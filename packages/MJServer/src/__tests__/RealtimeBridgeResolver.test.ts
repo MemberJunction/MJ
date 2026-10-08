@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   startRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_ACTIVE' })),
   getRoomTurnState: vi.fn((room: string): unknown => (room === 'busy-room' ? { RoomId: room, Agents: [] } : null)),
   setTurnToolBinder: vi.fn(),
+  setAgentVisionResolver: vi.fn(),
   getBridgeRuntime: vi.fn(),
   stopRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_COMPLETE' })),
   setAgentVision: vi.fn(async (): Promise<{ Success: boolean; NotInRoom?: boolean; ErrorMessage?: string }> => ({ Success: true })),
@@ -41,6 +42,7 @@ vi.mock('@memberjunction/livekit-room-server', () => ({
       StartAgentRoomSession: h.startAgentRoomSession,
       SetSessionFactory: vi.fn(),
       SetTurnToolBinder: h.setTurnToolBinder,
+      SetAgentVisionResolver: h.setAgentVisionResolver,
       GetRoomTurnState: h.getRoomTurnState,
       StopAgentRoomSession: h.stopAgentRoomSession,
       StopAllAgentsInRoom: h.stopAllAgentsInRoom,
@@ -124,6 +126,8 @@ const ctx = {} as AppContext;
 // so take it now rather than reading `mock.calls` inside a test.
 type TurnToolBinderFn = (session: object, handler: object) => void;
 const installedTurnToolBinder = h.setTurnToolBinder.mock.calls[0]?.[0] as TurnToolBinderFn | undefined;
+type AgentVisionResolverFn = (session: object) => boolean;
+const installedAgentVisionResolver = h.setAgentVisionResolver.mock.calls[0]?.[0] as AgentVisionResolverFn | undefined;
 
 describe('RealtimeBridgeResolver', () => {
   let resolver: TestableResolver;
@@ -200,6 +204,23 @@ describe('RealtimeBridgeResolver', () => {
       const binder = installedTurnToolBinder!;
       h.getBridgeRuntime.mockReturnValueOnce(undefined);
       expect(() => binder({}, {})).not.toThrow();
+    });
+  });
+
+  describe('agent vision binding', () => {
+    it("says an agent watches meetings exactly when its session runtime says so", () => {
+      const resolve = installedAgentVisionResolver!;
+      const session = {};
+      h.getBridgeRuntime.mockReturnValueOnce({ WatchesMeetingVideo: true });
+      expect(resolve(session)).toBe(true);
+      expect(h.getBridgeRuntime).toHaveBeenCalledWith(session);
+      h.getBridgeRuntime.mockReturnValueOnce({ WatchesMeetingVideo: false });
+      expect(resolve(session)).toBe(false);
+    });
+
+    it('says no for a session with no bridge runtime', () => {
+      h.getBridgeRuntime.mockReturnValueOnce(undefined);
+      expect(installedAgentVisionResolver!({})).toBe(false);
     });
   });
 

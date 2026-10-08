@@ -14,6 +14,7 @@
  * @module @memberjunction/ai-realtime-client/media
  */
 
+import { ScaleRealtimeVideoFrame } from '@memberjunction/ai';
 import { NominalVideoFrameIntervalMs } from './videoPacing';
 
 /** Image formats a frame can be encoded as. */
@@ -62,21 +63,14 @@ const DEFAULT_JPEG_QUALITY = 0.8;
 
 /**
  * The size a frame is encoded at: its own size, or scaled down so the longer side is at most
- * `maxDimension` pixels. Never enlarges, and never returns a side smaller than 1.
+ * `maxDimension` pixels. Never enlarges, and never returns a side smaller than 1. The math is
+ * `@memberjunction/ai`'s `ScaleRealtimeVideoFrame`, shared with the meeting bot.
  *
  * @param size The frame's own size.
  * @param maxDimension The cap on the longer side; `undefined` or a non-positive value means no cap.
  */
 export function ScaleToMaxDimension(size: FrameSize, maxDimension?: number): FrameSize {
-    const longer = Math.max(size.Width, size.Height);
-    if (!maxDimension || maxDimension <= 0 || longer <= maxDimension) {
-        return { Width: size.Width, Height: size.Height };
-    }
-    const scale = maxDimension / longer;
-    return {
-        Width: Math.max(1, Math.round(size.Width * scale)),
-        Height: Math.max(1, Math.round(size.Height * scale)),
-    };
+    return ScaleRealtimeVideoFrame(size, maxDimension);
 }
 
 /**

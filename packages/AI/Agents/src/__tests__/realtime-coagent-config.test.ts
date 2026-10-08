@@ -25,7 +25,8 @@ import {
     REALTIME_CONFIG_SECTION_KEYS,
     RealtimeConfigSection,
     GetDirectActionsConfig,
-    IsActionAllowedForDirectInvocation
+    IsActionAllowedForDirectInvocation,
+    GetWatchesMeetingVideo
 } from '../realtime/realtime-coagent-config';
 
 describe('DeepMergeConfigs', () => {
@@ -403,6 +404,34 @@ describe('GetNarrationPaceMs', () => {
         expect(GetNarrationPaceMs({})).toBeNull();
         expect(GetNarrationPaceMs(null)).toBeNull();
         expect(GetNarrationPaceMs(undefined)).toBeNull();
+    });
+});
+
+describe('GetWatchesMeetingVideo', () => {
+    it('is true only when realtime.video.watchMeetings is true', () => {
+        expect(GetWatchesMeetingVideo({ realtime: { video: { watchMeetings: true } } })).toBe(true);
+        expect(GetWatchesMeetingVideo({ realtime: { video: { watchMeetings: false } } })).toBe(false);
+        expect(GetWatchesMeetingVideo({ realtime: { video: { enabled: true } } })).toBe(false);
+        expect(GetWatchesMeetingVideo({})).toBe(false);
+        expect(GetWatchesMeetingVideo(null)).toBe(false);
+        expect(GetWatchesMeetingVideo(undefined)).toBe(false);
+    });
+
+    it('keeps only a boolean through normalization', () => {
+        const kept = ResolveEffectiveRealtimeConfig(null, '{"realtime":{"video":{"watchMeetings":true}}}', null);
+        expect(kept.realtime?.video).toEqual({ watchMeetings: true });
+
+        const dropped = ResolveEffectiveRealtimeConfig(null, '{"realtime":{"video":{"watchMeetings":"yes","enabled":true}}}', null);
+        expect(dropped.realtime?.video).toEqual({ enabled: true });
+        expect(GetWatchesMeetingVideo(dropped)).toBe(false);
+    });
+
+    it("lets the voiced (target) agent's setting win over the co-agent's", () => {
+        const on = '{"realtime":{"video":{"watchMeetings":true}}}';
+        const off = '{"realtime":{"video":{"watchMeetings":false}}}';
+        expect(GetWatchesMeetingVideo(ResolveEffectiveRealtimeConfig(null, off, null, on))).toBe(true);
+        expect(GetWatchesMeetingVideo(ResolveEffectiveRealtimeConfig(null, on, null, off))).toBe(false);
+        expect(GetWatchesMeetingVideo(ResolveEffectiveRealtimeConfig(on, null, null, null))).toBe(true);
     });
 });
 

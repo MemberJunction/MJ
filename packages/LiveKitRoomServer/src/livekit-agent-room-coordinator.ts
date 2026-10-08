@@ -15,7 +15,13 @@
 
 import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { ResolveIsModelFullDuplex, type IRealtimeSession, type RealtimeToolDefinition } from '@memberjunction/ai';
+import {
+  AgentWatchesAttributes,
+  InboundVideoStreamsOf,
+  ResolveIsModelFullDuplex,
+  type IRealtimeSession,
+  type RealtimeToolDefinition,
+} from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
   AlwaysAddressedMatcher,
@@ -31,7 +37,7 @@ import {
   type BridgeTurnTakingToolHandler,
   type RoomTurnSnapshot,
 } from '@memberjunction/ai-bridge-server';
-import { LiveKitTokenService } from './livekit-token-service';
+import { LiveKitTokenService, type MintedToken } from './livekit-token-service';
 import { ResolveLiveKitNativeModuleSpecifier } from './livekit-native-module';
 
 /**
@@ -142,6 +148,13 @@ export interface AgentRoomHostOptions {
 export type TurnToolBinder = (session: IRealtimeSession, handler: BridgeTurnTakingToolHandler) => void;
 
 /**
+ * Says whether the agent behind a model session watches meetings (its `realtime.video.watchMeetings` setting) — the
+ * seam that keeps this package free of the agent runtime, like {@link TurnToolBinder}. Production binds it to the
+ * session's bridged runtime (`@memberjunction/ai-agents`); unbound, no agent watches.
+ */
+export type AgentVisionResolver = (session: IRealtimeSession) => boolean;
+
+/**
  * Opens a realtime model session for the agent. Production binds this to the real model-resolution path;
  * tests inject a stub. Defaults to a clear "not bound" error so misconfiguration fails loudly.
  */
@@ -225,6 +238,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
   private roomRosters = new Map<string, RoomAgentEntry[]>();
   private bridgeOps: BridgeOps = AIBridgeEngine.Instance;
   private turnToolBinder?: TurnToolBinder;
+  private agentVisionResolver?: AgentVisionResolver;
   private turnStateSource: (roomKey: string) => RoomTurnSnapshot | null = (roomKey) => AIBridgeEngine.Instance.GetRoomTurnSnapshot(roomKey);
   private sessionFactory: RealtimeSessionFactory = () => {
     throw new Error(
@@ -262,6 +276,16 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
    */
   public SetTurnToolBinder(binder: TurnToolBinder | undefined): void {
     this.turnToolBinder = binder;
+  }
+
+  /**
+   * Binds the seam that says whether the agent behind a model session watches meetings. Without it no agent watches:
+   * the bot reads nobody's camera or screen and the room never offers people the choice.
+   *
+   * @param resolver The resolver, or `undefined` to clear it.
+   */
+  public SetAgentVisionResolver(resolver: AgentVisionResolver | undefined): void {
+    this.agentVisionResolver = resolver;
   }
 
   /**
@@ -324,7 +348,9 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
 
     const botName = params.AgentName ?? 'Agent';
     const botIdentity = `agent-${params.AgentSessionID}`;
-    const botToken = await this.tokenService.MintBotToken(params.RoomName, botIdentity, botName);
+    // Fail before opening a model session when LiveKit isn't configured. The bot's token itself is minted once the
+    // session is open, because whether the bot watches depends on the session (see agentWatches).
+    this.tokenService.AssertConfigured();
 
     // Multi-agent MEETING detection: if the room already holds an agent, THIS agent joins as a meeting
     // participant — auto-response OFF, speaks only when addressed by name. When a room becomes multi-agent
@@ -436,6 +462,8 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     };
     const session = await openModelSession();
     const finalFullDuplex = resolvedFullDuplex ?? false;
+    const watches = this.agentWatches(session);
+    const botToken = await this.mintBotTokenFor(session, params.RoomName, botIdentity, botName, watches);
 
     // The bridge id is known only after the engine starts the session, but the end-of-session hook is registered at start,
     // so it reaches the id through this holder.
@@ -473,6 +501,8 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
         BotDisplayName: botName,
         RoomName: params.RoomName,
         NativeModuleSpecifier: this.resolveNativeModuleSpecifier(),
+        // The bot reads the cameras and screens of people who allow it, only when this agent watches.
+        AgentVision: watches,
       },
       ContextUser: params.ContextUser,
       MetadataProvider: params.MetadataProvider,
@@ -509,6 +539,42 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
         `(bridge ${active.SessionBridgeID}, ${isMeeting ? 'MEETING — addressed-only' : 'solo 1:1'})`,
     );
     return { SessionBridgeID: active.SessionBridgeID, RoomName: params.RoomName, ServerUrl: botToken.ServerUrl };
+  }
+
+  /**
+   * Whether the agent behind this model session watches the meeting: its setting is on (through the bound
+   * {@link AgentVisionResolver}) AND its session takes inbound video. Watching on an audio-only model would offer people
+   * a choice no frame could honour, so it is logged and treated as off.
+   */
+  private agentWatches(session: IRealtimeSession): boolean {
+    const settingOn = this.agentVisionResolver?.(session) === true;
+    if (settingOn && InboundVideoStreamsOf(session.Capabilities) === 0) {
+      LogStatus('[LiveKitAgentRoomCoordinator] The agent is set to watch meetings, but its realtime model takes no video; it will not watch.');
+      return false;
+    }
+    return settingOn;
+  }
+
+  /**
+   * Mints the bot's join token, carrying `mj.agentWatches` when the agent watches so the room offers people the choice
+   * from the moment the bot joins. The model session is already open; if minting fails it is closed before the error
+   * propagates, so no model session is left behind.
+   */
+  private async mintBotTokenFor(
+    session: IRealtimeSession,
+    roomName: string,
+    botIdentity: string,
+    botName: string,
+    watches: boolean,
+  ): Promise<MintedToken> {
+    try {
+      return await this.tokenService.MintBotToken(roomName, botIdentity, botName, watches ? AgentWatchesAttributes(true) : undefined);
+    } catch (err) {
+      await session.Close().catch((closeErr: unknown) =>
+        LogError(`[LiveKitAgentRoomCoordinator] closing the model session after a failed token mint failed: ${closeErr instanceof Error ? closeErr.message : String(closeErr)}`),
+      );
+      throw err;
+    }
   }
 
   /** Installs the engine's turn-taking tool handler on the model session, when the session has one (a turn-based model in a room). */

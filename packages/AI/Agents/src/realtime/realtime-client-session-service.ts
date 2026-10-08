@@ -104,6 +104,7 @@ import {
     GetNarrationPaceMs,
     GetProviderVoiceSettings,
     GetSessionTuningSettings,
+    GetWatchesMeetingVideo,
     JSONObjectLike,
     RealtimeAllowedAgent,
     RealtimeCoAgentConfig,
@@ -514,6 +515,12 @@ export interface BridgeRealtimeRuntime {
      * {@link BridgeLocalToolHandler.Handles} is executed by the host instead of the shared delegation path.
      */
     SetLocalToolHandler: (handler: BridgeLocalToolHandler | undefined) => void;
+    /**
+     * Whether the agent watches LiveKit meetings (`realtime.video.watchMeetings` in its effective configuration, which
+     * includes the voiced agent's own). The room coordinator reads it, with whether the session takes video, to decide
+     * whether the bot reads the cameras and screens people allow.
+     */
+    WatchesMeetingVideo: boolean;
 }
 
 /**
@@ -939,6 +946,7 @@ export class RealtimeClientSessionService {
             },
             CancelPendingNarration: () => narrator.Cancel(),
             SetLocalToolHandler: (handler) => { localToolHandler = handler; },
+            WatchesMeetingVideo: GetWatchesMeetingVideo(prep.EffectiveConfig),
         };
         bridgeRuntimes.set(session, runtime);
         return runtime;
@@ -961,6 +969,7 @@ export class RealtimeClientSessionService {
             CancelInFlightDelegations: () => 0,
             CancelPendingNarration: () => { /* nothing is narrated */ },
             SetLocalToolHandler: () => { /* no tool path to extend */ },
+            WatchesMeetingVideo: false,
         };
         bridgeRuntimes.set(session, runtime);
         return runtime;

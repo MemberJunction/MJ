@@ -42,3 +42,11 @@ export function IsAgentWatching(attributes?: RealtimeParticipantAttributes | nul
 export function AgentVisionAttributes(allow: boolean): Record<string, string> {
     return { [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: allow ? 'true' : '' };
 }
+
+/**
+ * The attributes an agent's bot carries while it watches: `'true'`, or `''` to withdraw. The server puts them on the
+ * bot's join token, so the room offers people the choice from the moment the bot joins.
+ */
+export function AgentWatchesAttributes(watches: boolean): Record<string, string> {
+    return { [REALTIME_AGENT_WATCHES_ATTRIBUTE]: watches ? 'true' : '' };
+}

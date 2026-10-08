@@ -3,7 +3,8 @@
  * operations to an isolated {@link IMediaWorker} worker thread.
  *
  * Provides:
- * - Zero-copy transferable ArrayBuffer frame passing for inbound & outbound PCM audio.
+ * - Zero-copy transferable ArrayBuffer frame passing for inbound & outbound PCM audio, and for the sampled JPEG frames
+ *   of participant video (read and encoded inside the worker when the agent watches the meeting).
  * - Outbound jitter pre-buffering and duration-based pacing off the main event loop (in the worker).
  * - Instant barge-in queue flush across the worker boundary.
  * - Fallback to the in-process client when the worker cannot be started or joined.
@@ -28,11 +29,14 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { LogError, LogStatus } from '@memberjunction/core';
-import type {
-    NativeConnectArgs,
-    NativeConnectResult,
-    NativeRoomAudioFrame,
-    NativeRoomParticipant,
+import {
+    VideoSourceIdOf,
+    type NativeConnectArgs,
+    type NativeConnectResult,
+    type NativeRoomAudioFrame,
+    type NativeRoomParticipant,
+    type NativeRoomVideoFrame,
+    type NativeRoomVideoSourceEnd,
 } from '@memberjunction/ai-bridge-livekit';
 import { ReadEventLoop, type RoomAudioTelemetrySnapshot, type TelemetryRoomClient } from './room-telemetry';
 import type {
@@ -131,6 +135,13 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
     /** Roster as of the worker crash, diffed against the first post-rejoin snapshot. */
     private rosterBeforeRestart: Map<string, NativeRoomParticipant> | null = null;
     private audioFrameCallback?: (frame: NativeRoomAudioFrame) => void;
+    private videoFrameCallback?: (frame: NativeRoomVideoFrame) => void;
+    private videoSourceEndedCallback?: (source: NativeRoomVideoSourceEnd) => void;
+    /**
+     * The cameras and screens the worker sent frames of and has not reported ended, keyed by source id. When the worker
+     * crashes they are reported ended, so the model is told it can no longer see them; the restarted worker picks again.
+     */
+    private readonly videoSourcesInFlight = new Map<string, NativeRoomVideoSourceEnd>();
     private participantConnectedCallback?: (participant: NativeRoomParticipant) => void;
     private participantDisconnectedCallback?: (participantIdentity: string) => void;
     private disconnectedCallback?: (reason?: string) => void;
@@ -150,6 +161,7 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
             channels: options?.channels ?? 1,
             inboundSampleRate: options?.inboundSampleRate ?? 24000,
             preBufferMs: options?.preBufferMs ?? 150,
+            video: options?.video,
         };
         this.maxRestartAttempts = options?.maxRestartAttempts ?? 3;
         this.restartBackoffBaseMs = options?.restartBackoffBaseMs ?? 250;
@@ -246,6 +258,14 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
             case 'audioFrame':
                 this.audioFrameCallback?.(msg.frame);
                 break;
+            case 'videoFrame':
+                this.trackVideoSource(msg.frame);
+                this.videoFrameCallback?.(msg.frame);
+                break;
+            case 'videoSourceEnded':
+                this.videoSourcesInFlight.delete(VideoSourceIdOf(msg.source.participantIdentity, msg.source.source));
+                this.videoSourceEndedCallback?.(msg.source);
+                break;
             case 'participantConnected':
                 this.participants.set(msg.participant.identity, msg.participant);
                 this.participantConnectedCallback?.(msg.participant);
@@ -324,6 +344,7 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
         if (this.isIntentionallyDisconnected || this.fallback || !this.hasJoined) {
             return; // clean shutdown, or a failed initial connect that connect() already handles
         }
+        this.reportVideoSourcesEnded();
         if (this.isReconnecting) {
             return; // the in-flight reconnect attempt observes the rejection above and reschedules
         }
@@ -331,6 +352,28 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
         this.rosterBeforeRestart = new Map(this.participants);
         this.participants = new Map();
         this.scheduleRestart(`worker exited with code ${code}`);
+    }
+
+    /** Remembers a source the worker is sending frames of, until it reports the source ended. */
+    private trackVideoSource(frame: NativeRoomVideoFrame): void {
+        this.videoSourcesInFlight.set(VideoSourceIdOf(frame.participantIdentity, frame.source), {
+            participantIdentity: frame.participantIdentity,
+            name: frame.name,
+            source: frame.source,
+        });
+    }
+
+    /** The worker died: every source it was sending frames of has stopped, so report each as ended. */
+    private reportVideoSourcesEnded(): void {
+        const sources = [...this.videoSourcesInFlight.values()];
+        this.videoSourcesInFlight.clear();
+        for (const source of sources) {
+            try {
+                this.videoSourceEndedCallback?.(source);
+            } catch (err) {
+                LogError(`[LiveKitWorkerRoomClient] the video-source-ended handler threw: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
     }
 
     /** Schedules the next restart attempt with exponential backoff, or raises a disconnect when exhausted. */
@@ -472,6 +515,8 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
         const fallback = this.fallbackFactory!();
         this.fallback = fallback;
         if (this.audioFrameCallback) fallback.onAudioFrame(this.audioFrameCallback);
+        if (this.videoFrameCallback) fallback.onVideoFrame?.(this.videoFrameCallback);
+        if (this.videoSourceEndedCallback) fallback.onVideoSourceEnded?.(this.videoSourceEndedCallback);
         if (this.participantConnectedCallback) fallback.onParticipantConnected(this.participantConnectedCallback);
         if (this.participantDisconnectedCallback) fallback.onParticipantDisconnected(this.participantDisconnectedCallback);
         if (this.disconnectedCallback) {
@@ -556,6 +601,18 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
     public onAudioFrame(cb: (frame: NativeRoomAudioFrame) => void): void {
         this.audioFrameCallback = cb;
         this.fallback?.onAudioFrame(cb);
+    }
+
+    /** Registers the inbound video handler (frames the worker sampled and encoded, or the fallback client's). */
+    public onVideoFrame(cb: (frame: NativeRoomVideoFrame) => void): void {
+        this.videoFrameCallback = cb;
+        this.fallback?.onVideoFrame?.(cb);
+    }
+
+    /** Registers the handler for a camera or screen that stopped being read after sending frames. */
+    public onVideoSourceEnded(cb: (source: NativeRoomVideoSourceEnd) => void): void {
+        this.videoSourceEndedCallback = cb;
+        this.fallback?.onVideoSourceEnded?.(cb);
     }
 
     public onParticipantConnected(cb: (participant: NativeRoomParticipant) => void): void {

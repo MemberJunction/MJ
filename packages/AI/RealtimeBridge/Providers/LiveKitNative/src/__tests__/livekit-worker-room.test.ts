@@ -6,10 +6,26 @@ import type {
     NativeConnectResult,
     NativeRoomAudioFrame,
     NativeRoomParticipant,
+    NativeRoomVideoFrame,
+    NativeRoomVideoOptions,
+    NativeRoomVideoSourceEnd,
 } from '@memberjunction/ai-bridge-livekit';
 import { LiveKitWorkerRoomClient, type LiveKitWorkerRoomClientOptions } from '../livekit-worker-room-client';
-import { MediaWorkerSession, type MediaWorkerPort } from '../media-worker-session';
+import { CreateMediaWorkerRoomClient, MediaWorkerSession, type MediaWorkerPort } from '../media-worker-session';
 import { CreateLiveKitRtcNodeModule, IsWorkerMediaEnabled, LiveKitRtcNodeRoomClient } from '../livekit-rtc-node-room';
+import {
+    fakePerson,
+    FakePublication,
+    flush,
+    i420Frame,
+    LETS_AGENTS_SEE,
+    makeFakeRtc,
+    ROOM_EVENT,
+    TRACK_KIND,
+    TRACK_SOURCE,
+    type FakeRtc,
+    type FakeVideoStream,
+} from './fake-rtc-node';
 import type { RoomAudioTelemetrySnapshot, TelemetryRoomClient } from '../room-telemetry';
 import type {
     IMediaWorker,
@@ -20,6 +36,31 @@ import type {
 
 const ARGS: NativeConnectArgs = { url: 'ws://localhost:7880', token: 'test-token', name: 'Agent-Bot' };
 const RESULT: NativeConnectResult = { localIdentity: 'bot', roomName: 'room-1' };
+const WATCH: NativeRoomVideoOptions = { Streams: 1, Rate: 1, Cameras: true, Screens: true };
+const SCREEN_FRAME: NativeRoomVideoFrame = {
+    data: new ArrayBuffer(8),
+    mimeType: 'image/jpeg',
+    participantIdentity: 'ada',
+    name: 'Ada',
+    source: 'screen',
+    width: 4,
+    height: 2,
+    timestampMs: 1,
+};
+const SCREEN_ENDED: NativeRoomVideoSourceEnd = { participantIdentity: 'ada', name: 'Ada', source: 'screen' };
+
+/** A fake rtc-node room with Ada (who lets agents see her) and her camera; returns what a test needs to drive it. */
+function roomWithAdasCamera(): { fake: FakeRtc; subscribeCamera: () => FakeVideoStream | undefined; cam: FakePublication } {
+    const cam = new FakePublication('TR_cam', TRACK_SOURCE.SOURCE_CAMERA);
+    const ada = fakePerson('ada', 'Ada', { ...LETS_AGENTS_SEE }, [cam]);
+    const fake = makeFakeRtc([ada]);
+    const subscribeCamera = () => {
+        const track = { kind: TRACK_KIND.KIND_VIDEO };
+        fake.emit(ROOM_EVENT.TrackSubscribed, track, cam, ada);
+        return fake.cap.streamFor(track);
+    };
+    return { fake, subscribeCamera, cam };
+}
 
 /** Mock implementation of IMediaWorker for unit testing without spawning real threads. */
 class MockMediaWorker implements IMediaWorker {
@@ -90,6 +131,8 @@ class FakeRoomClient implements TelemetryRoomClient {
     public disconnectCount = 0;
     public roster: NativeRoomParticipant[] = [];
     public audioCb?: (frame: NativeRoomAudioFrame) => void;
+    public videoCb?: (frame: NativeRoomVideoFrame) => void;
+    public videoEndedCb?: (source: NativeRoomVideoSourceEnd) => void;
     public disconnectedCb?: (reason?: string) => void;
     public connectedCb?: (p: NativeRoomParticipant) => void;
     public constructor(private readonly clock: () => number = () => 0) {}
@@ -110,6 +153,12 @@ class FakeRoomClient implements TelemetryRoomClient {
     public publishScreen(): void {}
     public onAudioFrame(cb: (frame: NativeRoomAudioFrame) => void): void {
         this.audioCb = cb;
+    }
+    public onVideoFrame(cb: (frame: NativeRoomVideoFrame) => void): void {
+        this.videoCb = cb;
+    }
+    public onVideoSourceEnded(cb: (source: NativeRoomVideoSourceEnd) => void): void {
+        this.videoEndedCb = cb;
     }
     public onParticipantConnected(cb: (p: NativeRoomParticipant) => void): void {
         this.connectedCb = cb;
@@ -184,6 +233,59 @@ describe('CreateLiveKitRtcNodeModule worker selection', () => {
         const client = CreateLiveKitRtcNodeModule({ Loader: async () => { throw new Error('unused'); } }).createRoomClient({});
         expect(client).toBeInstanceOf(LiveKitRtcNodeRoomClient);
     });
+
+    it('passes Video to the worker client, which sends it with the connect command', async () => {
+        const worker = new MockMediaWorker();
+        const client = CreateLiveKitRtcNodeModule({ UseWorker: true, WorkerFactory: () => worker }).createRoomClient({ Video: WATCH });
+        const p = client.connect(ARGS);
+        expect(worker.commandsOf('connect')[0].options.video).toEqual(WATCH);
+        worker.answerConnect();
+        await p;
+        const d = client.disconnect();
+        worker.emitMessage({ type: 'commandSuccess', id: worker.commandsOf('disconnect')[0].id });
+        await d;
+    });
+
+    it('passes Video to the in-process fallback, whose frames reach the worker client\'s onVideoFrame', async () => {
+        const { fake, subscribeCamera } = roomWithAdasCamera();
+        const client = CreateLiveKitRtcNodeModule({
+            UseWorker: true,
+            Loader: async () => fake.module,
+            WorkerFactory: () => {
+                throw new Error('worker threads unavailable');
+            },
+        }).createRoomClient({ Video: WATCH });
+        const seen: NativeRoomVideoFrame[] = [];
+        client.onVideoFrame?.((f) => seen.push(f));
+        await client.connect(ARGS);
+
+        subscribeCamera()!.push({ frame: i420Frame(32, 24), rotation: 0 });
+        await flush();
+        expect(seen.map((f) => f.participantIdentity)).toEqual(['ada']);
+        await client.disconnect();
+    });
+});
+
+describe('CreateMediaWorkerRoomClient (the worker session\'s default client)', () => {
+    it('reads video when the connect options carry it', async () => {
+        const { fake, subscribeCamera } = roomWithAdasCamera();
+        const client = CreateMediaWorkerRoomClient({ sampleRate: 24000, channels: 1, inboundSampleRate: 16000, video: WATCH }, async () => fake.module);
+        const seen: NativeRoomVideoFrame[] = [];
+        client.onVideoFrame?.((f) => seen.push(f));
+        await client.connect(ARGS);
+        subscribeCamera()!.push({ frame: i420Frame(32, 24), rotation: 0 });
+        await flush();
+        expect(seen).toHaveLength(1);
+        expect(client).toBeInstanceOf(LiveKitRtcNodeRoomClient);
+    });
+
+    it('reads no video, and unsubscribes it, without them', async () => {
+        const { fake, subscribeCamera, cam } = roomWithAdasCamera();
+        const client = CreateMediaWorkerRoomClient({ sampleRate: 24000, channels: 1, inboundSampleRate: 16000 }, async () => fake.module);
+        await client.connect(ARGS);
+        expect(subscribeCamera()).toBeUndefined();
+        expect(cam.subscribeCalls).toEqual([false]);
+    });
 });
 
 describe('package index', () => {
@@ -213,6 +315,28 @@ describe('LiveKitWorkerRoomClient', () => {
         expect(cmd.args.name).toBe('Agent-Bot');
         workers[0].answerConnect();
         await expect(connectPromise).resolves.toEqual(RESULT);
+    });
+
+    it('sends the video options with the connect command', async () => {
+        const client = newClient(workers, { video: WATCH });
+        const p = client.connect(ARGS);
+        expect(workers[0].commandsOf('connect')[0].options.video).toEqual(WATCH);
+        workers[0].answerConnect();
+        await p;
+    });
+
+    it('raises onVideoFrame for a videoFrame event and onVideoSourceEnded for a videoSourceEnded event', async () => {
+        const client = newClient(workers);
+        const frames: NativeRoomVideoFrame[] = [];
+        const ended: NativeRoomVideoSourceEnd[] = [];
+        client.onVideoFrame((f) => frames.push(f));
+        client.onVideoSourceEnded((s) => ended.push(s));
+        await connected(client, workers);
+
+        workers[0].emitMessage({ type: 'videoFrame', frame: SCREEN_FRAME });
+        workers[0].emitMessage({ type: 'videoSourceEnded', source: SCREEN_ENDED });
+        expect(frames).toEqual([SCREEN_FRAME]);
+        expect(ended).toEqual([SCREEN_ENDED]);
     });
 
     it('transfers ArrayBuffer zero-copy when publishing audio and sends flushOutbound on barge-in', async () => {
@@ -250,6 +374,32 @@ describe('LiveKitWorkerRoomClient', () => {
             expect(fallback.flushCount).toBe(1);
             await client.disconnect();
             expect(fallback.disconnectCount).toBe(1);
+        });
+
+        it('wires the video callbacks to the fallback client, registered before or after it takes over', async () => {
+            const fallback = new FakeRoomClient();
+            const client = new LiveKitWorkerRoomClient({
+                workerFactory: () => { throw new Error('worker threads unavailable'); },
+                fallbackFactory: () => fallback,
+                telemetryPollMs: 0,
+            });
+            const earlyFrame = vi.fn();
+            const earlyEnded = vi.fn();
+            client.onVideoFrame(earlyFrame);
+            client.onVideoSourceEnded(earlyEnded);
+            await client.connect(ARGS);
+            expect(fallback.videoCb).toBe(earlyFrame);
+            expect(fallback.videoEndedCb).toBe(earlyEnded);
+
+            const lateFrame = vi.fn();
+            const lateEnded = vi.fn();
+            client.onVideoFrame(lateFrame);
+            client.onVideoSourceEnded(lateEnded);
+            fallback.videoCb?.(SCREEN_FRAME);
+            fallback.videoEndedCb?.(SCREEN_ENDED);
+            expect(lateFrame).toHaveBeenCalledWith(SCREEN_FRAME);
+            expect(lateEnded).toHaveBeenCalledWith(SCREEN_ENDED);
+            expect(earlyFrame).not.toHaveBeenCalled();
         });
 
         it('passes the LiveKit disconnect reason through the fallback client and clears it on disconnect', async () => {
@@ -422,6 +572,41 @@ describe('LiveKitWorkerRoomClient', () => {
             expect(workers).toHaveLength(2);
             expect(onDisconnected).toHaveBeenCalledTimes(1);
             expect(onDisconnected.mock.calls[0][0]).toBe('rejoin rejected: token expired');
+        });
+
+        it('reports the sources the crashed worker was sending as ended, once', async () => {
+            const client = newClient(workers, { restartBackoffBaseMs: 250 });
+            const ended: NativeRoomVideoSourceEnd[] = [];
+            client.onVideoSourceEnded((source) => ended.push(source));
+            await connected(client, workers);
+            const boCamera: NativeRoomVideoSourceEnd = { participantIdentity: 'bo', name: 'Bo', source: 'camera' };
+            workers[0].emitMessage({ type: 'videoFrame', frame: SCREEN_FRAME });
+            workers[0].emitMessage({ type: 'videoFrame', frame: { ...SCREEN_FRAME, ...boCamera } });
+            workers[0].emitMessage({ type: 'videoSourceEnded', source: boCamera });
+            expect(ended).toEqual([boCamera]);
+
+            workers[0].emitExit(1);
+            expect(ended).toEqual([boCamera, SCREEN_ENDED]); // Bo's camera was already reported; Ada's screen now
+
+            await vi.advanceTimersByTimeAsync(251); // the restarted worker rejoins and picks again
+            workers[1].answerConnect();
+            await vi.advanceTimersByTimeAsync(0);
+            workers[1].emitExit(1);
+            expect(ended).toEqual([boCamera, SCREEN_ENDED]); // nothing new was sent, so nothing more to report
+        });
+
+        it('reports no source ended when the bot disconnects', async () => {
+            const client = newClient(workers);
+            const ended: NativeRoomVideoSourceEnd[] = [];
+            client.onVideoSourceEnded((source) => ended.push(source));
+            await connected(client, workers);
+            workers[0].emitMessage({ type: 'videoFrame', frame: SCREEN_FRAME });
+
+            const p = client.disconnect();
+            workers[0].emitMessage({ type: 'commandSuccess', id: workers[0].commandsOf('disconnect')[0].id });
+            await p;
+            workers[0].emitExit(0);
+            expect(ended).toEqual([]);
         });
 
         it('disconnect() during a rejoin leaves no pending request, restart timer or further spawn', async () => {
@@ -744,6 +929,33 @@ describe('MediaWorkerSession', () => {
         expect(tel?.type === 'telemetry' && tel.id).toBe('t1');
         expect(tel?.type === 'telemetry' && tel.snapshot.pacerQueuedMs).toBe(60);
         expect(tel?.type === 'telemetry' && typeof tel.snapshot.workerEventLoopDelayP99Ms).toBe('number');
+    });
+
+    it('forwards video frames with the JPEG buffer in the transfer list, and ended sources', async () => {
+        await connectSession();
+        const data = new ArrayBuffer(16);
+        const frame: NativeRoomVideoFrame = { ...SCREEN_FRAME, data };
+        fake.videoCb?.(frame);
+        fake.videoEndedCb?.(SCREEN_ENDED);
+
+        const sent = events.find((e) => e.message.type === 'videoFrame');
+        expect(sent?.message).toEqual({ type: 'videoFrame', frame });
+        expect(sent?.transferList).toEqual([data]);
+        expect(events.find((e) => e.message.type === 'videoSourceEnded')?.message).toEqual({ type: 'videoSourceEnded', source: SCREEN_ENDED });
+    });
+
+    it('hands the video options to the in-worker client', async () => {
+        let seen: MediaWorkerClientOptions | undefined;
+        const port: MediaWorkerPort = { postMessage: (m) => { events.push({ message: m }); }, on() {} };
+        const s = new MediaWorkerSession(port, {
+            clientFactory: (o) => {
+                seen = o;
+                return fake;
+            },
+            now: nowMs,
+        });
+        await s.HandleCommand({ type: 'connect', id: 'c1', args: ARGS, options: { ...OPTS, video: WATCH } });
+        expect(seen?.video).toEqual(WATCH);
     });
 
     it('forwards the LiveKit disconnect reason from the native client', async () => {

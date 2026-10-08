@@ -1051,7 +1051,8 @@ class GeminiRealtimeSession implements IRealtimeSession {
                 Modality: 'video',
                 Direction: 'inbound',
                 Encoding: 'image/jpeg',
-                Rate: 1,
+                // The model's own ceiling from the profile table; a bridged host paces frames to it.
+                Rate: this.profile.MaxInboundVideoRate,
                 UsageBasis: ['tokens', 'frames'] as const,
                 RequiresConsent: true,
             });

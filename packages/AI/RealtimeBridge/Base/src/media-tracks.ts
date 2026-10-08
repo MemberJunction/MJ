@@ -95,6 +95,20 @@ export interface BridgeMediaFrame {
 }
 
 /**
+ * An inbound video source that stopped: the person stopped letting agents see them, left, stopped sharing or turned
+ * their camera off. A driver that sends camera or screen frames reports it so the host can tell the model, which would
+ * otherwise go on describing the last frame it saw.
+ */
+export interface BridgeVideoSourceEnd {
+    /** The plane the source was on: a camera (`video-in`) or a shared screen (`screen-in`). */
+    Track: Extract<BridgeMediaTrackKind, 'video-in' | 'screen-in'>;
+    /** The source's key, as its frames carried it in {@link BridgeMediaFrame.SourceID}. */
+    SourceID: string;
+    /** The source's human-readable name ("Ada's camera"), as its frames carried it in {@link BridgeMediaFrame.SourceLabel}. */
+    SourceLabel?: string;
+}
+
+/**
  * Identity and presence info for one participant on the bridged endpoint.
  *
  * The bridge produces these from the platform's roster (when the provider supports a roster /

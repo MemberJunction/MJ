@@ -11,6 +11,7 @@ import {
 import { performance } from 'node:perf_hooks';
 import { BaseSingleton, MJGlobal, EscapeSQLString } from '@memberjunction/global';
 import {
+    InboundVideoRateOf,
     InboundVideoStreamsOf,
     IRealtimeSession,
     RealtimeMediaKind,
@@ -32,6 +33,7 @@ import {
     BridgeMediaTrackKind,
     BridgeParticipantInfo,
     BridgeDisconnectReason,
+    BridgeVideoSourceEnd,
     RealtimeBridgeContext,
     TurnTakingPolicy,
     TurnTakingPolicyConfig,
@@ -625,6 +627,13 @@ export interface ActiveBridgeSession {
      */
     LastInboundSpeaker?: string;
 
+    /**
+     * The camera and screen sources whose frames reached the current model session (`SourceID` → `SourceLabel`), so
+     * that when one ends the model is told it can no longer see it, and only about sources it actually saw. Cleared
+     * when a recovered session replaces the model.
+     */
+    SeenVideoSources: Map<string, string>;
+
     /** This agent's participation style for the room moderator (`'proactive'` | `'addressed-only'`). */
     ParticipationMode: 'proactive' | 'addressed-only';
 
@@ -1106,6 +1115,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 ModelRecovering: false,
                 Ending: false,
                 LastSessionHeartbeatMs: Date.now(),
+                SeenVideoSources: new Map<string, string>(),
             };
 
             this.electTranscriptScribe(active);
@@ -1247,8 +1257,29 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                     MimeType: frame.MimeType,
                     TimestampMs: frame.TimestampMs,
                 });
+                if (kind === 'video' && frame.SourceID) {
+                    active.SeenVideoSources.set(frame.SourceID, frame.SourceLabel ?? frame.SourceID);
+                }
             }
         });
+        Bridge.OnVideoSourceEnded((source: BridgeVideoSourceEnd) => this.tellModelVideoSourceEnded(active, source));
+    }
+
+    /**
+     * Tells the model it can no longer see a camera or screen whose frames reached it (the person stopped letting agents
+     * see them, left, stopped sharing or turned the camera off), so it stops describing the last frame as current.
+     * A source the model never saw is ignored. Reads `active.RealtimeSession` each time: a recovered session replaces it.
+     *
+     * @param active The live bridged session.
+     * @param source The source that ended, as the driver reported it.
+     */
+    private tellModelVideoSourceEnded(active: ActiveBridgeSession, source: BridgeVideoSourceEnd): void {
+        const seenLabel = active.SeenVideoSources.get(source.SourceID);
+        if (seenLabel === undefined) {
+            return;
+        }
+        active.SeenVideoSources.delete(source.SourceID);
+        active.RealtimeSession.SendContextNote?.(VideoSourceEndedNote(source.SourceLabel ?? seenLabel));
     }
 
     /**
@@ -1261,6 +1292,8 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     private wireModelSession(active: ActiveBridgeSession): void {
         const { Bridge } = active;
         const session = active.RealtimeSession;
+        // A replacement model session has seen no frames yet; the sources it sees are recorded afresh as they arrive.
+        active.SeenVideoSources.clear();
 
         // Barge-in: on a TRUE interruption (the user speaks over the agent), the model stops generating —
         // but the driver may still hold queued outbound audio that would keep playing. Flush it so the
@@ -2897,6 +2930,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 ...params.Configuration,
                 InboundSampleRate: params.RealtimeSession.InputSampleRate ?? 24000,
                 OutboundSampleRate: params.RealtimeSession.OutputSampleRate ?? 24000,
+                // The model's video facts, for a driver that sends camera or screen frames: how many sources it may send
+                // at once and how often. Read from the session, so the rate always comes from the model.
+                InboundVideoStreams: InboundVideoStreamsOf(params.RealtimeSession.Capabilities),
+                InboundVideoRate: InboundVideoRateOf(params.RealtimeSession.Capabilities),
             },
             ContextUser: params.ContextUser,
         };
@@ -3090,4 +3127,14 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 /** The realtime media plane a bridge track feeds: cameras and shared screens are both video to the model. */
 function mediaKindOf(track: BridgeMediaTrackKind): RealtimeMediaKind {
     return track === 'video-in' || track === 'screen-in' ? 'video' : 'audio';
+}
+
+/**
+ * The note that tells the model a camera or screen it was seeing has ended ("[The agent can no longer see: Ada's
+ * camera]"). Worded like the call's own source notes (`VideoSourceArbiter`: "[The agent is now viewing: Camera]").
+ *
+ * @param sourceLabel The source's human-readable name.
+ */
+export function VideoSourceEndedNote(sourceLabel: string): string {
+    return `[The agent can no longer see: ${sourceLabel}]`;
 }

@@ -2,8 +2,8 @@
  * @fileoverview Types and protocol definitions for the worker thread media-plane isolation.
  *
  * Defines the bidirectional command/event message contracts and {@link IMediaWorker} interface
- * used to isolate `@livekit/rtc-node` WebRTC audio processing, outbound frame pacing, and pre-buffering
- * off the main Node.js event loop into a dedicated `worker_threads.Worker`.
+ * used to isolate `@livekit/rtc-node` WebRTC audio processing, outbound frame pacing, pre-buffering, and the
+ * reading and encoding of participant video off the main Node.js event loop into a dedicated `worker_threads.Worker`.
  *
  * Request/response commands (`connect`, `publishData`, `disconnect`, `getTelemetry`) carry a correlation
  * `id`; the worker answers each with exactly one of `connected` / `commandSuccess` / `telemetry` /
@@ -17,6 +17,9 @@ import type {
     NativeConnectResult,
     NativeRoomAudioFrame,
     NativeRoomParticipant,
+    NativeRoomVideoFrame,
+    NativeRoomVideoOptions,
+    NativeRoomVideoSourceEnd,
 } from '@memberjunction/ai-bridge-livekit';
 import type { RoomAudioTelemetrySnapshot } from './room-telemetry';
 
@@ -32,6 +35,11 @@ export interface MediaWorkerClientOptions {
     inboundSampleRate: number;
     /** Outbound pre-buffer target in milliseconds (default: 150ms). */
     preBufferMs?: number;
+    /**
+     * What the in-worker room client reads for the agent when it watches the meeting. Absent: no video is read (and
+     * every video track is unsubscribed). The watcher runs inside the worker: it reads attributes and events there.
+     */
+    video?: NativeRoomVideoOptions;  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
 }
 
 /**
@@ -65,7 +73,11 @@ export type MediaWorkerEvent =
     | { type: 'rosterSnapshot'; participants: NativeRoomParticipant[] }
     | { type: 'disconnected'; reason?: string }
     | { type: 'telemetry'; id: string; snapshot: RoomAudioTelemetrySnapshot }
-    | { type: 'workerError'; error: string };
+    | { type: 'workerError'; error: string }
+    /** A sampled JPEG frame of a person's camera or screen; its `data` buffer is in the transfer list (not copied). */
+    | { type: 'videoFrame'; frame: NativeRoomVideoFrame }  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
+    /** A camera or screen the in-worker client stopped reading after sending frames. */
+    | { type: 'videoSourceEnded'; source: NativeRoomVideoSourceEnd };  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
 
 /**
  * Interface representing the media worker communication channel (e.g. `worker_threads.Worker`

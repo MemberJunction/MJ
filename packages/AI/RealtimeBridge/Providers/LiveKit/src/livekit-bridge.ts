@@ -35,6 +35,7 @@ import {
     BridgeMediaTrackKind,
     BridgeParticipantInfo,
     BridgeParticipantRole,
+    BridgeVideoSourceEnd,
     RealtimeBridgeContext,
     IBridgeMeetingControlsEventSource,
 } from '@memberjunction/ai-bridge-base';
@@ -45,6 +46,9 @@ import {
     LiveKitParticipantRole,
     LiveKitAudioFrame,
     LiveKitConnectArgs,
+    LiveKitVideoFrame,
+    LiveKitVideoSourceEnd,
+    LiveKitVideoSourceKind,
 } from './livekit-sdk';
 import { LiveKitMeetingControlsEventSource } from './livekit-meeting-controls';
 
@@ -77,9 +81,10 @@ function mapParticipantRole(role: LiveKitParticipantRole, isLocal: boolean | und
  * knows its OWN bot via `IsLocal`; OTHER agents in a multi-agent room are REMOTE participants, so they must
  * be recognized by this identity prefix. Without it every other agent reads as a human — breaking
  * turn-taking's agent-exclusion (an agent treats another agent's speech as being addressed) AND the
- * "are any humans still present?" occupancy check the engine uses to auto-leave an empty room.
+ * "are any humans still present?" occupancy check the engine uses to auto-leave an empty room. The native room client
+ * uses it too, so an agent's bot never reads another agent's video.
  */
-function isAgentParticipantIdentity(identity: string | undefined): boolean {
+export function IsAgentParticipantIdentity(identity: string | undefined): boolean {
     return typeof identity === 'string' && identity.toLowerCase().startsWith('agent-');
 }
 
@@ -90,8 +95,27 @@ function toBridgeParticipant(p: LiveKitParticipant): BridgeParticipantInfo {
         DisplayName: p.DisplayName,
         Role: mapParticipantRole(p.Role, p.IsLocal),
         // The local bot OR any remote agent bot (by identity convention) counts as an agent, not a human.
-        IsAgent: p.IsLocal === true || isAgentParticipantIdentity(p.Identity),
+        IsAgent: p.IsLocal === true || IsAgentParticipantIdentity(p.Identity),
     };
+}
+
+/** The bridge track a participant's video source arrives on: a camera is `video-in`, a shared screen `screen-in`. */
+export function VideoTrackOf(source: LiveKitVideoSourceKind): Extract<BridgeMediaTrackKind, 'video-in' | 'screen-in'> {
+    return source === 'screen' ? 'screen-in' : 'video-in';
+}
+
+/**
+ * The stable key of one participant's video source (`participant:<identity>:camera|screen`): the same while they keep
+ * sharing, so the host can tell sources apart and notice a switch.
+ */
+export function VideoSourceIdOf(participantIdentity: string, source: LiveKitVideoSourceKind): string {
+    return `participant:${participantIdentity}:${source}`;
+}
+
+/** The name the model is given for a video source: "Ada's camera", "Ada's screen", or "a participant's camera". */
+export function VideoSourceLabelOf(displayName: string | undefined, source: LiveKitVideoSourceKind): string {
+    const owner = displayName && displayName.trim().length > 0 ? `${displayName.trim()}'s` : "a participant's";
+    return `${owner} ${source}`;
 }
 
 /**
@@ -117,6 +141,9 @@ export class LiveKitBridge extends BaseRealtimeBridge {
 
     /** The roster-change handler registered via {@link OnParticipantChange}. */
     private participantHandler?: (participants: BridgeParticipantInfo[]) => void;
+
+    /** The handler registered via {@link OnVideoSourceEnded}. */
+    private videoSourceEndedHandler?: (source: BridgeVideoSourceEnd) => void;
 
     /** The Meeting Controls event source for this session (only when diarization is supported). */
     private meetingControls: LiveKitMeetingControlsEventSource | null = null;
@@ -161,8 +188,15 @@ export class LiveKitBridge extends BaseRealtimeBridge {
         this.RequireFeature('AudioIn'); // a LiveKit room bridge requires bidirectional audio at minimum
         this.RequireFeature('AudioOut');
 
-        this.sdk = this.sdkFactory(ctx.Configuration);
+        // The provider's directional video flags travel with the session configuration, so the room client reads only
+        // the kinds of video this provider allows in.
+        this.sdk = this.sdkFactory({
+            ...ctx.Configuration,
+            VideoIn: this.features.VideoIn === true,
+            ScreenIn: this.features.ScreenIn === true,
+        });
         this.wireInboundAudio(this.sdk);
+        this.wireInboundVideo(this.sdk);
         this.sdk.onDisconnected((reason) => this.handleRoomDisconnected(reason));
 
         // Roster diarization is native to LiveKit (per-participant tracks); only stand up the Meeting
@@ -195,6 +229,7 @@ export class LiveKitBridge extends BaseRealtimeBridge {
         this.meetingControls = null;
         this.mediaHandler = undefined;
         this.participantHandler = undefined;
+        this.videoSourceEndedHandler = undefined;
         if (sdk) {
             try {
                 await sdk.disconnect();
@@ -253,6 +288,16 @@ export class LiveKitBridge extends BaseRealtimeBridge {
      */
     public OnMedia(handler: (frame: BridgeMediaFrame) => void): void {
         this.mediaHandler = handler;
+    }
+
+    /**
+     * Registers the handler for a camera or screen the room client stopped reading (the person opted out, left, stopped
+     * sharing or turned it off), so the engine can tell the model.
+     *
+     * @param handler Invoked with each source that ended.
+     */
+    public override OnVideoSourceEnded(handler: (source: BridgeVideoSourceEnd) => void): void {
+        this.videoSourceEndedHandler = handler;
     }
 
     // ── Capability-gated virtuals LiveKit supports (gated by SupportedFeatures) ───────
@@ -338,6 +383,41 @@ export class LiveKitBridge extends BaseRealtimeBridge {
                 TimestampMs: frame.TimestampMs ?? Date.now(),
             });
         });
+    }
+
+    /**
+     * Wires the SDK's sampled camera and screen frames (only people who let agents see them; the room client decides)
+     * to inbound `video-in` / `screen-in` frames carrying the source's key and name, and its ended sources to
+     * {@link OnVideoSourceEnded}'s handler. Each frame re-checks the provider's directional flag, as {@link SendMedia}
+     * does for outbound video. Optional on the SDK seam: an SDK without inbound video wires nothing.
+     */
+    private wireInboundVideo(sdk: ILiveKitRoomSdk): void {
+        sdk.onVideoTrack?.((frame: LiveKitVideoFrame) => {
+            const track = VideoTrackOf(frame.Source);
+            if (!this.allowsVideoIn(track)) {
+                return;
+            }
+            this.mediaHandler?.({
+                Track: track,
+                Bytes: frame.Bytes,
+                MimeType: frame.MimeType,
+                SourceID: VideoSourceIdOf(frame.ParticipantIdentity, frame.Source),
+                SourceLabel: VideoSourceLabelOf(frame.DisplayName, frame.Source),
+                TimestampMs: frame.TimestampMs,
+            });
+        });
+        sdk.onVideoSourceEnded?.((source: LiveKitVideoSourceEnd) => {
+            this.videoSourceEndedHandler?.({
+                Track: VideoTrackOf(source.Source),
+                SourceID: VideoSourceIdOf(source.ParticipantIdentity, source.Source),
+                SourceLabel: VideoSourceLabelOf(source.DisplayName, source.Source),
+            });
+        });
+    }
+
+    /** Whether the provider lets this kind of video in: cameras need `VideoIn`, shared screens `ScreenIn`. */
+    private allowsVideoIn(track: Extract<BridgeMediaTrackKind, 'video-in' | 'screen-in'>): boolean {
+        return track === 'screen-in' ? this.features.ScreenIn === true : this.features.VideoIn === true;
     }
 
     /**

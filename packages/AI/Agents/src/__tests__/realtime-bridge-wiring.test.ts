@@ -193,6 +193,16 @@ describe('WireBridgeRealtimeSession — runtime handle', () => {
         expect(GetBridgeRealtimeRuntime(new FakeSession() as unknown as IRealtimeSession)).toBeUndefined();
     });
 
+    it("carries whether the agent watches meetings, read from the effective configuration", async () => {
+        expect((await wire()).WatchesMeetingVideo).toBe(false);
+
+        service = new WiringService();
+        session = new FakeSession();
+        const prep = { ...makePrep([]), EffectiveConfig: { realtime: { video: { watchMeetings: true } } } } as RealtimeSessionParamsPrep;
+        const runtime = await service.WireBridgeRealtimeSession(session as unknown as IRealtimeSession, input, prep, contextUser, provider);
+        expect(runtime.WatchesMeetingVideo).toBe(true);
+    });
+
     it('CancelInFlightDelegations aborts a running delegation and reports how many', async () => {
         const runtime = await wire();
         service.UseRealRelay = true;

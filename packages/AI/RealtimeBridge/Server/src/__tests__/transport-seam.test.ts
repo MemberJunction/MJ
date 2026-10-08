@@ -94,6 +94,12 @@ class MockRealtimeSession implements IRealtimeSession {
         this.SpokenUpdates.push(instructions);
     }
 
+    /** Context notes the engine sent the model (e.g. that a camera it was seeing ended). */
+    public readonly Notes: string[] = [];
+    public SendContextNote(text: string): void {
+        this.Notes.push(text);
+    }
+
     /** Capability flag + capture for the live-reconfigure path (§6). */
     public CanReconfigure = true;
     public FullDuplex = false;
@@ -317,6 +323,63 @@ describe('AIBridgeEngine — transport seam round-trip (LoopbackBridge + mock se
 
         expect(session.HeardFrames.map((f) => f.Kind)).toEqual(['audio']);
 
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it("tells the driver how many video sources the session takes, and at what rate (the model's)", async () => {
+        const videoSession = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const video = await engine().StartBridgeSession(baseParams(videoSession, provider));
+        const videoConfig = (video.Bridge as LoopbackBridge).ConnectContext?.Configuration;
+        expect(videoConfig?.InboundVideoStreams).toBe(1);
+        expect(videoConfig?.InboundVideoRate).toBe(1);
+        await engine().StopBridgeSession(video.SessionBridgeID, 'Explicit');
+
+        const audio = await engine().StartBridgeSession(baseParams(new MockRealtimeSession(AUDIO_SESSION), provider));
+        const audioConfig = (audio.Bridge as LoopbackBridge).ConnectContext?.Configuration;
+        expect(audioConfig?.InboundVideoStreams).toBe(0);
+        expect(audioConfig?.InboundVideoRate).toBeUndefined();
+        await engine().StopBridgeSession(audio.SessionBridgeID, 'Explicit');
+    });
+
+    it('tells the model when a camera it was seeing ends, once', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
+
+        expect(session.Notes).toEqual(["[The agent can no longer see: Ada's camera]"]);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('says nothing about a source whose frames never reached the model', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:bo:screen', SourceLabel: "Bo's screen" });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
+
+        expect(session.Notes).toEqual([]);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('says nothing to a session that takes no video, whose camera frames were dropped', async () => {
+        const session = new MockRealtimeSession(AUDIO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
+
+        expect(session.Notes).toEqual([]);
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
 

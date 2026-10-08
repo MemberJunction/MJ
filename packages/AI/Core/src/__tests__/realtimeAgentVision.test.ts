@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     AgentVisionAttributes,
+    AgentWatchesAttributes,
     AllowsAgentVision,
     IsAgentWatching,
     REALTIME_AGENT_CAN_SEE_ATTRIBUTE,
@@ -60,6 +61,19 @@ describe('realtime agent vision attributes', () => {
         it('reads back as the choice it records', () => {
             expect(AllowsAgentVision(AgentVisionAttributes(true))).toBe(true);
             expect(AllowsAgentVision(AgentVisionAttributes(false))).toBe(false);
+        });
+    });
+
+    describe('AgentWatchesAttributes', () => {
+        it("sets 'true' while the bot watches, and '' (never 'false') to withdraw", () => {
+            expect(AgentWatchesAttributes(true)).toEqual({ [REALTIME_AGENT_WATCHES_ATTRIBUTE]: 'true' });
+            expect(AgentWatchesAttributes(false)).toEqual({ [REALTIME_AGENT_WATCHES_ATTRIBUTE]: '' });
+        });
+
+        it('reads back as watching, and never as a person allowing it', () => {
+            expect(IsAgentWatching(AgentWatchesAttributes(true))).toBe(true);
+            expect(IsAgentWatching(AgentWatchesAttributes(false))).toBe(false);
+            expect(AllowsAgentVision(AgentWatchesAttributes(true))).toBe(false);
         });
     });
 });

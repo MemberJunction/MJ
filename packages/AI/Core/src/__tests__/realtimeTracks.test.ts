@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    InboundVideoRateOf,
     InboundVideoStreamsOf,
     IsPcmAudioMimeType,
     RealtimeModalityRegistry,
@@ -252,6 +253,29 @@ describe('InboundVideoStreamsOf', () => {
         expect(InboundVideoStreamsOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [audioIn, videoIn] })).toBe(1);
         expect(InboundVideoStreamsOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [videoIn], MaxInboundVideoStreams: 2 })).toBe(2);
         expect(InboundVideoStreamsOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [videoIn], MaxInboundVideoStreams: -1 })).toBe(1);
+    });
+});
+
+describe('InboundVideoRateOf', () => {
+    const audioIn: RealtimeTrackDescriptor = { Modality: 'audio', Direction: 'inbound', Rate: 16000 };
+    const videoIn = (rate?: number): RealtimeTrackDescriptor => ({ Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: rate });
+
+    it('is the declared rate of the inbound video track', () => {
+        expect(InboundVideoRateOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [audioIn, videoIn(1)] })).toBe(1);
+        expect(InboundVideoRateOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [videoIn(2.5)] })).toBe(2.5);
+    });
+
+    it("is undefined without capabilities or an inbound video track, and never reads the audio track's rate", () => {
+        expect(InboundVideoRateOf(undefined)).toBeUndefined();
+        expect(InboundVideoRateOf(null)).toBeUndefined();
+        expect(InboundVideoRateOf({ CanReconfigureTurnMode: false })).toBeUndefined();
+        expect(InboundVideoRateOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [audioIn] })).toBeUndefined();
+    });
+
+    it('is undefined when the video track declares no rate, or one that is not a positive finite number', () => {
+        for (const rate of [undefined, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+            expect(InboundVideoRateOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [videoIn(rate)] })).toBeUndefined();
+        }
     });
 });
 

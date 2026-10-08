@@ -13,7 +13,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import type { IRealtimeSession, RealtimeInputFrame, RealtimeSessionError, RealtimeTranscript } from '@memberjunction/ai';
+import type { IRealtimeSession, RealtimeInputFrame, RealtimeSessionCapabilities, RealtimeSessionError, RealtimeTranscript } from '@memberjunction/ai';
 import type { MJAIBridgeProviderEntity, MJAIBridgeProviderEntity_IBridgeProviderFeatures } from '@memberjunction/core-entities';
 import { BaseRealtimeBridge, BaseTelephonyBridge, ITelephonyCallSdk } from '@memberjunction/ai-bridge-base';
 import { AIBridgeEngine, IHostInstanceIdentity, StartBridgeSessionParams } from '../ai-bridge-engine';
@@ -32,6 +32,11 @@ class MockSession implements IRealtimeSession {
     private interruption?: () => void;
     private error?: (e: RealtimeSessionError) => void;
     private close?: () => void;
+    /** @param inbound The inbound tracks the session declares; none (no capabilities) unless a test needs video. */
+    constructor(private readonly inbound?: RealtimeSessionCapabilities['SupportedInboundTracks']) {}
+    get Capabilities(): RealtimeSessionCapabilities | undefined {
+        return this.inbound ? { CanReconfigureTurnMode: false, SupportedInboundTracks: this.inbound } : undefined;
+    }
     SendInput(frame: RealtimeInputFrame): void {
         this.Heard.push(frame.Data);
     }
@@ -211,6 +216,31 @@ describe('model session loss', () => {
         // The replacement keeps recording the transcript.
         second.EmitTranscript('user', 'still there?');
         expect(active.TranscriptTail.at(-1)).toEqual({ Role: 'user', Text: 'still there?' });
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it("doesn't tell the replacement about a camera only the lost session saw", async () => {
+        const takesVideo: RealtimeSessionCapabilities['SupportedInboundTracks'] = [
+            { Modality: 'audio', Direction: 'inbound' },
+            { Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: 1 },
+        ];
+        const first = new MockSession(takesVideo);
+        const second = new MockSession(takesVideo);
+        const recover = vi.fn(async () => second as IRealtimeSession);
+        const active = await engine().StartBridgeSession(params(first, makeProvider({ bridge: makeRow() }), { RecoverRealtimeSession: recover }));
+        const loopback = active.Bridge as LoopbackBridge;
+        const ada = { SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" };
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+
+        first.EmitClose();
+        await vi.waitFor(() => expect(active.RealtimeSession).toBe(second));
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', ...ada });
+        expect(second.Notes).toEqual([]);
+
+        // Once the replacement has seen the camera itself, it is told when the camera ends.
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', ...ada });
+        expect(second.Notes).toEqual(["[The agent can no longer see: Ada's camera]"]);
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
 

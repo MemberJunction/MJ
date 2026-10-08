@@ -45,6 +45,11 @@ export interface MintTokenParams {
   TtlSeconds?: number;
   /** Extra metadata merged into the participant metadata JSON. */
   Metadata?: Record<string, unknown>;
+  /**
+   * LiveKit participant attributes the participant carries from the moment it joins (e.g. `mj.agentWatches` on an
+   * agent's bot). Attributes are shared with every participant and announced on change.
+   */
+  Attributes?: Record<string, string>;
 }
 
 /** A minted token plus the connection coordinates a client needs to join. */
@@ -102,12 +107,13 @@ export class LiveKitTokenService {
    * @throws {Error} when credentials are not configured.
    */
   public async MintToken(params: MintTokenParams): Promise<MintedToken> {
-    this.assertConfigured();
+    this.AssertConfigured();
     const at = new AccessToken(this.config.ApiKey, this.config.ApiSecret, {
       identity: params.Identity,
       name: params.DisplayName,
       ttl: params.TtlSeconds ?? 3600,
       metadata: this.buildMetadata(params),
+      attributes: params.Attributes,
     });
     at.addGrant(this.buildGrant(params));
     const token = await at.toJwt();
@@ -133,9 +139,10 @@ export class LiveKitTokenService {
    * @param roomName The room to join.
    * @param identity The bot identity.
    * @param displayName The bot display name.
+   * @param attributes Participant attributes the bot carries from the moment it joins (e.g. `mj.agentWatches`).
    */
-  public MintBotToken(roomName: string, identity: string, displayName?: string): Promise<MintedToken> {
-    return this.MintToken({ RoomName: roomName, Identity: identity, DisplayName: displayName, Role: 'agent' });
+  public MintBotToken(roomName: string, identity: string, displayName?: string, attributes?: Record<string, string>): Promise<MintedToken> {
+    return this.MintToken({ RoomName: roomName, Identity: identity, DisplayName: displayName, Role: 'agent', Attributes: attributes });
   }
 
   /** Builds the LiveKit video grant from the params (defaults: publish + subscribe + data all on). */
@@ -154,8 +161,11 @@ export class LiveKitTokenService {
     return JSON.stringify({ mjRole: params.Role ?? 'participant', ...(params.Metadata ?? {}) });
   }
 
-  /** Throws a clear error when credentials are missing. */
-  private assertConfigured(): void {
+  /**
+   * Throws a clear error when credentials are missing. Public so a caller that must fail before doing costly work (the
+   * room coordinator, before it opens a model session) gets the same error minting would.
+   */
+  public AssertConfigured(): void {
     if (!this.IsConfigured) {
       throw new Error(
         'LiveKitTokenService is not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET ' +

@@ -4,7 +4,8 @@
  * `media-worker-bootstrap.ts`, which is deliberately NOT exported from the package index.
  *
  * A {@link MediaWorkerSession} owns the native `@livekit/rtc-node` room inside a `worker_threads.Worker`,
- * the outbound pre-buffer + duration-paced publish loop, and the zero-copy inbound audio forwarding.
+ * the outbound pre-buffer + duration-paced publish loop, and the zero-copy forwarding of inbound audio and of the
+ * sampled JPEG frames of participant video (read and encoded in the worker when the agent watches the meeting).
  *
  * ## Outbound pacing
  * Model audio arrives in bursts far faster than real time. Each response is paced by audio DURATION
@@ -19,9 +20,9 @@
  */
 
 import { performance } from 'node:perf_hooks';
-import type { NativeConnectArgs } from '@memberjunction/ai-bridge-livekit';
+import type { NativeConnectArgs, NativeRoomAudioFrame } from '@memberjunction/ai-bridge-livekit';
 import { LogError } from '@memberjunction/core';
-import { LiveKitRtcNodeRoomClient, DefaultRtcNodeLoader } from './livekit-rtc-node-room';
+import { LiveKitRtcNodeRoomClient, DefaultRtcNodeLoader, type RtcNodeLoader } from './livekit-rtc-node-room';
 import { ReadEventLoop, type RoomAudioTelemetrySnapshot, type TelemetryRoomClient } from './room-telemetry';
 import type {
     MediaWorkerCommand,
@@ -55,6 +56,28 @@ const DEFAULT_PREBUFFER_MS = 150;
 const TIMER_SLACK_MS = 1;
 
 /**
+ * The native room client a worker session builds for a connect (the session's default factory): the in-process
+ * client, at the session's rates, reading participant video when the options carry `video`.
+ *
+ * @param options The options from the main thread's `connect` command.
+ * @param loader The `@livekit/rtc-node` loader (tests inject a fake). Default {@link DefaultRtcNodeLoader}.
+ */
+export function CreateMediaWorkerRoomClient(options: MediaWorkerClientOptions, loader: RtcNodeLoader = DefaultRtcNodeLoader): TelemetryRoomClient {
+    return new LiveKitRtcNodeRoomClient(options.sampleRate, options.inboundSampleRate, options.channels, loader, { Video: options.video });
+}
+
+/** Copies an inbound audio frame's PCM into a standalone buffer the worker can transfer (zero-copy) to the main thread. */
+function transferableAudio(frame: NativeRoomAudioFrame): ArrayBuffer {
+    const frameData = frame.data;
+    if (frameData instanceof ArrayBuffer) {
+        return frameData;
+    }
+    const copy = new Uint8Array(frameData.byteLength);
+    copy.set(frameData);
+    return copy.buffer;
+}
+
+/**
  * Encapsulates the media worker's state and message handling for one WebRTC room session.
  */
 export class MediaWorkerSession {
@@ -82,9 +105,7 @@ export class MediaWorkerSession {
 
     constructor(private readonly port: MediaWorkerPort, deps: MediaWorkerSessionDeps = {}) {
         this.now = deps.now ?? (() => performance.now());
-        this.clientFactory =
-            deps.clientFactory ??
-            ((o) => new LiveKitRtcNodeRoomClient(o.sampleRate, o.inboundSampleRate, o.channels, DefaultRtcNodeLoader));
+        this.clientFactory = deps.clientFactory ?? ((o) => CreateMediaWorkerRoomClient(o));
     }
 
     /**
@@ -139,19 +160,27 @@ export class MediaWorkerSession {
 
         const client = this.clientFactory(this.options);
         this.client = client;
+        this.forwardMedia(client);
+        this.forwardRoomEvents(client);
 
-        // Forward inbound subscribed audio to main thread with transferable ArrayBuffers
+        const result = await client.connect(args);
+
+        // Seed the main thread's roster with everyone already in the room (participantConnected only
+        // fires for LATER joins). Sent before `connected` so getParticipants() is right the moment
+        // connect() resolves.
+        const participants = await client.getParticipants();
+        this.port.postMessage({ type: 'rosterSnapshot', participants });
+        this.port.postMessage({ type: 'connected', id, result });
+    }
+
+    /**
+     * Forwards inbound media to the main thread, transferring each buffer (zero-copy): diarized audio frames, and the
+     * sampled JPEG frames and ended sources of participant video. A video frame's `data` is a standalone buffer, so
+     * transferring it detaches nothing else.
+     */
+    private forwardMedia(client: TelemetryRoomClient): void {
         client.onAudioFrame((frame) => {
-            const frameData = frame.data;
-            let buffer: ArrayBuffer;
-            if (frameData instanceof ArrayBuffer) {
-                buffer = frameData;
-            } else {
-                const copy = new Uint8Array(frameData.byteLength);
-                copy.set(frameData);
-                buffer = copy.buffer;
-            }
-
+            const buffer = transferableAudio(frame);
             this.port.postMessage(
                 {
                     type: 'audioFrame',
@@ -165,7 +194,16 @@ export class MediaWorkerSession {
                 [buffer]
             );
         });
+        client.onVideoFrame?.((frame) => {
+            this.port.postMessage({ type: 'videoFrame', frame }, [frame.data]);
+        });
+        client.onVideoSourceEnded?.((source) => {
+            this.port.postMessage({ type: 'videoSourceEnded', source });
+        });
+    }
 
+    /** Forwards roster changes and the room's own disconnect to the main thread. */
+    private forwardRoomEvents(client: TelemetryRoomClient): void {
         client.onParticipantConnected((participant) => {
             this.port.postMessage({ type: 'participantConnected', participant });
         });
@@ -178,15 +216,6 @@ export class MediaWorkerSession {
             this.resetPacing();
             this.port.postMessage({ type: 'disconnected', reason: reason ?? 'room disconnected' });
         });
-
-        const result = await client.connect(args);
-
-        // Seed the main thread's roster with everyone already in the room (participantConnected only
-        // fires for LATER joins). Sent before `connected` so getParticipants() is right the moment
-        // connect() resolves.
-        const participants = await client.getParticipants();
-        this.port.postMessage({ type: 'rosterSnapshot', participants });
-        this.port.postMessage({ type: 'connected', id, result });
     }
 
     /** Handles outbound audio from the main thread with pre-buffering and duration pacing. */

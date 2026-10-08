@@ -161,6 +161,13 @@ export interface RealtimeVideoConfig {
      * config bag — an OPAQUE private pact with that driver (mirrors {@link RealtimeVoiceConfig.providers}).
      */
     providers?: Record<string, JSONObjectLike>;
+    /**
+     * Whether this agent watches LiveKit meetings: its bot reads the cameras and shared screens of the people who let
+     * agents see them, and the room offers everyone that choice. Default (absent / non-boolean): `false`. Set it on the
+     * VOICED agent (the Realtime type's schema does not allow `video` on the co-agent). Needs a model that takes video
+     * (Gemini 3.8 Live); on an audio-only model it does nothing.
+     */
+    watchMeetings?: boolean;  // case-violation-ok-legacy-back-compat: an authored JSON key, camelCase like the block's other keys
 }
 
 /**
@@ -1240,6 +1247,9 @@ function normalizeVideo(raw: unknown): RealtimeVideoConfig | null {
     if (typeof raw['avatarId'] === 'string' && raw['avatarId'].trim().length > 0) {
         video.avatarId = raw['avatarId'].trim();
     }
+    if (typeof raw['watchMeetings'] === 'boolean') {
+        video.watchMeetings = raw['watchMeetings'];
+    }
 
     const rawProviders = raw['providers'];
     if (isPlainObject(rawProviders)) {
@@ -1537,6 +1547,17 @@ export function BuildRealtimeOverridesJson(
  */
 export function GetNarrationPaceMs(config: RealtimeCoAgentConfig | null | undefined): number | null {
     return config?.realtime?.narration?.paceMs ?? null;
+}
+
+/**
+ * Whether the effective configuration says the agent watches LiveKit meetings (`realtime.video.watchMeetings`). Only
+ * an explicit `true` counts; normalization already dropped any non-boolean value.
+ *
+ * @param config The effective configuration.
+ * @returns `true` only when the setting is on.
+ */
+export function GetWatchesMeetingVideo(config: RealtimeCoAgentConfig | null | undefined): boolean {
+    return config?.realtime?.video?.watchMeetings === true;
 }
 
 /**

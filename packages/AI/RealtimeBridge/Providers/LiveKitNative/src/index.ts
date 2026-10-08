@@ -3,6 +3,8 @@ export * from './media-worker-types';
 export * from './media-worker-session';
 export * from './room-telemetry';
 export * from './livekit-worker-room-client';
+export * from './video-frame-encoder';
+export * from './room-video-watcher';
 
 import { CreateLiveKitRtcNodeModule } from './livekit-rtc-node-room';
 

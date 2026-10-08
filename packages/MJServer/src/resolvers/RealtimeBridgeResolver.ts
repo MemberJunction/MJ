@@ -48,6 +48,13 @@ LiveKitAgentRoomCoordinator.Instance.SetTurnToolBinder((session, handler) => {
 });
 
 /**
+ * Binds whether an agent watches meetings (same module-load rationale as the factory above). The coordinator asks per
+ * model session; the answer is the agent's `realtime.video.watchMeetings` setting, which the session runtime read from
+ * its effective configuration (`@memberjunction/ai-agents`). The coordinator also requires a model that takes video.
+ */
+LiveKitAgentRoomCoordinator.Instance.SetAgentVisionResolver((session) => GetBridgeRealtimeRuntime(session)?.WatchesMeetingVideo === true);
+
+/**
  * Binds the co-agent run finalizer onto the bridge engine (same module-load rationale as the factory above).
  * Lets the engine finalize a session's dangling co-agent observability run when it reaps a bridge WITHOUT a
  * live in-memory session (a prior-boot orphan / cross-host reap) — the one teardown path the agent layer's

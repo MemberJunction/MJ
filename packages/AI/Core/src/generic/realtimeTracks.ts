@@ -183,6 +183,21 @@ export function InboundVideoStreamsOf(capabilities?: RealtimeSessionCapabilities
 }
 
 /**
+ * The frame rate (frames per second) a **live session** takes on inbound video, read from its declared capabilities:
+ * the `Rate` of its inbound video track. `undefined` when it declares no inbound video track, no rate, or a rate that is
+ * not a positive finite number; a sender then paces at the default rate (see `RealtimeVideoFrameIntervalMs`).
+ *
+ * A host that sends video from somewhere other than the browser (a meeting bot) reads the rate here, so the rate always
+ * comes from the model rather than from a constant in the sender.
+ *
+ * @param capabilities The session's declared capabilities, if any.
+ */
+export function InboundVideoRateOf(capabilities?: RealtimeSessionCapabilities | null): number | undefined {
+    const rate = capabilities?.SupportedInboundTracks?.find((t) => t.Modality === 'video')?.Rate;
+    return typeof rate === 'number' && Number.isFinite(rate) && rate > 0 ? rate : undefined;
+}
+
+/**
  * Canonical track descriptor for channel-sourced inbound video (e.g. Whiteboard, Remote Browser).
  * Encoded as JPEG, 1 fps rate ceiling, billed on tokens + frames, and requires no human OS consent grant.
  */

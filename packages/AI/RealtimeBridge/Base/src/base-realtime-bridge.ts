@@ -1,7 +1,7 @@
 import { MJAIBridgeProviderEntity_IBridgeProviderFeatures } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { BridgeCapabilityNotSupportedError } from './capability-errors';
-import { BridgeMediaFrame, BridgeMediaTrackKind, BridgeParticipantInfo } from './media-tracks';
+import { BridgeMediaFrame, BridgeMediaTrackKind, BridgeParticipantInfo, BridgeVideoSourceEnd } from './media-tracks';
 import { IBridgeMeetingControlsEventSource } from './channel-plane';
 
 /**
@@ -196,6 +196,20 @@ export abstract class BaseRealtimeBridge {
      */
     public FlushOutboundMedia(): void {
         // Default: nothing buffered to flush.
+    }
+
+    /**
+     * Registers a handler invoked when an inbound camera or screen source the driver was sending stops: the person
+     * stopped letting agents see them, left, stopped sharing or turned the camera off. The engine tells the model, so it
+     * stops describing what it can no longer see.
+     *
+     * **No-op by default** (NOT capability-gated): a driver that sends no inbound video has no source to end, so
+     * registering is always safe. Drivers that send camera or screen frames override it.
+     *
+     * @param _handler Invoked with each source that ended.
+     */
+    public OnVideoSourceEnded(_handler: (source: BridgeVideoSourceEnd) => void): void {
+        // Default: this driver sends no inbound video, so no source ever ends.
     }
 
     // ──────────────────────────────────────────────────────────────────────────────

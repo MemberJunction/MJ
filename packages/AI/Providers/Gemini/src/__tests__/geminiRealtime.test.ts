@@ -18,6 +18,7 @@ import type {
 } from '@memberjunction/ai';
 
 import { GeminiRealtime, type GeminiLiveSession, type GeminiConnectArgs } from '../geminiRealtime';
+import { ResolveGeminiLiveProfile } from '../geminiLiveProfiles';
 
 /* ------------------------------------------------------------------ */
 /*  Fake in-memory Gemini Live session                                */
@@ -1238,6 +1239,19 @@ describe('per-model Live legality', () => {
             expect(video.Capabilities?.SupportedInboundTracks?.some((t) => t.Modality === 'video')).toBe(true);
             const audioOnly = await new TestGeminiRealtime('k').StartSession(makeParams({ Model: 'gemini-3.1-flash-live-preview' }));
             expect(audioOnly.Capabilities?.MaxInboundVideoStreams).toBe(0);
+        });
+
+        it("declares the inbound video track's rate from the model's profile, not a literal", async () => {
+            const profile = ResolveGeminiLiveProfile('gemini-3.8-live');
+            const declared = profile.MaxInboundVideoRate;
+            profile.MaxInboundVideoRate = 2;
+            try {
+                const session = await new TestGeminiRealtime('k').StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+                const track = session.Capabilities?.SupportedInboundTracks?.find((t) => t.Modality === 'video');
+                expect(track?.Rate).toBe(2);
+            } finally {
+                profile.MaxInboundVideoRate = declared;
+            }
         });
 
         it('attaches scheduling on SendToolResult when model supports scheduling (gemini-3.8-live)', async () => {

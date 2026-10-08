@@ -8,13 +8,16 @@ import {
     BridgeCapabilityNotSupportedError,
     BridgeMeetingParticipant,
 } from '@memberjunction/ai-bridge-base';
-import { LiveKitBridge } from '../livekit-bridge';
+import { BridgeVideoSourceEnd } from '@memberjunction/ai-bridge-base';
+import { IsAgentParticipantIdentity, LiveKitBridge, VideoSourceIdOf, VideoSourceLabelOf, VideoTrackOf } from '../livekit-bridge';
 import {
     ILiveKitRoomSdk,
     LiveKitParticipant,
     LiveKitAudioFrame,
     LiveKitConnectArgs,
     LiveKitConnectResult,
+    LiveKitVideoFrame,
+    LiveKitVideoSourceEnd,
 } from '../livekit-sdk';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -34,6 +37,8 @@ class FakeLiveKitRoomSdk implements ILiveKitRoomSdk {
     private participants: LiveKitParticipant[] = [];
 
     private audioCb?: (frame: LiveKitAudioFrame) => void;
+    private videoCb?: (frame: LiveKitVideoFrame) => void;
+    private videoEndCb?: (source: LiveKitVideoSourceEnd) => void;
     private joinCb?: (p: LiveKitParticipant) => void;
     private leaveCb?: (id: string) => void;
     private disconnectedCb?: () => void;
@@ -55,6 +60,9 @@ class FakeLiveKitRoomSdk implements ILiveKitRoomSdk {
     public publishAudioFrame(pcm: ArrayBuffer): void {
         this.PublishedAudio.push(pcm);
     }
+    public flushOutboundAudio(): void {
+        /* not driven here */
+    }
     public publishVideoFrame(frame: ArrayBuffer): void {
         this.PublishedVideo.push(frame);
     }
@@ -63,6 +71,12 @@ class FakeLiveKitRoomSdk implements ILiveKitRoomSdk {
     }
     public onAudioTrack(cb: (frame: LiveKitAudioFrame) => void): void {
         this.audioCb = cb;
+    }
+    public onVideoTrack(cb: (frame: LiveKitVideoFrame) => void): void {
+        this.videoCb = cb;
+    }
+    public onVideoSourceEnded(cb: (source: LiveKitVideoSourceEnd) => void): void {
+        this.videoEndCb = cb;
     }
     public onParticipantJoin(cb: (p: LiveKitParticipant) => void): void {
         this.joinCb = cb;
@@ -83,6 +97,12 @@ class FakeLiveKitRoomSdk implements ILiveKitRoomSdk {
     // ── drive helpers ──
     public DriveInboundAudio(frame: LiveKitAudioFrame): void {
         this.audioCb?.(frame);
+    }
+    public DriveVideoFrame(frame: LiveKitVideoFrame): void {
+        this.videoCb?.(frame);
+    }
+    public DriveVideoSourceEnded(source: LiveKitVideoSourceEnd): void {
+        this.videoEndCb?.(source);
     }
     public DriveJoin(p: LiveKitParticipant): void {
         this.participants.push(p);
@@ -234,6 +254,129 @@ describe('LiveKitBridge — media', () => {
         const bridge = makeBridge(sdk);
         bridge.SendMedia('audio-out', { Track: 'audio-out', Bytes: bytes(1) });
         expect(sdk.PublishedAudio.length).toBe(0);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Video in (agent vision): sampled camera and screen frames from people who allow it.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('LiveKitBridge — video in (what the agent sees)', () => {
+    const cameraFrame = (overrides: Partial<LiveKitVideoFrame> = {}): LiveKitVideoFrame => ({
+        Bytes: bytes(0xff, 0xd8),
+        MimeType: 'image/jpeg',
+        ParticipantIdentity: 'p-ada',
+        DisplayName: 'Ada',
+        Source: 'camera',
+        Width: 640,
+        Height: 360,
+        TimestampMs: 1000,
+        ...overrides,
+    });
+
+    it("passes the provider's video flags to the SDK with the session configuration", async () => {
+        const configs: Array<Record<string, unknown> | undefined> = [];
+        const bridge = new LiveKitBridge();
+        bridge.SetSdkFactory((config) => {
+            configs.push(config);
+            return sdk;
+        });
+        await bridge.Connect(ctx({ ...FULL_FEATURES, ScreenIn: false }));
+        expect(configs[0]).toMatchObject({ BotDisplayName: 'Sage', AccessToken: 'signed-token-xyz', VideoIn: true, ScreenIn: false });
+    });
+
+    it('forwards a camera frame as video-in, with its type, source key and name', async () => {
+        const bridge = makeBridge(sdk);
+        const seen: BridgeMediaFrame[] = [];
+        bridge.OnMedia((f) => seen.push(f));
+        await bridge.Connect(ctx());
+
+        sdk.DriveVideoFrame(cameraFrame());
+
+        expect(seen).toHaveLength(1);
+        expect(seen[0]).toMatchObject({
+            Track: 'video-in',
+            MimeType: 'image/jpeg',
+            SourceID: 'participant:p-ada:camera',
+            SourceLabel: "Ada's camera",
+            TimestampMs: 1000,
+        });
+        expect(new Uint8Array(seen[0].Bytes!)).toEqual(new Uint8Array([0xff, 0xd8]));
+        expect(seen[0].SpeakerLabel).toBeUndefined();
+    });
+
+    it('forwards a shared screen as screen-in, with its own source key', async () => {
+        const bridge = makeBridge(sdk);
+        const seen: BridgeMediaFrame[] = [];
+        bridge.OnMedia((f) => seen.push(f));
+        await bridge.Connect(ctx());
+
+        sdk.DriveVideoFrame(cameraFrame({ Source: 'screen' }));
+
+        expect(seen.map((f) => [f.Track, f.SourceID, f.SourceLabel])).toEqual([['screen-in', 'participant:p-ada:screen', "Ada's screen"]]);
+    });
+
+    it('drops camera frames without VideoIn, and shared screens without ScreenIn', async () => {
+        const camerasOnly = makeBridge(sdk);
+        const fromCamerasOnly: BridgeMediaFrame[] = [];
+        camerasOnly.OnMedia((f) => fromCamerasOnly.push(f));
+        await camerasOnly.Connect(ctx({ ...FULL_FEATURES, ScreenIn: false }));
+        sdk.DriveVideoFrame(cameraFrame({ Source: 'screen' }));
+        sdk.DriveVideoFrame(cameraFrame());
+        expect(fromCamerasOnly.map((f) => f.Track)).toEqual(['video-in']);
+
+        const otherSdk = new FakeLiveKitRoomSdk();
+        const screensOnly = makeBridge(otherSdk);
+        const fromScreensOnly: BridgeMediaFrame[] = [];
+        screensOnly.OnMedia((f) => fromScreensOnly.push(f));
+        await screensOnly.Connect(ctx({ ...FULL_FEATURES, VideoIn: false }));
+        otherSdk.DriveVideoFrame(cameraFrame());
+        otherSdk.DriveVideoFrame(cameraFrame({ Source: 'screen' }));
+        expect(fromScreensOnly.map((f) => f.Track)).toEqual(['screen-in']);
+    });
+
+    it('reports an ended source with the same key and name its frames carried', async () => {
+        const bridge = makeBridge(sdk);
+        const ended: BridgeVideoSourceEnd[] = [];
+        bridge.OnVideoSourceEnded((s) => ended.push(s));
+        await bridge.Connect(ctx());
+
+        sdk.DriveVideoSourceEnded({ ParticipantIdentity: 'p-ada', DisplayName: 'Ada', Source: 'camera' });
+
+        expect(ended).toEqual([{ Track: 'video-in', SourceID: 'participant:p-ada:camera', SourceLabel: "Ada's camera" }]);
+    });
+
+    it('forwards nothing after Disconnect', async () => {
+        const bridge = makeBridge(sdk);
+        const seen: BridgeMediaFrame[] = [];
+        const ended: BridgeVideoSourceEnd[] = [];
+        bridge.OnMedia((f) => seen.push(f));
+        bridge.OnVideoSourceEnded((s) => ended.push(s));
+        await bridge.Connect(ctx());
+        await bridge.Disconnect('Explicit');
+
+        sdk.DriveVideoFrame(cameraFrame());
+        sdk.DriveVideoSourceEnded({ ParticipantIdentity: 'p-ada', Source: 'camera' });
+
+        expect(seen).toEqual([]);
+        expect(ended).toEqual([]);
+    });
+
+    it('names sources for the model, and keys them per participant and kind', () => {
+        expect(VideoSourceLabelOf('Ada', 'camera')).toBe("Ada's camera");
+        expect(VideoSourceLabelOf('  Bo ', 'screen')).toBe("Bo's screen");
+        expect(VideoSourceLabelOf(undefined, 'camera')).toBe("a participant's camera");
+        expect(VideoSourceLabelOf('', 'screen')).toBe("a participant's screen");
+        expect(VideoSourceIdOf('p-ada', 'camera')).not.toBe(VideoSourceIdOf('p-ada', 'screen'));
+        expect(VideoTrackOf('camera')).toBe('video-in');
+        expect(VideoTrackOf('screen')).toBe('screen-in');
+    });
+
+    it('recognizes other agents by their identity, which the bot never reads', () => {
+        expect(IsAgentParticipantIdentity('agent-1234')).toBe(true);
+        expect(IsAgentParticipantIdentity('Agent-XYZ')).toBe(true);
+        expect(IsAgentParticipantIdentity('p-ada')).toBe(false);
+        expect(IsAgentParticipantIdentity(undefined)).toBe(false);
     });
 });
 

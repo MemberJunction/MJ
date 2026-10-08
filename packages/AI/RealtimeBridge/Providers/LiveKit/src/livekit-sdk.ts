@@ -76,6 +76,42 @@ export interface LiveKitAudioFrame {
     TimestampMs?: number;
 }
 
+/** Which of a participant's video sources a frame comes from: their camera or a screen they share. */
+export type LiveKitVideoSourceKind = 'camera' | 'screen';
+
+/**
+ * One sampled frame of a person's camera or shared screen, from someone who lets agents see them. Already encoded for
+ * the model (JPEG) and paced to the model's rate by the room client.
+ */
+export interface LiveKitVideoFrame {
+    /** The encoded image. */
+    Bytes: ArrayBuffer;
+    /** The image format. */
+    MimeType: 'image/jpeg';
+    /** The participant whose camera or screen this is. */
+    ParticipantIdentity: string;
+    /** Their display name, when known. */
+    DisplayName?: string;
+    /** Which of their sources this is. */
+    Source: LiveKitVideoSourceKind;
+    /** The encoded image's width in pixels. */
+    Width: number;
+    /** The encoded image's height in pixels. */
+    Height: number;
+    /** Epoch-ms capture timestamp. */
+    TimestampMs: number;
+}
+
+/** A camera or screen the room client stopped reading: the person opted out, left, stopped sharing or turned it off. */
+export interface LiveKitVideoSourceEnd {
+    /** The participant whose source it was. */
+    ParticipantIdentity: string;
+    /** Their display name, when known. */
+    DisplayName?: string;
+    /** Which of their sources ended. */
+    Source: LiveKitVideoSourceKind;
+}
+
 /** Arguments to {@link ILiveKitRoomSdk.connect} — what the bot needs to join an MJ-native room. */
 export interface LiveKitConnectArgs {
     /** The LiveKit room server URL (e.g. `wss://livekit.myorg.com`). MJ-owned, self-hosted. */
@@ -136,6 +172,23 @@ export interface ILiveKitRoomSdk {
      * @param cb Invoked with each inbound, per-participant audio frame.
      */
     onAudioTrack(cb: (frame: LiveKitAudioFrame) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+    /**
+     * Subscribes sampled camera and screen frames from people who let agents see them (what the agent SEES). Only fires
+     * when the session's configuration asked the room client to watch. Optional: an SDK without inbound video omits it.
+     * "Latest handler wins."
+     *
+     * @param cb Invoked with each sampled frame.
+     */
+    onVideoTrack?(cb: (frame: LiveKitVideoFrame) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
+
+    /**
+     * Subscribes the end of a camera or screen the room client was reading. Optional, like {@link onVideoTrack}.
+     * "Latest handler wins."
+     *
+     * @param cb Invoked with each source that ended.
+     */
+    onVideoSourceEnded?(cb: (source: LiveKitVideoSourceEnd) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
 
     /**
      * Publishes one raw video frame on the bot's camera track. LiveKit does full video; the realtime

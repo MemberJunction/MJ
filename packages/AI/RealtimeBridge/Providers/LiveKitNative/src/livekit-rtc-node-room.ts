@@ -9,6 +9,10 @@
  *   (a LiveKit `AudioSource` → `LocalAudioTrack`), so other participants hear the agent.
  * - **Hearing in** — each remote participant's subscribed audio track is read via an `AudioStream` and
  *   surfaced as a diarized `NativeRoomAudioFrame` (`{ data, participantIdentity, name }`).
+ * - **Seeing in** — when the client is created with video options (the agent watches the meeting), a
+ *   {@link RoomVideoWatcher} reads the cameras and screens of people who let agents see them, one source at a time,
+ *   sampled to the session's rate and encoded as JPEG (`NativeRoomVideoFrame`). In EVERY meeting, video the bot does
+ *   not read is unsubscribed as it arrives.
  * - **Roster / data** — participant connect/disconnect events + the reliable data channel ("chat").
  *
  * ## Sample rates (THE most common live-test failure — read this)
@@ -42,9 +46,13 @@ import type {
     NativeConnectResult,
     NativeRoomAudioFrame,
     NativeRoomParticipant,
+    NativeRoomVideoFrame,
+    NativeRoomVideoOptions,
+    NativeRoomVideoSourceEnd,
 } from '@memberjunction/ai-bridge-livekit';
 import { LiveKitWorkerRoomClient } from './livekit-worker-room-client';
 import type { IMediaWorker } from './media-worker-types';
+import { DropVideoSubscription, RoomVideoWatcher } from './room-video-watcher';
 import {
     GetModuleEventLoopMonitor,
     ReadEventLoop,
@@ -76,18 +84,90 @@ export interface RtcAudioFrame {
     samplesPerChannel: number;
 }
 
-/** A participant as `@livekit/rtc-node` reports it. VERIFY: `identity` / `name`. */
+/** A participant as `@livekit/rtc-node` reports it. VERIFY: `identity` / `name` / `attributes` / `trackPublications`. */
 export interface RtcParticipant {
     /** The participant's stable application identity. */
     identity: string;
     /** The participant's display name. */
     name?: string;
+    /**
+     * The participant's attributes (where a person's `mj.agentCanSee` consent lives). VERIFY against @livekit/rtc-node:
+     * `Participant.attributes`, updated BEFORE `ParticipantAttributesChanged` is emitted.
+     */
+    attributes?: Record<string, string>;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+    /** The participant's publications keyed by track sid. VERIFY against @livekit/rtc-node: `Participant.trackPublications`. */
+    trackPublications?: Map<string, RtcTrackPublication>;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
 }
 
-/** A subscribed media track. VERIFY: `kind` compared against `TrackKind.KIND_AUDIO`. */
+/** A subscribed media track. VERIFY: `kind` compared against `TrackKind.KIND_AUDIO` / `KIND_VIDEO`. */
 export interface RtcTrack {
     /** The track kind (audio/video). */
     kind: number;
+}
+
+/**
+ * A remote participant's published track, subscribed or not. VERIFY against @livekit/rtc-node: `RemoteTrackPublication`
+ * (`sid`, `source`, `muted` getters; the SDK keeps one object per publication and passes it to every event).
+ */
+export interface RtcTrackPublication {
+    /** The track sid. */
+    readonly sid?: string;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+    /** The track source (`TrackSource`: camera and screen share are video; microphone and screen-share audio are not). */
+    readonly source?: number;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+    /** Whether the publisher muted it. VERIFY: updated BEFORE `TrackMuted` / `TrackUnmuted` is emitted. */
+    readonly muted?: boolean;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+    /**
+     * Asks the server to send (or stop sending) this track to the bot; the SDK answers with `TrackSubscribed` /
+     * `TrackUnsubscribed`. Remote publications only. VERIFY against @livekit/rtc-node: `RemoteTrackPublication.setSubscribed`.
+     */
+    setSubscribed?(subscribed: boolean): void;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+}
+
+/**
+ * One decoded video frame. VERIFY against @livekit/rtc-node: `VideoFrame` (I420 planes contiguous in `data`, strides equal
+ * to the plane widths; `convert` is an FFI call that returns a new frame).
+ */
+export interface RtcVideoFrame {
+    /** The pixel buffer. */
+    data: Uint8Array;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+    /** Width in pixels. */
+    width: number;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+    /** Height in pixels. */
+    height: number;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+    /** The buffer type (`VideoBufferType`). */
+    type: number;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+    /** Converts the frame to another buffer type. */
+    convert(dstType: number): RtcVideoFrame;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+}
+
+/** One frame a `VideoStream` yields. VERIFY against @livekit/rtc-node: `VideoFrameEvent { frame, timestampUs, rotation }`. */
+export interface RtcVideoFrameEvent {
+    /** The decoded frame. */
+    frame: RtcVideoFrame;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+    /** How far the frame must be turned clockwise to stand upright (`VideoRotation`). */
+    rotation: number;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+}
+
+/** What one `read()` of a video stream resolves to (the WHATWG `ReadableStreamReadResult`). */
+export type RtcVideoReadResult =
+    | { done: false; value: RtcVideoFrameEvent }  // case-violation-ok-legacy-back-compat: mirrors the WHATWG stream API's member names
+    | { done: true; value?: undefined };  // case-violation-ok-legacy-back-compat: mirrors the WHATWG stream API's member names
+
+/**
+ * The reader of a `VideoStream`. VERIFY against @livekit/rtc-node: `VideoStream` is a WHATWG `ReadableStream` that enqueues
+ * every decoded frame with no backpressure, so the reader must keep draining; `cancel()` releases the native stream.
+ */
+export interface RtcVideoStreamReader {
+    /** Resolves with the next frame, or `done` once the stream ended or was cancelled. */
+    read(): Promise<RtcVideoReadResult>;  // case-violation-ok-legacy-back-compat: mirrors the WHATWG stream API's member names
+    /** Cancels the stream: a pending `read()` resolves `done`, and the native stream is released. */
+    cancel(reason?: string): Promise<void>;  // case-violation-ok-legacy-back-compat: mirrors the WHATWG stream API's member names
+}
+
+/** The decoded frames of one subscribed video track. VERIFY against @livekit/rtc-node: `new VideoStream(track)`. */
+export interface RtcVideoStream {
+    /** Locks the stream to a reader. */
+    getReader(): RtcVideoStreamReader;  // case-violation-ok-legacy-back-compat: mirrors the WHATWG stream API's member names
 }
 
 /** The audio source the bot publishes its voice through. VERIFY: `captureFrame(frame)` is async. */
@@ -153,23 +233,42 @@ export interface RtcNodeModule {
     AudioStream: new (track: RtcTrack, sampleRate?: number, channels?: number) => RtcAudioStream;
     /** `LocalAudioTrack.createAudioTrack(name, source)`. */
     LocalAudioTrack: { createAudioTrack(name: string, source: RtcAudioSource): RtcLocalAudioTrack };
+    /**
+     * `new VideoStream(track)` — the decoded frames of one subscribed video track. VERIFY against @livekit/rtc-node: takes
+     * no options in 0.13.x, and copies every frame into JavaScript at the publisher's rate, so only tracks the bot reads
+     * get one.
+     */
+    VideoStream: new (track: RtcTrack) => RtcVideoStream;
+    /** Video buffer-type constants. VERIFY: `VideoBufferType.I420`. */
+    VideoBufferType: { I420: number };
+    /** Video rotation constants. VERIFY: `VideoRotation.VIDEO_ROTATION_*` (WebRTC's clockwise convention). */
+    VideoRotation: { VIDEO_ROTATION_0: number; VIDEO_ROTATION_90: number; VIDEO_ROTATION_180: number; VIDEO_ROTATION_270: number };
     /** Event-name constants. VERIFY exact member names. */
     RoomEvent: {
         TrackSubscribed: string;
+        TrackUnsubscribed: string;
+        TrackSubscriptionFailed: string;
+        TrackUnpublished: string;
+        TrackMuted: string;
+        TrackUnmuted: string;
         ParticipantConnected: string;
         ParticipantDisconnected: string;
+        ParticipantAttributesChanged: string;
         Disconnected: string;
     };
-    /** Track-kind constants. VERIFY: `KIND_AUDIO`. */
-    TrackKind: { KIND_AUDIO: number };
+    /** Track-kind constants. VERIFY: `KIND_AUDIO`, `KIND_VIDEO`. */
+    TrackKind: { KIND_AUDIO: number; KIND_VIDEO: number };
     /**
      * `new TrackPublishOptions({ source })` — the publish-options protobuf message. REQUIRED by
      * `publishTrack`: passing a plain object leaves `source` unset and the track improperly bound, so the
      * native `AudioSource.captureFrame` rejects every frame with `InvalidState`. Construct the real proto.
      */
     TrackPublishOptions: new (data?: { source?: number; dtx?: boolean; red?: boolean; stream?: string }) => RtcTrackPublishOptions;
-    /** Track-source constants — `SOURCE_MICROPHONE` tags the bot's published voice track. */
-    TrackSource: { SOURCE_MICROPHONE: number };
+    /**
+     * Track-source constants — `SOURCE_MICROPHONE` tags the bot's published voice track; `SOURCE_CAMERA` and
+     * `SOURCE_SCREENSHARE` tell a participant's camera from a screen they share.
+     */
+    TrackSource: { SOURCE_MICROPHONE: number; SOURCE_CAMERA: number; SOURCE_SCREENSHARE: number };
 }
 
 /** Opaque marker for a constructed `TrackPublishOptions` proto handed to `publishTrack`. */
@@ -180,6 +279,17 @@ export interface RtcTrackPublishOptions {
 
 /** The injectable loader for `@livekit/rtc-node` (tests inject a fake; production lazy-imports the addon). */
 export type RtcNodeLoader = () => Promise<RtcNodeModule>;
+
+/** Settings of {@link LiveKitRtcNodeRoomClient} beyond its audio rates. */
+export interface LiveKitRtcNodeRoomClientOptions {
+    /**
+     * What to read for the agent when it watches the meeting (from `NativeRoomClientOptions.Video`). Absent: the
+     * client reads no video. Either way, video the bot does not read is unsubscribed.
+     */
+    Video?: NativeRoomVideoOptions;
+    /** Monotonic millisecond clock for video pacing and encode timing (tests inject one). Default `performance.now()`. */
+    Now?: () => number;
+}
 
 /** Options for {@link CreateLiveKitRtcNodeModule}. */
 export interface CreateLiveKitRtcNodeModuleOptions {
@@ -328,6 +438,14 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     private participantConnectedHandler?: (p: NativeRoomParticipant) => void;
     private participantDisconnectedHandler?: (identity: string) => void;
     private disconnectedHandler?: (reason?: string) => void;
+    private videoFrameHandler?: (frame: NativeRoomVideoFrame) => void;
+    private videoSourceEndedHandler?: (source: NativeRoomVideoSourceEnd) => void;
+
+    /** What the agent may read; absent when it does not watch the meeting. */
+    private readonly videoOptions?: NativeRoomVideoOptions;
+    private readonly now?: () => number;
+    /** Reads participant video while connected; null when the agent does not watch (or after disconnect). */
+    private videoWatcher: RoomVideoWatcher | null = null;
 
     private warnedVideo = false;
     private warnedScreen = false;
@@ -337,21 +455,25 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
      * @param inboundRate Inbound PCM rate (Hz) — each AudioStream's resample target (model input rate).
      * @param channels Channel count.
      * @param loadRtc The `@livekit/rtc-node` loader.
+     * @param options Video settings (see {@link LiveKitRtcNodeRoomClientOptions}); omit for a voice-only bot.
      */
-    constructor(outboundRate: number, inboundRate: number, channels: number, loadRtc: RtcNodeLoader) {
+    constructor(outboundRate: number, inboundRate: number, channels: number, loadRtc: RtcNodeLoader, options: LiveKitRtcNodeRoomClientOptions = {}) {
         this.outboundRate = outboundRate;
         this.inboundRate = inboundRate;
         this.channels = channels;
         this.loadRtc = loadRtc;
+        this.videoOptions = options.Video;
+        this.now = options.Now;
     }
 
-    /** Connects to the room, publishes the bot's audio track, and wires inbound audio + roster events. */
+    /** Connects to the room, publishes the bot's audio track, and wires inbound audio, video + roster events. */
     public async connect(args: NativeConnectArgs): Promise<NativeConnectResult> {
         // Ensure module-level event-loop monitor is initialized (best-effort)
         GetModuleEventLoopMonitor();
 
         const rtc = await this.loadRtc();
         const room = new rtc.Room();
+        this.videoWatcher = this.createVideoWatcher(rtc, room);
         this.wireRoomEvents(rtc, room);
 
         // VERIFY against @livekit/rtc-node: connect(url, token, { autoSubscribe, dynacast }).
@@ -389,6 +511,8 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
             }
         }
 
+        this.videoWatcher?.Stop(); // cancels every video reader; the bot leaving is not a source ending
+        this.videoWatcher = null;
         this.closeInboundStreams();
         this.inboundGaps.clear();
         this.lastCaptureFinishMs = undefined;
@@ -557,14 +681,44 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         this.disconnectedHandler = cb;
     }
 
+    /**
+     * Registers the inbound video handler: sampled JPEG frames from people who let agents see them. Fires only when
+     * the client was created with video options. "Latest handler wins."
+     */
+    public onVideoFrame(cb: (frame: NativeRoomVideoFrame) => void): void {
+        this.videoFrameHandler = cb;
+    }
+
+    /** Registers the handler for a camera or screen that stopped being read after sending frames. "Latest handler wins." */
+    public onVideoSourceEnded(cb: (source: NativeRoomVideoSourceEnd) => void): void {
+        this.videoSourceEndedHandler = cb;
+    }
+
     // ── internals ──────────────────────────────────────────────────────────────
 
-    /** Wires room-level events (track-subscribed → inbound audio; participant + disconnect events). */
+    /** The video watcher for this session, or null when the agent does not watch the meeting. */
+    private createVideoWatcher(rtc: RtcNodeModule, room: RtcRoom): RoomVideoWatcher | null {
+        if (!this.videoOptions) {
+            return null;
+        }
+        return new RoomVideoWatcher({
+            Video: this.videoOptions,
+            Rtc: rtc,
+            ListParticipants: () => ParticipantsToArray(room.remoteParticipants),
+            OnFrame: (frame) => this.videoFrameHandler?.(frame),
+            OnSourceEnded: (source) => this.videoSourceEndedHandler?.(source),
+            Now: this.now,
+        });
+    }
+
+    /** Wires room-level events (track-subscribed → inbound audio or video; participant + disconnect events). */
     private wireRoomEvents(rtc: RtcNodeModule, room: RtcRoom): void {
         // VERIFY against @livekit/rtc-node: TrackSubscribed listener arity (track, publication, participant).
-        room.on(rtc.RoomEvent.TrackSubscribed, ((track: RtcTrack, _pub: unknownRecord, participant: RtcParticipant) => {
+        room.on(rtc.RoomEvent.TrackSubscribed, ((track: RtcTrack, publication: RtcTrackPublication, participant: RtcParticipant) => {
             if (track.kind === rtc.TrackKind.KIND_AUDIO) {
                 this.consumeInboundAudio(rtc, track, participant);
+            } else if (track.kind === rtc.TrackKind.KIND_VIDEO) {
+                this.routeInboundVideo(track, publication, participant);
             }
         }) as (...args: never[]) => void);
 
@@ -574,11 +728,50 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 
         room.on(rtc.RoomEvent.ParticipantDisconnected, ((participant: RtcParticipant) => {
             this.inboundGaps.delete(participant.identity);
+            this.videoWatcher?.HandleParticipantDisconnected(participant);
             this.participantDisconnectedHandler?.(participant.identity);
         }) as (...args: never[]) => void);
 
-        room.on(rtc.RoomEvent.Disconnected, ((reason?: unknown) =>
-            this.disconnectedHandler?.(reason === undefined ? undefined : String(reason))) as (...args: never[]) => void);
+        room.on(rtc.RoomEvent.Disconnected, ((reason?: unknown) => {
+            this.videoWatcher?.Stop();
+            this.disconnectedHandler?.(reason === undefined ? undefined : String(reason));
+        }) as (...args: never[]) => void);
+
+        if (this.videoWatcher) {
+            this.wireVideoEvents(rtc, room, this.videoWatcher);
+        }
+    }
+
+    /**
+     * A subscribed video track goes to the watcher when the agent watches; otherwise it is unsubscribed at once (the
+     * bot joins with `autoSubscribe` for its hearing, and must not keep receiving video it never reads).
+     */
+    private routeInboundVideo(track: RtcTrack, publication: RtcTrackPublication, participant: RtcParticipant): void {
+        if (this.videoWatcher) {
+            this.videoWatcher.HandleTrackSubscribed(track, publication, participant);
+        } else {
+            DropVideoSubscription(publication);
+        }
+    }
+
+    /**
+     * Wires the events that end or open a video source. VERIFY against @livekit/rtc-node: listener arities —
+     * `(track, publication, participant)` for TrackUnsubscribed, `(trackSid, participant, error)` for TrackSubscriptionFailed
+     * (as rtc-node 0.13.29's room.ts emits it), `(publication, participant)` for TrackUnpublished /
+     * TrackMuted / TrackUnmuted, `(changedAttributes, participant)` for ParticipantAttributesChanged.
+     */
+    private wireVideoEvents(rtc: RtcNodeModule, room: RtcRoom, watcher: RoomVideoWatcher): void {
+        room.on(rtc.RoomEvent.TrackUnsubscribed, ((_track: RtcTrack, publication: RtcTrackPublication, participant: RtcParticipant) =>
+            watcher.HandleTrackUnsubscribed(publication, participant)) as (...args: never[]) => void);
+        room.on(rtc.RoomEvent.TrackSubscriptionFailed, ((trackSid: string, participant: RtcParticipant, error?: string) =>
+            watcher.HandleTrackSubscriptionFailed(trackSid, participant, error)) as (...args: never[]) => void);
+        room.on(rtc.RoomEvent.TrackUnpublished, ((publication: RtcTrackPublication, participant: RtcParticipant) =>
+            watcher.HandleTrackUnpublished(publication, participant)) as (...args: never[]) => void);
+        room.on(rtc.RoomEvent.TrackMuted, ((publication: RtcTrackPublication, participant: RtcParticipant) =>
+            watcher.HandleTrackMuted(publication, participant)) as (...args: never[]) => void);
+        room.on(rtc.RoomEvent.TrackUnmuted, (() => watcher.HandleTrackUnmuted()) as (...args: never[]) => void);
+        room.on(rtc.RoomEvent.ParticipantAttributesChanged, ((_changed: Record<string, string>, participant: RtcParticipant) =>
+            watcher.HandleAttributesChanged(participant)) as (...args: never[]) => void);
     }
 
     /**
@@ -633,19 +826,26 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         }
     }
 
-    /** Returns a snapshot of room audio telemetry (inbound gaps, outbound underruns/captures, event-loop p99). */
+    /**
+     * Returns a snapshot of room telemetry (inbound gaps, outbound underruns/captures, event-loop p99, and the
+     * participant-video counters while the agent watches the meeting).
+     */
     public GetTelemetry(): RoomAudioTelemetrySnapshot {
         const inboundGaps: Record<string, InboundFrameGapHistogram> = {};
         for (const [k, v] of this.inboundGaps.entries()) {
             inboundGaps[k] = { ...v };
         }
         const loop = ReadEventLoop();
-        return {
+        const snapshot: RoomAudioTelemetrySnapshot = {
             inboundGaps,
             outbound: { ...this.outboundTelemetry },
             eventLoopDelayP99Ms: loop?.P99Ms,
             eventLoopWindowMs: loop?.WindowMs,
         };
+        if (this.videoWatcher) {
+            snapshot.video = this.videoWatcher.GetTelemetry();
+        }
+        return snapshot;
     }
 
     /** Closes all inbound audio streams (best-effort). */
@@ -693,24 +893,22 @@ export function CreateLiveKitRtcNodeModule(opts: CreateLiveKitRtcNodeModuleOptio
             // token to client.connect(args). The PER-SESSION sample rates ARE used: the agent's realtime
             // model dictates them (OpenAI 24 kHz; Gemini Live 16 kHz IN), threaded down from the engine, so
             // inbound room audio is resampled to what THIS model consumes. Fall back to the module defaults.
+            // `Video` is present only when the agent watches the meeting; it reaches whichever client hosts the room.
             const outRate = options.OutboundSampleRate ?? outbound;
             const inRate = options.InboundSampleRate ?? inbound;
+            const video = options.Video;
             if (useWorker) {
                 return new LiveKitWorkerRoomClient({
                     sampleRate: outRate,
                     inboundSampleRate: inRate,
                     channels,
                     preBufferMs,
+                    video,
                     workerFactory,
-                    fallbackFactory: () => new LiveKitRtcNodeRoomClient(outRate, inRate, channels, loader),
+                    fallbackFactory: () => new LiveKitRtcNodeRoomClient(outRate, inRate, channels, loader, { Video: video }),
                 });
             }
-            return new LiveKitRtcNodeRoomClient(
-                outRate,
-                inRate,
-                channels,
-                loader,
-            );
+            return new LiveKitRtcNodeRoomClient(outRate, inRate, channels, loader, { Video: video });
         },
     };
 }

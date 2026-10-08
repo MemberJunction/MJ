@@ -44,6 +44,8 @@ import {
     LiveKitConnectResult,
     LiveKitParticipant,
     LiveKitParticipantRole,
+    LiveKitVideoFrame,
+    LiveKitVideoSourceEnd,
 } from './livekit-sdk';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -62,6 +64,63 @@ export interface NativeRoomAudioFrame {
     name?: string;
     /** Optional epoch-ms capture timestamp. */
     timestampMs?: number;
+}
+
+/** Which of a participant's video sources the native client read: their camera or a screen they share. */
+export type NativeRoomVideoSourceKind = 'camera' | 'screen';
+
+/**
+ * One sampled camera or screen frame the native room client surfaces, from a person who lets agents see them. Encoded
+ * (JPEG) and paced to the session's rate by the client. Mapped onto {@link LiveKitVideoFrame}.
+ */
+export interface NativeRoomVideoFrame {
+    /** The encoded image. */
+    data: ArrayBuffer;  // case-violation-ok-legacy-back-compat: the native frame types use the native SDK's lower-case vocabulary, like NativeRoomAudioFrame
+    /** The image format. */
+    mimeType: 'image/jpeg';  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+    /** The participant whose camera or screen this is. */
+    participantIdentity: string;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+    /** Their display name, when the client has it. */
+    name?: string;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+    /** Which of their sources this is. */
+    source: NativeRoomVideoSourceKind;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+    /** The encoded image's width in pixels. */
+    width: number;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+    /** The encoded image's height in pixels. */
+    height: number;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+    /** Epoch-ms capture timestamp. */
+    timestampMs: number;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+}
+
+/** A camera or screen the native room client stopped reading. Mapped onto {@link LiveKitVideoSourceEnd}. */
+export interface NativeRoomVideoSourceEnd {
+    /** The participant whose source it was. */
+    participantIdentity: string;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+    /** Their display name, when the client has it. */
+    name?: string;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+    /** Which of their sources ended. */
+    source: NativeRoomVideoSourceKind;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+}
+
+/**
+ * What the native room client may read for the agent: present in {@link NativeRoomClientOptions.Video} only when the
+ * agent watches the meeting. The client reads only people whose `mj.agentCanSee` attribute is `'true'`.
+ */
+export interface NativeRoomVideoOptions {
+    /** How many sources the client reads at once: the session's inbound video stream count (1 today). */
+    Streams: number;
+    /** Frames per second each source is sampled to: the session's inbound video rate. Absent: the default, 1 fps. */
+    Rate?: number;
+    /** Whether cameras may be read (the provider's `VideoIn`). */
+    Cameras: boolean;
+    /** Whether shared screens may be read (the provider's `ScreenIn`). */
+    Screens: boolean;
+    /** Cap on a camera frame's longer side, in pixels. Default 640. */
+    CameraMaxDimension?: number;
+    /** Cap on a screen frame's longer side, in pixels. Default 1280, so text stays legible. */
+    ScreenMaxDimension?: number;
+    /** JPEG quality from 1 to 100. Default 80, the browser sampler's 0.8. */
+    JpegQuality?: number;
 }
 
 /** One participant as the native room client reports it. Mapped onto {@link LiveKitParticipant}. */
@@ -124,6 +183,14 @@ export interface NativeRoomClient {
     publishData(text: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Registers the room-disconnected callback (SFU closed / the bot was removed); `reason` is the disconnect reason when known. */
     onDisconnected(cb: (reason?: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    /**
+     * Registers the inbound video callback: sampled frames from people who let agents see them. Fires only when the
+     * client was created with {@link NativeRoomClientOptions.Video}. Optional: a wrapper without video omits it.
+     * "Latest handler wins."
+     */
+    onVideoFrame?(cb: (frame: NativeRoomVideoFrame) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
+    /** Registers the callback for a camera or screen the client stopped reading. Optional. "Latest handler wins." */
+    onVideoSourceEnded?(cb: (source: NativeRoomVideoSourceEnd) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
 }
 
 /** The native room module surface — a factory that constructs a {@link NativeRoomClient}. */
@@ -150,6 +217,8 @@ export interface NativeRoomClientOptions {
     InboundSampleRate?: number;
     /** PCM rate (Hz) the agent's model EMITS — the bot's published voice-track rate. Default 24000. */
     OutboundSampleRate?: number;
+    /** What to read for the agent, when it watches the meeting. Absent: the client reads no video. */
+    Video?: NativeRoomVideoOptions;
 }
 
 /**
@@ -181,6 +250,48 @@ export interface LiveKitNativeSdkConfig {
     InboundSampleRate?: number;
     /** PCM rate (Hz) the agent's model **emits** — the bot's published voice track rate. Default 24000. */
     OutboundSampleRate?: number;
+    /**
+     * Whether the agent watches the meeting: set by the room coordinator when the agent's setting is on and its session
+     * takes video. Only then does the room client read anyone's camera or screen (and only people who allow it).
+     */
+    AgentVision?: boolean;
+    /** How many inbound video streams the session takes, threaded from the model by the engine. `0` or absent: none. */
+    InboundVideoStreams?: number;
+    /** The session's inbound video rate (frames per second), threaded from the model by the engine. */
+    InboundVideoRate?: number;
+    /** Whether the provider allows camera video in (its `VideoIn` flag), passed down by the bridge. */
+    VideoIn?: boolean;
+    /** Whether the provider allows shared screens in (its `ScreenIn` flag), passed down by the bridge. */
+    ScreenIn?: boolean;
+    /** Override of the camera frame size cap (longer side, px). */
+    VideoCameraMaxDimension?: number;
+    /** Override of the screen frame size cap (longer side, px). */
+    VideoScreenMaxDimension?: number;
+    /** Override of the JPEG quality (1-100). */
+    VideoJpegQuality?: number;
+}
+
+/**
+ * The video options for the native room client, or `undefined` when the agent does not watch: the coordinator did not
+ * turn agent vision on, the session takes no video, or the provider allows neither cameras nor screens. Pure, so it is
+ * tested directly.
+ */
+export function NativeVideoOptionsFor(config: LiveKitNativeSdkConfig): NativeRoomVideoOptions | undefined {
+    const streams = config.InboundVideoStreams ?? 0;
+    const cameras = config.VideoIn === true;
+    const screens = config.ScreenIn === true;
+    if (config.AgentVision !== true || streams <= 0 || (!cameras && !screens)) {
+        return undefined;
+    }
+    return {
+        Streams: streams,
+        Rate: config.InboundVideoRate,
+        Cameras: cameras,
+        Screens: screens,
+        CameraMaxDimension: config.VideoCameraMaxDimension,
+        ScreenMaxDimension: config.VideoScreenMaxDimension,
+        JpegQuality: config.VideoJpegQuality,
+    };
 }
 
 /** Normalizes the native client's free-form role string onto the seam's {@link LiveKitParticipantRole}. */
@@ -254,6 +365,29 @@ export function MapNativeAudioFrame(frame: NativeRoomAudioFrame): LiveKitAudioFr
 /** @deprecated Use {@link MapNativeAudioFrame}. */
 export function mapNativeAudioFrame(frame: NativeRoomAudioFrame): LiveKitAudioFrame {
     return MapNativeAudioFrame(frame);
+}
+
+/** **Pure mapping** of one native sampled video frame onto the seam's {@link LiveKitVideoFrame}. */
+export function MapNativeVideoFrame(frame: NativeRoomVideoFrame): LiveKitVideoFrame {
+    return {
+        Bytes: frame.data,
+        MimeType: frame.mimeType,
+        ParticipantIdentity: String(frame.participantIdentity),
+        DisplayName: frame.name,
+        Source: frame.source,
+        Width: frame.width,
+        Height: frame.height,
+        TimestampMs: frame.timestampMs,
+    };
+}
+
+/** **Pure mapping** of a native ended video source onto the seam's {@link LiveKitVideoSourceEnd}. */
+export function MapNativeVideoSourceEnd(source: NativeRoomVideoSourceEnd): LiveKitVideoSourceEnd {
+    return {
+        ParticipantIdentity: String(source.participantIdentity),
+        DisplayName: source.name,
+        Source: source.source,
+    };
 }
 
 /**
@@ -392,6 +526,12 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
     /** The room-disconnected handler. */
     private disconnectedHandler?: (reason?: string) => void;
 
+    /** The inbound video handler (sampled frames from people who let agents see them). */
+    private videoHandler?: (frame: LiveKitVideoFrame) => void;
+
+    /** The handler for a camera or screen the room client stopped reading. */
+    private videoSourceEndedHandler?: (source: LiveKitVideoSourceEnd) => void;
+
     /**
      * @param config Resolved credentials + the native module specifier.
      * @param loadModule The native-module loader (defaults to the lazy specifier loader).
@@ -428,6 +568,8 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
             // audio is resampled to what the model consumes (OpenAI 24 kHz; Gemini Live 16 kHz).
             InboundSampleRate: this.config.InboundSampleRate,
             OutboundSampleRate: this.config.OutboundSampleRate,
+            // Only when the agent watches: the client then reads the cameras and screens of people who allow it.
+            Video: NativeVideoOptionsFor(this.config),
         });
         this.wireClient(client);
 
@@ -502,6 +644,16 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
         this.audioHandler = cb;
     }
 
+    /** Registers the inbound video handler: sampled frames from people who let agents see them (the seeing path). */
+    public onVideoTrack(cb: (frame: LiveKitVideoFrame) => void): void {
+        this.videoHandler = cb;
+    }
+
+    /** Registers the handler for a camera or screen the room client stopped reading. */
+    public onVideoSourceEnded(cb: (source: LiveKitVideoSourceEnd) => void): void {
+        this.videoSourceEndedHandler = cb;
+    }
+
     // ── ILiveKitRoomSdk — roster + signals ───────────────────────────────────────────
 
     /** Registers the participant-join handler. */
@@ -548,6 +700,9 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
         client.onParticipantConnected((p) => this.joinHandler?.(MapNativeParticipant(p)));
         client.onParticipantDisconnected((id) => this.leaveHandler?.(String(id)));
         client.onDisconnected((reason) => this.disconnectedHandler?.(reason));
+        // Optional on the native seam: a wrapper without inbound video simply never reports any.
+        client.onVideoFrame?.((frame) => this.videoHandler?.(MapNativeVideoFrame(frame)));
+        client.onVideoSourceEnded?.((source) => this.videoSourceEndedHandler?.(MapNativeVideoSourceEnd(source)));
     }
 }
 
@@ -590,6 +745,14 @@ export function ReadNativeConfig(config?: Record<string, unknown>): LiveKitNativ
         NativeModuleSpecifier: readString(cfg.NativeModuleSpecifier),
         InboundSampleRate: readNumber(cfg.InboundSampleRate),
         OutboundSampleRate: readNumber(cfg.OutboundSampleRate),
+        AgentVision: readBoolean(cfg.AgentVision),
+        InboundVideoStreams: readNumber(cfg.InboundVideoStreams),
+        InboundVideoRate: readNumber(cfg.InboundVideoRate),
+        VideoIn: readBoolean(cfg.VideoIn),
+        ScreenIn: readBoolean(cfg.ScreenIn),
+        VideoCameraMaxDimension: readNumber(cfg.VideoCameraMaxDimension),
+        VideoScreenMaxDimension: readNumber(cfg.VideoScreenMaxDimension),
+        VideoJpegQuality: readNumber(cfg.VideoJpegQuality),
     };
 }
 
@@ -606,4 +769,9 @@ function readString(value: unknown): string | undefined {
 /** Reads a positive finite number from a free-form config value, or `undefined`. */
 function readNumber(value: unknown): number | undefined {
     return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+/** Reads a boolean from a free-form config value, or `undefined` (only real booleans count, never `'true'`). */
+function readBoolean(value: unknown): boolean | undefined {
+    return typeof value === 'boolean' ? value : undefined;
 }

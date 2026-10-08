@@ -23,8 +23,12 @@ import {
     NativeRoomAudioFrame,
     NativeRoomParticipant,
     NativeConnectArgs,
+    NativeRoomClientOptions,
+    NativeRoomVideoFrame,
+    NativeRoomVideoSourceEnd,
+    NativeVideoOptionsFor,
 } from '../livekit-native-sdk';
-import { LiveKitAudioFrame, LiveKitConnectArgs, LiveKitParticipant } from '../livekit-sdk';
+import { LiveKitAudioFrame, LiveKitConnectArgs, LiveKitParticipant, LiveKitVideoFrame, LiveKitVideoSourceEnd } from '../livekit-sdk';
 
 /** An in-memory {@link NativeRoomClient} with drive helpers + capture sinks (no SDK, no network). */
 class FakeNativeClient implements NativeRoomClient {
@@ -37,6 +41,8 @@ class FakeNativeClient implements NativeRoomClient {
     public roster: NativeRoomParticipant[] = [];
 
     private audioCb?: (frame: NativeRoomAudioFrame) => void;
+    private videoCb?: (frame: NativeRoomVideoFrame) => void;
+    private videoEndCb?: (source: NativeRoomVideoSourceEnd) => void;
     private joinCb?: (p: NativeRoomParticipant) => void;
     private leaveCb?: (id: string) => void;
     private disconnectedCb?: (reason?: string) => void;
@@ -50,6 +56,9 @@ class FakeNativeClient implements NativeRoomClient {
     }
     publishAudio(pcm: ArrayBuffer) {
         this.publishedAudio.push(pcm);
+    }
+    flushOutbound() {
+        /* not driven here */
     }
     publishVideo(frame: ArrayBuffer) {
         this.publishedVideo.push(frame);
@@ -75,8 +84,20 @@ class FakeNativeClient implements NativeRoomClient {
     onDisconnected(cb: (reason?: string) => void) {
         this.disconnectedCb = cb;
     }
+    onVideoFrame(cb: (frame: NativeRoomVideoFrame) => void) {
+        this.videoCb = cb;
+    }
+    onVideoSourceEnded(cb: (source: NativeRoomVideoSourceEnd) => void) {
+        this.videoEndCb = cb;
+    }
 
     // ── drive helpers (the "LiveKit" side) ──
+    driveVideo(frame: NativeRoomVideoFrame) {
+        this.videoCb?.(frame);
+    }
+    driveVideoEnded(source: NativeRoomVideoSourceEnd) {
+        this.videoEndCb?.(source);
+    }
     driveAudio(frame: NativeRoomAudioFrame) {
         this.audioCb?.(frame);
     }
@@ -188,6 +209,78 @@ describe('LiveKitNativeMeetingSdk — connect + two-way audio', () => {
         expect(heard).toHaveLength(1);
         expect(heard[0].ParticipantIdentity).toBe('u-3');
         expect(heard[0].DisplayName).toBe('Sam');
+    });
+});
+
+describe('LiveKitNativeMeetingSdk — video in (what the agent sees)', () => {
+    const watching = { AgentVision: true, InboundVideoStreams: 1, InboundVideoRate: 1, VideoIn: true, ScreenIn: true };
+
+    it('asks the room client to watch only when the agent watches, its session takes video and the provider allows a kind', () => {
+        expect(NativeVideoOptionsFor(watching)).toEqual({
+            Streams: 1,
+            Rate: 1,
+            Cameras: true,
+            Screens: true,
+            CameraMaxDimension: undefined,
+            ScreenMaxDimension: undefined,
+            JpegQuality: undefined,
+        });
+        expect(NativeVideoOptionsFor({ ...watching, AgentVision: false })).toBeUndefined();
+        expect(NativeVideoOptionsFor({ ...watching, AgentVision: undefined })).toBeUndefined();
+        expect(NativeVideoOptionsFor({ ...watching, InboundVideoStreams: undefined })).toBeUndefined();
+        expect(NativeVideoOptionsFor({ ...watching, VideoIn: false, ScreenIn: false })).toBeUndefined();
+        expect(NativeVideoOptionsFor({ ...watching, ScreenIn: false })).toMatchObject({ Cameras: true, Screens: false });
+    });
+
+    it('passes the size and quality overrides through', () => {
+        expect(NativeVideoOptionsFor({ ...watching, VideoCameraMaxDimension: 480, VideoScreenMaxDimension: 960, VideoJpegQuality: 70 })).toMatchObject({
+            CameraMaxDimension: 480,
+            ScreenMaxDimension: 960,
+            JpegQuality: 70,
+        });
+    });
+
+    it('gives the room client the Video options at connect when watching, and none otherwise', async () => {
+        const seenOptions: NativeRoomClientOptions[] = [];
+        const recordingModule = (client: FakeNativeClient): NativeRoomModule => ({
+            createRoomClient: (options) => {
+                seenOptions.push(options);
+                return client;
+            },
+        });
+        await new LiveKitNativeMeetingSdk({ ...cfg, ...watching }, async () => recordingModule(new FakeNativeClient())).connect(baseArgs);
+        await new LiveKitNativeMeetingSdk(cfg, async () => recordingModule(new FakeNativeClient())).connect(baseArgs);
+        expect(seenOptions[0].Video).toMatchObject({ Streams: 1, Cameras: true, Screens: true });
+        expect(seenOptions[1].Video).toBeUndefined();
+    });
+
+    it("maps the client's sampled frames and ended sources onto the seam", async () => {
+        const client = new FakeNativeClient();
+        const sdk = new LiveKitNativeMeetingSdk({ ...cfg, ...watching }, async () => fakeModule(client));
+        const frames: LiveKitVideoFrame[] = [];
+        const ended: LiveKitVideoSourceEnd[] = [];
+        sdk.onVideoTrack((f) => frames.push(f));
+        sdk.onVideoSourceEnded((s) => ended.push(s));
+        await sdk.connect(baseArgs);
+
+        const jpeg = new Uint8Array([0xff, 0xd8]).buffer;
+        client.driveVideo({ data: jpeg, mimeType: 'image/jpeg', participantIdentity: 'p-ada', name: 'Ada', source: 'screen', width: 1280, height: 720, timestampMs: 5 });
+        client.driveVideoEnded({ participantIdentity: 'p-ada', name: 'Ada', source: 'screen' });
+
+        expect(frames).toEqual([
+            { Bytes: jpeg, MimeType: 'image/jpeg', ParticipantIdentity: 'p-ada', DisplayName: 'Ada', Source: 'screen', Width: 1280, Height: 720, TimestampMs: 5 },
+        ]);
+        expect(ended).toEqual([{ ParticipantIdentity: 'p-ada', DisplayName: 'Ada', Source: 'screen' }]);
+    });
+
+    it('reads the agent-vision keys from Configuration: only real booleans and positive numbers count', () => {
+        expect(ReadNativeConfig({ ...watching, VideoJpegQuality: 70 })).toMatchObject({ ...watching, VideoJpegQuality: 70 });
+        const loose = ReadNativeConfig({ AgentVision: 'true', InboundVideoStreams: 0, InboundVideoRate: -1, VideoIn: 1, ScreenIn: 'yes' });
+        expect(loose.AgentVision).toBeUndefined();
+        expect(loose.InboundVideoStreams).toBeUndefined();
+        expect(loose.InboundVideoRate).toBeUndefined();
+        expect(loose.VideoIn).toBeUndefined();
+        expect(loose.ScreenIn).toBeUndefined();
     });
 });
 
