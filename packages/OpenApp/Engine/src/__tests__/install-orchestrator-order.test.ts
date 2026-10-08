@@ -25,6 +25,7 @@ vi.mock('../github/github-client.js', () => ({
     DownloadMigrations: vi.fn(),
     GetLatestVersion: vi.fn(),
     ValidateGitHubTag: vi.fn(),
+    ListGitHubTagNames: vi.fn(),
     // The orchestrator derives an optional in-repo subpath from the Source URL;
     // keep the real parser so single-app URLs resolve to `undefined` (root manifest).
     ParseGitHubUrl: (repoUrl: string) => {
@@ -89,7 +90,7 @@ vi.mock('@memberjunction/core', () => ({
 
 import { InstallApp, UpgradeApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTagNames, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
 import { CheckCanMigrateAppSchema, CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
@@ -175,6 +176,7 @@ describe('InstallApp dependency orchestration', () => {
         // Dependency version resolution (B26): deps declare '^1.0.0'; offer a satisfying tag,
         // and let the pinned-version tag validation pass so the dep install proceeds.
         vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubTagNames).mockResolvedValue(['1.0.0']);
         vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(ValidateGitHubTag).mockResolvedValue({ Exists: true });
 

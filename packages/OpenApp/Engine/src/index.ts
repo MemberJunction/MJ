@@ -56,6 +56,7 @@ export {
     FetchManifestFromGitHub,
     ListGitHubReleases,
     ListGitHubTags,
+    ListGitHubTagNames,
     ValidateGitHubTag,
     DownloadMigrations,
     GetLatestVersion,

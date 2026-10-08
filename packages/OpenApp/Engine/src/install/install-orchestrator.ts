@@ -15,7 +15,7 @@ import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/versi
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTagNames, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
 import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
 import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
@@ -1684,14 +1684,21 @@ export async function ResolveDependencyVersion(
   if (!semver.validRange(range)) {
     return { ErrorMessage: `version '${versionRange}' is not a valid semver version or range` };
   }
-  // Gather candidate versions: non-draft releases + semver tags.
-  const [releases, tags] = await Promise.all([
-    ListGitHubReleases(repoUrl, options),
-    ListGitHubTags(repoUrl, options),
-  ]);
+  // Candidate versions are non-draft releases + semver tags. Tags first: whenever the releases cannot
+  // change the answer (see VersionDecidedByTags), listing them would only spend a request of the
+  // anonymous 60-per-hour GitHub allowance. ListGitHubTags reuses the walk ListGitHubTagNames just
+  // made, so this is one tag listing, not two.
+  const tagNames = await ListGitHubTagNames(repoUrl, options);
+  const tags = tagNames.length > 0 ? await ListGitHubTags(repoUrl, options) : [];
+  const tagVersions = tags.map((t) => t.replace(/^v/, '')).filter((v) => semver.valid(v) != null);
+  const decided = VersionDecidedByTags(tagNames, tagVersions, range);
+  if (decided) {
+    return { Version: decided };
+  }
+  const releases = await ListGitHubReleases(repoUrl, options);
   const candidates = [
     ...releases.filter((r) => !r.Draft).map((r) => r.TagName.replace(/^v/, '')),
-    ...tags.map((t) => t.replace(/^v/, '')),
+    ...tagVersions,
   ].filter((v) => semver.valid(v) != null);
   if (candidates.length === 0) {
     return { ErrorMessage: `no published versions found at ${repoUrl} to satisfy '${versionRange}'` };
@@ -1702,6 +1709,32 @@ export async function ResolveDependencyVersion(
     return { ErrorMessage: `no published version at ${repoUrl} satisfies '${versionRange}' (latest available: ${latest})` };
   }
   return { Version: best };
+}
+
+/**
+ * The version {@link ResolveDependencyVersion} would pick, when the tags alone decide it — or
+ * undefined when the releases list could still change the answer and must be fetched.
+ *
+ * Why skipping the releases request cannot change the result: a published release's tag is a tag in
+ * the repository (GitHub creates it on publish; drafts are excluded anyway), so every version a release
+ * contributes is the `v`-stripped name of some tag in `allTagNames`. `tagVersions` keeps only the names
+ * matching ListGitHubTags' strict pattern, so the releases can add only the OTHER semver-valid names —
+ * build metadata (`v1.2.3+build.7`) or hyphenated prerelease ids (`v1.0.0-rc-1`). When none of those
+ * satisfies the range at or above the tags' best, no release outranks that best, nor ties it with a
+ * different string (maxSatisfying keeps the first maximum, and releases come first) — so the answer
+ * with the releases is the answer without them. When nothing in the tags satisfies the range, releases
+ * are the only remaining source (and the error's "latest available"), so they are always fetched.
+ */
+function VersionDecidedByTags(allTagNames: string[], tagVersions: string[], range: string): string | undefined {
+  const best = semver.maxSatisfying(tagVersions, range);
+  if (!best) {
+    return undefined;
+  }
+  const strict = new Set(tagVersions);
+  const contender = allTagNames
+    .map((name) => name.replace(/^v/, ''))
+    .find((v) => !strict.has(v) && semver.valid(v) != null && semver.satisfies(v, range) && semver.gte(v, best));
+  return contender === undefined ? best : undefined;
 }
 
 /**

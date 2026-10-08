@@ -3,8 +3,13 @@
  * (@octokit/rest), so these tests mock the Octokit class and assert on the REST
  * methods it calls (repos.getContent / git.getRef / repos.listTags / repos.listReleases)
  * and the auth token each constructed client receives.
+ *
+ * File CONTENT is read from raw.githubusercontent.com first, through the global `fetch`. That is
+ * stubbed for every test — a unit test must never reach the network — and answers 404 by default,
+ * which sends each read down the Contents API path the older assertions here were written against.
+ * The raw path itself is covered by its own describe blocks below.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Hoisted shared mocks: every `new Octokit()` returns an object backed by the SAME
 // method mocks, so a test can stub the next response and assert on the call args.
@@ -16,6 +21,9 @@ const mocks = vi.hoisted(() => ({
     getRef: vi.fn(),
     getBlob: vi.fn(),
 }));
+
+/** The global fetch: every raw.githubusercontent.com read goes through it. */
+const rawFetch = vi.hoisted(() => vi.fn());
 
 /**
  * Stand-in for Octokit's paginate plugin: calls the endpoint page by page and concatenates the
@@ -54,6 +62,8 @@ import {
     FetchManifestFromGitHub,
     IsPrereleaseVersion,
     ClearGitHubTagCache,
+    ListGitHubTagNames,
+    GitHubAccessError,
 } from '../github/github-client.js';
 import type { GitHubClientOptions } from '../github/github-client.js';
 
@@ -84,6 +94,13 @@ beforeEach(() => {
     // stubs `listTags` could be served the PREVIOUS test's tag list and pass for the wrong reason
     // — or assert a call count that a cache hit had silently absorbed.
     ClearGitHubTagCache();
+    rawFetch.mockReset();
+    rawFetch.mockImplementation(async () => new Response('404: Not Found', { status: 404 }));
+    vi.stubGlobal('fetch', rawFetch);
+});
+
+afterEach(() => {
+    vi.unstubAllGlobals();
 });
 
 describe('ParseGitHubUrl', () => {
@@ -675,5 +692,277 @@ describe('scoped (multi-app) version resolution', () => {
         mocks.getRef.mockResolvedValueOnce({ data: {} });
         await ValidateGitHubTag('https://github.com/Acme/App', '2.0.0', {});
         expect(mocks.getRef).toHaveBeenCalledWith({ owner: 'Acme', repo: 'App', ref: 'tags/v2.0.0' });
+    });
+});
+
+describe('FetchManifestFromGitHub — content from raw.githubusercontent.com', () => {
+    /** Answers every raw read with `body` (a string or exact bytes). */
+    function serveRaw(body: string | Uint8Array): void {
+        rawFetch.mockImplementation(async () => new Response(body, { status: 200 }));
+    }
+    const rawUrl = (call = 0): string => String(rawFetch.mock.calls[call][0]);
+    const rawInit = (call = 0): RequestInit => rawFetch.mock.calls[call][1] as RequestInit;
+
+    it('reads the default-branch manifest from raw and makes no REST request at all', async () => {
+        serveRaw('{"manifestVersion":1}');
+
+        const result = await FetchManifestFromGitHub('https://github.com/Acme/App', undefined, {});
+
+        expect(result).toEqual({ Success: true, ManifestJSON: '{"manifestVersion":1}' });
+        expect(rawUrl()).toBe('https://raw.githubusercontent.com/Acme/App/HEAD/mj-app.json');
+        expect(mocks.getContent).not.toHaveBeenCalled();
+        expect(mocks.ctor).not.toHaveBeenCalled(); // no REST client was even needed
+    });
+
+    it('addresses a version as refs/tags/v<version>, so a same-named branch cannot shadow the tag', async () => {
+        serveRaw('{}');
+
+        await FetchManifestFromGitHub('https://github.com/Acme/App', '1.2.0', {});
+
+        expect(rawUrl()).toBe('https://raw.githubusercontent.com/Acme/App/refs/tags/v1.2.0/mj-app.json');
+    });
+
+    it('percent-encodes a scoped multi-app tag so its @ is not read as URL syntax', async () => {
+        serveRaw('{}');
+
+        await FetchManifestFromGitHub('https://github.com/MemberJunction/Integrations/CRM/HubSpot', '1.2.0', {});
+
+        expect(rawUrl()).toBe('https://raw.githubusercontent.com/MemberJunction/Integrations/refs/tags/CRM-HubSpot%401.2.0/CRM/HubSpot/mj-app.json');
+    });
+
+    it('sends the per-repository token as a Bearer header, and refuses redirects while holding it', async () => {
+        serveRaw('{}');
+        const options: GitHubClientOptions = { Token: 'default-token', TokenMap: { 'https://github.com/Acme/SpecialRepo': 'special-token' } };
+
+        await FetchManifestFromGitHub('https://github.com/Acme/SpecialRepo', undefined, options);
+
+        expect(rawInit().headers).toEqual({ Authorization: 'Bearer special-token' });
+        expect(rawInit().redirect).toBe('manual');
+    });
+
+    it('sends no Authorization header without a token, and treats an empty GITHUB_TOKEN as none', async () => {
+        serveRaw('{}');
+
+        await FetchManifestFromGitHub('https://github.com/Acme/App', undefined, { Token: '' });
+
+        expect(rawInit().headers).toBeUndefined();
+        expect(rawInit().redirect).toBe('follow');
+    });
+
+    it('keeps a UTF-8 byte-order mark, exactly as the Contents API path decodes it', async () => {
+        serveRaw(Buffer.from('﻿{"a":1}', 'utf-8'));
+
+        const result = await FetchManifestFromGitHub('https://github.com/Acme/App', undefined, {});
+
+        expect(result.ManifestJSON).toBe('﻿{"a":1}');
+    });
+
+    it('falls back to the Contents API when raw will not serve the file (e.g. a private repo it does not authorize)', async () => {
+        // rawFetch answers 404 by default.
+        mocks.getContent.mockResolvedValueOnce(fileResponse('{"from":"api"}'));
+
+        const result = await FetchManifestFromGitHub('https://github.com/Acme/Private', undefined, { Token: 'ghp_x' });
+
+        expect(result.ManifestJSON).toBe('{"from":"api"}');
+        expect(mocks.getContent).toHaveBeenCalledWith({ owner: 'Acme', repo: 'Private', path: 'mj-app.json', ref: 'HEAD' });
+        expect(lastAuth()).toBe('ghp_x');
+    });
+
+    it('falls back to the API when the raw host is unreachable, and skips raw for later reads', async () => {
+        rawFetch.mockRejectedValue(new TypeError('fetch failed', { cause: new Error('getaddrinfo ENOTFOUND raw.githubusercontent.com') }));
+        mocks.getContent.mockResolvedValueOnce(fileResponse('{"n":1}')).mockResolvedValueOnce(fileResponse('{"n":2}'));
+
+        const first = await FetchManifestFromGitHub('https://github.com/Acme/One', undefined, {});
+        const second = await FetchManifestFromGitHub('https://github.com/Acme/Two', undefined, {});
+
+        expect([first.ManifestJSON, second.ManifestJSON]).toEqual(['{"n":1}', '{"n":2}']);
+        // A blocked host costs one failed connection, not one per file.
+        expect(rawFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats a 429 from raw as the host being unavailable for a while', async () => {
+        rawFetch.mockImplementation(async () => new Response('slow down', { status: 429 }));
+        mocks.getContent.mockResolvedValue(fileResponse('{}'));
+
+        await FetchManifestFromGitHub('https://github.com/Acme/One', undefined, {});
+        await FetchManifestFromGitHub('https://github.com/Acme/Two', undefined, {});
+
+        expect(rawFetch).toHaveBeenCalledTimes(1);
+        expect(mocks.getContent).toHaveBeenCalledTimes(2);
+    });
+
+    it('serves a repeat fetch of the same manifest from memory, but never across tokens', async () => {
+        serveRaw('{}');
+
+        await FetchManifestFromGitHub('https://github.com/Acme/App', '1.0.0', {});
+        await FetchManifestFromGitHub('https://github.com/Acme/App', '1.0.0', {});
+        expect(rawFetch).toHaveBeenCalledTimes(1);
+
+        await FetchManifestFromGitHub('https://github.com/Acme/App', '1.0.0', { Token: 'ghp_other' });
+        expect(rawFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not remember a failed fetch', async () => {
+        mocks.getContent.mockRejectedValueOnce({ status: 404 });
+        const missing = await FetchManifestFromGitHub('https://github.com/Acme/App', undefined, {});
+        expect(missing.Success).toBe(false);
+
+        serveRaw('{"pushed":true}');
+        const found = await FetchManifestFromGitHub('https://github.com/Acme/App', undefined, {});
+        expect(found.ManifestJSON).toBe('{"pushed":true}');
+    });
+});
+
+describe('rate limits — explained, never a bare 403', () => {
+    const RESET_EPOCH = Math.floor(Date.UTC(2026, 9, 7, 21, 34, 0) / 1000);
+
+    /** An Octokit RequestError as GitHub returns it when the hourly allowance is spent. */
+    function rateLimited(headers: Record<string, string> = {}) {
+        return Object.assign(new Error("API rate limit exceeded for 203.0.113.7. (But here's the good news: Authenticated requests get a higher rate limit.)"), {
+            status: 403,
+            response: { headers: { 'x-ratelimit-limit': '60', 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(RESET_EPOCH), ...headers } },
+        });
+    }
+
+    it('ListGitHubTags throws a GitHubAccessError that says when the limit resets and how to raise it', async () => {
+        mocks.listTags.mockRejectedValueOnce(rateLimited());
+
+        const error = await ListGitHubTags('https://github.com/Acme/App', {}).catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(GitHubAccessError);
+        const access = error as GitHubAccessError;
+        expect(access.Status).toBe(403);
+        expect(access.IsRateLimit).toBe(true);
+        expect(access.ResetAt?.toISOString()).toBe('2026-10-07T21:34:00.000Z');
+        expect(access.message).toContain("GitHub's API rate limit was reached while listing tags");
+        expect(access.message).toContain('It resets at 2026-10-07 21:34:00 UTC');
+        expect(access.message).toContain('Without a token GitHub allows 60 requests per hour');
+        expect(access.message).toContain('Set GITHUB_TOKEN (or openApps.github.token in mj.config.cjs) to raise the limit to 5,000 requests per hour');
+        expect(access.message).toContain('NOT the same as "no versions found"');
+    });
+
+    it('FetchManifestFromGitHub explains the limit instead of relaying Octokit\'s message', async () => {
+        mocks.getContent.mockRejectedValueOnce(rateLimited());
+
+        const result = await FetchManifestFromGitHub('https://github.com/Acme/App', undefined, {});
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("GitHub's API rate limit was reached while fetching mj-app.json from Acme/App");
+        expect(result.ErrorMessage).toContain('2026-10-07 21:34:00 UTC');
+        expect(result.ErrorMessage).toContain('GITHUB_TOKEN');
+    });
+
+    it('with a token configured, blames the token\'s allowance and never prints the token', async () => {
+        mocks.getRef.mockRejectedValueOnce(rateLimited({ 'x-ratelimit-limit': '5000' }));
+
+        const result = await ValidateGitHubTag('https://github.com/Acme/App', '1.0.0', { Token: 'ghp_supersecret' });
+
+        expect(result.Exists).toBe(false);
+        expect(result.ErrorMessage).toContain("checking that tag 'v1.0.0' exists in Acme/App");
+        expect(result.ErrorMessage).toContain("The configured GitHub token's allowance of 5,000 requests per hour is used up");
+        expect(result.ErrorMessage).not.toContain('ghp_supersecret');
+        expect(result.ErrorMessage).not.toContain('GITHUB_TOKEN');
+    });
+
+    it('a secondary (burst) limit says how long to wait', async () => {
+        mocks.listReleases.mockRejectedValueOnce(Object.assign(new Error('You have exceeded a secondary rate limit.'), {
+            status: 403, response: { headers: { 'retry-after': '60', 'x-ratelimit-remaining': '41' } },
+        }));
+
+        const error = await ListGitHubReleases('https://github.com/Acme/App', {}).catch((e: unknown) => e) as GitHubAccessError;
+
+        expect(error.IsRateLimit).toBe(true);
+        expect(error.message).toContain("GitHub's secondary rate limit (too many requests in a short time) was reached while listing releases");
+        expect(error.message).toContain('Retry in 60 seconds');
+    });
+
+    it('a 429 is a rate limit even without headers', async () => {
+        mocks.listTags.mockRejectedValueOnce(Object.assign(new Error('Too Many Requests'), { status: 429 }));
+
+        const error = await ListGitHubTags('https://github.com/Acme/App', {}).catch((e: unknown) => e) as GitHubAccessError;
+
+        expect(error.IsRateLimit).toBe(true);
+        expect(error.message).toContain("GitHub's API rate limit was reached while listing tags");
+    });
+
+    it('a 403 that is NOT a rate limit stays an access error, not a misleading limit message', async () => {
+        mocks.listTags.mockRejectedValueOnce(Object.assign(new Error('Resource not accessible by personal access token'), {
+            status: 403, response: { headers: { 'x-ratelimit-remaining': '4321' } },
+        }));
+
+        const error = await ListGitHubTags('https://github.com/Acme/App', { Token: 'ghp_x' }).catch((e: unknown) => e) as GitHubAccessError;
+
+        expect(error).toBeInstanceOf(GitHubAccessError);
+        expect(error.IsRateLimit).toBe(false);
+        expect(error.message).toContain('GitHub API returned 403 (rate limit or access denied) while listing tags');
+    });
+});
+
+describe('ValidateGitHubTag — answered by a tag list fetched moments earlier', () => {
+    it('makes no request when the freshly fetched list names the tag', async () => {
+        stubTags(['v1.0.7', 'v1.0.6']);
+        await ListGitHubTags('https://github.com/Acme/App', {});
+
+        const result = await ValidateGitHubTag('https://github.com/Acme/App', '1.0.7', {});
+
+        expect(result).toEqual({ Exists: true });
+        expect(mocks.getRef).not.toHaveBeenCalled();
+    });
+
+    it('still asks GitHub when the list does not name the tag — it may have been pushed since', async () => {
+        stubTags(['v1.0.6']);
+        await ListGitHubTags('https://github.com/Acme/App', {});
+        mocks.getRef.mockResolvedValueOnce({ data: {} });
+
+        const result = await ValidateGitHubTag('https://github.com/Acme/App', '1.0.7', {});
+
+        expect(result.Exists).toBe(true);
+        expect(mocks.getRef).toHaveBeenCalledWith({ owner: 'Acme', repo: 'App', ref: 'tags/v1.0.7' });
+    });
+
+    it('never answers from a list fetched with a different token', async () => {
+        stubTags(['v1.0.7']);
+        await ListGitHubTags('https://github.com/Acme/Private', { Token: 'privileged' });
+        mocks.getRef.mockRejectedValueOnce({ status: 404 });
+
+        const result = await ValidateGitHubTag('https://github.com/Acme/Private', '1.0.7', {});
+
+        expect(result.Exists).toBe(false);
+        expect(mocks.getRef).toHaveBeenCalledTimes(1);
+    });
+
+    it('matches the scoped tag of a multi-app repository', async () => {
+        stubTags(['CRM-HubSpot@1.2.0', 'CRM-Salesforce@1.2.0']);
+        await ListGitHubTags('https://github.com/MemberJunction/Integrations/CRM/HubSpot', {});
+
+        const result = await ValidateGitHubTag('https://github.com/MemberJunction/Integrations/CRM/HubSpot', '1.2.0', {});
+
+        expect(result.Exists).toBe(true);
+        expect(mocks.getRef).not.toHaveBeenCalled();
+    });
+});
+
+describe('ListGitHubTagNames', () => {
+    it('returns every tag name unfiltered, from the same single fetch ListGitHubTags uses', async () => {
+        stubTags(['v1.0.0', 'v1.2.3+build.7', 'nightly', 'CRM-HubSpot@1.0.0']);
+
+        const names = await ListGitHubTagNames('https://github.com/Acme/App', {});
+        const tags = await ListGitHubTags('https://github.com/Acme/App', {});
+
+        expect(names).toEqual(['v1.0.0', 'v1.2.3+build.7', 'nightly', 'CRM-HubSpot@1.0.0']);
+        expect(tags).toEqual(['v1.0.0']);
+        expect(mocks.listTags).toHaveBeenCalledTimes(1);
+    });
+
+    it('surfaces a rate limit as GitHubAccessError rather than an empty list', async () => {
+        mocks.listTags.mockRejectedValueOnce(Object.assign(new Error('rate limited'), { status: 429 }));
+
+        await expect(ListGitHubTagNames('https://github.com/Acme/App', {})).rejects.toBeInstanceOf(GitHubAccessError);
+    });
+
+    it('returns [] for any other failure, as ListGitHubTags does', async () => {
+        mocks.listTags.mockRejectedValueOnce({ status: 404 });
+
+        expect(await ListGitHubTagNames('https://github.com/Acme/Gone', {})).toEqual([]);
     });
 });
