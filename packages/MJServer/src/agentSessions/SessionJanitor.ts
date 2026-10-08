@@ -8,7 +8,8 @@ import {
     LogError,
     LogStatus,
 } from '@memberjunction/core';
-import { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
+import { MJAIAgentEntity, MJAIAgentSessionEntity } from '@memberjunction/core-entities';
+import { RecoverRealtimeRecordingFromSegments, ResolveRecordingStorageAccountID } from '@memberjunction/ai-agents';
 import { GetHostInstanceID, GetHostNamePrefix } from './HostInstance.js';
 import { SessionManager, SessionCloseReason } from './SessionManager.js';
 
@@ -18,18 +19,62 @@ const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 /** Rows fetched per keyset page during a sweep. Small enough to bound memory on a large backlog. */
 const SWEEP_PAGE_SIZE = 200;
 
+/** Entity name for agent rows (the recording storage account is configured on the agent). */
+const AGENT_ENTITY = 'MJ: AI Agents';
+
+/** A session whose recording recovery has failed this many times is given up on for the life of the process. */
+const MAX_RECOVERY_ATTEMPTS = 8;
+
+/** Recovery attempts (calls into the recovery routine) per sweep; bounds the I/O one tick can trigger. */
+const MAX_RECOVERIES_PER_SWEEP = 5;
+
+/** Backoff after the k-th failed recovery is `2^k * base`, capped at the max. */
+const RECOVERY_BACKOFF_BASE_MS = 5 * 60_000;
+const RECOVERY_BACKOFF_MAX_MS = 6 * 60 * 60_000;
+
 /** Tuning knobs for the janitor. All durations in their named units. */
 export interface SessionJanitorConfig {
     /** A non-`Closed` session whose `LastActiveAt` is older than this is force-closed by the global sweep. */
     closeThresholdMinutes: number;
     /** How often the periodic staleness sweep runs once {@link SessionJanitor.Start} is called. */
     sweepIntervalMs: number;
+    /**
+     * How long after `ClosedAt` a recording-less session waits before recording recovery rebuilds it.
+     * Sessions are closed BEFORE the browser uploads the recording (#5195), so a fresh close without a
+     * recording is normal; recovery must not race the upload that is about to arrive.
+     */
+    recordingRecoveryGraceMinutes: number;
+    /** Sessions closed longer ago than this are no longer considered by recording recovery. */
+    recordingRecoveryLookbackHours: number;
 }
 
 const DEFAULT_CONFIG: SessionJanitorConfig = {
     closeThresholdMinutes: 15,
     sweepIntervalMs: 60_000,
+    recordingRecoveryGraceMinutes: 10,
+    recordingRecoveryLookbackHours: 168,
 };
+
+/** Per-session recovery retry state (process-local). */
+interface RecoveryBackoff {
+    Failures: number;
+    /** Epoch ms before which the session is not retried; `Infinity` once given up. */
+    NextAttemptAt: number;
+}
+
+/** Per-sweep working state shared by every candidate in one recovery pass. */
+interface RecoverySweepContext {
+    provider: IMetadataProvider;
+    systemUser: UserInfo;
+    /** Agents loaded this sweep, by lowercase id; `null` records a failed load so it is not retried per session. */
+    agents: Map<string, MJAIAgentEntity | null>;
+}
+
+/** What one candidate cost the sweep: `Attempted` = the recovery routine was called (counts against the cap). */
+interface RecoveryVisit {
+    Attempted: boolean;
+    Recovered: boolean;
+}
 
 /**
  * `BaseSingleton` background reconciler that keeps the durable `AIAgentSession` state from drifting
@@ -62,6 +107,8 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     private _provider: IMetadataProvider | null = null;
     private _systemUser: UserInfo | null = null;
     private readonly sessionManager = new SessionManager();
+    /** Recovery retry state keyed by lowercase session id. Process-local: a restart gets fresh attempts. */
+    private readonly recoveryBackoff = new Map<string, RecoveryBackoff>();
 
     protected constructor() {
         super();
@@ -196,6 +243,59 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         return closed;
     }
 
+    /**
+     * Rebuilds the recording of sessions whose end-of-call upload never arrived (browser died, tab
+     * closed). A session is a candidate when it is `Closed`, has `RecordingStartedAt` (consent is implied:
+     * recording only starts after the guest agreed), still has no `RecordingFileID`, and closed between
+     * the lookback window and the grace period (see {@link SessionJanitorConfig.recordingRecoveryGraceMinutes}).
+     *
+     * Work is bounded: candidates are handled sequentially, at most {@link MAX_RECOVERIES_PER_SWEEP}
+     * recovery attempts per call, and a failing session backs off exponentially (`min(2^k * 5 min, 6 h)`)
+     * and is abandoned after {@link MAX_RECOVERY_ATTEMPTS} failures with one `LogError`. Backoff entries of
+     * sessions that left the candidate set are pruned, but only after a pass that saw every candidate, so
+     * a capped pass never forgets sessions it did not reach.
+     *
+     * Never throws for a single bad session. Returns the number of recordings recovered.
+     */
+    public async RunRecordingRecoverySweep(provider: IMetadataProvider, systemUser: UserInfo): Promise<number> {
+        const nowMs = Date.now();
+        const graceCutoff = new Date(nowMs - this._config.recordingRecoveryGraceMinutes * 60_000).toISOString();
+        const lookbackCutoff = new Date(nowMs - this._config.recordingRecoveryLookbackHours * 3_600_000).toISOString();
+        const filter =
+            `Status = 'Closed' AND RecordingStartedAt IS NOT NULL AND RecordingFileID IS NULL ` +
+            `AND ClosedAt < '${graceCutoff}' AND ClosedAt >= '${lookbackCutoff}'`;
+
+        const context: RecoverySweepContext = { provider, systemUser, agents: new Map() };
+        const seen = new Set<string>();
+        let attempts = 0;
+        let recovered = 0;
+        let capped = false;
+
+        await this.forEachSessionPage(filter, provider, systemUser, async page => {
+            for (const session of page) {
+                seen.add(session.ID.toLowerCase());
+                if (this.isRecoveryBackedOff(session.ID)) {
+                    continue;
+                }
+                if (attempts >= MAX_RECOVERIES_PER_SWEEP) {
+                    capped = true;
+                    return false;
+                }
+                const visit = await this.recoverSessionRecording(session, context);
+                attempts += visit.Attempted ? 1 : 0;
+                recovered += visit.Recovered ? 1 : 0;
+            }
+        });
+
+        if (!capped) {
+            this.pruneRecoveryBackoff(seen);
+        }
+        if (recovered > 0) {
+            LogStatus(`[SessionJanitor] Recording recovery rebuilt ${recovered} recording(s)`);
+        }
+        return recovered;
+    }
+
     /** Parses the absolute deadline (ms) from a session's `Config_` JSON, or null when absent/malformed. */
     private parseSessionDeadlineMs(configJson: string | null | undefined): number | null {
         if (!configJson) {
@@ -245,8 +345,114 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             await this.RunMaxDurationSweep(this._provider, this._systemUser);
         } catch (err) {
             LogError(`SessionJanitor periodic sweep failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        // Own try/catch: a recovery failure must not mask the close sweeps, nor a close failure skip recovery.
+        try {
+            await this.RunRecordingRecoverySweep(this._provider, this._systemUser);
+        } catch (err) {
+            LogError(`SessionJanitor recording recovery sweep failed: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
             this._sweepRunning = false;
+        }
+    }
+
+    /**
+     * Recovers one candidate's recording and updates its backoff. Never throws: any exception is logged
+     * with the session id and counted as a failure.
+     */
+    private async recoverSessionRecording(candidate: MJAIAgentSessionEntity, context: RecoverySweepContext): Promise<RecoveryVisit> {
+        let attempted = false;
+        try {
+            // Re-read: the late upload may have landed since the candidate page was fetched.
+            const session = await context.provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, context.systemUser);
+            if (!(await session.Load(candidate.ID))) {
+                LogError(`[SessionJanitor] Recording recovery could not reload session ${candidate.ID}`);
+                return this.recordRecoveryFailure(candidate.ID, false);
+            }
+            if (session.RecordingFileID) {
+                return { Attempted: false, Recovered: false };
+            }
+            const agent = await this.loadRecoveryAgent(candidate.AgentID, context);
+            const accountID = agent ? await ResolveRecordingStorageAccountID(agent, context.systemUser, context.provider) : null;
+            if (!accountID) {
+                LogStatus(`[SessionJanitor] Recording recovery skipped for session ${candidate.ID}: no recording storage account for agent ${candidate.AgentID}`);
+                return this.recordRecoveryFailure(candidate.ID, false);
+            }
+            attempted = true;
+            const result = await RecoverRealtimeRecordingFromSegments({
+                SessionID: candidate.ID,
+                StorageAccountID: accountID,
+                StartedAt: candidate.RecordingStartedAt as Date, // non-null: the sweep filter requires RecordingStartedAt
+                ContextUser: context.systemUser,
+                Provider: context.provider,
+            });
+            switch (result.Outcome) {
+                case 'Recovered':
+                    this.recoveryBackoff.delete(candidate.ID.toLowerCase());
+                    LogStatus(`[SessionJanitor] Recovered recording for session ${candidate.ID} from ${result.SegmentCount} segment(s) (file ${result.FileID})`);
+                    return { Attempted: true, Recovered: true };
+                case 'Superseded':
+                    this.recoveryBackoff.delete(candidate.ID.toLowerCase());
+                    LogStatus(`[SessionJanitor] Session ${candidate.ID} was given a recording by another writer; recovery left it alone`);
+                    return { Attempted: true, Recovered: false };
+                case 'NoSegments':
+                    LogStatus(`[SessionJanitor] No recoverable segments for session ${candidate.ID} (agent ${candidate.AgentID}, storage account ${accountID})`);
+                    return this.recordRecoveryFailure(candidate.ID, true);
+                default:
+                    LogError(`[SessionJanitor] Recording recovery failed for session ${candidate.ID}: ${result.ErrorMessage ?? 'unknown error'}`);
+                    return this.recordRecoveryFailure(candidate.ID, true);
+            }
+        } catch (err) {
+            LogError(`[SessionJanitor] Recording recovery threw for session ${candidate.ID}: ${err instanceof Error ? err.message : String(err)}`);
+            return this.recordRecoveryFailure(candidate.ID, attempted);
+        }
+    }
+
+    /** Loads (and memoizes for this sweep) the agent that carries a session's recording storage config. */
+    private async loadRecoveryAgent(agentID: string, context: RecoverySweepContext): Promise<MJAIAgentEntity | null> {
+        const key = agentID.toLowerCase();
+        if (context.agents.has(key)) {
+            return context.agents.get(key) ?? null;
+        }
+        const agent = await context.provider.GetEntityObject<MJAIAgentEntity>(AGENT_ENTITY, context.systemUser);
+        const loaded = await agent.Load(agentID);
+        if (!loaded) {
+            LogError(`[SessionJanitor] Recording recovery could not load agent ${agentID}`);
+        }
+        context.agents.set(key, loaded ? agent : null);
+        return loaded ? agent : null;
+    }
+
+    /** True while a session's backoff (or give-up) window has not elapsed. */
+    private isRecoveryBackedOff(sessionID: string): boolean {
+        const state = this.recoveryBackoff.get(sessionID.toLowerCase());
+        return state != null && Date.now() < state.NextAttemptAt;
+    }
+
+    /**
+     * Counts one more failed recovery for a session and schedules its next attempt
+     * (`min(2^k * 5 min, 6 h)`); at {@link MAX_RECOVERY_ATTEMPTS} it abandons the session for this
+     * process with a single `LogError`.
+     */
+    private recordRecoveryFailure(sessionID: string, attempted: boolean): RecoveryVisit {
+        const key = sessionID.toLowerCase();
+        const failures = (this.recoveryBackoff.get(key)?.Failures ?? 0) + 1;
+        if (failures >= MAX_RECOVERY_ATTEMPTS) {
+            this.recoveryBackoff.set(key, { Failures: failures, NextAttemptAt: Infinity });
+            LogError(`[SessionJanitor] Giving up on recording recovery for session ${sessionID} after ${failures} failed attempts`);
+        } else {
+            const waitMs = Math.min(2 ** failures * RECOVERY_BACKOFF_BASE_MS, RECOVERY_BACKOFF_MAX_MS);
+            this.recoveryBackoff.set(key, { Failures: failures, NextAttemptAt: Date.now() + waitMs });
+        }
+        return { Attempted: attempted, Recovered: false };
+    }
+
+    /** Drops backoff state for sessions that were not in the latest complete candidate set. */
+    private pruneRecoveryBackoff(candidateKeys: ReadonlySet<string>): void {
+        for (const key of this.recoveryBackoff.keys()) {
+            if (!candidateKeys.has(key)) {
+                this.recoveryBackoff.delete(key);
+            }
         }
     }
 
