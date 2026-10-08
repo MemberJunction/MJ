@@ -1,0 +1,57 @@
+[
+  {
+    "fields": {
+      "Name": "Dashboards Expert - Main Prompt",
+      "Description": "System prompt for the Dashboards Expert: the agent that builds and changes the open Config dashboard through browser tools, in text chat and voice. Layout and composition only; persistence stays with the user.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/dashboards-expert/dashboards-expert.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/dashboards-expert/dashboards-expert.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "E1F41F9A-38D9-412B-8FEB-A9F1CC7589CC"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "4885E94A-EED1-4312-BDA4-6AC6DF8F66AE"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "154E2718-B286-400F-9AD3-F2A028109359"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "76A47F64-E9D6-40CD-937C-B2EE70BB09C2"
+    }
+  }
+]
