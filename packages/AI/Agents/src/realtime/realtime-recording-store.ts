@@ -194,8 +194,9 @@ function segmentFileName(segmentIndex: number, mimeType: string): string {
  * storage object — no `MJ: Files` row, no session stamping. Shards are durability insurance during a
  * live call (so a browser/tab death loses at most the last window); they are byte-slices of one
  * continuous stream (only the first carries the container header), so they are NOT individually
- * playable — recovery is "concatenate the folder's shards in order". They are deleted once the
- * canonical consolidated file lands ({@link deleteRealtimeRecordingSegments}). Never throws.
+ * playable — recovery (see {@link RecoverRealtimeRecordingFromSegments}) concatenates them in index order,
+ * filling absent indexes with silence. They are deleted once the canonical consolidated file lands
+ * ({@link DeleteRealtimeRecordingSegments}), or by the recovery path once it has stamped its own file. Never throws.
  *
  * @returns `true` on success.
  */
@@ -248,8 +249,10 @@ export async function writeRecordingPeaksSidecar(
 }
 
 /**
- * Deletes the `seg-*` shards in a session's folder, leaving the consolidated `recording.*` file. Called
- * after {@link storeRealtimeRecording} writes the canonical file at end of call. Never throws.
+ * Deletes every `seg-*` shard in a session's folder, leaving the consolidated `recording.*` file. Called
+ * after {@link StoreRealtimeRecording} writes the canonical file at end of call. The recovery path
+ * ({@link RecoverRealtimeRecordingFromSegments}) does not use this: it deletes only the shards it listed
+ * and assembled, so a shard written after its listing is not lost. Never throws.
  *
  * @returns The number of shards deleted.
  */
