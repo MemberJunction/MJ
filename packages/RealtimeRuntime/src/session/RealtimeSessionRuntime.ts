@@ -26,6 +26,7 @@ import { BuildNarrationInstructions } from '../narration/narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../channels/base-realtime-channel-client';
 import { IRealtimeMediaHost, IRealtimeSessionRecorder } from '../hosts/IRealtimeMediaHost';
+import { RecordingShardQueue } from './RecordingShardQueue';
 
 /**
  * `MJ: User Settings` key for the per-user "record this voice call" consent toggle. Stored as
@@ -144,6 +145,11 @@ export interface RealtimeChannelFocusEvent {
  * The narrow projection of an ACTIVE `MJ: AI Agent Channels` registry row the service
  * reads at session start from {@link AIEngineBase}'s cached `AgentChannels`.
  */
+/** The `UploadRealtimeRecordingSegment` mutation result; `true` only when the server stored the shard. */
+interface UploadRecordingSegmentResult {
+  UploadRealtimeRecordingSegment?: boolean;
+}
+
 interface RealtimeChannelDefinitionRow {
   ID: string;
   Name: string;
@@ -634,8 +640,12 @@ export class RealtimeSessionRuntime {
   private recordingStartedAtIso: string | null = null;
   /** Interval that flushes ~15s crash-recovery shards to the server during a recording. */
   private segmentTimer: ReturnType<typeof setInterval> | null = null;
-  /** 0-based index of the next recording shard to upload. */
-  private segmentIndex = 0;
+  /**
+   * Owns shard indexing and retry for the current recording: it assigns each shard its index and
+   * keeps failed shards to resend under that same index. A fresh queue per recording keeps a flush
+   * still in flight from a previous session off this session's indexes. Null when not recording.
+   */
+  private shardQueue: RecordingShardQueue | null = null;
   /** How often crash-recovery shards are flushed during a recording. */
   private static readonly segmentFlushMs = 15000;
 
@@ -1353,7 +1363,7 @@ export class RealtimeSessionRuntime {
 
   /** Begins flushing ~15s crash-recovery shards to the server for the duration of the recording. */
   private startSegmentFlushing(): void {
-    this.segmentIndex = 0;
+    this.shardQueue = new RecordingShardQueue();
     this.segmentTimer = setInterval(() => { void this.flushRecordingSegment(); }, RealtimeSessionRuntime.segmentFlushMs);
   }
 
@@ -1424,33 +1434,51 @@ export class RealtimeSessionRuntime {
 
   /**
    * Uploads the chunks captured since the last flush as one crash-recovery shard (durability only;
-   * the canonical file is still the full upload at teardown). Best-effort — never disturbs the call.
+   * the canonical file is still the full upload at teardown). Best-effort — never disturbs the call:
+   * a failed shard is retained by the queue and resent under its own index on later flushes, up to a
+   * bounded number of attempts (#5197).
    */
   private async flushRecordingSegment(): Promise<void> {
     const recorder = this.recorder;
     const agentSessionId = this.agentSessionId;
-    if (!recorder || !agentSessionId) {
+    const queue = this.shardQueue;
+    if (!recorder || !agentSessionId || !queue) {
       return;
     }
-    try {
-      const audioBase64 = await recorder.SnapshotNewSegmentBase64();
-      if (!audioBase64) {
-        return;
+    await queue.Flush(
+      () => recorder.SnapshotNewSegmentBase64(),
+      (segmentIndex, audioBase64) => this.uploadRecordingShard(agentSessionId, recorder.SampleRate, segmentIndex, audioBase64),
+    );
+  }
+
+  /**
+   * Sends one shard and reports whether the server stored it. The resolver reports a failed
+   * ownership load or storage write as `false`, not as an error — that is how #5197 lost a shard
+   * without a single client-side log line — so the typed result must be checked, not just the absence
+   * of a throw.
+   */
+  private async uploadRecordingShard(
+    agentSessionId: string,
+    sampleRate: number,
+    segmentIndex: number,
+    audioBase64: string,
+  ): Promise<boolean> {
+    const mutation = `
+      mutation UploadRealtimeRecordingSegment($agentSessionId: String!, $segmentIndex: Int!, $audioBase64: String!, $mimeType: String!) {
+        UploadRealtimeRecordingSegment(agentSessionId: $agentSessionId, segmentIndex: $segmentIndex, audioBase64: $audioBase64, mimeType: $mimeType)
       }
-      const index = this.segmentIndex++;
-      const mutation = `
-        mutation UploadRealtimeRecordingSegment($agentSessionId: String!, $segmentIndex: Int!, $audioBase64: String!, $mimeType: String!) {
-          UploadRealtimeRecordingSegment(agentSessionId: $agentSessionId, segmentIndex: $segmentIndex, audioBase64: $audioBase64, mimeType: $mimeType)
-        }
-      `;
-      // Shards are HEADER-LESS raw little-endian PCM16 (mime audio/L16 with the capture sample rate),
-      // NOT individually-playable WAV — recovery is concatenate-in-order then WAV-wrap. The canonical
-      // seekable WAV is the consolidated end-of-call upload below.
-      const shardMime = `audio/L16;rate=${recorder.SampleRate}`;
-      await this.gql().ExecuteGQL(mutation, { agentSessionId, segmentIndex: index, audioBase64, mimeType: shardMime });
-    } catch (error) {
-      console.warn('[RealtimeSession] Failed to flush recording shard:', error);
-    }
+    `;
+    // Shards are HEADER-LESS raw little-endian PCM16 (mime audio/L16 with the capture sample rate),
+    // NOT individually-playable WAV — recovery is concatenate-in-order then WAV-wrap. The canonical
+    // seekable WAV is the consolidated end-of-call upload below.
+    const shardMime = `audio/L16;rate=${sampleRate}`;
+    const result = (await this.gql().ExecuteGQL(mutation, {
+      agentSessionId,
+      segmentIndex,
+      audioBase64,
+      mimeType: shardMime,
+    })) as UploadRecordingSegmentResult | null;
+    return result?.UploadRealtimeRecordingSegment === true;
   }
 
   /**
@@ -3154,7 +3182,7 @@ export class RealtimeSessionRuntime {
     this.hasActiveInterimUserCaption = false;
     this.SetMinimized(false);
     this.stopSegmentFlushing();
-    this.segmentIndex = 0;
+    this.shardQueue = null;
     this.recorder = null;
     this.recordingStartedAtIso = null;
     this.currentTurnStartMs = null;

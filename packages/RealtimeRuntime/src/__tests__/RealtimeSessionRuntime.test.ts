@@ -450,6 +450,153 @@ describe('session lifecycle, driven end to end with fakes', () => {
         });
     });
 
+    describe('crash-recovery shard uploads (#5197)', () => {
+        /** A recorder whose every snapshot is a distinct window, so a resent shard is recognisable. */
+        let nextWindow = 0;
+        class SequencedRecorder extends FakeRecorder {
+            public override async SnapshotNewSegmentBase64(): Promise<string | null> {
+                return btoa(`window-${nextWindow++}`);
+            }
+        }
+        class SequencedHost extends FakeMediaHost {
+            public override CreateRecorder(): IRealtimeSessionRecorder | null {
+                this.recorder = new SequencedRecorder();
+                return this.recorder;
+            }
+        }
+
+        type ShardUpload = { agentSessionId: string; segmentIndex: number; audioBase64: string };
+        /** What a shard upload does on the server: store it, refuse it (`false`), or throw on the wire. */
+        type ShardOutcome = 'stored' | 'refused' | 'network-error';
+
+        /**
+         * A provider that records every shard upload attempt and, per attempt, answers with the next
+         * scripted outcome (then `stored` once the script runs out). `Stored` is what the server
+         * folder ends up holding: index → bytes.
+         */
+        class ShardProvider extends RecordingProvider {
+            public Attempts: ShardUpload[] = [];
+            /** When set, the next attempt waits on it and then answers with the outcome it resolves to. */
+            public HoldNextAttempt: Promise<ShardOutcome> | null = null;
+            public Stored = new Map<number, string>();
+            constructor(private readonly script: ShardOutcome[] = []) {
+                super();
+            }
+            public override async ExecuteGQL(query: string, variables?: ShardUpload): Promise<unknown> {
+                if (!/mutation UploadRealtimeRecordingSegment\(/.test(query) || !variables) {
+                    return super.ExecuteGQL(query);
+                }
+                this.Attempts.push({
+                    agentSessionId: variables.agentSessionId,
+                    segmentIndex: variables.segmentIndex,
+                    audioBase64: variables.audioBase64,
+                });
+                const held = this.HoldNextAttempt;
+                this.HoldNextAttempt = null;
+                const outcome = held ? await held : (this.script.shift() ?? 'stored');
+                if (outcome === 'network-error') {
+                    throw new Error('network blip');
+                }
+                if (outcome === 'refused') {
+                    // What the resolver answers when its ownership load hits a transient SQL error.
+                    return { UploadRealtimeRecordingSegment: false };
+                }
+                this.Stored.set(variables.segmentIndex, variables.audioBase64);
+                return { UploadRealtimeRecordingSegment: true };
+            }
+        }
+
+        async function startRecorded(script: ShardOutcome[] = []) {
+            nextWindow = 0;
+            const runtime = new RealtimeSessionRuntime(new SequencedHost());
+            const provider = new ShardProvider(script);
+            runtime.Provider = provider as unknown as IMetadataProvider;
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            // Bracket access drives the private flush the 15 s interval would call, without timers.
+            const flush = () => runtime['flushRecordingSegment']();
+            return { runtime, provider, flush };
+        }
+
+        /** The stored shards in index order, decoded. */
+        const storedWindows = (provider: ShardProvider) =>
+            [...provider.Stored.entries()].sort(([a], [b]) => a - b).map(([index, b64]) => `${index}:${atob(b64)}`);
+
+        it('resends a shard the server refused, under its own index, so the folder has no gap', async () => {
+            const { runtime, provider, flush } = await startRecorded(['stored', 'refused']);
+            for (let i = 0; i < 4; i++) {
+                await flush();
+            }
+            expect(storedWindows(provider)).toEqual(['0:window-0', '1:window-1', '2:window-2', '3:window-3']);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('resends a shard whose upload threw, under its own index', async () => {
+            const { runtime, provider, flush } = await startRecorded(['network-error']);
+            for (let i = 0; i < 3; i++) {
+                await flush();
+            }
+            expect(storedWindows(provider)).toEqual(['0:window-0', '1:window-1', '2:window-2']);
+            await runtime.EndRealtimeSession();
+        });
+
+        it.each([
+            ['null', null],
+            ['an empty object', {}],
+            ['a missing field', { somethingElse: true }],
+        ])('treats a GraphQL result of %s as a failure and retries it under the same index', async (_label, result) => {
+            const { runtime, provider, flush } = await startRecorded();
+            const original = provider.ExecuteGQL.bind(provider);
+            let answered = false;
+            provider.ExecuteGQL = async (query: string, variables?: ShardUpload) => {
+                if (!answered && /mutation UploadRealtimeRecordingSegment\(/.test(query)) {
+                    answered = true;
+                    provider.Attempts.push({
+                        agentSessionId: variables!.agentSessionId,
+                        segmentIndex: variables!.segmentIndex,
+                        audioBase64: variables!.audioBase64,
+                    });
+                    return result;
+                }
+                return original(query, variables);
+            };
+            await flush();
+            await flush();
+            expect(provider.Attempts.map((a) => a.segmentIndex)).toEqual([0, 0, 1]);
+            expect(storedWindows(provider)).toEqual(['0:window-0', '1:window-1']);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('never rejects a flush, even when every upload throws', async () => {
+            const { runtime, flush } = await startRecorded(Array(20).fill('network-error'));
+            for (let i = 0; i < 5; i++) {
+                await expect(flush()).resolves.toBeUndefined();
+            }
+            await runtime.EndRealtimeSession();
+        });
+
+        it("a flush still in flight when a new session starts does not touch the new session's shard indexes", async () => {
+            const { runtime, provider, flush } = await startRecorded();
+            let release!: (outcome: ShardOutcome) => void;
+            provider.HoldNextAttempt = new Promise<ShardOutcome>((resolve) => {
+                release = resolve;
+            });
+            const sessionAFlush = flush();
+            await runtime.EndRealtimeSession();
+            await runtime.StartRealtimeSessionFromResult(
+                { ...mintedSession('fake-provider'), AgentSessionId: 'session-B' },
+                { recordingConsent: true },
+            );
+            release('refused');
+            await sessionAFlush;
+            await runtime['flushRecordingSegment']();
+            const sessionBAttempts = provider.Attempts.filter((a) => a.agentSessionId === 'session-B');
+            expect(sessionBAttempts.map((a) => a.segmentIndex)).toEqual([0]);
+            // A's refused bytes (window-0) must never be resent under session B.
+            expect(sessionBAttempts.every((a) => atob(a.audioBase64) !== 'window-0')).toBe(true);
+            await runtime.EndRealtimeSession();
+        });
+    });
+
     describe('recording mixes the agent stream (#5153)', () => {
         const agentStream = { getAudioTracks: () => [{}], getTracks: () => [] } as unknown as MediaStream;
 
