@@ -1368,5 +1368,9 @@ export * from './geminiImage';
 export * from './geminiRealtime';
 export type { GeminiLiveEndpoint } from './geminiLiveProfiles';
 
+// Export the Gemini Live setup writer and the relay policy (MJAPI's realtime relay)
+export { BuildGeminiLiveSetup, type GeminiLiveSetupTarget } from './geminiLiveSetup';
+export { GeminiLiveRelayPolicy, type GeminiLiveRelayPolicyOptions } from './geminiLiveRelayPolicy';
+
 // Export multimodal embeddings
 export * from './geminiEmbedding';
