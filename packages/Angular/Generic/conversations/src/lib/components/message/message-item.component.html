@@ -36,10 +36,9 @@
         </span>
       }
 
-      <!-- Edit (owner's completed user messages) — opens the inline editor; the server
-           sets OriginalMessageChanged when the text actually changes on save -->
-      @if (allowMessageEdit && isUserMessage && isConversationOwner && !isEditing && messageStatus === 'Complete') {
-        <span class="message-edit-icon" (click)="onEditClick()" title="Edit message">
+      <!-- Edit (the author's completed user messages): saved as a new fork while the person may fork, else in place -->
+      @if (CanEdit) {
+        <span class="message-edit-icon" (click)="OnEditClick()" title="Edit message">
           <i class="fas fa-pen"></i>
         </span>
       }
@@ -199,21 +198,62 @@
             rows="4"
           placeholder="Edit your message..."></textarea>
           <div class="edit-actions">
-            <button class="edit-action-btn save" (click)="saveEdit()">
-              <i class="fas fa-check"></i>
-              Save
+            <button mjButton Variant="primary" Size="sm" (click)="SaveEdit()">
+              <i class="fas fa-check" aria-hidden="true"></i>
+              {{ EditSaveLabel }}
             </button>
-            <button class="edit-action-btn cancel" (click)="cancelEditing()">
-              <i class="fas fa-times"></i>
+            <button mjButton Variant="secondary" Size="sm" (click)="CancelEditing()">
+              <i class="fas fa-times" aria-hidden="true"></i>
               Cancel
             </button>
           </div>
-          <div class="edit-hint">
-            Press Enter to save, Shift+Enter for new line, Escape to cancel
-          </div>
+          @if (EditMode === 'Fork') {
+            <div class="edit-note">The original message stays here.</div>
+          }
+          <div class="edit-hint">{{ EditHint }}</div>
         </div>
       }
     </div>
+
+    @if (ForkChips.length > 0 && !isEditing) {
+      <div class="message-fork-chips">
+        @for (chip of ForkChips; track chip.Kind + (chip.BranchID ?? '')) {
+          @if (chip.Kind === 'Original') {
+            <button mjButton Variant="flat" Size="sm" class="fork-chip" data-kind="Original"
+                    (click)="OnForkChipClick(chip, $event)"
+                    [attr.aria-label]="ChipAriaLabel(chip)">
+              <i [class]="'fork-chip-icon ' + ChipIcon(chip)" aria-hidden="true"></i>
+              <span class="fork-chip-name">{{ chip.DisplayName }}</span>
+              <span class="fork-chip-time">· original</span>
+            </button>
+          } @else {
+            <button mjButton Variant="flat" Size="sm" class="fork-chip" [attr.data-kind]="chip.Kind"
+                    (click)="OnForkChipClick(chip, $event)"
+                    [attr.aria-label]="ChipAriaLabel(chip)">
+              <i [class]="'fork-chip-icon ' + ChipIcon(chip)" aria-hidden="true"></i>
+              @if (chip.Avatars.length > 0) {
+                <span class="fork-chip-avatars" aria-hidden="true">
+                  @for (avatar of chip.Avatars; track avatar.Kind + avatar.ID) {
+                    <span class="fork-chip-avatar" [title]="avatar.Label">
+                      @if (avatar.ImageURL) {
+                        <img [src]="avatar.ImageURL" alt="" />
+                      } @else if (avatar.IconClass) {
+                        <i [class]="avatar.IconClass"></i>
+                      } @else {
+                        {{ avatar.Initials }}
+                      }
+                    </span>
+                  }
+                </span>
+              }
+              <span class="fork-chip-messages">{{ chip.MessageLabel }}</span>
+              <span class="fork-chip-name">{{ chip.DisplayName }}</span>
+              <span class="fork-chip-time">· {{ chip.ActivityLabel }}</span>
+            </button>
+          }
+        }
+      </div>
+    }
 
     <!-- Message Footer: only rendered on the last message.
          Non-last messages have no footer — pin/delete/rating live in the gear panel. -->
@@ -389,14 +429,21 @@
 
     <!-- Rating component moved to message footer (lines 113-134) -->
 
-    <!-- Removed message-actions hover panel - actions now in gear icon dropdown -->
-    <!-- Retry button kept for critical error recovery on failed messages -->
-    @if (messageStatus === 'Error' && isAIMessage && !isProcessing && !isEditing) {
+    <!-- Start actions: Fork from here on the person's own finished user message (a new fork that replaces it); Regenerate asks for a new AI reply (a new fork while the person may fork, else in place) -->
+    @if (CanStartFork || CanRegenerate) {
       <div class="message-actions">
-        <button class="message-action-btn retry-btn" (click)="onRetryClick()" title="Retry">
-          <i class="fas fa-redo"></i>
-          Retry
-        </button>
+        @if (CanStartFork) {
+          <button mjButton Variant="flat" Size="sm" (click)="OnForkClick($event)" title="Fork from here">
+            <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
+            Fork from here
+          </button>
+        }
+        @if (CanRegenerate) {
+          <button mjButton Variant="flat" Size="sm" (click)="OnRegenerateClick()" [title]="RegenerateTitle">
+            <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+            Regenerate
+          </button>
+        }
       </div>
     }
 
@@ -415,3 +462,11 @@
     }
   </div>
 </div>
+<!-- Fork marker: a separate element under the row, outside its rail and fade -->
+@if (ForkMarkerText) {
+  <div class="fork-marker" role="note">
+    <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
+    <span class="fork-marker-text">{{ ForkMarkerText }}</span>
+    <span class="fork-marker-line" aria-hidden="true"></span>
+  </div>
+}

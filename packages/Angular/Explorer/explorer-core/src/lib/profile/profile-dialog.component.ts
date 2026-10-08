@@ -12,6 +12,7 @@ import { CommonModule } from '@angular/common';
 import { RunView, UserRoleInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
+    CONVERSATIONS_FORK_AUTHORIZATION,
     MJThemeEntity,
     MJUserNotificationPreferenceEntity,
     UserInfoEngine
@@ -21,8 +22,10 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ThemeService, SharedService, ThemeDefinition } from '@memberjunction/ng-shared';
 import type { ThemeSeeds } from '@memberjunction/theme-engine';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
+import { UserHoldsAuthorization } from '@memberjunction/ng-conversations';
 import { IsOmnibarAvailable, IsOmnibarEnabledForUser, OMNIBAR_USER_SETTING_KEY } from '../omnibar/omnibar-user-setting';
 import { GetOmnibarShortcutLabel } from '../omnibar/omnibar-shortcut';
+import { IsForkingOnForUser, SaveForkingForUser } from './forking-setting';
 import { Subscription } from 'rxjs';
 
 interface NotificationChannel {
@@ -148,6 +151,35 @@ type ProfilePanel = 'none' | 'photo' | 'theme';
                                         <span class="mj-profile__switch-knob"></span>
                                     </span>
                                 }
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @if (ForkingAvailable) {
+                <div class="mj-profile__section">
+                    <div class="mj-profile__section-head">
+                        <h4>Conversations</h4>
+                    </div>
+                    <div class="mj-profile__channels">
+                        <button type="button"
+                                class="mj-profile__channel"
+                                data-testid="forking-toggle"
+                                role="switch"
+                                [attr.aria-checked]="ForkingEnabled"
+                                [class.mj-profile__channel--on]="ForkingEnabled"
+                                [disabled]="SavingForking"
+                                (click)="ToggleForking()">
+                            <div class="mj-profile__channel-icon"><i class="fa-solid fa-code-branch" aria-hidden="true"></i></div>
+                            <div class="mj-profile__channel-label">
+                                Fork when I edit or regenerate
+                                <div class="mj-profile__channel-hint">When off, Edit and Regenerate change the latest turn in place.</div>
+                            </div>
+                            <div class="mj-profile__channel-state">
+                                <span class="mj-profile__switch" [class.mj-profile__switch--on]="ForkingEnabled">
+                                    <span class="mj-profile__switch-knob"></span>
+                                </span>
                             </div>
                         </button>
                     </div>
@@ -863,6 +895,11 @@ export class ProfileDialogComponent extends BaseAngularComponent implements OnIn
     public OmnibarEnabled = false;
     public SavingOmnibar = false;
 
+    // Personal forking switch (shown only to a person who holds Conversations: Fork)
+    public ForkingAvailable = false;
+    public ForkingEnabled = true;
+    public SavingForking = false;
+
     /** Platform-correct summon-shortcut label ('⌘K' on Mac, 'Ctrl+K' elsewhere). */
     public get OmnibarShortcutLabel(): string {
         return GetOmnibarShortcutLabel();
@@ -907,6 +944,8 @@ export class ProfileDialogComponent extends BaseAngularComponent implements OnIn
         this.loadNotifications();
         this.OmnibarAvailable = IsOmnibarAvailable();
         this.OmnibarEnabled = IsOmnibarEnabledForUser();
+        this.ForkingAvailable = UserHoldsAuthorization(this.ProviderToUse.CurrentUser, CONVERSATIONS_FORK_AUTHORIZATION, this.ProviderToUse);
+        this.ForkingEnabled = IsForkingOnForUser();
         this.themeSub = this.themeService.Preference$.subscribe(pref => {
             this.ThemePreference = pref;
             this.ThemeLabel = this.computeThemeLabel();
@@ -1047,6 +1086,27 @@ export class ProfileDialogComponent extends BaseAngularComponent implements OnIn
             }
         } finally {
             this.SavingOmnibar = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /**
+     * Turns the person's forking on or off. Saved through UserInfoEngine (MJ: User Settings), so it
+     * follows them across browsers; an open conversation reads it on its next change detection.
+     */
+    public async ToggleForking(): Promise<void> {
+        if (this.SavingForking) return;
+        const next = !this.ForkingEnabled;
+        this.SavingForking = true;
+        this.cdr.markForCheck();
+        try {
+            if (await SaveForkingForUser(next)) {
+                this.ForkingEnabled = next;
+            } else {
+                this.sharedService.CreateSimpleNotification('Could not save the forking preference', 'error', 3000);
+            }
+        } finally {
+            this.SavingForking = false;
             this.cdr.markForCheck();
         }
     }

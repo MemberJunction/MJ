@@ -3,7 +3,7 @@ import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import {
@@ -557,7 +557,11 @@ export class RealtimeSessionRuntime {
    */
   /** Conversation id the SERVER created for this session (null when the host supplied one). */
   private createdConversationId: string | null = null;
-  /** The session's conversation id (supplied or server-created). */
+  /**
+   * The session's conversation id (supplied or server-created). While a start's mint runs, the
+   * conversation the start asked for; null when it asked the server to create one. Null after
+   * teardown.
+   */
   private sessionConversationId: string | null = null;
   /** First final user utterance of the live session (the naming seed). */
   private firstUserTranscript: string | null = null;
@@ -833,6 +837,14 @@ export class RealtimeSessionRuntime {
   }
 
   /**
+   * True when a session is open or starting for `conversationId`. Ids are compared without
+   * regard to case.
+   */
+  public IsActiveFor(conversationId: string | null | undefined): boolean {
+    return this.IsActive && conversationId != null && UUIDsEqual(this.sessionConversationId, conversationId);
+  }
+
+  /**
    * Start a client-direct voice session fronting `targetAgentId`.
    *
    * @param targetAgentId The agent the Realtime Co-Agent voices on behalf of.
@@ -869,6 +881,7 @@ export class RealtimeSessionRuntime {
    *   the server-side Media channel resolves THIS collection as the agent's media kit for the session,
    *   taking precedence over the agent's `DefaultMediaCollectionID`. The server UUID-validates it
    *   (malformed ⇒ ignored, the agent default applies). Omit/`null` to use the agent default kit.
+   * @param conversationBranchId Optional fork the session starts on; null or omitted is Main. Its transcript is written there.
    */
   public async StartRealtimeSession(
     targetAgentId: string,
@@ -882,13 +895,17 @@ export class RealtimeSessionRuntime {
     recordingConsent?: boolean | null,
     mediaCollectionId?: string | null,
     applicationId?: string | null,
-    appContext?: AppContextSnapshot | null
+    appContext?: AppContextSnapshot | null,
+    conversationBranchId?: string | null
   ): Promise<void> {
     if (this.IsActive) {
       return; // a session is already running — ignore duplicate starts
     }
 
     const consent = this.beginSessionStart({ agentName, recordingConsent, applicationId, appContext });
+    this.sessionConversationId = conversationId ?? null;
+    // A teardown while the channels start or the mint runs bumps this; see the checks below.
+    const generation = this.startGeneration;
     // Captured BEFORE startChannels so the mint carries exactly the snapshot the prologue
     // resolved, whatever a channel plugin may push in the meantime.
     const effectiveAppContext = this._appContext$.value;
@@ -898,9 +915,22 @@ export class RealtimeSessionRuntime {
       // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
       // tool sets must be declared to the realtime model at session mint.
       const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext);
+      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext, conversationBranchId);
     } catch (error) {
+      // An ended or replaced start only logs its failure: the error state and the teardown belong
+      // to the session that is current now, which a newer start may own.
+      if (this.startGeneration !== generation) {
+        console.error('[RealtimeSession] A start that was already ended failed:', error);
+        return;
+      }
       await this.failSessionStart(error);
+      return;
+    }
+
+    // The host ended the start while the mint ran. That teardown had no session id to close, so
+    // close the minted row here, and touch no shared state: a newer start may already own it.
+    if (this.startGeneration !== generation) {
+      await this.closeServerSession(session.AgentSessionId);
       return;
     }
 
@@ -2499,11 +2529,12 @@ export class RealtimeSessionRuntime {
     recordingStartedAt?: string | null,
     mediaCollectionId?: string | null,
     applicationId?: string | null,
-    appContext?: AppContextSnapshot | null
+    appContext?: AppContextSnapshot | null,
+    conversationBranchId?: string | null
   ): Promise<StartRealtimeClientSessionResult> {
     const mutation = `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String, $mediaCollectionId: String, $applicationId: String, $appContextJson: String) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt, mediaCollectionId: $mediaCollectionId, applicationId: $applicationId, appContextJson: $appContextJson) {
+      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String, $mediaCollectionId: String, $applicationId: String, $appContextJson: String, $conversationBranchId: String) {
+        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt, mediaCollectionId: $mediaCollectionId, applicationId: $applicationId, appContextJson: $appContextJson, conversationBranchId: $conversationBranchId) {
           AgentSessionId
           ConversationId
           Provider
@@ -2529,7 +2560,8 @@ export class RealtimeSessionRuntime {
       recordingStartedAt: recordingStartedAt ?? null,
       mediaCollectionId: mediaCollectionId ?? null,
       applicationId: applicationId ?? null,
-      appContextJson: appContext ? JSON.stringify(appContext) : null
+      appContextJson: appContext ? JSON.stringify(appContext) : null,
+      conversationBranchId: conversationBranchId ?? null
     };
     const result = await this.gql().ExecuteGQL(mutation, variables);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
@@ -3129,6 +3161,7 @@ export class RealtimeSessionRuntime {
     // to call without an active session).
     const closedSessionId = this.agentSessionId;
     this.agentSessionId = null;
+    this.sessionConversationId = null;
     this.narrationTemplate = null;
     this.clientToolHandlers.clear();
     this._modelName$.next(null);

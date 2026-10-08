@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, ConversationScope, MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, UserInfo, BaseEntity, RunView, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 
@@ -182,13 +182,19 @@ export class DataCacheService {
   }
 
   /**
-   * Load all ConversationDetail entities for a conversation and cache them
-   * Used when loading a conversation's message history
+   * Load the ConversationDetail entities of one scope of a conversation (Main, or one fork's
+   * path) that no rerun replaced, and cache them
    * @param conversationId The conversation ID
    * @param currentUser User context
+   * @param scope The rows to read; Main when omitted
    * @returns Array of MJConversationDetailEntity objects
+   * @throws when the scope belongs to another conversation
    */
-  async LoadConversationDetails(conversationId: string, currentUser: UserInfo): Promise<MJConversationDetailEntity[]> {
+  async LoadConversationDetails(conversationId: string, currentUser: UserInfo, scope?: ConversationScope): Promise<MJConversationDetailEntity[]> {
+    if (scope && !UUIDsEqual(scope.ConversationID, conversationId)) {
+      throw new Error(`Conversation ${conversationId} cannot be read with the scope of conversation ${scope.ConversationID}`);
+    }
+    const resolved = scope ?? ConversationEngine.TrunkScope(conversationId);
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] 💾 DataCacheService.loadConversationDetails - Loading messages for conversation ${conversationId}`);
 
@@ -198,7 +204,7 @@ export class DataCacheService {
     const result = await rv.RunView<MJConversationDetailEntity>(
       {
         EntityName: 'MJ: Conversation Details',
-        ExtraFilter: `ConversationID='${conversationId}'`,
+        ExtraFilter: ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(resolved)),
         OrderBy: '__mj_CreatedAt ASC',
         ResultType: 'entity_object'
       },
@@ -229,8 +235,8 @@ export class DataCacheService {
   }
 
   /** @deprecated Use {@link LoadConversationDetails}. */
-  async loadConversationDetails(conversationId: string, currentUser: UserInfo): Promise<MJConversationDetailEntity[]> {
-    return this.LoadConversationDetails(conversationId, currentUser);
+  async loadConversationDetails(conversationId: string, currentUser: UserInfo, scope?: ConversationScope): Promise<MJConversationDetailEntity[]> {
+    return this.LoadConversationDetails(conversationId, currentUser, scope);
   }
 
   /**

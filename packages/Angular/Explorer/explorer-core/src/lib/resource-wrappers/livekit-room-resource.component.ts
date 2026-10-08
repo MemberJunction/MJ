@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, inject } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
+import { ConversationEngine, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { RunView } from '@memberjunction/core';
@@ -1242,20 +1242,24 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
     }
   }
 
-  /** Opens a past meeting's transcript (drill-in). */
+  /**
+   * Opens a past meeting's transcript (drill-in): the room conversation's Main rows (a bridge session
+   * writes Main), in `Sequence` order.
+   */
   public async OpenTranscript(room: { ConversationID: string; Name: string }): Promise<void> {
     this.OpenHistoryRoom = room;
     this.HistoryTranscript = [];
     this.LoadingTranscript = true;
     this.cdr.detectChanges();
     try {
+      const pathFilter = ConversationEngine.ScopeFilter(ConversationEngine.TrunkScope(room.ConversationID));
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const res = await rv.RunView<{ Role: string; Message: string; AgentID: string; Error: string }>(
         {
           EntityName: 'MJ: Conversation Details',
-          ExtraFilter: `ConversationID='${room.ConversationID.replace(/'/g, "''")}'`,
+          ExtraFilter: pathFilter,
           Fields: ['Role', 'Message', 'AgentID', 'Error', '__mj_CreatedAt'],
-          OrderBy: '__mj_CreatedAt ASC',
+          OrderBy: 'Sequence ASC',
           MaxRows: 5000,
           ResultType: 'simple',
         },

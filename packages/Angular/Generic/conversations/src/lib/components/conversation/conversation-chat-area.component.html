@@ -79,6 +79,15 @@
         }
       </div>
       <div class="chat-actions chat-actions-buttons">
+        @if (ForkSummaries.length > 0) {
+          <button mjButton #forksButton Variant="flat" Size="sm" class="forks-button" [class.active]="ShowForksPopover"
+            aria-haspopup="dialog" [attr.aria-expanded]="ShowForksPopover" [attr.aria-controls]="ShowForksPopover ? ForksPopoverID : null"
+            (click)="ToggleForksPopover()" title="Forks in this conversation">
+            <i class="fa-solid fa-code-branch"></i>
+            <span class="btn-label">Forks</span>
+            <span class="forks-count">{{ ForkSummaries.length }}</span>
+          </button>
+        }
         @if (allowPinning && pinnedMessageCount > 0) {
           <button class="pin-chip" [class.active]="showPinsPanel" (click)="TogglePinsPanel()" title="View pinned messages">
             <i class="fas fa-thumbtack"></i>
@@ -293,6 +302,53 @@
       } @else {
         <!-- Normal Message View -->
         <div class="chat-messages-wrapper">
+          @if (OpenView.Kind !== 'Main') {
+            <div class="fork-view-bar" role="region" aria-label="Fork">
+              <button mjButton Variant="icon" Size="sm" class="fork-view-back" (click)="GoBack()" [attr.aria-label]="BackLabel" [title]="BackLabel">
+                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+              </button>
+              <div class="fork-view-titles">
+                <nav class="fork-view-breadcrumb" aria-label="Breadcrumb">
+                  <ol class="fork-view-crumbs">
+                    @for (crumb of ForkBreadcrumbs; track $index) {
+                      <li class="fork-view-crumb">
+                        @if (!$first) {
+                          <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                        }
+                        @if (crumb.IsCurrent) {
+                          <span class="fork-view-crumb-current" aria-current="page">{{ crumb.Label }}</span>
+                        } @else {
+                          <button mjButton Variant="flat" Size="sm" (click)="OpenCrumb(crumb)">{{ crumb.Label }}</button>
+                        }
+                      </li>
+                    }
+                  </ol>
+                </nav>
+                <div class="fork-view-heading">
+                  <i [class]="'fork-view-kind ' + OpenViewIcon" [attr.data-kind]="OpenViewKind" aria-hidden="true"></i>
+                  @if (IsRenamingFork) {
+                    <input
+                      #forkNameInput
+                      type="text"
+                      class="fork-view-name-input"
+                      maxlength="255"
+                      aria-label="Rename fork"
+                      [(ngModel)]="ForkRenameText"
+                      (keydown.enter)="$event.preventDefault(); SaveForkRename(true)"
+                      (keydown.escape)="$event.preventDefault(); $event.stopPropagation(); CancelForkRename()"
+                      (blur)="SaveForkRename()" />
+                  } @else {
+                    <h2 class="fork-view-title">{{ OpenViewTitle }}</h2>
+                    @if (CanRenameFork) {
+                      <button mjButton #forkRenameButton Variant="icon" Size="sm" class="fork-view-rename" (click)="StartForkRename()" aria-label="Rename fork" title="Rename fork">
+                        <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                      </button>
+                    }
+                  }
+                </div>
+              </div>
+            </div>
+          }
           <!-- Upload Indicator Overlay (centered in conversation area) -->
           @if (isUploadingAttachments) {
             <div class="upload-indicator-overlay">
@@ -312,8 +368,8 @@
               [ReadOnly]="EffectiveReadOnly"
               [assistantDisplayName]="assistantDisplayName"
               [assistantAvatarUrl]="assistantAvatarUrl"
-              [messages]="messages"
-              [HasMoreAbove]="hasMoreMessagesAbove"
+              [messages]="DisplayMessages"
+              [HasMoreAbove]="ListHasMoreAbove"
               [IsLoadingOlder]="isLoadingOlderMessages"
               [ScrollRoot]="messageScrollRoot"
               (OlderRequested)="onOlderMessagesRequested()"
@@ -329,11 +385,17 @@
               [messageRendererTemplate]="slotTemplate('messageRenderer')"
               [messageExtraTemplate]="slotTemplate('messageExtra')"
               [sessionMetaMap]="realtimeSessionMetaMap"
+              [ForkChipMap]="ForkChipMap"
+              [ForkLayout]="ForkLayout"
+              [CanFork]="CanFork"
+              [InPlaceTurn]="InPlaceTurn"
+              (ForkOpenRequested)="OnForkOpenRequested($event)"
+              (EditResendRequested)="OnEditResendRequested($event)"
+              (RegenerateRequested)="OnRegenerateRequested($event)"
+              (ResendInPlaceRequested)="OnResendInPlaceRequested($event)"
+              (ForkRequested)="OnForkRequested($event)"
               (realtimeSessionOpenRequested)="OpenRealtimeSessionReview($event)"
-              (replyInThread)="onReplyInThread($event)"
-              (viewThread)="onViewThread($event)"
               (deleteMessage)="onDeleteMessage($event)"
-              (retryMessage)="onRetryMessage($event)"
               (testFeedbackMessage)="onTestFeedbackMessage($event)"
               (artifactClicked)="onArtifactClicked($event)"
               (messageEdited)="onMessageEdited($event)"
@@ -348,7 +410,7 @@
             </mj-conversation-message-list>
 
             <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
-            @if (showScrollToBottomIcon && messages && messages.length > 0) {
+            @if (showScrollToBottomIcon && DisplayMessages.length > 0) {
               <span class="scroll-to-bottom-icon" style="left: 50%;"
                 (click)="scrollToBottomAnimate()">
                 <i class="fas fa-arrow-down"></i>
@@ -410,6 +472,8 @@
                     [AllowedAgentIDs]="AllowedAgentIDs"
                     [MentionPeople]="MentionPeople"
                     [AgentHistoryFrom]="AgentHistoryFrom"
+                    [TargetBranchID]="TargetBranchIdFor(inputRef.conversationId)"
+                    [ResolveTargetBranch]="inputRef.conversationId === conversationId ? ResolveComposerBranch : null"
                     [AgentTurnHandler]="AgentTurnHandler"
                     [AutoNameConversation]="AutoNameConversation"
                     [EnableDecisionRouting]="EnableDecisionRouting"
@@ -422,7 +486,8 @@
                     [enableEntityMentions]="allowEntityMentions"
                     [enableSkillCommands]="allowSkillCommands"
                     [enablePlanMode]="allowPlanMode"
-                    [enableRealtime]="allowRealtime"
+                    [enableRealtime]="allowRealtime && OpenView.Kind !== 'DraftFork'"
+                    [Placeholder]="ComposerPlaceholderFor(inputRef.conversationId)"
                     [maxAttachments]="maxAttachments"
                     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
                     [acceptedFileTypes]="acceptedFileTypes"
@@ -446,6 +511,9 @@
                   </mj-message-input>
                 }
               </div>
+              @if (ComposerHint) {
+                <div class="fork-composer-hint">{{ ComposerHint }}</div>
+              }
             }
           </div>
         </div>
@@ -466,6 +534,7 @@
           [environmentId]="environmentId"
           [versionNumber]="selectedVersionNumber"
           [viewContext]="'conversation'"
+          [Scope]="ArtifactViewerScope"
           [canShare]="canShareSelectedArtifact"
           [canEdit]="canEditSelectedArtifact"
           [isMaximized]="isArtifactPaneMaximized"
@@ -503,6 +572,16 @@
         (unpinRequested)="onUnpinFromPanel($event)">
       </mj-pinned-messages-panel>
     }
+
+    @if (ShowForksPopover) {
+      <mj-conversation-forks-popover
+        [PanelID]="ForksPopoverID"
+        [Summaries]="ForkSummaries"
+        [CurrentUserID]="CurrentUser.ID"
+        (ForkSelected)="OnForkSelectedFromList($event)"
+        (Closed)="CloseForksPopover()">
+      </mj-conversation-forks-popover>
+    }
   </div>
 
   <!-- Live voice "call mode" overlay — fills this conversation panel in place
@@ -520,6 +599,7 @@
       [CurrentUser]="currentUser"
       [EnvironmentID]="environmentId"
       [ReviewData]="RealtimeReview"
+      [AllowStartLive]="CanStartVoiceFromReview"
       [Chrome]="overlayMode ? 'orb' : 'auto'"
       [Compact]="overlayMode"
       [ShowDevLinks]="!overlayMode"
@@ -542,17 +622,6 @@
   }
 </div>
 
-<!-- Thread Panel -->
-@if (threadId) {
-  <mj-thread-panel
-    [parentMessageId]="threadId"
-    [conversationId]="conversationId || ''"
-    [currentUser]="currentUser"
-    (closed)="onLocalThreadClosed()"
-    (replyAdded)="onThreadReplyAdded($event)">
-  </mj-thread-panel>
-}
-
 <!-- Export Modal -->
 <!-- [branding] is bound BEFORE [isVisible] deliberately: Angular sets inputs in
      template order within a change-detection pass, and the modal's isVisible setter
@@ -561,6 +630,7 @@
   [branding]="exportBranding"
   [isVisible]="showExportModal"
   [conversation]="conversation || undefined"
+  [Scope]="ExportScope"
   [currentUser]="currentUser"
   (cancelled)="onExportModalCancelled()"
   (exported)="onExportModalComplete()">

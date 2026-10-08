@@ -169,6 +169,7 @@ import { MJContentTypeFormComponent } from "./Entities/MJContentType/mjcontentty
 import { MJConversationArtifactFormComponent } from "./Entities/MJConversationArtifact/mjconversationartifact.form.component";
 import { MJConversationArtifactPermissionFormComponent } from "./Entities/MJConversationArtifactPermission/mjconversationartifactpermission.form.component";
 import { MJConversationArtifactVersionFormComponent } from "./Entities/MJConversationArtifactVersion/mjconversationartifactversion.form.component";
+import { MJConversationBranchFormComponent } from "./Entities/MJConversationBranch/mjconversationbranch.form.component";
 import { MJConversationCompactionRunFormComponent } from "./Entities/MJConversationCompactionRun/mjconversationcompactionrun.form.component";
 import { MJConversationDetailArtifactFormComponent } from "./Entities/MJConversationDetailArtifact/mjconversationdetailartifact.form.component";
 import { MJConversationDetailAttachmentFormComponent } from "./Entities/MJConversationDetailAttachment/mjconversationdetailattachment.form.component";
@@ -1230,6 +1231,7 @@ export class GeneratedForms_SubModule_25 { }
 @NgModule({
 declarations: [
     MJActionParamFormComponent,
+    MJConversationBranchFormComponent,
     MJConversationFormComponent,
     MJEntityActionInvocationTypeFormComponent,
     MJEntityCommunicationFieldFormComponent,

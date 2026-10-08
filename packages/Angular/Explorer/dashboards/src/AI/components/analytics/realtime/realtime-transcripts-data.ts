@@ -10,6 +10,7 @@
 import { IMetadataProvider, RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { ConversationEngine } from '@memberjunction/core-entities';
 
 const CONVERSATION_ENTITY = 'MJ: Conversations';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
@@ -71,9 +72,10 @@ export async function LoadMeetingRooms(provider: IMetadataProvider, maxRows = 50
 }
 
 /**
- * Loads + speaker-attributes one room's transcript. Resolves agent lines via `AgentID` (AIEngine cache) and
- * heard lines via the diarized `ExternalID` against the room's participant roster (so a `User` line reads as
- * the actual person, and another agent heard in the room reads as that agent — not a generic "User").
+ * Loads + speaker-attributes one room's transcript: the room conversation's Main rows (a bridge session
+ * writes Main), in `Sequence` order. Resolves agent lines via `AgentID` (AIEngine cache) and heard lines via
+ * the diarized `ExternalID` against the room's participant roster (so a `User` line reads as the actual
+ * person, and another agent heard in the room reads as that agent — not a generic "User").
  *
  * @param provider The request-scoped metadata provider.
  * @param conversationID The room conversation id.
@@ -84,13 +86,14 @@ export async function LoadRoomTranscript(
     conversationID: string,
     roomKey: string,
 ): Promise<TranscriptLine[]> {
+    const pathFilter = ConversationEngine.ScopeFilter(ConversationEngine.TrunkScope(conversationID));
     const rv = RunView.FromMetadataProvider(provider);
     const [detailResult, bridgeResult] = await rv.RunViews([
         {
             EntityName: CONVERSATION_DETAIL_ENTITY,
-            ExtraFilter: `ConversationID='${EscapeSQLString(conversationID)}'`,
+            ExtraFilter: pathFilter,
             Fields: ['ID', 'Role', 'Message', 'AgentID', 'ExternalID', 'Error', '__mj_CreatedAt'],
-            OrderBy: '__mj_CreatedAt ASC',
+            OrderBy: 'Sequence ASC',
             MaxRows: 5000,
             ResultType: 'simple',
         },

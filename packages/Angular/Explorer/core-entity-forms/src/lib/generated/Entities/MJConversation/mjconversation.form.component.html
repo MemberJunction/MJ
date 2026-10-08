@@ -548,6 +548,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Conversation Branches Section -->
+    <mj-collapsible-panel
+        SectionKey="mJConversationBranches"
+        SectionName="Conversation Branches"
+        Icon="fa fa-code-branch"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJConversationBranches')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Branches','ConversationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Branches','ConversationID')"
+                [AllowLoad]="IsSectionExpanded('mJConversationBranches')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationBranches', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

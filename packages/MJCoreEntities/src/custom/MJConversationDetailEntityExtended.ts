@@ -6,16 +6,9 @@ import {
     IMetadataProvider,
     LogError
 } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import {
-    MJConversationDetailEntity,
-    MJConversationEntity,
-    MJResourcePermissionEntity
-} from '../generated/entity_subclasses';
-import { ResourcePermissionEngine } from './ResourcePermissions/ResourcePermissionEngine';
-
-/** `MJ: Resource Types.ID` for Conversations — seeded in the resource type catalog. */
-const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
+import { RegisterClass } from '@memberjunction/global';
+import { MJConversationDetailEntity } from '../generated/entity_subclasses';
+import { UserMayWriteConversation } from './ConversationWriteAccess';
 
 /**
  * Fields that represent the conversation owner's evaluation of an AI message.
@@ -80,19 +73,8 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
         }
 
         try {
-            const conversation = await provider.GetEntityObject<MJConversationEntity>(
-                'MJ: Conversations',
-                user
-            );
-            const loaded = await conversation.Load(this.ConversationID);
-            if (!loaded) {
-                // Parent conversation missing — let the FK/base save handle it.
-                return true;
-            }
-
-            const isOwner =
-                !!conversation.UserID && UUIDsEqual(conversation.UserID, user.ID);
-            if (isOwner) {
+            const decision = await UserMayWriteConversation(provider, user, this.ConversationID);
+            if (decision.IsOwner) {
                 return true;
             }
 
@@ -108,27 +90,11 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
                 return false;
             }
 
-            const engine = ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(
-                provider as IMetadataProvider,
-                ResourcePermissionEngine
-            ) as ResourcePermissionEngine;
-            await engine.Config(false, user);
-
-            const grant = engine
-                .GetUserAvailableResources(user, CONVERSATIONS_RESOURCE_TYPE_ID)
-                .find((p: MJResourcePermissionEntity) => UUIDsEqual(p.ResourceRecordID, this.ConversationID));
-
-            if (!grant) {
-                this.recordDenied('You do not have access to this conversation.', resultType);
+            if (!decision.Allowed) {
+                this.recordDenied(decision.Reason ?? 'Permission denied.', resultType);
                 return false;
             }
-            if (grant.PermissionLevel === 'Edit' || grant.PermissionLevel === 'Owner') {
-                return true;
-            }
-
-            // Only View — block writes.
-            this.recordDenied('You have view-only access to this conversation.', resultType);
-            return false;
+            return true;
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             LogError(

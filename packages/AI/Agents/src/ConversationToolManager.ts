@@ -16,7 +16,7 @@
  */
 
 import { UserInfo } from '@memberjunction/core';
-import { ConversationEngine, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { ConversationBranchRow, ConversationEngine, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { FormatSequencedHistoryLine } from './conversation-history-format';
 
 /**
@@ -155,6 +155,10 @@ export class ConversationToolManager {
     private summaryHost: ConversationToolSummaryHost | null = null;
     /** The run's history floor: rows written before it are never paged in. Null reads everything. */
     private historyFrom: Date | null = null;
+    /** The run's branch; null is the trunk. */
+    private branchId: string | null = null;
+    /** The conversation's branch rows, loaded once per run by BaseAgent. */
+    private branches: ConversationBranchRow[] = [];
 
     /**
      * Arms the manager for a run. Pass null conversationId to disable (programmatic runs).
@@ -162,11 +166,22 @@ export class ConversationToolManager {
      * @param historyFrom The run's history floor (`ExecuteAgentParams.ConversationHistoryFrom`).
      *   When set, every tool sees only the rows written at or after it — the same window the
      *   run's messages were loaded from — so a tool can't page back past it.
+     * @param branchId The run's branch (`ExecuteAgentParams.ConversationBranchID`); null is the trunk.
+     *   Every tool sees only the rows on that branch's path.
+     * @param branches The conversation's branch rows, used to resolve the branch path.
      */
-    public Initialize(conversationId: string | null, contextUser: UserInfo, historyFrom: Date | null = null): void {
+    public Initialize(
+        conversationId: string | null,
+        contextUser: UserInfo,
+        historyFrom: Date | null = null,
+        branchId: string | null = null,
+        branches: ConversationBranchRow[] = []
+    ): void {
         this.conversationId = conversationId;
         this.contextUser = contextUser;
         this.historyFrom = historyFrom;
+        this.branchId = branchId;
+        this.branches = branches;
     }
 
     /** Wires the recursive-sub-call seam (BaseAgent owns prompt execution). */
@@ -180,6 +195,8 @@ export class ConversationToolManager {
         this.contextUser = null;
         this.summaryHost = null;
         this.historyFrom = null;
+        this.branchId = null;
+        this.branches = [];
     }
 
     /** True when the run has a conversation to page against. */
@@ -301,14 +318,19 @@ export class ConversationToolManager {
         return lines.join('\n');
     }
 
-    /** The conversation history the run may read (all of it, or from its floor), ordered by Sequence, from the engine cache. */
+    /**
+     * The conversation history the run may read — the rows on the run's branch path that no
+     * rerun replaced (all of them, or from its floor) — ordered by Sequence, from the engine cache.
+     */
     private async loadOrderedDetails(): Promise<MJConversationDetailEntity[]> {
         if (!this.conversationId || !this.contextUser) {
             throw new Error('Conversation tools are unavailable: no conversation is associated with this run');
         }
         const cache = await ConversationEngine.Instance.LoadConversationDetails(this.conversationId, this.contextUser);
+        const onPath = ConversationEngine.FilterRowsToBranchPath(cache.Details, this.branchId, this.branches)
+            .filter(d => d.ReplacedAt == null);
         const floor = this.historyFrom;
-        const visible = floor ? cache.Details.filter(d => ConversationToolManager.isAtOrAfter(d.__mj_CreatedAt, floor)) : cache.Details;
+        const visible = floor ? onPath.filter(d => ConversationToolManager.isAtOrAfter(d.__mj_CreatedAt, floor)) : onPath;
         return [...visible].sort((a, b) => a.Sequence - b.Sequence);
     }
 

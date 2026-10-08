@@ -1,6 +1,13 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { ExportService } from './export.service';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { RunView, type UserInfo } from '@memberjunction/core';
+import {
+  ConversationEngine,
+  type ConversationBranchRow,
+  type ConversationScope,
+  type MJConversationEntity,
+  type MJConversationDetailEntity,
+} from '@memberjunction/core-entities';
+import { ExportService, type ExportFormat } from './export.service';
 
 /**
  * DOM spec (jsdom — `escapeHtml` and the theme snapshot touch `document`) for the
@@ -302,5 +309,162 @@ describe('ExportService — BuildExportContent branding', () => {
       const snap = svc.SnapshotBrandTokens();
       expect(snap['--mj-bg-page']).toBe('#111111'); // live = dark, untouched
     });
+  });
+});
+
+/**
+ * `ExportConversation` reads the messages of one scope: Main, or the path of a fork. In a fork
+ * the export header names the fork by its display name.
+ */
+describe('ExportService — ExportConversation scope', () => {
+  const conversation = {
+    ID: 'c1',
+    Name: 'My Chat',
+    Description: 'About things',
+    __mj_CreatedAt: new Date('2026-01-02T03:04:05Z'),
+    __mj_UpdatedAt: new Date('2026-01-02T03:04:05Z'),
+  } as unknown as MJConversationEntity;
+  const details = [
+    { ID: 'm1', Role: 'User', Message: 'Hello there', __mj_CreatedAt: new Date('2026-01-02T03:05:00Z') },
+  ] as unknown as MJConversationDetailEntity[];
+  const user = { ID: 'u1' } as unknown as UserInfo;
+  const named: ConversationBranchRow = { ID: 'BRANCH-B', ConversationID: 'c1', ParentBranchID: null, ForkFromSequence: 2, Name: 'Shorter answers' };
+  const unnamed: ConversationBranchRow = { ID: 'BRANCH-U', ConversationID: 'c1', ParentBranchID: null, ForkFromSequence: 2, Name: null };
+  const branchScope: ConversationScope = { ConversationID: 'c1', BranchID: 'BRANCH-B', Branches: [named, unnamed] };
+  const unnamedScope: ConversationScope = { ConversationID: 'c1', BranchID: 'BRANCH-U', Branches: [named, unnamed] };
+  const formats: readonly ExportFormat[] = ['markdown', 'text', 'html', 'json'];
+
+  let runViews: ReturnType<typeof vi.fn>;
+  let svc: ExportService;
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+
+  beforeEach(() => {
+    runViews = vi.fn(async () => [
+      { Success: true, Results: [conversation] },
+      { Success: true, Results: details },
+    ]);
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunViews: runViews } as unknown as RunView);
+    URL.createObjectURL = vi.fn(() => 'blob:export');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    svc = new ExportService();
+  });
+
+  afterEach(() => {
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+    vi.restoreAllMocks();
+  });
+
+  /** The ExtraFilter and OrderBy of the details read. */
+  function detailsRead(): { EntityName: string; ExtraFilter: string; OrderBy: string } {
+    const batch = runViews.mock.calls[0][0] as Array<{ EntityName: string; ExtraFilter: string; OrderBy: string }>;
+    return batch[1];
+  }
+
+  /** Exports in one format and returns the document text. */
+  async function exportText(scope: ConversationScope, format: ExportFormat, includeMetadata = true): Promise<string> {
+    const build = vi.spyOn(svc, 'BuildExportContent');
+    await svc.ExportConversation('c1', scope, format, user, { includeMetadata });
+    const built = await build.mock.results[build.mock.results.length - 1].value;
+    return built.content;
+  }
+
+  it('reads the details on the fork path with the scope filter, in Sequence order', async () => {
+    await svc.ExportConversation('c1', branchScope, 'markdown', user);
+
+    const read = detailsRead();
+    expect(read.EntityName).toBe('MJ: Conversation Details');
+    expect(read.ExtraFilter).toBe(ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(branchScope)));
+    expect(read.ExtraFilter).toContain(`[BranchID]='BRANCH-B'`);
+    expect(read.OrderBy).toBe('Sequence ASC');
+  });
+
+  it('reads the Main details with the Main predicate', async () => {
+    await svc.ExportConversation('c1', ConversationEngine.TrunkScope('c1'), 'markdown', user);
+
+    const read = detailsRead();
+    expect(read.ExtraFilter).toBe(`[ConversationID]='c1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
+    expect(read.OrderBy).toBe('Sequence ASC');
+  });
+
+  it('names the fork in the header of every format in a fork', async () => {
+    expect(await exportText(branchScope, 'markdown')).toContain('**Created:** ');
+    expect(await exportText(branchScope, 'markdown')).toContain('**Fork:** Shorter answers\n\n---');
+    expect(await exportText(branchScope, 'text')).toContain('\nFork: Shorter answers\n\n----');
+    expect(await exportText(branchScope, 'html')).toContain('<p>Fork: Shorter answers</p>');
+    expect(JSON.parse(await exportText(branchScope, 'json')).conversation.fork).toBe('Shorter answers');
+  });
+
+  it('names an unnamed fork by its default display name', async () => {
+    const label = ConversationEngine.ForkDisplayName(unnamed, null);
+    expect(label).toBe('Fork');
+    expect(await exportText(unnamedScope, 'markdown')).toContain(`**Fork:** ${label}`);
+    expect(await exportText(unnamedScope, 'text')).toContain(`Fork: ${label}`);
+    expect(await exportText(unnamedScope, 'html')).toContain(`<p>Fork: ${label}</p>`);
+    expect(JSON.parse(await exportText(unnamedScope, 'json')).conversation.fork).toBe(label);
+  });
+
+  it("names an unnamed fork by the first words of its first own message", async () => {
+    const pathRows = [
+      { ID: 'm1', Role: 'User', Message: 'Main question', BranchID: null, Sequence: 1, __mj_CreatedAt: new Date('2026-01-02T03:05:00Z') },
+      { ID: 'm3', Role: 'AI', Message: 'Later reply', BranchID: 'BRANCH-U', Sequence: 4, __mj_CreatedAt: new Date('2026-01-02T03:07:00Z') },
+      { ID: 'm2', Role: 'User', Message: 'Try a shorter answer', BranchID: 'branch-u', Sequence: 3, __mj_CreatedAt: new Date('2026-01-02T03:06:00Z') },
+    ] as unknown as MJConversationDetailEntity[];
+    runViews.mockResolvedValue([
+      { Success: true, Results: [conversation] },
+      { Success: true, Results: pathRows },
+    ]);
+
+    const json = JSON.parse(await exportText(unnamedScope, 'json'));
+
+    expect(json.conversation.fork).toBe(ConversationEngine.ForkDisplayName(unnamed, 'Try a shorter answer'));
+    expect(json.conversation.fork).toBe('Try a shorter answer');
+  });
+
+  it('names the fork when metadata is left out', async () => {
+    expect(await exportText(branchScope, 'markdown', false)).toContain('**Fork:** Shorter answers');
+    expect(await exportText(branchScope, 'text', false)).toContain('Fork: Shorter answers');
+    expect(await exportText(branchScope, 'html', false)).toContain('<p>Fork: Shorter answers</p>');
+    expect(JSON.parse(await exportText(branchScope, 'json', false)).conversation.fork).toBe('Shorter answers');
+  });
+
+  it('adds no fork line in Main', async () => {
+    for (const format of formats) {
+      for (const includeMetadata of [true, false]) {
+        const content = await exportText(ConversationEngine.TrunkScope('c1'), format, includeMetadata);
+        expect(content).not.toMatch(/fork|branch/i);
+      }
+    }
+  });
+
+  it('keeps the Main document as BuildExportContent writes it', async () => {
+    for (const format of formats) {
+      const exported = await exportText(ConversationEngine.TrunkScope('c1'), format);
+      const built = await svc.BuildExportContent({ conversation, details }, format);
+      expect(exported).toBe(built.content);
+    }
+  });
+
+  it('rejects a scope of another conversation without reading', async () => {
+    await expect(svc.ExportConversation('c1', ConversationEngine.TrunkScope('c2'), 'markdown', user))
+      .rejects.toThrow(/c2/);
+    expect(runViews).not.toHaveBeenCalled();
+  });
+
+  it('the deprecated alias exports Main when no scope is given', async () => {
+    const loadScope = vi.spyOn(ConversationEngine, 'LoadScope');
+
+    await svc.exportConversation('c1', 'markdown', user);
+
+    expect(loadScope).not.toHaveBeenCalled();
+    expect(detailsRead().ExtraFilter).toBe(`[ConversationID]='c1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
+  });
+
+  it('the deprecated alias exports a given scope', async () => {
+    await svc.exportConversation('c1', 'markdown', user, {}, branchScope);
+
+    expect(detailsRead().ExtraFilter).toBe(ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(branchScope)));
   });
 });

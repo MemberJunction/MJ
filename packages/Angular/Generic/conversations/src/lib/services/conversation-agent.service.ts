@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Metadata, IMetadataProvider, RunView } from '@memberjunction/core';
+import { Metadata, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLAIClient, type RunDecisionParams, type RunDecisionResult } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, coerceFailedExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -293,17 +293,25 @@ export class ConversationAgentService {
    * mention blob (`@{"type":"agent","id":"…","configId":"…"}`). So SQL narrows and the parser
    * decides — both `configId` and the agent id appear verbatim in that blob, which makes the
    * two LIKEs a tight prefilter, and `parseMentions` is what actually confirms a match.
+   *
+   * @param branchId The active branch. Only messages on its path count; null or omitted reads
+   *   the trunk.
    */
   public async FindConfigurationPresetForAgent(
     conversationId: string,
-    agentId: string
+    agentId: string,
+    branchId?: string | null
   ): Promise<string | undefined> {
     type MentionRow = Pick<MJConversationDetailEntity, 'ID' | 'Message'>;
+    const pathFilter = await this.branchPathFilter(conversationId, branchId);
+    if (pathFilter == null) {
+      return undefined;
+    }
 
     const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MentionRow>({
       EntityName: 'MJ: Conversation Details',
-      ExtraFilter: `ConversationID='${conversationId}' AND Role='User'`
+      ExtraFilter: `${pathFilter} AND Role='User'`
         + ` AND Message LIKE '%"configId"%' AND Message LIKE '%${agentId}%'`,
       OrderBy: 'Sequence DESC',
       // >1 because LIKE cannot tell a mention blob from the same id appearing elsewhere in
@@ -511,12 +519,16 @@ export class ConversationAgentService {
    *
    * Stays on the Angular shim because it directly uses GraphQLAIClient.
    * Could move to the runtime in a follow-up.
+   *
+   * @param branchId The active branch. Only the agent's artifacts on its path are listed for the
+   *   classifier; null or omitted reads the trunk.
    */
   async CheckAgentContinuityIntent(
     conversationId: string,
     agentId: string,
     latestMessage: string,
-    conversationHistory: MJConversationDetailEntity[]
+    conversationHistory: MJConversationDetailEntity[],
+    branchId?: string | null
   ): Promise<IntentCheckResult> {
     if (!this._aiClient) {
       console.warn('AI Client not initialized, defaulting to UNSURE for intent check');
@@ -540,7 +552,7 @@ export class ConversationAgentService {
       // Queried, not read off the caller's window-scoped maps — see findAllAgentArtifacts.
       // `conversationHistory` below is still the window on purpose: the `.slice(-10)` wants
       // the most recent exchange, which the loaded tail always contains.
-      const agentArtifacts = await this.findAllAgentArtifacts(conversationId, agentId);
+      const agentArtifacts = await this.findAllAgentArtifacts(conversationId, agentId, undefined, branchId);
 
       const recentHistory = conversationHistory.slice(-10);
       const compactHistory = recentHistory.map((msg, idx) => {
@@ -628,9 +640,10 @@ ${compactHistory}${artifactContext}
     conversationId: string,
     agentId: string,
     latestMessage: string,
-    conversationHistory: MJConversationDetailEntity[]
+    conversationHistory: MJConversationDetailEntity[],
+    branchId?: string | null
   ): Promise<IntentCheckResult> {
-    return this.CheckAgentContinuityIntent(conversationId, agentId, latestMessage, conversationHistory);
+    return this.CheckAgentContinuityIntent(conversationId, agentId, latestMessage, conversationHistory, branchId);
   }
 
   /**
@@ -649,23 +662,26 @@ ${compactHistory}${artifactContext}
   }
 
   /**
-   * Every artifact this agent produced in this conversation, newest version first, for decision
-   * routing's artifact question. Resolved by query, as {@link findAllAgentArtifacts} explains.
+   * Every artifact this agent produced on the active branch path, newest version first, for
+   * decision routing's artifact question. Resolved by query, as {@link findAllAgentArtifacts} explains.
    *
    * @param historyFrom The chat's history floor. When set, only artifacts on replies written at or
    *   after it count, as with {@link FindLatestAgentOutputVersion}.
+   * @param branchId The active branch. Only artifacts on its path count, as with
+   *   {@link FindLatestAgentOutputVersion}; null or omitted reads the trunk.
    */
   public async FindAgentArtifacts(
     conversationId: string,
     agentId: string,
-    historyFrom?: Date | null
+    historyFrom?: Date | null,
+    branchId?: string | null
   ): Promise<AgentArtifactSummary[]> {
-    return this.findAllAgentArtifacts(conversationId, agentId, historyFrom);
+    return this.findAllAgentArtifacts(conversationId, agentId, historyFrom, branchId);
   }
 
   /**
-   * Every artifact this agent produced in this conversation, newest version first — resolved
-   * by QUERY, not by scanning the display array.
+   * Every artifact this agent produced on the active branch path, newest version first —
+   * resolved by QUERY, not by scanning the display array.
    *
    * The scan this replaces walked `conversationDetails` and looked each row up in the
    * caller's `artifactsByDetailId` / `agentRunsByDetailId` maps. Both are scoped to the
@@ -683,18 +699,24 @@ ${compactHistory}${artifactContext}
    * {@link AgentArtifactSummary} for why dropping `runId` removes the join back to agent runs.
    *
    * @param historyFrom The chat's history floor, when set (see {@link FindAgentArtifacts}).
+   * @param branchId The branch whose path to read; null or omitted reads the trunk.
    */
   private async findAllAgentArtifacts(
     conversationId: string,
     agentId: string,
-    historyFrom?: Date | null
+    historyFrom?: Date | null,
+    branchId?: string | null
   ): Promise<AgentArtifactSummary[]> {
     type VersionRow = Pick<MJArtifactVersionEntity, 'ID' | 'ArtifactID' | 'VersionNumber' | 'Name'>;
+    const pathFilter = await this.branchPathFilter(conversationId, branchId);
+    if (pathFilter == null) {
+      return [];                    // the classifier degrades to no artifact context
+    }
 
     const rv = RunView.FromMetadataProvider(this.Provider);
     const versionResult = await rv.RunView<VersionRow>({
       EntityName: 'MJ: Artifact Versions',
-      ExtraFilter: this.agentOutputVersionFilter(conversationId, agentId, historyFrom),
+      ExtraFilter: this.agentOutputVersionFilter(pathFilter, agentId, historyFrom),
       OrderBy: '__mj_CreatedAt DESC',
       MaxRows: MAX_AGENT_ARTIFACT_VERSIONS,
       Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name'],
@@ -753,20 +775,27 @@ ${compactHistory}${artifactContext}
    * @param historyFrom The chat's history floor. When set, only artifacts on replies written at
    *   or after it count: a run that may not read earlier messages must not pick up their work
    *   as its payload either.
+   * @param branchId The active branch. Only replies on its path count, so an artifact made on
+   *   another branch is never the latest here; null or omitted reads the trunk.
    */
   public async FindLatestAgentOutputVersion(
     conversationId: string,
     agentId: string,
-    historyFrom?: Date | null
+    historyFrom?: Date | null,
+    branchId?: string | null
   ): Promise<AgentPayloadSource | null> {
+    const pathFilter = await this.branchPathFilter(conversationId, branchId);
+    if (pathFilter == null) {
+      return null;
+    }
     return this.runPayloadSourceQuery(
-      this.agentOutputVersionFilter(conversationId, agentId, historyFrom), '__mj_CreatedAt DESC'
+      this.agentOutputVersionFilter(pathFilter, agentId, historyFrom), '__mj_CreatedAt DESC'
     );
   }
 
   /**
-   * `ArtifactVersion.ID IN (...)` for every OUTPUT artifact an agent produced in one
-   * conversation. Shared by {@link FindLatestAgentOutputVersion} and
+   * `ArtifactVersion.ID IN (...)` for every OUTPUT artifact an agent produced on one
+   * conversation path, in messages no rerun replaced. Shared by {@link FindLatestAgentOutputVersion} and
    * {@link findAllAgentArtifacts} so the two can never disagree about what "this agent's
    * artifacts" means.
    *
@@ -774,17 +803,39 @@ ${compactHistory}${artifactContext}
    * `Status = 'Completed'` (which is what the array scan this replaced used). Doing it on the
    * run would mean joining back to `MJ: AI Agent Runs` purely to restate a condition the
    * detail already carries.
+   *
+   * @param pathFilter The conversation-and-branch predicate from {@link branchPathFilter}.
    */
-  private agentOutputVersionFilter(conversationId: string, agentId: string, historyFrom?: Date | null): string {
+  private agentOutputVersionFilter(pathFilter: string, agentId: string, historyFrom?: Date | null): string {
     const floor = historyFrom ? ` AND ${ConversationEngine.HistoryFromFilter(historyFrom)}` : '';
     return `ID IN (
         SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts]
         WHERE Direction='Output' AND ConversationDetailID IN (
           SELECT ID FROM [__mj].[vwConversationDetails]
-          WHERE ConversationID='${conversationId}' AND AgentID='${agentId}'
+          WHERE ${ConversationEngine.LiveRowsFilter(pathFilter)} AND AgentID='${agentId}'
             AND Role='AI' AND Status <> 'Error'${floor}
         )
       )`;
+  }
+
+  /**
+   * The SQL predicate for one branch's path in a conversation, from
+   * `ConversationEngine.BranchPathFilterFresh`. A null or omitted branch is the trunk and costs
+   * no query.
+   *
+   * Never throws. When the path cannot be built (the branch rows fail to load, or the branch is
+   * not among them), it logs the error and returns null. Each lookup then returns its own
+   * failure value, as it does when its main query fails. A caller must not fall back to the
+   * trunk predicate: on a branch, that reads trunk rows past the fork point.
+   */
+  private async branchPathFilter(conversationId: string, branchId: string | null | undefined): Promise<string | null> {
+    try {
+      const user = this.Provider.CurrentUser ?? undefined;
+      return await ConversationEngine.BranchPathFilterFresh(conversationId, branchId, user as UserInfo, this.Provider);
+    } catch (error) {
+      console.error(`Failed to build the path of branch ${branchId} in conversation ${conversationId}:`, error);
+      return null;
+    }
   }
 
   /**

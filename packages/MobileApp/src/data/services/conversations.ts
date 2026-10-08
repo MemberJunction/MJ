@@ -6,7 +6,7 @@
  * into UI-shaped types (with agent avatar colors etc).
  */
 
-import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, type RunViewResult, type UserInfo } from '@memberjunction/core';
 import {
     CollectRealtimeSessionIDs,
     MapRealtimeSessionMeta,
@@ -14,11 +14,19 @@ import {
     type RealtimeSessionMetaRow,
     type RealtimeSessionTimelineMeta,
 } from '@memberjunction/conversations-runtime';
-import type {
-    MJConversationEntity,
-    MJConversationDetailEntity,
-    MJConversationArtifactEntity,
+import {
+    ConversationEngine,
+    type MJConversationEntity,
+    type MJConversationDetailEntity,
+    type MJConversationArtifactEntity,
 } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
+import {
+    ArtifactLinkQueries,
+    BuildArtifactLinks,
+    IsArtifactVisible,
+    type ArtifactLinkRow,
+} from '@/data/services/artifact-scope';
 
 const ENTITY_CONVERSATION = 'MJ: Conversations';
 const ENTITY_CONVERSATION_DETAIL = 'MJ: Conversation Details';
@@ -41,21 +49,35 @@ export type ConversationListItem = {
     AgentIds: string[];
     /** Distinct agent display names (parallel to agentIds when known). */
     AgentNames: string[];
-    /** Total message count in the conversation. */
+    /** Message count in Main, over the recent rows the list loads. */
     messageCount: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+};
+
+/** One recent `MJ: Conversation Details` row, as the list query selects it. */
+type ListDetailRow = {
+    ID: string;
+    ConversationID: string;
+    Message: string;
+    Role: 'User' | 'AI' | 'Error';
+    Status: 'Complete' | 'In-Progress' | 'Error';
+    AgentID: string | null;
+    __mj_CreatedAt: Date | string;
+    BranchID: string | null;
+    Sequence: number;
 };
 
 /**
  * Load all conversations for the current user along with enough message-level
  * info to render the list (latest snippet, live status, participating agents).
  *
- * Strategy: one RunView for conversations, one RunView for the most recent
- * N details per conversation (batched), aggregated client-side. Keeps round
- * trips low at the cost of pulling some extra rows.
+ * Strategy: one RunViews for conversations and the user's most recent detail rows, aggregated
+ * client-side. Keeps round trips low at the cost of pulling some extra rows.
  *
- * Phase 1 takes the top 100 conversations and pulls the most recent 200
- * detail rows across all of them (covers ~2 messages per conversation on
- * average for the list view).
+ * Each conversation's row aggregates only its Main rows; the mobile app shows Main until forks
+ * come to mobile.
+ *
+ * Phase 1 takes the top 100 conversations and pulls the most recent 500
+ * detail rows across all of them.
  */
 export async function LoadConversations(contextUser?: UserInfo): Promise<ConversationListItem[]> {
     const rv = new RunView();
@@ -84,7 +106,7 @@ export async function LoadConversations(contextUser?: UserInfo): Promise<Convers
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 500,
                 ResultType: 'simple',
-                Fields: ['ID', 'ConversationID', 'Message', 'Role', 'Status', 'AgentID', '__mj_CreatedAt'],
+                Fields: ['ID', 'ConversationID', 'Message', 'Role', 'Status', 'AgentID', '__mj_CreatedAt', 'BranchID', 'Sequence'],
             },
         ],
         currentUser,
@@ -95,63 +117,74 @@ export async function LoadConversations(contextUser?: UserInfo): Promise<Convers
     }
 
     const conversations = (convResult.Results as MJConversationEntity[]) ?? [];
-
-    type DetailRow = {
-        ID: string;
-        ConversationID: string;
-        Message: string;
-        Role: 'User' | 'AI' | 'Error';
-        Status: 'Complete' | 'In-Progress' | 'Error';
-        AgentID: string | null;
-        __mj_CreatedAt: Date | string;
-    };
-    const allDetails: DetailRow[] = detailResult.Success
-        ? ((detailResult.Results as unknown as DetailRow[]) ?? [])
+    const allDetails: ListDetailRow[] = detailResult.Success
+        ? ((detailResult.Results as unknown as ListDetailRow[]) ?? [])
         : [];
 
     // Group details by conversation for aggregation
-    const byConv = new Map<string, DetailRow[]>();
+    const byConv = new Map<string, ListDetailRow[]>();
     for (const d of allDetails) {
         if (!byConv.has(d.ConversationID)) byConv.set(d.ConversationID, []);
         byConv.get(d.ConversationID)!.push(d);
     }
 
-    // Resolve agent display names from the metadata-loaded AI Agents list (cheap, no extra round trip).
-    const agentNameById = new Map<string, string>();
-    try {
-        const agentResult = await rv.RunView<{ ID: string; Name: string }>(
-            { EntityName: 'MJ: AI Agents', Fields: ['ID', 'Name'], MaxRows: 500, ResultType: 'simple' },
-            currentUser,
-        );
-        if (agentResult.Success && agentResult.Results) {
-            for (const a of agentResult.Results) agentNameById.set(a.ID, a.Name);
-        }
-    } catch {
-        // Non-fatal — we'll just show unknown agents without names.
-    }
+    const lookups = await loadListLookups(rv, currentUser);
 
-    return conversations.map((conv) => {
-        const details = (byConv.get(conv.ID) ?? []).slice().sort((a, b) => {
-            const ad = new Date(a.__mj_CreatedAt).getTime();
-            const bd = new Date(b.__mj_CreatedAt).getTime();
-            return bd - ad; // newest first
-        });
-        const latest = details[0];
-        const agentIdSet = new Set<string>();
-        for (const d of details) if (d.AgentID) agentIdSet.add(d.AgentID);
-        const agentIds = Array.from(agentIdSet);
-        const agentNames = agentIds.map((id) => agentNameById.get(id) ?? 'Agent');
-        const updatedAt = (conv as unknown as { __mj_UpdatedAt?: Date }).__mj_UpdatedAt;
-        return {
-            entity: conv,
-            LatestSnippet: latest?.Message ?? null,
-            LatestAt: latest ? new Date(latest.__mj_CreatedAt) : (updatedAt ? new Date(updatedAt) : new Date()),
-            live: details.some((d) => d.Status === 'In-Progress'),
-            AgentIds: agentIds,
-            AgentNames: agentNames,
-            messageCount: details.length,
-        } satisfies ConversationListItem;
+    return conversations.map((conv) => buildListItem(conv, rowsOnMain(conv, byConv.get(conv.ID) ?? []), lookups.AgentNameById));
+}
+
+/** The list's lookups: agent display names. */
+type ListLookups = {
+    AgentNameById: Map<string, string>;
+};
+
+/** Loads the list's lookups: the AI Agents names. A failed read leaves the map empty. */
+async function loadListLookups(rv: RunView, user: UserInfo | undefined): Promise<ListLookups> {
+    const lookups: ListLookups = { AgentNameById: new Map() };
+    try {
+        const agentsResult = await rv.RunView<{ ID: string; Name: string }>(
+            { EntityName: 'MJ: AI Agents', Fields: ['ID', 'Name'], MaxRows: 500, ResultType: 'simple' },
+            user,
+        );
+        const agents = agentsResult?.Success ? (agentsResult.Results ?? []) : [];
+        for (const a of agents) lookups.AgentNameById.set(a.ID, a.Name);
+    } catch {
+        // Non-fatal — unknown agents show without names.
+    }
+    return lookups;
+}
+
+/** The rows of a conversation in Main. */
+function rowsOnMain(conv: MJConversationEntity, rows: ListDetailRow[]): ListDetailRow[] {
+    return ConversationEngine.FilterToScope(ConversationEngine.TrunkScope(conv.ID), rows);
+}
+
+/** One list row from a conversation and its Main rows. */
+function buildListItem(
+    conv: MJConversationEntity,
+    rows: ListDetailRow[],
+    agentNameById: Map<string, string>,
+): ConversationListItem {
+    const details = rows.slice().sort((a, b) => {
+        const ad = new Date(a.__mj_CreatedAt).getTime();
+        const bd = new Date(b.__mj_CreatedAt).getTime();
+        return bd - ad; // newest first
     });
+    const latest = details[0];
+    const agentIdSet = new Set<string>();
+    for (const d of details) if (d.AgentID) agentIdSet.add(d.AgentID);
+    const agentIds = Array.from(agentIdSet);
+    const agentNames = agentIds.map((id) => agentNameById.get(id) ?? 'Agent');
+    const updatedAt = (conv as unknown as { __mj_UpdatedAt?: Date }).__mj_UpdatedAt;
+    return {
+        entity: conv,
+        LatestSnippet: latest?.Message ?? null,
+        LatestAt: latest ? new Date(latest.__mj_CreatedAt) : (updatedAt ? new Date(updatedAt) : new Date()),
+        live: details.some((d) => d.Status === 'In-Progress'),
+        AgentIds: agentIds,
+        AgentNames: agentNames,
+        messageCount: details.length,
+    } satisfies ConversationListItem;
 }
 
 /** A single `MJ: Conversation Details` row paired with its resolved agent name (for AI rows). */
@@ -175,12 +208,12 @@ export type ConversationDetailLoad = {
 };
 
 /**
- * Load a single conversation with its message history and artifacts.
+ * Load a single conversation with its message history and artifacts, in Main.
  *
- * Loads the `MJ: Conversations` row via `GetEntityObject().Load()`, then batches a
- * `RunViews` for `MJ: Conversation Details` (ordered `__mj_CreatedAt ASC`),
- * `MJ: Conversation Artifacts`, and `MJ: AI Agents` (id→name lookup for resolving
- * each AI message's agent name).
+ * Loads the `MJ: Conversations` row via `GetEntityObject().Load()`, then batches a `RunViews` for
+ * the Main `MJ: Conversation Details` rows (ordered `Sequence ASC`), `MJ: Conversation Artifacts`,
+ * `MJ: AI Agents` (id→name lookup for resolving each AI message's agent name) and the message links
+ * that decide which artifacts are visible in Main (see `artifact-scope.ts`).
  *
  * @param conversationId The `MJ: Conversations` record id.
  * @param contextUser    Optional acting user (server-side scoping); defaults to `Metadata.CurrentUser`.
@@ -198,19 +231,21 @@ export async function LoadConversation(
     const loaded = await conversation.Load(conversationId);
     if (!loaded) return null;
 
+    const scope = ConversationEngine.TrunkScope(conversationId);
     const rv = new RunView();
-    const [detailsResult, artifactsResult, agentsResult] = await rv.RunViews(
+    const [detailsResult, artifactsResult, agentsResult, inScopeLinks, anyPathLinks] = await rv.RunViews(
         [
             {
                 EntityName: ENTITY_CONVERSATION_DETAIL,
-                ExtraFilter: `ConversationID='${conversationId}'`,
-                OrderBy: '__mj_CreatedAt ASC',
+                ExtraFilter: ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(scope)),
+                OrderBy: 'Sequence ASC',
                 MaxRows: 500,
                 ResultType: 'entity_object',
             },
             {
+                // Every artifact row of the conversation; the message links decide which are visible.
                 EntityName: ENTITY_CONVERSATION_ARTIFACT,
-                ExtraFilter: `ConversationID='${conversationId}'`,
+                ExtraFilter: `ConversationID='${EscapeSQLString(conversationId)}'`,
                 OrderBy: '__mj_UpdatedAt DESC',
                 MaxRows: 100,
                 ResultType: 'entity_object',
@@ -221,6 +256,7 @@ export async function LoadConversation(
                 MaxRows: 500,
                 ResultType: 'simple',
             },
+            ...ArtifactLinkQueries(scope),
         ],
         currentUser,
     );
@@ -242,13 +278,30 @@ export async function LoadConversation(
         agentName: d.AgentID ? (agentNameById.get(d.AgentID) ?? null) : null,
     }));
 
-    const artifacts = artifactsResult?.Success
-        ? ((artifactsResult.Results as MJConversationArtifactEntity[]) ?? [])
-        : [];
+    const artifacts = visibleArtifacts(artifactsResult, inScopeLinks, anyPathLinks);
 
     const sessionMeta = await LoadRealtimeSessionMeta(details, currentUser);
 
     return { Conversation: conversation, Messages: messages, Artifacts: artifacts, SessionMeta: sessionMeta };
+}
+
+/**
+ * The conversation's artifacts visible in scope. Empty when a read failed: a message card then
+ * shows its generic label, and the thread still loads.
+ */
+function visibleArtifacts(
+    artifactsResult: RunViewResult<MJConversationArtifactEntity>,
+    inScopeLinks: RunViewResult<ArtifactLinkRow>,
+    anyPathLinks: RunViewResult<ArtifactLinkRow>,
+): MJConversationArtifactEntity[] {
+    if (!artifactsResult.Success) return [];
+    try {
+        const links = BuildArtifactLinks(inScopeLinks, anyPathLinks);
+        return (artifactsResult.Results ?? []).filter((a) => IsArtifactVisible(links, a.ID));
+    } catch (error) {
+        console.warn('Artifact links could not be read — the thread loads without its artifacts:', error);
+        return [];
+    }
 }
 
 /**

@@ -40,7 +40,6 @@ graph TD
     C --> C3[ConversationSidebarComponent]
     C --> C4[ConversationListComponent]
     C --> C5[ConversationChatAreaComponent]
-    C --> C6[ThreadPanelComponent]
 
     D --> D1[CollectionTreeComponent]
     D --> D2[CollectionViewComponent]
@@ -103,11 +102,8 @@ The chat area handles message display, input, and agent interactions:
 <mj-conversation-chat-area
   [conversationId]="conversationId"
   [conversation]="conversation"
-  [threadId]="selectedThreadId"
   [isNewConversation]="isNewConversation"
-  (conversationCreated)="onConversationCreated($event)"
-  (threadOpened)="onThreadOpened($event)"
-  (threadClosed)="onThreadClosed()">
+  (conversationCreated)="onConversationCreated($event)">
 </mj-conversation-chat-area>
 ```
 
@@ -426,7 +422,6 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 | `ConversationListComponent` | `mj-conversation-list` | Scrollable conversation history |
 | `ConversationChatAreaComponent` | `mj-conversation-chat-area` | Main chat area |
 | `ConversationEmptyStateComponent` | `mj-conversation-empty-state` | Empty state display |
-| `ThreadPanelComponent` | `mj-thread-panel` | Threaded discussion panel |
 
 ### Collection and Library Components
 

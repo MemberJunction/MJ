@@ -4,23 +4,28 @@
  * - `attributeLine` — the diarization-attribution core: agent lines → agent name; heard lines → the
  *   diarized participant (human OR another agent, not lumped as "User"); undiarized → generic; errors.
  * - `LoadMeetingRooms` — queries `Type='Meeting Room'` newest-first and maps rows; tolerant of failure.
+ * - `LoadRoomTranscript` — reads the room's Main rows (a bridge session writes Main) in `Sequence` order.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ── Mocks (mirror realtime-session-data.test.ts) ──
 const runViewMock = vi.fn();
 const runViewsMock = vi.fn();
-vi.mock('@memberjunction/core', () => ({
-    RunView: {
-        FromMetadataProvider: () => ({ RunView: runViewMock, RunViews: runViewsMock }),
-    },
-}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        RunView: {
+            FromMetadataProvider: () => ({ RunView: runViewMock, RunViews: runViewsMock }),
+        },
+    };
+});
 vi.mock('@memberjunction/ai-engine-base', () => ({
     AIEngineBase: { Instance: { Agents: [{ ID: 'A1', Name: 'Sage' }] } },
 }));
 
 import type { IMetadataProvider } from '@memberjunction/core';
-import { LoadMeetingRooms, AttributeLine } from '../AI/components/analytics/realtime/realtime-transcripts-data';
+import { LoadMeetingRooms, AttributeLine, LoadRoomTranscript } from '../AI/components/analytics/realtime/realtime-transcripts-data';
 
 const provider = { CurrentUser: { ID: 'u1' } } as unknown as IMetadataProvider;
 
@@ -77,5 +82,31 @@ describe('realtime-transcripts-data — LoadMeetingRooms', () => {
     it('returns [] when the query fails (tolerant)', async () => {
         runViewMock.mockResolvedValueOnce({ Success: false, Results: [] });
         expect(await LoadMeetingRooms(provider)).toEqual([]);
+    });
+});
+
+describe('realtime-transcripts-data — LoadRoomTranscript (Main)', () => {
+    const detailRow = { ID: 'd1', Role: 'AI', Message: 'hello', AgentID: 'A1', __mj_CreatedAt: '2026-06-20T00:00:00Z' };
+
+    beforeEach(() => {
+        runViewsMock.mockReset();
+        runViewsMock.mockResolvedValue([
+            { Success: true, Results: [detailRow] },
+            { Success: true, Results: [] },
+        ]);
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('reads the Main rows in Sequence order', async () => {
+        const lines = await LoadRoomTranscript(provider, 'conv-1', 'room-a');
+
+        const [details] = runViewsMock.mock.calls[0][0];
+        expect(details.EntityName).toBe('MJ: Conversation Details');
+        expect(details.ExtraFilter).toBe("[ConversationID]='conv-1' AND [BranchID] IS NULL");
+        expect(details.OrderBy).toBe('Sequence ASC');
+        expect(lines).toEqual([expect.objectContaining({ ID: 'd1', Kind: 'agent', Speaker: 'Sage', Message: 'hello' })]);
     });
 });

@@ -333,6 +333,7 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
 
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            // conversation-scope: artifact-wide read, no conversation path applies
             const result = await rv.RunView<MJArtifactVersionEntity>({
                 EntityName: 'MJ: Artifact Versions',
                 ExtraFilter: `ArtifactID = '${artifactId}'`,

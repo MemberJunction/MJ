@@ -1,3 +1,4 @@
+import { ConversationEngine, type ConversationScope } from '@memberjunction/core-entities';
 import { SnapshotFromRows, type RubricAnswer, type RubricNodeSnapshot, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import { ShapeContent, type RubricSubjectContent } from './content.js';
@@ -45,6 +46,11 @@ export interface RubricEvaluationStore {
 export interface RubricRecords {
     rows(entityName: string, filter: string, orderBy?: string): Promise<Record<string, unknown>[]>;
     createDraft(input: { rubricId?: string; rubricName?: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }>;
+    /**
+     * The conversation's Main scope. A conversation subject's details are read only within it, so
+     * records without this method cannot read a conversation subject.
+     */
+    conversationScope?(conversationId: string): Promise<ConversationScope>;
 }
 
 export interface EvaluateParams {
@@ -418,9 +424,22 @@ export class RubricEngine {
             record.Steps = await this.records.rows('MJ: AI Agent Run Steps', `AgentRunID=${sqlLiteral(input.subjectRecordId)}`, 'StepNumber');
         }
         if (input.subjectEntityName === 'MJ: Conversations') {
-            record.Details = await this.records.rows('MJ: Conversation Details', `ConversationID=${sqlLiteral(input.subjectRecordId)}`, '__mj_CreatedAt');
+            const scope = await this.loadConversationScope(input.subjectRecordId);
+            record.Details = await this.records.rows('MJ: Conversation Details', ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(scope)), 'Sequence');
         }
         return ShapeContent(input.subjectEntityName, record);
+    }
+
+    /** The conversation's Main scope. Throws when the records cannot read it. */
+    private async loadConversationScope(conversationId: string): Promise<ConversationScope> {
+        if (!this.records.conversationScope) {
+            throw new Error('subject conversation not readable');
+        }
+        try {
+            return await this.records.conversationScope(conversationId);
+        } catch (error) {
+            throw new Error('subject conversation not readable', { cause: error });
+        }
     }
 
     }

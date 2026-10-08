@@ -13,6 +13,9 @@ export * from './custom/MJComponentEntityExtended';
 export * from './custom/MJEnvironmentEntityExtended';
 export * from './custom/MJTemplateEntityExtended';
 export * from './custom/MJConversationDetailEntityExtended';
+export * from './custom/ConversationWriteAccess';
+export * from './custom/ConversationForkAccess';
+export * from './custom/MJConversationBranchEntityExtended';
 export * from './custom/MJQueryEntityExtended';
 export * from './custom/AIAgentNoteStatus';
 

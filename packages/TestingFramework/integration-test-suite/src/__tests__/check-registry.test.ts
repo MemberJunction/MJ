@@ -141,7 +141,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
-        ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
+        ['conversation-compaction', ConversationCompactionChecks, 23], // CC1-CC23
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
         ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
         ['agent-loop-live', AgentLoopLiveChecks, 7],
@@ -272,7 +272,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'communication': 5,
         'concurrent': 2,
         'content-vectorization': 10,
-        'conversation-compaction': 18,
+        'conversation-compaction': 23,
         'trailing-runtime-state': 6,
         'dataset-cache': 4,
         'entity-actions': 8,

@@ -15,7 +15,7 @@
 
 import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AgentRunner } from './AgentRunner';
@@ -113,6 +113,9 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         // this run's request status to decide approved-vs-rejected; see base-agent.ts.
         const isPlanResume = await this.isPlanStepResume(md, contextUser);
 
+        // The resumed run writes and reads on the fork of the message that spawned the originating run.
+        const branchId = await this.resolveOriginatingBranchId(md, contextUser, originatingRun);
+
         // Run the agent with lastRunId to continue the conversation
         const runner = new AgentRunner();
         const params: ExecuteAgentParams = {
@@ -121,7 +124,8 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             contextUser,
             lastRunId: this.OriginatingAgentRunID!,
             autoPopulateLastRunPayload: true,
-            ...(isPlanResume ? { planMode: true } : {})
+            ...(isPlanResume ? { planMode: true } : {}),
+            ...(branchId ? { ConversationBranchID: branchId } : {})
         };
 
         LogStatus(`🔄 Resuming agent "${agentEntity.Name}" for feedback request ${this.ID}`);
@@ -140,6 +144,31 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             } else {
                 LogError(`Failed to save ResumingAgentRunID for request ${this.ID}`);
             }
+        }
+    }
+
+    /**
+     * Returns the conversation branch of the message that spawned the originating run, or null
+     * (Main) when the run has no conversation or message. A message that cannot be read is logged
+     * and also gives null.
+     */
+    private async resolveOriginatingBranchId(
+        md: IMetadataProvider,
+        contextUser: BaseEntity['ContextCurrentUser'],
+        originatingRun: MJAIAgentRunEntity
+    ): Promise<string | null> {
+        const detailId = originatingRun.ConversationDetailID;
+        if (!originatingRun.ConversationID || !detailId) return null;
+        try {
+            const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+            if (!(await detail.Load(detailId))) {
+                LogError(`Resume for request ${this.ID}: conversation detail ${detailId} of run ${originatingRun.ID} not found; resuming on Main`);
+                return null;
+            }
+            return detail.BranchID ?? null;
+        } catch (error) {
+            LogError(`Resume for request ${this.ID}: failed to load conversation detail ${detailId} of run ${originatingRun.ID}; resuming on Main: ${(error as Error).message}`);
+            return null;
         }
     }
 

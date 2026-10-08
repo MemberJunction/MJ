@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
-import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, ConversationScope, MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export type ExportFormat = 'json' | 'markdown' | 'html' | 'text';
 
@@ -104,6 +105,17 @@ export const DEFAULT_EXPORT_THEME_TOKENS: readonly string[] = [
   '--mj-radius-md',
 ];
 
+/** The conversation and the messages one export writes. */
+export interface ExportConversationData {
+  conversation: MJConversationEntity;
+  details: MJConversationDetailEntity[];
+  /**
+   * The fork the messages come from, as the header names it (its display name). Absent or null
+   * in Main.
+   */
+  fork?: string | null;
+}
+
 /** Internal: options with defaults applied (branding stays optional). */
 type ResolvedExportOptions = Required<Omit<ExportOptions, 'branding'>> & Pick<ExportOptions, 'branding'>;
 
@@ -134,35 +146,45 @@ export class ExportService {
       return this._provider ?? Metadata.Provider;
   }
 
+  /**
+   * Exports the messages of one scope of a conversation (Main, or one fork's path) and
+   * downloads the file. In a fork the export header names the fork.
+   * @throws when the scope belongs to another conversation, or the conversation is not found.
+   */
   async ExportConversation(
     conversationId: string,
+    scope: ConversationScope,
     format: ExportFormat,
     currentUser: UserInfo,
     options: ExportOptions = {}
   ): Promise<void> {
-    const conversation = await this.loadConversationData(conversationId, currentUser);
+    const conversation = await this.loadConversationData(conversationId, scope, currentUser);
     const { content, filename, mimeType } = await this.BuildExportContent(conversation, format, options);
     this.downloadFile(content, filename, mimeType);
   }
 
-  /** @deprecated Use {@link ExportConversation}. */
+  /**
+   * @deprecated Use {@link ExportConversation}. Without `scope`, exports Main.
+   */
   async exportConversation(
     conversationId: string,
     format: ExportFormat,
     currentUser: UserInfo,
-    options: ExportOptions = {}
+    options: ExportOptions = {},
+    scope?: ConversationScope
   ): Promise<void> {
-    return this.ExportConversation(conversationId, format, currentUser, options);
+    const resolved = scope ?? ConversationEngine.TrunkScope(conversationId);
+    return this.ExportConversation(conversationId, resolved, format, currentUser, options);
   }
 
   /**
    * Build the export document for already-loaded conversation data — the
-   * download-free seam of {@link exportConversation}. Async because HTML-format
+   * download-free seam of {@link ExportConversation}. Async because HTML-format
    * branding may inline a logo. Exposed publicly so hosts (and tests) can build
    * export content without triggering a browser download.
    */
   public async BuildExportContent(
-    data: { conversation: MJConversationEntity; details: MJConversationDetailEntity[] },
+    data: ExportConversationData,
     format: ExportFormat,
     options: ExportOptions = {}
   ): Promise<{ content: string; filename: string; mimeType: string }> {
@@ -278,7 +300,7 @@ export class ExportService {
 
   /** Document title used by every format: branding override → conversation name → generic. */
   private resolveTitle(
-    data: { conversation: MJConversationEntity; details: MJConversationDetailEntity[] },
+    data: ExportConversationData,
     options: ResolvedExportOptions
   ): string {
     return options.branding?.title?.trim() || data.conversation.Name || 'Conversation';
@@ -381,10 +403,15 @@ export class ExportService {
     }
   }
 
+  /** Loads the conversation and the messages in the scope that no rerun replaced, in Sequence order. */
   private async loadConversationData(
     conversationId: string,
+    scope: ConversationScope,
     currentUser: UserInfo
-  ): Promise<{ conversation: MJConversationEntity; details: MJConversationDetailEntity[] }> {
+  ): Promise<ExportConversationData> {
+    if (!UUIDsEqual(scope.ConversationID, conversationId)) {
+      throw new Error(`Conversation ${conversationId} cannot be exported with the scope of conversation ${scope.ConversationID}`);
+    }
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Load conversation and details in parallel
@@ -396,7 +423,7 @@ export class ExportService {
       },
       {
         EntityName: 'MJ: Conversation Details',
-        ExtraFilter: `ConversationID='${conversationId}'`,
+        ExtraFilter: ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(scope)),
         OrderBy: 'Sequence ASC',
         ResultType: 'entity_object'
       }
@@ -406,35 +433,50 @@ export class ExportService {
       throw new Error('Conversation not found');
     }
 
+    const details = (detailsResult.Results || []) as MJConversationDetailEntity[];
     return {
       conversation: conversationResult.Results[0] as MJConversationEntity,
-      details: (detailsResult.Results || []) as MJConversationDetailEntity[]
+      details,
+      fork: this.forkLabel(scope, details)
     };
   }
 
+  /** The header name of the scope's fork: its display name; null in Main. */
+  private forkLabel(scope: ConversationScope, details: ReadonlyArray<MJConversationDetailEntity>): string | null {
+    if (scope.BranchID == null) {
+      return null;
+    }
+    const fork = scope.Branches.find(b => UUIDsEqual(b.ID, scope.BranchID));
+    if (!fork) {
+      return scope.BranchID;
+    }
+    const first = [...details]
+      .filter(d => UUIDsEqual(d.BranchID ?? null, scope.BranchID))
+      .sort((a, b) => a.Sequence - b.Sequence)
+      .find(d => ConversationEngine.ForkPlainText(d.Message) != null);
+    return ConversationEngine.ForkDisplayName(fork, first?.Message ?? null);
+  }
+
   private exportAsJSON(
-    data: {
-      conversation: MJConversationEntity;
-      details: MJConversationDetailEntity[];
-    },
+    data: ExportConversationData,
     options: ResolvedExportOptions
   ): string {
     const exportData: Record<string, unknown> = {};
 
     // Add metadata if requested
-    if (options.includeMetadata) {
-      exportData.conversation = {
-        id: data.conversation.ID,
-        name: data.conversation.Name,
-        description: data.conversation.Description,
-        createdAt: data.conversation.__mj_CreatedAt,
-        updatedAt: data.conversation.__mj_UpdatedAt
-      };
-    } else {
-      exportData.conversation = {
-        name: data.conversation.Name
-      };
+    const conversationBlock: Record<string, unknown> = options.includeMetadata
+      ? {
+          id: data.conversation.ID,
+          name: data.conversation.Name,
+          description: data.conversation.Description,
+          createdAt: data.conversation.__mj_CreatedAt,
+          updatedAt: data.conversation.__mj_UpdatedAt
+        }
+      : { name: data.conversation.Name };
+    if (data.fork) {
+      conversationBlock.fork = data.fork;
     }
+    exportData.conversation = conversationBlock;
 
     // Branding block (title / trademark / logo) when the host supplied branding —
     // the data-format analogue of the HTML header + trademark footer.
@@ -466,10 +508,7 @@ export class ExportService {
   }
 
   private exportAsMarkdown(
-    data: {
-      conversation: MJConversationEntity;
-      details: MJConversationDetailEntity[];
-    },
+    data: ExportConversationData,
     options: ResolvedExportOptions
   ): string {
     const logoUrl = options.branding?.logoUrl?.trim();
@@ -489,6 +528,10 @@ export class ExportService {
 
     if (options.includeMetadata) {
       md += `**Created:** ${this.formatDate(data.conversation.__mj_CreatedAt)}\n\n`;
+    }
+
+    if (data.fork) {
+      md += `**Fork:** ${data.fork}\n\n`;
     }
 
     md += `---\n\n`;
@@ -515,10 +558,7 @@ export class ExportService {
   }
 
   private exportAsHTML(
-    data: {
-      conversation: MJConversationEntity;
-      details: MJConversationDetailEntity[];
-    },
+    data: ExportConversationData,
     options: ResolvedExportOptions,
     theme: ResolvedExportTheme
   ): string {
@@ -553,11 +593,17 @@ export class ExportService {
   ${theme.logoDataUri ? `<img class="brand-logo" src="${this.escapeAttr(theme.logoDataUri)}" alt="" />
   ` : ''}<h1>${this.escapeHtml(title)}</h1>`;
 
+    const forkLine = data.fork ? `
+    <p>Fork: ${this.escapeHtml(data.fork)}</p>` : '';
     if (options.includeMetadata) {
       html += `
   <div class="meta">
     ${data.conversation.Description ? `<p>${this.escapeHtml(data.conversation.Description)}</p>` : ''}
-    <p>Created: ${this.formatDate(data.conversation.__mj_CreatedAt)}</p>
+    <p>Created: ${this.formatDate(data.conversation.__mj_CreatedAt)}</p>${forkLine}
+  </div>`;
+    } else if (forkLine) {
+      html += `
+  <div class="meta">${forkLine}
   </div>`;
     }
 
@@ -592,10 +638,7 @@ export class ExportService {
   }
 
   private exportAsText(
-    data: {
-      conversation: MJConversationEntity;
-      details: MJConversationDetailEntity[];
-    },
+    data: ExportConversationData,
     options: ResolvedExportOptions
   ): string {
     const name = this.resolveTitle(data, options) || 'Conversation';
@@ -608,6 +651,10 @@ export class ExportService {
 
     if (options.includeMetadata) {
       text += `Created: ${this.formatDate(data.conversation.__mj_CreatedAt)}\n\n`;
+    }
+
+    if (data.fork) {
+      text += `Fork: ${data.fork}\n\n`;
     }
 
     text += '-'.repeat(80) + '\n\n';

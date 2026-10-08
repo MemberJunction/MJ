@@ -85,7 +85,6 @@ export class AIAssistantPanelComponent extends BaseAngularComponent implements O
     public ChatIsNewConversation = true;
     public PendingMessage: string | null = null;
     public PendingAttachments: PendingAttachment[] | null = null;
-    public ChatThreadId: string | null = null;
     public ChatPendingArtifactId: string | null = null;
     public ChatPendingArtifactVersionNumber: number | null = null;
 
@@ -287,16 +286,6 @@ export class AIAssistantPanelComponent extends BaseAngularComponent implements O
             }
             this.cdr.markForCheck();
         }
-    }
-
-    public OnThreadOpened(threadId: string): void {
-        this.ChatThreadId = threadId;
-        this.cdr.markForCheck();
-    }
-
-    public OnThreadClosed(): void {
-        this.ChatThreadId = null;
-        this.cdr.markForCheck();
     }
 
     public OnPendingArtifactConsumed(): void {

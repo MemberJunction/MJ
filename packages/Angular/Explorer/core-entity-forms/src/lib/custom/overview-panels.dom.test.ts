@@ -6,7 +6,6 @@ import { query, queryAll } from '@memberjunction/ng-test-utils';
 import type { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import { CompanyOverviewPanel } from './Companies/company-overview.panel';
 import { EmployeeOverviewPanel } from './Employees/employee-overview.panel';
-import { ConversationOverviewPanel } from './Conversations/conversation-overview.panel';
 import { AIAgentCategoryOverviewPanel } from './AIAgentCategories/ai-agent-category-overview.panel';
 import { UserOverviewPanel } from './Users/user-overview.panel';
 
@@ -16,6 +15,10 @@ import { UserOverviewPanel } from './Users/user-overview.panel';
  * panel owns: the entity it queries, its rows and count badge when the query succeeds, its
  * empty text when there are no rows, and a "could not load" line with no count badge when the
  * query fails or throws.
+ *
+ * ConversationOverviewPanel reads its branch scope first and then one batch of path-scoped
+ * reads, so its equivalent coverage (error lines, empty text, turn badge, role pills) lives in
+ * Conversations/conversation-overview.panel.dom.test.ts.
  */
 
 interface OverviewCase {
@@ -60,21 +63,6 @@ const CASES: OverviewCase[] = [
         BadgeText: '1 Team Members',
         Noun: 'direct reports',
         ErrorLines: 1,
-    },
-    {
-        Name: 'ConversationOverviewPanel',
-        Component: ConversationOverviewPanel,
-        RecordStub: { ID: 'convo-1' },
-        EntityName: 'MJ: Conversation Details',
-        Rows: [
-            { ID: 'msg-1', Role: 'User', Message: 'Hello agent' },
-            { ID: 'msg-2', Role: 'AI', Message: 'Hello human' },
-        ],
-        RowText: 'Hello agent',
-        EmptyText: 'No messages in this conversation yet.',
-        BadgeText: '2 Turns',
-        Noun: 'messages',
-        ErrorLines: 2,
     },
     {
         Name: 'AIAgentCategoryOverviewPanel',
@@ -182,40 +170,5 @@ describe.each(CASES)('$Name (DOM)', (c) => {
         expect(errorLines(fixture)).toEqual(Array(c.ErrorLines).fill(`Could not load ${c.Noun}: Entity Example not found in metadata`));
         expect(pageText(fixture)).not.toContain(c.EmptyText);
         expect(badgeTexts(fixture).filter((t) => /^\d/.test(t))).toEqual([]);
-    });
-});
-
-describe('ConversationOverviewPanel role display (DOM)', () => {
-    const conversation = CASES.find((c) => c.Name === 'ConversationOverviewPanel')!;
-
-    it('colors User turns differently from AI turns', async () => {
-        stubRunView(viewResult(conversation.Rows));
-        const fixture = await render(conversation);
-        const pills = queryAll(fixture, '.mj-pill');
-        const userPill = pills.find((p) => p.textContent?.trim() === 'User');
-        const aiPill = pills.find((p) => p.textContent?.trim() === 'AI');
-        expect(userPill?.classList.contains('mj-pill-blue')).toBe(true);
-        expect(userPill?.classList.contains('mj-pill-green')).toBe(false);
-        expect(aiPill?.classList.contains('mj-pill-green')).toBe(true);
-        expect(aiPill?.classList.contains('mj-pill-blue')).toBe(false);
-    });
-
-    it('counts User prompts and agent responses', async () => {
-        stubRunView(viewResult(conversation.Rows));
-        const fixture = await render(conversation);
-        const values = queryAll(fixture, '.mj-metric-val').map((v) => v.textContent?.trim());
-        expect(values).toEqual(['2', '1', '1']);
-        expect(query(fixture, '.mj-load-error')).toBeNull();
-    });
-
-    it('counts an Error turn as neither a User prompt nor an agent response, and gives it no pill color', async () => {
-        stubRunView(viewResult([...conversation.Rows, { ID: 'msg-3', Role: 'Error', Message: 'Model timed out' }]));
-        const fixture = await render(conversation);
-        const values = queryAll(fixture, '.mj-metric-val').map((v) => v.textContent?.trim());
-        expect(values).toEqual(['3', '1', '1']);
-        const errorPill = queryAll(fixture, '.mj-pill').find((p) => p.textContent?.trim() === 'Error');
-        expect(errorPill).toBeDefined();
-        expect(errorPill?.classList.contains('mj-pill-green')).toBe(false);
-        expect(errorPill?.classList.contains('mj-pill-blue')).toBe(false);
     });
 });

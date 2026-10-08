@@ -33,7 +33,8 @@ export class MJConversationFormComponent extends BaseFormComponent {
             { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
             { sectionKey: 'mJConversationSkills', sectionName: 'Conversation Skills', isExpanded: false },
-            { sectionKey: 'mJMeetings', sectionName: 'Meetings', isExpanded: false }
+            { sectionKey: 'mJMeetings', sectionName: 'Meetings', isExpanded: false },
+            { sectionKey: 'mJConversationBranches', sectionName: 'Conversation Branches', isExpanded: false }
         ]);
     }
 }

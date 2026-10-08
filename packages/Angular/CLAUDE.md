@@ -520,12 +520,9 @@ export class ConversationDataService {
 export class ChatAreaComponent {
   @Input() conversationId: string | null = null;
   @Input() conversation: ConversationEntity | null = null;
-  @Input() threadId: string | null = null;
   @Input() isNewConversation = false;
 
   @Output() conversationCreated = new EventEmitter<ConversationEntity>();
-  @Output() threadOpened = new EventEmitter<string>();
-  @Output() threadClosed = new EventEmitter<void>();
 
   constructor(private conversationData: ConversationDataService) {}
 
@@ -541,7 +538,6 @@ export class ChatAreaComponent {
 export class WorkspaceComponent {
   selectedConversationId: string | null = null;
   selectedConversation: ConversationEntity | null = null;
-  selectedThreadId: string | null = null;
   isNewUnsavedConversation = false;
 
   onConversationSelected(id: string) {
@@ -557,15 +553,12 @@ export class WorkspaceComponent {
 ```
 
 ```html
-<!-- Parent template passing state down -->
+<!-- Parent template passing state down. Which fork is open is the chat area's own state: it has no fork binding. -->
 <mj-conversation-chat-area
   [conversationId]="selectedConversationId"
   [conversation]="selectedConversation"
-  [threadId]="selectedThreadId"
   [isNewConversation]="isNewUnsavedConversation"
-  (conversationCreated)="onConversationCreated($event)"
-  (threadOpened)="onThreadOpened($event)"
-  (threadClosed)="onThreadClosed()">
+  (conversationCreated)="onConversationCreated($event)">
 </mj-conversation-chat-area>
 ```
 

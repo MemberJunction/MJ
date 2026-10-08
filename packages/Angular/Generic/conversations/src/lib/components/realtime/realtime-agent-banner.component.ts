@@ -92,6 +92,9 @@ export class RealtimeAgentBannerComponent {
   /** Whether the Minimize control renders (live sessions only). */
   @Input() ShowMinimize = false;
 
+  /** Review only: whether the "Start live session" action renders. */
+  @Input() ShowStartLive = true;
+
   /** The user's current interface-density override (selected state in the gear popover). */
   @Input() Density: RealtimeUxDensity = 'auto';
 

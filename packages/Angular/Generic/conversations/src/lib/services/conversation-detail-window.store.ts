@@ -92,6 +92,8 @@ export interface ConversationDetailWindowSnapshot extends ConversationDetailWind
  *  - {@link Reset} bumps a generation counter; every in-flight load checks it after each
  *    await and discards its result if the conversation changed underneath.
  *  - {@link LoadOlder} is a no-op while a load is in flight or when nothing is above.
+ *  - A window loaded with an `upToSequence` ({@link LoadLatest}) holds only rows at or below it;
+ *    every later read keeps that bound.
  *  - Merges dedupe by normalized ID and re-sort by `Sequence` — session expansion can
  *    return rows an earlier page already had.
  *  - {@link ApplyLocalDetail} never hits the network; it is the send/stream/edit path.
@@ -101,6 +103,7 @@ export interface ConversationDetailWindowSnapshot extends ConversationDetailWind
 export class ConversationDetailWindowStore {
     private loader: DetailWindowLoader;
     private conversationId: string | null = null;
+    private branchId: string | null = null;
     private loadedDetails: MJConversationDetailEntity[] = [];
     private pinnedDetails: MJConversationDetailEntity[] = [];
     private pinnedTotalCount = 0;
@@ -110,15 +113,21 @@ export class ConversationDetailWindowStore {
     private isLoadingLatest = false;
     private isLoadingOlder = false;
     private loadFailed = false;
+    /** The newest `Sequence` the window may hold; null for no bound. */
+    private upToSequence: number | null = null;
 
     constructor(loader: DetailWindowLoader) {
         this.loader = loader;
     }
 
-    /** Drops all state and invalidates in-flight loads. Call on every conversation switch. */
-    public Reset(conversationId: string | null): void {
+    /**
+     * Drops all state and invalidates in-flight loads. Call on every conversation switch.
+     * `branchId` is the branch whose path every later load pages; null is the trunk.
+     */
+    public Reset(conversationId: string | null, branchId: string | null = null): void {
         this.generation++;
         this.conversationId = conversationId;
+        this.branchId = branchId;
         this.loadedDetails = [];
         this.pinnedDetails = [];
         this.pinnedTotalCount = 0;
@@ -127,6 +136,15 @@ export class ConversationDetailWindowStore {
         this.isLoadingLatest = false;
         this.isLoadingOlder = false;
         this.loadFailed = false;
+        this.upToSequence = null;
+    }
+
+    /**
+     * The exclusive `BeforeSequence` that keeps a newest-rows read at or below {@link upToSequence};
+     * undefined when the window has no bound. `Sequence` is an int column, so `< n + 1` is `<= n`.
+     */
+    private newestReadBound(): number | undefined {
+        return this.upToSequence == null ? undefined : this.upToSequence + 1;
     }
 
     /**
@@ -179,20 +197,35 @@ export class ConversationDetailWindowStore {
     }
 
     /**
-     * First paint: the newest page of a conversation.
+     * First paint: the newest page of a conversation's path.
+     *
+     * With `upToSequence`, the window holds only rows at or below that `Sequence`: the first page
+     * ends there, and every later read of the window keeps the bound. Older pages load as usual.
      *
      * The loader is not expected to throw — `LoadDetailWindow` logs and returns an empty
      * window on a failed read — but a transport-layer rejection would otherwise strand
      * `isLoadingLatest` at true and wedge the store, so the flag is cleared in `finally`.
      */
-    public async LoadLatest(conversationId: string, contextUser: UserInfo): Promise<void> {
-        this.Reset(conversationId);
+    public async LoadLatest(
+        conversationId: string,
+        contextUser: UserInfo,
+        branchId: string | null = null,
+        upToSequence: number | null = null
+    ): Promise<void> {
+        this.Reset(conversationId, branchId);
+        this.upToSequence = upToSequence;
         const generation = this.generation;
         this.isLoadingLatest = true;
 
         try {
+            const before = this.newestReadBound();
             const result = await this.fetchPageFillingTimeline(
-                { ConversationID: conversationId, PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE },
+                {
+                    ConversationID: conversationId,
+                    BranchID: this.branchId,
+                    PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE,
+                    ...(before === undefined ? {} : { BeforeSequence: before })
+                },
                 contextUser
             );
 
@@ -244,7 +277,12 @@ export class ConversationDetailWindowStore {
 
         try {
             const result = await this.fetchPageFillingTimeline(
-                { ConversationID: conversationId, BeforeSequence: before, PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE },
+                {
+                    ConversationID: conversationId,
+                    BranchID: this.branchId,
+                    BeforeSequence: before,
+                    PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE
+                },
                 contextUser
             );
 
@@ -348,11 +386,16 @@ export class ConversationDetailWindowStore {
         contextUser: UserInfo
     ): Promise<RefreshedTail> {
         const results: DetailWindowLoadResult[] = [];
-        let before: number | undefined = undefined;
+        let before: number | undefined = this.newestReadBound();
 
         for (let page = 0; page <= MAX_REFRESH_BACKFILL_PAGES; page++) {
             const result = await this.loader.LoadDetailWindow(
-                { ConversationID: conversationId, BeforeSequence: before, PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE },
+                {
+                    ConversationID: conversationId,
+                    BranchID: this.branchId,
+                    BeforeSequence: before,
+                    PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE
+                },
                 contextUser
             );
             if (generation !== this.generation) {
@@ -483,6 +526,11 @@ export class ConversationDetailWindowStore {
     /** True when the most recent load failed — an empty transcript vs. a broken one. */
     public get LoadFailed(): boolean {
         return this.loadFailed;
+    }
+
+    /** The branch whose path the window pages; null is the trunk. */
+    public get BranchId(): string | null {
+        return this.branchId;
     }
 
     /** True when a `LoadOlder` would actually do work. Drives the sentinel's observer. */

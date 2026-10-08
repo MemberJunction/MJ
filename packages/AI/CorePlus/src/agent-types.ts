@@ -1327,6 +1327,14 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     ConversationHistoryFrom?: Date;
 
     /**
+     * The conversation branch this run belongs to. Meaningful only with {@link conversationId}.
+     * The framework reads the conversation on the run's behalf only along that branch's path:
+     * history retrieval tools, offered artifacts, cross-turn compaction and the previous
+     * turn's tool results. Omitted, the run reads the trunk (rows with no branch).
+     */
+    ConversationBranchID?: string;
+
+    /**
      * Optional flag to automatically populate the payload from the last run.
      * When true and lastRunId is provided, the framework will:
      * 1. Load the last run's FinalPayload

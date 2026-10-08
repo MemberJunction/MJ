@@ -39,6 +39,17 @@
   100% { box-shadow: none; }
 }
 
+/* Search hit: a highlight applied programmatically for 2 s after a search result opens */
+.message-item.search-hit-highlight {
+  animation: searchHitHighlight 2s ease-out forwards;
+}
+
+@keyframes searchHitHighlight {
+  0%   { background-color: color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+  70%  { background-color: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); }
+  100% { background-color: transparent; }
+}
+
 .message-item.in-progress {
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   border-left: 3px solid var(--mj-brand-primary);
@@ -609,50 +620,11 @@
   pointer-events: none;
 }
 
-.message-item:hover .message-actions {
+.message-item:hover .message-actions,
+.message-item:focus-within .message-actions {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
-}
-
-.message-action-btn {
-  padding: 6px 8px;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--mj-text-secondary);
-  font-size: 13px;
-  transition: all 150ms ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 32px;
-  height: 32px;
-}
-
-.message-action-btn:hover {
-  background-color: var(--mj-bg-surface-sunken);
-  color: var(--mj-text-primary);
-}
-
-.message-action-btn.danger:hover {
-  background-color: var(--mj-status-error-bg);
-  color: var(--mj-status-error);
-}
-
-.message-action-btn.retry-btn {
-  color: var(--mj-brand-primary);
-  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-  font-weight: 600;
-  gap: 6px;
-  padding: 6px 12px;
-  min-width: auto;
-}
-
-.message-action-btn.retry-btn:hover {
-  background-color: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-  color: var(--mj-brand-primary-hover);
 }
 
 /* Thread indicator badge */
@@ -723,36 +695,10 @@
   gap: 8px;
 }
 
-.edit-action-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 150ms ease;
-}
-
-.edit-action-btn.save {
-  background-color: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
-}
-
-.edit-action-btn.save:hover {
-  background-color: var(--mj-brand-primary-hover);
-}
-
-.edit-action-btn.cancel {
-  background-color: var(--mj-bg-surface-sunken);
+.edit-note {
+  margin-top: var(--mj-space-2);
+  font-size: var(--mj-text-xs);
   color: var(--mj-text-secondary);
-}
-
-.edit-action-btn.cancel:hover {
-  background-color: var(--mj-border-default);
-  color: var(--mj-text-primary);
 }
 
 .edit-hint {
@@ -1300,12 +1246,6 @@
     gap: 1px;
     padding: 3px;
   }
-
-  .message-action-btn {
-    min-width: 28px;
-    height: 28px;
-    font-size: 12px;
-  }
 }
 
 /* Small Phone adjustments: <= 480px */
@@ -1726,4 +1666,120 @@
   border: 1px solid color-mix(in srgb, var(--mj-status-success) 25%, transparent);
   padding: 4px 10px;
   font-size: 12.5px;
+}
+
+/* Fork chips: one per fork placed under the message */
+.message-fork-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-2);
+  margin-top: var(--mj-space-2);
+}
+.message-fork-chips > button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  font-size: var(--mj-text-xs);
+}
+.message-fork-chips > button:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.message-fork-chips .fork-chip-icon {
+  color: var(--mj-status-info);
+}
+.message-fork-chips > button[data-kind='Edit'] .fork-chip-icon {
+  color: var(--mj-status-warning);
+}
+.message-fork-chips > button[data-kind='Regenerate'] .fork-chip-icon {
+  color: var(--mj-brand-tertiary);
+}
+.fork-chip-avatars {
+  display: inline-flex;
+}
+.fork-chip-avatar {
+  width: 20px;
+  height: 20px;
+  margin-left: -6px;
+  border: 2px solid var(--mj-bg-surface);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  overflow: hidden;
+}
+.fork-chip-avatar:first-child {
+  margin-left: 0;
+}
+.fork-chip-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fork-chip-messages {
+  font-weight: 600;
+  color: var(--mj-text-link);
+}
+/* The name is the part of a chip that shrinks: a long name ends in an ellipsis inside a narrow column. */
+.fork-chip-name {
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fork-chip-time {
+  color: var(--mj-text-muted);
+}
+
+/* Fork view rails: inherited rows faded on a dashed rail, the fork's own rows on a solid rail.
+   The row's children fade, not the row, so the row's fade-in animation ends at the faded state. */
+.message-item.fork-rail-inherited {
+  border-left: 2px dashed var(--mj-border-strong);
+  padding-left: var(--mj-space-4);
+}
+.message-item.fork-rail-inherited > * {
+  opacity: 0.7;
+}
+.message-item.fork-rail-own {
+  border-left: 2px solid var(--mj-brand-primary);
+  padding-left: var(--mj-space-4);
+}
+
+/* Fork marker: a full-opacity divider under the last inherited row of a fork view, outside both rails */
+.fork-marker {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-6);
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+}
+.fork-marker i {
+  color: var(--mj-status-info);
+}
+.fork-marker-line {
+  flex: 1;
+  height: 1px;
+  background: var(--mj-border-default);
+}
+/* The marker lines up with the row padding of narrow screens */
+@media (max-width: 768px) {
+  .fork-marker {
+    padding: var(--mj-space-2) var(--mj-space-3);
+  }
+}
+@media (max-width: 480px) {
+  .fork-marker {
+    padding: var(--mj-space-2);
+  }
 }

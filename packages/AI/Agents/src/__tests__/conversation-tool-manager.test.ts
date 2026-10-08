@@ -11,18 +11,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockCache: { Details: Array<Record<string, unknown>> } = { Details: [] };
 
-vi.mock('@memberjunction/core-entities', () => ({
-    ConversationEngine: {
-        Instance: {
-            LoadConversationDetails: vi.fn().mockImplementation(async () => mockCache),
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
+    return {
+        ...actual,
+        ConversationEngine: {
+            Instance: {
+                LoadConversationDetails: vi.fn().mockImplementation(async () => mockCache),
+            },
+            FilterRowsToBranchPath: actual.ConversationEngine.FilterRowsToBranchPath,
         },
-    },
-}));
+    };
+});
 
 import { ConversationToolManager } from '../ConversationToolManager';
 
 function detail(sequence: number, role: string, message: string, agent: string | null = null): Record<string, unknown> {
-    return { ID: `detail-${sequence}`, Sequence: sequence, Role: role, Message: message, Agent: agent };
+    return { ID: `detail-${sequence}`, Sequence: sequence, Role: role, Message: message, Agent: agent, BranchID: null };
 }
 
 const user = { ID: 'user-1' } as never;
@@ -325,6 +330,56 @@ describe('ConversationToolManager', () => {
             manager.Initialize('conv-1', user);
             const r = await manager.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 2 } });
             expect(r.result.success).toBe(true);
+        });
+    });
+
+    describe('branch path (ExecuteAgentParams.ConversationBranchID)', () => {
+        const branches = [{ ID: 'B', ConversationID: 'conv-1', ParentBranchID: null, ForkFromSequence: 2 }];
+        beforeEach(() => {
+            mockCache.Details = [
+                { ...detail(1, 'User', 'budget question'), BranchID: null },
+                { ...detail(2, 'AI', 'budget answer'), BranchID: null },
+                { ...detail(3, 'User', 'trunk follow-up about budget'), BranchID: null },
+                { ...detail(4, 'User', 'branch follow-up about budget'), BranchID: 'B' },
+            ] as never;
+        });
+
+        it('on a branch, pages only rows on that branch\'s path', async () => {
+            manager = new ConversationToolManager();
+            manager.Initialize('conv-1', user, null, 'B', branches);
+            const range = await manager.ExecuteSingleToolCall({ tool: 'getMessagesByRange', input: { startSequence: 1, endSequence: 4 } });
+            expect((range.result.data as { messages: Array<{ sequence: number }> }).messages.map(m => m.sequence)).toEqual([1, 2, 4]);
+        });
+
+        it('on the trunk, never pages a branch row (control)', async () => {
+            manager = new ConversationToolManager();
+            manager.Initialize('conv-1', user);
+            const range = await manager.ExecuteSingleToolCall({ tool: 'getMessagesByRange', input: { startSequence: 1, endSequence: 4 } });
+            expect((range.result.data as { messages: Array<{ sequence: number }> }).messages.map(m => m.sequence)).toEqual([1, 2, 3]);
+        });
+    });
+
+    describe('replaced answers', () => {
+        beforeEach(() => {
+            mockCache.Details = [
+                detail(1, 'User', 'What was our Q3 budget?'),
+                { ...detail(2, 'AI', 'Old budget answer', 'Sage'), ReplacedAt: new Date('2026-10-07T10:00:00.000Z') },
+                detail(3, 'AI', 'New budget answer', 'Sage'),
+            ] as never;
+        });
+
+        it('leaves a replaced answer out of a range', async () => {
+            const r = await manager.ExecuteSingleToolCall({ tool: 'getMessagesByRange', input: { startSequence: 1, endSequence: 3 } });
+            const data = r.result.data as { messages: Array<{ sequence: number }> };
+            expect(data.messages.map(m => m.sequence)).toEqual([1, 3]);
+        });
+
+        it('does not find a replaced answer by search or by sequence', async () => {
+            const search = await manager.ExecuteSingleToolCall({ tool: 'searchConversation', input: { query: 'budget' } });
+            expect((search.result.data as { hits: Array<{ sequence: number }> }).hits.map(h => h.sequence)).toEqual([1, 3]);
+            const exact = await manager.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 2 } });
+            expect(exact.result.success).toBe(false);
+            expect(exact.result.errorMessage).toContain('No message found at sequence 2');
         });
     });
 });

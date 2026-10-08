@@ -1,5 +1,14 @@
-import { BaseSingleton, MJLruCache, NormalizeUUID } from '@memberjunction/global';
+import { BaseEntity, type BaseEntityEvent } from '@memberjunction/core';
+import { ConversationEngine, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { BaseSingleton, MJEventType, MJGlobal, MJLruCache, NormalizeUUID, type MJEvent } from '@memberjunction/global';
 import { CarryForwardStepRecord } from './tool-result-format';
+
+/** One cached projection, with the reply row of the run that stored it. */
+interface PriorTurnEntry {
+    readonly Steps: CarryForwardStepRecord[];
+    /** The run's reply row (its `ConversationDetailID`); null when not known. */
+    readonly SourceDetailID: string | null;
+}
 
 /**
  * Process-wide cache of the most recent settled root run's Tool-step results per
@@ -21,6 +30,13 @@ import { CarryForwardStepRecord } from './tool-result-format';
  * - Entries are keyed by conversation AND agent, mirroring the DB path's `AgentID`
  *   filter — in a multi-agent conversation, agent B must never inherit agent A's
  *   results labeled "your previous turn".
+ * - Entries are also keyed by branch, mirroring the DB path's branch-path filter — a
+ *   run never inherits results from a run whose reply row is off its path. A branch with
+ *   no entry yet falls back to the DB path, which can return a trunk run from before the fork.
+ * - Entries carry the reply row of the run that stored them. When a save on this server
+ *   marks that row replaced (`ReplacedAt` set by an in-place rerun of its turn), the entry
+ *   is no longer served, just as the DB path leaves out runs whose reply row is replaced:
+ *   a replaced answer's tool results are never carried forward.
  * - Values are the raw completed-`Tool`-step `OutputData` projections; eligibility is
  *   still decided downstream by `BuildPriorTurnToolResultsMessage` via `toolFamily`,
  *   identical for cached and DB-loaded records.
@@ -39,11 +55,17 @@ import { CarryForwardStepRecord } from './tool-result-format';
  * the TTL bounds the staleness window, and each node self-heals on its next completed
  * run for that conversation — so the fallback keeps the default single-node deployment
  * exact while multi-node degrades gracefully rather than paying the queries every turn.
+ * The replaced-row rule has the same limit: a replacement saved on another server is not
+ * seen here, so this node can still serve that run's entry until it expires or is replaced.
  */
 export class PriorTurnToolResultCache extends BaseSingleton<PriorTurnToolResultCache> {
-    /** Protected per the {@link BaseSingleton} contract — obtain via {@link Instance}. */
+    /**
+     * Protected per the {@link BaseSingleton} contract — obtain via {@link Instance}. Listens for
+     * entity saves on this server to learn which conversation details were replaced.
+     */
     protected constructor() {
         super();
+        MJGlobal.Instance.GetEventListener(false).subscribe(event => this.onGlobalEvent(event));
     }
 
     /** Process-wide singleton accessor (Global Object Store backed, bundler-duplication safe). */
@@ -57,36 +79,67 @@ export class PriorTurnToolResultCache extends BaseSingleton<PriorTurnToolResultC
      * minutes comfortably covers the inter-turn gap of a live conversation while
      * bounding the multi-node staleness window described above.
      */
-    private cache = new MJLruCache<string, CarryForwardStepRecord[]>({
+    private cache = new MJLruCache<string, PriorTurnEntry>({
         maxSize: 500,
         ttlMs: 30 * 60 * 1000
     });
 
-    /**
-     * Cache key: normalized conversation + agent, so agent B never inherits agent A's
-     * results in a multi-agent conversation. `::` is safe (UUIDs cannot contain it).
-     */
-    private static buildKey(conversationId: string, agentId: string): string {
-        return `${NormalizeUUID(conversationId)}::${NormalizeUUID(agentId)}`;
+    /** Normalized ids of conversation details replaced by an in-place rerun, seen on this server. */
+    private replacedDetails = new MJLruCache<string, true>({ maxSize: 5000 });
+
+    /** Key: conversation, agent and branch ('trunk' when none), so an entry serves only runs on the branch that stored it. */
+    private static buildKey(conversationId: string, agentId: string, branchId: string | null): string {
+        return `${NormalizeUUID(conversationId)}::${NormalizeUUID(agentId)}::${branchId ? NormalizeUUID(branchId) : 'trunk'}`;
     }
 
     /**
      * Returns the carry-forward records of this agent's most recent settled root run in
-     * the conversation on this node — `[]` means "settled with no tool results" (a
-     * valid, query-skipping answer); `undefined` means "not known here, ask the
-     * database".
+     * the conversation on this node, on one branch path (`branchId` null is the trunk) —
+     * `[]` means "settled with no tool results" (a valid, query-skipping answer);
+     * `undefined` means "not known here, ask the database". An entry whose run's reply row
+     * was replaced is dropped and reads as `undefined`.
      */
-    public Get(conversationId: string, agentId: string): CarryForwardStepRecord[] | undefined {
-        return this.cache.Get(PriorTurnToolResultCache.buildKey(conversationId, agentId));
+    public Get(conversationId: string, agentId: string, branchId: string | null): CarryForwardStepRecord[] | undefined {
+        const key = PriorTurnToolResultCache.buildKey(conversationId, agentId, branchId);
+        const entry = this.cache.Get(key);
+        if (!entry) {
+            return undefined;
+        }
+        if (entry.SourceDetailID && this.replacedDetails.Has(NormalizeUUID(entry.SourceDetailID))) {
+            this.cache.Delete(key);
+            return undefined;
+        }
+        return entry.Steps;
     }
 
-    /** Records a settled root run's carry-forward projections (empty array included). */
-    public Set(conversationId: string, agentId: string, steps: CarryForwardStepRecord[]): void {
-        this.cache.Set(PriorTurnToolResultCache.buildKey(conversationId, agentId), steps);
+    /**
+     * Records a settled root run's carry-forward projections (empty array included) for one branch path.
+     * `sourceDetailId` is the run's reply row; the entry is not served once that row is replaced.
+     */
+    public Set(conversationId: string, agentId: string, branchId: string | null, steps: CarryForwardStepRecord[], sourceDetailId: string | null = null): void {
+        this.cache.Set(PriorTurnToolResultCache.buildKey(conversationId, agentId, branchId), { Steps: steps, SourceDetailID: sourceDetailId });
     }
 
-    /** Drops every entry — test isolation hook. */
+    /** Records that an in-place rerun replaced a conversation detail; entries whose run replied with it are no longer served. */
+    public MarkDetailReplaced(detailId: string): void {
+        this.replacedDetails.Set(NormalizeUUID(detailId), true);
+    }
+
+    /** Drops every entry and every replaced-detail mark — test isolation hook. */
     public Clear(): void {
         this.cache.Clear();
+        this.replacedDetails.Clear();
+    }
+
+    /** Marks a conversation detail replaced when a save on this server leaves its `ReplacedAt` set. */
+    private onGlobalEvent(event: MJEvent): void {
+        if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) {
+            return;
+        }
+        const entityEvent: BaseEntityEvent | undefined = event.args;
+        const detail = entityEvent?.baseEntity;
+        if (entityEvent?.type === 'save' && detail instanceof MJConversationDetailEntity && ConversationEngine.IsReplacedRow(detail)) {
+            this.MarkDetailReplaced(detail.ID);
+        }
     }
 }
