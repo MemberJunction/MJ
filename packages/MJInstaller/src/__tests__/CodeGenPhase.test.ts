@@ -191,9 +191,12 @@ describe('CodeGenPhase', () => {
     describe('mj_generatedentities is looked up the way MJAPI resolves it (R33)', () => {
       const ROOT = '/test/install';
       const MONOREPO_MARKER = path.join(ROOT, 'packages', 'MJCoreEntities');
-      const DIST_LINK = path.join(ROOT, 'apps', 'MJAPI', 'node_modules', 'mj_generatedentities');
-      const MONOREPO_LINK = path.join(ROOT, 'packages', 'MJAPI', 'node_modules', 'mj_generatedentities');
-      const ROOT_LINK = path.join(ROOT, 'node_modules', 'mj_generatedentities');
+      // The lookup walks up from MJAPI to the RESOLVED install root, so its candidates are absolute:
+      // on Windows `path.resolve('/test/install')` gains a drive letter that `path.join` does not.
+      const RESOLVED_ROOT = path.resolve(ROOT);
+      const DIST_LINK = path.join(RESOLVED_ROOT, 'apps', 'MJAPI', 'node_modules', 'mj_generatedentities');
+      const MONOREPO_LINK = path.join(RESOLVED_ROOT, 'packages', 'MJAPI', 'node_modules', 'mj_generatedentities');
+      const ROOT_LINK = path.join(RESOLVED_ROOT, 'node_modules', 'mj_generatedentities');
 
       /**
        * DirectoryExists answers only for the given package link (plus the monorepo marker, when the
@@ -246,7 +249,7 @@ describe('CodeGenPhase', () => {
       });
 
       it('does not accept a link in a sibling package that MJAPI would never resolve', async () => {
-        layout(path.join(ROOT, 'apps', 'MJExplorer', 'node_modules', 'mj_generatedentities'), false);
+        layout(path.join(RESOLVED_ROOT, 'apps', 'MJExplorer', 'node_modules', 'mj_generatedentities'), false);
 
         await expect(phase.Run(makeContext({ PackageManager: 'pnpm' }))).rejects.toMatchObject({ Code: 'CODEGEN_FAILED' });
       });
