@@ -1,18 +1,70 @@
-import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild, ChangeDetectionStrategy, ElementRef, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
-import { Metadata, CompositeKey, EntityRecordNameInput, RunView, PermissionConstrainedError } from '@memberjunction/core';
+import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration, IsDashboardEntity, SafeDetectChanges, BuildDashboardPinInput } from '@memberjunction/ng-shared';
+import { ResourceTypeForEntity } from '@memberjunction/ng-shared-generic';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { Metadata, CompositeKey, EntityRecordNameInput, RunView, PermissionConstrainedError, LogError } from '@memberjunction/core';
 import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine, DashboardEngine, UserViewEngine, QueryEngine } from '@memberjunction/core-entities';
+import type { MJDashboardEntity } from '@memberjunction/core-entities';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
+import { DASHBOARD_NAME_MAX_LENGTH } from '@memberjunction/ng-dashboard-viewer';
+import type { DashboardNavRequestEvent } from '@memberjunction/ng-dashboard-viewer';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import type { DashboardEditorComponent } from '../DashboardEditor/dashboard-editor.component';
 import { ActionPinConfigResult } from './action-pin-config-dialog.component';
 import { ActionPinRunResult } from './action-pin-runner-dialog.component';
 import { BuildHomeAgentContext, BuildHomeNotFoundError, ResolveNamedRecord, NamedRecord, RecentItemSummary } from './home-agent-context';
+import { MenuAnchor, MenuAnchorOf, NextMenuFocusIndex, PlaceMenu } from './home-menus';
+import {
+  BuildPinDashboardNames,
+  BuildPinnedDashboards,
+  CanShowInHome,
+  DashboardIdOfPin,
+  FindDashboard,
+  HomeSwitcherDashboard,
+  ResolvePinnedDashboardReference,
+  ResolvePinResourceType,
+} from './home-pinned-dashboards';
 import { AgentToolResult, ValidateStringParam } from '../shared/agent-tool-validation';
+import { ObserveDashboardLibraryChanges } from '../shared/dashboard-library-changes';
+import { AutoInstallDashboardsApp, CreateBlankDashboard, DashboardNameMaxLength, EnsureDashboardsApp } from '../shared/dashboards-app.helpers';
+
+/** User setting for the Pinned section: 'true' when collapsed, 'false' when open. A missing setting means open. */
+const PINNED_COLLAPSED_SETTING = 'HomeApp.PinnedCollapsed';
+
+/** The query param that names the dashboard Home shows in place of its overview. */
+const DASHBOARD_QUERY_PARAM = 'dashboard';
+
+/** The dashboard view's title: the switcher button that names the open dashboard. */
+const DASHBOARD_TITLE_SELECTOR = '.dashboard-title .switcher-title';
+
+/** The notice when Home cannot show the dashboard the URL or the editor names. */
+const DASHBOARD_NOT_AVAILABLE = 'That dashboard is not available';
+
+/** The name the SwitchHomeDashboard agent tool takes for Home's overview (any letter case). */
+const HOME_OVERVIEW_NAME = 'Home';
+
+/** Width of the pin options menu, in pixels. */
+const PIN_MENU_WIDTH = 220;
+
+/** Process-wide counter for the ids that label each Home's pin menu groups. */
+let nextPinMenuUid = 0;
+
+/** One run of pins in the grid: the ungrouped pins (Group null), or the pins of one group. */
+interface HomePinSection {
+  Key: string;
+  Group: string | null;
+  Pins: HomeAppPinnedItem[];
+}
+
+/** A pin and the name it shows, for the agent's name resolver. */
+interface PinRecord extends NamedRecord {
+  Pin: HomeAppPinnedItem;
+}
 
 /**
  * Cached app data with pre-computed values for optimal rendering performance
@@ -47,8 +99,12 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   protected override destroy$ = new Subject<void>();
   private metadata = this.ProviderToUse;
   private pinService = inject(HomeAppPinService);
+  private confirmService = inject(MJConfirmService);
+  private hostElement = inject<ElementRef<HTMLElement>>(ElementRef);
 
   @ViewChild('appConfigDialog') AppConfigDialog!: UserAppConfigComponent;
+  @ViewChild('pinMenu') private pinMenuEl?: ElementRef<HTMLElement>;
+  @ViewChild('dashboardEditor') private dashboardEditor?: DashboardEditorComponent;
 
   /** @deprecated Use {@link AppConfigDialog}. */
   get appConfigDialog(): UserAppConfigComponent {
@@ -60,6 +116,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   // State
+  /** True until Home's first load finishes; the page shows its loading view meanwhile. A later app-list reload does not set it. */
   public isLoading = true;
   public Apps: BaseApplication[] = [];
 
@@ -81,14 +138,14 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   public set appsDisplayData(value: AppDisplayData[]) {
     this.AppsDisplayData = value;
   } // Pre-computed display data
-  public CurrentUser: { Name: string; Email: string } | null = null;
+  public CurrentUser: { Name: string; Email: string; FirstName?: string } | null = null;
 
   /** @deprecated Use {@link CurrentUser}. */
-  public get currentUser(): { Name: string; Email: string } | null {
+  public get currentUser(): { Name: string; Email: string; FirstName?: string } | null {
     return this.CurrentUser;
   }
   /** @deprecated Use {@link CurrentUser}. */
-  public set currentUser(value: { Name: string; Email: string } | null) {
+  public set currentUser(value: { Name: string; Email: string; FirstName?: string } | null) {
     this.CurrentUser = value;
   }
   public ShowConfigDialog = false;
@@ -183,10 +240,15 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   // Pin empty-state dismissal preference (persisted in UserSettings via UserInfoEngine)
   public HidePinEmptyState = false;
 
+  /** Whether the Pinned section is open. Saved for each user in the HomeApp.PinnedCollapsed setting. */
+  public PinnedExpanded = true;
+
   // Pin state
   public PinnedItems: HomeAppPinnedItem[] = [];
   public UngroupedPins: HomeAppPinnedItem[] = [];
   public PinGroups: string[] = [];
+  /** The pin grid's runs: ungrouped pins first, then each group in group order. */
+  public PinSections: HomePinSection[] = [];
   public EditMode = false;
   public AddPanelOpen = false;
   public AddPanelSearchQuery = '';
@@ -219,10 +281,53 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   public PinMenuVisible = false;
   public PinMenuX = 0;
   public PinMenuY = 0;
+  /** The pin menu's max height in pixels: the room on its side of the button. Null while the menu is measured. */
+  public PinMenuMaxHeight: number | null = null;
   public PinMenuPin: HomeAppPinnedItem | null = null;
+  /** Id of the menu's "Move to Group" header, which names the group rows. */
+  public readonly PinMenuGroupLabelId = `home-pin-menu-groups-${nextPinMenuUid++}`;
+  /** The ellipsis button that opened the pin options menu. Escape and Tab put focus back on it. */
+  private pinMenuTrigger: HTMLElement | null = null;
 
-  // Whether Data Explorer app is available (if so, dashboards/queries/views are accessible via its nav items)
+  // Whether the Add Pin panel found the Data Explorer app. Query pins then open in its Queries nav item.
   public HasDataExplorerApp = false;
+
+  // Dashboard view: a pinned dashboard shown in place of the overview
+  /** The dashboard Home shows in place of its overview, or null on the overview. */
+  public CurrentDashboard: MJDashboardEntity | null = null;
+  /** ID of that dashboard, or null. */
+  public CurrentDashboardId: string | null = null;
+  /** True when the dashboard view opens in edit mode. The editor reads it once, then sets it back to false. */
+  public DashboardStartsInEditMode = false;
+  /** True while the dashboard Home shows is in edit mode. */
+  public IsDashboardEditing = false;
+  /** The pinned Config dashboards, in pin order, for the Dashboards switcher. */
+  public PinnedDashboards: HomeSwitcherDashboard[] = [];
+  /** The names dashboard pins show, by pin id: their dashboards' names from the dashboard cache. */
+  private pinDashboardNames = new Map<string, string>();
+  /** True once the first load of the dashboard cache has finished, also when it failed. */
+  private dashboardCacheLoaded = false;
+  /** The dashboard the URL asks for; shown once the dashboard cache has loaded. */
+  private requestedDashboardId: string | null = null;
+  /**
+   * The dashboard Home shows because a URL change named it: back, forward or a deep link into the open tab. When the
+   * editor cannot show it, Home leaves the URL as it is. Home's first load does not set it, and any other change of the
+   * shown dashboard clears it.
+   */
+  private urlShownDashboardId: string | null = null;
+  /**
+   * The dashboard whose title gets focus when the editor has shown it: one the user picked in a switcher or opened from a
+   * pin, or one an agent showed after its switch removed the part of Home that had focus.
+   */
+  private focusTitleOnLoad: string | null = null;
+
+  // New dashboard: the name dialog
+  /** True while the New dashboard name dialog is open. */
+  public ShowNewDashboardDialog = false;
+  /** True while the named dashboard is being created. */
+  public IsCreatingDashboard = false;
+  /** The longest name the dialog accepts. */
+  public NewDashboardNameMaxLength = DASHBOARD_NAME_MAX_LENGTH;
 
   // Drag state
   public DraggingPinId: string | null = null;
@@ -244,6 +349,31 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.FavoriteDisplayNames = value;
   }
 
+  /** True when Home shows its overview: the greeting, Pinned and My applications. */
+  public get ShowOverview(): boolean {
+    return !this.isLoading && !this.CurrentDashboard;
+  }
+
+  /** True when Home shows a dashboard in place of its overview. */
+  public get ShowDashboardView(): boolean {
+    return !this.isLoading && this.CurrentDashboard !== null;
+  }
+
+  /** The Quick Access button and sidebar show on the overview only: in the dashboard view the button would cover the header's actions. */
+  public get ShowQuickAccess(): boolean {
+    return this.HasSidebarContent && !this.CurrentDashboard;
+  }
+
+  /** The name of the dashboard Home shows, from the dashboard cache; null on the overview. */
+  public get CurrentDashboardName(): string | null {
+    return this.CurrentDashboardId ? this.cachedDashboardName(this.CurrentDashboardId) : null;
+  }
+
+  /** True while the dashboard Home shows is in edit mode (see BaseResourceComponent.IsEditing). */
+  public override IsEditing(): boolean {
+    return this.IsDashboardEditing;
+  }
+
   /**
    * Check if sidebar has any content to show
    */
@@ -261,10 +391,12 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
-   * Toggle sidebar visibility
+   * Opens or closes the Quick Access sidebar and marks Home for check, so the change shows at the next render also
+   * when the agent's ToggleSidebar tool calls this outside a template event.
    */
   ToggleSidebar(): void {
     this.SidebarOpen = !this.SidebarOpen;
+    this.cdr.markForCheck();
   }
 
   /** @deprecated Use {@link ToggleSidebar}. */
@@ -299,22 +431,23 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     // Get current user info
     this.CurrentUser = {
       Name: this.metadata.CurrentUser?.Name || 'User',
-      Email: this.metadata.CurrentUser?.Email || ''
+      Email: this.metadata.CurrentUser?.Email || '',
+      FirstName: this.metadata.CurrentUser?.FirstName || ''
     };
+    this.loadSectionStates();
 
-    // Subscribe to loading state from ApplicationManager
-    this.appManager.Loading
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(loading => {
-        // Only update isLoading if manager is actively loading
-        // (we start with isLoading=true and only set to false when we have apps)
-        if (loading) {
-          this.isLoading = true;
-          this.cdr.markForCheck();
-        }
-      });
+    // The dashboard the tab's data names, for when the query-param stream has not delivered one
+    const initialDashboard = this.GetQueryParams()[DASHBOARD_QUERY_PARAM]?.trim();
+    if (initialDashboard && !this.requestedDashboardId) {
+      this.requestedDashboardId = initialDashboard;
+    }
 
-    // Subscribe to applications list, filtering out the Home app
+    // The Dashboards part of the first load: the automatic app install and the dashboard cache
+    const dashboardsLoad = this.loadDashboards();
+
+    // Subscribe to applications list, filtering out the Home app. The loading view shows during the first load
+    // only: a later reload of the list (an app install) keeps the page as it is, so an open dashboard and its edit
+    // stay, and the overview keeps its apps until the new list arrives.
     this.appManager.Applications
       .pipe(takeUntil(this.destroy$))
       .subscribe(async apps => {
@@ -323,6 +456,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
         // Pre-compute display data for all apps
         await this.computeAppsDisplayData();
+
+        // The page shows once the Dashboards part of the first load is done (see loadDashboards)
+        await dashboardsLoad;
 
         this.isLoading = false;
         this.NotifyLoadComplete();
@@ -353,6 +489,11 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         this.cdr.markForCheck();
       });
 
+    // The switcher, the dashboard pin names and the open dashboard follow changes to the dashboard cache
+    ObserveDashboardLibraryChanges()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.refreshPinnedDashboards());
+
     // Favorites and recents load asynchronously in the sidebar
     this.NotifyLoadComplete();
 
@@ -372,8 +513,11 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         this.PinnedItems = pins;
         this.UngroupedPins = this.pinService.GetUngroupedPins();
         this.PinGroups = this.pinService.GetGroups();
-        this.publishAgentContext();
-        this.cdr.markForCheck();
+        this.PinSections = [
+          { Key: 'ungrouped', Group: null, Pins: this.UngroupedPins },
+          ...this.PinGroups.map(group => ({ Key: `group:${group}`, Group: group, Pins: this.pinService.GetPinsInGroup(group) })),
+        ];
+        this.refreshPinnedDashboards();
       });
 
     // Resolve display names for record-type pins that have raw ID titles
@@ -404,11 +548,16 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   //
   // 🚨 SAFETY BOUNDARY: the Home dashboard exposes ONLY navigation / discovery /
   // panel-toggle operations to the agent. No pin create, no pin delete, no pin
-  // rename, no group mutation, no reordering — those are user-confirm-driven or
-  // destructive and stay in the UI. Every tool below maps to the exact same
-  // component method a user click would call (OpenApp→onAppClick, OpenPin→OnPinClick,
-  // search→AddPanel search field, panel/sidebar/edit-mode toggles). Handlers are
-  // tolerant: they never throw, returning { Success, Data?, ErrorMessage? }.
+  // rename, no group mutation, no reordering, and no dashboard create, rename,
+  // edit, save or delete — those are user-confirm-driven or destructive and stay
+  // in the UI. Home registers no dashboard edit tools for the dashboard it shows
+  // (those are on the dashboard tab). Every tool below maps to the exact same
+  // component method a user click would call (OpenApp→OnAppClick, OpenPin→openPin,
+  // which a pin click calls, SwitchHomeDashboard→OpenDashboardInHome / GoHome,
+  // which a switcher pick calls, search→AddPanel search field, panel/sidebar/
+  // edit-mode toggles). Leaving a dashboard with unsaved changes asks the user
+  // first, as it does for a click. Handlers are tolerant: they never throw,
+  // returning { Success, Data?, ErrorMessage? }.
 
   /**
    * Publish the current Home dashboard state to the AI agent via NavigationService.
@@ -423,7 +572,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       PinnedItemCount: this.PinnedItems.length,
       PinGroupCount: this.PinGroups.length,
       PinGroupNames: this.PinGroups,
-      PinNames: this.PinnedItems.map(p => p.DisplayName),
+      PinNames: this.PinnedItems.map(p => this.PinName(p)),
       UnreadNotifications: this.UnreadNotifications.length,
       NotificationTitles: this.UnreadNotifications.map(n => n.Title ?? '(untitled)'),
       RecentItemsCount: this.RecentItems.length,
@@ -432,6 +581,11 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       AddPanelOpen: this.AddPanelOpen,
       SidebarOpen: this.SidebarOpen,
       AddPanelSearchQuery: this.AddPanelSearchQuery,
+      PinnedCollapsed: !this.PinnedExpanded,
+      CurrentDashboardName: this.CurrentDashboardName,
+      CurrentDashboardID: this.CurrentDashboardId,
+      IsEditingDashboard: this.IsDashboardEditing,
+      PinnedDashboardNames: this.PinnedDashboards.map(d => d.Name),
     });
     this.navigationService.SetAgentContext(this, context);
   }
@@ -452,14 +606,16 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
    *
    * Tools:
    * - OpenApp: switch to an application by name (exact or partial match).
-   * - OpenPin: open a pinned item by its display name (exact or partial match).
+   * - OpenPin: open a pinned item by the name it shows (exact or partial match). A pinned dashboard opens inside Home.
    * - SearchPins: find pinned items by a name query (read-only — returns matches).
    * - OpenRecent: open a recently-accessed item by display name (read-only navigation).
    * - SearchAddPinPanel: open the Add Pin panel (if needed) and apply a search query.
    * - ClearAddPinPanelSearch: clear the Add Pin panel search query.
    * - OpenAddPinPanel / CloseAddPinPanel: toggle the Add Pin panel.
-   * - ToggleSidebar: toggle the notifications/favorites/recents sidebar.
-   * - TogglePinEditMode: toggle pin edit mode (reorder/rename UI affordances).
+   * - ToggleSidebar: toggle the notifications/favorites/recents sidebar (on the overview only).
+   * - TogglePinEditMode: toggle pin edit mode (reorder/rename UI affordances; on the overview only).
+   * - SwitchHomeDashboard: show a pinned dashboard inside Home by its name (exact or partial match) or id, or "Home"
+   *   for the overview.
    */
   private registerAgentClientTools(): void {
     this.navigationService.SetAgentClientTools(this, [
@@ -471,13 +627,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       },
       {
         Name: 'OpenPin',
-        Description: 'Open a pinned item on the Home screen by its display name (exact or partial match).',
+        Description: 'Open a pinned item on the Home screen by the name it shows (exact or partial match). A pinned dashboard opens inside Home; other pins open as before.',
         ParameterSchema: { type: 'object', properties: { pinName: { type: 'string' } }, required: ['pinName'] },
         Handler: async (params: Record<string, unknown>) => this.toolOpenPin(params),
       },
       {
         Name: 'SearchPins',
-        Description: 'Find pinned items on the Home screen whose display name matches a query (case-insensitive contains). Read-only — returns the matching pin names; does not open anything.',
+        Description: 'Find pinned items on the Home screen whose name, as the pin shows it, matches a query (case-insensitive contains). Read-only — returns the matching pin names; does not open anything.',
         ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
         Handler: async (params: Record<string, unknown>) => this.toolSearchPins(params),
       },
@@ -521,23 +677,21 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       },
       {
         Name: 'ToggleSidebar',
-        Description: 'Toggle the Home sidebar (unread notifications, favorites, and recent items).',
+        Description: `Toggle the Home sidebar (unread notifications, favorites, and recent items). Quick Access shows on the ${HOME_OVERVIEW_NAME} overview only: while Home shows a dashboard, use SwitchHomeDashboard with "${HOME_OVERVIEW_NAME}" first.`,
         ParameterSchema: { type: 'object', properties: {} },
-        Handler: async () => {
-          this.ToggleSidebar();
-          this.publishAgentContext();
-          return { Success: true, Data: { SidebarOpen: this.SidebarOpen } };
-        },
+        Handler: async () => this.toolToggleSidebar(),
       },
       {
         Name: 'TogglePinEditMode',
-        Description: 'Toggle pin edit mode on the Home screen (lets the user rename/reorder pins). This only changes the UI mode — it does not modify any pins.',
+        Description: `Toggle pin edit mode on the Home overview (lets the user rename/reorder pins). This only changes the UI mode — it does not modify any pins. Pin edit mode shows on the ${HOME_OVERVIEW_NAME} overview only: while Home shows a dashboard, use SwitchHomeDashboard with "${HOME_OVERVIEW_NAME}" first.`,
         ParameterSchema: { type: 'object', properties: {} },
-        Handler: async () => {
-          this.ToggleEditMode();
-          this.publishAgentContext();
-          return { Success: true, Data: { EditMode: this.EditMode } };
-        },
+        Handler: async () => this.toolTogglePinEditMode(),
+      },
+      {
+        Name: 'SwitchHomeDashboard',
+        Description: `Show a pinned dashboard inside Home by its name (exact or partial match) or id, or "${HOME_OVERVIEW_NAME}" to return to the Home overview. Navigation only — it does not pin, unpin, rename or edit dashboards. When the open dashboard has unsaved changes, the user is asked first.`,
+        ParameterSchema: { type: 'object', properties: { dashboard: { type: 'string' } }, required: ['dashboard'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSwitchHomeDashboard(params),
       },
     ]);
   }
@@ -565,13 +719,16 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     return { Success: true, Data: { AppName: app.Name } };
   }
 
-  /** The pinned items narrowed to the resolver's structural shape (Name == DisplayName). */
-  private get pinNamedRecords(): NamedRecord[] {
-    return this.PinnedItems.map(p => ({ Name: p.DisplayName }));
+  /** The pinned items with the names they show, for the resolver. */
+  private get pinNamedRecords(): PinRecord[] {
+    return this.PinnedItems.map(pin => ({ Name: this.PinName(pin), Pin: pin }));
   }
 
-  /** Resolve a pinned item by display name (exact then partial, case-insensitive) and open it. */
-  private toolOpenPin(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+  /**
+   * Resolve a pinned item by the name it shows (exact then partial, case-insensitive) and open it. A pinned dashboard
+   * opens inside Home. Focus stays where it is unless the change removed it (see refocusIfRemoved).
+   */
+  private async toolOpenPin(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
     const parsed = ValidateStringParam(params['pinName'], 'pinName');
     if (!parsed.ok) {
       return parsed.result;
@@ -580,33 +737,37 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     if (!pinName) {
       return { Success: false, ErrorMessage: 'pinName is required.' };
     }
-    const match = ResolveNamedRecord(pinName, this.pinNamedRecords);
+    const records = this.pinNamedRecords;
+    const match = ResolveNamedRecord(pinName, records);
     if (!match) {
-      return { Success: false, ErrorMessage: BuildHomeNotFoundError(pinName, 'pinned item', this.pinNamedRecords) };
+      return { Success: false, ErrorMessage: BuildHomeNotFoundError(pinName, 'pinned item', records) };
     }
-    const pin = this.PinnedItems.find(p => p.DisplayName === match.Name);
-    if (!pin) {
-      return { Success: false, ErrorMessage: BuildHomeNotFoundError(pinName, 'pinned item', this.pinNamedRecords) };
+    const opened = await this.switchViewForAgent(() => this.leaveEditModeAndOpenPin(match.Pin));
+    if (!opened) {
+      return { Success: false, ErrorMessage: `"${match.Name}" did not open. The pin may be broken, or the user kept editing the open dashboard.` };
     }
-    // OnPinClick is a no-op while in edit mode; clear edit mode so the open succeeds.
-    if (this.EditMode) {
-      this.EditMode = false;
-    }
-    this.OnPinClick(pin);
-    return { Success: true, Data: { PinName: pin.DisplayName } };
+    return { Success: true, Data: { PinName: match.Name } };
   }
 
-  /** Find pinned items whose display name matches a query (read-only — returns matches). */
+  /** Opens a pin for the agent. A pin does not open in edit mode: Home leaves it first, as Done does, and tells the agent. */
+  private leaveEditModeAndOpenPin(pin: HomeAppPinnedItem): Promise<boolean> {
+    if (this.EditMode) {
+      this.ToggleEditMode();
+      this.publishAgentContext();
+    }
+    return this.openPin(pin);
+  }
+
+  /** Find pinned items whose shown name matches a query (read-only — returns matches). */
   private toolSearchPins(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
     const parsed = ValidateStringParam(params['query'], 'query');
     if (!parsed.ok) {
       return parsed.result;
     }
     const query = parsed.value.trim().toLowerCase();
-    const matches = query
-      ? this.PinnedItems.filter(p => p.DisplayName.toLowerCase().includes(query))
-      : [...this.PinnedItems];
-    return { Success: true, Data: { Matches: matches.map(p => p.DisplayName), MatchCount: matches.length } };
+    const names = this.PinnedItems.map(p => this.PinName(p));
+    const matches = query ? names.filter(name => name.toLowerCase().includes(query)) : names;
+    return { Success: true, Data: { Matches: matches, MatchCount: matches.length } };
   }
 
   /** Resolve a recent item by display name (exact then partial) and navigate to it. */
@@ -634,6 +795,63 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     }
     this.OnRecentClick(item);
     return { Success: true, Data: { Name: match.Name, ResourceType: item.resourceType } };
+  }
+
+  /**
+   * Shows a pinned dashboard in Home by id (any letter case) or name (exact, then partial), or the overview for
+   * "Home". It uses the methods a switcher pick uses, so the user is asked first about unsaved changes. Unlike a pick,
+   * it moves focus only when the switch removed it (see refocusIfRemoved).
+   */
+  private async toolSwitchHomeDashboard(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
+    const parsed = ValidateStringParam(params['dashboard'], 'dashboard');
+    if (!parsed.ok) {
+      return parsed.result;
+    }
+    const reference = parsed.value.trim();
+    if (!reference) {
+      return { Success: false, ErrorMessage: 'dashboard is required.' };
+    }
+    if (reference.toLowerCase() === HOME_OVERVIEW_NAME.toLowerCase()) {
+      return (await this.switchViewForAgent(() => this.GoHome()))
+        ? { Success: true, Data: { HomeView: 'Overview' } }
+        : { Success: false, ErrorMessage: `The ${HOME_OVERVIEW_NAME} overview did not open. The user kept editing the open dashboard.` };
+    }
+    const target = ResolvePinnedDashboardReference(reference, this.PinnedDashboards);
+    if (!target) {
+      const candidates: NamedRecord[] = [{ Name: HOME_OVERVIEW_NAME }, ...this.PinnedDashboards.map(d => ({ Name: d.Name }))];
+      return { Success: false, ErrorMessage: BuildHomeNotFoundError(reference, 'pinned dashboard', candidates) };
+    }
+    // The switcher's list can trail the dashboard cache by a moment
+    if (!this.findHomeDashboard(target.ID)) {
+      return { Success: false, ErrorMessage: `"${target.Name}" did not open. The dashboard is not available.` };
+    }
+    if (!(await this.switchViewForAgent(() => this.OpenDashboardInHome(target.ID)))) {
+      return { Success: false, ErrorMessage: `"${target.Name}" did not open. The user kept editing the open dashboard.` };
+    }
+    return { Success: true, Data: { CurrentDashboardName: target.Name } };
+  }
+
+  /** Opens or closes Quick Access. While a dashboard shows, where Quick Access does not show, it changes nothing. */
+  private toolToggleSidebar(): AgentToolResult & { Data?: Record<string, unknown> } {
+    if (this.CurrentDashboardId) {
+      return { Success: false, ErrorMessage: overviewOnlyError('Quick Access') };
+    }
+    this.ToggleSidebar();
+    this.publishAgentContext();
+    return { Success: true, Data: { SidebarOpen: this.SidebarOpen } };
+  }
+
+  /**
+   * Turns pin edit mode on or off. While a dashboard shows, where the pins do not show, it changes nothing: it neither
+   * opens a collapsed Pinned section nor saves that.
+   */
+  private toolTogglePinEditMode(): AgentToolResult & { Data?: Record<string, unknown> } {
+    if (this.CurrentDashboardId) {
+      return { Success: false, ErrorMessage: overviewOnlyError('Pin edit mode') };
+    }
+    this.ToggleEditMode();
+    this.publishAgentContext();
+    return { Success: true, Data: { EditMode: this.EditMode } };
   }
 
   /** Open the Add Pin panel (if needed) and apply a search query. */
@@ -678,6 +896,11 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /** @deprecated Use {@link Greeting}. */
   get greeting(): string {
     return this.Greeting;
+  }
+
+  /** The first name the greeting uses, or the user's display name. */
+  public get GreetingName(): string {
+    return this.CurrentUser?.FirstName || this.CurrentUser?.Name || 'User';
   }
 
   /**
@@ -752,7 +975,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
       return {
         app,
-        color: app.GetColor() || '#1976d2',
+        color: app.GetColor() || 'var(--mj-brand-primary)',
         icon: app.Icon || 'fa-solid fa-cube',
         navItemsCount,
         navItemsPreview,
@@ -890,9 +1113,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     const entityName = favorite.Entity?.toLowerCase();
     const recordId = favorite.RecordID;
 
-    if (entityName === 'dashboards') {
-      this.navigationService.OpenDashboard(recordId, 'Dashboard');
-    } else if (entityName === 'user views') {
+    if (IsDashboardEntity(favorite.Entity)) {
+      this.openDashboard(recordId, 'Dashboard');
+    } else if (ResourceTypeForEntity(favorite.Entity) === 'view') {
       this.navigationService.OpenView(recordId, 'View');
     } else if (entityName?.includes('artifact')) {
       this.navigationService.OpenArtifact(recordId, 'Artifact');
@@ -922,7 +1145,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         this.navigationService.OpenView(item.recordId, name || 'View');
         break;
       case 'dashboard':
-        this.navigationService.OpenDashboard(item.recordId, name || 'Dashboard');
+        this.openDashboard(item.recordId, name || 'Dashboard');
         break;
       case 'artifact':
         this.navigationService.OpenArtifact(item.recordId, name || 'Artifact');
@@ -1063,6 +1286,437 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   // =============================================
+  // DASHBOARDS APP AND CACHE
+  // =============================================
+
+  /**
+   * The Dashboards part of Home's first load: the automatic Dashboards app install (at most once
+   * per user) and the dashboard cache. Home stays on its loading view until both finish, so the
+   * app-list reload that an install causes does not show a second loading view. Each install step
+   * gives up after DASHBOARDS_APP_INSTALL_STEP_TIMEOUT_MS. The cache load has no time limit: Home
+   * shows its loading view until the server answers or the load fails. Never rejects.
+   */
+  private async loadDashboards(): Promise<void> {
+    await Promise.allSettled([AutoInstallDashboardsApp(this.appManager), this.loadDashboardCache()]);
+  }
+
+  /**
+   * Loads the dashboard cache if it is not loaded yet, then reads the switcher's list and the dashboard pin names
+   * from it and shows the dashboard the URL asks for (one Home cannot show is removed from the URL). A failed load is
+   * only logged. Never rejects.
+   */
+  private async loadDashboardCache(): Promise<void> {
+    try {
+      await DashboardEngine.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse);
+    } catch (error) {
+      LogError(`Home: could not load the dashboards: ${errorMessage(error)}`);
+    }
+    this.dashboardCacheLoaded = true;
+    this.refreshPinnedDashboards();
+    this.applyRequestedDashboard(true);
+  }
+
+  /** Reloads the dashboard cache, so a dashboard saved a moment ago is in it. A failure is only logged. */
+  private async reloadDashboardCache(): Promise<void> {
+    try {
+      await DashboardEngine.Instance.Config(true, this.ProviderToUse.CurrentUser, this.ProviderToUse);
+    } catch (error) {
+      LogError(`Home: could not reload the dashboards: ${errorMessage(error)}`);
+    }
+  }
+
+  /** The dashboards the user can open, from the dashboard cache; none when the user cannot read the cache. */
+  private accessibleDashboards(): MJDashboardEntity[] {
+    const engine = DashboardEngine.Instance;
+    return engine.IsPermissionConstrained ? [] : engine.GetAccessibleDashboards(this.ProviderToUse.CurrentUser.ID);
+  }
+
+  /** Re-reads the switcher's list and the names dashboard pins show, and keeps the open dashboard in step with the cache. */
+  private refreshPinnedDashboards(): void {
+    const dashboards = this.accessibleDashboards();
+    this.PinnedDashboards = BuildPinnedDashboards(this.PinnedItems, dashboards);
+    this.pinDashboardNames = BuildPinDashboardNames(this.PinnedItems, dashboards);
+    this.syncCurrentDashboard(dashboards);
+    this.publishAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Opens a dashboard in place of the preview tab, which is usually the tab that shows Home, so Back
+   * returns to Home. A Shift-click opens it in a separate tab.
+   */
+  private openDashboard(dashboardId: string, dashboardName: string): void {
+    this.navigationService.OpenDashboard(dashboardId, dashboardName);
+  }
+
+  /**
+   * Follows a link from a panel of the dashboard Home shows: a record, a dashboard or a query, as the
+   * dashboard tab does. Other link types are only logged.
+   */
+  public OnDashboardNavigationRequested(event: DashboardNavRequestEvent): void {
+    const request = event.request;
+    switch (request.type) {
+      case 'OpenEntityRecord': {
+        const key = CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(request.entityName), request.recordId);
+        this.navigationService.OpenEntityRecord(request.entityName, key);
+        break;
+      }
+      case 'OpenDashboard':
+        this.openDashboard(request.dashboardId, this.cachedDashboardName(request.dashboardId));
+        break;
+      case 'OpenQuery':
+        this.navigationService.OpenQuery(request.queryId, 'Query');
+        break;
+      default:
+        console.warn(`[Home] A dashboard panel asked for a link type that Home does not open: ${request.type}`);
+    }
+  }
+
+  /** The dashboard's name from the dashboard cache, or 'Dashboard' when the cache does not have it. */
+  private cachedDashboardName(dashboardId: string): string {
+    const engine = DashboardEngine.Instance;
+    if (engine.IsPermissionConstrained) {
+      return 'Dashboard';
+    }
+    return engine.Dashboards.find(d => UUIDsEqual(d.ID, dashboardId))?.Name ?? 'Dashboard';
+  }
+
+  // =============================================
+  // DASHBOARD VIEW
+  // =============================================
+
+  /**
+   * Shows a dashboard inside Home in place of the overview and writes it to the URL (?dashboard=<id>). Only a Config
+   * dashboard the user can open shows in Home. Asks first when the open dashboard has unsaved changes. Returns false
+   * when the dashboard did not open.
+   */
+  public async OpenDashboardInHome(dashboardId: string, startInEditMode = false): Promise<boolean> {
+    const dashboard = this.findHomeDashboard(dashboardId);
+    if (!dashboard) return false;
+    if (UUIDsEqual(dashboard.ID, this.CurrentDashboardId)) return true;
+    if (!(await this.confirmLeaveDashboard())) return false;
+    // Another open of the same dashboard (a double click) finished meanwhile
+    if (UUIDsEqual(dashboard.ID, this.CurrentDashboardId)) return true;
+    this.requestedDashboardId = dashboard.ID;
+    this.setCurrentDashboard(dashboard, startInEditMode);
+    this.UpdateQueryParams({ [DASHBOARD_QUERY_PARAM]: dashboard.ID });
+    void this.recentAccessService.LogAccess('MJ: Dashboards', dashboard.ID, 'dashboard');
+    return true;
+  }
+
+  /**
+   * Returns to the overview (switcher Home, breadcrumb Home) and removes the dashboard from the URL. Asks first when
+   * the open dashboard has unsaved changes. Returns false when the user keeps editing.
+   */
+  public async GoHome(): Promise<boolean> {
+    if (!this.CurrentDashboardId) return true;
+    if (!(await this.confirmLeaveDashboard())) return false;
+    this.closeDashboardView();
+    return true;
+  }
+
+  /**
+   * A pick in a Dashboards switcher, or the breadcrumb's Home: null returns to the overview, an id opens that
+   * dashboard in Home. Focus then moves to what shows.
+   */
+  public OnSwitcherPick(dashboardId: string | null): void {
+    void this.followSwitcherPick(dashboardId);
+  }
+
+  /**
+   * Manage pins (switcher): the overview with the pins in edit mode, and focus on the Pinned header. When the user
+   * keeps editing the open dashboard, Home stays on it and focus goes to its title.
+   */
+  public async ManagePins(): Promise<void> {
+    const home = await this.GoHome();
+    if (home && !this.EditMode) {
+      this.ToggleEditMode();
+    }
+    this.focusShownView();
+  }
+
+  /** The switcher's New dashboard: asks to leave unsaved changes first, then asks for the name. */
+  public async OpenNewDashboardDialog(): Promise<void> {
+    if (!(await this.confirmLeaveDashboard())) return;
+    this.NewDashboardNameMaxLength = DashboardNameMaxLength(this.ProviderToUse);
+    this.ShowNewDashboardDialog = true;
+    this.cdr.markForCheck();
+  }
+
+  /** Closes the name dialog; nothing is created. */
+  public OnNewDashboardCancelled(): void {
+    this.ShowNewDashboardDialog = false;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Creates the named dashboard, pins it to Home and shows it in Home in edit mode. When the save fails, the
+   * dialog stays open with the name and the user is told. A second Create while one runs is ignored.
+   */
+  public async OnNewDashboardNamed(name: string): Promise<void> {
+    if (this.IsCreatingDashboard) return;
+    this.IsCreatingDashboard = true;
+    this.cdr.markForCheck();
+    try {
+      const dashboard = await CreateBlankDashboard(this.ProviderToUse, name);
+      if (!dashboard) {
+        MJNotificationService.Instance.CreateSimpleNotification('Could not create the dashboard', 'error', 3000);
+        return;
+      }
+      await this.reloadDashboardCache();
+      this.pinService.AddPin(BuildDashboardPinInput(dashboard));
+      this.ShowNewDashboardDialog = false;
+      if (!(await this.OpenDashboardInHome(dashboard.ID, true))) {
+        this.openDashboard(dashboard.ID, dashboard.Name);
+      }
+    } catch (error) {
+      LogError(`Home: could not open the new dashboard: ${errorMessage(error)}`);
+      MJNotificationService.Instance.CreateSimpleNotification('Could not open the new dashboard', 'error', 3000);
+    } finally {
+      this.IsCreatingDashboard = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Opens the dashboard in a tab of the Dashboards app, installing the app first when the user lacks it. */
+  public async OpenDashboardInDashboardsApp(dashboard: MJDashboardEntity): Promise<void> {
+    const app = await EnsureDashboardsApp(this.appManager);
+    this.navigationService.OpenDashboard(dashboard.ID, dashboard.Name, app ? { applicationId: app.ID } : undefined);
+  }
+
+  /**
+   * The editor entered or left edit mode. The editor can report leaving it while Home renders (it drops an edit when
+   * it gets another dashboard), so this sets no state the template reads, and tells the agent after the render.
+   */
+  public OnDashboardEditingChange(editing: boolean): void {
+    this.IsDashboardEditing = editing;
+    queueMicrotask(() => this.publishAgentContext());
+  }
+
+  /**
+   * The editor saved the dashboard, or its saved name changed: the switcher and the pin names read the new name from
+   * the cache.
+   */
+  public OnDashboardSaved(): void {
+    this.refreshPinnedDashboards();
+  }
+
+  /** The editor has shown a dashboard. Its title gets focus when Home asked for that (see focusTitleOnLoad). */
+  public OnDashboardViewLoaded(dashboard: MJDashboardEntity): void {
+    if (this.focusTitleOnLoad && UUIDsEqual(dashboard.ID, this.focusTitleOnLoad)) {
+      this.focusTitleOnLoad = null;
+      this.focusInHome(DASHBOARD_TITLE_SELECTOR);
+    }
+  }
+
+  /**
+   * The editor could not show the dashboard: Home returns to its overview and tells the user. A dashboard that a URL
+   * change named stays in the URL, since a write would add a history entry that every later Back lands on again. Any
+   * other dashboard is removed from the URL: one the user opened in Home, or the one Home opened with on its first load,
+   * so the tab does not keep it.
+   */
+  public OnDashboardViewLoadFailed(): void {
+    const namedByUrl = this.urlShownDashboardId !== null && UUIDsEqual(this.urlShownDashboardId, this.CurrentDashboardId);
+    this.closeDashboardView(DASHBOARD_NOT_AVAILABLE, !namedByUrl);
+  }
+
+  /** Applies the dashboard the URL names, for back and forward, deep links and pins of Home. */
+  protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    const requested = params[DASHBOARD_QUERY_PARAM]?.trim() || null;
+    if (UUIDsEqual(requested, this.requestedDashboardId)) return;
+    if (this.hasUnsavedDashboardChanges()) {
+      void this.followDashboardParamAfterConfirm(requested);
+      return;
+    }
+    this.requestedDashboardId = requested;
+    this.applyRequestedDashboard(false);
+  }
+
+  /**
+   * Asks before a URL change leaves unsaved changes. When the user keeps editing, writes the open dashboard back to the
+   * URL.
+   */
+  private async followDashboardParamAfterConfirm(requested: string | null): Promise<void> {
+    if (!(await this.confirmLeaveDashboard())) {
+      this.UpdateQueryParams({ [DASHBOARD_QUERY_PARAM]: this.CurrentDashboardId });
+      return;
+    }
+    this.requestedDashboardId = requested;
+    this.applyRequestedDashboard(false);
+  }
+
+  /**
+   * Shows the dashboard the URL asks for, once the dashboard cache has loaded: the dashboard view for a Config
+   * dashboard the user can open, else the overview. For a dashboard Home cannot show, the user is told, and
+   * `removeFromUrl` removes it from the URL. After a URL change (back, forward, a deep link into the open tab) the URL
+   * stays as it is: a write then would add a history entry that every later Back lands on again. After a URL change,
+   * Home also notes that the URL named the dashboard it shows (see OnDashboardViewLoadFailed).
+   */
+  private applyRequestedDashboard(removeFromUrl: boolean): void {
+    if (!this.dashboardCacheLoaded) return;
+    const requested = this.requestedDashboardId;
+    const dashboard = requested ? this.findHomeDashboard(requested) : null;
+    if (requested && !dashboard) {
+      this.closeDashboardView(DASHBOARD_NOT_AVAILABLE, removeFromUrl);
+      return;
+    }
+    this.setCurrentDashboard(dashboard, false);
+    this.urlShownDashboardId = removeFromUrl ? null : dashboard?.ID ?? null;
+  }
+
+  /**
+   * Keeps the open dashboard in step with the cache: one that is gone, or that the user can no longer open, returns
+   * Home to the overview.
+   */
+  private syncCurrentDashboard(dashboards: readonly MJDashboardEntity[]): void {
+    if (!this.dashboardCacheLoaded || !this.CurrentDashboardId || FindDashboard(dashboards, this.CurrentDashboardId)) return;
+    this.closeDashboardView('The dashboard is no longer available');
+  }
+
+  /**
+   * Returns Home to its overview and, with a notice, tells the user. `removeFromUrl` also removes the dashboard from
+   * the URL; that write runs after the current call stack, and only when no dashboard shows by then.
+   */
+  private closeDashboardView(notice?: string, removeFromUrl = true): void {
+    this.requestedDashboardId = null;
+    this.setCurrentDashboard(null, false);
+    if (removeFromUrl) {
+      queueMicrotask(() => {
+        if (!this.CurrentDashboardId) {
+          this.UpdateQueryParams({ [DASHBOARD_QUERY_PARAM]: null });
+        }
+      });
+    }
+    if (notice) {
+      MJNotificationService.Instance.CreateSimpleNotification(notice, 'warning', 3000);
+    }
+  }
+
+  /**
+   * Shows `dashboard` (or the overview for null). Home keeps the object it was given for the same dashboard: the
+   * editor follows the dashboard cache itself after a save, so a new copy of the same dashboard is not pushed to it.
+   */
+  private setCurrentDashboard(dashboard: MJDashboardEntity | null, startInEditMode: boolean): void {
+    if (UUIDsEqual(dashboard?.ID, this.CurrentDashboardId)) return;
+    this.CurrentDashboard = dashboard;
+    this.CurrentDashboardId = dashboard?.ID ?? null;
+    this.DashboardStartsInEditMode = dashboard !== null && startInEditMode;
+    this.IsDashboardEditing = false;
+    this.focusTitleOnLoad = null;
+    this.urlShownDashboardId = null;
+    this.EditingPinId = null;
+    this.SidebarOpen = false;
+    this.HidePinMenu();
+    this.publishAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  /** A Config dashboard the user can open, by id (any letter case), or null. */
+  private findHomeDashboard(dashboardId: string): MJDashboardEntity | null {
+    const dashboard = FindDashboard(this.accessibleDashboards(), dashboardId);
+    return dashboard && CanShowInHome(dashboard) ? dashboard : null;
+  }
+
+  /** True while the open dashboard is in edit mode with changes the editor has not saved. */
+  private hasUnsavedDashboardChanges(): boolean {
+    return this.IsDashboardEditing && (this.dashboardEditor?.HasUnsavedChanges ?? false);
+  }
+
+  /**
+   * True when Home may leave the open dashboard: it is not being edited, its changes are saved, or the user chose to
+   * discard them (the editor then cancels its edit). False when the user keeps editing.
+   */
+  private async confirmLeaveDashboard(): Promise<boolean> {
+    const editor = this.dashboardEditor;
+    if (!editor || !this.IsDashboardEditing) return true;
+    if (editor.HasUnsavedChanges && !(await this.confirmDiscardDashboardChanges())) return false;
+    editor.CancelEdit();
+    return true;
+  }
+
+  /**
+   * Asks whether to discard the open dashboard's unsaved changes. Resolves true for Discard changes, false for Keep
+   * editing.
+   */
+  private confirmDiscardDashboardChanges(): Promise<boolean> {
+    return this.confirmService.Confirm({
+      title: 'Discard changes?',
+      message: `Leave "${this.CurrentDashboardName}" without saving?`,
+      detail: 'Your changes to this dashboard will be lost.',
+      type: 'warning',
+      confirmText: 'Discard changes',
+      cancelText: 'Keep editing',
+    });
+  }
+
+  /**
+   * Follows a switcher pick, then moves focus to what shows: a dashboard Home switched to gets focus on its title once
+   * the editor has shown it; otherwise focus goes to the open dashboard's title, or to the Pinned header.
+   */
+  private async followSwitcherPick(dashboardId: string | null): Promise<void> {
+    const switching = dashboardId !== null && !UUIDsEqual(dashboardId, this.CurrentDashboardId);
+    const moved = dashboardId ? await this.OpenDashboardInHome(dashboardId) : await this.GoHome();
+    if (moved && switching) {
+      this.focusTitleOnLoad = this.CurrentDashboardId;
+    } else {
+      this.focusShownView();
+    }
+  }
+
+  /** Runs an agent's change of Home's view, then moves focus when the change removed it (see refocusIfRemoved). */
+  private async switchViewForAgent(switchView: () => Promise<boolean>): Promise<boolean> {
+    const focused = this.focusedElementInHome();
+    const switched = await switchView();
+    this.refocusIfRemoved(focused);
+    return switched;
+  }
+
+  /** The element in Home that has focus, or null when focus is outside Home. */
+  private focusedElementInHome(): HTMLElement | null {
+    const focused = document.activeElement;
+    return focused instanceof HTMLElement && this.hostElement.nativeElement.contains(focused) ? focused : null;
+  }
+
+  /**
+   * After an agent changed Home's view: renders Home, and when `focused` is gone (the change removed the part of Home it
+   * was in), moves focus as a switcher pick does, to the title of the dashboard Home shows once the editor has shown it,
+   * or on the overview to the Pinned header. Focus that is still on the page stays where it is.
+   */
+  private refocusIfRemoved(focused: HTMLElement | null): void {
+    if (!focused) return;
+    SafeDetectChanges(this.cdr);
+    if (focused.isConnected) return;
+    if (this.CurrentDashboardId) {
+      this.focusTitleOnLoad = this.CurrentDashboardId;
+    } else {
+      this.focusShownView();
+    }
+  }
+
+  /**
+   * Moves focus to the open dashboard's title, or on the overview to the Pinned header: its Dashboards button, or Done
+   * while the pins are in edit mode.
+   */
+  private focusShownView(): void {
+    if (this.CurrentDashboardId) {
+      this.focusInHome(DASHBOARD_TITLE_SELECTOR);
+    } else {
+      this.focusInHome(this.EditMode ? '.pinned-actions > button' : '.pinned-actions .switcher-button');
+    }
+  }
+
+  /**
+   * Renders Home, then focuses the first element in it that matches `selector`, and returns that element. Returns null,
+   * and focuses nothing, when none shows.
+   */
+  private focusInHome<T extends HTMLElement = HTMLElement>(selector: string): T | null {
+    SafeDetectChanges(this.cdr);
+    const element = this.hostElement.nativeElement.querySelector<T>(selector);
+    element?.focus();
+    return element;
+  }
+
+  // =============================================
   // PIN NAME RESOLUTION
   // =============================================
 
@@ -1074,7 +1728,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     // Find pins that need name resolution: records with raw ID titles,
     // or any pin whose DisplayName contains "ID|" (raw composite key)
     const pinsNeedingNames = this.PinnedItems.filter(pin => {
-      const rt = this.resolveStoredResourceType(pin);
+      const rt = ResolvePinResourceType(pin);
       if (rt !== 'Records') return false;
       // Check if the name looks like a raw ID format
       return pin.DisplayName.includes('ID|') || pin.DisplayName.includes(' - ID');
@@ -1120,7 +1774,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
    */
   private async resolveCustomPinIcons(): Promise<void> {
     const pinsNeedingIcons = this.PinnedItems.filter(pin =>
-      this.resolveStoredResourceType(pin) === 'Custom' && !pin.Icon
+      ResolvePinResourceType(pin) === 'Custom' && !pin.Icon
     );
 
     if (pinsNeedingIcons.length === 0) return;
@@ -1146,138 +1800,144 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   // =============================================
 
   /**
-   * Navigate to a pinned resource
+   * Opens a pinned resource. A click in edit mode does nothing. A dashboard the click shows in Home gets focus on its
+   * title once the editor has shown it.
    */
   OnPinClick(pin: HomeAppPinnedItem): void {
-    if (this.EditMode) return;
+    void this.openPinForUser(pin);
+  }
+
+  /** Opens a pin the user clicked. When it shows a dashboard in Home, that dashboard's title gets focus once the editor has shown it. */
+  private async openPinForUser(pin: HomeAppPinnedItem): Promise<void> {
+    const shown = this.CurrentDashboardId;
+    if ((await this.openPin(pin)) && this.CurrentDashboardId && !UUIDsEqual(this.CurrentDashboardId, shown)) {
+      this.focusTitleOnLoad = this.CurrentDashboardId;
+    }
+  }
+
+  /**
+   * Opens a pin: a dashboard pin as openDashboardPin describes, other pins as Home always has. Returns false when
+   * nothing opened: in edit mode, for a broken pin, or when the user kept editing the open dashboard.
+   */
+  private async openPin(pin: HomeAppPinnedItem): Promise<boolean> {
+    if (this.EditMode) return false;
+    const resourceType = ResolvePinResourceType(pin);
+    return resourceType === 'Dashboards' ? this.openDashboardPin(pin) : this.openResourcePin(pin, resourceType);
+  }
+
+  /**
+   * Opens a dashboard pin: a Config dashboard the user can open shows inside Home; a Code dashboard, or one the cache
+   * does not have, opens in a tab under the name the pin shows. Returns false when nothing opened.
+   */
+  private async openDashboardPin(pin: HomeAppPinnedItem): Promise<boolean> {
+    const dashboardId = DashboardIdOfPin(pin);
+    if (!dashboardId) {
+      console.warn('[Pin Click] Dashboards pin missing dashboardId and recordId', pin.Configuration);
+      return false;
+    }
+    if (this.findHomeDashboard(dashboardId)) {
+      return this.OpenDashboardInHome(dashboardId);
+    }
+    this.openDashboard(dashboardId, this.PinName(pin));
+    return true;
+  }
+
+  /**
+   * Opens a pin that is not a dashboard pin: a view, a query, a record, an app page or an action. Returns false when
+   * the pin is broken and nothing opened.
+   */
+  private openResourcePin(pin: HomeAppPinnedItem, resourceType: string): boolean {
     const config = pin.Configuration;
-    const rt = this.resolveStoredResourceType(pin);
-
-    // For Dashboards, Views, Queries — route through Data Explorer if available
-    const deApp = this.HasDataExplorerApp
-      ? this.appManager.GetAllApps().find(a => a.Name === 'Data Explorer')
-      : null;
-
-    switch (rt) {
-      case 'Dashboards': {
-        const dashboardId = config['dashboardId'] as string;
-        if (!dashboardId) break;
-        if (deApp) {
-          void this.navigationService.SwitchToApp(deApp.ID, 'Dashboards', { dashboard: dashboardId });
-        } else {
-          this.navigationService.OpenDashboard(dashboardId, pin.DisplayName);
-        }
-        break;
-      }
-      case 'User Views':
+    switch (resourceType) {
+      case 'User Views': {
         if (config['isDynamic']) {
-          this.navigationService.OpenDynamicView(
-            (config['Entity'] || config['entity']) as string,
-            config['extraFilter'] as string | undefined
-          );
-        } else {
-          const viewId = config['viewId'] as string;
-          if (viewId) {
-            this.navigationService.OpenView(viewId, pin.DisplayName);
+          const entityName = (config['Entity'] || config['entity']) as string | undefined;
+          if (!entityName) {
+            console.warn('[Pin Click] Dynamic view pin missing Entity', config);
+            return false;
           }
+          this.navigationService.OpenDynamicView(entityName, config['extraFilter'] as string | undefined);
+          return true;
         }
-        break;
+        const viewId = config['viewId'] as string;
+        if (!viewId) return false;
+        this.navigationService.OpenView(viewId, pin.DisplayName);
+        return true;
+      }
       case 'Queries': {
         const queryId = config['queryId'] as string;
-        if (!queryId) break;
+        if (!queryId) return false;
+        // Opens in Data Explorer's Queries nav item once the Add Pin panel has found that app
+        const deApp = this.HasDataExplorerApp
+          ? this.appManager.GetAllApps().find(a => a.Name === 'Data Explorer')
+          : null;
         if (deApp) {
           void this.navigationService.SwitchToApp(deApp.ID, 'Queries', { queryId: queryId });
         } else {
           this.navigationService.OpenQuery(queryId, pin.DisplayName);
         }
-        break;
+        return true;
       }
       case 'Records': {
         const entityName = (config['Entity'] || config['entity']) as string;
         const recordId = config['recordId'] as string;
-        if (entityName && recordId) {
-          const compositeKey = this.buildCompositeKeyForRecord(entityName, recordId);
-          if (compositeKey) {
-            this.navigationService.OpenEntityRecord(entityName, compositeKey);
-          }
-        } else {
+        if (!entityName || !recordId) {
           console.warn('[Pin Click] Records pin missing Entity or recordId', config);
+          return false;
         }
-        break;
+        const compositeKey = this.buildCompositeKeyForRecord(entityName, recordId);
+        if (!compositeKey) return false;
+        this.navigationService.OpenEntityRecord(entityName, compositeKey);
+        return true;
       }
-      case 'Custom': {
-        // Custom resources are nav items within apps — always use app name, never ID
-        const navItemName = config['navItemName'] as string;
-        const appName = config['appName'] as string;
-        const queryParams = config['queryParams'] as Record<string, string> | undefined;
-        if (appName) {
-          const app = this.appManager.GetAllApps().find(a => a.Name === appName);
-          if (app) {
-            // Pass query params INTO SwitchToApp so they're applied synchronously when the
-            // target tab activates — before a cached resource component reattaches. The old
-            // post-hoc UpdateActiveTabQueryParams() in a .then() raced the cache reattach and
-            // lost: e.g. two conversation pins both landed on whatever chat was already open.
-            void this.navigationService.SwitchToApp(app.ID, navItemName, queryParams);
-          } else {
-            console.warn(`[Pin Click] Custom pin: app "${appName}" not found`, config);
-          }
-        } else {
-          console.warn('[Pin Click] Custom pin missing appName', config);
-        }
-        break;
-      }
+      case 'Custom':
+        return this.openAppPagePin(config);
       case 'Actions': {
         const actionId = config['actionId'] as string;
         if (!actionId) {
           console.warn('[Pin Click] Action pin missing actionId', config);
-          break;
+          return false;
         }
         this.ActionRunnerPin = pin;
         this.ActionRunnerDialogVisible = true;
         this.cdr.markForCheck();
-        break;
+        return true;
       }
       default:
-        console.warn('[Pin Click] Unrecognized resource type', rt, 'for pin', pin.DisplayName, config);
-        break;
+        console.warn('[Pin Click] Unrecognized resource type', resourceType, 'for pin', pin.DisplayName, config);
+        return false;
     }
   }
 
-  /**
-   * Resolve a pin's resource type from its stored ResourceType and config keys.
-   * Handles legacy pins that may have stored a UUID resourceTypeId or
-   * a raw config.resourceType string instead of the canonical type names.
-   */
-  private resolveStoredResourceType(pin: HomeAppPinnedItem): string {
-    const rt = pin.ResourceType;
-    const config = pin.Configuration;
-
-    // Already a known canonical type
-    const knownTypes = ['Dashboards', 'User Views', 'Queries', 'Reports', 'Records', 'Custom', 'Actions'];
-    if (knownTypes.includes(rt)) return rt;
-
-    // Check the config's own resourceType field
-    const configRt = config['resourceType'] as string;
-    if (configRt && knownTypes.includes(configRt)) return configRt;
-
-    // Fall back to detecting by config keys
-    if (config['dashboardId']) return 'Dashboards';
-    if (config['viewId']) return 'User Views';
-    if (config['queryId']) return 'Queries';
-    if (config['reportId']) return 'Reports';
-    if ((config['Entity'] || config['entity']) && config['recordId']) return 'Records';
-    if (config['actionId']) return 'Actions';
-    if (config['navItemName']) return 'Custom';
-
-    return rt; // Give up and return whatever was stored
+  /** Opens an app page pin (a Custom pin): a nav item of an app, found by the app's name. Returns false when the pin is broken. */
+  private openAppPagePin(config: Record<string, unknown>): boolean {
+    // Custom resources are nav items within apps — always use app name, never ID
+    const navItemName = config['navItemName'] as string;
+    const appName = config['appName'] as string;
+    const queryParams = config['queryParams'] as Record<string, string> | undefined;
+    if (!appName) {
+      console.warn('[Pin Click] Custom pin missing appName', config);
+      return false;
+    }
+    const app = this.appManager.GetAllApps().find(a => a.Name === appName);
+    if (!app) {
+      console.warn(`[Pin Click] Custom pin: app "${appName}" not found`, config);
+      return false;
+    }
+    // SwitchToApp gets the query params, so the target tab has them when it activates, before a cached resource
+    // component reattaches: the page opens on the state the pin names.
+    void this.navigationService.SwitchToApp(app.ID, navItemName, queryParams);
+    return true;
   }
 
   /**
-   * Toggle edit mode for pins
+   * Toggle edit mode for pins. Entering edit mode opens a collapsed Pinned section.
    */
   ToggleEditMode(): void {
     this.EditMode = !this.EditMode;
-    if (!this.EditMode) {
+    if (this.EditMode) {
+      this.openPinnedSection();
+    } else {
       this.EditingPinId = null;
       this.EditingGroupName = null;
     }
@@ -1294,6 +1954,31 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.cdr.markForCheck();
   }
 
+  /** Opens or collapses the Pinned section, saves the choice for the user and reports it to the agent. */
+  OnPinnedExpandedChange(expanded: boolean): void {
+    this.PinnedExpanded = expanded;
+    this.sectionStateChanged(PINNED_COLLAPSED_SETTING, expanded);
+  }
+
+  /** Reads whether the Pinned section is open. 'true' means collapsed; a missing setting means open. */
+  private loadSectionStates(): void {
+    this.PinnedExpanded = UserInfoEngine.Instance.GetSetting(PINNED_COLLAPSED_SETTING) !== 'true';
+  }
+
+  /** Saves a section's state for the user ('true' when collapsed), reports it to the agent and renders. */
+  private sectionStateChanged(settingKey: string, expanded: boolean): void {
+    UserInfoEngine.Instance.SetSettingDebounced(settingKey, expanded ? 'false' : 'true');
+    this.publishAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  /** Opens the Pinned section when it is collapsed, so edit mode or a new pin shows. */
+  private openPinnedSection(): void {
+    if (!this.PinnedExpanded) {
+      this.OnPinnedExpandedChange(true);
+    }
+  }
+
   /**
    * Remove a pin
    */
@@ -1302,23 +1987,101 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
-   * Start inline editing of a pin's display name
+   * Starts renaming a pin: shows its rename box, with focus in it and the name selected. A dashboard pin is renamed
+   * only by a user who can edit its dashboard; other users are told why not.
    */
   StartEditingPin(pinId: string, event: Event): void {
     event.stopPropagation();
+    const pin = this.PinnedItems.find(p => p.Id === pinId);
+    if (pin && !this.canRenamePin(pin)) {
+      this.notifyCannotRename(pin);
+      return;
+    }
     this.EditingPinId = pinId;
-    this.cdr.markForCheck();
+    this.focusPinNameInput();
   }
 
   /**
-   * Save edited pin name
+   * Saves the name typed in a pin's rename box and closes the box. A dashboard pin renames its dashboard, since it
+   * shows the dashboard's name; other pins rename only the pin. An empty or unchanged name changes nothing. A call
+   * after the rename has ended does nothing: the browser can blur the box as it goes away.
    */
   SavePinName(pinId: string, newName: string): void {
-    if (newName.trim()) {
-      this.pinService.UpdatePin(pinId, { DisplayName: newName.trim() });
-    }
+    if (this.EditingPinId !== pinId) return;
     this.EditingPinId = null;
     this.cdr.markForCheck();
+    const pin = this.PinnedItems.find(p => p.Id === pinId);
+    const name = newName.trim();
+    if (!pin || !name || name === this.PinName(pin)) return;
+    const dashboard = this.pinDashboard(pin);
+    if (dashboard) {
+      void this.renameDashboard(dashboard, pin, name);
+      return;
+    }
+    this.pinService.UpdatePin(pinId, { DisplayName: name });
+  }
+
+  /** Enter in a pin's rename box: saves the name, then moves focus to Done, since the box goes away. */
+  public OnPinNameEnter(pinId: string, event: Event): void {
+    this.SavePinName(pinId, this.GetInputValue(event));
+    this.focusShownView();
+  }
+
+  /** Renders Home, then puts focus in the open rename box and selects the name, so typing replaces it. */
+  private focusPinNameInput(): void {
+    this.focusInHome<HTMLInputElement>('.pin-card .pin-name-input')?.select();
+  }
+
+  /** The dashboard a dashboard pin shows, from the dashboard cache. Null for other pins, and when the cache lacks it. */
+  private pinDashboard(pin: HomeAppPinnedItem): MJDashboardEntity | null {
+    return FindDashboard(this.accessibleDashboards(), DashboardIdOfPin(pin));
+  }
+
+  /** True when the user may rename the pin: a pin that shows no cached dashboard, or a dashboard pin whose dashboard the user can edit. */
+  private canRenamePin(pin: HomeAppPinnedItem): boolean {
+    const dashboard = this.pinDashboard(pin);
+    return !dashboard || DashboardEngine.Instance.CanUserEditDashboard(dashboard.ID, this.ProviderToUse.CurrentUser.ID);
+  }
+
+  /** Tells the user that only people who can edit the pin's dashboard can rename the pin. */
+  private notifyCannotRename(pin: HomeAppPinnedItem): void {
+    MJNotificationService.Instance.CreateSimpleNotification(`Only people who can edit "${this.PinName(pin)}" can rename it`, 'info', 3000);
+  }
+
+  /**
+   * Renames the dashboard a pin shows, and keeps the pin's stored name in step: the name the pin shows when the cache
+   * lacks the dashboard. It renames the cache's own dashboard object, so the switcher, the pin names and an editor that
+   * shows the dashboard have the new name at once. While a save of that object runs (an editor's Save, for example),
+   * it renames nothing and tells the user: its own save would join the running one and write nothing. A failed save
+   * puts the old name back and tells the user.
+   */
+  private async renameDashboard(dashboard: MJDashboardEntity, pin: HomeAppPinnedItem, name: string): Promise<void> {
+    if (dashboard.IsSaving) {
+      MJNotificationService.Instance.CreateSimpleNotification(`"${dashboard.Name}" is being saved. Rename it again in a moment.`, 'info', 3000);
+      return;
+    }
+    const previous = dashboard.Name;
+    dashboard.Name = name;
+    this.refreshPinnedDashboards();
+    const failure = await this.saveRenamedDashboard(dashboard);
+    if (failure !== null) {
+      dashboard.Name = previous;
+      this.refreshPinnedDashboards();
+      LogError(`Home: could not rename the dashboard "${previous}": ${failure}`);
+      MJNotificationService.Instance.CreateSimpleNotification(`Could not rename "${previous}"`, 'error', 3000);
+      return;
+    }
+    this.pinService.UpdatePin(pin.Id, { DisplayName: name });
+    MJNotificationService.Instance.CreateSimpleNotification(`Renamed the dashboard to "${name}"`, 'success', 2000);
+  }
+
+  /** Saves a renamed dashboard. Returns null when it saved, else why not. Never throws. */
+  private async saveRenamedDashboard(dashboard: MJDashboardEntity): Promise<string | null> {
+    try {
+      return (await dashboard.Save()) ? null : dashboard.LatestResult?.CompleteMessage ?? 'unknown error';
+    } catch (error) {
+      return errorMessage(error);
+    }
   }
 
   /**
@@ -1365,6 +2128,11 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
    */
   GetPinsInGroup(groupName: string): HomeAppPinnedItem[] {
     return this.pinService.GetPinsInGroup(groupName);
+  }
+
+  /** The name a pin shows: a dashboard pin shows its dashboard's name from the cache; other pins show their own. */
+  public PinName(pin: HomeAppPinnedItem): string {
+    return this.pinDashboardNames.get(pin.Id) ?? pin.DisplayName;
   }
 
   /**
@@ -1448,33 +2216,93 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   // =============================================
 
   /**
-   * Show the pin context menu (triggered by ellipsis button)
+   * Opens the pin options menu under the pin's ellipsis button, right-aligned and inside the viewport, and moves
+   * focus to its first row. A click elsewhere, Escape or Tab closes it.
    */
   ShowPinMenu(event: MouseEvent, pin: HomeAppPinnedItem): void {
     event.stopPropagation();
     event.preventDefault();
+    const trigger = event.currentTarget;
+    if (!(trigger instanceof HTMLElement)) {
+      return;
+    }
+    const anchor = MenuAnchorOf(trigger);
+    this.pinMenuTrigger = trigger;
     this.PinMenuPin = pin;
-    this.PinMenuX = event.clientX;
-    this.PinMenuY = event.clientY;
     this.PinMenuVisible = true;
-    this.cdr.markForCheck();
+    this.placePinMenu(anchor, 0);
+    // Render the menu with no max height to measure its full height, then place it again with that height
+    this.PinMenuMaxHeight = null;
+    this.cdr.detectChanges();
+    this.placePinMenu(anchor, this.pinMenuEl?.nativeElement.offsetHeight ?? 0);
+    this.cdr.detectChanges();
+    this.pinMenuRows()[0]?.focus({ preventScroll: true });
+    this.watchPinMenuDismiss();
+  }
 
-    // Close on click outside or Escape
+  /**
+   * Keys in the pin options menu: ArrowDown, ArrowUp, Home and End move between the rows. Escape closes the menu
+   * and puts focus back on its button. Tab closes it too, and the browser moves focus on from the button.
+   */
+  public OnPinMenuKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.closePinMenuToTrigger();
+    } else if (event.key === 'Tab') {
+      this.closePinMenuToTrigger();
+    } else {
+      this.focusPinMenuRow(event);
+    }
+  }
+
+  /** Moves focus to the menu row that ArrowDown, ArrowUp, Home or End picks. Other keys do nothing. */
+  private focusPinMenuRow(event: KeyboardEvent): void {
+    const rows = this.pinMenuRows();
+    const next = NextMenuFocusIndex(event.key, rows.findIndex(row => row === document.activeElement), rows.length);
+    if (next !== null) {
+      event.preventDefault();
+      rows[next].focus();
+    }
+  }
+
+  /** The menu's rows, in order: its menuitem buttons. */
+  private pinMenuRows(): HTMLElement[] {
+    return Array.from(this.pinMenuEl?.nativeElement.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+  }
+
+  /** Closes the pin options menu and puts focus back on the button that opened it. */
+  private closePinMenuToTrigger(): void {
+    const trigger = this.pinMenuTrigger;
+    this.HidePinMenu();
+    trigger?.focus();
+  }
+
+  /**
+   * Places the pin options menu next to its button and limits its height to the room on that side. A height of 0
+   * places it below the button.
+   */
+  private placePinMenu(anchor: MenuAnchor, height: number): void {
+    const place = PlaceMenu(anchor, PIN_MENU_WIDTH, height, 'right', { Width: window.innerWidth, Height: window.innerHeight });
+    this.PinMenuX = place.Left;
+    this.PinMenuY = place.Top;
+    this.PinMenuMaxHeight = place.MaxHeight;
+  }
+
+  /** Closes the pin options menu on the next click anywhere or on Escape. */
+  private watchPinMenuDismiss(): void {
     setTimeout(() => {
-      const clickHandler = () => {
+      const close = () => {
         this.HidePinMenu();
-        document.removeEventListener('click', clickHandler);
-        document.removeEventListener('keydown', keyHandler);
+        document.removeEventListener('click', close);
+        document.removeEventListener('keydown', onKeydown);
       };
-      const keyHandler = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          this.HidePinMenu();
-          document.removeEventListener('click', clickHandler);
-          document.removeEventListener('keydown', keyHandler);
+      const onKeydown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          close();
         }
       };
-      document.addEventListener('click', clickHandler);
-      document.addEventListener('keydown', keyHandler);
+      document.addEventListener('click', close);
+      document.addEventListener('keydown', onKeydown);
     }, 0);
   }
 
@@ -1484,19 +2312,29 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   HidePinMenu(): void {
     this.PinMenuVisible = false;
     this.PinMenuPin = null;
+    this.pinMenuTrigger = null;
     this.cdr.markForCheck();
   }
 
   /**
-   * Edit a pin (enters edit mode focused on this pin)
+   * Edit in a pin's menu: closes the menu, puts the pins in edit mode (opening a collapsed Pinned section) and starts
+   * renaming the pin, with focus in its rename box. For a dashboard pin the user cannot rename, it says why and moves
+   * focus to Done instead.
    */
   OnPinMenuEdit(): void {
-    if (this.PinMenuPin) {
-      this.EditMode = true;
-      this.EditingPinId = this.PinMenuPin.Id;
-      this.cdr.markForCheck();
-    }
+    const pin = this.PinMenuPin;
     this.HidePinMenu();
+    if (!pin) return;
+    this.EditMode = true;
+    this.openPinnedSection();
+    if (this.canRenamePin(pin)) {
+      this.EditingPinId = pin.Id;
+      this.focusPinNameInput();
+    } else {
+      this.EditingPinId = null;
+      this.notifyCannotRename(pin);
+      this.focusShownView();
+    }
   }
 
   /**
@@ -1673,8 +2511,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     // Load apps with their nav items
     await this.loadAvailableApps();
 
-    // Check if Data Explorer is available — if so, dashboards/queries/views
-    // are accessible through its nav items, no need for standalone sections
+    // Query pins open in Data Explorer when the user has that app (see OnPinClick)
     this.HasDataExplorerApp = this.AvailableApps.some(a => a.appName === 'Data Explorer');
   }
 
@@ -1752,6 +2589,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       MJNotificationService.Instance.CreateSimpleNotification(
         `"${navItemLabel}" pinned to Home`, 'success', 3000
       );
+      this.openPinnedSection();
       this.cdr.markForCheck();
     }
   }
@@ -1789,6 +2627,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       MJNotificationService.Instance.CreateSimpleNotification(
         `"${name}" pinned to Home`, 'success', 3000
       );
+      this.openPinnedSection();
     }
   }
 
@@ -1839,6 +2678,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       MJNotificationService.Instance.CreateSimpleNotification(
         `"${p.DisplayName}" pinned to Home`, 'success', 3000
       );
+      this.openPinnedSection();
     } else {
       MJNotificationService.Instance.CreateSimpleNotification(
         'A pin with the same title and config already exists.', 'warning', 3000
@@ -1897,4 +2737,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       }))
       .filter(app => app.appName.toLowerCase().includes(q) || app.navItems.length > 0);
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** What a Home agent tool for a part of the overview says while a dashboard shows: the part shows on the overview only. */
+function overviewOnlyError(part: string): string {
+  return `${part} shows on the ${HOME_OVERVIEW_NAME} overview only. Use SwitchHomeDashboard with "${HOME_OVERVIEW_NAME}" first.`;
 }

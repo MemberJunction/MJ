@@ -53,6 +53,15 @@ describe('ClientContextChannel — ContextTool dispatch', () => {
     expect(JSON.parse(out)).toEqual({ success: false, output: 'no such tool' });
   });
 
+  it('reports a tool whose handler returned Success: false as a failure, with its message', async () => {
+    const failed = { Success: false, ErrorMessage: 'The open dashboard changed.' };
+    const exec = vi.fn(async () => ({ Success: false, ErrorMessage: failed.ErrorMessage, Result: failed }));
+    const ch = new ClientContextChannel();
+    ch.Initialize(makeContext({ ExecuteClientTool: exec }));
+    const out = await ch.ApplyAgentTool('ContextTool', JSON.stringify({ action: 'AddPanel', params: { dashboardId: 'd-2' } }));
+    expect(JSON.parse(out)).toEqual({ success: false, output: 'The open dashboard changed.' });
+  });
+
   it('rejects a call with no action', async () => {
     const ch = new ClientContextChannel();
     ch.Initialize(makeContext({ ExecuteClientTool: vi.fn() }));

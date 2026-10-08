@@ -598,6 +598,9 @@ importers:
 
   packages/AI/AgentsClient:
     dependencies:
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0-edge.3
+        version: link:../CorePlus
       '@memberjunction/core':
         specifier: 6.2.0-edge.3
         version: link:../../MJCore
@@ -4023,6 +4026,9 @@ importers:
       pdfkit:
         specifier: ^0.17.2
         version: 0.17.2
+      playwright:
+        specifier: ^1.58.1
+        version: 1.58.1
       psl:
         specifier: ^1.15.0
         version: 1.15.0
@@ -5171,6 +5177,9 @@ importers:
       '@memberjunction/communication-types':
         specifier: 6.2.0-edge.3
         version: link:../../../Communication/base-types
+      '@memberjunction/conversations-runtime':
+        specifier: 6.2.0-edge.3
+        version: link:../../../ConversationsRuntime
       '@memberjunction/core':
         specifier: 6.2.0-edge.3
         version: link:../../../MJCore
@@ -5315,6 +5324,9 @@ importers:
       '@memberjunction/theme-engine':
         specifier: 6.2.0-edge.3
         version: link:../../../ThemeEngine
+      angular-split:
+        specifier: ^20.0.0
+        version: 20.0.0(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
       golden-layout:
         specifier: ^2.6.0
         version: 2.6.0
@@ -5334,6 +5346,12 @@ importers:
       '@memberjunction/ng-test-utils':
         specifier: 6.2.0-edge.3
         version: link:../../Generic/test-utils
+      '@memberjunction/sql-dialect':
+        specifier: 6.2.0-edge.3
+        version: link:../../../SQLDialect
+      '@memberjunction/sql-parser':
+        specifier: 6.2.0-edge.3
+        version: link:../../../SQLParser
       sass:
         specifier: ^1.97.3
         version: 1.97.3
@@ -11679,6 +11697,9 @@ importers:
       '@memberjunction/query-gen':
         specifier: 6.2.0-edge.3
         version: link:../QueryGen
+      '@memberjunction/redis-provider':
+        specifier: 6.2.0-edge.3
+        version: link:../RedisProvider
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.2.0-edge.3
         version: link:../ServerBootstrapLite
@@ -15722,6 +15743,9 @@ importers:
       '@memberjunction/open-app-engine':
         specifier: 6.2.0-edge.3
         version: link:../../OpenApp/Engine
+      '@memberjunction/postgresql-dataprovider':
+        specifier: 6.2.0-edge.3
+        version: link:../../PostgreSQLDataProvider
       '@memberjunction/predictive-studio':
         specifier: 6.2.0-edge.3
         version: link:../../AI/PredictiveStudio/Engine
