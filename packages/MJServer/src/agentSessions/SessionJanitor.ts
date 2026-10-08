@@ -32,11 +32,17 @@ const MAX_RECOVERIES_PER_SWEEP = 5;
 const RECOVERY_BACKOFF_BASE_MS = 5 * 60_000;
 const RECOVERY_BACKOFF_MAX_MS = 6 * 60 * 60_000;
 
+/**
+ * How long {@link SessionJanitor.Shutdown} waits for an in-flight recording recovery pass. A pass can
+ * spend minutes on large downloads/uploads, and graceful shutdown must not hang on it indefinitely.
+ */
+const RECOVERY_SHUTDOWN_WAIT_MS = 10_000;
+
 /** Tuning knobs for the janitor. All durations in their named units. */
 export interface SessionJanitorConfig {
     /** A non-`Closed` session whose `LastActiveAt` is older than this is force-closed by the global sweep. */
     closeThresholdMinutes: number;
-    /** How often the periodic staleness sweep runs once {@link SessionJanitor.Start} is called. */
+    /** How often the periodic tick (close sweeps, then recording recovery) runs once {@link SessionJanitor.Start} is called. */
     sweepIntervalMs: number;
     /**
      * How long after `ClosedAt` a recording-less session waits before recording recovery rebuilds it.
@@ -54,6 +60,14 @@ const DEFAULT_CONFIG: SessionJanitorConfig = {
     recordingRecoveryGraceMinutes: 10,
     recordingRecoveryLookbackHours: 168,
 };
+
+/** Every knob {@link SessionJanitor.Configure} accepts; each must be a finite number greater than zero. */
+const CONFIG_KEYS: ReadonlyArray<keyof SessionJanitorConfig> = [
+    'closeThresholdMinutes',
+    'sweepIntervalMs',
+    'recordingRecoveryGraceMinutes',
+    'recordingRecoveryLookbackHours',
+];
 
 /** Per-session recovery retry state (process-local). */
 interface RecoveryBackoff {
@@ -87,34 +101,45 @@ interface RecoveryVisit {
  * away from volatile process reality. A crash/redeploy vaporizes a host's in-memory sockets but
  * leaves its session rows reading `Active`/`Idle` forever; the janitor force-closes those orphans.
  *
- * Two close sweeps, both writing through {@link SessionManager.CloseSession} so Record Changes captures
- * each transition and channel rows are disconnected consistently (a third, {@link RunMaxDurationSweep},
- * enforces the hard duration cap the same way):
+ * Three close sweeps, all writing through {@link SessionManager.CloseSession} so Record Changes captures
+ * each transition and channel rows are disconnected consistently:
  *
  * 1. **Own-host recovery ({@link RunStartupRecovery})** — run once at boot. Closes any `Active`/`Idle`
  *    session whose `HostInstanceID` belongs to a *previous* boot of *this* host (same hostname prefix,
  *    different `bootId`). Primary defense against the "Active forever" leak after a restart.
- * 2. **Global staleness sweep ({@link RunStalenessSweep})** — run periodically on every instance.
- *    Closes any `Active`/`Idle` session whose `LastActiveAt` is older than `closeThresholdMinutes`,
- *    regardless of host. Catches sessions whose owner died without a clean reboot (OOM, scaled-down pod).
+ * 2. **Global staleness sweep ({@link RunStalenessSweep})** — run on every periodic tick, on every
+ *    instance. Closes any `Active`/`Idle` session whose `LastActiveAt` is older than
+ *    `closeThresholdMinutes`, regardless of host. Catches sessions whose owner died without a clean
+ *    reboot (OOM, scaled-down pod).
+ * 3. **Max-duration sweep ({@link RunMaxDurationSweep})** — run on every periodic tick after the
+ *    staleness sweep. Closes any session past its stored hard deadline (the public voice cost cap).
  *
- * Separately from closing, {@link RunRecordingRecoverySweep} runs on every periodic tick and rebuilds
- * the recording of already-`Closed` sessions whose end-of-call upload never arrived (it closes nothing).
+ * The close sweeps stamp `CloseReason = 'Janitor'`. A shutdown-time path — {@link RunShutdownDrain},
+ * invoked from {@link Shutdown} during the graceful ShutdownRegistry drain — closes this exact host
+ * instance's own live sessions with `CloseReason = 'Shutdown'`.
  *
- * The close sweeps stamp `CloseReason = 'Janitor'`. A third, shutdown-time path —
- * {@link RunShutdownDrain}, invoked from {@link Shutdown} during the graceful ShutdownRegistry
- * drain — closes this exact host instance's own live sessions with `CloseReason = 'Shutdown'`.
+ * Separately from closing, {@link RunRecordingRecoverySweep} runs after the close sweeps on every
+ * periodic tick, without blocking them, and rebuilds the recording of already-`Closed` sessions whose
+ * end-of-call upload never arrived (it closes nothing).
  *
- * Both sweeps are **idempotent and safe to run concurrently** on every instance: closing an
- * already-`Closed` session is a no-op, and the close path is last-writer-wins. Both page with keyset
+ * The close sweeps are **idempotent and safe to run concurrently** on every instance: closing an
+ * already-`Closed` session is a no-op, and the close path is last-writer-wins. Recording recovery is not
+ * strictly so: two instances can recover the same session at once (there is no claim column). Each
+ * attempt uploads its own file and defers to an already-stamped recording on a best-effort basis, so
+ * the cost is duplicate work and an orphaned file, not a lost recording. Every sweep pages with keyset
  * (`AfterKey`) pagination per the deep-pagination guide so a large backlog can't blow up memory.
  */
 export class SessionJanitor extends BaseSingleton<SessionJanitor> implements IShutdownable {
     private _config: SessionJanitorConfig = DEFAULT_CONFIG;
     private _sweepTimer: ReturnType<typeof setInterval> | null = null;
     private _sweepRunning = false;
-    /** Separate from {@link _sweepRunning}: slow recording recovery must never block the close sweeps. */
-    private _recoveryRunning = false;
+    /**
+     * The in-flight recording recovery pass, or null. Separate from {@link _sweepRunning}: slow recovery
+     * must never block the close sweeps. Kept as a promise so {@link Shutdown} can wait for it.
+     */
+    private _recoveryPass: Promise<void> | null = null;
+    /** Set by {@link Stop}, cleared by {@link Start}: no new recovery pass starts while stopped. */
+    private _stopped = false;
     private _registered = false;
     private _provider: IMetadataProvider | null = null;
     private _systemUser: UserInfo | null = null;
@@ -134,29 +159,53 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     /** Identifier surfaced in graceful-shutdown logs. */
     public readonly ShutdownName = 'SessionJanitor';
 
-    /** Overrides default tuning. Safe to call before or after {@link Start}. */
+    /**
+     * Overrides default tuning. Safe to call before or after {@link Start}. Every value given must be a
+     * finite number greater than zero: a NaN or non-positive duration would otherwise build an invalid
+     * cutoff date and make every later sweep throw. All-or-nothing: on an invalid value it throws, naming
+     * the field and value, and applies nothing. `undefined` values are ignored.
+     */
     public Configure(config: Partial<SessionJanitorConfig>): void {
-        this._config = { ...this._config, ...config };
+        const next: SessionJanitorConfig = { ...this._config };
+        for (const key of CONFIG_KEYS) {
+            const value = config[key];
+            if (value === undefined) {
+                continue;
+            }
+            if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+                throw new Error(`SessionJanitor.Configure: ${key} must be a finite number greater than 0, got ${String(value)}`);
+            }
+            next[key] = value;
+        }
+        this._config = next;
     }
 
     /**
-     * Run own-host startup recovery once, then schedule the periodic staleness sweep. Idempotent:
-     * a second call does not stack a second timer. Captures the provider + system user so the timer
-     * callback can run without re-supplying them.
+     * Run own-host startup recovery once, then schedule the periodic tick (staleness and max-duration
+     * close sweeps, then recording recovery). Idempotent: a second call does not stack a second timer.
+     * Captures the provider + system user so the timer callback can run without re-supplying them, and
+     * re-enables recording recovery after a {@link Stop}. Throws, before doing any work, when
+     * `intervalMs` is invalid (see {@link Configure}).
      */
     public async Start(provider: IMetadataProvider, systemUser: UserInfo, intervalMs?: number): Promise<void> {
+        if (intervalMs != null) {
+            this.Configure({ sweepIntervalMs: intervalMs });
+        }
         this._provider = provider;
         this._systemUser = systemUser;
-        if (intervalMs != null) {
-            this._config = { ...this._config, sweepIntervalMs: intervalMs };
-        }
+        this._stopped = false;
         this.ensureRegistered();
         await this.RunStartupRecovery(provider, systemUser);
         this.scheduleSweep();
     }
 
-    /** Stops the periodic sweep timer. Idempotent. Part of {@link IShutdownable}. */
+    /**
+     * Stops the periodic tick and keeps any new recording recovery pass from starting until the next
+     * {@link Start}, including one a tick already in progress would have started. A pass that is already
+     * running is not interrupted ({@link Shutdown} waits for it). Idempotent. Part of {@link IShutdownable}.
+     */
     public Stop(): void {
+        this._stopped = true;
         if (this._sweepTimer) {
             clearInterval(this._sweepTimer);
             this._sweepTimer = null;
@@ -164,8 +213,9 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     }
 
     /**
-     * {@link IShutdownable}: clear the timer, then drain this host's own live sessions so a
-     * graceful stop never strands `Active`/`Idle` rows for the next boot's janitor to mop up.
+     * {@link IShutdownable}: stop the timer, then drain this host's own live sessions so a
+     * graceful stop never strands `Active`/`Idle` rows for the next boot's janitor to mop up, then wait
+     * (at most {@link RECOVERY_SHUTDOWN_WAIT_MS}) for an in-flight recording recovery pass.
      * Drained sessions are stamped `CloseReason = 'Shutdown'` (vs. `'Janitor'` for crash orphans),
      * so the dashboards can tell a clean redeploy from a reconciled crash. Never throws; the drain
      * is skipped when {@link Start} was never called (no captured provider/user).
@@ -179,6 +229,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
                 LogError(`SessionJanitor shutdown drain failed: ${err instanceof Error ? err.message : String(err)}`);
             }
         }
+        await this.waitForRecoveryPass();
     }
 
     /**
@@ -350,8 +401,8 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
      *
      * Recovery is started WITHOUT awaiting and has its own overlap guard: it can spend minutes on
      * large downloads/uploads, and awaiting it under the close sweeps' guard would delay the
-     * max-duration cost cap and make every later tick return early. A slow recovery therefore skips
-     * only the next recovery pass.
+     * max-duration cost cap and make every later tick return early. A slow recovery therefore only
+     * delays later recovery passes (each tick skips recovery while one is still running).
      */
     private async periodicSweep(): Promise<void> {
         if (this._sweepRunning || !this._provider || !this._systemUser) {
@@ -371,19 +422,50 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         this.startRecoveryPass(this._provider, this._systemUser);
     }
 
-    /** Fire-and-forget recording recovery, skipped when the previous pass is still running. */
+    /**
+     * Fire-and-forget recording recovery, skipped when the previous pass is still running or the janitor
+     * has been stopped (a tick that was mid-close-sweep when {@link Stop} ran must not start one).
+     */
     private startRecoveryPass(provider: IMetadataProvider, systemUser: UserInfo): void {
-        if (this._recoveryRunning) {
+        if (this._stopped || this._recoveryPass) {
             return;
         }
-        this._recoveryRunning = true;
-        this.RunRecordingRecoverySweep(provider, systemUser)
-            .catch(err => {
-                LogError(`SessionJanitor recording recovery sweep failed: ${err instanceof Error ? err.message : String(err)}`);
-            })
+        this._recoveryPass = this.RunRecordingRecoverySweep(provider, systemUser)
+            .then(
+                () => undefined,
+                err => {
+                    LogError(`SessionJanitor recording recovery sweep failed: ${err instanceof Error ? err.message : String(err)}`);
+                },
+            )
             .finally(() => {
-                this._recoveryRunning = false;
+                this._recoveryPass = null;
             });
+    }
+
+    /**
+     * Waits for the in-flight recovery pass, if any, for at most {@link RECOVERY_SHUTDOWN_WAIT_MS}; logs
+     * once when it gives up. Never throws: the pass promise already logs and absorbs its own errors.
+     */
+    private async waitForRecoveryPass(): Promise<void> {
+        const pass = this._recoveryPass;
+        if (!pass) {
+            return;
+        }
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timedOut = new Promise<'timeout'>(resolve => {
+            timer = setTimeout(() => resolve('timeout'), RECOVERY_SHUTDOWN_WAIT_MS);
+        });
+        try {
+            const outcome = await Promise.race([pass.then(() => 'finished' as const), timedOut]);
+            if (outcome === 'timeout') {
+                LogError(
+                    `SessionJanitor shutdown (host instance ${GetHostInstanceID()}): recording recovery pass still running after ` +
+                    `${RECOVERY_SHUTDOWN_WAIT_MS} ms; shutting down without it. A session it had not yet stamped is retried by a later sweep.`,
+                );
+            }
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
     /**
@@ -392,6 +474,13 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
      */
     private async recoverSessionRecording(candidate: MJAIAgentSessionEntity, context: RecoverySweepContext): Promise<RecoveryVisit> {
         let attempted = false;
+        // The sweep filter requires RecordingStartedAt, so this only fires on drifted data; recovery would
+        // otherwise stamp a recording with no t0. Counted as a failure so it backs off rather than logging every tick.
+        const startedAt = candidate.RecordingStartedAt;
+        if (!startedAt) {
+            LogError(`[SessionJanitor] Recording recovery skipped for session ${candidate.ID}: RecordingStartedAt is empty`);
+            return this.recordRecoveryFailure(candidate.ID, false);
+        }
         try {
             // Re-read: the late upload may have landed since the candidate page was fetched.
             const session = await context.provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, context.systemUser);
@@ -415,7 +504,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             const result = await RecoverRealtimeRecordingFromSegments({
                 SessionID: candidate.ID,
                 StorageAccountID: accountID,
-                StartedAt: candidate.RecordingStartedAt as Date, // non-null: the sweep filter requires RecordingStartedAt
+                StartedAt: startedAt,
                 ContextUser: context.systemUser,
                 Provider: context.provider,
             });

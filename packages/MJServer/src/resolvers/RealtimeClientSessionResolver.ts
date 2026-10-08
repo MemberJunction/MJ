@@ -822,9 +822,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
     /**
      * Uploads ONE crash-recovery audio shard (~15s) for an IN-PROGRESS recording into the session's
-     * folder (`realtime-recordings/<sessionId>/seg-NNNN.<ext>`) as a raw storage object. Durability
-     * insurance during a live call so a browser/tab death loses at most the last window; the shards are
-     * deleted once the canonical consolidated file lands via {@link UploadRealtimeRecording}. Ownership-
+     * folder (`realtime-recordings/<sessionId>/seg-NNNN.r<rate>.pcm` for PCM with a rate in its MIME type,
+     * else the legacy `seg-NNNN.<ext>`) as a raw storage object. Durability insurance during a live call
+     * so a browser/tab death loses at most the last window; the shards are deleted once the canonical
+     * consolidated file lands via {@link UploadRealtimeRecording}, or by the session janitor once it has
+     * recovered a recording from them when that upload never arrives. Ownership-
      * gated; consent was already established at session start. Best-effort — returns `false` (never
      * throws) on any problem so a failed shard never disrupts the live call.
      *

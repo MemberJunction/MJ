@@ -37,7 +37,7 @@ vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
     };
 });
 
-import { SessionJanitor } from '../agentSessions/SessionJanitor.js';
+import { SessionJanitor, type SessionJanitorConfig } from '../agentSessions/SessionJanitor.js';
 import { GetHostInstanceID, GetHostNamePrefix } from '../agentSessions/HostInstance.js';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
@@ -382,6 +382,15 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
         expect(recoverMock).not.toHaveBeenCalled();
     });
 
+    it('skips and logs a candidate without RecordingStartedAt instead of recovering it with no t0', async () => {
+        const noStart = { ...candidate(), RecordingStartedAt: null };
+        const { provider } = makeRecoveryProvider();
+
+        expect(await sweepWith(provider, [noStart])).toBe(0);
+        expect(recoverMock).not.toHaveBeenCalled();
+        expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`${noStart.ID}.*RecordingStartedAt`)));
+    });
+
     it('treats a missing storage account as a failure: no recover call, backed off', async () => {
         const noAccount = candidate();
         resolveAccountMock.mockResolvedValue(null);
@@ -608,6 +617,89 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
             expect(sessionSweepCalls().map((c) => c[0].ExtraFilter).filter((f) => f.includes('RecordingStartedAt'))).toHaveLength(2);
         });
 
+        /** Makes the recovery sweep's candidate query hang until the returned release function is called. */
+        function hangRecoveryQuery(): () => void {
+            let release: () => void = () => undefined;
+            const gate = new Promise<void>((resolve) => { release = resolve; });
+            runViewMock.mockImplementation(async (params: { ExtraFilter?: string }) => {
+                if (params.ExtraFilter?.includes('RecordingStartedAt')) await gate;
+                return { Success: true, Results: [] };
+            });
+            return release;
+        }
+
+        function recoveryQueries(): number {
+            return sessionSweepCalls().filter((c) => c[0].ExtraFilter.includes('RecordingStartedAt')).length;
+        }
+
+        it('starts no recovery pass after Stop(), even from a tick that was already running', async () => {
+            const { provider } = makeRecoveryProvider();
+            await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
+            runViewMock.mockClear();
+            let releaseClose: () => void = () => undefined;
+            const closeGate = new Promise<void>((resolve) => { releaseClose = resolve; });
+            runViewMock.mockImplementation(async (params: { ExtraFilter?: string }) => {
+                if (params.ExtraFilter?.includes('LastActiveAt <')) await closeGate; // tick parks in the close sweeps
+                return { Success: true, Results: [] };
+            });
+
+            await vi.advanceTimersByTimeAsync(60_000);
+            SessionJanitor.Instance.Stop();
+            releaseClose();
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(sessionSweepCalls().some((c) => c[0].ExtraFilter.includes('maxSessionDeadlineIso'))).toBe(true);
+            expect(recoveryQueries()).toBe(0);
+        });
+
+        it('Shutdown() waits for an in-flight recovery pass to finish', async () => {
+            const { provider } = makeRecoveryProvider();
+            await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
+            runViewMock.mockClear();
+            const releaseRecovery = hangRecoveryQuery();
+            try {
+                await vi.advanceTimersByTimeAsync(60_000); // recovery pass starts and hangs
+                expect(recoveryQueries()).toBe(1);
+
+                let finished = false;
+                const shutdown = SessionJanitor.Instance.Shutdown().then(() => { finished = true; });
+                await vi.advanceTimersByTimeAsync(1_000);
+                expect(finished).toBe(false);
+
+                releaseRecovery();
+                await shutdown;
+                expect(finished).toBe(true);
+                expect(logErrorMock).not.toHaveBeenCalled();
+            } finally {
+                releaseRecovery(); // never leave a parked pass on the singleton for later tests
+                await vi.advanceTimersByTimeAsync(0);
+            }
+        });
+
+        it('Shutdown() stops waiting for a stuck recovery pass after 10 s and logs that once', async () => {
+            const { provider } = makeRecoveryProvider();
+            await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
+            runViewMock.mockClear();
+            const releaseRecovery = hangRecoveryQuery();
+            try {
+                await vi.advanceTimersByTimeAsync(60_000);
+
+                let finished = false;
+                const shutdown = SessionJanitor.Instance.Shutdown().then(() => { finished = true; });
+                await vi.advanceTimersByTimeAsync(9_999);
+                expect(finished).toBe(false);
+                await vi.advanceTimersByTimeAsync(1);
+                await shutdown;
+
+                expect(finished).toBe(true);
+                expect(logErrorMock).toHaveBeenCalledTimes(1);
+                expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(/shutdown.*recording recovery.*10000 ms/i));
+            } finally {
+                releaseRecovery(); // let the parked pass end so the singleton can start passes in later tests
+                await vi.advanceTimersByTimeAsync(0);
+            }
+        });
+
         it('a recovery failure is logged with context and does not disturb the close sweeps', async () => {
             const { provider } = makeRecoveryProvider();
             await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
@@ -624,5 +716,45 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
             expect(filters[1]).toContain('maxSessionDeadlineIso');
             expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(/recording recovery.*recovery query blew up/i));
         });
+    });
+});
+
+describe('SessionJanitor.Configure', () => {
+    const DEFAULTS: SessionJanitorConfig = {
+        closeThresholdMinutes: 15, sweepIntervalMs: 60_000, recordingRecoveryGraceMinutes: 10, recordingRecoveryLookbackHours: 168,
+    };
+
+    afterEach(() => {
+        SessionJanitor.Instance.Configure(DEFAULTS);
+        vi.useRealTimers();
+    });
+
+    it.each([
+        ['recordingRecoveryGraceMinutes', Number.NaN],
+        ['recordingRecoveryGraceMinutes', 0],
+        ['recordingRecoveryLookbackHours', -1],
+        ['closeThresholdMinutes', 0],
+        ['sweepIntervalMs', Number.POSITIVE_INFINITY],
+    ] as const)('rejects %s = %s, naming the field and the value', (field, value) => {
+        const config: Partial<SessionJanitorConfig> = { [field]: value };
+        expect(() => SessionJanitor.Instance.Configure(config)).toThrow(new RegExp(`${field}.*${String(value)}`));
+    });
+
+    it('applies nothing from a call that has an invalid value', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-10-07T12:00:00.000Z'));
+        SessionJanitor.Instance.Configure({ closeThresholdMinutes: 20 });
+        expect(() => SessionJanitor.Instance.Configure({ closeThresholdMinutes: 30, sweepIntervalMs: -5 })).toThrow(/sweepIntervalMs/);
+
+        const { provider } = makeProvider(new Map());
+        await SessionJanitor.Instance.RunStalenessSweep(provider, makeUser());
+        const cutoff = new Date(Date.now() - 20 * 60_000).toISOString();
+        expect(sessionSweepCalls()[0][0].ExtraFilter).toContain(`LastActiveAt < '${cutoff}'`);
+    });
+
+    it('rejects an invalid sweep interval passed to Start() before doing any work', async () => {
+        const { provider } = makeProvider(new Map());
+        await expect(SessionJanitor.Instance.Start(provider, makeUser(), 0)).rejects.toThrow(/sweepIntervalMs.*0/);
+        expect(sessionSweepCalls()).toHaveLength(0);
     });
 });
