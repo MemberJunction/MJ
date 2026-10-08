@@ -191,6 +191,12 @@ describe('session lifecycle, driven end to end with fakes', () => {
         }
     }
 
+    /** A driver whose socket is already gone: Disconnect throws, as a dead WebSocket can. */
+    @RegisterClass(BaseRealtimeClient, 'fake-throwing-disconnect')
+    class ThrowingDisconnectClient extends FakeRealtimeClient {
+        public override async Disconnect(): Promise<void> { throw new Error('socket already gone'); }
+    }
+
     /**
      * Records every GraphQL relay the runtime makes, so teardown can be asserted on.
      *
@@ -244,6 +250,38 @@ describe('session lifecycle, driven end to end with fakes', () => {
     /** The mutation names the runtime sent, for readable assertions. */
     function mutationNames(provider: RecordingProvider): string[] {
         return provider.Mutations.map((m) => m.match(/mutation (\w+)/)?.[1] ?? m.trim().slice(0, 20));
+    }
+
+    /**
+     * A provider whose `UploadRealtimeRecording` never answers until the test settles it — what the
+     * runtime sees when the tab closes while tens of MB of WAV are still on the wire. Every other
+     * relay answers at once. `UploadStarted` resolves the moment the upload mutation arrives, so
+     * tests never count microtask ticks.
+     */
+    class StalledUploadProvider extends RecordingProvider {
+        private markStarted: () => void = () => undefined;
+        public readonly UploadStarted = new Promise<void>((resolve) => { this.markStarted = resolve; });
+        private settleUpload: (outcome: { ok: boolean }) => void = () => undefined;
+        private readonly upload = new Promise<{ ok: boolean }>((resolve) => { this.settleUpload = resolve; });
+        public override async ExecuteGQL(query: string): Promise<unknown> {
+            this.Mutations.push(query);
+            if (/mutation UploadRealtimeRecording\(/.test(query)) {
+                this.markStarted();
+                const { ok } = await this.upload; // never settles unless the test calls Finish/Fail
+                if (!ok) { throw new Error('network gone'); }
+                return { UploadRealtimeRecording: { Success: true, FileID: 'file-1' } };
+            }
+            return {};
+        }
+        public FinishUpload(): void { this.settleUpload({ ok: true }); }
+        public FailUpload(): void { this.settleUpload({ ok: false }); }
+    }
+
+    function buildStalled(host: IRealtimeMediaHost = new FakeMediaHost()) {
+        const runtime = new RealtimeSessionRuntime(host);
+        const provider = new StalledUploadProvider();
+        runtime.Provider = provider as unknown as IMetadataProvider;
+        return { runtime, provider };
     }
 
     it('goes live through real driver resolution, then closes the server session once', async () => {
@@ -334,6 +372,82 @@ describe('session lifecycle, driven end to end with fakes', () => {
         await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
         expect(runtime.LastStartError).toBeNull();
         await runtime.EndRealtimeSession();
+    });
+
+    describe('a page that dies during the end-of-call upload (#5195)', () => {
+        it('closes the server session before the consolidated upload starts', async () => {
+            const { runtime, provider } = buildStalled();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+
+            void runtime.EndRealtimeSession();
+            await provider.UploadStarted;
+
+            const names = mutationNames(provider);
+            expect(names).toContain('CloseAgentSession');
+            expect(names.indexOf('CloseAgentSession')).toBeLessThan(names.indexOf('UploadRealtimeRecording'));
+        });
+
+        it('still closes the session when the driver fails to disconnect', async () => {
+            expect(ThrowingDisconnectClient).toBeDefined();
+            const { runtime, provider } = build(new FakeMediaHost());
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-throwing-disconnect'), { recordingConsent: true });
+
+            await runtime.EndRealtimeSession();
+
+            expect(mutationNames(provider)).toContain('CloseAgentSession');
+            expect(mutationNames(provider)).toContain('UploadRealtimeRecording');
+            expect(runtime.IsActive).toBe(false);
+            expect(runtime.CurrentAgentSessionId).toBeNull();
+        });
+    });
+
+    describe('SavingRecording$ (#5195)', () => {
+        it('reports saving before the first teardown await', async () => {
+            const { runtime } = buildStalled();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            void runtime.EndRealtimeSession();
+            // Synchronous: no await between End and the arm.
+            expect(runtime.IsSavingRecording).toBe(true);
+        });
+
+        it('stays saving while the upload is in flight and clears once it lands', async () => {
+            const { runtime, provider } = buildStalled();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            const ending = runtime.EndRealtimeSession();
+            await provider.UploadStarted;
+            expect(runtime.IsSavingRecording).toBe(true);
+            provider.FinishUpload();
+            await ending;
+            expect(runtime.IsSavingRecording).toBe(false);
+        });
+
+        it('disarms after a failed upload', async () => {
+            const { runtime, provider } = buildStalled();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            const ending = runtime.EndRealtimeSession();
+            await provider.UploadStarted;
+            provider.FailUpload();
+            await ending; // upload failures never reject teardown
+            expect(runtime.IsSavingRecording).toBe(false);
+        });
+
+        it('never reports saving for an unrecorded session', async () => {
+            const { runtime } = build(new FakeMediaHost());
+            const seen: boolean[] = [];
+            runtime.SavingRecording$.subscribe((s) => seen.push(s));
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider')); // no consent
+            await runtime.EndRealtimeSession();
+            expect(seen).toEqual([false]);
+        });
+
+        it('coalesced teardowns arm and clear once', async () => {
+            const { runtime } = build(new FakeMediaHost());
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            const seen: boolean[] = [];
+            runtime.SavingRecording$.subscribe((s) => seen.push(s));
+            await Promise.all([runtime.EndRealtimeSession(), runtime.EndRealtimeSession()]);
+            expect(seen).toEqual([false, true, false]);
+        });
     });
 
     describe('recording mixes the agent stream (#5153)', () => {
