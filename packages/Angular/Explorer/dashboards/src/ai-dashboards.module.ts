@@ -49,6 +49,7 @@ import { ClassifySeedTaxonomyComponent } from './AI/components/autotagging/compo
 import { ClassifySetupWizardComponent } from './AI/components/autotagging/dialogs/classify-setup-wizard.component';
 import { TagsResourceComponent, LoadTagsResource } from './AI/components/tags/tags-resource.component';
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
+import { CompareValueComponent } from './AI/components/duplicates/compare-value.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
 import { AIAnalyticsResourceComponent, LoadAIAnalyticsResource } from './AI/components/analytics/ai-analytics-resource.component';
@@ -167,6 +168,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AIOverviewHubComponent
   ],
   imports: [
+    CompareValueComponent,
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
