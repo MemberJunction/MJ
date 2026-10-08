@@ -824,7 +824,46 @@ export interface RealtimeSessionParams {
      * session ends at the provider's connection limit instead. Absent or `false` means "not declared".
      */
     ZeroDataRetention?: boolean;
+
+    /**
+     * A live avatar the session asks the model to render. A driver renders it only where its model and endpoint can;
+     * anywhere else the session runs audio-only and the driver logs why ({@link RealtimeAvatarUnavailableReason}). Absent
+     * means no avatar.
+     */
+    Avatar?: RealtimeAvatarSettings;
 }
+
+/**
+ * A live avatar a session asks for. The tuning members carry the same names as a persona's avatar settings
+ * (`IAIPersonaVendorSettings.Avatar`), which is where a request usually comes from.
+ */
+export interface RealtimeAvatarSettings {
+    /** The vendor's avatar id: a preset name (for example Gemini's "Ben"), or a custom avatar's id. */
+    AvatarID: string;
+    /** `'preset'` (default): an avatar from the vendor's catalog. `'custom'`: one made from a reference image. */
+    Kind?: 'preset' | 'custom';
+    /** The MJ Storage file id of the reference image, when {@link Kind} is `'custom'`. */
+    ReferenceImageFileID?: string;
+    /** The preferred video resolution; a driver uses the nearest its vendor offers. */
+    Resolution?: 'low' | 'standard' | 'high';
+    /** What shows behind the avatar, when the vendor can change it: a named treatment, or an image from MJ Storage. */
+    Background?: 'default' | 'transparent' | 'blur' | { ImageFileID: string };
+    /** The persona the avatar belongs to, for logs. */
+    PersonaName?: string;
+    /** Where the request came from: the voiced agent's persona, or an explicit override. */
+    Source?: 'persona' | 'override';
+}
+
+/**
+ * Why a session that asked for an avatar runs audio-only:
+ * - `'endpoint'`: the model, on the endpoint serving it, renders no avatar;
+ * - `'bridged'`: the session runs on the server (a meeting or a phone call), where nothing shows video yet;
+ * - `'custom-disabled'`: custom avatars are not enabled;
+ * - `'unknown-avatar'`: the request names no avatar the vendor knows;
+ * - `'no-binding'`: the persona has no avatar on this vendor;
+ * - `'downgraded'`: the host could not show video, so it asked for audio.
+ */
+export type RealtimeAvatarUnavailableReason = 'endpoint' | 'bridged' | 'custom-disabled' | 'unknown-avatar' | 'no-binding' | 'downgraded';
 
 /**
  * A transcript event emitted by the model for either the user's speech or the assistant's

@@ -47,6 +47,8 @@ import {
     RealtimeSessionResumption,
     type RealtimeInputFrame,
     type RealtimeResumeAttempt,
+    type RealtimeAvatarSettings,
+    type RealtimeAvatarUnavailableReason,
 } from '@memberjunction/ai';
 import {
     ResolveGeminiLiveProfile,
@@ -55,6 +57,8 @@ import {
     GEMINI_LIVE_FALLBACK_PROFILE,
     type GeminiThinkingLevel,
     type GeminiLiveModelProfile,
+    type GeminiLiveEndpoint,
+    type GeminiLiveResolvedProfile,
 } from './geminiLiveProfiles';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -83,6 +87,13 @@ const GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS = 10 * 60 * 1000;
  * authenticated with the token are rejected after this point.
  */
 const GEMINI_CLIENT_TOKEN_EXPIRY_MS = 30 * 60 * 1000;
+
+/**
+ * The video bitrate an avatar session asks for. Google's sample avatar streams run at about 8.5 Mbps; MJAPI relays
+ * the avatar to the browser, so the session asks for 2 Mbps, about a quarter of the load. Whether Google honours
+ * `videoBitrateBps` is checked against a live Enterprise session.
+ */
+const GEMINI_AVATAR_VIDEO_BITRATE_BPS = 2_000_000;
 
 /**
  * The minimal subset of `@google/genai`'s `Session` that the realtime driver depends on. Declaring
@@ -217,10 +228,10 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * provider's frames and the MemberJunction realtime contract.
      */
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
-        const profile = ResolveGeminiLiveProfile(params.Model);
+        const profile = ResolveGeminiLiveProfile(params.Model, this.Endpoint);
         const session = new GeminiRealtimeSession(profile);
         session.SetConnectTimeTools(params.Tools ?? []);
-        const config = this.buildConnectConfig(params);
+        const config = this.BuildConnectConfig(this.withoutAvatarOnServer(params));
         // Meeting mode (auto activity detection disabled) → the session must drive turns manually.
         session.SetMeetingMode(config.realtimeInputConfig?.automaticActivityDetection?.disabled === true);
         // The session opens its own connections through this seam, so it can resume on a new one
@@ -252,6 +263,15 @@ export class GeminiRealtime extends BaseRealtimeModel {
     }
 
     /**
+     * The Gemini endpoint this driver talks to. The Developer API here; the Gemini Enterprise driver (Vertex AI)
+     * overrides it. Every profile lookup passes it, because what a model renders depends on the endpoint (live avatars
+     * are Enterprise only).
+     */
+    protected get Endpoint(): GeminiLiveEndpoint {
+        return 'developer';
+    }
+
+    /**
      * Gemini Live sessions accept dynamically-defined tools at connect/mint time.
      */
     public static override readonly SupportsDynamicToolSet = true;
@@ -260,7 +280,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * Mints an ephemeral, server-scoped Live credential for a **client-direct** session.
      *
      * The connect config is built EXACTLY as {@link StartSession} builds it (same
-     * {@link buildConnectConfig}: audio modality, input+output transcription, system instruction,
+     * {@link BuildConnectConfig}: audio modality, input+output transcription, system instruction,
      * mapped tools) and is **locked into the token** via `liveConnectConstraints` +
      * `lockAdditionalFields: []` — so the API ignores any attempt by the browser to change the
      * locked fields. The same config is ALSO carried in `SessionConfig` (as `{ model, config }`)
@@ -275,7 +295,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * @returns The minted {@link ClientRealtimeSessionConfig} the browser authenticates + applies.
      */
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
-        const config = this.buildConnectConfig(params);
+        const config = this.BuildConnectConfig(params);
         const now = Date.now();
         const expireTime = new Date(now + GEMINI_CLIENT_TOKEN_EXPIRY_MS).toISOString();
         const newSessionExpireTime = new Date(now + GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS).toISOString();
@@ -300,7 +320,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
         if (!token.name) {
             throw new Error('Gemini auth-token mint returned no token name');
         }
-        const profile = ResolveGeminiLiveProfile(params.Model);
+        const profile = ResolveGeminiLiveProfile(params.Model, this.Endpoint);
         return {
             Provider: 'gemini',
             Model: params.Model,
@@ -324,6 +344,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
                     // How many concurrent inbound video streams the model accepts (0 without video support).
                     // The browser's source arbiter maps live sources onto this many streams.
                     maxInboundVideoStreams: ResolveGeminiMaxInboundVideoStreams(profile),
+                    ...this.AvatarPactFor(config, profile),
                 })
             ) as JSONObject,
         };
@@ -524,7 +545,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * {@link GeminiRealtime.buildSpeechConfig}, plus any provider-specific overrides from the open
      * config bag.
      */
-    private buildConnectConfig(params: RealtimeSessionParams): LiveConnectConfig {
+    protected BuildConnectConfig(params: RealtimeSessionParams): LiveConnectConfig {
         const config: LiveConnectConfig = {
             responseModalities: [Modality.AUDIO],
             inputAudioTranscription: {},
@@ -640,7 +661,94 @@ export class GeminiRealtime extends BaseRealtimeModel {
         // merge above put back is removed here.
         this.applyModelLegality(config, params);
         GeminiRealtime.applyZeroDataRetention(config, params);
+        this.applyAvatarOutput(config, params);
         return config;
+    }
+
+    /**
+     * Renders the requested avatar when the model can on this endpoint: video output and the avatar's name, at the
+     * bitrate MJ asks for. Otherwise the session stays audio-only and one line says why. Either way a VIDEO modality or
+     * an `avatarConfig` from the config bag is removed: an avatar comes only from the session's avatar request. Applied
+     * last, like the legality rules.
+     */
+    private applyAvatarOutput(config: LiveConnectConfig, params: RealtimeSessionParams): void {
+        const request = params.Avatar;
+        const reason = request ? this.avatarUnavailableReason(request, params.Model) : undefined;
+        if (request && !reason) {
+            config.responseModalities = [Modality.VIDEO];
+            config.avatarConfig = { avatarName: request.AvatarID.trim(), videoBitrateBps: GEMINI_AVATAR_VIDEO_BITRATE_BPS };
+            return;
+        }
+        GeminiRealtime.removeVideoOutput(config, params.Model);
+        if (request && reason) {
+            console.warn(this.avatarUnavailableMessage(request, params.Model, reason));
+        }
+    }
+
+    /** Why this session can't render the requested avatar, or `undefined` when it can. */
+    private avatarUnavailableReason(request: RealtimeAvatarSettings, model: string): RealtimeAvatarUnavailableReason | undefined {
+        if ((request.Kind ?? 'preset') === 'custom') {
+            return 'custom-disabled';
+        }
+        if (!ResolveGeminiLiveProfile(model, this.Endpoint).SupportsAvatarOutput) {
+            return 'endpoint';
+        }
+        return request.AvatarID?.trim() ? undefined : 'unknown-avatar';
+    }
+
+    /** The one log line for an avatar the session asked for and won't render. */
+    private avatarUnavailableMessage(request: RealtimeAvatarSettings, model: string, reason: RealtimeAvatarUnavailableReason): string {
+        const endpointName = this.Endpoint === 'enterprise' ? 'Gemini Enterprise' : 'the Gemini Developer API';
+        const why: Record<RealtimeAvatarUnavailableReason, string> = {
+            endpoint: `${model} on ${endpointName} renders no avatar`,
+            bridged: 'a session on the server (a meeting or a phone call) shows no video yet',
+            'custom-disabled': 'custom avatars are not enabled',
+            'unknown-avatar': 'the request names no avatar',
+            'no-binding': 'the persona has no avatar on this vendor',
+            downgraded: 'the host could not show video',
+        };
+        const persona = request.PersonaName ? ` (persona ${request.PersonaName})` : '';
+        return `[GeminiRealtime] Avatar "${request.AvatarID}"${persona} not used: ${why[reason]}. The call is audio only. Reason: ${reason}.`;
+    }
+
+    /** Removes a VIDEO response modality and any `avatarConfig` that came from somewhere other than an avatar request. */
+    private static removeVideoOutput(config: LiveConnectConfig, model: string): void {
+        if (config.avatarConfig !== undefined) {
+            delete config.avatarConfig;
+            console.warn(`[GeminiRealtime] Dropped \`avatarConfig\` from the session config for ${model}: an avatar comes only from the session's avatar request.`);
+        }
+        const modalities = config.responseModalities ?? [];
+        if (modalities.includes(Modality.VIDEO)) {
+            const rest = modalities.filter((m) => m !== Modality.VIDEO);
+            config.responseModalities = rest.length > 0 ? rest : [Modality.AUDIO];
+            console.warn(`[GeminiRealtime] Dropped the VIDEO response modality for ${model}: video output comes only from an avatar request the model can render.`);
+        }
+    }
+
+    /**
+     * A server-side session (a bridged meeting or phone call) never asks for an avatar: nothing on the server can show
+     * its video yet. Returns the params without the request, logging the reason once when there was one.
+     */
+    private withoutAvatarOnServer(params: RealtimeSessionParams): RealtimeSessionParams {
+        if (!params.Avatar) {
+            return params;
+        }
+        console.warn(this.avatarUnavailableMessage(params.Avatar, params.Model, 'bridged'));
+        return { ...params, Avatar: undefined };
+    }
+
+    /**
+     * The minted session config's avatar block: present only when this session renders an avatar, so the browser driver
+     * knows to expect video parts, their encoding, and whether they carry the voice.
+     *
+     * @param config The connect config the session was built with.
+     * @param profile The model's profile on this driver's endpoint.
+     */
+    protected AvatarPactFor(config: LiveConnectConfig, profile: GeminiLiveResolvedProfile): JSONObject {
+        if (!config.avatarConfig) {
+            return {};
+        }
+        return { avatar: { output: true, encoding: profile.AvatarOutputEncoding ?? null, audioMuxed: profile.AvatarAudioMuxed ?? true } };
     }
 
     /**
@@ -666,7 +774,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * `plans/realtime/gemini-3-8-live.md` §3 for their sourcing.
      */
     private applyModelLegality(config: LiveConnectConfig, params: RealtimeSessionParams): void {
-        const profile = ResolveGeminiLiveProfile(params.Model);
+        const profile = ResolveGeminiLiveProfile(params.Model, this.Endpoint);
         // The catalog's ModelConfiguration.Realtime reaches a driver folded into the session Config
         // BAG as neutral keys (the same route `turnDetection` already travels), not as a field on
         // RealtimeSessionParams — so read it from there.

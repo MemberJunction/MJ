@@ -771,7 +771,7 @@ describe('C7: agnostic voice → Gemini speechConfig (issue #3721)', () => {
     it('omits speechConfig ENTIRELY when no voice is authored', async () => {
         const driver = new TestGeminiRealtime('k');
         await driver.StartSession(makeParams({ Config: { temperature: 0.2 } }));
-        // Pins the `if (speech.SpeechConfig)` guard in buildConnectConfig and keeps the connect config
+        // Pins the `if (speech.SpeechConfig)` guard in BuildConnectConfig and keeps the connect config
         // clean — writing `speechConfig: undefined` instead would fail this.
         //
         // It is NOT protecting against a token 400: an undefined value cannot reach the field mask
@@ -1378,5 +1378,106 @@ describe('per-model Live legality', () => {
         await d.StartSession(makeParams({ Model: 'gemini-9.9-live-future' }));
         expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
         expect(thinkingOf(d)).toBeUndefined();
+    });
+});
+
+/** The base driver as if it served Gemini Enterprise, for the avatar rule (the real Enterprise driver arrives later). */
+class EnterpriseClientDirect extends ClientDirectTestable {
+    protected override get Endpoint(): 'enterprise' {
+        return 'enterprise';
+    }
+}
+
+/** A bridged (server-side) session driver on Gemini Enterprise. */
+class EnterpriseBridged extends TestGeminiRealtime {
+    protected override get Endpoint(): 'enterprise' {
+        return 'enterprise';
+    }
+}
+
+const BEN: RealtimeSessionParams['Avatar'] = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' };
+
+/** The connect config a client-direct mint carried, and the warnings it logged. */
+async function mintWithWarnings(driver: ClientDirectTestable, params: RealtimeSessionParams): Promise<{ sc: Record<string, unknown>; config: Record<string, unknown>; warnings: string[] }> {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+        const cfg = await driver.CreateClientSession(params);
+        const sc = cfg.SessionConfig as Record<string, unknown>;
+        return { sc, config: sc['config'] as Record<string, unknown>, warnings: warn.mock.calls.map((c) => String(c[0])) };
+    } finally {
+        warn.mockRestore();
+    }
+}
+
+describe('live avatars: the driver asks for one only where the endpoint renders it', () => {
+    it('stays audio-only on the Developer API, logging why, with no avatar block in the mint', async () => {
+        const { sc, config, warnings } = await mintWithWarnings(new ClientDirectTestable('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        expect(config['responseModalities']).toEqual(['AUDIO']);
+        expect(config['avatarConfig']).toBeUndefined();
+        expect(sc['avatar']).toBeUndefined();
+        expect(warnings.filter((w) => w.includes('Reason: endpoint'))).toHaveLength(1);
+        expect(warnings.find((w) => w.includes('Reason: endpoint'))).toContain('Avatar "Ben" (persona Ben) not used: gemini-3.8-live on the Gemini Developer API renders no avatar');
+    });
+
+    it('asks for video and the avatar at 2 Mbps on Enterprise 3.8 Live, and mints the avatar block', async () => {
+        const { sc, config, warnings } = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        expect(config['responseModalities']).toEqual(['VIDEO']);
+        expect(config['avatarConfig']).toEqual({ avatarName: 'Ben', videoBitrateBps: 2_000_000 });
+        expect(sc['avatar']).toEqual({ output: true, encoding: 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"', audioMuxed: true });
+        expect(warnings.filter((w) => w.includes('Avatar "Ben"'))).toEqual([]);
+    });
+
+    it('never puts the avatar into the token lock', async () => {
+        const driver = new EnterpriseClientDirect('k');
+        await mintWithWarnings(driver, makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        const constraints = driver.MintParams?.config?.liveConnectConstraints?.config as Record<string, unknown> | undefined;
+        expect(constraints?.['avatarConfig']).toBeUndefined();
+    });
+
+    it('stays audio-only for a custom avatar, an empty avatar id, or a model without avatars, with the reason', async () => {
+        const custom = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: { AvatarID: 'Mine', Kind: 'custom' } }));
+        expect(custom.config['avatarConfig']).toBeUndefined();
+        expect(custom.warnings.some((w) => w.includes('Reason: custom-disabled'))).toBe(true);
+
+        const blank = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: { AvatarID: '  ' } }));
+        expect(blank.config['responseModalities']).toEqual(['AUDIO']);
+        expect(blank.warnings.some((w) => w.includes('Reason: unknown-avatar'))).toBe(true);
+
+        const et = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live-extended-thinking', Avatar: BEN }));
+        expect(et.config['avatarConfig']).toBeUndefined();
+        expect(et.sc['avatar']).toBeUndefined();
+        expect(et.warnings.some((w) => w.includes('Reason: endpoint'))).toBe(true);
+    });
+
+    it('a server-side (bridged) session never asks for video, even on Enterprise', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const d = new EnterpriseBridged('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+            const config = d.LastConnectArgs!.Config as Record<string, unknown>;
+            expect(config['responseModalities']).toEqual(['AUDIO']);
+            expect(config['avatarConfig']).toBeUndefined();
+            expect(warn.mock.calls.map((c) => String(c[0])).filter((w) => w.includes('Reason: bridged'))).toHaveLength(1);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('removes video output and an avatarConfig that arrive through the config bag', async () => {
+        const { config, warnings } = await mintWithWarnings(
+            new EnterpriseClientDirect('k'),
+            makeParams({ Model: 'gemini-3.8-live', Config: { responseModalities: ['VIDEO'], avatarConfig: { avatarName: 'Ben' } } }),
+        );
+        expect(config['responseModalities']).toEqual(['AUDIO']);
+        expect(config['avatarConfig']).toBeUndefined();
+        expect(warnings.some((w) => w.includes('Dropped `avatarConfig`'))).toBe(true);
+        expect(warnings.some((w) => w.includes('Dropped the VIDEO response modality'))).toBe(true);
+    });
+
+    it('changes nothing for a session without an avatar request', async () => {
+        const { sc, config, warnings } = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live' }));
+        expect(config['responseModalities']).toEqual(['AUDIO']);
+        expect(sc['avatar']).toBeUndefined();
+        expect(warnings.filter((w) => /avatar|VIDEO/i.test(w))).toEqual([]);
     });
 });
