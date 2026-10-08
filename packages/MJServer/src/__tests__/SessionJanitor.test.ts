@@ -682,6 +682,41 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
             }
         });
 
+        it('pauses recovery while 2 abandoned attempts are still running, logs it once, and resumes when one settles', async () => {
+            const [a, b, c, d] = [candidate(), candidate(), candidate(), candidate()];
+            const gates = new Map<string, () => void>();
+            recoverMock.mockImplementation(async (input: { SessionID: string }) => {
+                if (input.SessionID === a.ID || input.SessionID === b.ID || input.SessionID === c.ID) {
+                    await new Promise<void>((resolve) => gates.set(input.SessionID, resolve));
+                    return NO_SEGMENTS;
+                }
+                return { Outcome: 'Recovered', FileID: 'file-1', SegmentCount: 1, MissingIndexes: [], ErrorMessage: null };
+            });
+            const attempted = (): string[] => recoverMock.mock.calls.map((call) => (call[0] as { SessionID: string }).SessionID);
+            const { provider } = makeRecoveryProvider();
+            try {
+                const first = sweepWith(provider, [a, b, c, d]);
+                await vi.advanceTimersByTimeAsync(20 * MINUTE);
+                await first;
+                expect(attempted()).toEqual([a.ID, b.ID]); // cap reached after the 2nd abandonment: C and D wait
+
+                await sweepWith(provider, [a, b, c, d]);
+                await sweepWith(provider, [a, b, c, d]);
+                expect(attempted()).toEqual([a.ID, b.ID]);
+                expect(logErrorMock.mock.calls.filter((call) => String(call[0]).includes('paused'))).toHaveLength(1);
+
+                gates.get(a.ID)?.();
+                await vi.advanceTimersByTimeAsync(0);
+                const resumed = sweepWith(provider, [d, c]);
+                await vi.advanceTimersByTimeAsync(10 * MINUTE);
+                expect(await resumed).toBe(1);
+                expect(attempted()).toEqual([a.ID, b.ID, d.ID, c.ID]);
+            } finally {
+                for (const release of gates.values()) release();
+                await vi.advanceTimersByTimeAsync(0);
+            }
+        });
+
         it('honours a configured attempt timeout', async () => {
             SessionJanitor.Instance.Configure({ recordingRecoveryAttemptTimeoutMinutes: 2 });
             const hung = candidate();

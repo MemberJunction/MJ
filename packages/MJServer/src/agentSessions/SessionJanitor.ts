@@ -33,6 +33,13 @@ const MAX_RECOVERY_ATTEMPTS = 8;
 /** Recovery attempts (calls into the recovery routine) per sweep; bounds the I/O one tick can trigger. */
 const MAX_RECOVERIES_PER_SWEEP = 5;
 
+/**
+ * Abandoned (timed-out, still running) recovery attempts allowed at once. Each keeps its socket and any
+ * shard buffers it had read (up to the 384 MiB recovery cap) until it settles, so recovery pauses at this
+ * many instead of adding one more every timeout while storage keeps hanging.
+ */
+const MAX_ABANDONED_RECOVERIES = 2;
+
 /** Backoff after the k-th failed recovery is `2^k * base`, capped at the max. */
 const RECOVERY_BACKOFF_BASE_MS = 5 * 60_000;
 const RECOVERY_BACKOFF_MAX_MS = 6 * 60 * 60_000;
@@ -168,6 +175,8 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
      * sweeps so a second attempt never runs alongside the abandoned one; removed when it settles.
      */
     private readonly abandonedRecoveries = new Set<string>();
+    /** True once the "recovery paused" error has been logged for the current pause; reset when it lifts. */
+    private _recoveryPauseLogged = false;
 
     protected constructor() {
         super();
@@ -343,6 +352,9 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
      * Never throws for a single bad session. Returns the number of recordings recovered.
      */
     public async RunRecordingRecoverySweep(provider: IMetadataProvider, systemUser: UserInfo): Promise<number> {
+        if (this.isRecoveryPausedForAbandonedAttempts()) {
+            return 0;
+        }
         const nowMs = Date.now();
         const graceCutoff = new Date(nowMs - this._config.recordingRecoveryGraceMinutes * 60_000).toISOString();
         const lookbackCutoff = new Date(nowMs - this._config.recordingRecoveryLookbackHours * 3_600_000).toISOString();
@@ -361,8 +373,8 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
                 if (this.isRecoveryBackedOff(session.ID) || this.abandonedRecoveries.has(session.ID.toLowerCase())) {
                     continue;
                 }
-                if (attempts >= MAX_RECOVERIES_PER_SWEEP) {
-                    return false; // cap reached: stop paging
+                if (attempts >= MAX_RECOVERIES_PER_SWEEP || this.abandonedRecoveries.size >= MAX_ABANDONED_RECOVERIES) {
+                    return false; // per-sweep cap, or too many abandoned attempts still running: stop paging
                 }
                 const visit = await this.recoverSessionRecording(session, context);
                 attempts += visit.Attempted ? 1 : 0;
@@ -589,6 +601,25 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         } finally {
             clearTimeout(timer);
         }
+    }
+
+    /**
+     * True while {@link MAX_ABANDONED_RECOVERIES} timed-out attempts are still running: no new attempt
+     * starts until one settles. Logs one `LogError` per pause.
+     */
+    private isRecoveryPausedForAbandonedAttempts(): boolean {
+        if (this.abandonedRecoveries.size < MAX_ABANDONED_RECOVERIES) {
+            this._recoveryPauseLogged = false;
+            return false;
+        }
+        if (!this._recoveryPauseLogged) {
+            LogError(
+                `[SessionJanitor] Recording recovery paused: ${this.abandonedRecoveries.size} abandoned attempts are still waiting on storage ` +
+                `(sessions ${[...this.abandonedRecoveries].join(', ')}); no new attempt starts until one of them settles`,
+            );
+            this._recoveryPauseLogged = true;
+        }
+        return true;
     }
 
     /**
