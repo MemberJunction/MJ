@@ -190,6 +190,51 @@ describe('RecoverRealtimeRecordingFromSegments', () => {
         expect(bucket.Keys()).toHaveLength(2);
     });
 
+    describe('legacy shards with no declared rate (no rate in the key, no usable content type, e.g. on Box)', () => {
+        /** Bytes in one full legacy shard: the pre-rate-key client flushed a shard every 15 s of mono PCM16. */
+        const fullShard = (rate: number): number => rate * 15 * 2;
+
+        it('infers the rate from the size of the full shards and recovers', async () => {
+            seed({ 'seg-0000.pcm': fullShard(16000), 'seg-0001.pcm': fullShard(16000), 'seg-0002.pcm': 100_000 }, 'application/octet-stream');
+            const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
+            expect(result.Outcome).toBe('Recovered');
+            expect(uploads[0].content.readUInt32LE(24)).toBe(16000);
+            expect(bucket.Keys().filter((k) => k.includes('/seg-'))).toEqual([]);
+        });
+
+        it('snaps full shards a few samples short of 15 s to the standard rate', async () => {
+            seed({ 'seg-0000.pcm': 1_437_952, 'seg-0001.pcm': 1_440_768, 'seg-0002.pcm': 300_000 }, 'application/octet-stream');
+            const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
+            expect(result.Outcome).toBe('Recovered');
+            expect(uploads[0].content.readUInt32LE(24)).toBe(48000);
+        });
+
+        it('refuses a lone shard, which may be a partial window, naming it; keeps it', async () => {
+            seed({ 'seg-0000.pcm': fullShard(16000) }, 'application/octet-stream');
+            const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
+            expect(result.Outcome).toBe('Failed');
+            expect(result.ErrorMessage).toContain('seg-0000.pcm');
+            expect(uploads).toHaveLength(0);
+            expect(bucket.Keys()).toEqual([`${FOLDER}/seg-0000.pcm`]);
+        });
+
+        it('refuses when full shards imply different rates', async () => {
+            seed({ 'seg-0000.pcm': fullShard(16000), 'seg-0001.pcm': fullShard(48000), 'seg-0002.pcm': 1_000 }, 'application/octet-stream');
+            const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
+            expect(result.Outcome).toBe('Failed');
+            expect(result.ErrorMessage).toMatch(/rate/i);
+            expect(uploads).toHaveLength(0);
+        });
+
+        it('refuses when a full shard matches no standard rate', async () => {
+            seed({ 'seg-0000.pcm': fullShard(20000), 'seg-0001.pcm': fullShard(20000), 'seg-0002.pcm': 1_000 }, 'application/octet-stream');
+            const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
+            expect(result.Outcome).toBe('Failed');
+            expect(result.ErrorMessage).toContain('seg-0000.pcm');
+            expect(uploads).toHaveLength(0);
+        });
+    });
+
     it('fails when a legacy shard has no usable rate', async () => {
         seed({ 'seg-0000.pcm': 4 }, 'audio/L16');
         const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
@@ -277,6 +322,58 @@ describe('RecoverRealtimeRecordingFromSegments', () => {
         expect(result.ErrorMessage).toContain('could not re-read session sess-1 before stamping');
         expect(provider.Links).toHaveLength(0);
         expect(bucket.Keys()).toContain(`${FOLDER}/seg-0000.r24000.pcm`);
+    });
+
+    describe('after the stamp is saved', () => {
+        /** Captures LogError output (it writes through console.error). */
+        function captureErrors(): { messages: () => string[]; restore: () => void } {
+            const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            return { messages: () => spy.mock.calls.map((c) => c.map(String).join(' ')), restore: () => spy.mockRestore() };
+        }
+
+        it('reports Recovered, keeps the shards and names them, when the confirming reload fails', async () => {
+            seed({ 'seg-0000.r24000.pcm': 4, 'seg-0001.r24000.pcm': 4 });
+            let loads = 0;
+            const realGet = provider.GetEntityObject.bind(provider);
+            provider.GetEntityObject = async (name: string) => {
+                const entity = await realGet(name) as { Load?: (id: string) => Promise<boolean> };
+                if (name === 'MJ: AI Agent Sessions' && entity.Load) {
+                    const inner = entity.Load.bind(entity);
+                    entity.Load = async (id: string) => (++loads === 2 ? false : inner(id));
+                }
+                return entity;
+            };
+            const errors = captureErrors();
+            try {
+                const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
+
+                expect(result).toMatchObject({ Outcome: 'Recovered', FileID: 'file-new', ErrorMessage: null });
+                expect(provider.Row.RecordingFileID).toBe('file-new');
+                expect(bucket.Keys()).toContain(`${FOLDER}/seg-0000.r24000.pcm`);
+                expect(bucket.Keys()).toContain(`${FOLDER}/seg-0001.r24000.pcm`);
+                const message = errors.messages().find((m) => m.includes('sess-1') && m.includes('seg-0000.r24000.pcm'));
+                expect(message).toBeDefined();
+                expect(message).toContain('seg-0001.r24000.pcm');
+            } finally {
+                errors.restore();
+            }
+        });
+
+        it('names the shards it could not delete', async () => {
+            seed({ 'seg-0000.r24000.pcm': 4, 'seg-0001.r24000.pcm': 4 });
+            const realDelete = bucket.DeleteObject.bind(bucket);
+            bucket.DeleteObject = async (key: string) => (key.endsWith('seg-0001.r24000.pcm') ? false : realDelete(key));
+            const errors = captureErrors();
+            try {
+                const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
+
+                expect(result.Outcome).toBe('Recovered');
+                expect(bucket.Keys()).toContain(`${FOLDER}/seg-0001.r24000.pcm`);
+                expect(errors.messages().some((m) => m.includes('sess-1') && m.includes(`${FOLDER}/seg-0001.r24000.pcm`))).toBe(true);
+            } finally {
+                errors.restore();
+            }
+        });
     });
 
     it('gives every attempt its own file name, so a retry never shares a storage object with an earlier upload', async () => {

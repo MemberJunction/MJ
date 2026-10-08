@@ -576,9 +576,27 @@ export const MAX_RECOVERY_SEGMENTS = 240;
  * janitor allocate gigabytes. Checked against listed sizes, running actual bytes, and the assembled size.
  *
  * It caps the data, not the process's memory: the shard buffers are still held while the WAV is
- * assembled, so peak memory for one recovery is about twice this (shards + WAV).
+ * assembled (2x), and storage drivers can copy on read (the S3 driver copies each shard once more), so
+ * peak memory for one recovery is up to about three times this: two 288 MB recoveries raised the API
+ * process's RSS by 730 MB and 920 MB.
  */
 export const MAX_RECOVERY_BYTES = 384 * 1024 * 1024;
+
+/**
+ * Seconds of audio in one full shard written before shard keys carried a rate. Those clients flushed a
+ * shard every 15 s. The legacy format is frozen, so this deliberately does not follow the client's
+ * current flush interval: it is only used to infer the rate of shards that declare none.
+ */
+const LEGACY_SHARD_SECONDS = 15;
+
+/** Sample rates a legacy shard's rate may be inferred as. */
+const STANDARD_PCM_RATES: readonly number[] = [8000, 11025, 16000, 22050, 24000, 32000, 44100, 48000];
+
+/**
+ * How far a full legacy shard's size-implied rate may be from a standard rate (relative). Real full
+ * shards are within ~0.2% of 15 s; the closest pair of standard rates is ~9% apart.
+ */
+const RATE_SNAP_TOLERANCE = 0.02;
 
 /** `seg-0003.pcm` or `seg-0003.r48000.pcm`: index, optional keyed rate, extension. */
 const SEGMENT_KEY_PATTERN = /^seg-(\d+)(?:\.r(\d+))?\.([A-Za-z0-9]+)$/;
@@ -641,6 +659,14 @@ interface ListedShard {
  * effort: the session is re-checked immediately before the stamp, but a recording stamped inside that
  * one load -> save window is overwritten (there is no compare-and-set).
  *
+ * The sample rate comes from the shard keys (`seg-NNNN.r<rate>.pcm`) or, for legacy `seg-NNNN.pcm`
+ * shards, from each object's stored content type. When no shard declares a rate (a legacy shard on a
+ * driver that keeps no content type, such as Box), it is inferred from the size of the full shards; see
+ * {@link LEGACY_SHARD_SECONDS}.
+ *
+ * Once the stamp has saved, the outcome is `Recovered` even if the confirming reload or a shard delete
+ * fails; the shards it could not remove are named in a `LogError` (nothing revisits a stamped session).
+ *
  * Never throws: every failure is logged with the session id and returned as `Failed`.
  *
  * @param input Session, storage account, recording `t0`, and server context.
@@ -671,8 +697,12 @@ async function recoverFromSegments(input: RecoverRealtimeRecordingInput): Promis
     }
     assertRecoverable(shards);
 
-    const sampleRate = await resolveSharedSampleRate(driver, shards);
+    const declaredRate = await resolveDeclaredSampleRate(driver, shards);
     const segments = await readShardBytes(driver, shards);
+    const sampleRate = declaredRate ?? inferSampleRateFromShardSizes(segments, shards);
+    if (declaredRate === null) {
+        LogStatus(`RecoverRealtimeRecordingFromSegments (session ${SessionID}): no shard declares a sample rate; inferred ${sampleRate} Hz from the size of its full shards`);
+    }
     const assembled = BuildRecordingFromSegments(segments, sampleRate, MAX_RECOVERY_BYTES);
     const description = describeRecovery(shards.length, assembled, sampleRate);
     if (assembled.MissingIndexes.length > 0) {
@@ -702,7 +732,13 @@ async function finishRecovery(
     const { SessionID, StorageAccountID, ContextUser, Provider } = input;
     const session = await Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ContextUser);
     if (!await session.Load(SessionID)) {
-        throw new Error(`could not reload session ${SessionID} to confirm the recovered recording was stamped`);
+        // The stamp and link already saved, so the recording is in place; only the overwrite check could
+        // not run. Keep the shards (they might belong to a recording that replaced ours) and name them.
+        LogError(
+            `RecoverRealtimeRecordingFromSegments (session ${SessionID}): recovered file ${fileID} is stamped, but the session ` +
+            `could not be reloaded to confirm it before deleting shards; kept for manual cleanup: ${shards.map(s => s.Path).join(', ')}`
+        );
+        return recoveryResult('Recovered', found);
     }
     if (session.RecordingFileID && session.RecordingFileID !== fileID) {
         LogStatus(`RecoverRealtimeRecordingFromSegments (session ${SessionID}): session now points at ${session.RecordingFileID}, not recovered file ${fileID}; keeping shards`);
@@ -711,26 +747,29 @@ async function finishRecovery(
     if (session.RecordingFileID !== fileID) {
         throw new Error(`recovered file ${fileID} uploaded but not stamped on session ${SessionID}; shards kept`);
     }
-    const deleted = await deleteListedShards(StorageAccountID, ContextUser, shards);
-    if (deleted < shards.length) {
-        LogError(`RecoverRealtimeRecordingFromSegments (session ${SessionID}): deleted ${deleted} of ${shards.length} shards after recovery`);
+    const notDeleted = await deleteListedShards(StorageAccountID, ContextUser, shards);
+    if (notDeleted.length > 0) {
+        LogError(
+            `RecoverRealtimeRecordingFromSegments (session ${SessionID}): deleted ${shards.length - notDeleted.length} of ${shards.length} ` +
+            `shards after recovery; left for manual cleanup: ${notDeleted.join(', ')}`
+        );
     }
     return recoveryResult('Recovered', found);
 }
 
 /**
  * Deletes exactly the shards that were assembled. A re-list would also take shards written after our
- * listing, whose audio is not in the recovered file. Returns how many were deleted.
+ * listing, whose audio is not in the recovered file. Returns the paths it could not delete.
  */
-async function deleteListedShards(storageAccountID: string, contextUser: UserInfo, shards: ListedShard[]): Promise<number> {
+async function deleteListedShards(storageAccountID: string, contextUser: UserInfo, shards: ListedShard[]): Promise<string[]> {
     const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
-    let deleted = 0;
+    const notDeleted: string[] = [];
     for (const shard of shards) {
-        if (await driver.DeleteObject(shard.Path)) {
-            deleted++;
+        if (!await driver.DeleteObject(shard.Path)) {
+            notDeleted.push(shard.Path);
         }
     }
-    return deleted;
+    return notDeleted;
 }
 
 /** Lists the session folder's `seg-*` objects. Other objects (recording.*, peaks.json) are ignored. */
@@ -771,25 +810,68 @@ function assertRecoverable(shards: ListedShard[]): void {
     }
 }
 
-/** One sample rate for every shard: from the key when present, else the object's stored content type. */
-async function resolveSharedSampleRate(driver: FileStorageBase, shards: ListedShard[]): Promise<number> {
-    let rate: number | null = null;
-    let rateSource = '';
+/**
+ * The one sample rate the shards declare: from the key when present, else the object's stored content
+ * type. Null when no shard declares one (left to {@link inferSampleRateFromShardSizes}). Throws when
+ * shards disagree, or when some declare a rate and others do not.
+ */
+async function resolveDeclaredSampleRate(driver: FileStorageBase, shards: ListedShard[]): Promise<number | null> {
+    const declared: { shard: ListedShard; rate: number | null }[] = [];
     for (const shard of shards) {
-        const shardRate = shard.KeyedRate ?? parsePcmRate((await driver.GetObjectMetadata({ fullPath: shard.Path })).contentType ?? '');
-        if (shardRate === null) {
-            throw new Error(`cannot determine the sample rate of shard ${shard.Name}`);
-        }
-        if (rate !== null && shardRate !== rate) {
-            throw new Error(`shards disagree on sample rate: ${rateSource} is ${rate} Hz but ${shard.Name} is ${shardRate} Hz`);
-        }
-        rate = shardRate;
-        rateSource = shard.Name;
+        const rate = shard.KeyedRate ?? parsePcmRate((await driver.GetObjectMetadata({ fullPath: shard.Path })).contentType ?? '');
+        declared.push({ shard, rate });
     }
-    if (rate === null) {
-        throw new Error('no shards to take a sample rate from');
+    const withRate = declared.filter(d => d.rate !== null);
+    if (withRate.length === 0) {
+        return null;
     }
-    return rate;
+    const undeclared = declared.find(d => d.rate === null);
+    if (undeclared) {
+        throw new Error(`cannot determine the sample rate of shard ${undeclared.shard.Name}`);
+    }
+    const first = withRate[0];
+    const disagreeing = withRate.find(d => d.rate !== first.rate);
+    if (disagreeing) {
+        throw new Error(`shards disagree on sample rate: ${first.shard.Name} is ${first.rate} Hz but ${disagreeing.shard.Name} is ${disagreeing.rate} Hz`);
+    }
+    return first.rate;
+}
+
+/**
+ * Infers the sample rate of shards that declare none from the size of their full shards: every shard
+ * but the highest-indexed (normally a partial window) holds {@link LEGACY_SHARD_SECONDS} of mono PCM16.
+ * Each full shard's implied rate must be within {@link RATE_SNAP_TOLERANCE} of a standard rate, and all
+ * must agree. A lone shard is refused, since it may be a partial window.
+ */
+function inferSampleRateFromShardSizes(segments: RecordingSegmentBytes[], shards: ListedShard[]): number {
+    const nameOf = (index: number): string => shards.find(s => s.Index === index)?.Name ?? `index ${index}`;
+    const ordered = [...segments].sort((a, b) => a.Index - b.Index);
+    const full = ordered.slice(0, -1);
+    if (full.length === 0) {
+        throw new Error(
+            `cannot determine the sample rate of shard ${nameOf(ordered[0].Index)}: neither its key nor its content type carries one, ` +
+            `and a lone shard may be a partial window, so its size cannot be trusted`
+        );
+    }
+    const rates = full.map(segment => {
+        const implied = segment.Bytes.length / RECORDING_BYTES_PER_SAMPLE / LEGACY_SHARD_SECONDS;
+        const snapped = STANDARD_PCM_RATES.find(r => Math.abs(implied - r) / r <= RATE_SNAP_TOLERANCE);
+        if (snapped === undefined) {
+            throw new Error(
+                `cannot determine the sample rate of shard ${nameOf(segment.Index)}: its size (${segment.Bytes.length} bytes) ` +
+                `implies ${Math.round(implied)} Hz, not a standard rate`
+            );
+        }
+        return snapped;
+    });
+    const disagreeing = rates.findIndex(r => r !== rates[0]);
+    if (disagreeing !== -1) {
+        throw new Error(
+            `shards disagree on sample rate: ${nameOf(full[0].Index)}'s size implies ${rates[0]} Hz ` +
+            `but ${nameOf(full[disagreeing].Index)}'s implies ${rates[disagreeing]} Hz`
+        );
+    }
+    return rates[0];
 }
 
 /** Sequential on purpose: bounds memory and request concurrency against the storage account. */
