@@ -14,6 +14,7 @@ import {
     SearchResponse,
     SearchResultSelectedEvent,
     StreamingProviderStatus,
+    PassesSemanticFloor,
 } from '@memberjunction/ng-search';
 import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud';
 
@@ -767,10 +768,11 @@ export class SearchResultsResource extends BaseResourceComponent {
     private applyClientFilters(): void {
         let results = this.allResults;
 
-        // Apply min score filter FIRST (this determines what's "available")
+        // Apply the similar-meaning cutoff FIRST (this determines what's "available"). It judges
+        // semantic similarity only; text matches always pass (see PassesSemanticFloor).
         if (this.MinScorePercent > 0) {
             const minScore = this.MinScorePercent / 100;
-            results = results.filter(r => r.Score >= minScore);
+            results = results.filter(r => PassesSemanticFloor(r, minScore));
         }
 
         // Rebuild filters from score-filtered results so counts are accurate

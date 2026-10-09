@@ -54,7 +54,7 @@ import {
     SearchAudience,
 } from './search.types';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
-import { SearchFusion, LabeledResultList } from './SearchFusion';
+import { SearchFusion, LabeledResultList, ApplySemanticFloor } from './SearchFusion';
 import { SearchEnricher } from './SearchEnricher';
 import { FullTextSearchProvider } from './FullTextSearchProvider';
 import { StorageSearchProvider } from './StorageSearchProvider';
@@ -562,6 +562,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     isPreview,
                     undefined,
                     partialEvents,
+                    params.MinScore,
                 );
                 sourceCounts = this.countSources(labeledLists);
                 const defaultFusionWeights = params.FusionWeightsOverride;
@@ -580,6 +581,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                         params.FusionWeightsOverride,
                         this.principalsFrom(params),
                         partialEvents,
+                        params.MinScore,
                     )
                 ));
 
@@ -652,10 +654,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             }
             results = await this.FilterForAudience(results, params, contextUser);
 
-            const scoreThreshold = params.MinScore ?? 0;
-            if (scoreThreshold > 0) {
-                results = results.filter(r => r.Score >= scoreThreshold);
-            }
+            // MinScore was applied to the semantic lane before fusion (ApplySemanticFloor). The
+            // fused Score is rank-based RRF, so it is deliberately not compared to MinScore here.
 
             // Trim to caller's requested topK (we overfetched earlier)
             if (results.length > topK) results = results.slice(0, topK);
@@ -1744,6 +1744,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
          */
         principals: ScopePrincipals,
         onProviderResolved?: OnProviderResolved,
+        minScore?: number,
     ): Promise<{
         scopeID: string;
         fused: SearchResultItem[];
@@ -1822,12 +1823,16 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 // stored templates lives in AgentPreExecutionRAG/ScopedSearchAction, not here.
                 // This engine only forwards already-rendered strings that the caller provides.)
 
-                const providerResults = await entry.Provider.Search(
-                    query,
-                    effectiveTopK,
-                    filters,
-                    contextUser,
-                    perProviderConstraints
+                const providerResults = ApplySemanticFloor(
+                    entry.Provider.SourceType,
+                    await entry.Provider.Search(
+                        query,
+                        effectiveTopK,
+                        filters,
+                        contextUser,
+                        perProviderConstraints
+                    ),
+                    minScore,
                 );
                 // Stamp provider metadata onto each result
                 for (const r of providerResults) {
@@ -2515,6 +2520,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         isPreview: boolean,
         scopeConstraints: ScopeConstraints | undefined,
         onProviderResolved?: OnProviderResolved,
+        minScore?: number,
     ): Promise<LabeledResultList[]> {
         const entries = this.availableProviders(isPreview);
 
@@ -2527,7 +2533,13 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             const providerStart = Date.now();
             try {
                 const providerTopK = entry.MaxResultsOverride ?? topK;
-                const results = await entry.Provider.Search(query, providerTopK, filters, contextUser, scopeConstraints);
+                // MinScore is a floor on the semantic lane's own similarity, applied here, before
+                // streaming and fusion (see ApplySemanticFloor).
+                const results = ApplySemanticFloor(
+                    entry.Provider.SourceType,
+                    await entry.Provider.Search(query, providerTopK, filters, contextUser, scopeConstraints),
+                    minScore,
+                );
                 // Stamp provider metadata onto each result
                 for (const r of results) {
                     r.ProviderId = entry.ID;

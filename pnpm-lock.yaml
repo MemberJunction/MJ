@@ -15558,15 +15558,24 @@ importers:
       '@memberjunction/aiengine':
         specifier: 6.2.0-edge.3
         version: link:../../AI/Engine
+      '@memberjunction/component-registry-client-sdk':
+        specifier: 6.2.0-edge.3
+        version: link:../../ComponentRegistryClientSDK
       '@memberjunction/core':
         specifier: 6.2.0-edge.3
         version: link:../../MJCore
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.3
         version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.3
+        version: link:../../Credentials/Engine
       '@memberjunction/global':
         specifier: 6.2.0-edge.3
         version: link:../../MJGlobal
+      '@memberjunction/interactive-component-types':
+        specifier: 6.2.0-edge.3
+        version: link:../../InteractiveComponents
       '@memberjunction/rubrics':
         specifier: 6.2.0-edge.3
         version: link:../../Rubrics/Engine

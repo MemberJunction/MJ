@@ -406,7 +406,7 @@ When multiple scopes are queried (either via UI multi-select or multiple pre-exe
 1. Each scope runs independently with its own provider subset, query transform, and fusion weights → per-scope RRF produces one ranked list.
 2. The per-scope lists become inputs to **cross-scope RRF** (`SearchFusion.CrossScopeFusion()`), which uses the same `ComputeRRF` primitive from `@memberjunction/core`.
 3. Records appearing in multiple scopes get boosted scores (standard RRF behavior).
-4. The result is deduplicated by `EntityName::RecordID`, with the max score and merged ScoreBreakdown retained.
+4. The result is deduplicated by `EntityName::RecordID`, with the ScoreBreakdowns merged. `Score` is the RRF score divided by its maximum (0–1, 1.0 = every lane ranked it first): it is rank-based, not a confidence. `MinScore` is applied earlier, to the semantic lane's similarity before fusion.
 
 ### Per-agent weight override
 
