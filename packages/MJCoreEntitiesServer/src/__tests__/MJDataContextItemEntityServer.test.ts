@@ -3,10 +3,11 @@
  *
  * The SQL of a `sql` item runs when its data context is loaded, so only an administrator
  * (Owner-type user) may save an item that is, or would become, a SQL item or that carries SQL text.
- * The rule reads the record as it will be written, not which fields changed:
- * `MJ: Data Context Items` does not track record changes, so `UpdateMJDataContextItem` with
- * `OldValues___` takes its starting state from the client, and a client that sends its new SQL
- * as the old value too leaves the field "clean".
+ * The rule reads the item's values, not which fields changed, and refuses a non-Owner's save of an
+ * existing item whose `Type` or `SQL` was not loaded, because the stored item may be a SQL item.
+ * `MJ: Data Context Items` does not track record changes, so a client that sends `OldValues___`
+ * could otherwise decide those values: repeat its new SQL as the old value, or leave `Type` and
+ * `SQL` out so that the save keeps the stored SQL item.
  *
  * The entity is the real class over a hand-built EntityInfo, so dirty tracking, permission checks
  * and `Save()` are BaseEntity's own. The data provider records saves instead of writing them.
@@ -126,9 +127,10 @@ function newItem(user: UserInfo | null, type: ItemRow['Type'], sqlText: string |
 
 /**
  * An existing item hydrated from `startingState`, the way `UpdateMJDataContextItem` hydrates it:
- * from the stored row, or from the client's `OldValues___` when the client sends them.
+ * from the stored row, or from the client's `OldValues___`. Fields that `startingState` leaves out
+ * are marked not loaded.
  */
-async function loadedItem(user: UserInfo, startingState: ItemRow, provider: IEntityDataProvider | null = null): Promise<MJDataContextItemEntityServer> {
+async function loadedItem(user: UserInfo, startingState: Partial<ItemRow>, provider: IEntityDataProvider | null = null): Promise<MJDataContextItemEntityServer> {
     const item = new MJDataContextItemEntityServer(dataContextItemEntityInfo(), provider);
     item.ContextCurrentUser = user;
     await item.LoadFromData(startingState);
@@ -267,6 +269,41 @@ describe('MJDataContextItemEntityServer — who may write SQL', () => {
             item.Description = 'Moved';
 
             expect(sqlRefusals(item)).toHaveLength(1);
+        });
+    });
+
+    describe('an existing item whose Type or SQL was not loaded', () => {
+        it('REJECTS a non-Owner moving an item whose Type and SQL were not loaded', async () => {
+            const item = await loadedItem(USER, { ID: ITEM_ID, DataContextID: DATA_CONTEXT_ID });
+            item.DataContextID = OTHER_DATA_CONTEXT_ID;
+
+            expect(item.GetFieldByName('Type')?.NotLoaded).toBe(true);
+            expect(sqlRefusals(item)).toHaveLength(1);
+        });
+
+        it('REJECTS a non-Owner changing an item whose SQL was not loaded, even when its Type was', async () => {
+            const item = await loadedItem(USER, { ID: ITEM_ID, DataContextID: DATA_CONTEXT_ID, Type: 'view' });
+            item.Description = 'Renamed';
+
+            expect(sqlRefusals(item)).toHaveLength(1);
+        });
+
+        it('REFUSES a non-Owner\'s ReplayOnly save of an item whose Type and SQL were not loaded', async () => {
+            const recorder = recordingProvider();
+            const item = await loadedItem(USER, { ID: ITEM_ID, DataContextID: DATA_CONTEXT_ID }, recorder.Provider);
+            item.DataContextID = OTHER_DATA_CONTEXT_ID;
+
+            const saved = await item.Save(replayOnly());
+
+            expect(saved).toBe(false);
+            expect(recorder.Saves).toEqual([]);
+        });
+
+        it('ALLOWS an Owner to change an item whose Type and SQL were not loaded', async () => {
+            const item = await loadedItem(ADMINISTRATOR, { ID: ITEM_ID, DataContextID: DATA_CONTEXT_ID });
+            item.DataContextID = OTHER_DATA_CONTEXT_ID;
+
+            expect(sqlRefusals(item)).toEqual([]);
         });
     });
 

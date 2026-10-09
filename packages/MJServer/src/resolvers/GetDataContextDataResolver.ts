@@ -177,7 +177,7 @@ export class GetDataContextDataResolver extends ResolverBase {
         const provider = GetReadOnlyProvider(appCtx.providers, { allowFallbackToReadWrite: false });
         for (const item of sqlItems) {
             const refusal = this.sqlItemRefusal(item, ownerID, user, provider);
-            if (refusal) {
+            if (refusal !== null) {
                 refusals.set(item, refusal);
             }
         }
@@ -216,14 +216,15 @@ export class GetDataContextDataResolver extends ResolverBase {
             return null;
         }
         catch (e) {
-            return e instanceof Error ? e.message : String(e);
+            const reason = e instanceof Error ? e.message : String(e);
+            return reason || 'The SQL of this item did not pass the read-only check.';
         }
     }
 
     /** Loads one item's data unless `gate` refused it. Returns the data as JSON, or why there is none. */
     private async loadItem(item: DataContextItem, gate: SQLItemGate, user: UserInfo, forceRefresh: boolean): Promise<ItemOutcome> {
         const refusal = gate.Refusals.get(item);
-        if (refusal) {
+        if (refusal !== undefined) {
             return { Result: null, Error: refusal };
         }
         if (await item.LoadData(gate.Provider, forceRefresh, false, 0, user)) {

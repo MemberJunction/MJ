@@ -25,6 +25,7 @@ import type {
     RunViewResult,
 } from '@memberjunction/core';
 import type { MJDataContextEntity, MJDataContextItemEntity } from '@memberjunction/core-entities';
+import { RenderPipeline } from '@memberjunction/generic-database-provider';
 import type { AppContext } from '../types.js';
 
 /** Every SQL text that a raw mssql connection was asked to run, and the pool it was sent to. */
@@ -272,6 +273,19 @@ describe('GetDataContextItemData — sql items', () => {
         expectNoSQLRan(s);
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toMatch(/owner/i);
+    });
+
+    it('refuses an item whose SQL check fails without a message', async () => {
+        vi.spyOn(RenderPipeline, 'Run').mockImplementation(() => {
+            throw new Error('');
+        });
+        const s = server(OWNER, [sqlItemRow(READ_SQL)], true);
+
+        const result = await resolver.GetDataContextItemData(SQL_ITEM_ID, s.Context);
+
+        expectNoSQLRan(s);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBeTruthy();
     });
 
     it('lets an administrator (Owner-type user) run another user\'s SQL, on the read-only provider', async () => {
