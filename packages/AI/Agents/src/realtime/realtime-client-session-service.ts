@@ -240,6 +240,11 @@ export interface PrepareClientSessionInput {
      * deployments (a public web-widget guest's `VoiceMaxSessionMinutes`); omitted otherwise.
      */
     MaxSessionSeconds?: number;
+    /**
+     * When `true`, no direct actions are projected for the session, so the model gets none and the
+     * session's relays run none. Set for callers that may not run actions directly.
+     */
+    ExcludeDirectActions?: boolean;
 }
 
 /**
@@ -2143,7 +2148,7 @@ export class RealtimeClientSessionService {
         modelID?: string,
         modelVendorID?: string
     ): Promise<RealtimeSessionParams> {
-        const directTools = this.BuildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass, input.AgentSessionID);
+        const directTools = this.projectDirectActions(input, effectiveConfig, driverClass);
         const hasDirectTools = directTools.length > 0 || (input.ExtraTools != null && input.ExtraTools.length > 0);
         const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, hasDirectTools);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
@@ -3023,6 +3028,22 @@ export class RealtimeClientSessionService {
     }
 
     /**
+     * The session's direct-action tools. When the input excludes direct actions, none, and the empty
+     * projection is recorded so the session's relays run none.
+     */
+    private projectDirectActions(
+        input: PrepareClientSessionInput,
+        effectiveConfig: RealtimeCoAgentConfig | undefined,
+        driverClass: string | undefined
+    ): RealtimeToolDefinition[] {
+        if (input.ExcludeDirectActions) {
+            this.recordEmptyProjection(input.AgentSessionID);
+            return [];
+        }
+        return this.BuildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass, input.AgentSessionID);
+    }
+
+    /**
      * Builds the projected direct action tool definitions for a target agent if supported by the driver.
      * Gated by driver capability (`SupportsDynamicToolSet`) and explicit configuration opt-in
      * (`Configuration.realtime.directActions.enabled = true`).
@@ -3146,9 +3167,12 @@ export class RealtimeClientSessionService {
      * configured timeout. If the tool is unrecognized, disallowed, or target resolution fails,
      * returns a structured "not available" result.
      *
-     * When this service prepared the session, only the actions it projected for the session at
-     * start may run, whatever target the input names. Otherwise the target agent's own metadata
-     * decides.
+     * When this service holds the session's start-time projection, only the projected actions may
+     * run, whatever target the input names. When it holds none, the target agent's own metadata
+     * decides: another process prepared the session, the entry was evicted or lost on a restart, or
+     * the session was never started through this service (for example a row created through the
+     * entity API). That fallback skips the driver-capability gate but is still limited to the
+     * target's own direct-actions allowlist.
      *
      * @param call The non-target tool call.
      * @param input The optional relayed tool input context.
@@ -3279,7 +3303,7 @@ export class RealtimeClientSessionService {
 
     /**
      * True when the action is in the session's start-time projection, or when this service holds no
-     * projection for the session because another process prepared it.
+     * projection for the session (see {@link executeNonTargetTool} for when that happens).
      */
     private isInProjection(
         projection: Map<string, MJActionEntityExtended> | undefined,

@@ -2623,6 +2623,55 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
                 expect(runSpy).not.toHaveBeenCalled();
             });
 
+            it('projects and runs no direct action for a session prepared with ExcludeDirectActions', async () => {
+                const svc = new TestableService();
+                svc.ResolveModelResult = { Model: svc.Model, ModelID: 'm1', VendorID: 'v1', APIName: 'gpt-realtime', DriverClass: 'OpenAIRealtime' };
+                svc.TargetActions = [mockEmailAction];
+                const coAgent = makeCoAgent({ TypeConfiguration: JSON.stringify(allowAll) });
+
+                const prep = await svc.PrepareClientSession(
+                    makePrepInput({ CoAgent: coAgent, AgentSessionID: 'sess-excluded', ExcludeDirectActions: true }),
+                    contextUser,
+                    provider
+                );
+
+                expect(prep.Success).toBe(true);
+                expect((prep.SessionParams?.Tools ?? []).some(t => t.Name === 'SendEmail')).toBe(false);
+                // The target's own metadata allows SendEmail, so only the recorded empty projection refuses it.
+                const targetAgent = { ID: 'target-1', Name: 'Sales Agent', TypeConfiguration: JSON.stringify(allowAll) } as unknown as MJAIAgentEntityExtended;
+                vi.spyOn(svc as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+                const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(okResult());
+                const call: RealtimeToolCall = { CallID: 'call-excluded', ToolName: 'SendEmail', Arguments: JSON.stringify({ To: 'a@example.com' }) };
+                const result = await svc.ExposeExecuteNonTargetTool(
+                    call, { AgentSessionID: 'sess-excluded', TargetAgentID: 'target-1', Call: call }, contextUser
+                );
+
+                expect(result.Success).toBe(false);
+                expect(runSpy).not.toHaveBeenCalled();
+            });
+
+            it('lets the target agent\'s own allowlist decide for a session this service never prepared', async () => {
+                // No projection is held after eviction, after a restart, on another server, or for a
+                // session row that was created without a start (for example through the entity API).
+                const service = new TestableService();
+                service.TargetActions = [mockEmailAction, mockTaskAction];
+                const onlyEmail: RealtimeCoAgentConfig = { realtime: { directActions: { enabled: true, actionNames: ['SendEmail'] } } };
+                const targetAgent = { ID: 'target-1', Name: 'Sales Agent', TypeConfiguration: JSON.stringify(onlyEmail) } as unknown as MJAIAgentEntityExtended;
+                vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+                const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(okResult());
+                const emailCall: RealtimeToolCall = { CallID: 'call-never-1', ToolName: 'SendEmail', Arguments: JSON.stringify({ To: 'a@example.com' }) };
+                const taskCall: RealtimeToolCall = { CallID: 'call-never-2', ToolName: 'CreateTask', Arguments: JSON.stringify({ Title: 'x' }) };
+                const relayInput = (call: RealtimeToolCall): ExecuteRelayedToolInput => ({ AgentSessionID: 'sess-never-prepared', TargetAgentID: 'target-1', Call: call });
+
+                const email = await service.ExposeExecuteNonTargetTool(emailCall, relayInput(emailCall), contextUser);
+                const task = await service.ExposeExecuteNonTargetTool(taskCall, relayInput(taskCall), contextUser);
+
+                expect(email.Success).toBe(true);
+                expect(task.Success).toBe(false);
+                expect(task.Output).toContain('not enabled for direct voice invocation');
+                expect(runSpy).toHaveBeenCalledTimes(1);
+            });
+
             it('still runs an action that was projected for the session', async () => {
                 const service = new TestableService();
                 projectSession(service, 'sess-projected-2');

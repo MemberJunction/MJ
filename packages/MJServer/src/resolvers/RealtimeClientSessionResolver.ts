@@ -24,6 +24,10 @@
  * - **Session `Config`**: the owner can edit it through the generic entity API, so nothing in it is
  *   trusted. Execute re-checks `CanRun` on its target, direct actions never come from it, and its
  *   run ids are used only when {@link SessionRunIDVerifier} finds them to be records of the session.
+ * - **Scope-limited callers** (anonymous and resource-scoped magic-link sessions, including public
+ *   web-widget guests): no direct actions. Their scope exists only as row-level filters, which an
+ *   action can read around, and a scoped anonymous caller's relay runs as the system user. They
+ *   reach the target agent only through `invoke-target-agent`.
  *
  * @module @memberjunction/server
  */
@@ -53,6 +57,7 @@ import {
     ResolveEffectiveRealtimeConfig,
     ResolveRealtimeCoAgentID,
     FilterAllowedAgentsByCanRun,
+    INVOKE_TARGET_AGENT_TOOL_NAME,
     RealtimeAllowedAgent,
     RealtimeDirectActionsConfig,
     REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
@@ -68,6 +73,7 @@ import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
 import { SessionRunIDVerifier } from '../agentSessions/SessionRunIDVerifier.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser, ResolveRecordingStoreUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /**
@@ -527,8 +533,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * serialized result for the browser to relay back to the model.
      *
      * Ownership-gated. The target agent id is read from the session config and `CanRun` on it is
-     * checked for the caller on every call, because the owner can edit the config. Heartbeats the
-     * session on success.
+     * checked for the caller on every call, because the owner can edit the config. A direct-action
+     * call from a scope-limited caller is refused before any elevation. Heartbeats the session on
+     * success.
      *
      * @returns The serialized tool result JSON.
      */
@@ -545,6 +552,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
         const config = this.readSessionConfig(session);
         await this.assertCanRunTarget(config.targetAgentID, contextUser, provider);
+        if (toolName !== INVOKE_TARGET_AGENT_TOOL_NAME && IsScopeLimitedPrincipal(contextUser)) {
+            return this.refuseDirectAction(agentSessionId, toolName);
+        }
 
         // SCOPED-ANONYMOUS ELEVATION (issue #3371): once ownership is proven above, the delegated
         // run + its AI-run-entity writes execute as the system user for a scoped anonymous caller
@@ -601,7 +611,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             `ExecuteRealtimeSessionTool: completed relayed tool '${toolName}' (callId: ${callId}) in ${durationMs}ms`,
         );
 
-        if (toolName !== 'invoke-target-agent') {
+        if (toolName !== INVOKE_TARGET_AGENT_TOOL_NAME) {
             await this.persistDirectActionTurn(
                 session,
                 callId,
@@ -656,6 +666,19 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 percentage: progress.percentage,
             }), userPayload);
         };
+    }
+
+    /**
+     * The tool result for a direct-action call from a scope-limited caller (see the authorization
+     * model above). It has the broker's result shape, so the model hears that the tool is not
+     * available and can ask the target agent through `invoke-target-agent` instead.
+     */
+    private refuseDirectAction(agentSessionId: string, toolName: string): string {
+        LogStatus(`ExecuteRealtimeSessionTool: refused direct action '${toolName}' for a scope-limited caller on session ${agentSessionId}.`);
+        return JSON.stringify({
+            success: false,
+            output: `The tool '${toolName}' is not available in this session. Ask the agent to do it with ${INVOKE_TARGET_AGENT_TOOL_NAME}.`,
+        });
     }
 
     /**
@@ -1256,8 +1279,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
-     * Authorization gate for {@link RealtimeClientSessionResolver.StartRealtimeClientSession}: the
-     * caller must be able to run the **target** agent. Denial throws (no session is created).
+     * Authorization gate for the **target** agent: the caller must be able to run it. Denial throws.
+     * {@link RealtimeClientSessionResolver.StartRealtimeClientSession} runs it before any session is
+     * created, and {@link RealtimeClientSessionResolver.ExecuteRealtimeSessionTool} runs it on every
+     * relayed call, because the owner can edit the target in the session config.
      */
     private async assertCanRunTarget(
         targetAgentId: string,
@@ -1567,6 +1592,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 // (allowed-agent union); the snapshot is injected into the system prompt at mint.
                 ApplicationID: applicationId,
                 AppContext: appContext,
+                // Scope-limited callers get no direct actions (see the authorization model above), so
+                // the model is not given tools that the relay refuses.
+                ExcludeDirectActions: IsScopeLimitedPrincipal(contextUser),
             },
             // SCOPED-ANONYMOUS ELEVATION (issue #3371): the prepare creates the co-agent
             // observability AIAgentRun/AIPromptRun/run-step, which a scoped anonymous caller's role

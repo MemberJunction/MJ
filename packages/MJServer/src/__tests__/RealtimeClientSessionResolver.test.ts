@@ -3119,7 +3119,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(executeRelayedToolMock.mock.calls[0][1]).toBe(ANON_USER);
     });
 
-    it('writes the hidden direct-action tool turn (ExecuteRealtimeSessionTool) as the CALLER, not the system user (#4791)', async () => {
+    it('refuses a direct action from a scoped anonymous caller without dispatching it or writing a turn as the system user (#4791)', async () => {
         const detail = makeSessionEntity({ ID: 'detail-1' });
         currentProvider = {
             GetEntityObject: vi.fn(async (name: string) =>
@@ -3129,17 +3129,16 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"success":true}', Success: true });
         const resolver = makeAnonResolver();
 
-        await resolver.ExecuteRealtimeSessionTool(
+        const out = await resolver.ExecuteRealtimeSessionTool(
             'session-1', 'call-1', 'Some Direct Action', '{}', makeCtx(), makePubSub(),
         );
 
-        // The dispatch itself still runs elevated (SYSTEM_USER)…
-        expect(executeRelayedToolMock.mock.calls[0][1]).toBe(SYSTEM_USER);
-        // …but the hidden Conversation Detail turn is written as the CALLER, never the system user.
-        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', ANON_USER);
+        // Scope-limited callers get no direct actions, so nothing is dispatched, elevated or not…
+        expect(JSON.parse(out)).toMatchObject({ success: false });
+        expect(executeRelayedToolMock).not.toHaveBeenCalled();
+        // …and no hidden Conversation Detail turn is written, least of all as the system user.
         expect(getEntityObjectSpy()).not.toHaveBeenCalledWith('MJ: Conversation Details', SYSTEM_USER);
-        expect(detail.Save).toHaveBeenCalled();
-        expect(detail.UserID).toBe('anon-1');
+        expect(detail.Save).not.toHaveBeenCalled();
     });
 
     it('writes the direct-action tool turn as the caller unchanged for a normal authenticated user', async () => {
@@ -3276,6 +3275,30 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(prepUser).toBe(SYSTEM_USER);
         // …but run attribution + memory scope stay the visitor's.
         expect(prepInput.UserID).toBe('anon-1');
+    });
+
+    /** Starts a session as `resolver`'s caller and returns the input the prepare service received. */
+    async function startAndCapturePrepInput(resolver: RealtimeClientSessionResolver, userID: string): Promise<{ ExcludeDirectActions?: boolean }> {
+        currentProvider = makeProvider(() => makeSessionEntity({ UserID: userID }));
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-start', UserID: userID }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: { Provider: 'openai', Model: 'gpt-realtime', EphemeralToken: 'ek_abc', ExpiresAt: '2026-01-01T00:00:00Z', SessionConfig: {} },
+        });
+        await resolver.StartRealtimeClientSession('target-1', makeCtx());
+        return prepareClientSessionMock.mock.calls[0][0] as { ExcludeDirectActions?: boolean };
+    }
+
+    it('prepares a scope-limited caller\'s session with no direct actions', async () => {
+        const prepInput = await startAndCapturePrepInput(makeAnonResolver(), 'anon-1');
+
+        expect(prepInput.ExcludeDirectActions).toBe(true);
+    });
+
+    it('prepares a caller that is not scope-limited with direct actions', async () => {
+        const prepInput = await startAndCapturePrepInput(makeResolver(), 'user-1');
+
+        expect(prepInput.ExcludeDirectActions).toBe(false);
     });
 
     it('junction-links delegated artifacts under the SYSTEM user and stamps the hidden anchor with the SESSION owner', async () => {
