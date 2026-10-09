@@ -1,7 +1,8 @@
 import { Metadata, CompositeKey, DatabaseProviderBase } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
-import { AppContext } from '../types.js';
+import { AppContext, UserPayload } from '../types.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
+import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
 
 @InputType()
@@ -31,8 +32,17 @@ export class EntityRecordNameResult {
   RecordName?: string;
 }
 
+/**
+ * Resolves a record's display NAME from its primary key — the lookup behind every foreign-key
+ * link, breadcrumb and picker label in the UI.
+ *
+ * Row-level security is applied by the provider's lookup, for the acting user passed to it: it
+ * reads only rows the user's read row filter allows, binds the key values as parameters, and
+ * refuses a key that does not name the entity's primary key fields. Without an acting user there
+ * is no lookup.
+ */
 @Resolver(EntityRecordNameResult)
-export class EntityRecordNameResolver {
+export class EntityRecordNameResolver extends ResolverBase {
   @Query(() => EntityRecordNameResult)
   async GetEntityRecordName(
     @Arg('EntityName', () => String) EntityName: string,
@@ -41,27 +51,34 @@ export class EntityRecordNameResolver {
   ): Promise<EntityRecordNameResult> {
     const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
 
-    return await this.InnerGetEntityRecordName(md, EntityName, primaryKey);
+    return await this.InnerGetEntityRecordName(md, EntityName, primaryKey, userPayload);
   }
 
   @Query(() => [EntityRecordNameResult])
   async GetEntityRecordNames(
     @Arg('info', () => [EntityRecordNameInput]) info: EntityRecordNameInput[],
-    @Ctx() {providers}: AppContext
+    @Ctx() {providers, userPayload}: AppContext
   ): Promise<EntityRecordNameResult[]> {
     const result: EntityRecordNameResult[] = [];
     const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     for (const i of info) {
-      result.push(await this.InnerGetEntityRecordName(md, i.EntityName, i.CompositeKey));
+      result.push(await this.InnerGetEntityRecordName(md, i.EntityName, i.CompositeKey, userPayload));
     }
     return result;
   }
 
-  async InnerGetEntityRecordName(md: DatabaseProviderBase, EntityName: string, primaryKey: CompositeKeyInputType): Promise<EntityRecordNameResult> {
+  async InnerGetEntityRecordName(
+    md: DatabaseProviderBase,
+    EntityName: string,
+    primaryKey: CompositeKeyInputType,
+    userPayload?: UserPayload
+  ): Promise<EntityRecordNameResult> {
     const pk = new CompositeKey(primaryKey.KeyValuePairs);
     const e = md.Entities.find((e) => e.Name === EntityName);
     if (e) {
-      const recordName = await md.GetEntityRecordName(e.Name, pk);
+      const contextUser = userPayload ? this.GetUserFromPayload(userPayload) : undefined;
+      // The acting user is what row-level security is applied for.
+      const recordName = contextUser ? await md.GetEntityRecordName(e.Name, pk, contextUser) : '';
       if (recordName) return { Success: true, Status: 'OK', CompositeKey: pk, RecordName: recordName, EntityName };
       else
         return {
