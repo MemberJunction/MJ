@@ -16,6 +16,9 @@ import { HTMLGenerator } from '../generators/HTMLGenerator.js';
 import { CSVGenerator } from '../generators/CSVGenerator.js';
 import { MermaidGenerator } from '../generators/MermaidGenerator.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
+import { PluginManager } from '../plugins/PluginManager.js';
+import type { AutoDocExporter, AutoDocExporterOptions, AutoDocPluginConfigEntry } from '../plugins/types.js';
+import type { DatabaseDocumentation } from '../types/state.js';
 // DatabaseConnection is lazy-imported only when --apply is used (requires DB credentials)
 
 export default class Export extends Command {
@@ -45,7 +48,17 @@ export default class Export extends Command {
     'schema-info-confirmed-only': Flags.boolean({ description: 'Only include confirmed candidates in schema info', default: false }),
     apply: Flags.boolean({ description: 'Apply SQL to database', default: false }),
     'approved-only': Flags.boolean({ description: 'Only export approved items', default: false }),
-    'confidence-threshold': Flags.string({ description: 'Minimum confidence threshold', default: '0' })
+    'confidence-threshold': Flags.string({ description: 'Minimum confidence threshold', default: '0' }),
+    format: Flags.string({
+      description: 'Plugin export format to generate (repeatable). See --list-formats.',
+      multiple: true
+    }),
+    'list-formats': Flags.boolean({ description: 'List the export formats contributed by plugins and exit', default: false }),
+    provider: Flags.string({
+      description: 'Database platform for dialect-specific output (defaults to the state file, then config, then sqlserver)',
+      options: ['sqlserver', 'mysql', 'postgresql']
+    }),
+    'file-prefix': Flags.string({ description: 'File name prefix override for plugin exports (e.g. a migration version prefix)' })
   };
 
   async run(): Promise<void> {
@@ -87,8 +100,19 @@ export default class Export extends Command {
       // Ensure output directory exists
       await fs.mkdir(outputDir, { recursive: true });
 
+      // Plugin-contributed formats (--format / --list-formats)
+      const exporters = await this.loadPluginExporters(config?.plugins);
+      if (flags['list-formats']) {
+        this.listFormats(exporters);
+        return;
+      }
+      if (flags.format?.length) {
+        const provider = (flags.provider ?? state.database.provider ?? config?.database?.provider ?? 'sqlserver') as AutoDocExporterOptions['Provider'];
+        await this.runPluginExports(flags.format, exporters, state, outputDir, { Provider: provider, FileNamePrefix: flags['file-prefix'] }, spinner);
+      }
+
       // Default to SQL + Markdown if no specific format flags provided
-      const anyFormatSpecified = flags.sql || flags.markdown || flags.html || flags.csv || flags.mermaid || flags.report || flags['schema-info'];
+      const anyFormatSpecified = flags.sql || flags.markdown || flags.html || flags.csv || flags.mermaid || flags.report || flags['schema-info'] || !!flags.format?.length;
       const generateSQL = flags.sql || !anyFormatSpecified;
       const generateMarkdown = flags.markdown || !anyFormatSpecified;
       const generateHTML = flags.html;
@@ -231,6 +255,46 @@ export default class Export extends Command {
     } catch (error) {
       spinner.fail('Export failed');
       this.error((error as Error).message);
+    }
+  }
+
+  /** Loads built-in plugins plus any external plugin modules named in the config. */
+  private async loadPluginExporters(entries: AutoDocPluginConfigEntry[] | undefined): Promise<AutoDocExporter[]> {
+    const plugins = new PluginManager();
+    await plugins.Load(entries);
+    return plugins.GetExporters();
+  }
+
+  private listFormats(exporters: AutoDocExporter[]): void {
+    if (exporters.length === 0) {
+      this.log('No plugin export formats are available.');
+      return;
+    }
+    for (const e of exporters) {
+      this.log(`${chalk.cyan(e.Format)}  ${e.Description}`);
+    }
+  }
+
+  private async runPluginExports(
+    formats: string[],
+    exporters: AutoDocExporter[],
+    state: DatabaseDocumentation,
+    outputDir: string,
+    options: AutoDocExporterOptions,
+    spinner: ReturnType<typeof ora>
+  ): Promise<void> {
+    for (const format of formats) {
+      const exporter = exporters.find((e) => e.Format.toLowerCase() === format.toLowerCase());
+      if (!exporter) {
+        const known = exporters.map((e) => e.Format).join(', ') || '(none)';
+        throw new Error(`Unknown export format '${format}'. Available: ${known}`);
+      }
+      spinner.start(`Generating ${exporter.Format}`);
+      const files = exporter.Generate(state, options);
+      for (const file of files) {
+        await fs.writeFile(path.join(outputDir, file.FileName), file.Content, 'utf-8');
+      }
+      spinner.succeed(`${exporter.Format}: ${files.length ? files.map((f) => f.FileName).join(', ') : 'nothing to export'}`);
     }
   }
 }

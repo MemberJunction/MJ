@@ -127,6 +127,38 @@ export interface AutoDocConnectionConfig {
 /**
  * Query result wrapper
  */
+/**
+ * Placeholder for an expression key part in {@link AutoDocIndex.Columns}. It can never equal a
+ * real column name in a prefix comparison, so an index led by an expression covers no column.
+ */
+export const AUTODOC_EXPRESSION_KEY_PART = '(expression)';
+
+/**
+ * An existing index on a table, as read from the database catalog.
+ * Primary-key indexes are included (IsPrimaryKey = true).
+ */
+export interface AutoDocIndex {
+  SchemaName: string;
+  TableName: string;
+  IndexName: string;
+  /**
+   * Key parts, in index order. An expression key part (PostgreSQL `lower(code)`, MySQL
+   * functional key part) appears as {@link AUTODOC_EXPRESSION_KEY_PART} at its position, so the
+   * order of the named columns, and therefore which column leads the index, is preserved.
+   */
+  Columns: string[];
+  /** Non-key columns carried by the index (SQL Server INCLUDE / PostgreSQL INCLUDE). */
+  IncludeColumns: string[];
+  IsUnique: boolean;
+  IsPrimaryKey: boolean;
+  /** Access method or index type as the database names it (btree, gin, NONCLUSTERED, BTREE, …). */
+  Method: string;
+  /** Partial-index predicate (PostgreSQL WHERE / SQL Server filter), when present. */
+  FilterDefinition?: string;
+  /** True when some key parts are expressions rather than plain columns. */
+  HasExpressions: boolean;
+}
+
 export interface AutoDocQueryResult<T = any> {
   success: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   data?: T[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
