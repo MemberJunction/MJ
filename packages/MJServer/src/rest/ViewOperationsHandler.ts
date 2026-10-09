@@ -1,5 +1,5 @@
 import { 
-    LogError, Metadata, RunView, RunViewParams, 
+    BaseEntity, LogError, Metadata, RunView, RunViewParams, 
     RunViewResult, UserInfo, type IRunViewProvider 
 } from '@memberjunction/core';
 import { ClientClauseScreen } from '@memberjunction/generic-database-provider';
@@ -202,6 +202,12 @@ export class ViewOperationsHandler {
         // Ensure EntityName is provided
         if (!params.EntityName) {
             throw new Error('EntityName is required');
+        }
+
+        // A loaded view entity cannot arrive over JSON; the provider would trust a plain object's
+        // fields (its ID is spliced into view SQL). REST callers name a saved view by ViewID or ViewName.
+        if (params.ViewEntity != null && !(params.ViewEntity instanceof BaseEntity)) {
+            throw new Error('ViewEntity is not accepted over REST; use ViewID or ViewName');
         }
         
         // Convert string arrays if they came in as comma-separated strings

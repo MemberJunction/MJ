@@ -3,7 +3,7 @@
 // rule, this barrel only exports things defined within this package. Consumers
 // that want shared types should import directly from @memberjunction/lists-base.
 
-export { ListOperations, type DeltaTarget, type AdhocFilterScreen, type ListOperationsOptions } from './ListOperations';
+export { ListOperations, type DeltaTarget } from './ListOperations';
 export { ListSharing, DEFAULT_INVITATION_TTL_MS } from './ListSharing';
 export { AudienceResolver } from './AudienceResolver';
 export {

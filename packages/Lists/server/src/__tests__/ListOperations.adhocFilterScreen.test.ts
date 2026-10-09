@@ -1,9 +1,10 @@
 /**
- * `ListOperations` runs an ad-hoc source's `ExtraFilter` through `RunView`. That text comes from
- * the client (`ListSourceInput{Kind:'adhoc'}`) or from a list's stored `SourceFilterSnapshot`,
- * which the list owner can edit. The `AdhocFilterScreen` option lets the server boundary refuse a
- * filter before it runs; these tests pin that every ad-hoc filter, including one rebuilt from a
- * snapshot, goes through it, and that nothing it refuses reaches `RunView`.
+ * `ListOperations` runs an ad-hoc source's `ExtraFilter` through `RunView`. That text comes from a
+ * client (`ListSourceInput{Kind:'adhoc'}`, and the Compose Lists, Refresh List From Source, Resolve
+ * Audience and Send To Audience actions) or from a list's stored `SourceFilterSnapshot`, which the
+ * list owner can edit. These tests pin that every ad-hoc filter passes its provider's client-clause
+ * screen, with the acting user, before it runs, and that it fails closed when the provider cannot
+ * screen.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,6 +12,8 @@ const mockRunViewImpl = vi.fn();
 const mockGetEntityObject = vi.fn();
 const mockEntityByName = vi.fn();
 const mockEntities: Array<{ ID: string; Name: string; PrimaryKeys: Array<{ Name: string }> }> = [];
+/** The global provider `ListOperations` falls back to when it is given none. */
+let globalProvider: object = {};
 
 vi.mock('@memberjunction/core', () => {
   class CompositeKey {
@@ -33,6 +36,9 @@ vi.mock('@memberjunction/core', () => {
     }
   }
   class Metadata {
+    static get Provider() {
+      return globalProvider;
+    }
     get Entities() {
       return mockEntities;
     }
@@ -61,12 +67,27 @@ const CTX_USER = { ID: 'u1', Name: 'Test', Email: 't@x', UserRoles: [] };
 const CONTACTS = { ID: 'entity-contacts', Name: 'Contacts', PrimaryKeys: [{ Name: 'ID' }] };
 const STACKED = "1 = (SELECT 1 AS [a'])) ; SELECT 1 AS [x] ; SELECT 1 WHERE (1 = (SELECT 1 AS [b'])";
 
-/** Refuses any filter carrying a statement separator, the way the server's clause screen does. */
-function refusingScreen(extraFilter: string): void {
-  if (extraFilter.includes(';')) throw new Error(`Invalid ExtraFilter: refused by screen`);
+/** What a screening provider was asked to screen. */
+interface ScreenCall {
+  Clause: string;
+  Label: string;
+  User: unknown;
+  Entity: unknown;
 }
 
-describe('ListOperations — AdhocFilterScreen', () => {
+/** A provider whose screen refuses any filter carrying a statement separator, as the real one does. */
+function screeningProvider(calls: ScreenCall[]) {
+  return {
+    ScreenClientClause(clause: string, label: string, user?: unknown, entity?: unknown): void {
+      calls.push({ Clause: clause, Label: label, User: user, Entity: entity });
+      if (clause.includes(';')) throw new Error(`Invalid ${label}: refused by the provider's screen`);
+    },
+  };
+}
+
+describe('ListOperations — ad-hoc filters pass the provider screen by default', () => {
+  let calls: ScreenCall[];
+
   beforeEach(() => {
     SetDeltaTokenSecret('unit-test-secret');
     mockRunViewImpl.mockReset();
@@ -76,12 +97,14 @@ describe('ListOperations — AdhocFilterScreen', () => {
     mockEntities.push(CONTACTS);
     mockEntityByName.mockReturnValue(CONTACTS);
     mockRunViewImpl.mockResolvedValue({ Success: true, Results: [{ ID: 'r1' }], RowCount: 1 });
+    calls = [];
+    globalProvider = screeningProvider(calls);
   });
 
   it('refuses a client ad-hoc filter the screen rejects, before RunView', async () => {
-    const ops = new ListOperations(CTX_USER as never, undefined, { AdhocFilterScreen: refusingScreen });
+    const ops = new ListOperations(CTX_USER as never);
 
-    await expect(ops.ResolveSource({ kind: 'adhoc', entityName: 'Contacts', extraFilter: STACKED })).rejects.toThrow(/refused by screen/);
+    await expect(ops.ResolveSource({ kind: 'adhoc', entityName: 'Contacts', extraFilter: STACKED })).rejects.toThrow(/refused by the provider's screen/);
     expect(mockRunViewImpl).not.toHaveBeenCalled();
   });
 
@@ -94,18 +117,27 @@ describe('ListOperations — AdhocFilterScreen', () => {
       UseSnapshot: true,
       SourceFilterSnapshot: JSON.stringify({ v: 1, whereClause: STACKED }),
     });
-    const ops = new ListOperations(CTX_USER as never, undefined, { AdhocFilterScreen: refusingScreen });
+    const ops = new ListOperations(CTX_USER as never);
 
-    await expect(ops.RefreshFromSource('list-1', 'Additive', { ConfirmDrops: false })).rejects.toThrow(/refused by screen/);
+    await expect(ops.RefreshFromSource('list-1', 'Additive', { ConfirmDrops: false })).rejects.toThrow(/refused by the provider's screen/);
     expect(mockRunViewImpl).not.toHaveBeenCalled();
   });
 
-  it('runs a filter the screen accepts', async () => {
-    const ops = new ListOperations(CTX_USER as never, undefined, { AdhocFilterScreen: refusingScreen });
+  it('fails closed when the provider cannot screen client SQL', async () => {
+    globalProvider = { Entities: [] };
+    const ops = new ListOperations(CTX_USER as never);
+
+    await expect(ops.ResolveSource({ kind: 'adhoc', entityName: 'Contacts', extraFilter: "Status='Active'" })).rejects.toThrow(/cannot screen client SQL/);
+    expect(mockRunViewImpl).not.toHaveBeenCalled();
+  });
+
+  it('runs a filter the screen accepts, screened with the acting user and the entity', async () => {
+    const ops = new ListOperations(CTX_USER as never);
 
     const result = await ops.ResolveSource({ kind: 'adhoc', entityName: 'Contacts', extraFilter: "Status='Active'" });
 
     expect(result.RecordIds).toEqual(['r1']);
+    expect(calls).toEqual([{ Clause: "Status='Active'", Label: 'ExtraFilter', User: CTX_USER, Entity: CONTACTS }]);
     expect(mockRunViewImpl).toHaveBeenCalledWith(expect.objectContaining({ ExtraFilter: "Status='Active'" }));
   });
 });

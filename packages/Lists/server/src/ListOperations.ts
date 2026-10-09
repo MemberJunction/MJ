@@ -36,16 +36,16 @@ import type {
  *  consumer outside this package needs to compose it. */
 export type DeltaTarget = ListSource | 'new';
 
-/** Screens an ad-hoc source's filter before it runs; throws to refuse it. */
-export type AdhocFilterScreen = (extraFilter: string, entityName: string) => void;
+/**
+ * A provider that screens client SQL clauses (GenericDatabaseProvider does, as
+ * `ClientClauseScreeningProvider` in `@memberjunction/generic-database-provider`).
+ */
+interface ClauseScreeningProvider {
+  ScreenClientClause(clause: string, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void;
+}
 
-/** Optional behavior for {@link ListOperations}. */
-export interface ListOperationsOptions {
-  /**
-   * Applied to every ad-hoc filter before it runs: one a client supplied, and one rebuilt from a
-   * list's stored `SourceFilterSnapshot`. Server entry points pass the RunView clause screen.
-   */
-  AdhocFilterScreen?: AdhocFilterScreen;
+function canScreenClauses(provider: IMetadataProvider | undefined): provider is IMetadataProvider & ClauseScreeningProvider {
+  return !!provider && 'ScreenClientClause' in provider && typeof provider.ScreenClientClause === 'function';
 }
 
 /**
@@ -60,12 +60,10 @@ export interface ListOperationsOptions {
 export class ListOperations {
   private readonly contextUser: UserInfo;
   private readonly provider: IMetadataProvider | undefined;
-  private readonly options: ListOperationsOptions;
 
-  constructor(contextUser: UserInfo, provider?: IMetadataProvider, options: ListOperationsOptions = {}) {
+  constructor(contextUser: UserInfo, provider?: IMetadataProvider) {
     this.contextUser = contextUser;
     this.provider = provider;
-    this.options = options;
   }
 
   /**
@@ -469,7 +467,7 @@ export class ListOperations {
       throw new Error(`Entity '${entityName}' not found in metadata`);
     }
     const pkFields = entityInfo.PrimaryKeys.map((pk) => pk.Name);
-    this.options.AdhocFilterScreen?.(extraFilter, entityName);
+    this.screenAdhocFilter(extraFilter, entityInfo);
 
     const rv = this.runView();
     const result = await rv.RunView({
@@ -488,6 +486,22 @@ export class ListOperations {
       RecordIds: (result.Results ?? []).map((row) => this.serializeRecordId(entityInfo, row as Record<string, unknown>)),
       TotalCount: result.RowCount,
     };
+  }
+
+  /**
+   * SECURITY — refuses an ad-hoc filter the provider's client-clause screen refuses, with the
+   * acting user, before it runs. The text comes from a client (`ListSourceInput{Kind:'adhoc'}`, and
+   * the Compose Lists, Refresh List From Source, Resolve Audience and Send To Audience actions) or
+   * from a list's stored `SourceFilterSnapshot`, which the list owner can edit. Fails closed when
+   * the provider cannot screen.
+   */
+  private screenAdhocFilter(extraFilter: string, entityInfo: EntityInfo): void {
+    if (!extraFilter.trim()) return;
+    const provider = this.provider ?? Metadata.Provider;
+    if (!canScreenClauses(provider)) {
+      throw new Error(`Ad-hoc filter on '${entityInfo.Name}' refused: the data provider cannot screen client SQL`);
+    }
+    provider.ScreenClientClause(extraFilter, 'ExtraFilter', this.contextUser, entityInfo);
   }
 
   /**

@@ -27,7 +27,13 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public CustomWhereClause: boolean | number = false;
         public ContextCurrentUser: { ID: string; Type: string } | null = null;
         public ProviderToUse: unknown = null;
+        public ViewEntityInfo: unknown = undefined;
         private dirty = new Set<string>();
+
+        /** BaseEntity's acting-user accessor; the real one falls back to the provider's user. */
+        public get ActiveUser(): { ID: string; Type: string } | null {
+            return this.ContextCurrentUser;
+        }
 
         public MarkDirty(...names: string[]): void {
             names.forEach((n) => this.dirty.add(n.toLowerCase()));
@@ -47,6 +53,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 });
 
 import type { EntityInfo, ValidationResult } from '@memberjunction/core';
+import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { PostgreSQLDialect, SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 import { MJUserViewEntityServer } from '../custom/MJUserViewEntityServer.server.js';
 
 /** The stub's extra members, which the real class type does not declare. */
@@ -71,14 +79,35 @@ const CONTACTS = {
     GetUserPermisions: () => ({ CanRead: true }),
 } as unknown as EntityInfo;
 
-function view(options: { saved?: boolean; where?: string; orderBy?: string; custom?: boolean; dirty?: string[]; user?: { ID: string; Type: string } }): MJUserViewEntityServer & StubControls {
+/** A provider double that screens with the real `GenericDatabaseProvider.ScreenClientClause`. */
+function screeningProvider(dialect: SQLDialect) {
+    return {
+        Entities: [CONTACTS],
+        Dialect: dialect,
+        PlatformKey: dialect.PlatformKey,
+        TransformExternalSQLClause: (clause: string) => clause,
+        ScreenClientClause(...args: Parameters<GenericDatabaseProvider['ScreenClientClause']>): void {
+            GenericDatabaseProvider.prototype.ScreenClientClause.apply(this as unknown as GenericDatabaseProvider, args);
+        },
+    };
+}
+
+function view(options: {
+    saved?: boolean;
+    where?: string;
+    orderBy?: string;
+    custom?: boolean;
+    dirty?: string[];
+    user?: { ID: string; Type: string };
+    provider?: unknown;
+}): MJUserViewEntityServer & StubControls {
     const v = new MJUserViewEntityServer(null as unknown as EntityInfo) as MJUserViewEntityServer & StubControls;
     v.IsSaved = options.saved ?? false;
     v.WhereClause = options.where ?? null;
     v.OrderByClause = options.orderBy ?? '';
     v.CustomWhereClause = options.custom ?? false;
     v.ContextCurrentUser = options.user ?? USER;
-    v.ProviderToUse = { Entities: [CONTACTS], PlatformKey: 'sqlserver' };
+    v.ProviderToUse = 'provider' in options ? options.provider : screeningProvider(new SQLServerDialect());
     v.MarkDirty(...(options.dirty ?? []));
     return v;
 }
@@ -128,6 +157,24 @@ describe('MJUserViewEntityServer — stored clauses pass the clause screen at sa
         Object.defineProperty(v, 'OrderByClause', { get: () => { throw new SyntaxError('Unexpected token'); } });
 
         expect(v.Validate().Success).toBe(true);
+    });
+
+    it('accepts a FilterState clause with bracket identifiers on PostgreSQL, and still refuses a base table there', () => {
+        const pg = screeningProvider(new PostgreSQLDialect());
+
+        const filter = view({ where: `([Name] = 'Acme') AND ([Name] LIKE '%acme%')`, orderBy: 'Name DESC', provider: pg }).Validate();
+        const baseTable = view({ where: `([Name] = 'x') AND EXISTS (SELECT 1 FROM [__mj].[User])`, provider: pg }).Validate();
+
+        expect(messages(filter)).toBe('');
+        expect(filter.Success).toBe(true);
+        expect(messages(baseTable)).toMatch(/entity base view/);
+    });
+
+    it('fails closed when the provider cannot screen client SQL', () => {
+        const result = view({ where: `Status = 'Active'`, provider: { Entities: [CONTACTS] } }).Validate();
+
+        expect(result.Success).toBe(false);
+        expect(messages(result)).toMatch(/cannot screen client SQL/);
     });
 
     it('does not re-screen clauses an edit did not touch', () => {

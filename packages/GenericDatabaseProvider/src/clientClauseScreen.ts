@@ -21,6 +21,20 @@ export interface EntityBaseViewAllowList {
     Bare: Map<string, EntityInfo | null>;
 }
 
+/**
+ * A provider that screens client SQL clauses with {@link ClientClauseScreen} against its own
+ * entities and dialect. `GenericDatabaseProvider` is one; server code that hands client SQL text
+ * to RunView outside the API entry points asks its provider through this.
+ */
+export interface ClientClauseScreeningProvider {
+    ScreenClientClause(clause: string | null | undefined, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void;
+}
+
+/** True when `provider` can screen client SQL clauses. */
+export function IsClientClauseScreeningProvider(provider: object | null | undefined): provider is ClientClauseScreeningProvider {
+    return !!provider && 'ScreenClientClause' in provider && typeof provider.ScreenClientClause === 'function';
+}
+
 /** One variant of a clause, with the dialect it would run under. */
 interface ClauseVariant {
     Text: string;
@@ -77,10 +91,11 @@ export class ClientClauseScreen {
             throw new Error(`Invalid ${label}: multiple statements are not permitted in client-supplied filters`);
         }
 
+        const fragment = ClientClauseScreen.toDialectQuoting(clause, dialect);
         const wrapped =
             label === 'OrderBy'
-                ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`
-                : `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`;
+                ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${fragment}`
+                : `SELECT 1 FROM __mj_clause_screen WHERE (${fragment})`;
         const parser = new SQLParser(wrapped, dialect);
         if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
             throw new Error(`Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`);
@@ -125,7 +140,10 @@ export class ClientClauseScreen {
      * or sort fragment never needs either, so this cannot refuse a legitimate clause.
      */
     public static AssertSingleStatementFragment(clause: string | null | undefined, label: string, dialect: SQLParserDialect): void {
-        if (!clause) return;
+        if (clause == null || clause === '') return;
+        if (typeof clause !== 'string') {
+            throw new Error(`Invalid ${label}: expected SQL text`);
+        }
         const token = LexSQL(clause, dialect).find((t) => t.Kind === 'semicolon' || t.Kind === 'comment');
         if (token) {
             const found = token.Kind === 'semicolon' ? 'statement separators' : 'comments';
@@ -210,8 +228,23 @@ export class ClientClauseScreen {
             throw new Error(`Invalid ${label}: expected SQL text`);
         }
         const variants: ClauseVariant[] = [{ Text: value.default, Dialect: dialect }];
-        if (typeof value.sqlserver === 'string') variants.push({ Text: value.sqlserver, Dialect: new SQLServerDialect() });
-        if (typeof value.postgresql === 'string') variants.push({ Text: value.postgresql, Dialect: new PostgreSQLDialect() });
+        for (const [variant, variantDialect] of [[value.sqlserver, new SQLServerDialect()], [value.postgresql, new PostgreSQLDialect()]] as const) {
+            if (variant == null) continue;
+            if (typeof variant !== 'string') throw new Error(`Invalid ${label}: expected SQL text`);
+            variants.push({ Text: variant, Dialect: variantDialect });
+        }
         return variants;
+    }
+
+    /**
+     * The clause with T-SQL bracket identifiers in the dialect's own quoting, for a dialect that
+     * does not quote with brackets. The PostgreSQL provider accepts `[Name]` in a client clause and
+     * converts it the same way before running it (`PostgreSQLDataProvider.quoteIdentifiersInSQL`).
+     * Only a bracket around a plain name changes; any other bracket stays as written, and the
+     * grammar refuses it.
+     */
+    private static toDialectQuoting(clause: string, dialect: SQLParserDialect): string {
+        if (dialect.QuoteIdentifier('x').startsWith('[')) return clause;
+        return clause.replace(/\[(\w[\w\s]*)\]/g, (_bracketed: string, name: string) => dialect.QuoteIdentifier(name));
     }
 }

@@ -13,6 +13,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { PostgreSQLDialect, SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 import { MJUserViewEntityServer } from '../custom/MJUserViewEntityServer.server.js';
 
 const BRACKET_STACKED =
@@ -48,17 +50,33 @@ const USER_VIEWS = new EntityInfo({
     ],
 });
 
-const CONTACTS = new EntityInfo({ ID: '6c6a8bb6-0000-4000-8000-0000000000b2', Name: 'Contacts', SchemaName: 'crm', BaseView: 'vwContacts', Fields: [] });
+const CONTACTS = new EntityInfo({
+    ID: '6c6a8bb6-0000-4000-8000-0000000000b2',
+    Name: 'Contacts',
+    SchemaName: 'crm',
+    BaseView: 'vwContacts',
+    Fields: [field('ID', 'uniqueidentifier', { IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false }), field('Name', 'nvarchar', { Length: 200 })],
+});
 
 function user(type: 'User' | 'Owner'): UserInfo {
     return new UserInfo(null as unknown as IMetadataProvider, { ID: `${type}-1`, Email: `${type}@example.com`, Type: type });
 }
 
-/** The entity provider this record saves through: the metadata the clause screen reads. */
-const PROVIDER = { Entities: [USER_VIEWS, CONTACTS], PlatformKey: 'sqlserver' };
+/** The provider this record saves through; it screens with the real `GenericDatabaseProvider.ScreenClientClause`. */
+function screeningProvider(dialect: SQLDialect) {
+    return {
+        Entities: [USER_VIEWS, CONTACTS],
+        Dialect: dialect,
+        PlatformKey: dialect.PlatformKey,
+        TransformExternalSQLClause: (clause: string) => clause,
+        ScreenClientClause(...args: Parameters<GenericDatabaseProvider['ScreenClientClause']>): void {
+            GenericDatabaseProvider.prototype.ScreenClientClause.apply(this as unknown as GenericDatabaseProvider, args);
+        },
+    };
+}
 
-function createdView(by: UserInfo, viaNewRecord: boolean): MJUserViewEntityServer {
-    const view = new MJUserViewEntityServer(USER_VIEWS, PROVIDER as never);
+function createdView(by: UserInfo, viaNewRecord: boolean, dialect: SQLDialect = new SQLServerDialect()): MJUserViewEntityServer {
+    const view = new MJUserViewEntityServer(USER_VIEWS, screeningProvider(dialect) as never);
     view.ContextCurrentUser = by;
     if (viaNewRecord) view.NewRecord();
     return view;
@@ -94,4 +112,17 @@ describe('MJUserViewEntityServer — save gates on create (real entity dirty-sta
             expect(errorsOn(view, 'WhereClause')).toEqual([]);
         });
     }
+});
+
+describe('MJUserViewEntityServer — a UI FilterState saves on PostgreSQL', () => {
+    it('accepts the bracketed WhereClause the platform compiles from a FilterState', async () => {
+        const view = createdView(user('User'), true, new PostgreSQLDialect());
+        view.Name = 'Acme contacts';
+        view.EntityID = CONTACTS.ID;
+        view.FilterState = JSON.stringify({ logic: 'and', filters: [{ field: 'Name', operator: 'contains', value: 'acme' }] });
+        await view.UpdateWhereClause();
+
+        expect(view.WhereClause).toBe(`([Name] LIKE '%acme%')`);
+        expect(errorsOn(view, 'WhereClause')).toEqual([]);
+    });
 });

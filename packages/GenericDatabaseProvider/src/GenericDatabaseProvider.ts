@@ -78,7 +78,7 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { BytesToBase64, IsByteArray, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -110,7 +110,7 @@ import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEn
 import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { TransactionFrameTracker } from './TransactionFrameTracker';
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
-import { ClientClauseScreen } from './clientClauseScreen.js';
+import { ClientClauseScreen, type ClientClauseScreeningProvider } from './clientClauseScreen.js';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -170,7 +170,7 @@ export class DoomedTransactionError extends Error {
     }
 }
 
-export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
+export abstract class GenericDatabaseProvider extends DatabaseProviderBase implements ClientClauseScreeningProvider {
     // Composition engine is now owned by RenderPipeline
 
     /**************************************************************************/
@@ -2071,8 +2071,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // first column's value with a prior run — refuse rather than return the wrong rows.
                 this.assertSingleColumnPrimaryKey(entityInfo, 'ExcludeUserViewRunID / ExcludeDataFromAllPriorViewRuns');
                 let sExcludeSQL = `${this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name)} NOT IN (SELECT RecordID FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwUserViewRunDetails')} WHERE EntityID='${viewEntity?.EntityID}' AND`; // first-pk-ok: guarded above — view-run RecordID is a single bare key value, PrimaryKeys.length === 1 enforced
-                if (params.ExcludeDataFromAllPriorViewRuns === true)
+                if (params.ExcludeDataFromAllPriorViewRuns === true) {
+                    // SECURITY: the view ID is interpolated; a loaded view's ID is always a GUID.
+                    if (!IsValidUUID(String(viewEntity?.ID ?? '')))
+                        throw new Error(`ExcludeDataFromAllPriorViewRuns requires a saved view with a GUID ID`);
                     sExcludeSQL += ` UserViewID=${viewEntity?.ID})`;
+                }
                 else {
                     // SECURITY: excludeUserViewRunID is user-supplied (GraphQL input) and is
                     // interpolated directly into SQL here. Unlike ExtraFilter/OrderBy/
@@ -2700,15 +2704,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * SECURITY — the full client-clause screen ({@link ClientClauseScreen.AssertClauseUsesEntityBaseViews})
+     * against this provider's entities and dialect, with `contextUser` as the acting user. With
+     * `entityInfo`, the clause is screened in the form this provider runs a client clause for that
+     * entity ({@link TransformExternalSQLClause}). Server code that hands client SQL text to RunView
+     * outside the API entry points calls this: ad-hoc list sources (`ListOperations`) and the
+     * saved-view save gate (`MJUserViewEntityServer`).
+     */
+    public ScreenClientClause(clause: string | null | undefined, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void {
+        const text = clause && entityInfo ? this.TransformExternalSQLClause(clause, entityInfo) : clause;
+        ClientClauseScreen.AssertClauseUsesEntityBaseViews(text, label, this.Entities, this.Dialect, contextUser);
+    }
+
+    /**
      * SECURITY — screens a saved view's rendered WhereClause with the full client-clause screen.
      * Any user who can save a view can write its WhereClause, directly or through FilterState or a
      * Smart Filter. Exempt: a CustomWhereClause view loaded as an entity, whose clause only an Owner
      * can set (MJUserViewEntityServer). The flag on any other object, such as one built from a
-     * request body, is not trusted.
+     * request body, is not trusted. The exemption tests `instanceof BaseEntity`, so a second copy of
+     * `@memberjunction/core` in the process makes loaded custom views fail closed, not open.
      */
     protected ScreenStoredViewWhereClause(viewEntity: MJUserViewEntityExtended, renderedWhere: string, user: UserInfo): void {
         if (viewEntity instanceof BaseEntity && !!viewEntity.CustomWhereClause) return; // truthy — the DB may hand back true or 1
-        ClientClauseScreen.AssertClauseUsesEntityBaseViews(renderedWhere, 'view WhereClause', this.Entities, this.Dialect, user);
+        this.AssertClauseFragmentIsSingleStatement(renderedWhere, 'view WhereClause');
+        this.ScreenClientClause(renderedWhere, 'view WhereClause', user);
     }
 
     /**
@@ -2716,7 +2735,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * the full client-clause screen. Any user who can save a view can write those.
      */
     protected ScreenStoredViewOrderBy(orderBy: string, user: UserInfo): void {
-        ClientClauseScreen.AssertClauseUsesEntityBaseViews(orderBy, 'OrderBy', this.Entities, this.Dialect, user);
+        this.ScreenClientClause(orderBy, 'OrderBy', user);
     }
 
     /**************************************************************************/

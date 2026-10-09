@@ -1,11 +1,10 @@
 import { RegisterClass, CleanAndParseJSON } from "@memberjunction/global";
-import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
+import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
-import { ClientClauseScreen } from "@memberjunction/generic-database-provider";
-import type { SQLParserDialect } from "@memberjunction/sql-dialect";
+import { IsClientClauseScreeningProvider } from "@memberjunction/generic-database-provider";
 
 /**
  * Expected response format from the Smart Filter AI prompt
@@ -53,22 +52,20 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
      * Filter) and the ORDER BY built from SortState / GridState. Any user who can save a view can
      * write these, and the provider splices them into view SQL. A CustomWhereClause is left to the
      * Owner gate above. Only a new view or a changed clause is screened here; the provider screens
-     * every stored clause again when the view runs.
+     * every stored clause again when the view runs. Both use the provider's own screen, so a clause
+     * is judged the same way at save and at run.
      */
     private validateStoredClauses(result: ValidationResult): void {
-        const provider = this.ProviderToUse as unknown as IMetadataProvider | null;
-        const user = this.ContextCurrentUser ?? provider?.CurrentUser;
-        const entities = provider?.Entities ?? [];
-        const dialect = ClientClauseScreen.DialectFor(provider);
         const changed = (...fields: string[]) => !this.IsSaved || fields.some(f => this.GetFieldByName(f)?.Dirty === true);
 
         if (!this.CustomWhereClause && changed('WhereClause', 'CustomWhereClause')) {
             const where = MJUserViewEntityServer.neutralizeViewTemplates(this.WhereClause ?? '');
-            this.screenStoredClause(result, 'WhereClause', where, 'view WhereClause', entities, dialect, user);
+            this.screenStoredClause(result, 'WhereClause', where, 'view WhereClause');
         }
         const orderBy = changed('SortState', 'GridState') ? this.storedOrderBy() : null;
         if (orderBy) {
-            this.screenStoredClause(result, 'SortState', orderBy, 'OrderBy', entities, dialect, user);
+            // The provider transforms a stored sort for its platform before running it; screen that form.
+            this.screenStoredClause(result, 'SortState', orderBy, 'OrderBy', this.ViewEntityInfo);
         }
     }
 
@@ -84,18 +81,18 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
         }
     }
 
-    /** Adds a validation failure on `field` when the clause screen refuses `clause`. */
-    private screenStoredClause(
-        result: ValidationResult,
-        field: string,
-        clause: string,
-        label: string,
-        entities: EntityInfo[],
-        dialect: SQLParserDialect,
-        user: UserInfo | undefined,
-    ): void {
+    /**
+     * Adds a validation failure on `field` when the provider's client-clause screen refuses `clause`,
+     * or when the provider cannot screen (fails closed).
+     */
+    private screenStoredClause(result: ValidationResult, field: string, clause: string, label: string, entityInfo?: EntityInfo): void {
+        if (!clause.trim()) return;
+        const provider = this.ProviderToUse;
         try {
-            ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, label, entities, dialect, user);
+            if (!IsClientClauseScreeningProvider(provider)) {
+                throw new Error(`Invalid ${label}: the data provider cannot screen client SQL`);
+            }
+            provider.ScreenClientClause(clause, label, this.ActiveUser, entityInfo);
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             result.Errors.push(new ValidationErrorInfo(field, message, clause, ValidationErrorType.Failure));

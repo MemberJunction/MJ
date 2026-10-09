@@ -24,6 +24,7 @@ import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../save
 import {
     BaseEntity,
     UserInfo,
+    type DatabasePlatform,
     type DeleteSQLResult,
     type EntityInfo,
     type IMetadataProvider,
@@ -132,11 +133,21 @@ class ClauseScreenTestProvider extends GenericDatabaseProviderTestBase {
     async RollbackTransaction(): Promise<void> {}
 }
 
+/** The same double on PostgreSQL: its platform key, dialect and identifier quoting. */
+class PostgreSQLClauseScreenTestProvider extends ClauseScreenTestProvider {
+    public override get PlatformKey(): DatabasePlatform { return 'postgresql'; }
+    public override QuoteIdentifier(name: string): string { return `"${name}"`; }
+    public override QuoteSchemaAndView(schema: string, obj: string): string { return `"${schema}"."${obj}"`; }
+    /** Stands in for the PostgreSQL provider's metadata-driven quoting of a client clause. */
+    protected override TransformExternalSQLClause(clause: string): string {
+        return clause.replace(/\[(\w+)\]/g, '"$1"').replace(/\bOrder\b/g, '"Order"');
+    }
+}
+
 const USER = new UserInfo(null as unknown as IMetadataProvider, { ID: 'U1', Email: 'u1@example.com' });
 
 /** Runs one view and returns its result with every statement the database was sent. */
-async function run(params: RunViewParams): Promise<{ result: RunViewResult; sql: string[] }> {
-    const provider = new ClauseScreenTestProvider();
+async function run(params: RunViewParams, provider: ClauseScreenTestProvider = new ClauseScreenTestProvider()): Promise<{ result: RunViewResult; sql: string[] }> {
     const result = await provider.Run(params, USER);
     return { result, sql: provider.ExecutedSQL };
 }
@@ -151,7 +162,7 @@ describe('RunViewCore — a saved view\'s stored clauses pass the clause screen 
 
         expect(sql).toHaveLength(0);
         expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toMatch(/multiple statements/);
+        expect(result.ErrorMessage).toMatch(/statement separators|multiple statements/);
     });
 
     it('refuses a stored WhereClause that reads a base table', async () => {
@@ -210,6 +221,55 @@ describe('RunViewCore — a saved view\'s stored clauses pass the clause screen 
 
         expect(result.Success).toBe(true);
         expect(sql[0]).toContain(`WHERE (${adminClause})`);
+    });
+});
+
+describe('RunViewCore — saved views on PostgreSQL', () => {
+    const pg = () => new PostgreSQLClauseScreenTestProvider();
+
+    it('runs a saved view whose FilterState clause uses bracket identifiers', async () => {
+        const where = `([Name] = 'Acme') AND ([Name] LIKE '%acme%') AND ID IN (SELECT ID FROM [__mj].[vwAccounts])`;
+
+        const { result, sql } = await run(savedView({ WhereClause: where, OrderByClause: 'Name DESC' }), pg());
+
+        expect(result.Success).toBe(true);
+        expect(sql[0]).toContain(`WHERE (${where})`);
+    });
+
+    it('still refuses a bracketed base-table read and a stacked E-string in a stored WhereClause', async () => {
+        const baseTable = await run(savedView({ WhereClause: `([Name] = 'x') AND EXISTS (SELECT 1 FROM [__mj].[User])` }), pg());
+        const eString = await run(savedView({ WhereClause: "Name = E'\\'' ; SELECT 1 ; SELECT 1 WHERE Name = E'\\''" }), pg());
+
+        expect(baseTable.sql).toHaveLength(0);
+        expect(baseTable.result.ErrorMessage).toMatch(/entity base view/);
+        expect(eString.sql).toHaveLength(0);
+        expect(eString.result.ErrorMessage).toMatch(/statement separators/);
+    });
+
+    it('screens a client clause in the form the provider runs it when given the entity', () => {
+        const provider = pg();
+
+        expect(() => provider.ScreenClientClause('Order DESC', 'OrderBy', USER, ACCOUNTS)).not.toThrow();
+        expect(() => provider.ScreenClientClause('Order DESC', 'OrderBy', USER)).toThrow(/Invalid OrderBy/);
+    });
+});
+
+describe('RunViewCore — a view object\'s ID is spliced only when it is a GUID', () => {
+    it('refuses a view object whose ID is not a GUID before it reaches the exclusion filter', async () => {
+        const forged = { ID: '0) ; SELECT 1 AS [x] ; SELECT 1 WHERE (1=1', Name: 'Forged', EntityID: ACCOUNTS_ID, ViewEntityInfo: ACCOUNTS, WhereClause: '' };
+
+        const { result, sql } = await run({ ViewEntity: forged as unknown as BaseEntity, Fields: ['ID'], ExcludeDataFromAllPriorViewRuns: true });
+
+        expect(sql).toHaveLength(0);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/GUID/);
+    });
+
+    it('still excludes prior runs of a loaded view', async () => {
+        const { result, sql } = await run({ ...savedView({ WhereClause: '' }), ExcludeDataFromAllPriorViewRuns: true });
+
+        expect(result.Success).toBe(true);
+        expect(sql[0]).toContain('UserViewID=3f1f6b9e-0000-4000-8000-0000000000f1)');
     });
 });
 

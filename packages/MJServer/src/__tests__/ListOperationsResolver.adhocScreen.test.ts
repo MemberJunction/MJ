@@ -11,6 +11,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
  */
 
 import type { DatabaseProviderBase, EntityInfo, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
 import { SetDeltaTokenSecret } from '@memberjunction/lists';
 import { ComposeListsInput, ComputeDeltaInput, ListOperationsResolver, ListSourceInput } from '../resolvers/ListOperationsResolver.js';
 import type { AppContext } from '../types.js';
@@ -44,6 +46,12 @@ function fakeProvider(snapshotWhere = `Status = 'Active'`) {
     };
     const provider = {
         Entities: [contacts],
+        Dialect: new SQLServerDialect(),
+        TransformExternalSQLClause: (clause: string) => clause,
+        // The real provider screen, run against this double's entities and dialect.
+        ScreenClientClause(...args: Parameters<GenericDatabaseProvider['ScreenClientClause']>): void {
+            GenericDatabaseProvider.prototype.ScreenClientClause.apply(this as unknown as GenericDatabaseProvider, args);
+        },
         EntityByName: (name: string) => (name.trim().toLowerCase() === 'contacts' ? contacts : undefined),
         EntityByID: (id: string) => (id === contacts.ID ? contacts : undefined),
         GetEntityObject: async () => snapshotList,

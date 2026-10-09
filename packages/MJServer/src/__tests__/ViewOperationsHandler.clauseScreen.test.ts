@@ -39,7 +39,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...actual, Metadata: MockMetadata, RunView: MockRunView, LogError: vi.fn() };
 });
 
-import type { PlatformSQL, RunViewParams, UserInfo } from '@memberjunction/core';
+import type { BaseEntity, PlatformSQL, RunViewParams, UserInfo } from '@memberjunction/core';
 import { ViewOperationsHandler } from '../rest/ViewOperationsHandler.js';
 
 const BRACKET_STACKED =
@@ -115,6 +115,16 @@ describe('ViewOperationsHandler — REST clause screen', () => {
             ViewOperationsHandler.ListEntities({ EntityName: 'Customers', ExtraFilter: BRACKET_STACKED }, USER),
         ).rejects.toThrow(/multiple statements/);
         expect(mockRunViewFn).not.toHaveBeenCalled();
+    });
+
+    it('refuses a ViewEntity that was not loaded as an entity (its ID would be spliced into SQL)', async () => {
+        const forged = { ID: '0) ; SELECT 1 AS [x] ; SELECT 1 WHERE (1=1', EntityID: 'any' } as unknown as BaseEntity;
+
+        const outcome = await ViewOperationsHandler.RunView({ EntityName: 'Customers', ViewEntity: forged, ExcludeDataFromAllPriorViewRuns: true }, USER);
+
+        expect(mockRunViewFn).not.toHaveBeenCalled();
+        expect(outcome.success).toBe(false);
+        expect(outcome.error).toMatch(/ViewEntity is not accepted over REST/);
     });
 
     it('passes a filter that only reads entity base views through to RunView', async () => {

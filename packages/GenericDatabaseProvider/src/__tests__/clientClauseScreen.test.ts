@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import type { EntityInfo, UserInfo } from '@memberjunction/core';
 import { PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
-import { ClientClauseScreen } from '../clientClauseScreen';
+import { ClientClauseScreen, IsClientClauseScreeningProvider, type ClientViewClauseSet } from '../clientClauseScreen';
 
 const MSSQL = new SQLServerDialect();
 const PG = new PostgreSQLDialect();
@@ -73,6 +73,20 @@ describe('ClientClauseScreen.AssertClauseUsesEntityBaseViews', () => {
     });
 });
 
+describe('ClientClauseScreen — PostgreSQL bracket identifiers', () => {
+    it('screens a bracketed clause in the form the PostgreSQL provider runs it', () => {
+        expect(screen(`([Name] = 'Acme') AND ([Name] LIKE '%acme%')`, 'ExtraFilter', PG)).not.toThrow();
+        expect(screen(`ID IN (SELECT ID FROM [__mj].[vwAccounts])`, 'ExtraFilter', PG)).not.toThrow();
+        expect(screen('[Name] DESC', 'OrderBy', PG)).not.toThrow();
+    });
+
+    it('still refuses a bracketed base table, and any bracket around more than a plain name', () => {
+        expect(screen(`EXISTS (SELECT 1 FROM [__mj].[User])`, 'ExtraFilter', PG)).toThrow(/entity base view/);
+        expect(screen(`[a;b] = 1`, 'ExtraFilter', PG)).toThrow(/Invalid ExtraFilter/);
+        expect(screen(`[x'y] = 1`, 'ExtraFilter', PG)).toThrow(/Invalid ExtraFilter/);
+    });
+});
+
 describe('ClientClauseScreen.ScreenViewClauses', () => {
     it('screens every variant of a platform-specific clause under its own dialect', () => {
         expect(() => ClientClauseScreen.ScreenViewClauses(
@@ -85,9 +99,11 @@ describe('ClientClauseScreen.ScreenViewClauses', () => {
         )).not.toThrow();
     });
 
-    it('refuses a clause value that is not SQL text', () => {
-        const junk = { ExtraFilter: 42 } as unknown as { ExtraFilter: string };
+    it('refuses a clause value, or a platform variant, that is not SQL text', () => {
+        const junk = { ExtraFilter: 42 } as unknown as ClientViewClauseSet;
+        const junkVariant = { ExtraFilter: { default: `Name = 'x'`, sqlserver: ['1=1 ; SELECT 1'] } } as unknown as ClientViewClauseSet;
         expect(() => ClientClauseScreen.ScreenViewClauses(junk, ENTITIES, MSSQL, USER)).toThrow(/expected SQL text/);
+        expect(() => ClientClauseScreen.ScreenViewClauses(junkVariant, ENTITIES, MSSQL, USER)).toThrow(/expected SQL text/);
     });
 });
 
@@ -100,9 +116,22 @@ describe('ClientClauseScreen.AssertSingleStatementFragment', () => {
         expect(check("1=1 AND [x'] = 1 --'")).toThrow(/comments/);
     });
 
+    it('refuses input that is not SQL text', () => {
+        const notText = ['1=1 ; SELECT 1'] as unknown as string;
+        expect(() => ClientClauseScreen.AssertSingleStatementFragment(notText, 'ExtraFilter', MSSQL)).toThrow(/expected SQL text/);
+    });
+
     it('allows separators and comment markers inside literals and quoted identifiers', () => {
         expect(check(`[Na;me] = 'a;b' AND Note <> 'c--d' AND "x;y" = 1`)).not.toThrow();
         expect(check(`Name = E'it\\'s;fine'`, PG)).not.toThrow();
         expect(check('')).not.toThrow();
+    });
+});
+
+describe('IsClientClauseScreeningProvider', () => {
+    it('recognizes a provider that exposes ScreenClientClause', () => {
+        expect(IsClientClauseScreeningProvider({ ScreenClientClause: () => undefined })).toBe(true);
+        expect(IsClientClauseScreeningProvider({ Entities: [] })).toBe(false);
+        expect(IsClientClauseScreeningProvider(null)).toBe(false);
     });
 });
