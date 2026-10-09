@@ -70,7 +70,10 @@ import {
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSpec } from '../feature-assembly';
 import type { SourceRow } from '../feature-assembly';
+import { ModelHasTrainedArtifact, ModelNeedsTrainingMessage, ModelArtifactMissingMessage, ModelNeedsTrainingError } from './model-readiness';
 import type {
+  IModelAutoTrainer,
+  MLAutoTrainConfig,
   MLModelInferenceProcessorOptions,
   MLInferenceDeps,
   LoadedModel,
@@ -88,8 +91,11 @@ export const ML_INFERENCE_WORK_TYPE_ALIAS = 'MLModelInference';
  */
 @RegisterClass(MLModelInferenceProcessor, ML_INFERENCE_WORK_TYPE)
 export class MLModelInferenceProcessor implements IRecordProcessor {
-  private readonly modelId: string;
+  /** The model to score with. Mutable only so an opt-in auto-train can retarget the run at the freshly trained model. */
+  private modelId: string;
   private readonly deps: MLInferenceDeps;
+  private readonly autoTrain?: MLAutoTrainConfig;
+  private readonly autoTrainer?: IModelAutoTrainer;
   private readonly primaryKeyField: string;
   private readonly datedSources?: DatedSourceSpec[];
   private readonly assembler: FeatureAssemblyExecutor;
@@ -108,7 +114,55 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     this.deps = options.deps;
     this.primaryKeyField = options.primaryKeyField ?? 'ID';
     this.datedSources = options.datedSources;
+    this.autoTrain = options.autoTrain;
+    this.autoTrainer = options.autoTrainer;
     this.assembler = assembler ?? new FeatureAssemblyExecutor();
+  }
+
+  /**
+   * Run-level readiness check (the Record Set Processing `Preflight` seam): warm-loads
+   * the model + artifact ONCE before the first batch, so a model that needs training
+   * refuses the whole run with one clear message instead of failing every record into
+   * the error-rate circuit breaker. The loaded model is the same warm cache every
+   * record then reuses, so this costs no extra load.
+   *
+   * @param context the run-level execution context (user + provider)
+   * @throws when the model is missing, has no trained artifact, or its artifact can't be loaded
+   */
+  public async Preflight(context: RecordProcessorContext): Promise<void> {
+    try {
+      await this.ensureModel(context);
+      return;
+    } catch (err) {
+      // Clear the memoized failure so a retry (or the auto-train below) re-attempts the load.
+      this.resetModelCache();
+      if (!(err instanceof ModelNeedsTrainingError) || !this.autoTrain || !this.autoTrainer) {
+        throw err;
+      }
+    }
+    // Opt-in train-if-untrained: train the declared pipeline, publish, repoint, then score with it.
+    this.modelId = await this.autoTrainer.EnsureTrainedModel(
+      {
+        pipelineId: this.autoTrain.pipelineId,
+        currentModelId: this.modelId || null,
+        recordProcessId: context.recordProcessID ?? null,
+        binding: this.autoTrain.binding,
+      },
+      context.contextUser,
+      context.provider,
+    );
+    try {
+      await this.ensureModel(context);
+    } catch (err) {
+      this.resetModelCache();
+      throw err;
+    }
+  }
+
+  /** Drop the warm-model cache (and any memoized failed load). */
+  private resetModelCache(): void {
+    this.loadPromise = null;
+    this.loadedModel = null;
   }
 
   /**
@@ -191,16 +245,19 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   /** Resolve the `MJ: ML Models` row + its frozen contract + the artifact bytes. */
   private async loadModel(context: RecordProcessorContext): Promise<LoadedModel> {
+    if (!this.modelId) {
+      throw new ModelNeedsTrainingError('MLModelInferenceProcessor: no ML Model is configured yet — the model needs training.');
+    }
     const model = await this.deps.modelLoader.loadModel(this.modelId, context.contextUser, context.provider);
     if (!model) {
-      throw new Error(`MLModelInferenceProcessor: ML Model '${this.modelId}' not found`);
+      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ML Model '${this.modelId}' not found`);
     }
-    if (!model.ArtifactFileID) {
-      throw new Error(`MLModelInferenceProcessor: ML Model '${this.modelId}' has no ArtifactFileID`);
+    if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
+      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelNeedsTrainingMessage(this.modelId)}`);
     }
     const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, context.contextUser);
     if (!bytes) {
-      throw new Error(`MLModelInferenceProcessor: artifact '${model.ArtifactFileID}' not found for model '${this.modelId}'`);
+      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelArtifactMissingMessage(this.modelId, model.ArtifactFileID)}`);
     }
     return this.buildLoadedModel(model, bytes, context);
   }
