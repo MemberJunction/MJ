@@ -345,9 +345,15 @@ export interface CoAgentSystemPromptResolution {
 export interface ExecuteRelayedToolInput {
     /** The shared session id grouping this voice session's runs. */
     AgentSessionID: string;
-    /** The id of the (co-agent) run that owns this session, used as the delegated run's parent. Optional. */
+    /**
+     * The id of the (co-agent) run that owns this session, used as the delegated run's parent. Optional.
+     * The caller passes it only when it is a run of this session.
+     */
     ParentRunID?: string;
-    /** The top-level (lead) target agent id for `invoke-target-agent` delegation. */
+    /**
+     * The top-level (lead) target agent id for `invoke-target-agent` delegation. The caller must have
+     * checked that the acting user may run this agent.
+     */
     TargetAgentID: string;
     /**
      * The session's effective allowed delegation targets (the union-accumulated set from the config
@@ -359,7 +365,8 @@ export interface ExecuteRelayedToolInput {
     /**
      * Optional direct actions configuration for this session, derived once during session prep
      * (cascade: co-agent + runtime overrides + target + app settings). When present, direct action
-     * enforcement checks this configuration instead of recomputing from target alone.
+     * enforcement checks this configuration instead of recomputing from target alone. Pass it only
+     * from server-side state, never from a client-writable source such as a session's `Config`.
      */
     DirectActions?: RealtimeDirectActionsConfig;
     /** The tool call the browser relayed from the provider. */
@@ -380,7 +387,8 @@ export interface ExecuteRelayedToolInput {
      * Optional id of a previously-paused delegated run (Status `AwaitingFeedback`) to RESUME instead
      * of starting a fresh run. When set, {@link delegateToTarget} passes it as `lastRunId` (with
      * `autoPopulateLastRunPayload`) to {@link AgentRunner.RunAgent}, so the user's answer continues
-     * the SAME interactive run (e.g. confirming a Query Builder task graph).
+     * the SAME interactive run (e.g. confirming a Query Builder task graph). The caller passes it only
+     * when it is a run of this session.
      */
     ResumeRunID?: string;
     /**
@@ -3019,6 +3027,9 @@ export class RealtimeClientSessionService {
      * Gated by driver capability (`SupportsDynamicToolSet`) and explicit configuration opt-in
      * (`Configuration.realtime.directActions.enabled = true`).
      *
+     * With `agentSessionID`, the projection is recorded for the session, even when it is empty: relayed
+     * direct-action calls for the session may run only the projected actions.
+     *
      * @param targetAgentID The target agent ID being voiced.
      * @param effectiveConfig The resolved effective configuration.
      * @param driverClass The resolved vendor's DriverClass.
@@ -3031,11 +3042,13 @@ export class RealtimeClientSessionService {
         agentSessionID?: string
     ): RealtimeToolDefinition[] {
         if (!targetAgentID || !this.driverSupportsDynamicToolSet(driverClass)) {
+            this.recordEmptyProjection(agentSessionID);
             return [];
         }
 
         const directConfig = GetDirectActionsConfig(effectiveConfig);
         if (!directConfig || !directConfig.enabled) {
+            this.recordEmptyProjection(agentSessionID);
             return [];
         }
 
@@ -3058,6 +3071,13 @@ export class RealtimeClientSessionService {
             tools.push(this.mapActionToToolDefinition(action, wireName));
         }
         return tools;
+    }
+
+    /** Records that a session projected no direct actions, so its relays run none. */
+    private recordEmptyProjection(agentSessionID: string | undefined): void {
+        if (agentSessionID) {
+            this.sessionWireActionMaps.Set(agentSessionID, new Map<string, MJActionEntityExtended>());
+        }
     }
 
     /** @deprecated Use {@link BuildDirectActionTools}. */
@@ -3126,6 +3146,10 @@ export class RealtimeClientSessionService {
      * configured timeout. If the tool is unrecognized, disallowed, or target resolution fails,
      * returns a structured "not available" result.
      *
+     * When this service prepared the session, only the actions it projected for the session at
+     * start may run, whatever target the input names. Otherwise the target agent's own metadata
+     * decides.
+     *
      * @param call The non-target tool call.
      * @param input The optional relayed tool input context.
      * @param contextUser The calling user context.
@@ -3153,11 +3177,9 @@ export class RealtimeClientSessionService {
             };
         }
 
-        const candidateActions = this.getTargetAgentActions(target.ID);
-        const candidateWireMap = this.BuildWireActionMap(candidateActions);
-        const action = (input?.AgentSessionID ? this.sessionWireActionMaps.Get(input.AgentSessionID)?.get(call.ToolName) : undefined)
-            ?? candidateWireMap.get(call.ToolName)
-            ?? Array.from(candidateWireMap.entries()).find(([w]) => w.toLowerCase() === call.ToolName.trim().toLowerCase())?.[1];
+        const projection = input?.AgentSessionID ? this.sessionWireActionMaps.Get(input.AgentSessionID) : undefined;
+        const candidateWireMap = this.BuildWireActionMap(this.getTargetAgentActions(target.ID));
+        const action = this.findWireAction(projection, call.ToolName) ?? this.findWireAction(candidateWireMap, call.ToolName);
 
         if (!action) {
             return {
@@ -3171,7 +3193,7 @@ export class RealtimeClientSessionService {
             ?? (input?.AgentSessionID ? this.sessionDirectConfigs.Get(input.AgentSessionID) : undefined)
             ?? GetDirectActionsConfig(this.resolveEffectiveConfig(target, undefined, target));
 
-        if (!IsActionAllowedForDirectInvocation(action.Name, directConfig)) {
+        if (!this.isInProjection(projection, action) || !IsActionAllowedForDirectInvocation(action.Name, directConfig)) {
             return {
                 CallID: call.CallID,
                 Success: false,
@@ -3238,6 +3260,32 @@ export class RealtimeClientSessionService {
                 Output: `Action '${action.Name}' failed: ${message}`
             };
         }
+    }
+
+    /**
+     * Finds the action a relayed tool name refers to: the exact wire name first, then a
+     * case-insensitive match.
+     */
+    private findWireAction(
+        wireMap: Map<string, MJActionEntityExtended> | undefined,
+        toolName: string
+    ): MJActionEntityExtended | undefined {
+        if (!wireMap) {
+            return undefined;
+        }
+        const wanted = toolName.trim().toLowerCase();
+        return wireMap.get(toolName) ?? Array.from(wireMap.entries()).find(([wireName]) => wireName.toLowerCase() === wanted)?.[1];
+    }
+
+    /**
+     * True when the action is in the session's start-time projection, or when this service holds no
+     * projection for the session because another process prepared it.
+     */
+    private isInProjection(
+        projection: Map<string, MJActionEntityExtended> | undefined,
+        action: MJActionEntityExtended
+    ): boolean {
+        return !projection || Array.from(projection.values()).some(projected => UUIDsEqual(projected.ID, action.ID));
     }
 
     /**

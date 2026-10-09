@@ -11,9 +11,9 @@
  * and **executes** every tool call the browser relays back. The three mutations here cover the MVP:
  *
  * 1. {@link RealtimeClientSessionResolver.StartRealtimeClientSession} — authorize, create the
- *    session (storing the target agent id server-side, authoritatively), mint the ephemeral config.
- * 2. {@link RealtimeClientSessionResolver.ExecuteRealtimeSessionTool} — execute a relayed tool call,
- *    reading the target agent id from the session (NOT the client) so the browser can't swap targets.
+ *    session (storing the target agent id on it), mint the ephemeral config.
+ * 2. {@link RealtimeClientSessionResolver.ExecuteRealtimeSessionTool} — execute a relayed tool call
+ *    for the target agent stored on the session, re-authorized for the caller on every call.
  * 3. {@link RealtimeClientSessionResolver.RelayRealtimeTranscript} — persist a transcript turn as a
  *    `Conversation Detail`.
  *
@@ -21,6 +21,9 @@
  * - **Start**: the caller must have `CanRun` on the *target* agent (the Realtime Co-Agent is an internal
  *   orchestration agent, so the meaningful gate is the agent doing the real work).
  * - **Execute / Relay**: inbound ownership — the session's `UserID` must equal `contextUser.ID`.
+ * - **Session `Config`**: the owner can edit it through the generic entity API, so nothing in it is
+ *   trusted. Execute re-checks `CanRun` on its target, direct actions never come from it, and its
+ *   run ids are used only when {@link SessionRunIDVerifier} finds them to be records of the session.
  *
  * @module @memberjunction/server
  */
@@ -64,6 +67,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
+import { SessionRunIDVerifier } from '../agentSessions/SessionRunIDVerifier.js';
 import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser, ResolveRecordingStoreUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /**
@@ -119,9 +123,9 @@ const MAX_CONVERSATION_HISTORY_TURNS = 30;
 const MAX_CONVERSATION_HISTORY_CHARS = 8_000;
 
 /**
- * Authoritative shape persisted in `AIAgentSession.Config_` for a client-direct voice session.
- * The target agent id is stored here at start and read back on every relay — the browser never
- * re-supplies it, so it cannot swap targets mid-session.
+ * Shape persisted in `AIAgentSession.Config_` for a client-direct voice session. The server writes
+ * it, but the session owner can also edit it through the generic entity API, so relays re-check
+ * what they read from it (see the authorization model above).
  */
 interface RealtimeSessionConfig {
     /** The top-level target agent the co-agent voices on behalf of. */
@@ -363,6 +367,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     // state on — otherwise that cleanup silently no-ops on a freshly-constructed instance.
     private readonly clientSessionService = new RealtimeClientSessionService();
     private readonly sessionManager = new SessionManager(this.clientSessionService);
+    private readonly runIDVerifier = new SessionRunIDVerifier();
 
     /**
      * The reason a `Save()`/`Delete()` returned false, for a log line. `CompleteMessage` renders
@@ -399,7 +404,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      *    agent's `DefaultCoAgentID` → type-level `AIAgentCoAgent` default row → global Realtime Co-Agent) —
      *    see {@link ResolveRealtimeCoAgentID} for the full contract.
      * 3. Create the durable `AIAgentSession` (run by the co-agent), storing `targetAgentID` in its
-     *    config server-side — this is the authoritative target for all later relays.
+     *    config — the target later relays use, re-authorized for the caller on each relay.
      * 4. Mint the {@link import('@memberjunction/ai').ClientRealtimeSessionConfig} via the service.
      *    On failure the just-created session is closed so no half-open session leaks.
      *
@@ -521,8 +526,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * Execute a single tool call the browser relayed from its provider socket and return the
      * serialized result for the browser to relay back to the model.
      *
-     * Ownership-gated; the target agent id is read from the **session config** (authoritative), never
-     * from the client. Heartbeats the session on success.
+     * Ownership-gated. The target agent id is read from the session config and `CanRun` on it is
+     * checked for the caller on every call, because the owner can edit the config. Heartbeats the
+     * session on success.
      *
      * @returns The serialized tool result JSON.
      */
@@ -538,13 +544,20 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
         const config = this.readSessionConfig(session);
+        await this.assertCanRunTarget(config.targetAgentID, contextUser, provider);
 
         // SCOPED-ANONYMOUS ELEVATION (issue #3371): once ownership is proven above, the delegated
         // run + its AI-run-entity writes execute as the system user for a scoped anonymous caller
         // (the caller's role deliberately holds no grants on the run entities). The lead
-        // targetAgentID comes from the session config and was CanRun-gated at start; the colleague
-        // union is gated just below, against the CALLER, so elevation never widens agent authority.
+        // targetAgentID is CanRun-gated against the CALLER just above, and the colleague union
+        // just below, so elevation never widens agent authority.
         const runUser = ResolveScopedAnonymousRunUser(contextUser);
+        const runIDs = await this.runIDVerifier.Verify(
+            session.ID,
+            { CoAgentRunID: config.coAgentRunID, PendingFeedbackRunID: config.pendingFeedbackRunID },
+            runUser,
+            provider,
+        );
         if (runUser !== contextUser) {
             LogStatus(
                 `ExecuteRealtimeSessionTool: dispatching relayed tool '${toolName}' for session ${agentSessionId} ` +
@@ -562,12 +575,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 // Multi-target (Move 4): the session's persisted allowed-agent union — a model-named
                 // colleague in the call is validated against this; absent ⇒ single-target behavior.
                 AllowedAgents: await FilterAllowedAgentsByCanRun(config.allowedAgents, contextUser),
-                DirectActions: config.directActions,
+                // No DirectActions: the service takes them from the session's start-time projection
+                // or the target agent's metadata, never from the owner-editable config.
                 // Attribution follows the VISITOR even when `runUser` is elevated: the delegated run
                 // row and its context-memory scope must stay the person's, not the system user's.
                 AttributionUserID: contextUser.ID,
                 // Nest the delegated target-agent run under the co-agent observability run (when present).
-                ParentRunID: config.coAgentRunID,
+                ParentRunID: runIDs.CoAgentRunID,
                 // The client-tool channel is keyed on the browser session id, so the delegated run can call
                 // the surface's tools; the session-start app context gives its prompt the surface context.
                 BrowserSessionID: userPayload.sessionId,
@@ -577,7 +591,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 Call: { CallID: callId, ToolName: toolName, Arguments: argsJson },
                 OnProgress: this.buildDelegationProgressCallback(pubSub, userPayload, agentSessionId, callId),
                 // Resume a previously-paused delegated run (if any) with the user's answer.
-                ResumeRunID: config.pendingFeedbackRunID,
+                ResumeRunID: runIDs.PendingFeedbackRunID,
             },
             runUser,
             provider,
@@ -716,14 +730,15 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // conversation (run-viewer observability parity). Best-effort — never fails the transcript relay.
         // The prompt-run write runs as the scoped-anonymous elevated user (issue #3371) — the visible
         // Conversation Detail above deliberately stays on the caller.
-        const promptRunID = this.readPromptRunID(session);
+        const runUser = ResolveScopedAnonymousRunUser(contextUser);
+        const promptRunID = await this.readPromptRunID(session, runUser, provider);
         if (promptRunID) {
             await this.clientSessionService.AppendPromptRunMessage(
                 promptRunID,
                 this.mapTranscriptRoleToChatRole(role),
                 text,
                 replacesPrevious ?? false,
-                ResolveScopedAnonymousRunUser(contextUser),
+                runUser,
                 provider,
             );
         }
@@ -921,7 +936,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             provider,
         );
 
-        const promptRunID = this.readPromptRunID(session);
+        const runUser = ResolveScopedAnonymousRunUser(contextUser);
+        const promptRunID = await this.readPromptRunID(session, runUser, provider);
         if (!promptRunID) {
             return false;
         }
@@ -930,7 +946,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             'assistant',
             this.formatToolTurn(toolName, argsJson, resultJson),
             false,
-            ResolveScopedAnonymousRunUser(contextUser),
+            runUser,
             provider,
         );
     }
@@ -1022,16 +1038,15 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return true; // nothing to add — a no-op flush is a success, not a failure
         }
 
-        const promptRunID = this.readPromptRunID(session);
+        // Runs as the scoped-anonymous elevated user (issue #3371) — the caller's role holds no prompt-run grants.
+        const runUser = ResolveScopedAnonymousRunUser(contextUser);
+        const promptRunID = await this.readPromptRunID(session, runUser, provider);
         if (!promptRunID) {
             return false; // no observability prompt run for this session — logged in the helper
         }
         // Delegate to the service so usage writes share the per-run serialization with transcript-message
         // appends — otherwise the frequent usage save clobbers freshly-appended Messages (and vice-versa).
-        // Runs as the scoped-anonymous elevated user (issue #3371) — the caller's role holds no prompt-run grants.
-        return this.clientSessionService.AccumulatePromptRunUsage(
-            promptRunID, inputDelta, outputDelta, ResolveScopedAnonymousRunUser(contextUser), provider,
-        );
+        return this.clientSessionService.AccumulatePromptRunUsage(promptRunID, inputDelta, outputDelta, runUser, provider);
     }
 
     /** Clamps a relayed token delta: negative / non-finite values become 0. */
@@ -1058,24 +1073,40 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
     /**
      * Reads the co-agent `AIPromptRun` id from the session config WITHOUT the relay path's
-     * throw-on-missing-target semantics — usage relay is best-effort, so a missing/malformed
-     * config or absent id just logs and returns `null`.
+     * throw-on-missing-target semantics, and keeps it only when it is the prompt run of the
+     * session's co-agent run (the owner can edit the config). Usage relay is best-effort, so a
+     * missing/malformed config, an absent id, or an id of another session just logs and returns `null`.
+     *
+     * @param runUser The user the prompt-run write runs as; the check runs as the same user.
      */
-    private readPromptRunID(session: MJAIAgentSessionEntity): string | null {
-        try {
-            const config = this.readSessionConfig(session);
-            if (config.promptRunID) {
-                return config.promptRunID;
-            }
+    private async readPromptRunID(
+        session: MJAIAgentSessionEntity,
+        runUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        const config = this.tryReadSessionConfig(session);
+        if (!config) {
+            LogError(`RelayRealtimeUsage: session ${session.ID} has no parseable config — usage delta dropped.`);
+            return null;
+        }
+        if (!config.promptRunID) {
             LogStatus(
                 `RelayRealtimeUsage: session ${session.ID} has no co-agent promptRunID (observability run ` +
                     'creation was skipped or failed) — usage delta dropped.',
             );
             return null;
-        } catch {
-            LogError(`RelayRealtimeUsage: session ${session.ID} has no parseable config — usage delta dropped.`);
+        }
+        const verified = await this.runIDVerifier.Verify(
+            session.ID,
+            { CoAgentRunID: config.coAgentRunID, PromptRunID: config.promptRunID },
+            runUser,
+            provider,
+        );
+        if (!verified.PromptRunID) {
+            LogError(`RelayRealtimeUsage: session ${session.ID} names a promptRunID that is not its co-agent prompt run — ignored.`);
             return null;
         }
+        return verified.PromptRunID;
     }
 
     /**
@@ -1577,9 +1608,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
     /**
      * Writes the co-agent observability run ids into the session's `Config_` alongside the
-     * authoritative `targetAgentID`, then saves the session. These ids are read back on close to
+     * `targetAgentID`, then saves the session. These ids are read back on close to
      * finalize the runs (and on relay to nest delegated runs). The app awareness (application id,
-     * allowed agents, direct actions, app-context snapshot) is written with them for each relay to read.
+     * allowed agents, direct actions, app-context snapshot) is written with them; relays read the
+     * allowed agents and the app context, never the direct actions.
      * Best-effort: a save failure is logged, not thrown — the voice session still proceeds, it just
      * won't carry the run ids.
      */
@@ -2449,9 +2481,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
-     * Parses the session's persisted config, returning the authoritative `targetAgentID` plus any
-     * observability run ids (`coAgentRunID`/`promptRunID`). Throws when the config is missing/malformed
-     * or carries no target — a relay cannot proceed without a target.
+     * Parses the session's persisted config, returning its `targetAgentID` plus any observability run
+     * ids (`coAgentRunID`/`promptRunID`). Throws when the config is missing/malformed or carries no
+     * target — a relay cannot proceed without a target. The owner can edit the config, so callers
+     * re-check what they act on.
      */
     private readSessionConfig(session: MJAIAgentSessionEntity): RealtimeSessionConfig {
         const raw = session.Config_;

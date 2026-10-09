@@ -32,3 +32,4 @@ export * from './remoteBrowserGoalEngine.js';
 export * from './HostInstance.js';
 export * from './SessionManager.js';
 export * from './SessionJanitor.js';
+export * from './SessionRunIDVerifier.js';

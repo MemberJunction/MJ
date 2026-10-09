@@ -29,15 +29,18 @@ vi.mock('@memberjunction/ai-agents', () => ({
     },
 }));
 
-// --- Mock RunView.FromMetadataProvider so channel sweeps are controllable, while leaving the
-//     rest of @memberjunction/core intact. ---
+// --- Mock RunView.FromMetadataProvider so channel sweeps and run-id lookups are controllable,
+//     while leaving the rest of @memberjunction/core intact. RunViews runs each view through runViewMock. ---
 const runViewMock = vi.fn();
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     return {
         ...actual,
         RunView: {
-            FromMetadataProvider: () => ({ RunView: runViewMock }),
+            FromMetadataProvider: () => ({
+                RunView: runViewMock,
+                RunViews: (paramsList: unknown[]) => Promise.all(paramsList.map((params) => runViewMock(params))),
+            }),
         },
     };
 });
@@ -100,6 +103,27 @@ function makeSessionEntity(overrides: Partial<FakeEntity> = {}): FakeEntity {
         LatestResult: { CompleteMessage: '' },
         ...overrides,
     };
+}
+
+/** Co-agent observability ids as a voice session's Config holds them. */
+const CO_RUN_ID = 'a5a5a5a5-0000-4000-8000-0000000000c0';
+const PROMPT_RUN_ID = 'a5a5a5a5-0000-4000-8000-0000000000b0';
+const RUN_STEP_ID = 'a5a5a5a5-0000-4000-8000-0000000000a0';
+
+/**
+ * Makes the given runs records of the session for the run-id lookups: `runIDs` carry the session's
+ * id, and `promptRunID` (when given) is the TargetLogID of the co-agent run's Prompt step.
+ */
+function mockSessionRunRecords(runIDs: string[], promptRunID?: string): void {
+    runViewMock.mockImplementation(async (params: { EntityName?: string }) => {
+        if (params.EntityName === 'MJ: AI Agent Runs') {
+            return { Success: true, Results: runIDs.map((ID) => ({ ID })) };
+        }
+        if (params.EntityName === 'MJ: AI Agent Run Steps') {
+            return { Success: true, Results: promptRunID ? [{ ID: RUN_STEP_ID, StepType: 'Prompt', TargetLogID: promptRunID }] : [] };
+        }
+        return { Success: true, Results: [] };
+    });
 }
 
 beforeEach(() => {
@@ -230,8 +254,9 @@ describe('SessionManager.CloseSession', () => {
         const session = makeSessionEntity({
             ID: 'session-voice',
             Status: 'Active',
-            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: 'co-run-5', promptRunID: 'prompt-run-5' }),
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
         });
+        mockSessionRunRecords([CO_RUN_ID], PROMPT_RUN_ID);
         const { provider } = makeProvider(() => session);
         const mgr = new SessionManager();
         const user = makeUser();
@@ -240,7 +265,7 @@ describe('SessionManager.CloseSession', () => {
 
         expect(ok).toBe(true);
         expect(finalizeCoAgentRunMock).toHaveBeenCalledTimes(1);
-        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-5', 'prompt-run-5', user, provider, true, null);
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith(CO_RUN_ID, PROMPT_RUN_ID, user, provider, true, null);
     });
 
     it('threads the co-agent run-step id into finalize when the session config carries it', async () => {
@@ -249,11 +274,12 @@ describe('SessionManager.CloseSession', () => {
             Status: 'Active',
             Config_: JSON.stringify({
                 targetAgentID: 't1',
-                coAgentRunID: 'co-run-6',
-                promptRunID: 'prompt-run-6',
-                coAgentRunStepID: 'run-step-6',
+                coAgentRunID: CO_RUN_ID,
+                promptRunID: PROMPT_RUN_ID,
+                coAgentRunStepID: RUN_STEP_ID,
             }),
         });
+        mockSessionRunRecords([CO_RUN_ID], PROMPT_RUN_ID);
         const { provider } = makeProvider(() => session);
         const mgr = new SessionManager();
         const user = makeUser();
@@ -261,7 +287,7 @@ describe('SessionManager.CloseSession', () => {
         const ok = await mgr.CloseSession('session-voice-step', user, provider);
 
         expect(ok).toBe(true);
-        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-6', 'prompt-run-6', user, provider, true, 'run-step-6');
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith(CO_RUN_ID, PROMPT_RUN_ID, user, provider, true, RUN_STEP_ID);
     });
 
     it('finalizes as the SYSTEM user when a scoped anonymous owner closes their session (issue #3371)', async () => {
@@ -276,8 +302,9 @@ describe('SessionManager.CloseSession', () => {
         const session = makeSessionEntity({
             ID: 'session-anon',
             Status: 'Active',
-            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: 'co-run-9', promptRunID: 'prompt-run-9' }),
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
         });
+        mockSessionRunRecords([CO_RUN_ID], PROMPT_RUN_ID);
         const { provider } = makeProvider(() => session);
         const mgr = new SessionManager();
 
@@ -286,7 +313,7 @@ describe('SessionManager.CloseSession', () => {
         expect(ok).toBe(true);
         // The session-close writes themselves stay on the caller — only finalize elevates.
         expect(session.Status).toBe('Closed');
-        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-9', 'prompt-run-9', systemUser, provider, true, null);
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith(CO_RUN_ID, PROMPT_RUN_ID, systemUser, provider, true, null);
     });
 
     it('FAILS CLOSED — finalizes as the anonymous caller when no system user is available', async () => {
@@ -299,14 +326,15 @@ describe('SessionManager.CloseSession', () => {
         const session = makeSessionEntity({
             ID: 'session-anon-2',
             Status: 'Active',
-            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: 'co-run-10', promptRunID: null }),
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: CO_RUN_ID, promptRunID: null }),
         });
+        mockSessionRunRecords([CO_RUN_ID]);
         const { provider } = makeProvider(() => session);
         const mgr = new SessionManager();
 
         await mgr.CloseSession('session-anon-2', anonUser, provider);
 
-        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-10', null, anonUser, provider, true, null);
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith(CO_RUN_ID, null, anonUser, provider, true, null);
     });
 
     it('does not finalize when the session config has no run ids (target only)', async () => {
@@ -336,8 +364,9 @@ describe('SessionManager.CloseSession', () => {
         const session = makeSessionEntity({
             ID: 'session-injected',
             Status: 'Active',
-            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: 'co-run-injected', promptRunID: 'prompt-run-injected' }),
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
         });
+        mockSessionRunRecords([CO_RUN_ID], PROMPT_RUN_ID);
         const { provider } = makeProvider(() => session);
         const mgr = new SessionManager(injectedService);
         const user = makeUser();
@@ -347,7 +376,7 @@ describe('SessionManager.CloseSession', () => {
         expect(ok).toBe(true);
         // The finalize call landed on the INJECTED instance, never the module-default one.
         expect(injectedFinalizeMock).toHaveBeenCalledTimes(1);
-        expect(injectedFinalizeMock).toHaveBeenCalledWith('co-run-injected', 'prompt-run-injected', user, provider, true, null);
+        expect(injectedFinalizeMock).toHaveBeenCalledWith(CO_RUN_ID, PROMPT_RUN_ID, user, provider, true, null);
         expect(finalizeCoAgentRunMock).not.toHaveBeenCalled();
     });
 
@@ -355,8 +384,9 @@ describe('SessionManager.CloseSession', () => {
         const session = makeSessionEntity({
             ID: 'session-default-svc',
             Status: 'Active',
-            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: 'co-run-default', promptRunID: 'prompt-run-default' }),
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
         });
+        mockSessionRunRecords([CO_RUN_ID], PROMPT_RUN_ID);
         const { provider } = makeProvider(() => session);
         const mgr = new SessionManager(); // no injection — e.g. SessionJanitor, telephony services
         const user = makeUser();
@@ -364,7 +394,7 @@ describe('SessionManager.CloseSession', () => {
         const ok = await mgr.CloseSession('session-default-svc', user, provider);
 
         expect(ok).toBe(true);
-        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-default', 'prompt-run-default', user, provider, true, null);
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith(CO_RUN_ID, PROMPT_RUN_ID, user, provider, true, null);
     });
 
     it('stamps CloseReason = Explicit by default (untouched call sites get the right reason)', async () => {
@@ -469,7 +499,8 @@ describe('SessionManager.Heartbeat — the session\'s co-agent run stays alive',
     });
 
     it('keeps the co-agent run alive for the run watchdog on each persisted heartbeat', async () => {
-        const session = makeSessionEntity({ ID: 'session-1', Status: 'Active', Config_: JSON.stringify({ coAgentRunID: 'co-run-1', promptRunID: 'pr-1' }) });
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Active', Config_: JSON.stringify({ coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }) });
+        mockSessionRunRecords([CO_RUN_ID], PROMPT_RUN_ID);
         const { provider } = makeProvider(() => session);
         const mgr = new SessionManager();
 
@@ -477,7 +508,7 @@ describe('SessionManager.Heartbeat — the session\'s co-agent run stays alive',
         await mgr.Heartbeat('session-1', makeUser(), provider); // coalesced: no write, no re-registration
 
         expect(keepCoAgentRunAliveMock).toHaveBeenCalledOnce();
-        expect(keepCoAgentRunAliveMock.mock.calls[0][0]).toBe('co-run-1');
+        expect(keepCoAgentRunAliveMock.mock.calls[0][0]).toBe(CO_RUN_ID);
         expect(keepCoAgentRunAliveMock.mock.calls[0][1]).toBe(provider);
     });
 
@@ -655,5 +686,66 @@ describe('SessionManager — server-side channel plugin lifecycle notifications'
         const ok = await mgr.CloseSession('session-1', makeUser(), provider);
         expect(ok).toBe(true);
         expect(session.Status).toBe('Closed');
+    });
+});
+
+// A session's Config is writable by its owner (generic CRUD on MJ: AI Agent Sessions), so the run
+// ids in it are acted on only when they are UUIDs of records that belong to the session.
+describe('SessionManager — run ids in the owner-writable session Config', () => {
+    const SESSION_ID = 'c3c3c3c3-1000-4000-8000-000000000001';
+    const FOREIGN_RUN_ID = 'c3c3c3c3-1000-4000-8000-0000000000f1';
+    const FOREIGN_PROMPT_RUN_ID = 'c3c3c3c3-1000-4000-8000-0000000000f2';
+    const FOREIGN_STEP_ID = 'c3c3c3c3-1000-4000-8000-0000000000f3';
+    /** Harmless text that is not a UUID and would change the meaning of a quoted filter. */
+    const NOT_A_UUID = "x' OR '1'='1";
+
+    function issuedFilters(): string[] {
+        return runViewMock.mock.calls.map(([params]) => (params as { ExtraFilter?: string }).ExtraFilter ?? '');
+    }
+
+    beforeEach(() => {
+        keepCoAgentRunAliveMock.mockClear();
+    });
+
+    it('CloseSession does not finalize run ids that are not records of the session', async () => {
+        const session = makeSessionEntity({
+            ID: SESSION_ID,
+            Status: 'Active',
+            Config_: JSON.stringify({
+                targetAgentID: 't1',
+                coAgentRunID: FOREIGN_RUN_ID,
+                promptRunID: FOREIGN_PROMPT_RUN_ID,
+                coAgentRunStepID: FOREIGN_STEP_ID,
+            }),
+        });
+        const { provider } = makeProvider(() => session);
+
+        await new SessionManager().CloseSession(SESSION_ID, makeUser(), provider);
+
+        expect(finalizeCoAgentRunMock).not.toHaveBeenCalled();
+    });
+
+    it('CloseSession does not finalize run ids that are not UUIDs, and never puts them in a filter', async () => {
+        const session = makeSessionEntity({
+            ID: SESSION_ID,
+            Status: 'Active',
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: NOT_A_UUID, promptRunID: NOT_A_UUID }),
+        });
+        const { provider } = makeProvider(() => session);
+
+        await new SessionManager().CloseSession(SESSION_ID, makeUser(), provider);
+
+        expect(finalizeCoAgentRunMock).not.toHaveBeenCalled();
+        expect(issuedFilters().filter((f) => f.includes(NOT_A_UUID))).toEqual([]);
+    });
+
+    it('Heartbeat does not keep alive a run that is not a record of the session', async () => {
+        const session = makeSessionEntity({ ID: SESSION_ID, Status: 'Active', Config_: JSON.stringify({ coAgentRunID: FOREIGN_RUN_ID }) });
+        const { provider } = makeProvider(() => session);
+
+        await new SessionManager().Heartbeat(SESSION_ID, makeUser(), provider);
+
+        expect(keepCoAgentRunAliveMock).toHaveBeenCalledOnce();
+        expect(keepCoAgentRunAliveMock.mock.calls[0][0]).toBeUndefined();
     });
 });

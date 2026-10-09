@@ -2566,6 +2566,78 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             expect(runSpy).toHaveBeenCalled();
             expect(runSpy.mock.calls[0][0].Params).toEqual([]);
         });
+
+        // A relay's TargetAgentID comes from the session's owner-writable Config. Once the session
+        // has a start-time projection, only the actions in it may run, whatever target the relay names.
+        describe('a session with a start-time projection', () => {
+            const allowAll: RealtimeCoAgentConfig = {
+                realtime: { directActions: { enabled: true, actionNames: ['*'] } }
+            };
+
+            function projectSession(service: TestableService, sessionID: string): void {
+                service.TargetActions = [mockEmailAction];
+                const tools = service.BuildDirectActionTools('target-1', allowAll, 'OpenAIRealtime', sessionID);
+                expect(tools.map(t => t.Name)).toEqual(['SendEmail']);
+            }
+
+            function okResult(): ActionResult {
+                const result = new ActionResult();
+                result.Success = true;
+                result.Message = 'done';
+                return result;
+            }
+
+            it('refuses an action that was not projected for the session, even when the relayed target has it', async () => {
+                const service = new TestableService();
+                projectSession(service, 'sess-projected-1');
+                // The relay names another agent that also has CreateTask, as an edited session Config would.
+                service.TargetActions = [mockEmailAction, mockTaskAction];
+                const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(okResult());
+
+                const call: RealtimeToolCall = { CallID: 'call-projected-1', ToolName: 'CreateTask', Arguments: JSON.stringify({ Title: 'x' }) };
+                const result = await service.ExposeExecuteNonTargetTool(
+                    call, { AgentSessionID: 'sess-projected-1', TargetAgentID: 'target-2', Call: call }, contextUser
+                );
+
+                expect(result.Success).toBe(false);
+                expect(result.Output).toContain('not enabled for direct voice invocation');
+                expect(runSpy).not.toHaveBeenCalled();
+            });
+
+            it('runs no action for a session whose start projected none, even when the target allows it', async () => {
+                const service = new TestableService();
+                service.TargetActions = [mockEmailAction];
+                // The driver takes no dynamic tool set, so the start projects nothing for the session.
+                expect(service.BuildDirectActionTools('target-1', allowAll, 'ElevenLabsRealtime', 'sess-projected-3')).toEqual([]);
+                const targetAgent = { ID: 'target-1', Name: 'Sales Agent', TypeConfiguration: JSON.stringify(allowAll) } as unknown as MJAIAgentEntityExtended;
+                vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+                const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(okResult());
+
+                const call: RealtimeToolCall = { CallID: 'call-projected-3', ToolName: 'SendEmail', Arguments: JSON.stringify({ To: 'a@example.com' }) };
+                const result = await service.ExposeExecuteNonTargetTool(
+                    call, { AgentSessionID: 'sess-projected-3', TargetAgentID: 'target-1', Call: call }, contextUser
+                );
+
+                expect(result.Success).toBe(false);
+                expect(result.Output).toContain('not enabled for direct voice invocation');
+                expect(runSpy).not.toHaveBeenCalled();
+            });
+
+            it('still runs an action that was projected for the session', async () => {
+                const service = new TestableService();
+                projectSession(service, 'sess-projected-2');
+                const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(okResult());
+
+                const call: RealtimeToolCall = { CallID: 'call-projected-2', ToolName: 'sendemail', Arguments: JSON.stringify({ To: 'a@example.com' }) };
+                const result = await service.ExposeExecuteNonTargetTool(
+                    call, { AgentSessionID: 'sess-projected-2', TargetAgentID: 'target-1', Call: call }, contextUser
+                );
+
+                expect(result.Success).toBe(true);
+                expect(runSpy).toHaveBeenCalledTimes(1);
+                expect(runSpy.mock.calls[0][0].Action.Name).toBe('SendEmail');
+            });
+        });
     });
 
     describe('parseActionParams', () => {

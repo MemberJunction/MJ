@@ -24,6 +24,7 @@ import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-en
 import { NormalizeInstanceKey, RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 import { BeginBrowserGoalStep, FinalizeBrowserGoalStep, ExtractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
 import { RemoteBrowserGoalRegistry } from '../agentSessions/remoteBrowserGoalRegistry.js';
+import { SessionRunIDVerifier } from '../agentSessions/SessionRunIDVerifier.js';
 import { randomUUID } from 'node:crypto';
 import {
   RemoteBrowserAction,
@@ -261,6 +262,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    */
   private startedScreencasts = new Map<string, number>();
 
+  /** Checks the co-agent run id read from a session's owner-editable `Config_` before a step is attached to it. */
+  private readonly runIDVerifier = new SessionRunIDVerifier();
+
   /**
    * Surfaces whose live tab-audio stream this resolver has already started, keyed by
    * {@link RemoteBrowserActionResolver.streamKey} for the same reason the screencast map is. Entries
@@ -400,7 +404,13 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     // Observability: nest this goal's many prompt runs under ONE "Browser goal" step on the realtime
     // co-agent run (when the session has one). Best-effort — a null step just means the goal runs unlinked.
-    const coAgentRunID = ExtractCoAgentRunID(session.Config_);
+    // The owner can edit Config_, so its run id is used only when it is a run of this session.
+    const { CoAgentRunID: coAgentRunID } = await this.runIDVerifier.Verify(
+      session.ID,
+      { CoAgentRunID: ExtractCoAgentRunID(session.Config_) },
+      contextUser,
+      provider,
+    );
     const goalStep = await BeginBrowserGoalStep(provider, contextUser, coAgentRunID, goal);
 
     // ASYNC START: a goal loop can run for minutes; do NOT hold this request open for it (browser
