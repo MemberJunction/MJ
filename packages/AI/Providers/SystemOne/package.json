@@ -2,7 +2,7 @@
   "name": "@memberjunction/ai-systemone",
   "type": "module",
   "version": "6.2.0-edge.3",
-  "description": "MemberJunction driver for any server that speaks the System One decisions API (POST /v1/systemone): Kev on Modal, llama.cpp llama-server, TypeSafe",
+  "description": "MemberJunction drivers for System One decision APIs: any server with POST /v1/systemone (Kev on Modal, llama.cpp llama-server, TypeSafe), and Perplexity's Decisions API (pplx-decider-v1-27b)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

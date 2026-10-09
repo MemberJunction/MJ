@@ -117,6 +117,50 @@ describe('RecordSetProcessor.Process', () => {
         expect(tracker.details[0].result.DurationMs).toBeGreaterThanOrEqual(0);
     });
 
+    it('refuses the whole run up front when the processor Preflight throws — no record is processed', async () => {
+        const tracker = new SpyTracker();
+        let processed = 0;
+        const inner = new FunctionRecordProcessor(() => { processed++; return ok(); });
+        const processor = {
+            ProcessRecord: (r: RecordRef, c: Parameters<typeof inner.ProcessRecord>[1]) => inner.ProcessRecord(r, c),
+            Preflight: async () => { throw new Error('ML Model needs training'); },
+        };
+        const result = await engine.Process({
+            source: new ArraySource(recs(5), 'E'),
+            processor,
+            tracker,
+            contextUser: USER,
+            provider: PROVIDER,
+            batchSize: 2,
+        });
+        expect(result.Status).toBe('Failed');
+        expect(result.ErrorMessage).toBe('ML Model needs training');
+        expect(result.Processed).toBe(0);
+        expect(processed).toBe(0);
+        expect(tracker.details).toHaveLength(0);
+        expect(tracker.completed?.Status).toBe('Failed'); // the run is still recorded honestly
+    });
+
+    it('runs normally when the processor Preflight passes, calling it exactly once', async () => {
+        let preflights = 0;
+        const inner = new FunctionRecordProcessor(ok);
+        const processor = {
+            ProcessRecord: (r: RecordRef, c: Parameters<typeof inner.ProcessRecord>[1]) => inner.ProcessRecord(r, c),
+            Preflight: async () => { preflights++; },
+        };
+        const result = await engine.Process({
+            source: new ArraySource(recs(5), 'E'),
+            processor,
+            tracker: new NoOpTracker(),
+            contextUser: USER,
+            provider: PROVIDER,
+            batchSize: 2,
+        });
+        expect(result.Status).toBe('Completed');
+        expect(result.Success).toBe(5);
+        expect(preflights).toBe(1);
+    });
+
     it('pauses gracefully when the tracker requests cancellation at a checkpoint', async () => {
         const tracker = new SpyTracker();
         tracker.pauseAfter = 1; // first checkpoint returns false

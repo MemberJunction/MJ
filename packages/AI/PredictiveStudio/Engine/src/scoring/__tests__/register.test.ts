@@ -102,4 +102,13 @@ describe('registerMLScoringProcessor', () => {
       RecordProcessorRegistry.Instance.Resolve({ WorkType: ML_INFERENCE_WORK_TYPE, Configuration: '{}' }),
     ).toThrow(/modelId/);
   });
+
+  it('accepts a Configuration with no modelId when it opts in to autoTrain', () => {
+    RegisterMLScoringProcessor(deps, { EnsureTrainedModel: async () => 'trained' });
+    const proc = RecordProcessorRegistry.Instance.Resolve({
+      WorkType: ML_INFERENCE_WORK_TYPE,
+      Configuration: JSON.stringify({ autoTrain: { pipelineId: 'pipe-1' } }),
+    });
+    expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
+  });
 });

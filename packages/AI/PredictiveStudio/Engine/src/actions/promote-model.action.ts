@@ -55,6 +55,7 @@ export type PromoteModelOutcome =
   | { kind: 'refused-leakage'; topFeature?: string; topShare?: number }
   | { kind: 'signoff-reason-required'; topFeature?: string; topShare?: number }
   | { kind: 'invalid-transition'; currentStatus: string; targetStatus: PromotableStatus }
+  | { kind: 'needs-training'; message: string }
   | { kind: 'not-found' }
   | { kind: 'save-failed'; message: string };
 
@@ -136,6 +137,8 @@ export class PredictiveStudioPromoteModelAction extends BasePredictiveStudioActi
           `Model ${modelId} cannot move from '${outcome.currentStatus}' to '${outcome.targetStatus}'. ` +
             'Allowed lifecycle: Draft → Validated → Published → Archived (with Published ↔ Archived).',
         );
+      case 'needs-training':
+        return this.fail('MODEL_NEEDS_TRAINING', outcome.message);
       case 'not-found':
         return this.fail('MODEL_NOT_FOUND', `ML Model '${modelId}' was not found.`);
       case 'save-failed':
