@@ -1,5 +1,5 @@
 /**
- * client-cache.checks.ts — the 'client-cache' bundle (C1–C12).
+ * client-cache.checks.ts — the 'client-cache' bundle (C1–C14).
  *
  * PORTED VERBATIM from packages/MJServer/integration-test-scripts/client-cache-tests.ts.
  * These run against a RUNNING MJAPI via GraphQLDataProvider (client transport,
@@ -12,19 +12,32 @@
  * rule: no dynamic import()). C10 carries `RequiresMutation: true` in place of the
  * original `if (process.env.RUN_MUTATION_TESTS === '1')` gate.
  */
-import { RunView, RunQuery, BaseEntity, Metadata } from '@memberjunction/core';
-import type { AggregateExpression } from '@memberjunction/core';
-import type { MJUserSettingEntity } from '@memberjunction/core-entities';
+import { RunView, RunQuery, BaseEntity, LocalCacheManager, Metadata } from '@memberjunction/core';
+import type { AggregateExpression, RunViewParams } from '@memberjunction/core';
+import { uuidv4 } from '@memberjunction/global';
+import type { MJActionCategoryEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual, AssertRowShape, RowKeys } from '@memberjunction/testing-integration';
 import { UniqueFilter } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
-import { NamedCheck } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const ENTITY = 'MJ: Entities';
 const SMALL_ENTITY = 'MJ: Query Categories';
 
 function Sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** The entity C14 writes in one client transaction group. */
+const GROUP_ENTITY = 'MJ: Action Categories';
+
+/** How many rows C14 saves in one client transaction group. */
+const GROUP_ROWS = 3;
+
+/** Row IDs a client slot holds, upper-cased, or null when the slot is not stored. */
+async function clientSlotIds(ctx: IntegrationCheckContext, fingerprint: string): Promise<string[] | null> {
+    const stored = await ctx.Storage.GetItem<{ results: Array<{ ID: string }> }>(fingerprint, 'RunViewCache');
+    return stored ? stored.results.map(r => r.ID.toUpperCase()).sort() : null;
 }
 
 /** The ordered client-cache bundle. Numeric order is intentional and load-bearing (C3→C4→C5 share 'c3'). */
@@ -367,6 +380,58 @@ export const ClientCacheChecks: NamedCheck[] = [
             Assert(reversed.AggregateResults != null && reversed.AggregateResults.length === 2, 'reversed run must return two AggregateResults');
             AssertEqual(reversed.AggregateResults![0].alias, B.alias!, 'ORDER CONTRACT: AggregateResults[0] must be the caller\'s FIRST requested aggregate');
             AssertEqual(reversed.AggregateResults![1].alias, A.alias!, 'ORDER CONTRACT: AggregateResults[1] must be the caller\'s SECOND requested aggregate');
+        }
+    },
+    {
+        Id: 'client-cache.C14',
+        Name: 'C14 (mutation): a transaction group submitted from the client rewrites the client\'s cached slot once',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const params: RunViewParams = { EntityName: GROUP_ENTITY, IgnoreMaxRows: true };
+            // A private, connection-shaped slot, stored empty, so only this check's rows reach it.
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, `it-c14://${uuidv4()}/`);
+            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, [], '');
+            AssertEqual(JSON.stringify(await clientSlotIds(ctx, fingerprint)), '[]', 'precondition: the client slot is stored and empty');
+            const writesBefore = ctx.Storage.SetCountForKey(fingerprint);
+
+            const group = await md.CreateTransactionGroup();
+            const categories: MJActionCategoryEntity[] = [];
+            for (let i = 0; i < GROUP_ROWS; i++) {
+                const category = await md.GetEntityObject<MJActionCategoryEntity>(GROUP_ENTITY);
+                category.NewRecord();
+                category.Name = `C14 client group ${i} ${uuidv4()} (mj-integration-test — safe to delete)`;
+                category.Status = 'Active';
+                category.TransactionGroup = group;
+                Assert(await category.Save(), `queueing a category failed: ${category.LatestResult?.CompleteMessage ?? ''}`);
+                categories.push(category);
+            }
+            let submitted = false;
+            try {
+                Assert(await group.Submit(), 'the client transaction group failed to submit');
+                submitted = true;
+                const ids = categories.map(c => c.ID.toUpperCase()).sort();
+                let stored = await clientSlotIds(ctx, fingerprint);
+                for (let waited = 0; JSON.stringify(stored) !== JSON.stringify(ids) && waited < 5000; waited += 50) {
+                    await Sleep(50);
+                    stored = await clientSlotIds(ctx, fingerprint);
+                }
+                AssertEqual(JSON.stringify(stored), JSON.stringify(ids), 'the client slot holds every row the group saved');
+                await Sleep(1000); // count any write that lands a moment later as well
+                AssertEqual(ctx.Storage.SetCountForKey(fingerprint) - writesBefore, 1, `the client slot is written once for the group of ${GROUP_ROWS} rows`);
+            } finally {
+                if (submitted) {
+                    // Through a new group: each entity still points at the submitted one, which would take
+                    // a plain Delete() and never run it.
+                    const deletes = await md.CreateTransactionGroup();
+                    for (const category of categories) {
+                        category.TransactionGroup = deletes;
+                        Assert(await category.Delete(), `queueing a client-side delete failed: ${category.LatestResult?.CompleteMessage ?? ''}`);
+                    }
+                    Assert(await deletes.Submit(), 'the client group of deletes failed to submit');
+                }
+                await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
+            }
         }
     }
 ];

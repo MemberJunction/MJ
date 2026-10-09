@@ -67,6 +67,7 @@
     "@memberjunction/metadata-sync": "6.2.0-edge.3",
     "@memberjunction/open-app-engine": "6.2.0-edge.3",
     "@memberjunction/query-gen": "6.2.0-edge.3",
+    "@memberjunction/redis-provider": "6.2.0-edge.3",
     "@memberjunction/server-bootstrap-lite": "6.2.0-edge.3",
     "@memberjunction/skyway-core": "^0.6.2",
     "@memberjunction/skyway-postgres": "^0.6.2",

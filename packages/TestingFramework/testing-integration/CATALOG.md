@@ -71,6 +71,8 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 | agent-loop-standin | 6 | det | server |
 | agent-decisions-switch | 9 | det | server |
 | binary-fields | 6 | det (+mut) | **client** |
+| cloudflare-clef | 6 | det | server |
+| systemone-kev | 10 | det | server |
 | transaction-groups | 5 | det | **client** |
 | class-resolution | 5 | det | server |
 | metadata-sync | 9 | det | server |
@@ -81,10 +83,10 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 | queue | 7 | det | server |
 | auth-validation | 7 | det | server |
 
-**615 checks / 84 registered bundles today** (IT01–IT84; the table above lists the majors — run `mj test list` or read `integration-test-suite/src/checks/` for the full set): 69 members land in the **deterministic** suite, 15 in **live-model**. The 2026-07 expansion added the IT31–IT52 client-first bundles; IT64–IT84 followed — the newest are storage at IT77, materialized-entity-read/materialized-read at IT78–IT79, startup-mode (renumbered out of a duplicate IT31) at IT80, cache-immutability at IT81, queue/auth-validation at IT82–IT83, and agent-note-cache-types (the entity_object cache-event invariant) at IT84. The bundle count is pinned by `check-registry.test.ts` — treat that as the source of truth over any hand-count here. The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.
+**877 checks / 108 registered bundles today** (IT01–IT109, with IT107 unassigned; the table above lists the majors — run `mj test list` or read `integration-test-suite/src/checks/` for the full set): 92 members land in the **deterministic** suite, 16 in **live-model**. The 2026-07 expansion added the IT31–IT52 client-first bundles; IT64 onward followed, through the Clef and Kev decision-model bundles at IT108–IT109. The bundle count is pinned by `check-registry.test.ts` — treat that as the source of truth over any hand-count here. The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.
 
 > **Suite ordering invariant**: ALL server-transport members are sequenced before ALL
-> client-transport members (deterministic suite: servers 1–48, clients 49–68). The first client
+> client-transport members (deterministic suite: servers 1–49, clients 50–74). The first client
 > bundle rebinds the process-global provider to GraphQL (issue #3251), so a server member
 > sequenced after any client member hard-errors. Keep the invariant when joining new members.
 

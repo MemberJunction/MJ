@@ -19,6 +19,7 @@ export * from './agent-decisions';
 export * from './agent-run-steps';
 export * from './app-context';
 export * from './client-tool-resolver';
+export * from './client-tool-media';
 export * from './artifact-tool-library';
 
 export * from './MJAIPromptEntityExtended';

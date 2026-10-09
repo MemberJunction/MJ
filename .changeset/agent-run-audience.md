@@ -17,4 +17,4 @@ Agent runs bounded by an audience (A6, run level). `ExecuteAgentParams.Audience`
 
 Deferred and documented (TSDoc, `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md`): per-reader scope expansion queries (`ScopeDimensionResolver` binds one `UserID`); `Union`, anchor and narrowing modes (use `PrimaryScope*` / `SecondaryScopes`); a resumed run (`MJAIAgentRequestEntityServer.resumeAgent`) runs as the responder with no audience, because persisting the audience needs a column — an open design point shared with bound action parameters; conversation history and artifacts remain the host's to choose. Agents whose work needs actions other than the two search actions are refused those actions in shared rooms, by design.
 
-Tests: unit suites for each package, and a new deterministic integration bundle `agent-run-audience` (IT110, AU1–AU6). No migration.
+Tests: unit suites for each package, and a new deterministic integration bundle `agent-run-audience` (IT113, AU1–AU6). No migration.

@@ -19,7 +19,11 @@ import { LoadOmnibarProviders } from './index';
 /** One rendered result row: the suggestion + presentation extras. */
 interface OmnibarRow {
     Suggestion: MentionSuggestion;
-    /** Set only on the FIRST row of each group — drives the section header. */
+    /**
+     * Section header before this row, set where the group changes: the group name, '' for the
+     * empty spacer before an ungrouped row that follows a group (the "see all" row), or null
+     * for no header. A group that comes back after another group gets its header again.
+     */
     GroupLabel: string | null;
     /** 0-100 relevance bar (search mode only). */
     ScorePercent: number | null;
@@ -452,6 +456,9 @@ export class OmnibarPaletteComponent implements OnDestroy {
                     void this.fileOpen.OpenFileFromSearchResult(nav.rawMetadata);
                 }
                 break;
+            case 'dashboard':
+                this.navigation.OpenDashboard(nav.dashboardId, nav.dashboardName);
+                break;
         }
         this.Close();
     }
@@ -582,17 +589,16 @@ export class OmnibarPaletteComponent implements OnDestroy {
     }
 
     private toRows(suggestions: MentionSuggestion[]): OmnibarRow[] {
-        let lastGroup: string | null = null;
+        // '' = ungrouped, so ungrouped rows at the top get no header.
+        let previousGroup = '';
         return suggestions.map((s) => {
             const group = typeof s.data?.['group'] === 'string' ? (s.data['group'] as string) : '';
-            const isNewGroup = group.length > 0 && group !== lastGroup;
-            if (group.length > 0) {
-                lastGroup = group;
-            }
+            const groupLabel = group !== previousGroup ? group : null;
+            previousGroup = group;
             const score = typeof s.data?.['score'] === 'number' ? (s.data['score'] as number) : null;
             return {
                 Suggestion: s,
-                GroupLabel: isNewGroup ? group : null,
+                GroupLabel: groupLabel,
                 ScorePercent: score != null ? Math.round(Math.max(0, Math.min(1, score)) * 100) : null,
             };
         });

@@ -5,7 +5,7 @@
  * (InMemoryLocalStorageProvider, ILocalStorageProvider) is imported from
  * @memberjunction/core, never copied.
  */
-import type { ILocalStorageProvider } from '@memberjunction/core';
+import type { ILocalStorageProvider, LocalStorageWriteOptions } from '@memberjunction/core';
 
 /**
  * Wraps any ILocalStorageProvider with call counters so tests can prove cache
@@ -28,14 +28,16 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
 
     /**
      * Delegated for the same reason as {@link SharesReferences}: this wrapper stores nothing of its
-     * own. It matters that this passes through — the integration bootstrap wraps an in-process
-     * provider, and a wrapper that failed to delegate would report itself persistent and make
-     * `ProviderBase` serialize the whole metadata graph on every refresh in the test tier, which is
-     * exactly the cost the flag exists to avoid.
+     * own, so whether what it holds outlives the process is a property of the inner store.
      * See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
      */
     public get SupportsCrossProcessPersistence(): boolean | undefined {
         return this.inner.SupportsCrossProcessPersistence;
+    }
+
+    /** Delegated, like {@link SharesReferences}: sharing is a property of the inner store. */
+    public get SharedAcrossProcesses(): boolean | undefined {
+        return this.inner.SharedAcrossProcesses;
     }
 
     public GetItemCount = 0;
@@ -43,8 +45,41 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
     public SetItemCount = 0;
     public RemoveCount = 0;
     private perCategory = new Map<string, { Gets: number; Sets: number }>();
+    private setsPerKey = new Map<string, number>();
 
-    constructor(private readonly inner: ILocalStorageProvider) {}
+    /**
+     * Present only when the inner provider has it: `LocalCacheManager` chooses its lookup path by
+     * whether the method exists, so the wrapper must not add one the real provider lacks.
+     */
+    public readonly GetIndexGroupKeys?: (category: string, group: string) => Promise<string[]>;
+
+    /** Present only when the inner provider has it, for the same reason as {@link GetIndexGroupKeys}. */
+    public readonly WithKeyLock?: <T>(key: string, category: string, work: () => Promise<T>) => Promise<T>;
+
+    /** Present only when the inner provider has it, for the same reason as {@link GetIndexGroupKeys}. */
+    public readonly TryAcquireLease?: (name: string, ttlMs: number) => Promise<boolean>;
+
+    /** Present only when the inner provider has it, for the same reason as {@link GetIndexGroupKeys}. */
+    public readonly ReleaseLease?: (name: string) => Promise<void>;
+
+    constructor(private readonly inner: ILocalStorageProvider) {
+        const innerGroupKeys = inner.GetIndexGroupKeys;
+        if (innerGroupKeys) {
+            this.GetIndexGroupKeys = (category, group) => innerGroupKeys.call(inner, category, group);
+        }
+        const innerLock = inner.WithKeyLock;
+        if (innerLock) {
+            this.WithKeyLock = <T>(key: string, category: string, work: () => Promise<T>) => innerLock.call(inner, key, category, work) as Promise<T>;
+        }
+        const innerLease = inner.TryAcquireLease;
+        if (innerLease) {
+            this.TryAcquireLease = (name, ttlMs) => innerLease.call(inner, name, ttlMs);
+        }
+        const innerRelease = inner.ReleaseLease;
+        if (innerRelease) {
+            this.ReleaseLease = (name) => innerRelease.call(inner, name);
+        }
+    }
 
     public ResetCounts(): void {
         this.GetItemCount = 0;
@@ -52,6 +87,7 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
         this.SetItemCount = 0;
         this.RemoveCount = 0;
         this.perCategory.clear();
+        this.setsPerKey.clear();
     }
 
     /**
@@ -66,6 +102,14 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
 
     public SetCount(category: string): number {
         return this.perCategory.get(category)?.Sets ?? 0;
+    }
+
+    /**
+     * Writes to one key since the last {@link ResetCounts}. Use it to assert how often a single
+     * cache slot was rewritten when other slots in the same category may be written meanwhile.
+     */
+    public SetCountForKey(key: string): number {
+        return this.setsPerKey.get(key) ?? 0;
     }
 
     private bump(category: string | undefined, kind: 'Gets' | 'Sets'): void {
@@ -87,10 +131,11 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
         return this.inner.GetItems<T>(keys, category);
     }
 
-    public async SetItem<T>(key: string, value: T, category?: string): Promise<void> {
+    public async SetItem<T>(key: string, value: T, category?: string, options?: LocalStorageWriteOptions): Promise<void> {
         this.SetItemCount++;
         this.bump(category, 'Sets');
-        return this.inner.SetItem<T>(key, value, category);
+        this.setsPerKey.set(key, (this.setsPerKey.get(key) ?? 0) + 1);
+        return this.inner.SetItem<T>(key, value, category, options);
     }
 
     public async Remove(key: string, category?: string): Promise<void> {
