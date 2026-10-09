@@ -7,7 +7,7 @@
  * sort, paginate, get-row, project-columns) are inherited automatically.
  * This library adds search-specific tools on top of that:
  *
- *   - filterByScore     — narrow by post-fusion score range
+ *   - filterByScore     — narrow by post-fusion (rank-based) score range
  *   - groupBySourceProvider — markdown summary by provider
  *   - getMatchingChunks — fetch chunk text + metadata for a row
  *   - followSourceLink  — lift a row's source entity to a sub-artifact
@@ -183,12 +183,12 @@ export class SearchResultSetToolLibrary extends BaseArtifactToolLibrary {
         return [
             {
                 name: 'filterByScore',
-                description: 'Return the subset of search results whose post-fusion Score falls within the given range. Use this to focus on high-confidence matches when the result set is large.',
+                description: 'Return the subset of search results whose post-fusion Score falls within the given range. Score is RANK-based (RRF divided by its maximum, 0-1; 1.0 = every search lane ranked it first). It is not a confidence or relevance probability: the top result of a search that only one lane answered is always 1.0, even for a poor match. Use this to keep the top-ranked part of a large result set, not to judge whether results are relevant.',
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        minScore: { type: 'number', description: 'Minimum post-fusion score (inclusive). Required.' },
-                        maxScore: { type: 'number', description: 'Maximum post-fusion score (inclusive). Optional.' },
+                        minScore: { type: 'number', description: 'Minimum rank-based post-fusion Score (0-1, inclusive). Required.' },
+                        maxScore: { type: 'number', description: 'Maximum rank-based post-fusion Score (0-1, inclusive). Optional.' },
                     },
                     required: ['minScore'],
                 },

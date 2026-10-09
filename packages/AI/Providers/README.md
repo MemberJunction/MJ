@@ -27,6 +27,7 @@ Managed AI services offered through major cloud platforms.
 |---------|-----|-------------|
 | [Azure](./Azure/README.md) | `@memberjunction/ai-azure` | Azure AI Provider for MemberJunction |
 | [Bedrock](./Bedrock/readme.md) | `@memberjunction/ai-bedrock` | Wrapper for Amazon Bedrock AI Models |
+| [Cloudflare](./Cloudflare/README.md) | `@memberjunction/ai-cloudflare` | Cloudflare Workers AI decision models (Clef, Clef-flash) |
 | [Vertex](./Vertex/README.md) | `@memberjunction/ai-vertex` | Wrapper for Google Vertex AI Models |
 
 ### Inference Routers and Aggregators
@@ -37,6 +38,7 @@ Services that provide access to multiple models through a single API.
 |---------|-----|-------------|
 | [Fireworks](./Fireworks/README.md) | `@memberjunction/ai-fireworks` | Wrapper for Fireworks.ai AI Models |
 | [OpenRouter](./OpenRouter/README.md) | `@memberjunction/ai-openrouter` | Wrapper for OpenRouter AI inference services |
+| [SystemOne](./SystemOne/README.md) | `@memberjunction/ai-systemone` | Decision models on any System One server (`/v1/systemone`): Kev on Modal, llama.cpp `llama-server`, TypeSafe |
 
 ### Local Inference
 

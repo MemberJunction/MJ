@@ -15,7 +15,11 @@ import { PSOperateDialogComponent } from './ps-operate-dialog.component';
 import { PSPredictionsGridComponent } from './ps-predictions-grid.component';
 
 /** A model's deployment state, derived purely from cached bindings + Record Processes. */
-type DeployState = 'bound' | 'scheduled' | 'idle';
+/**
+ * `needs-training` overrides the others: a model with no trained artifact can't score, so it is
+ * never shown as Bound/Scheduled (which would promise results a run can't deliver).
+ */
+type DeployState = 'needs-training' | 'bound' | 'scheduled' | 'idle';
 
 /** One scoring binding shown in a model's deployment detail. */
 interface BindingVM {
@@ -151,7 +155,7 @@ interface RunDetailVM {
                         <div class="ps-muted ps-small sub">{{ selected.algorithm }} · {{ selected.problemType }} · holdout {{ selected.holdoutMetric }}</div>
                       </div>
                       <span class="ps-badge" [class]="deployBadge(selected.deployState)">{{ deployLabel(selected.deployState) }}</span>
-                      <button mjButton variant="primary" size="sm" data-testid="ps-production-operate" (click)="operateOpen = true">
+                      <button mjButton variant="primary" size="sm" data-testid="ps-production-operate" [disabled]="selected.deployState === 'needs-training'" [title]="selected.deployState === 'needs-training' ? 'Train this model before operating it' : 'Operate this model'" (click)="operateOpen = true">
                         <i class="fa-solid fa-rocket"></i> Operate
                       </button>
                       <button class="ps-card-collapse-btn" type="button" (click)="toggleHeaderCollapse()" title="Collapse model header" aria-label="Collapse model header">
@@ -167,7 +171,7 @@ interface RunDetailVM {
                         <span class="ps-muted ps-small">· {{ selected.algorithm }}</span>
                       </div>
                       <span class="ps-badge" [class]="deployBadge(selected.deployState)">{{ deployLabel(selected.deployState) }}</span>
-                      <button mjButton variant="primary" size="sm" data-testid="ps-production-operate-compact" (click)="$event.stopPropagation(); operateOpen = true">
+                      <button mjButton variant="primary" size="sm" data-testid="ps-production-operate-compact" [disabled]="selected.deployState === 'needs-training'" (click)="$event.stopPropagation(); operateOpen = true">
                         <i class="fa-solid fa-rocket"></i> Operate
                       </button>
                       <button class="ps-card-collapse-btn" type="button" (click)="$event.stopPropagation(); toggleHeaderCollapse()" title="Expand model header" aria-label="Expand model header">
@@ -196,7 +200,12 @@ interface RunDetailVM {
                   </div>
                   @if (!isDeploymentCollapsed) {
                     <div class="ps-card-body">
-                      @if (selected.deployState === 'idle') {
+                      @if (selected.deployState === 'needs-training') {
+                        <div class="ps-callout warn" data-testid="ps-production-needs-training">
+                          <i class="fa-solid fa-triangle-exclamation"></i>
+                          <div class="ps-small">This model <strong>needs training</strong> — it has no trained model artifact on this server, so it can't score anything yet. Train its pipeline (Pipelines → Train), then publish the new model; scoring processes that opt in to auto-train do this on their next run.</div>
+                        </div>
+                      } @else if (selected.deployState === 'idle') {
                         <div class="ps-callout info">
                           <i class="fa-solid fa-circle-info"></i>
                           <div class="ps-small">This model is published but <strong>not operating</strong> yet — nothing scores with it. Click <strong>Operate</strong> above to run it now, schedule it to run regularly, or write predictions back to a column.</div>
@@ -660,7 +669,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
       problemType: m.ProblemType ?? '—',
       version: m.Version,
       holdoutMetric,
-      deployState: bindings.length > 0 ? 'bound' : scheduledCount > 0 ? 'scheduled' : 'idle',
+      deployState: !m.ArtifactFileID ? 'needs-training' : bindings.length > 0 ? 'bound' : scheduledCount > 0 ? 'scheduled' : 'idle',
       bindingCount: bindings.length,
       processCount: processes.length,
       scheduledCount,
@@ -851,6 +860,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
 
   public DeployIcon(state: DeployState): string {
     switch (state) {
+      case 'needs-training': return 'fa-solid fa-triangle-exclamation';
       case 'bound': return 'fa-solid fa-arrow-right-to-bracket';
       case 'scheduled': return 'fa-solid fa-clock';
       case 'idle': return 'fa-solid fa-circle-pause';
@@ -863,6 +873,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   }
   public DeployLabel(state: DeployState): string {
     switch (state) {
+      case 'needs-training': return 'Needs training';
       case 'bound': return 'Bound';
       case 'scheduled': return 'Scheduled';
       case 'idle': return 'Idle';
@@ -875,6 +886,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   }
   public DeployBadge(state: DeployState): StatusVariant {
     switch (state) {
+      case 'needs-training': return 'amber';
       case 'bound': return 'green';
       case 'scheduled': return 'blue';
       case 'idle': return 'gray';

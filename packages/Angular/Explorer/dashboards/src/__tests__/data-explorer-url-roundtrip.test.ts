@@ -25,6 +25,7 @@ import { ChangeDetectorRef, Injector, NgZone, runInInjectionContext } from '@ang
 import { CompositeKey, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJUserViewEntityExtended, UserInfoEngine, UserViewEngine } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { DataExplorerDashboardComponent } from '../DataExplorer/data-explorer-dashboard.component';
 import { ExplorerStateService } from '../DataExplorer/services/explorer-state.service';
@@ -101,6 +102,8 @@ describe('DataExplorerDashboardComponent — own URL writes echoed back', () => 
     const injector = Injector.create({
       providers: [
         { provide: NavigationService, useValue: tabParams },
+        // Only the Dashboards moved banner's OpenDashboardsApp reads it, and these specs never call it.
+        { provide: ApplicationManager, useValue: {} },
         { provide: ChangeDetectorRef, useValue: { detectChanges: vi.fn(), markForCheck: vi.fn() } },
       ],
     });

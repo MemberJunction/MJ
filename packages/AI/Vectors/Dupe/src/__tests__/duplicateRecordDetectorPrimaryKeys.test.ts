@@ -107,10 +107,11 @@ vi.mock('@memberjunction/ai-vectors', () => ({
     },
 }));
 
-vi.mock('@memberjunction/ai-vector-sync', () => ({
+vi.mock('@memberjunction/ai-vector-sync', async (importOriginal) => ({
     EntityDocumentTemplateParser: { CreateInstance: vi.fn() },
     EntityVectorSyncer: class { CurrentUser = null; },
     VectorizeEntityParams: class {},
+    CombineExtraFilters: (await importOriginal<typeof import('@memberjunction/ai-vector-sync')>()).CombineExtraFilters,
 }));
 
 vi.mock('@memberjunction/aiengine', () => ({
