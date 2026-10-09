@@ -1,12 +1,14 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone, inject } from '@angular/core';
 
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { takeUntil, debounceTime } from 'rxjs/operators';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo, LogError } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
 import { MJApplicationEntityEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import {
@@ -28,6 +30,7 @@ import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-pane
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { buildDataExplorerAgentContext, isValidViewMode, isValidEntityBrowserMode, AppGroupSummary, entityDisplayName, resolveEntityByName, resolveRecordSelection, RecordSelectionRequest } from './data-explorer-agent-context';
 import { validateStringParam, validateEnumParam, validateNonNegativeNumberParam, VALID_ENTITY_BROWSER_MODES_FOR_VALIDATION } from '../shared/agent-tool-validation';
+import { DASHBOARDS_LIBRARY_NAV_ITEM, EnsureDashboardsApp } from '../shared/dashboards-app.helpers';
 
 /**
  * Default server-side page size used by the inner entity viewer when {@link viewerConfig}
@@ -64,6 +67,7 @@ const DATA_EXPLORER_DEFAULT_PAGE_SIZE = 100;
 export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges, AfterViewInit {
   protected override destroy$ = new Subject<void>();
   private metadata = this.ProviderToUse;
+  private appManager = inject(ApplicationManager);
 
   /** Reference to the filter input for keyboard shortcuts */
   @ViewChild('filterInput') FilterInputRef: ElementRef<HTMLInputElement> | undefined;
@@ -378,6 +382,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** @deprecated Use {@link RecentRecordsEntityFilter}. */
   public set recentRecordsEntityFilter(value: string | null) {
     this.RecentRecordsEntityFilter = value;
+  }
+
+  /** User setting that records the dismissal of the "Dashboards moved" banner. */
+  private static readonly DASHBOARDS_MOVED_KEY = 'DataExplorer.DashboardsMovedBanner';
+
+  /** True until the user dismisses the "Dashboards moved" banner. ngOnInit sets it from the user's settings. */
+  private dashboardsMovedBannerOpen = false;
+
+  /**
+   * Shows the "Dashboards moved" banner on the Data tab, with or without a selected entity.
+   * An explorer that has an entity filter (an application's own scoped explorer) never shows it.
+   */
+  public get ShowDashboardsMovedBanner(): boolean {
+    return this.dashboardsMovedBannerOpen && !this.EntityFilter;
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
@@ -724,6 +742,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // This prevents race conditions where we try to load default view settings
     // before the user settings have been loaded from the server
     await UserInfoEngine.Instance.Config(false);
+    this.dashboardsMovedBannerOpen = !this.isDashboardsMovedBannerDismissed();
 
     // Read initial query params — prefer params forwarded from the resource wrapper
     // (which has Data.Configuration.queryParams from the shell), then fall back to
@@ -803,10 +822,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.filterInput$
       .pipe(
         debounceTime(500),
-        distinctUntilChanged(),
         takeUntil(this.destroy$)
       )
       .subscribe(filterText => {
+        // Compare against the APPLIED filter, not the last debounced value: navigation and view
+        // switches reset DebouncedFilterText directly, and a distinctUntilChanged() here would
+        // then swallow the user re-typing the same search until the box was cleared first.
+        if (filterText === this.DebouncedFilterText) {
+          return;
+        }
         this.DebouncedFilterText = filterText;
         this.cdr.detectChanges();
       });
@@ -2761,14 +2785,22 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.StateService.selectEntity(entity.Name);
         }
 
+        // These params are also delivered back after this dashboard writes them itself (the tab's
+        // param stream echoes every write), so only apply what actually differs from the state
+        // on screen — re-applying an echo would wipe the user's search and re-resolve a record
+        // they just clicked against whatever page happens to be loaded.
+        const viewChanged = entityChanged || !this.isSelectedView(urlState.viewId);
+
         // Restore saved view by ID if specified. The workspace applies the view's grid state
         // itself once selectedViewEntity flows into its [SelectedView] input.
-        if (urlState.viewId) {
-          await this.restoreViewFromUrl(urlState.viewId, entity);
-        } else {
-          // No specific view — clear view selection to use default
-          this.SelectedViewEntity = null;
-          this.StateService.selectView(null);
+        if (viewChanged) {
+          if (urlState.viewId) {
+            await this.restoreViewFromUrl(urlState.viewId, entity);
+          } else {
+            // No specific view — clear view selection to use default
+            this.SelectedViewEntity = null;
+            this.StateService.selectView(null);
+          }
         }
 
         // Filters live in saved views (DB), never in URL query strings.
@@ -2776,12 +2808,16 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         if (entityChanged && !urlState.viewId) {
           this.StateService.setSmartFilterPrompt('');
         }
-        // User search text is always cleared when applying URL state
-        this.LiveFilterText = '';
-        this.DebouncedFilterText = '';
+        // User search text belongs to the entity + view it was typed against
+        if (viewChanged) {
+          this.LiveFilterText = '';
+          this.DebouncedFilterText = '';
+        }
 
         // Handle record selection
-        if (urlState.record) {
+        if (urlState.record && !entityChanged && this.isSelectedRecord(urlState.record)) {
+          // Already showing this record — nothing to re-resolve
+        } else if (urlState.record) {
           if (entityChanged) {
             // Entity changed - need to wait for data to load
             this.pendingRecordSelection = urlState.record;
@@ -2820,6 +2856,24 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     this.cdr.detectChanges();
+  }
+
+  /** Whether `viewId` (absent = the default view) is the view currently selected. */
+  private isSelectedView(viewId: string | undefined): boolean {
+    const selectedId = this.SelectedViewEntity?.ID;
+    if (!viewId || !selectedId) {
+      return !viewId && !selectedId;
+    }
+    return UUIDsEqual(selectedId, viewId);
+  }
+
+  /** Whether `recordKey` (concatenated or compact URL form) is the record shown in the detail panel. */
+  private isSelectedRecord(recordKey: string): boolean {
+    if (!this.SelectedRecord || !this.SelectedEntity) {
+      return false;
+    }
+    const key = buildCompositeKey(this.SelectedRecord, this.SelectedEntity);
+    return key.ToConcatenatedString() === recordKey || key.ToCompactURLSegment() === recordKey;
   }
 
   /**
@@ -2923,6 +2977,39 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** @deprecated Use {@link ToggleShowAllEntities}. */
   public toggleShowAllEntities(): void {
     return this.ToggleShowAllEntities();
+  }
+
+  /**
+   * Opens the Library page of the Dashboards app. First installs or re-enables the app for the
+   * user when necessary. When the app cannot be opened, tells the user to try again or ask for access.
+   */
+  public async OpenDashboardsApp(): Promise<void> {
+    const app = await EnsureDashboardsApp(this.appManager);
+    if (app) {
+      await this.navigationService.SwitchToApp(app.ID, DASHBOARDS_LIBRARY_NAV_ITEM);
+    } else {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Could not open the Dashboards app. Try again, or ask your administrator for access.',
+        'warning',
+        4000,
+      );
+    }
+  }
+
+  /** Hides the "Dashboards moved" banner and saves the dismissal in the user's settings. */
+  public async DismissDashboardsMovedBanner(): Promise<void> {
+    this.dashboardsMovedBannerOpen = false;
+    await UserInfoEngine.Instance.SetSetting(DataExplorerDashboardComponent.DASHBOARDS_MOVED_KEY, 'dismissed');
+  }
+
+  /** True when the user dismissed the "Dashboards moved" banner, or when the user's settings cannot be read. */
+  private isDashboardsMovedBannerDismissed(): boolean {
+    try {
+      return UserInfoEngine.Instance.GetSetting(DataExplorerDashboardComponent.DASHBOARDS_MOVED_KEY) === 'dismissed';
+    } catch (error) {
+      LogError(`Data Explorer: cannot read the Dashboards moved banner setting: ${error instanceof Error ? error.message : String(error)}`);
+      return true;
+    }
   }
 
   // ========================================

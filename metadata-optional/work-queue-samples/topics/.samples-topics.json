@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "samples.hello",
+      "Description": "Hello World sample topic (safe to delete). Every message fans out to the three samples.hello-* subscriptions, one per partition mode.",
+      "TransportID": "@lookup:MJ: Work Queue Transports.Name=Database",
+      "IsFifo": false,
+      "AllowExternalPublish": true,
+      "MaxPayloadBytes": 262144,
+      "DefaultDeduplicationTTLSeconds": 3600,
+      "RetentionDays": 7,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "67B2FC5A-F381-4039-8DC4-12A9CF09B6DC"
+    }
+  }
+]

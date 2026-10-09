@@ -38,6 +38,9 @@ import {
     QueryInfo,
     QueryCategoryInfo,
     Metadata,
+    ProviderBase,
+    ProviderConfigDataBase,
+    InMemoryLocalStorageProvider,
 } from '@memberjunction/core';
 import type { PostCommitToken, QueryExecutionSpec, RunViewParams } from '@memberjunction/core';
 import type { MJEntityAIActionEntity } from '@memberjunction/core-entities';
@@ -218,6 +221,36 @@ describe('GenericDatabaseProvider', () => {
         provider = new TestGenericProvider();
     });
 
+    describe('Config with a storage provider', () => {
+        it('installs the configured storage before the base configuration runs', async () => {
+            const shared = new InMemoryLocalStorageProvider();
+            let seenDuringConfig: unknown;
+            const baseConfig = vi.spyOn(ProviderBase.prototype, 'Config').mockImplementation(async function (this: ProviderBase) {
+                seenDuringConfig = this.LocalStorageProvider;
+                return true;
+            });
+            try {
+                const data = new ProviderConfigDataBase({});
+                data.LocalStorageProvider = shared;
+                expect(await provider.Config(data)).toBe(true);
+                expect(seenDuringConfig).toBe(shared);
+                expect(provider.LocalStorageProvider).toBe(shared);
+            } finally {
+                baseConfig.mockRestore();
+            }
+        });
+
+        it('keeps the default in-memory storage when none is configured', async () => {
+            const baseConfig = vi.spyOn(ProviderBase.prototype, 'Config').mockResolvedValue(true);
+            try {
+                await provider.Config(new ProviderConfigDataBase({}));
+                expect(provider.LocalStorageProvider).toBeInstanceOf(InMemoryLocalStorageProvider);
+            } finally {
+                baseConfig.mockRestore();
+            }
+        });
+    });
+
     describe('Inheritance', () => {
         it('extends DatabaseProviderBase', () => {
             expect(provider).toBeInstanceOf(DatabaseProviderBase);
@@ -237,7 +270,7 @@ describe('GenericDatabaseProvider', () => {
 
     describe('PostProcessRows', () => {
         it('returns empty array for empty input', async () => {
-            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [], BinaryFields: [] } as unknown as EntityInfo;
             const result = await provider.testPostProcessRows([], entityInfo, mockUser);
             expect(result).toEqual([]);
         });
@@ -249,6 +282,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'Name', Encrypt: false, EncryptionKeyID: null },
                 ],
                 DatetimeFields: [],
+                BinaryFields: [],
             } as unknown as EntityInfo;
             const rows = [{ ID: '1', Name: 'Test' }];
             const result = await provider.testPostProcessRows(rows, entityInfo, mockUser);
@@ -256,7 +290,7 @@ describe('GenericDatabaseProvider', () => {
         });
 
         it('returns null input unchanged', async () => {
-            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [], BinaryFields: [] } as unknown as EntityInfo;
             const result = await provider.testPostProcessRows(null as unknown as Record<string, unknown>[], entityInfo, mockUser);
             expect(result).toBeNull();
         });
@@ -283,12 +317,12 @@ describe('GenericDatabaseProvider', () => {
         });
 
         it('TransformExternalSQLClause returns clause unchanged by default', () => {
-            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [], BinaryFields: [] } as unknown as EntityInfo;
             expect(provider.testTransformExternalSQLClause('Status = 1', entityInfo)).toBe('Status = 1');
         });
 
         it('TransformExternalSQLClause passes empty string through', () => {
-            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [], BinaryFields: [] } as unknown as EntityInfo;
             expect(provider.testTransformExternalSQLClause('', entityInfo)).toBe('');
         });
     });
@@ -500,6 +534,7 @@ describe('GenericDatabaseProvider', () => {
                 ],
                 Fields: [],
                 DatetimeFields: [],
+                BinaryFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
                 GetEffectiveRowFilterWhereClause: () => '',
@@ -537,6 +572,7 @@ describe('GenericDatabaseProvider', () => {
                 ],
                 Fields: [],
                 DatetimeFields: [],
+                BinaryFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
                 GetEffectiveRowFilterWhereClause: () => '',
@@ -570,6 +606,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'Name', TSType: EntityFieldTSType.String, Type: 'varchar' },
                 ],
                 DatetimeFields: [],
+                BinaryFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
                 GetEffectiveRowFilterWhereClause: () => '',
@@ -608,6 +645,7 @@ describe('GenericDatabaseProvider', () => {
                 ],
                 Fields: [],
                 DatetimeFields: [],
+                BinaryFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => opts.exempt,
                 GetEffectiveRowFilterWhereClause: () => opts.exempt ? '' : opts.rlsClause,

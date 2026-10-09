@@ -7,6 +7,8 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 const h = vi.hoisted(() => ({
   configure: vi.fn(),
+  registryConfigure: vi.fn(),
+  getSystemUser: vi.fn(),
   listOffersForUser: vi.fn(),
   acceptOffer: vi.fn(),
   declineOffer: vi.fn(),
@@ -23,7 +25,11 @@ vi.mock('@memberjunction/livekit-room-server', () => ({
       DeclineOffer: h.declineOffer,
     },
   },
+  HandoffOfferRegistry: { Instance: { Configure: h.registryConfigure } },
   LiveKitSipService: class {},
+}));
+vi.mock('@memberjunction/generic-database-provider', () => ({
+  UserCache: { Instance: { GetSystemUser: h.getSystemUser } },
 }));
 vi.mock('@memberjunction/notifications', () => ({
   NotificationEngine: { Instance: { Config: h.notificationConfig, SendNotification: h.sendNotification } },
@@ -44,6 +50,17 @@ import type { AppContext } from '../types.js';
 /** Captured at module load: the resolver binds the engine's server-only collaborators then. */
 const wiredAtLoad = h.configure.mock.calls[0]?.[0] as { Presence: unknown; Publisher: unknown; Notifier: unknown };
 
+const registryWiredAtLoad = h.registryConfigure.mock.calls[0]?.[0] as { ResolveContextUser: () => UserInfo | undefined };
+
+describe('offer registry server identity wiring', () => {
+  it('configures the registry with a lazy system-user resolver that reads the user cache on every call', () => {
+    const systemUser = { ID: 'sys' } as unknown as UserInfo;
+    h.getSystemUser.mockReturnValueOnce(undefined).mockReturnValueOnce(systemUser);
+    expect(registryWiredAtLoad.ResolveContextUser()).toBeUndefined();
+    expect(registryWiredAtLoad.ResolveContextUser()).toBe(systemUser);
+  });
+});
+
 class TestableResolver extends HumanHandoffResolver {
   public user: UserInfo | undefined = { ID: 'U1', Name: 'Dana', Email: 'dana@x.com' } as unknown as UserInfo;
   protected override GetUserFromPayload(): UserInfo | undefined {
@@ -63,6 +80,7 @@ const VIEW = {
   Status: 'Pending',
   CreatedAt: '2026-10-03T10:00:00.000Z',
   ExpiresAt: '2026-10-03T10:00:45.000Z',
+  InteractionID: 'int-123',
 };
 
 describe('HumanHandoffResolver', () => {

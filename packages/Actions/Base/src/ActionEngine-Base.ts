@@ -340,6 +340,19 @@ export class RunActionParams<TContext = any> {
    public RuntimeAPIKeyResolver?: RuntimeAPIKeyResolver;
 
    /**
+    * The agent run's credential scope, set by BaseAgent from `ExecuteAgentParams.CredentialScope`.
+    * Under `'RuntimeOnly'` an action that calls an AI vendor itself must take the
+    * {@link RuntimeAPIKeyResolver}'s answer as final — `undefined`, or no resolver at all, means the
+    * run has no key for that vendor, NOT "use `GetAIAPIKey`". Absent means `'Any'`.
+    *
+    * An action that runs its own prompt or agent must forward this onto that prompt's or agent's
+    * params (`CredentialScope`). It is not handed the run's keys, so under `'RuntimeOnly'` that
+    * prompt finds no usable model and fails — which is the point: otherwise it would resolve the
+    * platform's keys inside a run restricted to the caller's.
+    */
+   public CredentialScope?: RuntimeCredentialScope;
+
+   /**
     * Optional AbortSignal that is aborted when the action exceeds its wall-clock
     * time budget (set via `Action.MaxExecutionTimeMS` or the engine default). Set
     * automatically by `ActionEngine.RunAction()` — callers should not populate it
@@ -593,3 +606,11 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
  * the run had none.
  */
 export type RuntimeAPIKeyResolver = (driverClass: string) => string | undefined;
+
+/**
+ * Which credentials an agent run may spend: `'Any'` (the run's keys, then the platform's) or
+ * `'RuntimeOnly'` (the run's keys alone). The same union as `AICredentialScope` in
+ * `@memberjunction/ai`, declared here for the reason {@link RuntimeAPIKeyResolver} is: this package
+ * does not depend on that one.
+ */
+export type RuntimeCredentialScope = 'Any' | 'RuntimeOnly';

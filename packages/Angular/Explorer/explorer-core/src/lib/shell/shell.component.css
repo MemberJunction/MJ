@@ -100,8 +100,10 @@ mj-tab-container.hide-tab-bar ::ng-deep .main-region .lm_content {
   height: 100% !important;
 }
 
-/* Ensure smooth transitions */
-mj-tab-container ::ng-deep .lm_stack {
+/* Animate the stacks of the shell's own layouts (main and records regions) only.
+   A Golden Layout inside a tab's content (the dashboard viewer) sizes its own
+   stacks: with this transition they grow from zero height on every rebuild. */
+mj-tab-container ::ng-deep :is(.gl-container, .records-gl-container) .lm_stack:not(.lm_content .lm_stack) {
   transition: all 0.2s ease-in-out;
 }
 
