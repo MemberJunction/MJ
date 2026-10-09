@@ -7,7 +7,8 @@
  *   WebCodecs codec string; H.264 in Annex B needs no `description`) at the first key frame, after the browser confirms
  *   it decodes the codec (`VideoDecoder.isConfigSupported`, asynchronous). A "no" reports `'unsupported'` and gives up,
  *   so the player tries the next decoder. Until a key frame, delta chunks are dropped.
- * - **Paced by presentation time.** Decoded frames show on the {@link FrameScheduler} by their `PresentationTimeMs`.
+ * - **Paced by presentation time.** Decoded frames show on the {@link FrameScheduler} by their `PresentationTimeMs`: on
+ *   the voice's clock when the player has one (`VideoPlayoutOptions.Clock`), else by their own times.
  *   Chunks wait, encoded, while {@link MAX_FRAMES_AHEAD} frames are decoding or waiting to show: a browser decoder stalls
  *   when its output frames aren't closed.
  * - **End of turn** flushes the decoder once the waiting chunks are decoded, so the turn's last frames show; a chunk
@@ -68,7 +69,7 @@ export class WebCodecsChunkDecoder implements IVideoFrameDecoder {
 
     /** @param context The player this decoder plays for. */
     constructor(private readonly context: VideoFrameDecoderContext) {
-        this.scheduler = new FrameScheduler(this.canvas, () => this.feed());
+        this.scheduler = new FrameScheduler(this.canvas, () => this.feed(), { Clock: context.Clock });
     }
 
     /** Always `false`: a chunk carries no voice. */

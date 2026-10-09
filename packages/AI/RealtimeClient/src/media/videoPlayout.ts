@@ -19,6 +19,9 @@
  *   {@link VideoPlayout.CarriesVoice} `false` mutes the element. Chunk and image decoders carry no voice.
  *   {@link VideoPlayoutOptions.OnElementAttached} lets the realtime client route the element's audio into its own Web
  *   Audio graph, so its meter and its recording carry the avatar's voice.
+ * - **Lip sync.** With {@link VideoPlayoutOptions.Clock}, the voice's playback clock, the chunk and image decoders show
+ *   each frame when the voice reaches its `PresentationTimeMs`. MSE needs no clock: an MP4 that carries the voice keeps
+ *   voice and face together on its own timestamps.
  * - **End of turn, barge-in, gaps.** {@link VideoPlayout.EndOfTurn} lets playback run to the true end of the turn;
  *   {@link VideoPlayout.Flush} drops everything not yet played; between turns, or while a connection resumes, the element
  *   holds the last frame. Each decoder does this its own way.
@@ -29,6 +32,7 @@
 
 import { SniffFmp4Piece, type RealtimeVideoFrame, type RealtimeVideoFrameKind } from '@memberjunction/ai';
 import type { MediaVideoSource } from './model';
+import type { IPlaybackClock } from './playbackClock';
 import type { IVideoFrameDecoder, VideoFrameDecoderContext } from './videoFrameDecoder';
 import { VideoFrameDecoderRegistry } from './videoFrameDecoderRegistry';
 import { FrameKindOfMimeType, FrameTypeKey } from './decoders/videoMimeTypes';
@@ -58,6 +62,13 @@ export interface VideoPlayoutOptions {
      * into a Web Audio graph. A player that moves to another element calls it again with that one.
      */
     OnElementAttached?: (element: HTMLVideoElement) => void;
+    /**
+     * The voice's playback clock, for lip sync: the chunk and image decoders show each frame when the voice reaches its
+     * `PresentationTimeMs`. Give it when the driver times its PCM (`IRealtimePcmPlayback.Enqueue(pcm16, mediaTimeMs)`) and
+     * its frames on one media timeline; `RealtimePcmPlayback` is such a clock. Without it, frames go by their own times.
+     * MSE ignores it.
+     */
+    Clock?: IPlaybackClock;
 }
 
 /** Why playout reported a problem. */
@@ -117,6 +128,7 @@ export class VideoPlayout implements IAvatarVideoPlayout {
     private readonly mimeType: string;
     private readonly backBufferSeconds: number;
     private readonly onElementAttached: ((element: HTMLVideoElement) => void) | undefined;
+    private readonly clock: IPlaybackClock | undefined;
     private readonly problemHandlers = new Set<(problem: VideoPlayoutProblem, message: string) => void>();
     private readonly reported = new Set<VideoPlayoutProblem>();
     /** Decoders that gave up, by frame type: they are not chosen again for it. */
@@ -137,6 +149,7 @@ export class VideoPlayout implements IAvatarVideoPlayout {
         this.backBufferSeconds = options.BackBufferSeconds ?? DEFAULT_BACK_BUFFER_SECONDS;
         this.carriesVoice = options.CarriesVoice ?? true;
         this.onElementAttached = options.OnElementAttached;
+        this.clock = options.Clock;
     }
 
     /** The video to show: the player takes over the element it is attached to. */
@@ -266,6 +279,7 @@ export class VideoPlayout implements IAvatarVideoPlayout {
                 return carriesVoice();
             },
             OnElementAttached: this.onElementAttached,
+            Clock: this.clock,
             Report: (problem, message) => this.report(problem, message),
             Failed: (message) => this.decoderFailed(type, name, message),
         };

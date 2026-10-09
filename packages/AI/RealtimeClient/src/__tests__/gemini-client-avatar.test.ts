@@ -150,6 +150,8 @@ describe('GeminiRealtimeClient avatar playout', () => {
             const custom = 'video/mp4; codecs="avc1.4d401f, mp4a.40.2"';
             const first = await connectAvatar({ Encoding: custom, AudioMuxed: false });
             expect(first.Client.PlayoutOptions[0]).toMatchObject({ MimeType: custom, CarriesVoice: false });
+            // No clock, even with a separate voice: Gemini's PCM carries no media time to sync to.
+            expect(first.Client.PlayoutOptions[0].Clock).toBeUndefined();
 
             const second = await connectAvatar({ Encoding: null });
             expect(second.Client.PlayoutOptions[0]).toMatchObject({ MimeType: GEMINI_AVATAR_MP4_TYPE, CarriesVoice: true });

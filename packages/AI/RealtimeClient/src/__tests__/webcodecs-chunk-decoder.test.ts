@@ -51,7 +51,7 @@ describe('WebCodecsChunkDecoder', () => {
     /** The times (µs) of the chunks the browser decoder was given, with their types. */
     const decoded = (target = browserDecoder()): string[] => target.Chunks.map((c) => `${c.type}@${c.timestamp}`);
     /** The labels of the frames shown, in order. */
-    const shown = (): string[] => FakeTrackGenerator.Instances[0].Written.map((frame) => frame.Label);
+    const shown = (): string[] => (FakeTrackGenerator.Instances.at(-1) as FakeTrackGenerator).Written.map((frame) => frame.Label);
 
     /** A decoder configured for H.264 by a first key frame at 0 ms. */
     async function started(): Promise<FakeVideoDecoder> {
@@ -189,6 +189,18 @@ describe('WebCodecsChunkDecoder', () => {
             expect(shown()).toEqual(['frame@0']);
             vi.advanceTimersByTime(40);
             expect(shown()).toEqual(['frame@0', 'frame@40000']);
+        });
+
+        it("shows decoded frames on the player's clock when it has one", async () => {
+            decoder.Dispose();
+            const voice = { CurrentTimeMs: null as number | null };
+            decoder = new WebCodecsChunkDecoder({ ...context, Clock: voice });
+            const browser = await started();
+            browser.Output(0);
+            expect(shown()).toEqual([]);
+            voice.CurrentTimeMs = 0;
+            vi.advanceTimersByTime(20);
+            expect(shown()).toEqual(['frame@0']);
         });
 
         it(`decodes at most ${MAX_FRAMES_AHEAD} frames ahead: the rest wait, encoded, until frames show`, async () => {

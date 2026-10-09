@@ -4,8 +4,9 @@
  *
  * - **In order.** Images are decoded one at a time, in the order they arrived, while fewer than {@link MAX_IMAGES_AHEAD}
  *   decoded images wait to show; the rest wait encoded.
- * - **Paced by presentation time when an image has one**, on the {@link FrameScheduler}; an image without a time shows as
- *   soon as it is decoded.
+ * - **Paced by presentation time when an image has one**, on the {@link FrameScheduler}: on the voice's clock when the
+ *   player has one (`VideoPlayoutOptions.Clock`), else by its own time. An image without a time shows as soon as it is
+ *   decoded.
  * - **End of turn** needs nothing: every image stands alone. **Barge-in** drops the images waiting, decoded or not, and a
  *   decode under way; the last image shown stays.
  * - An image the browser can't decode is dropped and reported (`'append-failed'`); the next one plays.
@@ -44,7 +45,7 @@ export class ImageFrameDecoder implements IVideoFrameDecoder {
 
     /** @param context The player this decoder plays for. */
     constructor(private readonly context: VideoFrameDecoderContext) {
-        this.scheduler = new FrameScheduler(this.canvas, () => this.feed());
+        this.scheduler = new FrameScheduler(this.canvas, () => this.feed(), { Clock: context.Clock });
     }
 
     /** Always `false`: an image carries no voice. */

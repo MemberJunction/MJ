@@ -33,7 +33,7 @@ describe('ImageFrameDecoder', () => {
     let decoder: ImageFrameDecoder;
 
     /** The labels of the images shown, in order. */
-    const shown = (): string[] => FakeTrackGenerator.Instances[0].Written.map((frame) => frame.Label);
+    const shown = (): string[] => (FakeTrackGenerator.Instances.at(-1) as FakeTrackGenerator).Written.map((frame) => frame.Label);
 
     beforeEach(() => {
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
@@ -98,6 +98,27 @@ describe('ImageFrameDecoder', () => {
         expect(shown()).toEqual(['a']);
         vi.advanceTimersByTime(500);
         expect(shown()).toEqual(['a', 'b']);
+    });
+
+    it("shows a timed image on the player's clock when it has one", async () => {
+        decoder.Dispose();
+        const voice = { CurrentTimeMs: 100 as number | null };
+        decoder = new ImageFrameDecoder({
+            MimeType: 'image/jpeg',
+            BackBufferSeconds: 10,
+            CarriesVoice: false,
+            Clock: voice,
+            Report: () => undefined,
+            Failed: () => undefined,
+        });
+        decoder.Append(image(300));
+        decodes[decodes.length - 1].Resolve('timed');
+        await settle();
+        vi.advanceTimersByTime(300);
+        expect(shown()).toEqual([]);
+        voice.CurrentTimeMs = 300;
+        vi.advanceTimersByTime(20);
+        expect(shown()).toEqual(['timed']);
     });
 
     it(`keeps at most ${MAX_IMAGES_AHEAD} decoded images waiting to show; the rest wait encoded`, async () => {

@@ -1,6 +1,20 @@
 import { Pcm16ToFloat32 } from './pcmUtils';
 import { IRealtimeAudioMeter, RealtimeAudioMeter } from './audioMeter';
 import { MediaElementAudioRouter } from './mediaElementAudioRouter';
+import type { IPlaybackClock } from '../media/playbackClock';
+
+/** Played chunks are forgotten this long after they end, in seconds: longer than any output latency a clock subtracts. */
+const ANCHOR_RETENTION_SECONDS = 2;
+
+/** One scheduled chunk's place on the context's clock and on the stream's media timeline. */
+interface ChunkAnchor {
+    /** When it starts playing, in context time (seconds). */
+    StartAt: number;
+    /** How long it plays (seconds). */
+    DurationS: number;
+    /** Its first sample's media time (ms); `null` for untimed audio with no timed audio before it. */
+    MediaMs: number | null;
+}
 
 /**
  * The playback contract for a client-owned realtime audio plane: schedules raw PCM16 chunks
@@ -13,8 +27,15 @@ import { MediaElementAudioRouter } from './mediaElementAudioRouter';
  * use this.
  */
 export interface IRealtimePcmPlayback {
-    /** Schedules a raw PCM16 mono chunk back-to-back after any already-queued audio. */
-    Enqueue(pcm16: ArrayBuffer): void;
+    /**
+     * Schedules a raw PCM16 mono chunk back-to-back after any already-queued audio.
+     *
+     * @param pcm16 The chunk.
+     * @param mediaTimeMs Where the chunk starts on the stream's media timeline (ms), when the driver knows it: a playback
+     *   that is also an `IPlaybackClock` then reads out the media time of the audio heard. A chunk without one continues
+     *   the chunk before it.
+     */
+    Enqueue(pcm16: ArrayBuffer, mediaTimeMs?: number): void;
     /** Stops + clears every scheduled source (barge-in / interruption). */
     Flush(): void;
     /** `true` while scheduled audio is audibly playing (playhead ahead of the context clock). */
@@ -55,12 +76,17 @@ export interface IRealtimePcmPlayback {
  * sources) means audio is audibly coming out of the speaker. On interruption, {@link Flush}
  * stops every scheduled source and rewinds the playhead.
  *
+ * It is also the voice's **playback clock** ({@link IPlaybackClock}): each chunk enqueued with a media time keeps its
+ * place on the context's clock, and {@link CurrentTimeMs} reads out the media time of the audio heard now (the context's
+ * time less the output latency the browser reports). A video player given this clock shows each frame when the voice
+ * reaches it.
+ *
  * Generalized from the Gemini driver's original 24 kHz-fixed engine: the sample rate is now a
  * constructor parameter so providers that negotiate their output format at session start
  * (e.g. ElevenLabs' `agent_output_audio_format`) can construct the playout engine with the
  * negotiated rate.
  */
-export class RealtimePcmPlayback implements IRealtimePcmPlayback {
+export class RealtimePcmPlayback implements IRealtimePcmPlayback, IPlaybackClock {
     private context: AudioContext;
     private sampleRate: number;
     /**
@@ -79,6 +105,8 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
     private activeSources = new Set<AudioBufferSourceNode>();
     /** Elements {@link ConnectMediaElement} has taken in (or tried to), so each is taken in once. */
     private connectedElements = new WeakSet<HTMLMediaElement>();
+    /** Where each chunk scheduled and not long played sits on the context's clock and the media timeline, in order. */
+    private anchors: ChunkAnchor[] = [];
 
     /**
      * @param sampleRate The PCM16 sample rate (Hz) of the chunks this engine will play
@@ -109,7 +137,7 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
     }
 
     /** @inheritdoc */
-    public Enqueue(pcm16: ArrayBuffer): void {
+    public Enqueue(pcm16: ArrayBuffer, mediaTimeMs?: number): void {
         const samples = Pcm16ToFloat32(pcm16);
         if (samples.length === 0) {
             return;
@@ -124,6 +152,7 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
         const startAt = Math.max(this.playheadTime, this.context.currentTime);
         source.start(startAt);
         this.playheadTime = startAt + buffer.duration;
+        this.anchor(startAt, buffer.duration, mediaTimeMs);
     }
 
     /** @inheritdoc */
@@ -137,6 +166,21 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
         }
         this.activeSources.clear();
         this.playheadTime = 0;
+        this.anchors = [];
+    }
+
+    /**
+     * The media time (ms) of the audio heard now: the context's time, less the output latency the browser reports
+     * (`outputLatency` and `baseLatency`, where it has them), placed in the chunk playing then. `null` while nothing plays,
+     * between chunks, or while the chunk playing carries no media time (untimed audio with no timed audio before it).
+     */
+    public get CurrentTimeMs(): number | null {
+        const heard = this.context.currentTime - this.outputDelaySeconds();
+        const playing = this.anchors.find((anchor) => anchor.StartAt <= heard && heard < anchor.StartAt + anchor.DurationS);
+        if (!playing || playing.MediaMs === null) {
+            return null;
+        }
+        return playing.MediaMs + (heard - playing.StartAt) * 1000;
     }
 
     /** @inheritdoc */
@@ -189,5 +233,26 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
     public Close(): void {
         this.Flush();
         void this.context.close();
+    }
+
+    /**
+     * Records where a chunk plays: its media time is the one given, else the end of the chunk before it, else `null`.
+     * Chunks played more than {@link ANCHOR_RETENTION_SECONDS} ago are forgotten.
+     */
+    private anchor(startAt: number, durationS: number, mediaTimeMs: number | undefined): void {
+        const previous = this.anchors[this.anchors.length - 1];
+        const continued = previous && previous.MediaMs !== null ? previous.MediaMs + previous.DurationS * 1000 : null;
+        const timed = typeof mediaTimeMs === 'number' && Number.isFinite(mediaTimeMs);
+        this.anchors.push({ StartAt: startAt, DurationS: durationS, MediaMs: timed ? mediaTimeMs : continued });
+        const forgetBefore = this.context.currentTime - ANCHOR_RETENTION_SECONDS;
+        while (this.anchors.length > 1 && this.anchors[0].StartAt + this.anchors[0].DurationS < forgetBefore) {
+            this.anchors.shift();
+        }
+    }
+
+    /** How long audio takes from the context's clock to the speakers, in seconds, as far as the browser reports it. */
+    private outputDelaySeconds(): number {
+        const latency = (value: number | undefined): number => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0);
+        return latency(this.context.outputLatency) + latency(this.context.baseLatency);
     }
 }

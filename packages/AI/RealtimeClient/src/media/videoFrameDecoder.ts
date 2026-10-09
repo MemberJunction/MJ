@@ -13,6 +13,7 @@
  * @module @memberjunction/ai-realtime-client/media
  */
 import type { RealtimeVideoFrame, RealtimeVideoFrameKind } from '@memberjunction/ai';
+import type { IPlaybackClock } from './playbackClock';
 import type { VideoPlayoutProblem } from './videoPlayout';
 
 /** What a decoder plays with and reports through. The player gives one to each decoder it creates. */
@@ -31,6 +32,11 @@ export interface VideoFrameDecoderContext {
      * carries audio calls it with each element it takes over, before playback starts.
      */
     OnElementAttached?(element: HTMLVideoElement): void;
+    /**
+     * The voice's playback clock (`VideoPlayoutOptions.Clock`), when the player has one: a decoder that paces its own
+     * frames shows each when the clock reaches its `PresentationTimeMs`. A decoder whose media carries the voice ignores it.
+     */
+    readonly Clock?: IPlaybackClock;
     /** Reports a problem. The player passes each kind on once. */
     Report(problem: VideoPlayoutProblem, message: string): void;
     /**

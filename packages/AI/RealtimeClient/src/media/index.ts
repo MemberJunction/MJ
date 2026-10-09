@@ -25,6 +25,7 @@ export * from './channelVideoSource';
 export * from './displayCapture';
 export * from './videoPacing';
 export * from './videoPlayout';
+export * from './playbackClock';
 export * from './videoFrameDecoder';
 export * from './videoFrameDecoderRegistry';
 export * from './videoSourceArbiter';

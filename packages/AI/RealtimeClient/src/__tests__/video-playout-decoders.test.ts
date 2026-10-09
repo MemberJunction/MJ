@@ -166,12 +166,14 @@ describe('VideoPlayout: choosing a decoder', () => {
         });
     });
 
-    it("gives each decoder the player's settings, the voice as it is now, the element hook, and reports once per kind", () => {
+    it("gives each decoder the player's settings, the voice as it is now, the element hook, the clock, and reports once per kind", () => {
         const hook = (): void => undefined;
-        player({ MimeType: VP8, BackBufferSeconds: 4, CarriesVoice: false, OnElementAttached: hook });
+        const clock = { CurrentTimeMs: 0 };
+        player({ MimeType: VP8, BackBufferSeconds: 4, CarriesVoice: false, OnElementAttached: hook, Clock: clock });
         playout.Append(chunk(0));
         const context = only(chunks).Context;
         expect([context.MimeType, context.BackBufferSeconds, context.CarriesVoice, context.OnElementAttached]).toEqual([VP8, 4, false, hook]);
+        expect(context.Clock).toBe(clock);
 
         playout.CarriesVoice = true;
         expect(context.CarriesVoice).toBe(true);
@@ -221,6 +223,18 @@ describe('VideoPlayout: choosing a decoder', () => {
             expect(VideoPlayout.IsSupported()).toBe(true);
             expect(VideoPlayout.IsSupported(GEMINI_AVATAR_MP4_TYPE)).toBe(true);
         });
+    });
+
+    it("plays MP4 through MSE whatever the clock reads: the MP4's own timestamps keep voice and face together", async () => {
+        RestoreBuiltInDecoders(added.splice(0));
+        InstallFakeMse();
+        player({ Clock: { CurrentTimeMs: null } });
+        AttachVideoSource(playout.Source, document.createElement('video'));
+        FakeMediaSource.Instances[0].Open();
+        const init = FakeInitSegment();
+        playout.Append(PieceFrame(init));
+        await settle();
+        expect(FakeMediaSource.Instances[0].Buffers[0].Appended).toEqual([init]);
     });
 
     it('moves from MSE to WebCodecs when chunks follow the configured MP4 type, with the built-in decoders', async () => {
