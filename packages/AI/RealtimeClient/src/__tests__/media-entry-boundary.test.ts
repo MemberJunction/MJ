@@ -123,6 +123,11 @@ describe('the /media entry point', () => {
                 'media/channelVideoSource.ts',
                 'media/videoPacing.ts',
                 'media/videoSourceArbiter.ts',
+                'media/videoFrameDecoderRegistry.ts',
+                'media/decoders/mseFmp4Decoder.ts',
+                'media/decoders/webCodecsChunkDecoder.ts',
+                'media/decoders/imageFrameDecoder.ts',
+                'media/decoders/streamCanvas.ts',
                 'audio/audioMeter.ts',
             ])
         );

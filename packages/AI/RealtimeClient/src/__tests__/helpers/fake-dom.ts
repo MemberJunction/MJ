@@ -1,6 +1,6 @@
 /**
  * A minimal DOM for code that draws video frames onto a canvas. `document.createElement('video')` and
- * `('canvas')` return fakes that record what was drawn and encoded. Install it with {@link InstallFakeDom};
+ * `('canvas')` return fakes that record what was drawn, encoded and captured. Install it with {@link InstallFakeDom};
  * remove it with `vi.unstubAllGlobals()`.
  */
 import { vi } from 'vitest';
@@ -65,24 +65,60 @@ export class FakeVideoElement {
     }
 }
 
-/** Stands in for the `<canvas>` a sampler draws and encodes frames on. */
+/** The video track of a captured canvas: counts the frames requested of it. */
+export class FakeCanvasTrack {
+    public FrameRequests = 0;
+    public Stopped = false;
+
+    public requestFrame(): void {
+        this.FrameRequests++;
+    }
+
+    public stop(): void {
+        this.Stopped = true;
+    }
+}
+
+/** The stream a captured canvas produces: one video track. */
+export class FakeCanvasStream {
+    public readonly Track = new FakeCanvasTrack();
+
+    public getVideoTracks(): FakeCanvasTrack[] {
+        return [this.Track];
+    }
+}
+
+/** Stands in for the `<canvas>` a sampler draws and encodes frames on, or a decoder draws pictures on and captures. */
 export class FakeCanvasElement {
     public width = 300;
     public height = 150;
     /** The size each frame was drawn at. */
     public readonly Draws: Array<{ Width: number; Height: number }> = [];
+    /** What each draw drew, in order. */
+    public readonly Sources: unknown[] = [];
     /** The format and quality each frame was encoded with. */
     public readonly Encodes: Array<{ MimeType: string; Quality: number | undefined }> = [];
+    /** The frame rate of each `captureStream` call. */
+    public readonly CaptureRates: Array<number | undefined> = [];
+    /** The stream the last `captureStream` returned. */
+    public Captured: FakeCanvasStream | null = null;
 
-    public getContext(kind: string): { drawImage: (source: FakeVideoElement, x: number, y: number, width: number, height: number) => void } | null {
+    public getContext(kind: string): { drawImage: (source: unknown, x: number, y: number, width: number, height: number) => void } | null {
         if (kind !== '2d') {
             return null;
         }
         return {
-            drawImage: (_source, _x, _y, width, height) => {
+            drawImage: (source, _x, _y, width, height) => {
                 this.Draws.push({ Width: width, Height: height });
+                this.Sources.push(source);
             },
         };
+    }
+
+    public captureStream(frameRate?: number): FakeCanvasStream {
+        this.CaptureRates.push(frameRate);
+        this.Captured = new FakeCanvasStream();
+        return this.Captured;
     }
 
     public toDataURL(mimeType: string, quality?: number): string {
