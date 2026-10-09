@@ -157,8 +157,6 @@ class FakeRoomClient implements TelemetryRoomClient {
     public flushOutbound(): void {
         this.flushCount++;
     }
-    public publishVideo(): void {}
-    public publishScreen(): void {}
     public onAudioFrame(cb: (frame: NativeRoomAudioFrame) => void): void {
         this.audioCb = cb;
     }

@@ -10,10 +10,11 @@
  * so it builds + unit-tests with NO network and NO real LiveKit SDK (the Zoom `SetSdkFactory`
  * testability pattern).
  *
- * LiveKit capability coverage (per the §4c / §8 seed row): on-demand join, **full** audio/video/screen
- * in+out (LiveKit does the lot), and per-participant diarization (`SpeakerDiarization`) — the SFU
- * delivers tracks per participant, so speaker labels come free. No scheduled/invite/telephony features.
- * Those virtual base methods keep throwing `BridgeCapabilityNotSupportedError`.
+ * LiveKit capability coverage (per the §4c / §8 seed row): on-demand join, audio in+out, camera and
+ * screen in, video out as the agent's live avatar only (no raw video frames, no screen share out), and
+ * per-participant diarization (`SpeakerDiarization`) — the SFU delivers tracks per participant, so speaker
+ * labels come free. No scheduled/invite/telephony features. Those virtual base methods keep throwing
+ * `BridgeCapabilityNotSupportedError`.
  *
  * ## Echo / self-audio
  * A LiveKit SFU **never delivers a participant its own published track back**, so the bot does not hear
@@ -122,6 +123,9 @@ export function IsAvatarMediaFrame(frame: BridgeMediaFrame): boolean {
     return /^video\/mp4\b/i.test(frame.MimeType?.trim() ?? '');
 }
 
+/** The outbound tracks a frame can arrive on that the room has no publisher for (beyond an avatar on `video-out`). */
+type UnpublishedOutboundTrack = Extract<BridgeMediaTrackKind, 'video-out' | 'screen-out'>;
+
 /** The name the model is given for a video source: "Ada's camera", "Ada's screen", or "a participant's camera". */
 export function VideoSourceLabelOf(displayName: string | undefined, source: LiveKitVideoSourceKind): string {
     const owner = displayName && displayName.trim().length > 0 ? `${displayName.trim()}'s` : "a participant's";
@@ -160,6 +164,9 @@ export class LiveKitBridge extends BaseRealtimeBridge {
 
     /** The Meeting Controls event source for this session (only when diarization is supported). */
     private meetingControls: LiveKitMeetingControlsEventSource | null = null;
+
+    /** The outbound tracks whose dropped frames this session has already logged (one line per track per session). */
+    private readonly loggedDrops = new Set<UnpublishedOutboundTrack>();
 
     /**
      * The SDK creation seam. Defaults to a factory that throws an explicit "bind the real LiveKit SDK"
@@ -200,6 +207,7 @@ export class LiveKitBridge extends BaseRealtimeBridge {
         this.applyContext(ctx);
         this.RequireFeature('AudioIn'); // a LiveKit room bridge requires bidirectional audio at minimum
         this.RequireFeature('AudioOut');
+        this.loggedDrops.clear();
 
         // The provider's directional video flags travel with the session configuration, so the room client reads only
         // the kinds of video this provider allows in.
@@ -254,19 +262,21 @@ export class LiveKitBridge extends BaseRealtimeBridge {
         }
     }
 
-    /**
-     * Sends an outbound media frame into the room. LiveKit does the FULL media set, so audio, video, and
-     * screen are all published on their respective tracks (gated by the directional capability flags —
-     * the realtime models light audio first, video/screen ride the same path once a model emits them).
-     *
-     * @param track The outbound track the frame targets.
-     * @param frame The media frame to send.
-     */
     /** Flushes the agent's queued outbound voice on barge-in (the user interrupted the agent). */
     public override FlushOutboundMedia(): void {
         this.sdk?.flushOutboundAudio();
     }
 
+    /**
+     * Sends an outbound media frame into the room: the agent's voice on `audio-out`, and on `video-out` the pieces of its
+     * live avatar (fragmented MP4), which the room client decodes and publishes with the voice. The avatar is the bot's
+     * only video: the room has no publisher for a raw video frame or a `screen-out` frame, so each is dropped, with one log
+     * line per track per session when the provider allows that track. Video and screen are gated by the directional
+     * capability flags (`VideoOut`, `ScreenOut`).
+     *
+     * @param track The outbound track the frame targets.
+     * @param frame The media frame to send.
+     */
     public SendMedia(track: BridgeMediaTrackKind, frame: BridgeMediaFrame): void {
         if (!this.sdk) {
             return; // not connected — drop
@@ -280,25 +290,45 @@ export class LiveKitBridge extends BaseRealtimeBridge {
                 this.sdk.publishAudioFrame(bytes);
                 break;
             case 'video-out':
-                if (this.features.VideoOut !== true) {
-                    break;
-                }
-                if (IsAvatarMediaFrame(frame)) {
-                    // An agent's live avatar: the room client decodes it and publishes the face and the voice together.
-                    this.sdk.publishAvatarMedia?.({ Bytes: bytes, MimeType: frame.MimeType ?? 'video/mp4' });
-                } else {
-                    this.sdk.publishVideoFrame(bytes);
-                }
+                this.sendVideoOut(this.sdk, frame, bytes);
                 break;
             case 'screen-out':
                 if (this.features.ScreenOut === true) {
-                    this.sdk.publishScreenFrame(bytes);
+                    this.logDroppedOnce('screen-out', 'a screen-share frame');
                 }
                 break;
             default:
                 // An inbound track was passed to SendMedia — ignore (defensive).
                 break;
         }
+    }
+
+    /**
+     * Publishes a piece of the agent's avatar when the provider allows video out. Any other video frame has no publisher
+     * in the room: it is dropped, and the first one is logged.
+     */
+    private sendVideoOut(sdk: ILiveKitRoomSdk, frame: BridgeMediaFrame, bytes: ArrayBuffer): void {
+        if (this.features.VideoOut !== true) {
+            return;
+        }
+        if (IsAvatarMediaFrame(frame)) {
+            // An agent's live avatar: the room client decodes it and publishes the face and the voice together.
+            sdk.publishAvatarMedia?.({ Bytes: bytes, MimeType: frame.MimeType ?? 'video/mp4' });
+            return;
+        }
+        this.logDroppedOnce('video-out', `a video frame that is not an avatar's MP4 (type ${frame.MimeType?.trim() || 'none'})`);
+    }
+
+    /** Logs a dropped outbound frame once per track per session; later drops on that track are silent. */
+    private logDroppedOnce(track: UnpublishedOutboundTrack, what: string): void {
+        if (this.loggedDrops.has(track)) {
+            return;
+        }
+        this.loggedDrops.add(track);
+        LogStatus(
+            `[LiveKitBridge] Dropped ${what} on ${track}: the room publishes only the agent's avatar. ` +
+                `Later ${track} frames in this session are dropped without a log line.`,
+        );
     }
 
     /**

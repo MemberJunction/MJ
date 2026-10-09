@@ -154,6 +154,18 @@ describe('LiveKitWorkerRoomClient — the avatar', () => {
         expect(workers[1].Of('connect')[0].options.avatarStatus).toEqual(TAKEN_DOWN);
         expect(workers[1].Of('publishAvatarMedia')).toHaveLength(0);
     });
+
+    it('sends the worker no raw video or screen command: the avatar is the only video it is given', async () => {
+        expect('publishVideo' in LiveKitWorkerRoomClient.prototype).toBe(false);
+        expect('publishScreen' in LiveKitWorkerRoomClient.prototype).toBe(false);
+        const client = newClient(workers);
+        await connect(client, workers);
+        client.publishAudio(new ArrayBuffer(48));
+        client.publishAvatarMedia({ data: FixturePieces()[0], mimeType: 'video/mp4' });
+        client.flushOutbound();
+        const types = workers[0].Sent.map((s) => s.message.type);
+        expect(types).toEqual(['connect', 'publishAudio', 'publishAvatarMedia', 'flushOutbound']);
+    });
 });
 
 /** A room client double for the worker's session. */
@@ -166,8 +178,6 @@ class SessionRoomClient implements TelemetryRoomClient {
     public async disconnect(): Promise<void> {}
     public publishAudio(): void {}
     public flushOutbound(): void {}
-    public publishVideo(): void {}
-    public publishScreen(): void {}
     public publishAvatarMedia(chunk: NativeAvatarMediaChunk): void {
         this.Avatar.push(chunk);
     }

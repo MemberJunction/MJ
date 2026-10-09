@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({ LogStatus: vi.fn<(message: string) => void>() }));
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return { ...actual, LogStatus: mocks.LogStatus };
+});
+
 import type {
     MJAIBridgeProviderEntity_IBridgeProviderFeatures,
 } from '@memberjunction/core-entities';
@@ -67,9 +75,11 @@ class FakeLiveKitRoomSdk implements ILiveKitRoomSdk {
     public flushOutboundAudio(): void {
         /* not driven here */
     }
+    /** Not on the seam any more (the avatar is the bot's only video out): kept here to catch any call to it. */
     public publishVideoFrame(frame: ArrayBuffer): void {
         this.PublishedVideo.push(frame);
     }
+    /** Not on the seam any more (the bot shares no screen): kept here to catch any call to it. */
     public publishScreenFrame(frame: ArrayBuffer): void {
         this.PublishedScreen.push(frame);
     }
@@ -172,7 +182,13 @@ function bytes(...vals: number[]): ArrayBuffer {
 let sdk: FakeLiveKitRoomSdk;
 beforeEach(() => {
     sdk = new FakeLiveKitRoomSdk([{ Identity: 'p-alice', DisplayName: 'Alice', Role: 'Host' }]);
+    mocks.LogStatus.mockClear();
 });
+
+/** The bridge's log lines about outbound frames it dropped. */
+function droppedLines(): string[] {
+    return mocks.LogStatus.mock.calls.map(([message]) => message).filter((message) => message.includes('Dropped'));
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Connect / Disconnect.
@@ -211,7 +227,7 @@ describe('LiveKitBridge — Connect / Disconnect', () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Audio in → OnMedia (with speaker labels) and out → seam. Full A/V/screen out.
+// Audio in → OnMedia (with speaker labels) and out → seam. Raw video and screen out are dropped (the avatar is the video).
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe('LiveKitBridge — media', () => {
@@ -245,22 +261,41 @@ describe('LiveKitBridge — media', () => {
         expect(new Uint8Array(sdk.PublishedAudio[0])).toEqual(new Uint8Array([1, 2, 3]));
     });
 
-    it('publishes video and screen out when those features are enabled (LiveKit does full A/V/screen)', async () => {
+    it('drops a raw video-out frame and a screen-out frame (the room publishes only the avatar), one log line per track', async () => {
         const bridge = makeBridge(sdk);
         await bridge.Connect(ctx());
         bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(1) });
         bridge.SendMedia('screen-out', { Track: 'screen-out', Bytes: bytes(2) });
-        expect(sdk.PublishedVideo.length).toBe(1);
-        expect(sdk.PublishedScreen.length).toBe(1);
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(3) });
+        bridge.SendMedia('screen-out', { Track: 'screen-out', Bytes: bytes(4) });
+        expect(sdk.PublishedVideo).toHaveLength(0);
+        expect(sdk.PublishedScreen).toHaveLength(0);
+        expect(sdk.PublishedAvatar).toHaveLength(0);
+        const lines = droppedLines();
+        expect(lines).toHaveLength(2);
+        expect(lines[0]).toContain("on video-out: the room publishes only the agent's avatar");
+        expect(lines[0]).toContain('(type none)');
+        expect(lines[1]).toContain('a screen-share frame on screen-out');
     });
 
-    it('does NOT publish video/screen when those directional features are off', async () => {
+    it('logs a dropped frame again in the next session', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(1) });
+        await bridge.Disconnect('Explicit');
+        await bridge.Connect(ctx());
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(2) });
+        expect(droppedLines()).toHaveLength(2);
+    });
+
+    it('drops video/screen without a log line when those directional features are off', async () => {
         const bridge = makeBridge(sdk);
         await bridge.Connect(ctx({ AudioIn: true, AudioOut: true, SpeakerDiarization: true })); // no Video/ScreenOut
         bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(1) });
         bridge.SendMedia('screen-out', { Track: 'screen-out', Bytes: bytes(2) });
         expect(sdk.PublishedVideo.length).toBe(0);
         expect(sdk.PublishedScreen.length).toBe(0);
+        expect(droppedLines()).toEqual([]);
     });
 
     it('drops outbound media when not connected', () => {
@@ -586,13 +621,27 @@ describe('LiveKitBridge — the agent\'s avatar', () => {
         ]);
     });
 
-    it('still sends a raw video frame (no MP4 type) to the camera path', async () => {
+    it('drops a video frame that is not an MP4 piece (no raw camera path), logging the first with its type', async () => {
         const bridge = makeBridge(sdk);
         await bridge.Connect(ctx());
         bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(1), MimeType: 'image/jpeg' });
         bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(2) });
-        expect(sdk.PublishedVideo).toHaveLength(2);
+        expect(sdk.PublishedVideo).toHaveLength(0);
         expect(sdk.PublishedAvatar).toHaveLength(0);
+        expect(droppedLines()).toEqual([
+            "[LiveKitBridge] Dropped a video frame that is not an avatar's MP4 (type image/jpeg) on video-out: the room publishes " +
+                "only the agent's avatar. Later video-out frames in this session are dropped without a log line.",
+        ]);
+    });
+
+    it('still publishes the avatar after dropping a raw frame: the avatar is the one video path', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(1), MimeType: 'image/jpeg' });
+        const piece = bytes(0, 0, 0, 8, 0x66, 0x74, 0x79, 0x70);
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: piece, MimeType: 'video/mp4' });
+        expect(sdk.PublishedAvatar).toEqual([{ Bytes: piece, MimeType: 'video/mp4' }]);
+        expect(sdk.PublishedVideo).toHaveLength(0);
     });
 
     it('publishes no avatar when the provider does not allow video out', async () => {

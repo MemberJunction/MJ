@@ -601,26 +601,10 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
         this.worker.postMessage({ type: 'flushOutbound' });
     }
 
-    public publishVideo(frame: ArrayBuffer): void {
-        if (this.fallback) {
-            this.fallback.publishVideo(frame);
-            return;
-        }
-        this.worker?.postMessage({ type: 'publishVideo', frame }, [frame]);
-    }
-
-    public publishScreen(frame: ArrayBuffer): void {
-        if (this.fallback) {
-            this.fallback.publishScreen(frame);
-            return;
-        }
-        this.worker?.postMessage({ type: 'publishScreen', frame }, [frame]);
-    }
-
     /**
-     * Hands one avatar piece to the worker, which decodes and publishes it, transferring its buffer (zero-copy). An init
-     * segment is copied first, for a restarted worker; one that comes while the worker restarts is kept for it too.
-     * Other pieces are dropped until the worker has joined.
+     * Hands one avatar piece to the worker, which decodes and publishes it, transferring its buffer (zero-copy): the bot's
+     * only video out. An init segment is copied first, for a restarted worker; one that comes while the worker restarts is
+     * kept for it too. Other pieces are dropped until the worker has joined.
      */
     public publishAvatarMedia(chunk: NativeAvatarMediaChunk): void {
         if (this.fallback) {

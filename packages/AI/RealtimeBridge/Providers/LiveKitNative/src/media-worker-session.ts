@@ -130,12 +130,6 @@ export class MediaWorkerSession {
                 case 'flushOutbound':
                     this.handleFlushOutbound();
                     break;
-                case 'publishVideo':
-                    this.client?.publishVideo(command.frame);
-                    break;
-                case 'publishScreen':
-                    this.client?.publishScreen(command.frame);
-                    break;
                 case 'publishAvatarMedia':
                     // Decoded and published in this worker: the avatar's decoders are its child processes.
                     this.client?.publishAvatarMedia?.(command.chunk);

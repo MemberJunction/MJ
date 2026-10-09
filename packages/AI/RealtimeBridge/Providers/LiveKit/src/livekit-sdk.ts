@@ -24,8 +24,8 @@
  * - {@link publishAudioFrame} → publishing PCM on the bot's audio track (the agent's voice).
  * - {@link onAudioTrack} → subscribing each remote participant's audio track; LiveKit delivers tracks
  *   **per participant**, which is the native source of speaker labels for diarization (no extra mixer).
- * - {@link publishVideoFrame} / {@link publishScreenFrame} → publishing the bot's camera / screen-share
- *   tracks (LiveKit does full A/V/screen; the realtime models light audio first).
+ * - {@link publishAvatarMedia} → publishing the agent's live avatar: its face on the bot's camera track and its voice
+ *   on the audio track. That is the bot's only video out: it publishes no raw camera frames and no screen share.
  * - {@link onParticipantJoin} / {@link onParticipantLeave} / {@link getParticipants} → the room's
  *   `ParticipantConnected` / `ParticipantDisconnected` events + the participant list.
  * - {@link sendDataMessage} → the LiveKit **data channel** (reliable data publish) — used for chat.
@@ -216,25 +216,9 @@ export interface ILiveKitRoomSdk {
     onVideoSourceEnded?(cb: (source: LiveKitVideoSourceEnd) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
 
     /**
-     * Publishes one raw video frame on the bot's camera track. LiveKit does full video; the realtime
-     * models light audio first, so this is wired but typically unused until a model emits video.
-     *
-     * @param frame The encoded/raw video frame bytes to publish.
-     */
-    publishVideoFrame(frame: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-
-    /**
-     * Publishes one raw screen-share frame on the bot's screen track (e.g. a Remote Browser channel's
-     * viewport). LiveKit does full screen share.
-     *
-     * @param frame The encoded/raw screen frame bytes to publish.
-     */
-    publishScreenFrame(frame: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-
-    /**
      * Publishes one piece of the agent's live avatar: the room client decodes it, publishes the face on the bot's camera
-     * track (at its first frame) and the voice on its audio track, lip-synced. Optional: an SDK without avatar publishing
-     * omits it, and the avatar's pieces are dropped.
+     * track (at its first frame) and the voice on its audio track, lip-synced. This is the bot's only video out. Optional:
+     * an SDK without avatar publishing omits it, and the avatar's pieces are dropped.
      *
      * @param chunk The avatar piece.
      */

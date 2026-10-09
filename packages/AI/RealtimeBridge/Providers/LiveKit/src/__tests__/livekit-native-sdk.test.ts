@@ -2,7 +2,7 @@
  * Tests for `LiveKitNativeMeetingSdk` — the **two-way** native LiveKit Node room SDK binding. Exercises
  * the adapter against a **fake native module** (no SDK, no network): the pure native→seam mappings, the
  * connect/auth path, BOTH audio directions (the subscribe→`LiveKitAudioFrame` path AND the real
- * `publishAudioFrame`→native publish path), video/screen publish, roster + participant join/leave +
+ * `publishAudioFrame`→native publish path), the avatar as the only video out, roster + participant join/leave +
  * room-disconnected signals, the data-channel chat reaching the native client, the `BindLiveKitNative`
  * factory, `readNativeConfig` extraction, and the actionable errors (no specifier / module absent).
  */
@@ -67,9 +67,11 @@ class FakeNativeClient implements NativeRoomClient {
     flushOutbound() {
         /* not driven here */
     }
+    /** Not on the native seam any more (the avatar is the bot's only video out): kept here to catch any call to it. */
     publishVideo(frame: ArrayBuffer) {
         this.publishedVideo.push(frame);
     }
+    /** Not on the native seam any more (the bot shares no screen): kept here to catch any call to it. */
     publishScreen(frame: ArrayBuffer) {
         this.publishedScreen.push(frame);
     }
@@ -198,16 +200,21 @@ describe('LiveKitNativeMeetingSdk — connect + two-way audio', () => {
         expect(client.publishedAudio[0]).toBe(pcm);
     });
 
-    it('publishVideoFrame + publishScreenFrame forward to the native publish path', async () => {
+    it('has no raw video or screen publish: through every operation, only the avatar reaches the native client as video', async () => {
+        expect('publishVideoFrame' in LiveKitNativeMeetingSdk.prototype).toBe(false);
+        expect('publishScreenFrame' in LiveKitNativeMeetingSdk.prototype).toBe(false);
         const client = new FakeNativeClient();
         const sdk = new LiveKitNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.connect(baseArgs);
-        const vid = new Uint8Array([1]).buffer;
-        const scr = new Uint8Array([2]).buffer;
-        sdk.publishVideoFrame(vid);
-        sdk.publishScreenFrame(scr);
-        expect(client.publishedVideo).toEqual([vid]);
-        expect(client.publishedScreen).toEqual([scr]);
+        const piece = new Uint8Array([0, 0, 0, 8]).buffer;
+        sdk.publishAudioFrame(new Uint8Array([5]).buffer);
+        sdk.publishAvatarMedia({ Bytes: piece, MimeType: 'video/mp4' });
+        sdk.flushOutboundAudio();
+        await sdk.sendDataMessage('hello');
+        await sdk.disconnect();
+        expect(client.publishedVideo).toEqual([]);
+        expect(client.publishedScreen).toEqual([]);
+        expect(client.publishedAvatar).toEqual([{ data: piece, mimeType: 'video/mp4' }]);
     });
 
     it('publishAudioFrame before connect is a safe no-op (no throw)', () => {

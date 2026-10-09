@@ -4,7 +4,7 @@
  * minting + admin, plus a room client such as `@livekit/rtc-node` that publishes/subscribes media). It
  * gives the agent both **hearing** (each remote participant's subscribed audio track → a diarized
  * {@link LiveKitAudioFrame}) and a **voice** ({@link publishAudioFrame} forwards the agent's synthesized
- * PCM onto the bot's published audio track), plus full video/screen publish and the data-channel "chat".
+ * PCM onto the bot's published audio track), plus the agent's live avatar and the data-channel "chat".
  *
  * ## Why a native binding
  * Publishing audio *into* a LiveKit room requires a real WebRTC participant — there is no receive-only
@@ -213,10 +213,6 @@ export interface NativeRoomClient {
     publishAudio(pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Drops all pending/queued outbound audio — flushes the agent's voice on barge-in. */
     flushOutbound(): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-    /** Publishes one raw frame on the bot's camera/video track. */
-    publishVideo(frame: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-    /** Publishes one raw frame on the bot's screen-share track. */
-    publishScreen(frame: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Registers the inbound per-participant subscribed-audio callback. "Latest handler wins." */
     onAudioFrame(cb: (frame: NativeRoomAudioFrame) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Registers the participant-connected callback. */
@@ -239,7 +235,8 @@ export interface NativeRoomClient {
     onVideoSourceEnded?(cb: (source: NativeRoomVideoSourceEnd) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
     /**
      * Decodes and publishes one piece of the agent's live avatar: the face on a camera track published at its first
-     * frame, the voice on the bot's audio track, paced together. Optional: a wrapper without avatars omits it.
+     * frame, the voice on the bot's audio track, paced together. It is the bot's only video out: the client publishes no
+     * raw camera frames and no screen share. Optional: a wrapper without avatars omits it.
      */
     publishAvatarMedia?(chunk: NativeAvatarMediaChunk): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
     /** Registers the callback for a change in what the client shows of the avatar. Optional. "Latest handler wins." */
@@ -570,8 +567,8 @@ export const defaultNativeLoader: NativeModuleLoader = DefaultNativeLoader;
  * A **real, two-way** {@link ILiveKitRoomSdk} over the native LiveKit Node room SDK (publish + subscribe).
  *
  * Gives the agent both **hearing** (per-participant subscribed audio → diarized {@link LiveKitAudioFrame}s)
- * and a **voice** ({@link publishAudioFrame} → the native publish path), plus working video/screen publish,
- * the data-channel chat, and roster events. Construct via {@link BindLiveKitNative} (the factory the
+ * and a **voice** ({@link publishAudioFrame} → the native publish path), plus its live avatar
+ * ({@link publishAvatarMedia}), the data-channel chat, and roster events. Construct via {@link BindLiveKitNative} (the factory the
  * bridge's `SetSdkFactory` wants), not directly, so config resolution + the lazy loader wire consistently.
  */
 export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
@@ -693,28 +690,8 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
     }
 
     /**
-     * Publishes one raw video frame on the bot's camera track via the native publish path. No-ops before
-     * {@link connect}.
-     *
-     * @param frame The video frame bytes to publish.
-     */
-    public publishVideoFrame(frame: ArrayBuffer): void {
-        this.client?.publishVideo(frame);
-    }
-
-    /**
-     * Publishes one raw screen-share frame on the bot's screen track via the native publish path. No-ops
-     * before {@link connect}.
-     *
-     * @param frame The screen frame bytes to publish.
-     */
-    public publishScreenFrame(frame: ArrayBuffer): void {
-        this.client?.publishScreen(frame);
-    }
-
-    /**
-     * Hands one piece of the agent's live avatar to the native room client, which decodes and publishes it. Dropped
-     * before {@link connect} or when the wrapper publishes no avatars.
+     * Hands one piece of the agent's live avatar to the native room client, which decodes and publishes it: the bot's
+     * only video out. Dropped before {@link connect} or when the wrapper publishes no avatars.
      *
      * @param chunk The avatar piece.
      */

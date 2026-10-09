@@ -39,7 +39,7 @@
  * @author MemberJunction.com
  */
 
-import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
+import { LogError, LogStatusEx } from '@memberjunction/core';
 import { performance } from 'node:perf_hooks';
 import type {
     NativeAvatarMediaChunk,
@@ -531,9 +531,6 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     /** Audio (ms) handed to the audio source in all. */
     private capturedMs = 0;
 
-    private warnedVideo = false;
-    private warnedScreen = false;
-
     /**
      * @param outboundRate Outbound PCM rate (Hz) — the AudioSource rate (model output rate).
      * @param inboundRate Inbound PCM rate (Hz) — each AudioStream's resample target (model input rate).
@@ -731,7 +728,8 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     /**
      * Decodes and publishes one piece of the agent's live avatar ({@link AvatarPublisher}, created at the first piece):
      * the face on a camera track published at its first frame, the voice through this client's voice queue, paced by
-     * the voice. Dropped before connect, and after the avatar was taken down before this client joined.
+     * the voice. It is the bot's only video out (through {@link RtcNodeAvatarOutlet}); the client publishes no raw camera
+     * frames and no screen share. Dropped before connect, and after the avatar was taken down before this client joined.
      */
     public publishAvatarMedia(chunk: NativeAvatarMediaChunk): void {
         const rtc = this.rtc;
@@ -748,25 +746,6 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     /** Registers the handler for a change in what the room is shown of the avatar. "Latest handler wins." */
     public onAvatarStatus(cb: (status: NativeAvatarStatus) => void): void {
         this.avatarStatusHandler = cb;
-    }
-
-    /**
-     * Video publish is not part of the voice MVP — LiveKit supports it, but it needs a `VideoSource` +
-     * frame-format negotiation beyond this wrapper's scope. One-time-warned no-op (never throws).
-     */
-    public publishVideo(_frame: ArrayBuffer): void {
-        if (!this.warnedVideo) {
-            this.warnedVideo = true;
-            LogStatus('[LiveKitRtcNodeRoomClient] video publish not implemented in the native wrapper (voice MVP). No-op.');
-        }
-    }
-
-    /** Screen publish — same status as {@link publishVideo}. One-time-warned no-op. */
-    public publishScreen(_frame: ArrayBuffer): void {
-        if (!this.warnedScreen) {
-            this.warnedScreen = true;
-            LogStatus('[LiveKitRtcNodeRoomClient] screen publish not implemented in the native wrapper (voice MVP). No-op.');
-        }
     }
 
     /** Registers the inbound per-participant audio handler. "Latest handler wins." */

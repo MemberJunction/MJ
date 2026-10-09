@@ -3,8 +3,9 @@
  * module** (no native addon, no network). Covers the pure PCM helpers, the connect→publish-track flow,
  * BOTH audio directions (outbound `captureFrame` at the right rate + inbound `AudioStream`→diarized frame),
  * participant connect/disconnect events, roster, data-channel publish, disconnect teardown, the
- * sample-rate overrides, the video/screen publish no-ops, the participant-video wiring (the watcher's own rules are
- * in room-video-watcher.test.ts), and the actionable error when the addon is absent.
+ * sample-rate overrides, the absence of raw video/screen publish (the avatar is the only video out; its tests are in
+ * livekit-rtc-node-avatar.test.ts), the participant-video wiring (the watcher's own rules are in
+ * room-video-watcher.test.ts), and the actionable error when the addon is absent.
  */
 import { describe, it, expect, vi } from 'vitest';
 import {
@@ -217,12 +218,16 @@ describe('LiveKitRtcNodeRoomClient — roster, data, lifecycle', () => {
         expect(cap.disconnected).toBe(true);
     });
 
-    it('video/screen publish are safe no-ops (voice MVP)', async () => {
-        const { module } = makeFakeRtc();
+    it('has no raw video or screen publish: joining and speaking publish the voice track only (the avatar outlet is the one video path)', async () => {
+        expect('publishVideo' in LiveKitRtcNodeRoomClient.prototype).toBe(false);
+        expect('publishScreen' in LiveKitRtcNodeRoomClient.prototype).toBe(false);
+        const { module, cap } = makeFakeRtc();
         const client = new LiveKitRtcNodeRoomClient(24000, 24000, 1, async () => module);
         await client.connect(connectArgs);
-        expect(() => client.publishVideo(new ArrayBuffer(4))).not.toThrow();
-        expect(() => client.publishScreen(new ArrayBuffer(4))).not.toThrow();
+        client.publishAudio(new Int16Array([1, 2]).buffer);
+        await flush();
+        expect(cap.publishes.map((p) => p.kind)).toEqual(['audio']);
+        expect(cap.videoSources).toHaveLength(0);
     });
 });
 

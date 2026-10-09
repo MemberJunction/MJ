@@ -63,9 +63,7 @@ export type MediaWorkerCommand =
     | { type: 'connect'; id: string; args: NativeConnectArgs; options: MediaWorkerClientOptions }
     | { type: 'publishAudio'; pcm: ArrayBuffer }
     | { type: 'flushOutbound' }
-    | { type: 'publishVideo'; frame: ArrayBuffer }
-    | { type: 'publishScreen'; frame: ArrayBuffer }
-    /** One piece of the agent's live avatar; its `data` buffer is in the transfer list (not copied). */
+    /** One piece of the agent's live avatar (the bot's only video out); its `data` buffer is in the transfer list (not copied). */
     | { type: 'publishAvatarMedia'; chunk: NativeAvatarMediaChunk }  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
     | { type: 'publishData'; id: string; text: string }
     | { type: 'disconnect'; id: string }
