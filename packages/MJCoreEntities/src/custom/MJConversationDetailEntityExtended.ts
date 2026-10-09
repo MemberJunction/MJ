@@ -67,9 +67,11 @@ function isPersonRole(role: string | null | undefined): boolean {
  *  - change who wrote it and what it says ({@link AUTHORED_FIELDS}) only when they wrote it, and never its role;
  *  - delete it only when they wrote it, or own the conversation.
  *
- * The system user may write any message, as a save with no user may: it is how server code writes in anyone's
- * conversation. Agent replies (`Role='AI'`/`'Error'`) keep today's rules until MJ's chat stops writing them from the
- * browser (A19's second half).
+ * The system user is exempt from these authorship rules, since server code writes on people's behalf, but it still
+ * needs to own the conversation or hold a grant on it, as before: some server paths elevate an anonymous visitor to
+ * the system user (MJ#4791), and this gate keeps those paths out of other people's conversations. The plan's "the
+ * system user may write any message" lands with A19's second half, which must design that boundary. Agent replies
+ * (`Role='AI'`/`'Error'`) keep today's rules until MJ's chat stops writing them from the browser.
  * MJ's permissions engine has no native primitive for per-field row-conditional
  * write rules, so this gate lives here rather than in `MJ: Entity Permissions`.
  *
@@ -108,11 +110,11 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
             // No user context on a server save = system operation; allow.
             return true;
         }
-        if (WellKnownUserSource.Instance.IsSystemUser(user)) {
-            // Server code writing as the system user (agent replies, transcripts) may write any message.
-            return true;
-        }
-        if (this.TransactionGroup?.Variables.some((v) => v.EntityObject === this && v.Type === 'Use')) {
+        // The system user skips the authorship rules (server code writes on people's behalf) but, like anyone, must own
+        // the conversation or hold a grant on it: some server paths elevate an anonymous visitor to the system user
+        // (MJ#4791), and this gate is what keeps those paths out of other people's conversations.
+        const isSystemUser = WellKnownUserSource.Instance.IsSystemUser(user);
+        if (!isSystemUser && this.TransactionGroup?.Variables.some((v) => v.EntityObject === this && v.Type === 'Use')) {
             // A transaction variable sets its field after this check has passed, at submit, to any value an earlier
             // item in the group produced: a person's message would be checked with one author and saved with another.
             this.recordDenied('A conversation message cannot take its values from a transaction variable.', resultType);
@@ -132,7 +134,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
                 // is still theirs (no one is its owner yet, so an empty UserID gets the poster's).
                 const refusal = (await this.conversationExists(provider))
                     ? 'You do not have access to this conversation.'
-                    : this.authorshipRefusal(operation, user, null, false);
+                    : isSystemUser ? null : this.authorshipRefusal(operation, user, null, false);
                 if (refusal) {
                     this.recordDenied(refusal, resultType);
                     return false;
@@ -143,7 +145,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
             const isOwner =
                 !!conversation.UserID && UUIDsEqual(conversation.UserID, user.ID);
             const refusal = (isOwner ? null : await this.nonOwnerAccessRefusal(provider, user))
-                ?? this.authorshipRefusal(operation, user, conversation.UserID, isOwner);
+                ?? (isSystemUser ? null : this.authorshipRefusal(operation, user, conversation.UserID, isOwner));
             if (refusal) {
                 this.recordDenied(refusal, resultType);
                 return false;

@@ -411,15 +411,23 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
         });
     });
 
-    it('lets the system user write any message, with no grant and naming anyone', async () => {
+    it('exempts the system user from the authorship rules when it holds a grant: it may name anyone', async () => {
         mocks.isSystemUser.mockReturnValue(true);
-        mocks.getUserAvailableResources.mockReturnValue([]);
         const entity = await messageAs('system-account');
         entity.UserID = OTHER;
 
         expect(await entity.Save()).toBe(true);
         expect(await entity.Delete()).toBe(true);
-        expect(mocks.engineConfig).not.toHaveBeenCalled();
+    });
+
+    it('still refuses the system user on a conversation it neither owns nor holds a grant on (the MJ#4791 boundary)', async () => {
+        mocks.isSystemUser.mockReturnValue(true);
+        mocks.getUserAvailableResources.mockReturnValue([]);
+        const entity = await messageAs('system-account');
+
+        expect(await entity.Save()).toBe(false);
+        expect(entity.LatestResult?.CompleteMessage).toBe('You do not have access to this conversation.');
+        expect(await entity.Delete()).toBe(false);
     });
 
     it("keeps today's rules for agent replies until the chat stops writing them from the browser", async () => {
