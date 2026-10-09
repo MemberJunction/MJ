@@ -142,6 +142,16 @@ interface PostCommitEntry {
     Depth: number;
 }
 
+/** How one dataset item reads for the caller, or why it is refused. */
+interface DatasetItemScope {
+    /** The item's stored WhereClause AND'd with the caller's ItemFilter; '' when neither applies. */
+    Filter: string;
+    /** The context user's effective read row filter for the item's entity; '' when none applies. */
+    RowFilter: string;
+    /** Why the item is refused, or null when it may run. */
+    Refusal: string | null;
+}
+
 /**
  * GenericDatabaseProvider is an intermediate abstract class that implements shared
  * entity action, AI action, encryption, and view WHERE clause rendering logic.
@@ -5450,11 +5460,61 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Resolves how one dataset item reads for the caller. A caller's ItemFilter must pass the same
+     * denylist as a RunView ExtraFilter. With a context user, the item's entity must be readable by
+     * that user and the user's effective read row filter applies. MJ_Metadata is exempt from the
+     * user checks: every authenticated client loads it to learn the schema, including principals
+     * (widget guests, magic-link sessions) whose roles hold no read grant on the metadata entities.
+     */
+    private resolveDatasetItemScope(
+        datasetName: string,
+        item: Record<string, unknown>,
+        itemFilters: DatasetItemFilterType[] | undefined,
+        contextUser: UserInfo | undefined,
+    ): DatasetItemScope {
+        const code = String(item['Code']);
+        const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
+        const clientFilter = itemFilters?.find(f => f?.ItemCode === code)?.Filter ?? '';
+        if (clientFilter && !this.ValidateUserProvidedSQLClause(clientFilter)) {
+            return { Filter: '', RowFilter: '', Refusal: `Invalid ItemFilter for dataset item '${code}': contains one or more forbidden keywords` };
+        }
+        const filter = whereClause && clientFilter ? `${whereClause} AND (${clientFilter})` : (whereClause || clientFilter);
+        if (!contextUser || datasetName === GenericDatabaseProvider._mjMetadataDatasetName) {
+            return { Filter: filter, RowFilter: '', Refusal: null };
+        }
+
+        const entityName = String(item['Entity']);
+        const entity = this.EntityByName(entityName);
+        if (!entity) {
+            return { Filter: filter, RowFilter: '', Refusal: `Entity '${entityName}' of dataset item '${code}' not found in metadata` };
+        }
+        if (!entity.GetUserPermisions(contextUser)?.CanRead) {
+            return { Filter: filter, RowFilter: '', Refusal: `User ${contextUser.Email} does not have read permissions on ${entity.Name}` };
+        }
+        return { Filter: filter, RowFilter: entity.GetEffectiveRowFilterWhereClause(contextUser, EntityPermissionType.Read, ''), Refusal: null };
+    }
+
+    /**
+     * The WHERE text for a dataset item: the caller's row filter AND'd with the item's filter. The
+     * item's filter sits two parentheses deep because a client ItemFilter is screened inside one
+     * level, so an OR it reaches by closing a parenthesis still cannot widen the row filter.
+     */
+    private datasetItemWhereClause(scope: DatasetItemScope): string {
+        if (!scope.RowFilter) return scope.Filter;
+        if (!scope.Filter) return scope.RowFilter;
+        return `(${scope.RowFilter}) AND ((${scope.Filter}))`;
+    }
+
+    /**
      * Retrieves a dataset by name, executing all item queries via ExecuteSQLBatch
      * and aggregating results. Uses dialect-neutral quoting for all SQL construction.
      *
      * ExecuteSQLBatch gives SQL Server true multi-result-set batching automatically,
      * while PG (and the default) use parallel individual queries.
+     *
+     * An ItemFilter that fails the denylist refuses its item. With a context user, each item needs
+     * CanRead on its entity and gets the user's read row filter (MJ_Metadata excepted). A refused
+     * item runs no SQL and fails the dataset.
      */
     public async GetDatasetByName(
         datasetName: string,
@@ -5514,7 +5574,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const code = String(item['Code']);
             const entityName = String(item['Entity']);
             const entityID = String(item['EntityID']);
-            const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
 
             // External-data-source entities have no MJ base view — their data is proxied live and
             // can't be served through the dataset's batched MJ-DB SQL path. Fail loud for that item
@@ -5533,23 +5592,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 continue;
             }
 
-            // Build effective filter (WhereClause + optional runtime ItemFilter)
-            let effectiveFilter = whereClause;
-            if (itemFilters && itemFilters.length > 0) {
-                const filter = itemFilters.find(f => f.ItemCode === code);
-                if (filter) {
-                    effectiveFilter = whereClause
-                        ? `${whereClause} AND (${filter.Filter})`
-                        : filter.Filter;
-                }
+            // The item's filter and the caller's row filter, or why it is refused. A refused item
+            // never reaches the cache or the database.
+            const scope = provider.resolveDatasetItemScope(datasetName, item, itemFilters, contextUser);
+            if (scope.Refusal) {
+                errorResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: undefined,
+                    Status: scope.Refusal,
+                    Success: false,
+                });
+                continue;
             }
+            // The row filter keys the slot, so one user's filtered rows are never served to another.
+            const rowFilterKey = scope.RowFilter || undefined;
 
             // Try cache first
             if (cacheAvailable) {
                 const fingerprint = cache.GenerateRunViewFingerprint(
-                    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
+                    { EntityName: entityName, ExtraFilter: scope.Filter } as RunViewParams,
                     this.InstanceConnectionString,
-                    undefined,
+                    rowFilterKey,
                     this.datasetCacheSegment(datasetName, code)
                 );
                 const cached = await cache.GetRunViewResult(fingerprint);
@@ -5585,15 +5651,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 continue;
             }
 
-            const filterSQL = effectiveFilter ? 'WHERE ' + effectiveFilter : '';
+            const whereSQL = this.datasetItemWhereClause(scope);
+            const filterSQL = whereSQL ? 'WHERE ' + whereSQL : '';
             uncachedQueries.push(`SELECT ${columns} FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)} ${filterSQL}`);
             uncachedItems.push(item);
             // Store fingerprint for write-through caching after SQL
             const fp = cacheAvailable
                 ? cache.GenerateRunViewFingerprint(
-                    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
+                    { EntityName: entityName, ExtraFilter: scope.Filter } as RunViewParams,
                     this.InstanceConnectionString,
-                    undefined,
+                    rowFilterKey,
                     this.datasetCacheSegment(datasetName, code)
                 )
                 : '';
@@ -5744,6 +5811,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Retrieves status information for a dataset by name: per-entity row count and
      * latest update date. Uses ExecuteSQLBatch for per-item status queries.
+     *
+     * Items read with the same scope as {@link GetDatasetByName}. When any item is refused, the
+     * status fails with the refusal and no status SQL runs.
      */
     public async GetDatasetStatusByName(
         datasetName: string,
@@ -5794,13 +5864,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const updateDates: DatasetStatusEntityUpdateDateType[] = [];
         let overallLatestDate = new Date(1900, 1, 1);
 
+        // Same scope as GetDatasetByName's data read — the stored item WhereClause, the caller's
+        // ItemFilter and the caller's row filter — so status and data describe the same row set.
+        // (Every shipped MJ_Metadata item has a NULL WhereClause and no row filter, so for
+        // metadata this is an unfiltered aggregate.)
+        const scopes = items.map(item => provider.resolveDatasetItemScope(datasetName, item, itemFilters, contextUser));
+        const refusal = scopes.find(scope => scope.Refusal)?.Refusal;
+        if (refusal) {
+            return {
+                DatasetID: String(items[0]['DatasetID']),
+                DatasetName: datasetName,
+                Success: false,
+                Status: refusal,
+                LatestUpdateDate: new Date(0),
+                EntityUpdateDates: [],
+            };
+        }
+
         const itemMeta: Array<{ entityID: string; entityName: string }> = [];
-        const queries = items.map((item) => {
+        const queries = items.map((item, index) => {
             const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
             const entityBaseView = String(item['EntityBaseView']);
-            const code = String(item['Code']);
             const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
-            const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
 
             itemMeta.push({ entityID: String(item['EntityID']), entityName: String(item['Entity']) });
 
@@ -5810,20 +5895,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
             const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime())).toISOString();
 
-            // Same filter composition as GetDatasetByName's data read — the stored item
-            // WhereClause AND'd with any runtime filter — so status and data describe the same
-            // row set. (Every shipped MJ_Metadata item has a NULL WhereClause, so for metadata
-            // this is identical to an unfiltered aggregate.)
-            let effectiveFilter = whereClause;
-            if (itemFilters && itemFilters.length > 0) {
-                const filter = itemFilters.find(f => f.ItemCode === code);
-                if (filter) {
-                    effectiveFilter = whereClause
-                        ? `${whereClause} AND (${filter.Filter})`
-                        : filter.Filter;
-                }
-            }
-            const filterSQL = effectiveFilter ? ' WHERE ' + effectiveFilter : '';
+            const whereSQL = this.datasetItemWhereClause(scopes[index]);
+            const filterSQL = whereSQL ? ' WHERE ' + whereSQL : '';
 
             return `SELECT ` +
                 `CASE ` +
