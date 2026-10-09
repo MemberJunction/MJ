@@ -153,9 +153,11 @@ describe('TelemetryManager — bounded derived collections', () => {
 
     describe('_insightDedupeWindow', () => {
         it('drops keys older than the dedupe window and keeps recent ones', () => {
+            // Keys are stamped with wall-clock time, the clock the dedupe check writes with.
+            const wallNow = Date.now();
             i._settings.analyzers.dedupeWindowMs = 1000;
-            i._insightDedupeWindow.set('expired', now - 5000);
-            i._insightDedupeWindow.set('recent', now);
+            i._insightDedupeWindow.set('expired', wallNow - 5000);
+            i._insightDedupeWindow.set('recent', wallNow);
             i._lastDeepTrimAt = openThrottle(now);
 
             i.trimIfNeeded();

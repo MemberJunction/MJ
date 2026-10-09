@@ -1322,6 +1322,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // Forwarded on this transport too, so a CacheLocal batch that asked for binary
                     // fields gets them (the slot fingerprint already distinguishes the two widths).
                     IncludeBinaryFields: item.params.IncludeBinaryFields,
+                    // BypassCache needs the same forwarding as the fields above, and omitting it INVERTED
+                    // the caller's intent rather than merely losing it. A param that bypasses the cache is
+                    // ineligible for a cache status, so none is attached below —
+                    // and the server reads a missing cacheStatus as "the client has nothing cached", which
+                    // is its cue to answer from the SERVER cache without touching the database. So the
+                    // strongest available "read true database state" arrived as its opposite, and
+                    // BaseEngine.Config(true) in a browser could not escape a stale server slot.
+                    BypassCache: item.params.BypassCache,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,

@@ -1,0 +1,73 @@
+@if (Visible) {
+  <mj-dialog [Visible]="true" Size="md" [Title]="DialogTitle" (Close)="Cancel()">
+    <div class="part-dialog">
+      <section>
+        <div class="part-dialog__label" id="part-dialog-type-label">Part type</div>
+        <div class="part-dialog__types" role="group" aria-labelledby="part-dialog-type-label">
+          @for (partType of TypeTiles; track partType.ID) {
+            <button type="button" class="part-dialog__type"
+                    [class.part-dialog__type--selected]="IsSelected(partType)"
+                    [attr.aria-pressed]="IsSelected(partType)"
+                    [attr.data-autofocus]="Mode === 'add' && IsSelected(partType) ? '' : null"
+                    [disabled]="Mode === 'edit' && !IsSelected(partType)"
+                    (click)="SelectPartType(partType)">
+              <i [class]="partType.Icon || 'fa-solid fa-puzzle-piece'" aria-hidden="true"></i>
+              <span class="part-dialog__type-label">{{ TileLabel(partType) }}</span>
+              <span class="part-dialog__type-desc">{{ TileDescription(partType) }}</span>
+            </button>
+          }
+        </div>
+        @if (TypeTiles.length === 0) {
+          <mj-empty-state Size="compact" Variant="warning" Title="No part types available"
+                          Message="Dashboard part types have not been set up in this system." />
+        }
+      </section>
+
+      @if (SelectedPartType) {
+        @if (HasSettingsPanel) {
+          <section>
+            <div class="part-dialog__label">Source</div>
+            @if (IsLoadingPanel) {
+              <mj-loading Text="Loading..." Size="small"></mj-loading>
+            }
+            @if (LoadError) {
+              <p class="part-dialog__warning">{{ LoadError }}</p>
+            }
+            <ng-container #configPanelContainer></ng-container>
+            @for (error of Errors; track $index) {
+              <p class="part-dialog__error"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> {{ error }}</p>
+            }
+          </section>
+        }
+
+        <section>
+          <label class="part-dialog__label" for="part-dialog-title">Title</label>
+          <input id="part-dialog-title" class="mj-input" type="text" [(ngModel)]="Title" [placeholder]="TitlePlaceholder">
+        </section>
+
+        @if (IsQuery) {
+          <section class="part-dialog__options">
+            <label class="part-dialog__option">
+              <input type="checkbox" class="mj-checkbox" [(ngModel)]="ShowParameterControls"> Show parameter controls
+            </label>
+            <label class="part-dialog__option">
+              <input type="checkbox" class="mj-checkbox" [(ngModel)]="AutoRefreshEnabled"> Refresh automatically every
+              <select class="mj-input part-dialog__refresh" [(ngModel)]="AutoRefreshSeconds" [disabled]="!AutoRefreshEnabled" aria-label="Refresh interval in seconds">
+                @for (seconds of RefreshChoices; track seconds) {
+                  <option [ngValue]="seconds">{{ seconds }}</option>
+                }
+              </select>
+              seconds
+            </label>
+          </section>
+        }
+      }
+    </div>
+    <mj-dialog-actions>
+      <button mjButton Variant="primary" type="button" [disabled]="!CanSubmit" (click)="Submit()">
+        <i [class]="SubmitIcon" aria-hidden="true"></i> {{ SubmitLabel }}
+      </button>
+      <button mjButton Variant="secondary" type="button" (click)="Cancel()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}
