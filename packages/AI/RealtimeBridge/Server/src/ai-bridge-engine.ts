@@ -15,6 +15,7 @@ import {
     InboundVideoRateOf,
     InboundVideoStreamsOf,
     IRealtimeSession,
+    ReadFmp4Fragment,
     ReadFmp4Init,
     RealtimeMediaKind,
     RealtimeTranscript,
@@ -1404,8 +1405,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
     /**
      * Sends one piece of the agent's avatar to the bridge on `video-out`, with its MIME type so the driver publishes it as
-     * an avatar. In a full-duplex multi-agent room the piece passes the floor gate first, counted by its audio's duration:
-     * that is how long the agent speaks. An init segment carries no speech and always passes.
+     * an avatar, and what the piece says about its video (see {@link avatarPieceVideoFacts}). In a full-duplex
+     * multi-agent room the piece passes the floor gate first, counted by its audio's duration: that is how long the agent
+     * speaks. An init segment carries no speech and always passes.
      */
     private forwardAvatarOutput(active: ActiveBridgeSession, session: IRealtimeSession, chunk: RealtimeAvatarMediaChunk): void {
         if (active.RealtimeSession !== session) {
@@ -1419,7 +1421,13 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             }
             return;
         }
-        active.Bridge.SendMedia('video-out', { Track: 'video-out', Bytes: chunk.Data, MimeType: chunk.MimeType, TimestampMs: Date.now() });
+        active.Bridge.SendMedia('video-out', {
+            Track: 'video-out',
+            Bytes: chunk.Data,
+            MimeType: chunk.MimeType,
+            TimestampMs: Date.now(),
+            ...avatarPieceVideoFacts(chunk.Data, active.AvatarInit),
+        });
     }
 
     /** The floor gate's verdict on one avatar piece: an init segment is remembered and passes; a fragment counts its audio. */
@@ -3260,6 +3268,31 @@ function mediaKindOf(track: BridgeMediaTrackKind): RealtimeMediaKind {
 /** The name a camera or screen gets in a note when its driver gave none: never its `SourceID`. */
 function fallbackVideoSourceLabel(track: BridgeMediaTrackKind): string {
     return track === 'screen-in' ? "a participant's screen" : "a participant's camera";
+}
+
+/**
+ * What one piece of an avatar's fragmented MP4 says about its video, for the bridge frame that carries it: the size the
+ * stream's init segment gives the video track, on the init segment and on each fragment with video in it, and for such
+ * a fragment whether its first video frame is a key frame. Nothing for an audio-only fragment, a fragment before any
+ * init, a stream whose init declares no video track, or a piece the reader can't read. An init segment is read from the
+ * piece itself, never from an earlier stream's init.
+ *
+ * @param bytes The avatar piece.
+ * @param streamInit The init segment of the stream the piece belongs to, read.
+ */
+function avatarPieceVideoFacts(bytes: ArrayBuffer, streamInit: Fmp4Init | null | undefined): Pick<BridgeMediaFrame, 'Width' | 'Height' | 'KeyFrame'> {
+    const kind = SniffFmp4Piece(bytes);
+    const init = kind === 'init' ? ReadFmp4Init(bytes) : kind === 'fragment' ? streamInit : null;
+    const video = init?.Tracks.find((track) => track.Handler === 'vide');
+    if (!init || !video) {
+        return {};
+    }
+    const size = video.Width && video.Height ? { Width: video.Width, Height: video.Height } : {};
+    if (kind === 'init') {
+        return size;
+    }
+    const firstFrame = ReadFmp4Fragment(bytes, init)?.Samples.find((sample) => sample.TrackID === video.TrackID);
+    return firstFrame ? { ...size, KeyFrame: firstFrame.IsSync } : {};
 }
 
 /**

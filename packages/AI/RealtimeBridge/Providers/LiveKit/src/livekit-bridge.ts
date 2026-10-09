@@ -418,9 +418,10 @@ export class LiveKitBridge extends BaseRealtimeBridge {
 
     /**
      * Wires the SDK's sampled camera and screen frames (only people who let agents see them; the room client decides)
-     * to inbound `video-in` / `screen-in` frames carrying the source's key and name, and its ended sources to
-     * {@link OnVideoSourceEnded}'s handler. Each frame re-checks the provider's directional flag, as {@link SendMedia}
-     * does for outbound video. Optional on the SDK seam: an SDK without inbound video wires nothing.
+     * to inbound `video-in` / `screen-in` frames carrying the source's key and name, the image's size, and the key-frame
+     * flag every JPEG gets (it decodes on its own), and its ended sources to {@link OnVideoSourceEnded}'s handler. Each
+     * frame re-checks the provider's directional flag, as {@link SendMedia} does for outbound video. Optional on the SDK
+     * seam: an SDK without inbound video wires nothing.
      */
     private wireInboundVideo(sdk: ILiveKitRoomSdk): void {
         sdk.onVideoTrack?.((frame: LiveKitVideoFrame) => {
@@ -432,6 +433,9 @@ export class LiveKitBridge extends BaseRealtimeBridge {
                 Track: track,
                 Bytes: frame.Bytes,
                 MimeType: frame.MimeType,
+                Width: frame.Width,
+                Height: frame.Height,
+                KeyFrame: true,
                 SourceID: VideoSourceIdOf(frame.ParticipantIdentity, frame.Source),
                 SourceLabel: VideoSourceLabelOf(frame.DisplayName, frame.Source),
                 TimestampMs: frame.TimestampMs,

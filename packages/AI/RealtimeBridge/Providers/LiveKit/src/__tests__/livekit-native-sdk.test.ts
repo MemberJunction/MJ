@@ -32,6 +32,8 @@ import {
     MapNativeAvatarStatus,
 } from '../livekit-native-sdk';
 import { LiveKitAudioFrame, LiveKitAvatarStatus, LiveKitConnectArgs, LiveKitParticipant, LiveKitVideoFrame, LiveKitVideoSourceEnd } from '../livekit-sdk';
+import { LiveKitBridge } from '../livekit-bridge';
+import type { BridgeMediaFrame } from '@memberjunction/ai-bridge-base';
 
 /** An in-memory {@link NativeRoomClient} with drive helpers + capture sinks (no SDK, no network). */
 class FakeNativeClient implements NativeRoomClient {
@@ -301,6 +303,37 @@ describe('LiveKitNativeMeetingSdk — video in (what the agent sees)', () => {
             { Bytes: jpeg, MimeType: 'image/jpeg', ParticipantIdentity: 'p-ada', DisplayName: 'Ada', Source: 'screen', Width: 1280, Height: 720, TimestampMs: 5 },
         ]);
         expect(ended).toEqual([{ ParticipantIdentity: 'p-ada', DisplayName: 'Ada', Source: 'screen' }]);
+    });
+
+    it("gives the bridge's frame the room client's image size, as a key frame", async () => {
+        const client = new FakeNativeClient();
+        const bridge = new LiveKitBridge();
+        bridge.SetSdkFactory(BindLiveKitNative(async () => fakeModule(client)));
+        const seen: BridgeMediaFrame[] = [];
+        bridge.OnMedia((f) => seen.push(f));
+        await bridge.Connect({
+            Features: { AudioIn: true, AudioOut: true, VideoIn: true, ScreenIn: true },
+            ProviderName: 'LiveKit',
+            Address: 'wss://livekit.myorg.com',
+            Configuration: { ...cfg, ...watching },
+        });
+
+        const jpeg = new Uint8Array([0xff, 0xd8]).buffer;
+        client.driveVideo({ data: jpeg, mimeType: 'image/jpeg', participantIdentity: 'p-ada', name: 'Ada', source: 'camera', width: 480, height: 640, timestampMs: 7 });
+
+        expect(seen).toEqual([
+            {
+                Track: 'video-in',
+                Bytes: jpeg,
+                MimeType: 'image/jpeg',
+                Width: 480,
+                Height: 640,
+                KeyFrame: true,
+                SourceID: 'participant:p-ada:camera',
+                SourceLabel: "Ada's camera",
+                TimestampMs: 7,
+            },
+        ]);
     });
 
     it('reads the agent-vision keys from Configuration: only real booleans and positive numbers count', () => {

@@ -15,9 +15,10 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { IRealtimeSession, RealtimeAvatarMediaChunk, RealtimeSessionCapabilities, RealtimeTranscript } from '@memberjunction/ai';
 import type { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
+import type { BridgeMediaFrame } from '@memberjunction/ai-bridge-base';
 import { AIBridgeEngine, IHostInstanceIdentity, StartBridgeSessionParams, ActiveBridgeSession, BridgeRealtimeSessionRecoveryRequest } from '../ai-bridge-engine';
 import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '../loopback-bridge';
-import { AvatarFragmentPiece, AvatarInitPiece, AUDIO_TRACK, VIDEO_TRACK } from './helpers/avatar-pieces';
+import { AvatarFragmentPiece, AvatarInitPiece, AUDIO_TRACK, UnreadableAvatarInitPiece, VIDEO_TRACK } from './helpers/avatar-pieces';
 
 const RATE = 24000;
 
@@ -98,8 +99,13 @@ function loopback(active: ActiveBridgeSession): LoopbackBridge {
 }
 
 /** The avatar pieces the bridge was sent: video-out frames with a MIME type. */
-function avatarSent(active: ActiveBridgeSession): Array<{ MimeType?: string; Bytes?: ArrayBuffer }> {
+function avatarSent(active: ActiveBridgeSession): BridgeMediaFrame[] {
     return loopback(active).Sent.filter((f) => f.Track === 'video-out');
+}
+
+/** What each avatar piece sent to the bridge said about its video: `[Width, Height, KeyFrame]`. */
+function videoFactsSent(active: ActiveBridgeSession): Array<[number | undefined, number | undefined, boolean | undefined]> {
+    return avatarSent(active).map((f) => [f.Width, f.Height, f.KeyFrame]);
 }
 
 beforeEach(() => {
@@ -141,6 +147,61 @@ describe('AIBridgeEngine — the avatar output', () => {
         const flush = vi.spyOn(active.Bridge, 'FlushOutboundMedia');
         session.Interrupt();
         expect(flush).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('AIBridgeEngine — what an avatar piece says about its video', () => {
+    it("gives the init segment and each video fragment the stream's size, and says whether the fragment starts at a key frame", async () => {
+        const session = new AvatarSession();
+        const active = await seat('facts', session);
+        session.Piece(AvatarInitPiece({ Width: 704, Height: 1280 }));
+        session.Piece(AvatarFragmentPiece(VIDEO_TRACK, 41.7));
+        session.Piece(AvatarFragmentPiece(VIDEO_TRACK, 41.7, { KeyFrame: false }));
+
+        expect(videoFactsSent(active)).toEqual([
+            [704, 1280, undefined], // an init segment carries no frame
+            [704, 1280, true],
+            [704, 1280, false],
+        ]);
+    });
+
+    it('says nothing about the video on an audio fragment', async () => {
+        const session = new AvatarSession();
+        const active = await seat('audio-piece', session);
+        session.Piece(AvatarInitPiece({ Width: 704, Height: 1280 }));
+        session.Piece(AvatarFragmentPiece(AUDIO_TRACK, 40));
+
+        expect(videoFactsSent(active)[1]).toEqual([undefined, undefined, undefined]);
+    });
+
+    it('leaves out what the stream does not say: the size without a sample entry, everything before an init', async () => {
+        const session = new AvatarSession();
+        const active = await seat('unknown', session);
+        session.Piece(AvatarFragmentPiece(VIDEO_TRACK, 41.7)); // no init yet
+        session.Piece(AvatarInitPiece()); // a video track without a size
+        session.Piece(AvatarFragmentPiece(VIDEO_TRACK, 41.7));
+
+        expect(videoFactsSent(active)).toEqual([
+            [undefined, undefined, undefined],
+            [undefined, undefined, undefined],
+            [undefined, undefined, true],
+        ]);
+    });
+
+    it("reads a new init segment's size from that segment, never from the stream before it", async () => {
+        const session = new AvatarSession();
+        const active = await seat('new-stream', session);
+        session.Piece(AvatarInitPiece({ Width: 704, Height: 1280 }));
+        session.Piece(AvatarInitPiece({ Width: 360, Height: 640 }));
+        session.Piece(AvatarFragmentPiece(VIDEO_TRACK, 41.7));
+        session.Piece(UnreadableAvatarInitPiece());
+
+        expect(videoFactsSent(active)).toEqual([
+            [704, 1280, undefined],
+            [360, 640, undefined],
+            [360, 640, true],
+            [undefined, undefined, undefined],
+        ]);
     });
 });
 

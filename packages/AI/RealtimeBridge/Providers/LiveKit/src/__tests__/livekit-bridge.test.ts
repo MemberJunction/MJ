@@ -318,6 +318,21 @@ describe('LiveKitBridge — video in (what the agent sees)', () => {
         expect(seen[0].SpeakerLabel).toBeUndefined();
     });
 
+    it("carries each image's size, and marks every JPEG a key frame (it decodes on its own)", async () => {
+        const bridge = makeBridge(sdk);
+        const seen: BridgeMediaFrame[] = [];
+        bridge.OnMedia((f) => seen.push(f));
+        await bridge.Connect(ctx());
+
+        sdk.DriveVideoFrame(cameraFrame());
+        sdk.DriveVideoFrame(cameraFrame({ Source: 'screen', Width: 1280, Height: 720 }));
+
+        expect(seen.map((f) => [f.Track, f.Width, f.Height, f.KeyFrame])).toEqual([
+            ['video-in', 640, 360, true],
+            ['screen-in', 1280, 720, true],
+        ]);
+    });
+
     it('forwards a shared screen as screen-in, with its own source key', async () => {
         const bridge = makeBridge(sdk);
         const seen: BridgeMediaFrame[] = [];
@@ -556,6 +571,19 @@ describe('LiveKitBridge — the agent\'s avatar', () => {
         expect(sdk.PublishedAvatar.map((c) => c.MimeType)).toEqual(['video/mp4', 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"']);
         expect(sdk.PublishedAvatar[0].Bytes).toBe(piece);
         expect(sdk.PublishedVideo).toHaveLength(0);
+    });
+
+    it('publishes an avatar piece the same whether or not it says its size and key frame', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        const described = bytes(1, 2);
+        const bare = bytes(3, 4);
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: described, MimeType: 'video/mp4', Width: 704, Height: 1280, KeyFrame: true });
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bare, MimeType: 'video/mp4' });
+        expect(sdk.PublishedAvatar).toEqual([
+            { Bytes: described, MimeType: 'video/mp4' },
+            { Bytes: bare, MimeType: 'video/mp4' },
+        ]);
     });
 
     it('still sends a raw video frame (no MP4 type) to the camera path', async () => {

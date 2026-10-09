@@ -303,6 +303,22 @@ describe('AIBridgeEngine — transport seam round-trip (LoopbackBridge + mock se
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
 
+    it('sends a camera frame to the model the same whether or not it says its size and key frame', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', TimestampMs: 5, Width: 640, Height: 360, KeyFrame: true });
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', TimestampMs: 5 });
+
+        expect(session.HeardFrames).toHaveLength(2);
+        expect(session.HeardFrames[0]).toEqual(session.HeardFrames[1]);
+        expect(session.HeardFrames[0]).toMatchObject({ Kind: 'video', MimeType: 'image/jpeg', TimestampMs: 5 });
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
     it('sends a shared screen to a video model as a video frame', async () => {
         const session = new MockRealtimeSession(VIDEO_SESSION);
         const { provider } = makeProvider(() => makeBridgeRow());

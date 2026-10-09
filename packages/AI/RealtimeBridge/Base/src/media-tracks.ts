@@ -80,6 +80,25 @@ export interface BridgeMediaFrame {
     MimeType?: string;
 
     /**
+     * The video's width in pixels, where the producer knows it: an image's own width (after any rotation and scaling),
+     * or for a fragmented MP4 stream, the width its init segment gives the video track, on the init segment and on each
+     * fragment that carries video. Absent on audio and wherever the producer does not know it; a consumer treats absent
+     * as unknown.
+     */
+    Width?: number;
+
+    /** The video's height in pixels, set and left out together with {@link BridgeMediaFrame.Width}. */
+    Height?: number;
+
+    /**
+     * Whether a decoder can start at this frame, with no frame before it. `true` for a still image (a JPEG or PNG decodes
+     * on its own); for a fragment of encoded video, whether its first video frame is a key frame. Absent where the
+     * producer does not know, and on a piece that carries no video frame (audio, an MP4 init segment); a consumer
+     * treats absent as unknown.
+     */
+    KeyFrame?: boolean;
+
+    /**
      * Which source a `video-in` or `screen-in` frame comes from, when the endpoint can have several (each
      * participant's camera, a shared screen): an opaque key that stays the same for one source, for example
      * `'participant:ada:camera'`. A model that takes one video stream is shown one source at a time; this key is how
