@@ -4,7 +4,7 @@ import { UserInfoEngine, type MJAIAgentChannelEntity, type MJAIAgentChannelEntit
 import { AddRealtimeUsageRecord, AIEngineBase, HasRealtimeUsage, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, ParseRealtimeAvatarStatus, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, ParseRealtimeAvatarStatus, ParseRealtimeClientTransport, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import {
   AppContextSnapshot,
   CompareExposure,
@@ -45,7 +45,7 @@ import {
   type VideoSourceState,
   REQUESTED_TRACKS_SESSION_KEY
 } from '@memberjunction/ai-realtime-client';
-import { DefaultRealtimeSessionLauncher, type IRealtimeSessionLauncher } from './session-launcher';
+import { DefaultRealtimeSessionLauncher, HasClientCredential, type IRealtimeSessionLauncher } from './session-launcher';
 import { RequestsAgentVideo, ResolveAvatarNotice, type RealtimeAvatarNotice } from './avatar-notice';
 import { ClientSessionDeadline } from './client-session-deadline';
 import {
@@ -407,6 +407,7 @@ export interface StartRealtimeClientSessionResult {
   ConversationId: string | null;
   Provider: string;
   Model: string;
+  /** The provider credential the client driver presents. Empty on a relay session, which has {@link RelayUrl} instead. */
   EphemeralToken: string;
   ExpiresAt: string;
   /** JSON.stringify of the provider session config (instructions + tools) to apply at connect. */
@@ -442,6 +443,16 @@ export interface StartRealtimeClientSessionResult {
    * for no avatar, and from a host that mints for itself and does not pass it on; the call then shows no notice.
    */
   AvatarStatusJson?: string | null;
+  /**
+   * OPTIONAL — how the browser reaches the provider: `'direct'` or `'relay'` (`RealtimeClientTransport` from
+   * `@memberjunction/ai`). Absent, null or unknown means direct: a direct session, or a server that predates it.
+   */
+  Transport?: string | null;
+  /**
+   * OPTIONAL — where a relay session's client driver connects (MJAPI's realtime relay). It carries the session's ticket,
+   * so it is a credential: never log it. A host that mints for itself must pass it on for a relay session.
+   */
+  RelayUrl?: string | null;
 }
 
 /**
@@ -1288,7 +1299,8 @@ export class RealtimeSessionRuntime {
    * owns that half too.
    *
    * @param result The minted session — the same ten fields the `StartRealtimeClientSession`
-   *   mutation returns. `EphemeralToken` and `Provider` are what actually open the call.
+   *   mutation returns. `EphemeralToken` and `Provider` are what actually open the call; a relay
+   *   session opens with its `Transport` and `RelayUrl` instead, so a host must pass those on.
    * @param options Host-side inputs the result cannot carry; see {@link RealtimeSessionRunOptions}.
    *   Every field defaults exactly as its {@link StartRealtimeSession} counterpart does.
    */
@@ -3104,6 +3116,7 @@ export class RealtimeSessionRuntime {
    * Aggregates the tracks active channels source and sink under {@link REQUESTED_TRACKS_SESSION_KEY} so the
    * driver can negotiate them (e.g., inbound video for Whiteboard / RemoteBrowser, outbound video for a
    * channel that shows the agent's video). A track the model does not support resolves to `'unsupported'`.
+   * The session's transport and relay URL go to the driver as minted (an unknown transport is left out: direct).
    */
   public BuildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
     const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
@@ -3132,11 +3145,14 @@ export class RealtimeSessionRuntime {
       }
       sessionConfig[REQUESTED_TRACKS_SESSION_KEY] = Array.from(trackMap.values());
     }
+    const transport = ParseRealtimeClientTransport(session.Transport);
     return {
       Provider: session.Provider,
       Model: session.Model,
       EphemeralToken: session.EphemeralToken,
       ExpiresAt: session.ExpiresAt,
+      ...(transport ? { Transport: transport } : {}),
+      ...(session.RelayUrl ? { RelayUrl: session.RelayUrl } : {}),
       SessionConfig: sessionConfig
     };
   }
@@ -3712,8 +3728,8 @@ export class RealtimeSessionRuntime {
       },
       { Provider: this.Provider }
     );
-    if (!result?.EphemeralToken) {
-      throw new Error('The session launcher returned no ephemeral token');
+    if (!HasClientCredential(result)) {
+      throw new Error('The session launcher returned no ephemeral token (or, for a relay session, no relay URL)');
     }
     return result;
   }

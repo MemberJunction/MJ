@@ -12,6 +12,7 @@ import {
     RealtimeTrackDescriptor,
     ExtractToolSchedulingHint,
     type RealtimeAvatarUnavailableReason,
+    type RealtimeClientTransport,
     type RealtimeResumeAttempt,
 } from '@memberjunction/ai';
 import {
@@ -99,17 +100,24 @@ export interface GeminiLiveClientSession {
 
 /**
  * Arguments handed to {@link GeminiRealtimeClient.connectLiveSession}. Bundles the resolved
- * model + connect config (from the server-minted `SessionConfig`), the ephemeral token, and the
- * lifecycle callbacks so the seam owns the entire `live.connect` call and tests can substitute
- * it wholesale.
+ * model + connect config (from the server-minted `SessionConfig`), the ephemeral token (or a relay
+ * session's transport and relay URL), and the lifecycle callbacks so the seam owns the entire
+ * `live.connect` call and tests can substitute it wholesale.
  */
 export interface GeminiClientConnectArgs {
     /** The Gemini Live model id to open the session against. */
     Model: string;
     /** The server-built connect config (system instruction, tools, modalities, transcription). */
     Config: LiveConnectConfig;
-    /** The server-minted ephemeral auth token (used as the API key on a `v1alpha` client). */
+    /** The server-minted ephemeral auth token (used as the API key on a `v1alpha` client). Empty on a relay session. */
     EphemeralToken: string;
+    /** How the browser reaches the provider, as minted (`ClientRealtimeSessionConfig.Transport`); absent means direct. */
+    Transport?: RealtimeClientTransport;
+    /**
+     * A relay session's relay URL, as minted (`ClientRealtimeSessionConfig.RelayUrl`). It carries the relay's ticket:
+     * never log it or put it in an error message.
+     */
+    RelayUrl?: string;
     /** Invoked for every {@link LiveServerMessage} the server emits over the session. */
     OnMessage: (message: LiveServerMessage) => void;
     /** Invoked on a websocket-level error (fatal). */
@@ -119,7 +127,7 @@ export interface GeminiClientConnectArgs {
 }
 
 /** What a connection is opened against; a resume reuses it with the new handle in `Config`. */
-type GeminiConnectTarget = Pick<GeminiClientConnectArgs, 'Model' | 'Config' | 'EphemeralToken'>;
+type GeminiConnectTarget = Pick<GeminiClientConnectArgs, 'Model' | 'Config' | 'EphemeralToken' | 'Transport' | 'RelayUrl'>;
 
 /** What {@link GeminiRealtimeClient} reads from the server-minted `SessionConfig`. */
 interface GeminiParsedSessionConfig {
@@ -361,6 +369,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * open. When the host doesn't show it, the session connects audio only.
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream, cameraStream?: MediaStream): Promise<void> {
+        this.AssertTransportSupported(config);
         this.resetForConnect(micStream, cameraStream);
         this.setState('connecting');
         const session = this.parseSessionConfig(config);
@@ -376,7 +385,13 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const liveConfig = this.prepareAvatar(session, playback);
         this.resumption?.Dispose();
         this.resumption = this.createResumption();
-        this.connectTarget = { Model: session.model, Config: liveConfig, EphemeralToken: config.EphemeralToken };
+        this.connectTarget = {
+            Model: session.model,
+            Config: liveConfig,
+            EphemeralToken: config.EphemeralToken,
+            Transport: config.Transport,
+            RelayUrl: config.RelayUrl,
+        };
         this.useConnection(await this.openConnection(this.connectTarget));
         this.setState('connected');
         // Handed over now rather than at the first part, so the avatar's tile is up before the agent speaks.

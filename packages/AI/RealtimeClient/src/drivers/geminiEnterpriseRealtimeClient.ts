@@ -19,9 +19,10 @@ const RELAY_URL_PATTERN = /^(wss?|https?):\/\/(.+)$/i;
  * Gemini Live on **Gemini Enterprise**, in the browser: a session through MJAPI's realtime relay.
  *
  * Registered under `'gemini-enterprise'`, the `Provider` the server's `GeminiEnterpriseRealtime` driver stamps. Gemini
- * Enterprise has no browser credential, so the minted `EphemeralToken` is the relay URL (the ticket is in its path), and
- * MJAPI holds the Google credential, writes the setup and filters what the browser sends. Everything else is
- * {@link GeminiRealtimeClient}'s: audio, transcripts, tools, the avatar playout, resumption (which reuses the URL).
+ * Enterprise has no browser credential, so the mint makes a relay session: `Transport` `'relay'`, the relay URL as
+ * `RelayUrl` (the ticket is in its path) and no `EphemeralToken`. MJAPI holds the Google credential, writes the setup and
+ * filters what the browser sends. The client opens only relay sessions. Everything else is {@link GeminiRealtimeClient}'s:
+ * audio, transcripts, tools, the avatar playout, resumption (which reuses the URL).
  *
  * The web SDK runs in Vertex mode against the relay: `vertexai: true` (the browser build ignores `enterprise`), a
  * placeholder API key (the build requires one; it never leaves the page), and the relay URL as the base URL, to which the
@@ -29,17 +30,24 @@ const RELAY_URL_PATTERN = /^(wss?|https?):\/\/(.+)$/i;
  */
 @RegisterClass(BaseRealtimeClient, 'gemini-enterprise')
 export class GeminiEnterpriseRealtimeClient extends GeminiRealtimeClient {
+    /** Opts in to relay sessions: this client speaks Gemini Live to MJAPI's relay, which speaks it to Google. */
+    protected override get SupportsRelayTransport(): boolean {
+        return true;
+    }
+
     /**
      * Opens one Live connection through the relay; a resume opens another with the same URL and the new handle.
      *
      * The config states the response modalities: the web SDK fills in AUDIO when it has none, and the relay reads an
      * AUDIO-only setup as a request to drop the avatar. So a session that shows the avatar always asks for VIDEO.
+     *
+     * @throws When the session is not a relay session, or its relay URL is not a ws(s) URL (see {@link relayBaseUrl}).
      */
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         const ai = new GoogleGenAI({
             vertexai: true,
             apiKey: RELAY_PLACEHOLDER_API_KEY,
-            httpOptions: { baseUrl: relayBaseUrl(args.EphemeralToken), apiVersion: VERTEX_LIVE_API_VERSION },
+            httpOptions: { baseUrl: relayBaseUrl(args), apiVersion: VERTEX_LIVE_API_VERSION },
         });
         return ai.live.connect({
             model: args.Model,
@@ -68,13 +76,20 @@ export class GeminiEnterpriseRealtimeClient extends GeminiRealtimeClient {
  * The relay URL as the web SDK's base URL. The SDK turns an `http:` base into `ws:` and any other into `wss:`, so a
  * `ws://` relay URL (MJAPI without TLS, in development) goes in as `http://`, and a `wss://` one as `https://`.
  *
- * @param relayUrl The minted `EphemeralToken`.
- * @throws When the token is not a ws(s) or http(s) URL. The message never quotes it: the URL carries the ticket.
+ * @param args The session's transport and relay URL, as minted.
+ * @throws When the session is not a relay session (a Gemini Enterprise session has no direct path), has no relay URL, or
+ *   its relay URL is not a ws(s) or http(s) URL. No message quotes the URL or the token: the URL carries the ticket.
  */
-function relayBaseUrl(relayUrl: string): string {
-    const match = RELAY_URL_PATTERN.exec(relayUrl);
+function relayBaseUrl(args: Pick<GeminiClientConnectArgs, 'Transport' | 'RelayUrl'>): string {
+    if (args.Transport !== 'relay') {
+        throw new Error("GeminiEnterpriseRealtimeClient: the session is not a relay session (Transport 'relay'); Gemini Enterprise runs only through MJAPI's relay.");
+    }
+    if (!args.RelayUrl) {
+        throw new Error('GeminiEnterpriseRealtimeClient: the relay session has no relay URL.');
+    }
+    const match = RELAY_URL_PATTERN.exec(args.RelayUrl);
     if (!match) {
-        throw new Error('GeminiEnterpriseRealtimeClient: the session token is not a relay URL (ws:// or wss://).');
+        throw new Error('GeminiEnterpriseRealtimeClient: the relay URL is not a ws:// or wss:// URL.');
     }
     const scheme = match[1].toLowerCase();
     const httpScheme = scheme === 'ws' || scheme === 'http' ? 'http' : 'https';

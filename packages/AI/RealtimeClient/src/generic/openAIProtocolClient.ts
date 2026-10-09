@@ -952,6 +952,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      * `'listening'` only after all of that (obligation #7).
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
+        this.AssertTransportSupported(config);
         this.sessionObject = this.resolveSessionObject(config);
         this.micStream = micStream;
         this.closedByConsumer = false;

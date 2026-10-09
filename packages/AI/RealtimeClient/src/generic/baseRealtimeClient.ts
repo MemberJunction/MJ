@@ -259,6 +259,13 @@ export interface RealtimeClientError {
  *    WebRTC sender, a Web Audio source node, the input meter's clone) goes silent. A driver
  *    implements {@link BaseRealtimeClient.ReplaceMicrophone} to rebind them: `replaceTrack` on
  *    its senders, or `IPcmMicCapture.Rebind` on its PCM capture, and a new input meter.
+ * 11. **Refuse a transport you don't speak.** A session minted to run through MJAPI's realtime
+ *    relay (`ClientRealtimeSessionConfig.Transport` `'relay'`) has no provider token, only a relay
+ *    URL. Every driver calls {@link BaseRealtimeClient.AssertTransportSupported} first in
+ *    {@link BaseRealtimeClient.Connect}, so a driver that connects only to its provider refuses
+ *    such a session with a clear error instead of failing at the provider. A driver that speaks
+ *    its provider's protocol through the relay opts in by overriding
+ *    {@link BaseRealtimeClient.SupportsRelayTransport}.
  */
 export abstract class BaseRealtimeClient {
     // ── Registered handlers (single-handler style, like IRealtimeSession) ─────
@@ -494,7 +501,8 @@ export abstract class BaseRealtimeClient {
      * private pact between this driver and the same-keyed server driver that minted it (see
      * driver obligation #8); how it is applied is entirely driver-specific.
      *
-     * @param config The server-minted client session config (provider, model, ephemeral token, session config).
+     * @param config The server-minted client session config (provider, model, ephemeral token or relay transport,
+     *   session config). A driver refuses a transport it does not speak first (see {@link AssertTransportSupported}).
      * @param micStream The user's microphone capture stream. The caller acquires it (so IT owns
      *   the permission prompt UX); the client attaches it to the transport and stops its tracks
      *   on {@link Disconnect}.
@@ -504,6 +512,32 @@ export abstract class BaseRealtimeClient {
      *   {@link OnRemoteVideo}.
      */
     public abstract Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream, cameraStream?: MediaStream): Promise<void>;
+
+    /**
+     * Whether this driver can open a relay session (`ClientRealtimeSessionConfig.Transport` `'relay'`): connect to
+     * MJAPI's realtime relay at the session's `RelayUrl` rather than to its provider. `false` here; a driver that speaks
+     * its provider's protocol through the relay opts in by overriding it (the Gemini Enterprise client does).
+     */
+    protected get SupportsRelayTransport(): boolean {
+        return false;
+    }
+
+    /**
+     * Refuses a session this driver cannot open: a relay session, unless the driver opts in through
+     * {@link SupportsRelayTransport}. Every driver calls this first in {@link Connect}, before it touches the session's
+     * media or opens a connection (driver obligation #11). The message names the provider key and never quotes the
+     * relay URL, which carries the relay's ticket.
+     *
+     * @param config The session the host asked this driver to open.
+     * @throws When the session runs through the relay and this driver does not support it.
+     */
+    protected AssertTransportSupported(config: ClientRealtimeSessionConfig): void {
+        if (config.Transport === 'relay' && !this.SupportsRelayTransport) {
+            throw new Error(
+                `The '${config.Provider}' realtime client cannot open a session through MJAPI's relay (Transport 'relay'); it connects only to its provider.`
+            );
+        }
+    }
 
     // ── Remote (agent) audio slot ──────────────────────────────────────────────
     // Lives here, not in each driver, so every driver that owns a tappable agent-audio plane

@@ -96,6 +96,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
      * data channel opens; the client reports `'listening'` at that point.
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
+        this.AssertTransportSupported(config);
         this.sessionConfig = config.SessionConfig;
         this.micStream = micStream;
         this.setState('connecting');

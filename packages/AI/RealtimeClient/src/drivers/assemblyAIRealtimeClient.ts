@@ -207,6 +207,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      * format. Reports `'listening'` only after all of that (obligation #7).
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
+        this.AssertTransportSupported(config);
         this.micStream = micStream;
         this.closedByConsumer = false;
         this.setState('connecting');

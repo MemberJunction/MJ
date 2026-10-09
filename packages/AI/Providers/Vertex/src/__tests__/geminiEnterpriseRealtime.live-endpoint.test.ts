@@ -71,7 +71,7 @@ function makeParams(overrides: Partial<RealtimeSessionParams> = {}): RealtimeSes
 }
 
 function openFresh(minted: ClientRealtimeSessionConfig): RealtimeRelayGrant {
-    const ticket = decodeURIComponent(/\/realtime\/relay\/([^/?#]+)$/.exec(minted.EphemeralToken)?.[1] ?? '');
+    const ticket = decodeURIComponent(/\/realtime\/relay\/([^/?#]+)$/.exec(minted.RelayUrl ?? '')?.[1] ?? '');
     const result = RealtimeProxyRegistry.Instance.OpenRelaySession(ticket, { ResumeHandle: null, AudioOnly: false });
     if (!('Granted' in result)) {
         throw new Error(`relay session refused: ${result.Refused}`);

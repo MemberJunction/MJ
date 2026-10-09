@@ -143,18 +143,18 @@ class TestEnterprise extends GeminiEnterpriseRealtime {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The ticket id in a relay URL's path. */
-function ticketOf(relayUrl: string): string {
-    const match = /\/realtime\/relay\/([^/?#]+)$/.exec(relayUrl);
+/** The ticket id in a minted session's relay URL path. */
+function ticketOf(minted: ClientRealtimeSessionConfig): string {
+    const match = /\/realtime\/relay\/([^/?#]+)$/.exec(minted.RelayUrl ?? '');
     if (!match) {
-        throw new Error(`not a relay URL: ${relayUrl}`);
+        throw new Error('the minted session has no relay URL');
     }
     return decodeURIComponent(match[1]);
 }
 
 /** Opens the session's fresh connection in the registry, as the relay does at the browser's first frame. */
 function openFresh(minted: ClientRealtimeSessionConfig): RealtimeRelayGrant {
-    const result = RealtimeProxyRegistry.Instance.OpenRelaySession(ticketOf(minted.EphemeralToken), { ResumeHandle: null, AudioOnly: false });
+    const result = RealtimeProxyRegistry.Instance.OpenRelaySession(ticketOf(minted), { ResumeHandle: null, AudioOnly: false });
     if (!('Granted' in result)) {
         throw new Error(`relay session refused: ${result.Refused}`);
     }
@@ -232,19 +232,38 @@ describe('GeminiEnterpriseRealtime', () => {
             const before = RealtimeProxyRegistry.Instance.RelaySessionCount;
             const { Minted } = await mint();
             expect(RealtimeProxyRegistry.Instance.RelaySessionCount).toBe(before + 1);
-            const info = RealtimeProxyRegistry.Instance.FindRelaySession(ticketOf(Minted.EphemeralToken));
+            const info = RealtimeProxyRegistry.Instance.FindRelaySession(ticketOf(Minted));
             expect(info?.DriverClass).toBe('GeminiEnterpriseRealtime');
             const grant = openFresh(Minted);
             expect(grant.UserID).toBe('user-1');
             expect(grant.Resumed).toBe(false);
         });
 
-        it('returns the relay URL, with the ticket in the path, as the token, for the gemini-enterprise client', async () => {
+        it('returns a relay session for the gemini-enterprise client: the relay URL, with the ticket in the path, and no token', async () => {
             const { Minted } = await mint();
             expect(Minted.Provider).toBe('gemini-enterprise');
             expect(Minted.Model).toBe('gemini-3.8-live');
-            expect(Minted.EphemeralToken).toMatch(/^wss:\/\/mjapi\.example\.test\/realtime\/relay\/[0-9a-f-]{36}$/);
-            expect(Minted.EphemeralToken).not.toContain('?');
+            expect(Minted.Transport).toBe('relay');
+            expect(Minted.RelayUrl).toMatch(/^wss:\/\/mjapi\.example\.test\/realtime\/relay\/[0-9a-f-]{36}$/);
+            expect(Minted.RelayUrl).not.toContain('?');
+            expect(Minted.EphemeralToken).toBe('');
+        });
+
+        it('puts the ticket only in the relay URL: not in the pact, the avatar status or anything else the browser gets', async () => {
+            const { Minted } = await mint(serviceAccountKey(), makeParams({ Avatar: { AvatarID: 'Ben', PersonaName: 'Ben' } }));
+            const ticket = ticketOf(Minted);
+            const { RelayUrl: _relayUrl, ...rest } = Minted;
+            expect(JSON.stringify(rest)).not.toContain(ticket);
+        });
+
+        it('logs nothing that carries the relay URL or its ticket, also when the mint warns about the location', async () => {
+            const spies = [warn, ...(['log', 'info', 'error', 'debug'] as const).map((method) => vi.spyOn(console, method).mockImplementation(() => undefined))];
+            const minted = [(await mint()).Minted, (await mint(serviceAccountKey({ location: 'europe-west4' }))).Minted];
+            const logged = spies.flatMap((spy) => spy.mock.calls.map((call: unknown[]) => call.map(String).join(' ')));
+            expect(logged.some((line) => line.includes('Location "europe-west4"'))).toBe(true); // the mint did log
+            for (const session of minted) {
+                expect(logged.filter((line) => line.includes(ticketOf(session)))).toEqual([]);
+            }
         });
 
         it('expires with the relay session: 30 minutes, or the session cap when shorter', async () => {

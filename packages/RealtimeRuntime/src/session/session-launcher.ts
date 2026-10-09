@@ -1,6 +1,6 @@
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import type { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
+import { ParseRealtimeClientTransport, type JSONValue, type RealtimeToolDefinition } from '@memberjunction/ai';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import type { StartRealtimeClientSessionResult } from './RealtimeSessionRuntime';
 
@@ -67,8 +67,8 @@ export interface RealtimeSessionLaunchContext {
  * context the stock one cannot — without proxying the runtime's provider or re-implementing the run
  * half. Install one with {@link RealtimeSessionRuntime.Launcher}.
  *
- * A launcher must either resolve a usable result (one carrying an ephemeral token) or throw; the runtime
- * turns a throw into a failed start with the error on `LastStartError`.
+ * A launcher must either resolve a usable result (one carrying an ephemeral token, or a relay session's relay URL) or
+ * throw; the runtime turns a throw into a failed start with the error on `LastStartError`.
  */
 export interface IRealtimeSessionLauncher {
   /**
@@ -76,10 +76,24 @@ export interface IRealtimeSessionLauncher {
    *
    * @param request The inputs the runtime resolved for this start.
    * @param context The provider the session runs on.
-   * @returns The minted session, including `ClientPolicyJson` when the launcher's mint scoped channels and
-   *   `AvatarStatusJson` when the server reports the session's avatar status.
+   * @returns The minted session, including `ClientPolicyJson` when the launcher's mint scoped channels,
+   *   `AvatarStatusJson` when the server reports the session's avatar status, and `Transport` and `RelayUrl` for a
+   *   session that runs through MJAPI's realtime relay.
    */
   Launch(request: RealtimeSessionLaunchRequest, context: RealtimeSessionLaunchContext): Promise<StartRealtimeClientSessionResult>;
+}
+
+/**
+ * Whether a minted session carries what its client driver connects with: an ephemeral token, or, for a relay session
+ * (`Transport` `'relay'`), its relay URL.
+ *
+ * @param result The minted session, or nothing.
+ */
+export function HasClientCredential(result: Pick<StartRealtimeClientSessionResult, 'EphemeralToken' | 'Transport' | 'RelayUrl'> | null | undefined): boolean {
+  if (!result) {
+    return false;
+  }
+  return !!result.EphemeralToken || (ParseRealtimeClientTransport(result.Transport) === 'relay' && !!result.RelayUrl);
 }
 
 /**
@@ -91,19 +105,32 @@ interface MintExtensions {
   ChannelScoping: boolean;
   /** The session's live-avatar status: the `AvatarStatusJson` field. */
   AvatarStatus: boolean;
+  /** How the browser reaches the provider: the `Transport` and `RelayUrl` fields of a relay session. */
+  RelayTransport: boolean;
 }
+
+/** What the launcher says, once, when the server rejects an extension of the mint. */
+const UNSUPPORTED_EXTENSION_WARNINGS: Readonly<Record<keyof MintExtensions, string>> = {
+  ChannelScoping: '[RealtimeSession] The server does not support channel scoping — minting without it and resolving channels locally.',
+  AvatarStatus: '[RealtimeSession] The server does not report the avatar status — minting without it; the call shows no avatar notice.',
+  RelayTransport: '[RealtimeSession] The server does not report the session transport — minting without it; every session connects directly.',
+};
 
 /**
  * The extension a mint failure rejects, when the failure is a GraphQL validation rejection of one the mint asked for —
  * the signature of a server that predates it ("Unknown argument "channelCandidatesJson"…", "Cannot query field
- * "ClientPolicyJson"…", "Cannot query field "AvatarStatusJson"…"). Only that case is recoverable; any other failure is a
- * real mint failure and must surface. A rejection names one field at a time, so a server that predates both extensions
- * is found out in two steps.
+ * "ClientPolicyJson"…", "Cannot query field "AvatarStatusJson"…", "Cannot query field "Transport"…"). Only that case is
+ * recoverable; any other failure is a real mint failure and must surface. A rejection names one field at a time, so a
+ * server that predates several extensions is found out one step at a time.
  */
 function unsupportedExtension(error: unknown, asked: MintExtensions): keyof MintExtensions | null {
   const message = error instanceof Error ? error.message : String(error);
   if (asked.AvatarStatus && message.includes('AvatarStatusJson')) {
     return 'AvatarStatus';
+  }
+  // The quoted field name, not the bare word: "Transport" alone could be any transport error.
+  if (asked.RelayTransport && (message.includes('field "Transport"') || message.includes('RelayUrl'))) {
+    return 'RelayTransport';
   }
   if (asked.ChannelScoping && (message.includes('channelCandidatesJson') || message.includes('ClientPolicyJson'))) {
     return 'ChannelScoping';
@@ -117,25 +144,24 @@ function unsupportedExtension(error: unknown, asked: MintExtensions): keyof Mint
  *
  * When the session has channel candidates it asks the server to scope them (`channelCandidatesJson`)
  * and to return the resolved policy (`ClientPolicyJson`). It also asks for the session's live-avatar status
- * (`AvatarStatusJson`), which the call reads to say why it shows no avatar. A server that predates either
- * extension rejects it at validation, in which case the launcher mints without that extension alone (the
- * runtime then resolves the channel scope locally, or shows no avatar notice) — a new client must keep
- * working against an older server, and a failed mint over an optional extension would be the worst way to
- * find out they differ. Each fallback is remembered per launcher instance so a long-lived runtime asks once.
+ * (`AvatarStatusJson`), which the call reads to say why it shows no avatar, and for how the browser reaches the
+ * provider (`Transport` and `RelayUrl`), which a relay session's client driver connects with. A server that predates
+ * an extension rejects it at validation, in which case the launcher mints without that extension alone (the
+ * runtime then resolves the channel scope locally, shows no avatar notice, or treats every session as direct) — a
+ * new client must keep working against an older server, and a failed mint over an optional extension would be the
+ * worst way to find out they differ. Each fallback is remembered per launcher instance so a long-lived runtime asks once.
  */
 export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher {
-  /** Whether the server rejected the channel-scoping extension of the mint; set once and kept. */
-  private serverLacksChannelScoping = false;
-  /** Whether the server rejected the avatar-status field of the mint; set once and kept. */
-  private serverLacksAvatarStatus = false;
+  /** The extensions of the mint the server rejected; each is added once and kept. */
+  private readonly serverLacks = new Set<keyof MintExtensions>();
 
   public async Launch(request: RealtimeSessionLaunchRequest, context: RealtimeSessionLaunchContext): Promise<StartRealtimeClientSessionResult> {
     // The session's provider is the GraphQL one in every shipped host; this is the same narrowing the runtime applies for its relay mutations.
     const transport = context.Provider as GraphQLDataProvider;
     const result = await this.executeMintMutation(transport, this.buildVariables(request), request.ChannelCandidatesJson);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
-    if (!payload?.EphemeralToken) {
-      throw new Error('StartRealtimeClientSession returned no ephemeral token');
+    if (!payload || !HasClientCredential(payload)) {
+      throw new Error('StartRealtimeClientSession returned no ephemeral token (or, for a relay session, no relay URL)');
     }
     return payload;
   }
@@ -168,8 +194,9 @@ export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher 
     channelCandidatesJson: string | null
   ): Promise<{ StartRealtimeClientSession?: StartRealtimeClientSessionResult } | undefined> {
     let asked: MintExtensions = {
-      ChannelScoping: channelCandidatesJson !== null && !this.serverLacksChannelScoping,
-      AvatarStatus: !this.serverLacksAvatarStatus,
+      ChannelScoping: channelCandidatesJson !== null && !this.serverLacks.has('ChannelScoping'),
+      AvatarStatus: !this.serverLacks.has('AvatarStatus'),
+      RelayTransport: !this.serverLacks.has('RelayTransport'),
     };
     for (;;) {
       try {
@@ -188,20 +215,20 @@ export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher 
 
   /** Remembers that the server lacks an extension of the mint, and says so once. */
   private rememberUnsupported(extension: keyof MintExtensions): void {
-    if (extension === 'ChannelScoping') {
-      console.warn('[RealtimeSession] The server does not support channel scoping — minting without it and resolving channels locally.');
-      this.serverLacksChannelScoping = true;
-      return;
-    }
-    console.warn('[RealtimeSession] The server does not report the avatar status — minting without it; the call shows no avatar notice.');
-    this.serverLacksAvatarStatus = true;
+    console.warn(UNSUPPORTED_EXTENSION_WARNINGS[extension]);
+    this.serverLacks.add(extension);
   }
 
   /** The `StartRealtimeClientSession` document, with the extensions asked for. */
   private buildMintMutation(asked: MintExtensions): string {
     const extraVariable = asked.ChannelScoping ? ', $channelCandidatesJson: String' : '';
     const extraArgument = asked.ChannelScoping ? ', channelCandidatesJson: $channelCandidatesJson' : '';
-    const extraField = [asked.ChannelScoping ? 'ClientPolicyJson' : '', asked.AvatarStatus ? 'AvatarStatusJson' : '']
+    const extraField = [
+      asked.ChannelScoping ? 'ClientPolicyJson' : '',
+      asked.AvatarStatus ? 'AvatarStatusJson' : '',
+      asked.RelayTransport ? 'Transport' : '',
+      asked.RelayTransport ? 'RelayUrl' : '',
+    ]
       .filter((field) => field.length > 0)
       .map((field) => `\n          ${field}`)
       .join('');

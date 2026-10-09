@@ -301,18 +301,40 @@ export interface RealtimeInputFrame {
 }
 
 /**
+ * How a client-direct session's browser reaches the provider ({@link ClientRealtimeSessionConfig.Transport}):
+ * - `'direct'`: the browser opens the provider's socket itself, authenticated with
+ *   {@link ClientRealtimeSessionConfig.EphemeralToken};
+ * - `'relay'`: the browser connects to MJAPI's realtime relay at {@link ClientRealtimeSessionConfig.RelayUrl}, and
+ *   MJAPI holds the provider credential and opens the provider's socket.
+ */
+export type RealtimeClientTransport = 'direct' | 'relay';
+
+/**
+ * Reads a {@link RealtimeClientTransport} from untyped data, such as the mint result's `Transport` field.
+ *
+ * @param value The value to read.
+ * @returns The transport, or `undefined` when the value is absent or not a known transport (read as direct).
+ */
+export function ParseRealtimeClientTransport(value: unknown): RealtimeClientTransport | undefined {
+    return value === 'direct' || value === 'relay' ? value : undefined;
+}
+
+/**
  * The server-minted configuration a browser needs to open a **client-direct** realtime session.
  *
  * Returned by {@link BaseRealtimeModel.CreateClientSession}. The browser authenticates to the
- * provider with {@link ClientRealtimeSessionConfig.EphemeralToken} and hands
- * {@link ClientRealtimeSessionConfig.SessionConfig} to the matching client driver — so the server
- * retains control of the prompt and tool set even though the browser owns the socket.
+ * provider with {@link ClientRealtimeSessionConfig.EphemeralToken} (or, on a relay session, connects to
+ * {@link ClientRealtimeSessionConfig.RelayUrl}) and hands {@link ClientRealtimeSessionConfig.SessionConfig}
+ * to the matching client driver — so the server retains control of the prompt and tool set even though the
+ * browser owns the socket.
  *
  * **`SessionConfig` is a private pact between same-keyed driver halves.** The server driver that
  * minted it (selected by {@link ClientRealtimeSessionConfig.Provider}) and the client driver
  * registered under the same key are the ONLY parties that understand its shape. Hosts and any
  * transport in between must treat it as an opaque, serializable blob — never inspect, edit, or
- * depend on its fields.
+ * depend on its fields. {@link ClientRealtimeSessionConfig.Transport} and
+ * {@link ClientRealtimeSessionConfig.RelayUrl} are not part of the pact: hosts carry them to the client
+ * driver as they are.
  */
 export interface ClientRealtimeSessionConfig {
     /**
@@ -329,13 +351,29 @@ export interface ClientRealtimeSessionConfig {
     /**
      * The short-lived client secret the browser presents to the provider to authenticate its
      * direct session. Server-scoped and expiring (see {@link ClientRealtimeSessionConfig.ExpiresAt}).
+     * Empty on a relay session ({@link ClientRealtimeSessionConfig.Transport} `'relay'`): the browser
+     * holds no provider credential, and {@link ClientRealtimeSessionConfig.RelayUrl} carries the relay's ticket.
      */
     EphemeralToken: string;
 
     /**
-     * ISO-8601 timestamp at which {@link ClientRealtimeSessionConfig.EphemeralToken} expires.
+     * ISO-8601 timestamp at which {@link ClientRealtimeSessionConfig.EphemeralToken} (or a relay
+     * session's ticket) expires.
      */
     ExpiresAt: string;
+
+    /**
+     * How the browser reaches the provider (see {@link RealtimeClientTransport}). Absent means `'direct'`,
+     * as for every session minted before this field existed.
+     */
+    Transport?: RealtimeClientTransport;
+
+    /**
+     * Where a relay session's browser connects: MJAPI's realtime relay, `wss://<mjapi>/realtime/relay/<ticket>`.
+     * Present only when {@link ClientRealtimeSessionConfig.Transport} is `'relay'`. The URL carries the
+     * session's ticket, so it is a credential: never log it or put it in an error message.
+     */
+    RelayUrl?: string;
 
     /**
      * The provider-native session config the matching client driver applies when it opens its

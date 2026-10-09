@@ -113,6 +113,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         micStream: MediaStream,
         _cameraStream?: MediaStream
     ): Promise<void> {
+        this.AssertTransportSupported(config);
         this.sessionConfig = config.SessionConfig;
         this.micStream = micStream;
         this.setState('connecting');

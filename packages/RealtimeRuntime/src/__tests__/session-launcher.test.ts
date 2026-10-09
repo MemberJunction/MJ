@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { IMetadataProvider } from '@memberjunction/core';
+import type { ClientRealtimeSessionConfig } from '@memberjunction/ai';
 import type { RealtimeSessionClientPolicy } from '@memberjunction/ai-core-plus';
 import {
     BaseRealtimeChannelClient,
@@ -39,6 +40,35 @@ class LauncherFakeClient extends BaseRealtimeClient {
     }
 }
 
+/** A client driver that records the config it was asked to connect with. */
+@RegisterClass(BaseRealtimeClient, 'launcher-relay-provider')
+class RecordingRelayClient extends BaseRealtimeClient {
+    public static readonly Configs: ClientRealtimeSessionConfig[] = [];
+    public async Connect(config: ClientRealtimeSessionConfig): Promise<void> {
+        RecordingRelayClient.Configs.push(config);
+        this.emitStateChange('listening');
+    }
+    public SendText(): void {}
+    public CancelActiveResponse(): void {}
+    public SendContextNote(): void {}
+    public RequestSpokenUpdate(): void {}
+    public SendToolResult(): void {}
+    public SetMuted(): void {}
+    public async Disconnect(): Promise<void> {}
+    public get IsBusy(): boolean {
+        return false;
+    }
+    public get IsAudioPlaying(): boolean {
+        return false;
+    }
+}
+
+const RELAY_TICKET = '9e8d7c6b-1111-4222-8333-944455556666';
+const RELAY_URL = `wss://mjapi.example.test/realtime/relay/${RELAY_TICKET}`;
+
+/** A relay session as the server mints it: no token, the transport and the relay URL. */
+const RELAY_MINT: Partial<StartRealtimeClientSessionResult> = { EphemeralToken: '', Transport: 'relay', RelayUrl: RELAY_URL };
+
 class Host implements IRealtimeMediaHost {
     public async AcquireMicrophone(): Promise<MediaStream> {
         return { getTracks: () => [], getAudioTracks: () => [] } as unknown as MediaStream;
@@ -72,8 +102,12 @@ class MintProvider {
     public Calls: GqlCall[] = [];
     public RejectChannelScoping = false;
     public RejectAvatarStatus = false;
+    /** A server that predates the transport fields: it rejects `Transport` (the first one a validator meets). */
+    public RejectTransport = false;
     /** Which rejection a server that predates both names first (a validation error carries one message). */
     public AvatarRejectionFirst = false;
+    /** What the mint returns, over the defaults. */
+    public MintOverrides: Partial<StartRealtimeClientSessionResult> = {};
     public Entities: unknown[] = [{ Name: 'MJ: AI Agent Channels' }];
     public async ExecuteGQL(query: string, variables: Record<string, unknown>): Promise<unknown> {
         this.Calls.push({ query, variables });
@@ -85,11 +119,14 @@ class MintProvider {
                 this.RejectAvatarStatus && query.includes('AvatarStatusJson')
                     ? 'Cannot query field "AvatarStatusJson" on type "StartRealtimeClientSessionResult".'
                     : null,
+                this.RejectTransport && query.includes('RelayUrl')
+                    ? 'Cannot query field "Transport" on type "StartRealtimeClientSessionResult".'
+                    : null,
             ].filter((message): message is string => message !== null);
             if (rejections.length > 0) {
                 throw new Error(this.AvatarRejectionFirst ? rejections[rejections.length - 1] : rejections[0]);
             }
-            return { StartRealtimeClientSession: mintResult() };
+            return { StartRealtimeClientSession: mintResult(this.MintOverrides) };
         }
         return {};
     }
@@ -290,6 +327,69 @@ describe('DefaultRealtimeSessionLauncher', () => {
         provider.ExecuteGQL = async () => ({ StartRealtimeClientSession: mintResult({ EphemeralToken: '' }) });
         await expect(new DefaultRealtimeSessionLauncher().Launch(request(), { Provider: provider as unknown as IMetadataProvider })).rejects.toThrow('no ephemeral token');
     });
+
+    describe('the relay transport', () => {
+        const launch = (provider: MintProvider, launcher = new DefaultRealtimeSessionLauncher()) =>
+            launcher.Launch(request(), { Provider: provider as unknown as IMetadataProvider });
+
+        it('asks for the transport and the relay URL in every mint', async () => {
+            const provider = new MintProvider();
+            await launch(provider);
+            const [mint] = provider.mints();
+            expect(mint.query).toMatch(/\n\s+Transport\n\s+RelayUrl\n/);
+        });
+
+        it('returns a relay session that carries a relay URL and no token', async () => {
+            const provider = new MintProvider();
+            provider.MintOverrides = RELAY_MINT;
+            const result = await launch(provider);
+            expect(result).toMatchObject({ EphemeralToken: '', Transport: 'relay', RelayUrl: RELAY_URL });
+        });
+
+        it('rejects a mint with no token unless it is a relay session with a relay URL', async () => {
+            const cases: Array<Partial<StartRealtimeClientSessionResult>> = [
+                { EphemeralToken: '', Transport: 'relay', RelayUrl: null },
+                { EphemeralToken: '', Transport: null, RelayUrl: RELAY_URL },
+                { EphemeralToken: '', Transport: 'direct', RelayUrl: RELAY_URL },
+                { EphemeralToken: '', Transport: 'Relay', RelayUrl: RELAY_URL },
+            ];
+            for (const overrides of cases) {
+                const provider = new MintProvider();
+                provider.MintOverrides = overrides;
+                await expect(launch(provider), JSON.stringify(overrides)).rejects.toThrow('no ephemeral token');
+            }
+        });
+
+        it('drops only the transport fields for a server that predates them, keeping the other extensions, and remembers', async () => {
+            const provider = new MintProvider();
+            provider.RejectTransport = true;
+            const launcher = new DefaultRealtimeSessionLauncher();
+            const result = await launch(provider, launcher);
+            expect(result.EphemeralToken).toBe('t');
+            const [rejected, retried] = provider.mints();
+            expect(rejected.query).toContain('RelayUrl');
+            expect(retried.query).not.toContain('RelayUrl');
+            expect(retried.query).not.toMatch(/\n\s+Transport\n/);
+            expect(retried.query).toContain('AvatarStatusJson');
+            expect(vi.mocked(console.warn).mock.calls.map((call) => String(call[0]))).toContain(
+                '[RealtimeSession] The server does not report the session transport — minting without it; every session connects directly.'
+            );
+
+            await launch(provider, launcher);
+            expect(provider.mints()).toHaveLength(3); // asked once; the next mint went straight to the mutation without them
+            expect(provider.mints()[2].query).not.toContain('RelayUrl');
+        });
+
+        it('surfaces a failure that merely mentions a transport, rather than reading it as a server without the fields', async () => {
+            const provider = new MintProvider();
+            provider.ExecuteGQL = async (query: string, variables: Record<string, unknown>) => {
+                provider.Calls.push({ query, variables });
+                throw new Error('Transport error: the connection to MJAPI was reset');
+            };
+            await expect(launch(provider)).rejects.toThrow('Transport error');
+            expect(provider.mints()).toHaveLength(1);
+        });
+    });
 });
 
 describe('RealtimeSessionRuntime.Launcher', () => {
@@ -365,6 +465,32 @@ describe('RealtimeSessionRuntime.Launcher', () => {
         await start(runtime);
         expect(runtime.IsActive).toBe(false);
         expect(runtime.LastStartError?.message).toContain('no ephemeral token');
+    });
+
+    it("hands a relay session's transport and relay URL to the client driver, and logs neither", async () => {
+        const { runtime } = build();
+        const logged = (['log', 'info', 'debug'] as const).map((method) => vi.spyOn(console, method).mockImplementation(() => undefined));
+        RecordingRelayClient.Configs.length = 0;
+        runtime.Launcher = { Launch: async () => mintResult({ ...RELAY_MINT, Provider: 'launcher-relay-provider' }) };
+        await start(runtime);
+
+        expect(runtime.IsActive).toBe(true);
+        expect(RecordingRelayClient.Configs).toHaveLength(1);
+        expect(RecordingRelayClient.Configs[0]).toMatchObject({ Provider: 'launcher-relay-provider', EphemeralToken: '', Transport: 'relay', RelayUrl: RELAY_URL });
+        await runtime.EndRealtimeSession();
+        const lines = [...logged, vi.mocked(console.warn), vi.mocked(console.error)].flatMap((spy) => spy.mock.calls.map((call: unknown[]) => call.map(String).join(' ')));
+        expect(lines.filter((line) => line.includes(RELAY_TICKET))).toEqual([]);
+    });
+
+    it('builds a direct config with no transport or relay URL, and leaves out a transport it does not know', () => {
+        const { runtime } = build();
+        const direct = runtime.BuildClientConfig(mintResult());
+        expect('Transport' in direct).toBe(false);
+        expect('RelayUrl' in direct).toBe(false);
+        const unknown = runtime.BuildClientConfig(mintResult({ Transport: 'bridged' }));
+        expect('Transport' in unknown).toBe(false);
+        expect(runtime.BuildClientConfig(mintResult({ Transport: 'direct' })).Transport).toBe('direct');
+        expect(runtime.BuildClientConfig(mintResult(RELAY_MINT))).toMatchObject({ Transport: 'relay', RelayUrl: RELAY_URL, EphemeralToken: '' });
     });
 
     it('restores the stock launcher when set to null', async () => {

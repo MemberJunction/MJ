@@ -394,6 +394,38 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
         expect(prepArg.PreferredModelID).toBeUndefined();
         expect(result.ModelName).toBeUndefined();
         expect(result.NarrationInstructionsTemplate).toBeUndefined();
+        // A direct session says nothing about the transport.
+        expect(result.Transport).toBeUndefined();
+        expect(result.RelayUrl).toBeUndefined();
+    });
+
+    it("returns a relay session's transport and relay URL as minted, with no token, and logs neither", async () => {
+        const ticket = '7d1e0c2a-5555-4666-8777-988899990000';
+        const relayUrl = `wss://mjapi.example.test/realtime/relay/${ticket}`;
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-relay' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: {
+                Provider: 'gemini-enterprise',
+                Model: 'gemini-3.8-live',
+                EphemeralToken: '',
+                ExpiresAt: '2026-01-01T00:00:00Z',
+                Transport: 'relay',
+                RelayUrl: relayUrl,
+                SessionConfig: { model: 'gemini-3.8-live' },
+            },
+        });
+        const consoleSpies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((method) => vi.spyOn(console, method));
+
+        const result = await makeResolver().StartRealtimeClientSession('target-1', makeCtx());
+
+        expect(result).toMatchObject({ Provider: 'gemini-enterprise', EphemeralToken: '', Transport: 'relay', RelayUrl: relayUrl });
+        expect(result.SessionConfigJson).not.toContain(ticket);
+        const logged = consoleSpies.flatMap((spy) => spy.mock.calls.map((call: unknown[]) => call.map(String).join(' ')));
+        expect(logged.filter((line) => line.includes(ticket))).toEqual([]);
+        consoleSpies.forEach((spy) => spy.mockRestore());
     });
 
     it('propagates the preferred-model failure (and closes the session) — no silent fallback', async () => {

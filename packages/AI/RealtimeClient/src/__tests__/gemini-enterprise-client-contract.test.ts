@@ -125,8 +125,10 @@ function enterprisePact(options: PactOptions = {}): ClientRealtimeSessionConfig 
     return {
         Provider: 'gemini-enterprise',
         Model: 'gemini-3.8-live',
-        EphemeralToken: options.RelayUrl ?? LOCAL_RELAY,
+        EphemeralToken: '',
         ExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        Transport: 'relay',
+        RelayUrl: options.RelayUrl ?? LOCAL_RELAY,
         SessionConfig: sessionConfig,
     };
 }
@@ -202,12 +204,93 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             expect(Socket.Protocols).toBeUndefined();
         });
 
-        it('refuses a token that is not a relay URL, without quoting it', async () => {
+        it('refuses a relay URL that is not a ws(s) URL, without quoting it', async () => {
             const client = new EnterpriseHarness();
             const failed = client.Connect(enterprisePact({ RelayUrl: `auth_tokens/${TICKET}` }), new FakeMediaStream([new FakeTrack()]));
-            await expect(failed).rejects.toThrow('is not a relay URL');
+            await expect(failed).rejects.toThrow('the relay URL is not a ws:// or wss:// URL');
             await expect(failed).rejects.not.toThrow(TICKET);
             expect(FakeWebSocket.Instances).toEqual([]);
+        });
+
+        it('connects to RelayUrl and never to the token, even a token that looks like a relay URL', async () => {
+            const pact = { ...enterprisePact(), EphemeralToken: 'wss://elsewhere.example.test/realtime/relay/not-this-one' };
+            const { Socket } = await connect(pact);
+            expect(Socket.Url).toBe(`${LOCAL_RELAY}${BIDI_PATH}`);
+        });
+
+        it("refuses a session that is not a relay session (Transport 'direct' or none): Gemini Enterprise has no direct path", async () => {
+            const { Transport: _transport, ...unmarked } = enterprisePact();
+            const sessions: ClientRealtimeSessionConfig[] = [
+                { ...enterprisePact(), Transport: 'direct' },
+                unmarked,
+                // A session as this client once read it: the relay URL as the token, and no transport.
+                { ...unmarked, RelayUrl: undefined, EphemeralToken: LOCAL_RELAY },
+            ];
+            for (const session of sessions) {
+                const failed = new EnterpriseHarness().Connect(session, new FakeMediaStream([new FakeTrack()]));
+                await expect(failed).rejects.toThrow("the session is not a relay session (Transport 'relay')");
+                await expect(failed).rejects.not.toThrow(TICKET);
+            }
+            expect(FakeWebSocket.Instances).toEqual([]);
+        });
+
+        it('refuses a relay session that has no relay URL', async () => {
+            const failed = new EnterpriseHarness().Connect({ ...enterprisePact(), RelayUrl: undefined }, new FakeMediaStream([new FakeTrack()]));
+            await expect(failed).rejects.toThrow('the relay session has no relay URL');
+            expect(FakeWebSocket.Instances).toEqual([]);
+        });
+    });
+
+    describe('the relay URL is never logged', () => {
+        /** Everything the client wrote to the console, and every error it reported to the host. */
+        function captureOutput(client: EnterpriseHarness): () => string[] {
+            const spies = [
+                vi.mocked(console.warn),
+                vi.mocked(console.info),
+                ...(['log', 'error', 'debug'] as const).map((method) => vi.spyOn(console, method).mockImplementation(() => undefined)),
+            ];
+            const errors: string[] = [];
+            client.OnError((error) => errors.push(error.Message));
+            return () => [...spies.flatMap((spy) => spy.mock.calls.map((call: unknown[]) => call.map(String).join(' '))), ...errors];
+        }
+
+        it('not while it connects, resumes after a lost connection, or fails, with verbose diagnostics on', async () => {
+            vi.stubEnv('MJ_VERBOSE', 'true');
+            // A session that loses its connection and resumes on the same relay URL.
+            const resumed = new EnterpriseHarness();
+            const resumedOutput = captureOutput(resumed);
+            const { Socket: first } = await connect(enterprisePact({ Avatar: true }), resumed);
+            first.Receive({ setupComplete: {} });
+            first.Receive({ sessionResumptionUpdate: { newHandle: 'handle-1', resumable: true } });
+            await vi.waitFor(() => expect(resumed.ResumptionHandle).toBe('handle-1'));
+            first.onerror?.(new Event('error'));
+            first.onclose?.(new CloseEvent('close', { code: 1006, reason: 'relay went away', wasClean: false }));
+            const second = await nextSocket(2);
+            second.Open();
+            await vi.waitFor(() => expect(second.Sent.length).toBeGreaterThan(0));
+            await resumed.Disconnect();
+
+            // A session whose connection fails before Google issued a handle: a fatal error to the host.
+            const failed = new EnterpriseHarness();
+            const failedOutput = captureOutput(failed);
+            const { Socket: third } = await connect(enterprisePact(), failed);
+            third.onclose?.(new CloseEvent('close', { code: 1011, reason: 'upstream closed', wasClean: false }));
+            await failed.Disconnect();
+
+            const lines = [...resumedOutput(), ...failedOutput()];
+            expect(lines.some((line) => line.includes('Transport closed'))).toBe(true); // the client did report
+            expect(lines.some((line) => line.includes('connection closed (1011)'))).toBe(true);
+            expect(lines.filter((line) => line.includes(TICKET))).toEqual([]);
+            vi.unstubAllEnvs();
+        });
+
+        it('not when it refuses a session', async () => {
+            const client = new EnterpriseHarness();
+            const output = captureOutput(client);
+            for (const session of [{ ...enterprisePact(), Transport: 'direct' as const }, enterprisePact({ RelayUrl: `ftp://mjapi.example.test/realtime/relay/${TICKET}` })]) {
+                await expect(client.Connect(session, new FakeMediaStream([new FakeTrack()]))).rejects.toThrow('GeminiEnterpriseRealtimeClient');
+            }
+            expect(output().filter((line) => line.includes(TICKET))).toEqual([]);
         });
     });
 

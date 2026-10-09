@@ -13,6 +13,7 @@ import {
     REALTIME_SHARED_CONFIG_KEYS,
     ExtractToolSchedulingHint,
     RealtimeDiagLog,
+    ParseRealtimeClientTransport,
 } from '../generic/baseRealtime';
 import { IsTranscriptContinuation } from '../generic/transcriptContinuation';
 
@@ -190,6 +191,19 @@ describe('BaseRealtimeModel client-direct capability', () => {
         const cfg = await model.CreateClientSession({ Model: 'gpt-realtime', SystemPrompt: 'be brief' });
         expect(cfg.EphemeralToken).toBe('ek_123');
         expect(cfg.SessionConfig).toEqual({ instructions: 'be brief' });
+    });
+});
+
+describe('ParseRealtimeClientTransport', () => {
+    it("reads 'direct' and 'relay'", () => {
+        expect(ParseRealtimeClientTransport('direct')).toBe('direct');
+        expect(ParseRealtimeClientTransport('relay')).toBe('relay');
+    });
+
+    it('reads anything else as no transport (a direct session): absent, another word, another case, not a string', () => {
+        for (const value of [undefined, null, '', 'bridged', 'Relay', ' relay', 1, { relay: true }]) {
+            expect(ParseRealtimeClientTransport(value)).toBeUndefined();
+        }
     });
 });
 

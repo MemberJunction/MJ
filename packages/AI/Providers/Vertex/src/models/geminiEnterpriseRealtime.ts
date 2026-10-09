@@ -113,8 +113,9 @@ export interface GeminiEnterpriseLiveClient {
  *   gives the SDK the host and the full name itself.
  *
  * - **Client-direct** ({@link CreateClientSession}): MJ writes the Live setup from the connect config, MJAPI's relay
- *   sends it upstream with a bearer token and filters what the browser sends after it, and the browser gets the relay
- *   URL (the ticket is in the path) and a pact with a minimal config: no system prompt and no tools.
+ *   sends it upstream with a bearer token (or the key's API key) and filters what the browser sends after it, and the
+ *   browser gets a relay session (`Transport` `'relay'`, the relay URL as `RelayUrl`, with the ticket in its path) and a
+ *   pact with a minimal config: no system prompt and no tools.
  * - **Bridged** ({@link StartSession}): `@google/genai` in Vertex mode; audio only, unless the host publishes the avatar
  *   into a meeting room (`RealtimeAvatarSettings.Delivery` `'room'`): then the model renders it and the session sends its
  *   pieces to the host through `OnAvatarOutput`.
@@ -147,10 +148,11 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
 
     /**
      * Mints a client-direct session through MJAPI's relay: a relay session whose policy opens every upstream connection
-     * with the setup written from the connect config and a fresh bearer token (or the key's API key); the relay URL as
-     * `EphemeralToken`; a pact whose config holds only what the browser needs to state (the response modalities, and the
-     * avatar's name when one is granted); and, when the session asked for an avatar, the avatar status the call reads to
-     * say why it shows none.
+     * with the setup written from the connect config and a fresh bearer token (or the key's API key); `Transport`
+     * `'relay'` with the relay URL as `RelayUrl` and an empty `EphemeralToken` (the browser holds no Google credential;
+     * the URL carries the ticket); a pact whose config holds only what the browser needs to state (the response
+     * modalities, and the avatar's name when one is granted); and, when the session asked for an avatar, the avatar status
+     * the call reads to say why it shows none.
      *
      * @param params The session parameters (model, system prompt, tools, config bag, avatar request).
      * @throws When the key cannot be read or names a location that is not a Google Cloud location.
@@ -175,9 +177,11 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
         return {
             Provider: CLIENT_PROVIDER,
             Model: params.Model,
-            // The ticket is in the path: the web SDK appends its own path to this URL. A resume reuses it.
-            EphemeralToken: BuildRealtimeRelayUrl(ResolveRealtimeProxyBaseWsUrl(params), ticket.ID),
+            EphemeralToken: '',
             ExpiresAt: ticket.ExpiresAt,
+            Transport: 'relay',
+            // The ticket is in the path: the web SDK appends its own path to this URL. A resume reuses it.
+            RelayUrl: BuildRealtimeRelayUrl(ResolveRealtimeProxyBaseWsUrl(params), ticket.ID),
             SessionConfig: this.SessionPactFor(params.Model, config, GeminiEnterpriseRealtime.browserConnectConfig(config)),
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
         };

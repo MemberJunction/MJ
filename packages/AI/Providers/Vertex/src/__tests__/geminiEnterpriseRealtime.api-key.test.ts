@@ -76,7 +76,7 @@ function makeParams(overrides: Partial<RealtimeSessionParams> = {}): RealtimeSes
 }
 
 function openFresh(minted: ClientRealtimeSessionConfig): RealtimeRelayGrant {
-    const ticket = decodeURIComponent(/\/realtime\/relay\/([^/?#]+)$/.exec(minted.EphemeralToken)?.[1] ?? '');
+    const ticket = decodeURIComponent(/\/realtime\/relay\/([^/?#]+)$/.exec(minted.RelayUrl ?? '')?.[1] ?? '');
     const result = RealtimeProxyRegistry.Instance.OpenRelaySession(ticket, { ResumeHandle: null, AudioOnly: false });
     if (!('Granted' in result)) {
         throw new Error(`relay session refused: ${result.Refused}`);
@@ -140,7 +140,7 @@ describe('GeminiEnterpriseRealtime with a Google Cloud API key (apiKey)', () => 
         }
         expect(JSON.stringify(Minted)).not.toContain(RUN_API_KEY);
         expect(JSON.stringify(Minted.SessionConfig)).not.toContain(RUN_API_KEY);
-        expect(Minted.EphemeralToken).not.toContain(RUN_API_KEY);
+        expect(Minted.RelayUrl).not.toContain(RUN_API_KEY);
         expect(grant.UpstreamUrl).not.toContain(RUN_API_KEY);
         expect(logged.length).toBeGreaterThan(0);
         expect(logged.filter((line) => line.includes(RUN_API_KEY) || line.includes('AIzaStandIn'))).toEqual([]);
