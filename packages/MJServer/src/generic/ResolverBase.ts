@@ -357,13 +357,16 @@ export class ResolverBase {
    * @param dataObject - The data object containing field values
    * @param encryptionEngine - Optional encryption engine for re-encryption (lazy loaded if needed)
    * @param contextUser - User context for encryption operations
+   * @param fieldKey - What the object's keys are: field CodeNames (GraphQL transport rows, the
+   *   default) or field Names (raw provider rows, such as dataset item results)
    * @returns The filtered data object
    */
   protected async FilterEncryptedFieldsForAPI(
     entityName: string,
     dataObject: Record<string, unknown>,
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>> {
     if (!dataObject) return dataObject;
 
@@ -377,7 +380,7 @@ export class ResolverBase {
 
     // Process each encrypted field
     for (const field of encryptedFields) {
-      const fieldName = field.CodeName;
+      const fieldName = fieldKey === 'Name' ? field.Name : field.CodeName;
       const value = dataObject[fieldName];
 
       // Skip null/undefined values
@@ -418,13 +421,15 @@ export class ResolverBase {
   }
 
   /**
-   * Filters encrypted fields for an array of data objects
+   * Filters encrypted fields for an array of data objects. `fieldKey` is as for
+   * {@link FilterEncryptedFieldsForAPI}.
    */
   protected async ArrayFilterEncryptedFieldsForAPI(
     entityName: string,
     dataObjectArray: Record<string, unknown>[],
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>[]> {
     if (!dataObjectArray || dataObjectArray.length === 0) return dataObjectArray;
 
@@ -438,7 +443,7 @@ export class ResolverBase {
 
     // Process each element
     for (const element of dataObjectArray) {
-      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider);
+      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider, fieldKey);
     }
 
     return dataObjectArray;
@@ -922,6 +927,7 @@ export class ResolverBase {
     clause: string | undefined | null,
     label: string,
     provider?: IMetadataProvider,
+    user?: UserInfo,
   ): void {
     if (!clause?.trim()) return;
 
@@ -952,9 +958,38 @@ export class ResolverBase {
       if (table.toLowerCase() === '__mj_clause_screen') continue;
       const qualified = `${schema}.${table}`.toLowerCase();
       const bare = table.toLowerCase();
-      if (allowed.qualified.has(qualified) || allowed.bare.has(bare)) continue;
+      if (!allowed.qualified.has(qualified) && !allowed.bare.has(bare)) {
+        throw new Error(
+          `Invalid ${label}: subquery must use an entity base view, not '${schema}.${table}'`,
+        );
+      }
+      if (user) this.assertBaseViewReadable(provider, schema, table, label, user);
+    }
+  }
+
+  /**
+   * With a user, a subquery's base view must belong to an entity that user can read. A schema-qualified
+   * name resolves in that schema; an unqualified (or `dbo`) name that matches none falls back to the
+   * bare view name, and if several schemas share it, every one must be readable (fail closed).
+   * Hand-ported subset of next's assertTableRefReadable for the dataset ItemFilter screen (#5265).
+   */
+  private assertBaseViewReadable(
+    provider: IMetadataProvider | undefined,
+    schema: string,
+    table: string,
+    label: string,
+    user: UserInfo,
+  ): void {
+    const sameView = (provider?.Entities ?? []).filter(
+      (e) => this.stripSqlIdent(e.BaseView).toLowerCase() === table.toLowerCase(),
+    );
+    const inSchema = sameView.filter((e) => this.stripSqlIdent(e.SchemaName).toLowerCase() === schema.toLowerCase());
+    const unqualified = !schema || schema.toLowerCase() === 'dbo';
+    const matches = inSchema.length > 0 || !unqualified ? inSchema : sameView;
+    const unreadable = matches.find((e) => !e.GetUserPermisions(user)?.CanRead);
+    if (matches.length === 0 || unreadable) {
       throw new Error(
-        `Invalid ${label}: subquery must use an entity base view, not '${schema}.${table}'`,
+        `Invalid ${label}: you do not have read permission on entity '${unreadable?.Name ?? table}' referenced by '${schema ? schema + '.' : ''}${table}'`,
       );
     }
   }
