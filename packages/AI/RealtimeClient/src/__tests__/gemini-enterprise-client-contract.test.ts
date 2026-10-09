@@ -12,9 +12,12 @@ import type { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai
 import { BaseRealtimeClient, type RealtimeClientTranscript, type RealtimeClientUsage } from '../generic/baseRealtimeClient';
 import { GeminiRealtimeClient, type IGeminiAudioPlayback, type IGeminiMicCapture } from '../drivers/geminiRealtimeClient';
 import { GeminiEnterpriseRealtimeClient } from '../drivers/geminiEnterpriseRealtimeClient';
-import { GEMINI_AVATAR_MP4_TYPE, type IAvatarVideoPlayout, type VideoPlayoutOptions } from '../media/videoPlayout';
+import { GEMINI_AVATAR_MP4_TYPE, VideoPlayout, type IAvatarVideoPlayout, type VideoPlayoutOptions } from '../media/videoPlayout';
+import { AttachVideoSource } from '../media/attachVideoSource';
+import type { MediaVideoSource } from '../media/model';
+import { InstallFakeDom } from './helpers/fake-dom';
 import { FakeMediaSource, InstallFakeMse } from './helpers/fake-mse';
-import { AvatarInitSegment, AvatarVideoFragment, PieceToBase64 } from './helpers/fmp4-pieces';
+import { AvatarFragment, AvatarInitSegment, AvatarVideoFragment, PieceToBase64 } from './helpers/fmp4-pieces';
 import { FakeAvatarPlayout, FakeGeminiPlayback, FakeMediaStream, FakeMicCapture, FakeTrack } from './helpers/realtime-fakes';
 
 // ── A fake browser WebSocket ────────────────────────────────────────────────────────────────────────────
@@ -76,6 +79,13 @@ class EnterpriseHarness extends GeminiEnterpriseRealtimeClient {
 
     protected override CreateVideoPlayout(options: VideoPlayoutOptions): IAvatarVideoPlayout {
         return new FakeAvatarPlayout(options);
+    }
+}
+
+/** The Enterprise client with the real avatar player, over the fake MSE and DOM. */
+class EnterprisePlayerHarness extends EnterpriseHarness {
+    protected override CreateVideoPlayout(options: VideoPlayoutOptions): IAvatarVideoPlayout {
+        return new VideoPlayout(options);
     }
 }
 
@@ -353,6 +363,41 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             expect(modalitiesOf(second)).toEqual(['VIDEO']);
             expect(setupOf(first)['sessionResumption']).toBeUndefined();
             await vi.waitFor(() => expect(first.Closed).toBe(true));
+        });
+
+        it("keeps the avatar's player: the relay's new socket brings the next init and fragments to the same element and source buffer", async () => {
+            const dom = InstallFakeDom();
+            const client = new EnterprisePlayerHarness();
+            const videos: MediaVideoSource[] = [];
+            client.OnRemoteVideo((video) => videos.push(video));
+            const { Socket: first } = await connect(enterprisePact({ Avatar: true }), client);
+            first.Receive({ setupComplete: {} });
+            AttachVideoSource(videos[0], document.createElement('video'));
+            const element = dom.Videos[0];
+            const source = FakeMediaSource.Instances[0];
+            source.Open();
+            const buffer = source.Buffers[0];
+            const url = element.src;
+            const parts = (...pieces: ArrayBuffer[]): JSONObject => ({
+                serverContent: { modelTurn: { role: 'model', parts: pieces.map((piece) => ({ inlineData: { mimeType: 'video/mp4', data: PieceToBase64(piece) } })) } },
+            });
+            first.Receive(parts(AvatarInitSegment(), AvatarFragment(1)));
+            first.Receive({ sessionResumptionUpdate: { newHandle: 'handle-1', resumable: true } });
+            first.Receive({ goAway: { timeLeft: '50s' } });
+
+            const second = await nextSocket(2);
+            second.Open();
+            await vi.waitFor(() => expect(first.Closed).toBe(true));
+            second.Receive({ setupComplete: {} });
+            second.Receive(parts(AvatarInitSegment(), AvatarFragment(2)));
+
+            await vi.waitFor(() => expect(buffer.Appended).toHaveLength(4));
+            expect(second.Url).toBe(first.Url);
+            const sent = [AvatarInitSegment(), AvatarFragment(1), AvatarInitSegment(), AvatarFragment(2)];
+            expect(buffer.Appended.map((piece) => new Uint8Array(piece))).toEqual(sent.map((piece) => new Uint8Array(piece)));
+            expect([FakeMediaSource.Instances.length, source.Buffers.length, element.src, element.Loads, element.Paused]).toEqual([1, 1, url, 0, false]);
+            expect(buffer.Removed).toEqual([]);
+            expect(videos).toHaveLength(1);
         });
     });
 });

@@ -21,7 +21,8 @@ export class FakeTimeRanges implements TimeRanges {
 
 /**
  * A source buffer that records appends and removals. Like a browser, it applies a removal to {@link buffered}
- * only when the removal completes, and `abort()` during an operation fires its own `updateend`.
+ * only when the removal completes, and `abort()` during an operation fires its own `updateend`. An append or a removal
+ * opens its media source again when the stream had ended, as the MSE spec says.
  */
 export class FakeSourceBuffer extends EventTarget {
     public mode: AppendMode = 'segments';
@@ -42,7 +43,14 @@ export class FakeSourceBuffer extends EventTarget {
     /** Bumped by abort, so an aborted operation's completion is ignored. */
     private operation = 0;
 
-    constructor(public readonly Type: string) {
+    /**
+     * @param Type The type the buffer was added with.
+     * @param parent The media source the buffer belongs to, which an append or a removal opens again after it ended.
+     */
+    constructor(
+        public readonly Type: string,
+        private readonly parent: FakeMediaSource | null = null
+    ) {
         super();
     }
 
@@ -56,6 +64,7 @@ export class FakeSourceBuffer extends EventTarget {
         if (error) {
             throw error;
         }
+        this.parent?.OpenAgainIfEnded();
         this.Appended.push(data);
         this.OffsetAtAppend.push(this.timestampOffset);
         this.finishLater();
@@ -63,6 +72,7 @@ export class FakeSourceBuffer extends EventTarget {
 
     /** Records the removal; it cuts the range out of {@link buffered} when it completes. */
     public remove(start: number, end: number): void {
+        this.parent?.OpenAgainIfEnded();
         this.Removed.push([start, end]);
         this.finishLater(() => {
             this.buffered = new FakeTimeRanges(
@@ -116,6 +126,8 @@ export class FakeMediaSource extends EventTarget {
     public readyState: ReadyState = 'closed';
     public readonly Buffers: FakeSourceBuffer[] = [];
     public EndOfStreamCalls = 0;
+    /** How many times an append or a removal opened the source again after its stream ended. */
+    public Reopens = 0;
 
     public static isTypeSupported(type: string): boolean {
         return FakeMediaSource.Supported && !FakeMediaSource.UnsupportedTypes.has(type);
@@ -127,7 +139,7 @@ export class FakeMediaSource extends EventTarget {
     }
 
     public addSourceBuffer(type: string): FakeSourceBuffer {
-        const buffer = new FakeSourceBuffer(type);
+        const buffer = new FakeSourceBuffer(type, this);
         this.Buffers.push(buffer);
         return buffer;
     }
@@ -135,6 +147,19 @@ export class FakeMediaSource extends EventTarget {
     public endOfStream(): void {
         this.EndOfStreamCalls++;
         this.readyState = 'ended';
+    }
+
+    /**
+     * What an append or a removal does to a source whose stream ended (the MSE spec's "prepare append" and `remove()`
+     * steps): it is open again, and `sourceopen` fires again (queued, here as a microtask).
+     */
+    public OpenAgainIfEnded(): void {
+        if (this.readyState !== 'ended') {
+            return;
+        }
+        this.readyState = 'open';
+        this.Reopens++;
+        queueMicrotask(() => this.dispatchEvent(new Event('sourceopen')));
     }
 
     /** What the browser does once the element has loaded the object URL. */

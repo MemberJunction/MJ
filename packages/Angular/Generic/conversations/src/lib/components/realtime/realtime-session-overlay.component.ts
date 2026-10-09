@@ -665,6 +665,16 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     return this.ShowCaptions && this.ShowHero && this.PresenterOnStage;
   }
 
+  /**
+   * Whether the call body shows the connecting screen for `state`: while the call connects, outside review, unless the
+   * agent's video presents in the hero. The hero then stays, so a resume on a new connection keeps the video in its place
+   * with its last frame on screen, and the video's tile says the call is connecting. Taking the hero away would take the
+   * video's place with it, and the stage would lay the video over the whole call until the hero came back.
+   */
+  public ShowConnectingScreen(state: RealtimeConnectionState): boolean {
+    return !this.IsReviewing && state === 'connecting' && !(this.ShowHero && this.PresenterOnStage);
+  }
+
   /** The newest caption, as the captions over the agent's video show it: the user's is marked "You". `null` before any. */
   public get AvatarCaption(): RealtimeAvatarCaption | null {
     const items = this.State.Items;

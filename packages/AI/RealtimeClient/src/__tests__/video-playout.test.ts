@@ -297,6 +297,32 @@ describe('VideoPlayout', () => {
             expect(video.currentTime).toBe(5.9);
             expect(video.Paused).toBe(false);
         });
+
+        it("an ended stream opens again for the next pieces, on the same source buffer: the element is never reset", async () => {
+            const buffer = attachAndOpen();
+            const source = FakeMediaSource.Instances[0];
+            const video = dom.Videos[0];
+            const url = video.src;
+            playout.Append(FakeInitSegment());
+            playout.Append(FakeFragment());
+            playout.EndOfTurn();
+            await settle();
+            expect(source.readyState).toBe('ended');
+
+            // The next turn, such as the first on a resumed connection, starts with a fresh init segment.
+            playout.Append(FakeInitSegment());
+            playout.Append(FakeFragment());
+            await settle();
+            expect(source.Reopens).toBe(1);
+            expect(source.readyState).toBe('open');
+            expect(source.Buffers).toEqual([buffer]);
+            expect(buffer.Appended).toHaveLength(4);
+            expect([FakeMediaSource.Instances.length, video.src, video.Loads]).toEqual([1, url, 0]);
+
+            playout.EndOfTurn();
+            await settle();
+            expect(source.EndOfStreamCalls).toBe(2);
+        });
     });
 
     describe('Flush (barge-in)', () => {

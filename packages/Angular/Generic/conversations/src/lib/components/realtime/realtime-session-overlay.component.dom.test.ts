@@ -82,6 +82,8 @@ function fakeSession() {
   const captions$ = new BehaviorSubject<RealtimeCaption[]>([]);
   /** Why the call shows no avatar, as the runtime publishes it once per call. */
   const notice$ = new BehaviorSubject<RealtimeAvatarNotice | null>(null);
+  /** The call's state, as the runtime maps the client's: a resume on a new connection passes through `'connecting'`. */
+  const state$ = new BehaviorSubject<RealtimeConnectionState>('listening');
   /** The capture calls the overlay made, in order. */
   const calls: string[] = [];
   const service = {
@@ -90,7 +92,7 @@ function fakeSession() {
     DelegationResult$: EMPTY,
     DelegationNarration$: EMPTY,
     ThoughtNarration$: EMPTY,
-    ConnectionState$: new BehaviorSubject<RealtimeConnectionState>('listening').asObservable(),
+    ConnectionState$: state$.asObservable(),
     ModelName$: new BehaviorSubject<string | null>(null).asObservable(),
     Active$: new BehaviorSubject(false).asObservable(),
     ActiveChannels$: channels$.asObservable(),
@@ -139,7 +141,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, activity$, captures$, offers$, captions$, sources$, notice$, calls };
+  return { service, channels$, focus$, activity$, captures$, offers$, captions$, sources$, notice$, state$, calls };
 }
 
 /**
@@ -732,6 +734,88 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(surface(f).classList.contains('stage-surface--stage')).toBe(true);
       expect(surface(f).classList.contains('stage-surface--in-slot')).toBe(false);
       expect(avatarBox(f)?.classList.contains('stage-surface--pip')).toBe(true);
+    });
+
+    /**
+     * A resume on a new connection (Google's `goAway`, a dropped socket, the relay's reconnect) takes the call through
+     * `'connecting'` and back. The agent's video must keep its place and its element meanwhile, so its last frame stays
+     * on screen: no jump, no empty box, no second attach.
+     */
+    describe('while the call reconnects', () => {
+      const chips = (f: Awaited<ReturnType<typeof renderWithAvatar>>['f']) =>
+        queryAll(f, 'mj-realtime-avatar-surface .tile__chip').map((c) => c.textContent?.trim());
+      const tileVideo = (f: Awaited<ReturnType<typeof renderWithAvatar>>['f']) => query(f, 'mj-realtime-avatar-surface video');
+
+      it("keeps the agent's video in its place in the hero, on the same element, its tile saying the call is connecting", async () => {
+        const { f, sendVideo, state$ } = await renderWithAvatar('orb');
+        const { attached } = await sendVideo();
+        const element = tileVideo(f);
+
+        state$.next('connecting');
+        await settle();
+        expect(query(f, '.call-connecting')).toBeNull();
+        expect(query(f, '.call-body')?.classList.contains('call-body--hero')).toBe(true);
+        expect(avatarBox(f)?.classList.contains('stage-surface--in-slot')).toBe(true);
+        expect(avatarBox(f)?.classList.contains('stage-surface--hidden')).toBe(false);
+        expect(place(avatarBox(f))).toEqual(['300px', '80px', '300px', '400px']);
+        expect(chips(f)).toEqual(['AI-generated video', 'Connecting']);
+        expect(query(f, '.hero[role="status"] .hero__sr')?.textContent?.trim()).toBe('Connecting…');
+
+        state$.next('listening');
+        await settle();
+        expect(place(avatarBox(f))).toEqual(['300px', '80px', '300px', '400px']);
+        expect(chips(f)).toEqual(['AI-generated video', 'Listening']);
+        expect(tileVideo(f)).toBe(element);
+        expect(attached).toEqual([element]);
+      });
+
+      it('keeps it above the thread in the console, where the connecting screen takes only the thread', async () => {
+        const { f, sendVideo, state$ } = await renderWithAvatar('console');
+        const { attached } = await sendVideo();
+
+        state$.next('connecting');
+        await settle();
+        expect(query(f, '.call-connecting')).not.toBeNull();
+        expect(place(avatarBox(f))).toEqual(['240px', '64px', '126px', '168px']);
+        expect(chips(f)).toEqual(['AI-generated video', 'Connecting']);
+
+        state$.next('listening');
+        await settle();
+        expect(place(avatarBox(f))).toEqual(['240px', '64px', '126px', '168px']);
+        expect(attached).toHaveLength(1);
+      });
+
+      it("puts video that arrives while the call still connects in the hero's place, not over the whole call", async () => {
+        const { f, sendVideo, state$ } = await renderWithAvatar('orb');
+        state$.next('connecting');
+        await settle();
+        expect(query(f, '.call-connecting')).not.toBeNull();
+
+        await sendVideo();
+        expect(query(f, '.call-connecting')).toBeNull();
+        expect(avatarBox(f)?.classList.contains('stage-surface--in-slot')).toBe(true);
+        expect(place(avatarBox(f))).toEqual(['300px', '80px', '300px', '400px']);
+      });
+
+      it('shows the connecting screen in the hero while no video presents there: none yet, or moved to picture-in-picture', async () => {
+        const { f, sendVideo, state$ } = await renderWithAvatar('orb');
+        state$.next('connecting');
+        await settle();
+        expect(query(f, '.call-connecting')).not.toBeNull();
+        expect(query(f, '.hero')).toBeNull();
+
+        state$.next('listening');
+        await settle();
+        const { attached } = await sendVideo();
+        await pick(f, '.stage-presenter-move', 'Picture-in-picture');
+        state$.next('connecting');
+        await settle();
+        expect(query(f, '.call-connecting')).not.toBeNull();
+        expect(query(f, '.hero')).toBeNull();
+        expect(avatarBox(f)?.classList.contains('stage-surface--pip')).toBe(true);
+        expect(avatarBox(f)?.classList.contains('stage-surface--hidden')).toBe(false);
+        expect(attached).toHaveLength(1);
+      });
     });
   });
 

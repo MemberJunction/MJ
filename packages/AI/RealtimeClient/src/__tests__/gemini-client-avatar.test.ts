@@ -85,6 +85,14 @@ class ResumingClient extends GeminiTestClient {
         this.Connections[current].OnMessage({ goAway: { timeLeft: '60s' } } as LiveServerMessage);
         await vi.advanceTimersByTimeAsync(0);
     }
+
+    /** Has the socket drop after Google issued a handle (a network change, or the relay's upstream closing); the client resumes. */
+    public async Drop(): Promise<void> {
+        const current = this.Connections.length - 1;
+        this.Connections[current].OnMessage({ sessionResumptionUpdate: { newHandle: `h${current}`, resumable: true } } as LiveServerMessage);
+        this.Connections[current].OnClose({ code: 1006, reason: 'connection lost', wasClean: false } as CloseEvent);
+        await vi.advanceTimersByTimeAsync(0);
+    }
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -448,8 +456,10 @@ describe('GeminiRealtimeClient avatar playout', () => {
         });
 
         /** Connects with the real player, attaches its video to a host element muted the way a media tile mutes it, and opens the media source. */
-        async function connectAndShow(options: GeminiAvatarConfigOptions = {}): Promise<{ Client: GeminiTestClient; Element: FakeVideoElement; Buffer: FakeSourceBuffer }> {
-            const client = new GeminiTestClient();
+        async function connectAndShow(
+            options: GeminiAvatarConfigOptions = {},
+            client = new GeminiTestClient()
+        ): Promise<{ Client: GeminiTestClient; Element: FakeVideoElement; Buffer: FakeSourceBuffer; Videos: MediaVideoSource[] }> {
             client.UseRealPlayout = true;
             const { Videos: videos } = await connectAvatar(options, client);
             const element = document.createElement('video');
@@ -457,7 +467,7 @@ describe('GeminiRealtimeClient avatar playout', () => {
             AttachVideoSource(videos[0], element);
             FakeMediaSource.Instances[0].Open();
             const buffer = FakeMediaSource.Instances[0].Buffers[0];
-            return { Client: client, Element: dom.Videos[0], Buffer: buffer };
+            return { Client: client, Element: dom.Videos[0], Buffer: buffer, Videos: videos };
         }
 
         it('muxed: the element plays unmuted, routed into the PCM playback once, and the pieces append in order', async () => {
@@ -504,6 +514,104 @@ describe('GeminiRealtimeClient avatar playout', () => {
             expect(element.Paused).toBe(true);
             expect(buffer.Removed).toEqual([[3, Infinity]]);
             expect(client.IsAudioPlaying).toBe(false);
+        });
+
+        /**
+         * A resume moves the session to a new socket (Google's `goAway`, a dropped socket, the relay reconnecting). The avatar
+         * keeps its one player: the same element, media source and source buffer, so the last frame stays on screen and the
+         * new connection's pieces play on from it.
+         */
+        describe('across a resume on a new connection', () => {
+            beforeEach(() => {
+                vi.useFakeTimers();
+            });
+
+            /** Connects a client that can resume, shows its video, and plays the first pieces of a turn partway. */
+            async function speakingWhenCut(): Promise<{ Client: ResumingClient; Element: FakeVideoElement; Buffer: FakeSourceBuffer; Videos: MediaVideoSource[]; Url: string }> {
+                const client = new ResumingClient();
+                const shown = await connectAndShow({}, client);
+                emitParts(client, videoPart(AvatarInitSegment()), videoPart(AvatarFragment(1)));
+                await settle();
+                shown.Buffer.buffered = new FakeTimeRanges([[0, 2]]);
+                shown.Element.currentTime = 1.2;
+                return { ...shown, Client: client, Url: shown.Element.src };
+            }
+
+            /** The one media source, its buffers, the element's URL and resets, and whether anything paused the element. */
+            function playerState(element: FakeVideoElement) {
+                return {
+                    Sources: FakeMediaSource.Instances.length,
+                    Buffers: FakeMediaSource.Instances[0].Buffers.length,
+                    Url: element.src,
+                    Loads: element.Loads,
+                    Paused: element.Paused,
+                };
+            }
+
+            it('goAway: the same element, media source and source buffer; the cut turn plays out what arrived, nothing removed', async () => {
+                const { Client: client, Element: element, Buffer: buffer, Videos: videos, Url: url } = await speakingWhenCut();
+
+                await client.Resume();
+                await settle();
+                expect(client.Connections).toHaveLength(2);
+                expect(playerState(element)).toEqual({ Sources: 1, Buffers: 1, Url: url, Loads: 0, Paused: false });
+                expect([buffer.Removed, buffer.Aborts]).toEqual([[], 0]);
+                expect(FakeMediaSource.Instances[0].EndOfStreamCalls).toBe(1);
+                expect(videos).toHaveLength(1);
+            });
+
+            it('a dropped socket: resumed the same way', async () => {
+                const { Client: client, Element: element, Buffer: buffer, Videos: videos, Url: url } = await speakingWhenCut();
+
+                await client.Drop();
+                await settle();
+                expect(client.Connections).toHaveLength(2);
+                expect(playerState(element)).toEqual({ Sources: 1, Buffers: 1, Url: url, Loads: 0, Paused: false });
+                expect(buffer.Removed).toEqual([]);
+                expect(FakeMediaSource.Instances[0].EndOfStreamCalls).toBe(1);
+                expect(videos).toHaveLength(1);
+            });
+
+            it("the new connection's init and fragments go to the same buffer and play on from the last frame, not from the start", async () => {
+                const { Client: client, Element: element, Buffer: buffer, Url: url } = await speakingWhenCut();
+                await client.Resume();
+                await settle();
+                // The cut turn played out to its end and holds its last frame there.
+                element.currentTime = 2;
+                element.pause();
+                element.ended = true;
+                const seeks = element.Seeks;
+
+                const next = [AvatarInitSegment(), AvatarFragment(2)];
+                emitParts(client, ...next.map((piece) => videoPart(piece)));
+                buffer.buffered = new FakeTimeRanges([[0, 3]]);
+                await settle();
+                expect(client.LastConnectArgs).toBe(client.Connections[1]);
+                const sent = [AvatarInitSegment(), AvatarFragment(1), ...next];
+                expect(buffer.Appended.map((piece) => new Uint8Array(piece))).toEqual(sent.map((piece) => new Uint8Array(piece)));
+                expect(FakeMediaSource.Instances[0].readyState).toBe('open');
+                expect(playerState(element)).toEqual({ Sources: 1, Buffers: 1, Url: url, Loads: 0, Paused: false });
+                expect([element.Seeks, element.currentTime]).toEqual([seeks + 1, 2]);
+
+                emit(client, { generationComplete: true });
+                await settle();
+                expect(FakeMediaSource.Instances[0].EndOfStreamCalls).toBe(2);
+            });
+
+            it('barge-in on the new connection still stops the video at once and drops what has not played', async () => {
+                const { Client: client, Element: element, Buffer: buffer } = await speakingWhenCut();
+                await client.Resume();
+                emitParts(client, videoPart(AvatarInitSegment()), videoPart(AvatarFragment(2)));
+                await settle();
+                buffer.buffered = new FakeTimeRanges([[0, 4]]);
+                element.currentTime = 2.5;
+                expect(client.IsAudioPlaying).toBe(true);
+
+                emit(client, { interrupted: true });
+                expect(element.Paused).toBe(true);
+                expect(buffer.Removed).toEqual([[2.5, Infinity]]);
+                expect(client.IsAudioPlaying).toBe(false);
+            });
         });
     });
 });

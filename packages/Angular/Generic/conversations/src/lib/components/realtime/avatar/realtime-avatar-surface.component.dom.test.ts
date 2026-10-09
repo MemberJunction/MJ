@@ -99,6 +99,33 @@ describe('RealtimeAvatarSurfaceComponent (DOM)', () => {
     expect(orbState(fixture)).toBe('listening');
   });
 
+  it('keeps its one video through a reconnect: the held frame at first, the orb after a second without one, the video at the next', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+    const video = player();
+    const { fixture, state$ } = render(video);
+    const chips = () => queryAll(fixture, '.tile__chip').map((c) => c.textContent?.trim());
+    frame();
+    fixture.detectChanges();
+
+    state$.next('connecting');
+    vi.advanceTimersByTime(500);
+    fixture.detectChanges();
+    expect(orbState(fixture)).toBeNull();
+    expect(chips()).toEqual(['AI-generated video', 'Connecting']);
+
+    vi.advanceTimersByTime(800);
+    fixture.detectChanges();
+    expect(orbState(fixture)).toBe('listening');
+    expect(chips()).toEqual(['Connecting']);
+
+    state$.next('listening');
+    frame();
+    fixture.detectChanges();
+    expect(orbState(fixture)).toBeNull();
+    expect(chips()).toEqual(['AI-generated video', 'Listening']);
+    expect([video.Attached.length, video.Detaches]).toEqual([1, 0]);
+  });
+
   it("follows the agent's turn on the orb: speaking, thinking, and listening for everything else", () => {
     const { fixture, state$ } = render(null, 'speaking');
     expect(orbState(fixture)).toBe('speaking');
