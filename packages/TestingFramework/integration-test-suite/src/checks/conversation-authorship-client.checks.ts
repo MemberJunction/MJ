@@ -1,5 +1,5 @@
 /**
- * conversation-authorship-client.checks.ts — the 'conversation-authorship-client' bundle (CA1–CA7, client
+ * conversation-authorship-client.checks.ts — the 'conversation-authorship-client' bundle (CA1–CA10, client
  * transport, needs MJAPI): who a conversation message is from, enforced by the server and proven over the GraphQL
  * wire as two real users.
  *
@@ -39,16 +39,24 @@
  *   CA7: the grantee cannot get round CA3 by sending the generated update mutation with forged `OldValues___`
  *        (claiming to be the owner message's author, or claiming it is an agent reply): MJAPI decides from the stored
  *        row, refuses, and the row does not move.
+ *   CA8: the grantee cannot fill a conversation message's field from a transaction variable: a transaction group
+ *        whose second item takes a value from the first is refused, nothing is written, and the pin the first item
+ *        asked for does not land.
+ *   CA9: a person's role cannot dodge the rules by its spelling: the grantee posting with `Role='user'` (lower case)
+ *        and the owner's UserID is refused as posting as someone else, and no row exists.
+ *   CA10: the grantee cannot move the owner's message into a conversation the grantee owns (where the owner's rules
+ *        would no longer apply): refused, and the message stays in the shared conversation.
  *
- * CA1–CA6 save with entity objects from the acting user's own connection and assert both the `Save()`/`Delete()`
- * result and `LatestResult.CompleteMessage`. CA7 bypasses the entity layer and sends raw GraphQL, asserting the error
- * the mutation throws. Every check reads the database afterwards through the run's own identity to prove what moved
- * and what did not.
+ * CA1–CA6 and CA10 save with entity objects from the acting user's own connection and assert both the
+ * `Save()`/`Delete()` result and `LatestResult.CompleteMessage`. CA7–CA9 bypass the entity layer and send raw GraphQL,
+ * as any API caller can, asserting the error the mutation returns. Every check reads the database afterwards through
+ * the run's own identity to prove what moved and what did not.
  *
  * MUTATION TIER. Every check writes (or would write if its guard regressed), so every check carries
  * `RequiresMutation: true`, and Setup provisions nothing when the tier is off. Checks skip LOUDLY when the tier is
  * off or the seed is absent, and FAIL when the seed is present but provisioning broke. Teardown deletes every
- * message in the fixture conversation, the grant, the conversation and the minted keys. Saving the grant also makes
+ * message in the fixture conversation and in the grantee's own conversation from CA10, the grant, both conversations
+ * and the minted keys. Saving the grant also makes
  * MJAPI send the grantee a 'Resource Shared' notification as the owner; the seeded role holds nothing on
  * 'MJ: User Notifications', so as the code stands that send is refused in MJAPI and nothing lands. Teardown sweeps
  * the grantee's notifications for the conversation anyway, and says so loudly if it cannot remove one.
@@ -88,7 +96,9 @@ const REFUSAL = {
     PostAsSelf: 'You can post a message only as yourself.',
     OnlyAuthorChanges: 'Only the person who wrote this message can change it.',
     OnlyAuthorOrOwnerDeletes: "Only the message's author or the conversation's owner can delete it.",
-    NoAccess: 'You do not have access to this conversation.'
+    NoAccess: 'You do not have access to this conversation.',
+    MovedConversation: 'A message cannot be moved to another conversation.',
+    TransactionVariable: 'A conversation message cannot take its values from a transaction variable.'
 } as const;
 
 /** How long Setup waits for MJAPI to honour the grantee's new grant, and how often it looks. */
@@ -101,6 +111,20 @@ const GRANT_VISIBLE_POLL_MS = 2_000;
  */
 const FIRST_WRITE_ATTEMPTS = 4;
 const FIRST_WRITE_RETRY_MS = 5_000;
+
+/** The generated create mutation for a conversation message, as any API caller can send it. */
+const CREATE_DETAIL_MUTATION = `
+    mutation CreateConversationDetail($input: CreateMJConversationDetailInput!) {
+        CreateMJConversationDetail(input: $input) { ID Role UserID Message }
+    }
+`;
+
+/** The document GraphQLTransactionGroup sends to run a transaction group on the server. */
+const EXECUTE_TG_MUTATION = `
+    mutation ExecuteTransactionGroup($group: TransactionInputType!) {
+        ExecuteTransactionGroup(group: $group) { Success ErrorMessages ResultsJSON }
+    }
+`;
 
 /** The generated update mutation for a conversation message, as any API caller can send it. */
 const UPDATE_DETAIL_MUTATION = `
@@ -129,6 +153,8 @@ interface ConversationAuthorshipFixture extends MintedUserKeyIds {
     GrantID?: string;
     /** The owner's message from Setup, saved with no `UserID` (so it reads as the owner's). */
     OwnerMessageID?: string;
+    /** Conversations the grantee creates as their own (CA10), removed in Teardown. */
+    GranteeConversationIDs: string[];
 }
 
 /** The fixture once Setup has built everything the checks use. */
@@ -142,9 +168,11 @@ interface ReadyFixture extends ConversationAuthorshipFixture {
 /** A conversation message as the database holds it. */
 interface MessageRow {
     ID: string;
+    ConversationID: string;
     UserID: string | null;
     Role: MJConversationDetailEntity['Role'];
     Message: string;
+    IsPinned: boolean;
 }
 
 /** What happened to a write the rule may refuse: whether it went through, and the reason the caller was given. */
@@ -165,6 +193,40 @@ interface ForgedDetailUpdate {
     Message: string;
     UserID?: string | null;
     OldValues___: OldValueInput[];
+}
+
+/** The `CreateMJConversationDetailInput` fields CA9 sends. `Role` is a plain string: the input does not constrain it. */
+interface RawDetailCreate {
+    ConversationID: string;
+    Role: string;
+    Message: string;
+    UserID: string;
+    Status: MJConversationDetailEntity['Status'];
+}
+
+/** One item of `TransactionInputType.Items`. */
+interface TransactionItemInput {
+    EntityName: string;
+    EntityObjectJSON: string;
+    OperationType: 'Create' | 'Update' | 'Delete';
+}
+
+/** One entry of `TransactionInputType.Variables`: item `ItemIndex`'s `FieldName` defines or uses the variable `Name`. */
+interface TransactionVariableInput {
+    Name: string;
+    ItemIndex: number;
+    FieldName: string;
+    Type: 'Define' | 'Use';
+}
+
+interface TransactionGroupInput {
+    Items: TransactionItemInput[];
+    Variables: TransactionVariableInput[];
+}
+
+/** What `ExecuteTransactionGroup` returns: `ErrorMessages[i]` is item i's `LatestResult`, as JSON. */
+interface TransactionGroupOutput {
+    ExecuteTransactionGroup?: { Success: boolean; ErrorMessages: string[]; ResultsJSON: string[] } | null;
 }
 
 /** The part of a GraphQL client error that carries the server's own message. */
@@ -280,7 +342,7 @@ async function loadMessage(leg: AuthorshipLeg, id: string): Promise<MJConversati
 /** Messages as the database holds them now, read by the run's own identity with the cache bypassed. */
 async function readMessages(ctx: IntegrationCheckContext, filter: string): Promise<MessageRow[]> {
     const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<MessageRow>(
-        { EntityName: DETAILS_ENTITY, ExtraFilter: filter, Fields: ['ID', 'UserID', 'Role', 'Message'], ResultType: 'simple', BypassCache: true },
+        { EntityName: DETAILS_ENTITY, ExtraFilter: filter, Fields: ['ID', 'ConversationID', 'UserID', 'Role', 'Message', 'IsPinned'], ResultType: 'simple', BypassCache: true },
         ctx.User
     );
     Assert(res.Success, `reading ${DETAILS_ENTITY} (${filter}) failed: ${res.ErrorMessage}`);
@@ -302,13 +364,54 @@ function sameUser(actual: string | null | undefined, expected: string): boolean 
     return !!actual && UUIDsEqual(actual, expected);
 }
 
-/** Asserts a message still holds exactly what an earlier read saw: it exists, and its text, author and role did not move. */
+/**
+ * Asserts a message still holds exactly what an earlier read saw: it exists, in the same conversation, and its text,
+ * author, role and pin did not move.
+ */
 async function assertMessageUnchanged(ctx: IntegrationCheckContext, before: MessageRow, what: string): Promise<void> {
     const after = await readMessage(ctx, before.ID);
     Assert(after != null, `${what}: message ${before.ID} disappeared`);
+    Assert(UUIDsEqual(after!.ConversationID, before.ConversationID),
+        `${what}: the message moved from conversation ${before.ConversationID} to ${after!.ConversationID}`);
     AssertEqual(after!.Message, before.Message, `${what}: the message text`);
     AssertEqual(after!.UserID ?? null, before.UserID ?? null, `${what}: the message UserID`);
     AssertEqual(after!.Role, before.Role, `${what}: the message Role`);
+    AssertEqual(after!.IsPinned, before.IsPinned, `${what}: the message IsPinned`);
+}
+
+/** Setup's owner message as stored now, asserted to be a person's message with no UserID (so it reads as the owner's). */
+async function readOwnerMessage(ctx: IntegrationCheckContext, fx: ReadyFixture, checkId: string): Promise<MessageRow> {
+    const row = await readMessage(ctx, fx.OwnerMessageID);
+    Assert(row != null, `${checkId} precondition: Setup's owner message ${fx.OwnerMessageID} is missing`);
+    Assert(!row!.UserID && row!.Role === 'User',
+        `${checkId} precondition: Setup's owner message must be a person's message with no UserID (has Role=${row!.Role}, UserID=${row!.UserID ?? '(empty)'})`);
+    return row!;
+}
+
+/** Sends the generated `CreateMJConversationDetail` mutation straight over the wire as the leg's user. Reports a refusal instead of raising it. */
+async function sendDetailCreate(leg: AuthorshipLeg, input: RawDetailCreate): Promise<WriteOutcome> {
+    try {
+        await leg.Provider.ExecuteGQL(CREATE_DETAIL_MUTATION, { input });
+        return { Done: true, Message: '' };
+    } catch (e) {
+        return { Done: false, Message: wireErrorText(e) };
+    }
+}
+
+/**
+ * Runs a transaction group on the server as the leg's user, the way GraphQLTransactionGroup does. The server reports
+ * a refused item through `Success: false` and that item's `LatestResult` JSON in `ErrorMessages`, not by throwing;
+ * every item's text is joined into the outcome's message.
+ */
+async function sendTransactionGroup(leg: AuthorshipLeg, group: TransactionGroupInput): Promise<WriteOutcome> {
+    try {
+        const data = (await leg.Provider.ExecuteGQL(EXECUTE_TG_MUTATION, { group })) as TransactionGroupOutput | null;
+        const result = data?.ExecuteTransactionGroup;
+        Assert(result != null, `ExecuteTransactionGroup returned no result for ${leg.Email}`);
+        return { Done: result!.Success, Message: (result!.ErrorMessages ?? []).join(' | ') };
+    } catch (e) {
+        return { Done: false, Message: wireErrorText(e) };
+    }
 }
 
 /**
@@ -373,13 +476,13 @@ async function saveFirstWrite(row: BaseEntity, what: string): Promise<void> {
     throw new Error(`${what} failed after ${FIRST_WRITE_ATTEMPTS} attempts: ${last}`);
 }
 
-/** The owner creates the conversation they will share; returns its ID. */
-async function createConversation(fx: ConversationAuthorshipFixture, owner: AuthorshipLeg): Promise<string> {
-    const conversation = await owner.Provider.GetEntityObject<MJConversationEntity>(CONVERSATIONS_ENTITY, owner.Provider.CurrentUser);
+/** The leg creates a conversation of their own (they own it); returns its ID. Retried, as it may be the leg's first write. */
+async function createConversation(leg: AuthorshipLeg, name: string): Promise<string> {
+    const conversation = await leg.Provider.GetEntityObject<MJConversationEntity>(CONVERSATIONS_ENTITY, leg.Provider.CurrentUser);
     conversation.NewRecord();
-    conversation.UserID = owner.UserID;
-    conversation.Name = `IT115 shared conversation ${fx.RunTag} ${MARKER}`;
-    await saveFirstWrite(conversation, `${owner.Email} creating the conversation`);
+    conversation.UserID = leg.UserID;
+    conversation.Name = `${name} ${MARKER}`;
+    await saveFirstWrite(conversation, `${leg.Email} creating a conversation`);
     return conversation.ID;
 }
 
@@ -439,7 +542,7 @@ async function provisionSharedConversation(ctx: IntegrationCheckContext, fx: Con
     fx.Owner = owner;
     const grantee = await provisionLeg(ctx, fx, GRANTEE_EMAIL, granteeId);
     fx.Grantee = grantee;
-    const conversationId = await createConversation(fx, owner);
+    const conversationId = await createConversation(owner, `IT115 shared conversation ${fx.RunTag}`);
     fx.ConversationID = conversationId;
     fx.OwnerMessageID = await postOwnerMessage(fx, owner, conversationId);
     fx.GrantID = await grantEdit(owner, grantee, conversationId);
@@ -448,11 +551,11 @@ async function provisionSharedConversation(ctx: IntegrationCheckContext, fx: Con
 
 // ─────────────────────────────────────────────────────────────────── teardown
 
-/** The owner first (exercising the rule's owner path), then the run's own identity as the fallback. */
-function teardownDeleters(ctx: IntegrationCheckContext, fx: ConversationAuthorshipFixture): Deleter[] {
+/** A conversation's owner first (exercising the rule's owner path), then the run's own identity as the fallback. */
+function teardownDeleters(ctx: IntegrationCheckContext, conversationOwner: AuthorshipLeg | undefined): Deleter[] {
     const deleters: Deleter[] = [];
-    if (fx.Owner) {
-        deleters.push({ Label: fx.Owner.Email, Provider: fx.Owner.Provider, User: fx.Owner.Provider.CurrentUser });
+    if (conversationOwner) {
+        deleters.push({ Label: conversationOwner.Email, Provider: conversationOwner.Provider, User: conversationOwner.Provider.CurrentUser });
     }
     deleters.push({ Label: 'the run identity', Provider: ctx.Provider, User: ctx.User });
     return deleters;
@@ -521,7 +624,7 @@ async function sweepShareNotifications(ctx: IntegrationCheckContext, fx: Convers
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
     Setup: async (ctx: IntegrationCheckContext): Promise<void> => {
-        const fx: ConversationAuthorshipFixture = { RunTag: `IT115-${Date.now()}`, CreatedKeyIds: [], CreatedScopeRuleIds: [] };
+        const fx: ConversationAuthorshipFixture = { RunTag: `IT115-${Date.now()}`, CreatedKeyIds: [], CreatedScopeRuleIds: [], GranteeConversationIDs: [] };
         fixture.Current = fx;
         if (!IsTierEnabled('mutation') && ctx.Config?.runMutationTests !== true) {
             fx.SkipReason = 'the mutation tier is off (RUN_MUTATION_TESTS)';
@@ -546,14 +649,21 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         if (!fx) {
             return;
         }
-        const deleters = teardownDeleters(ctx, fx);
+        const deleters = teardownDeleters(ctx, fx.Owner);
+        const granteeDeleters = teardownDeleters(ctx, fx.Grantee);
         if (fx.ConversationID) {
             await deleteConversationMessages(ctx, fx.ConversationID, deleters);
+        }
+        for (const id of fx.GranteeConversationIDs) {
+            await deleteConversationMessages(ctx, id, granteeDeleters);
         }
         if (fx.GrantID) {
             await deleteRow(GRANTS_ENTITY, fx.GrantID, deleters);
         }
         await sweepShareNotifications(ctx, fx);
+        for (const id of fx.GranteeConversationIDs) {
+            await deleteRow(CONVERSATIONS_ENTITY, id, granteeDeleters);
+        }
         if (fx.ConversationID) {
             await deleteRow(CONVERSATIONS_ENTITY, fx.ConversationID, deleters);
         }
@@ -602,32 +712,25 @@ async function checkCa2GranteePostIsStampedWithGrantee(ctx: IntegrationCheckCont
 async function checkCa3GranteeCannotEditOwnersMessage(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA3');
     if (!fx) return;
-    const before = await readMessage(ctx, fx.OwnerMessageID);
-    Assert(before != null, `CA3 precondition: Setup's owner message ${fx.OwnerMessageID} is missing`);
-    Assert(!before!.UserID && before!.Role === 'User',
-        `CA3 precondition: Setup's owner message must be a person's message with no UserID (has Role=${before!.Role}, UserID=${before!.UserID ?? '(empty)'})`);
+    const before = await readOwnerMessage(ctx, fx, 'CA3');
 
     const message = await loadMessage(fx.Grantee, fx.OwnerMessageID);
     message.Message = `${fx.RunTag} CA3: rewritten by the grantee ${MARKER}`;
     const outcome = await attemptSave(message);
     assertRefusedWith(outcome, REFUSAL.OnlyAuthorChanges, `CA3: ${fx.Grantee.Email} editing the owner's message`);
-    await assertMessageUnchanged(ctx, before!, "CA3: the owner's message after the refused edit");
+    await assertMessageUnchanged(ctx, before, "CA3: the owner's message after the refused edit");
 }
 
 /** CA4 — the grantee cannot delete the owner's message. Depends on Setup's owner message; a passing run leaves it in place. */
 async function checkCa4GranteeCannotDeleteOwnersMessage(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA4');
     if (!fx) return;
-    const before = await readMessage(ctx, fx.OwnerMessageID);
-    Assert(before != null, `CA4 precondition: Setup's owner message ${fx.OwnerMessageID} is missing`);
+    const before = await readOwnerMessage(ctx, fx, 'CA4');
 
     const message = await loadMessage(fx.Grantee, fx.OwnerMessageID);
     const outcome = await attemptDelete(message);
     assertRefusedWith(outcome, REFUSAL.OnlyAuthorOrOwnerDeletes, `CA4: ${fx.Grantee.Email} deleting the owner's message`);
-
-    const after = await readMessage(ctx, fx.OwnerMessageID);
-    Assert(after != null, "CA4: the owner's message is gone after the refused delete");
-    AssertEqual(after!.Message, before!.Message, "CA4: the owner's message text after the refused delete");
+    await assertMessageUnchanged(ctx, before, "CA4: the owner's message after the refused delete");
 }
 
 /** CA5 — the grantee edits their own message, and the owner deletes it. Self-contained: posts its own message. */
@@ -686,29 +789,105 @@ async function checkCa6OwnerPostsAndEditsAsBefore(ctx: IntegrationCheckContext):
 async function checkCa7ForgedOldValuesCannotClaimAuthorship(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA7');
     if (!fx) return;
-    const before = await readMessage(ctx, fx.OwnerMessageID);
-    Assert(before != null, `CA7 precondition: Setup's owner message ${fx.OwnerMessageID} is missing`);
-    Assert(!before!.UserID && before!.Role === 'User',
-        `CA7 precondition: Setup's owner message must be a person's message with no UserID (has Role=${before!.Role}, UserID=${before!.UserID ?? '(empty)'})`);
+    const before = await readOwnerMessage(ctx, fx, 'CA7');
 
     const claimedAuthor = await sendDetailUpdate(fx.Grantee, {
         ID: fx.OwnerMessageID,
         Message: `${fx.RunTag} CA7: rewritten under a forged author ${MARKER}`,
         UserID: fx.Grantee.UserID,
-        OldValues___: forgedOldValues(before!, fx.ConversationID, { Role: 'User', UserID: fx.Grantee.UserID })
+        OldValues___: forgedOldValues(before, fx.ConversationID, { Role: 'User', UserID: fx.Grantee.UserID })
     });
     assertRefusedWith(claimedAuthor, REFUSAL.OnlyAuthorChanges,
         `CA7: ${fx.Grantee.Email} rewriting the owner's message with OldValues___ claiming they wrote it`);
-    await assertMessageUnchanged(ctx, before!, "CA7: the owner's message after the forged-author update");
+    await assertMessageUnchanged(ctx, before, "CA7: the owner's message after the forged-author update");
 
     const claimedAgent = await sendDetailUpdate(fx.Grantee, {
         ID: fx.OwnerMessageID,
         Message: `${fx.RunTag} CA7: rewritten under a forged role ${MARKER}`,
-        OldValues___: forgedOldValues(before!, fx.ConversationID, { Role: 'AI', UserID: before!.UserID })
+        OldValues___: forgedOldValues(before, fx.ConversationID, { Role: 'AI', UserID: before.UserID })
     });
     assertRefusedWith(claimedAgent, REFUSAL.OnlyAuthorChanges,
         `CA7: ${fx.Grantee.Email} rewriting the owner's message with OldValues___ claiming it is an agent reply`);
-    await assertMessageUnchanged(ctx, before!, "CA7: the owner's message after the forged-role update");
+    await assertMessageUnchanged(ctx, before, "CA7: the owner's message after the forged-role update");
+}
+
+/**
+ * CA8 — a person's conversation message cannot take a field's value from a transaction variable. A 'Use' variable
+ * sets its field at Submit(), after every write check has passed, so a message could be checked with one author and
+ * saved with another. Shape (the simplest the resolver accepts that puts a 'Use' on a conversation message), built
+ * the way GraphQLTransactionGroup builds it (`GetDataObjectJSON()` of client entities):
+ *   item 0: Update of Setup's owner message, pinning it (`IsPinned`), which the grantee may do; it 'Define's the
+ *           variable from its `ConversationID`;
+ *   item 1: Create of the grantee's own message (no UserID), which CA2 shows is otherwise allowed; it 'Use's the
+ *           variable on its `ConversationID`.
+ * The value the variable would carry is harmless (the same conversation); the point is that any 'Use' is refused.
+ * Expect the group to fail with the variable refusal, no row for item 1, and Setup's message unpinned and unchanged
+ * (nothing in a refused group is submitted). Depends on Setup's owner message.
+ */
+async function checkCa8TransactionVariableCannotFillAMessage(ctx: IntegrationCheckContext): Promise<void> {
+    const fx = readyFixture('CA8');
+    if (!fx) return;
+    const before = await readOwnerMessage(ctx, fx, 'CA8');
+    Assert(!before.IsPinned, "CA8 precondition: Setup's owner message must start unpinned, or the pin proves nothing");
+
+    const pin = await loadMessage(fx.Grantee, fx.OwnerMessageID);
+    pin.IsPinned = true;
+    const text = `${fx.RunTag} CA8: the grantee's message filled from a transaction variable ${MARKER}`;
+    const post = await draftMessage(fx.Grantee, fx.ConversationID, text);
+    const outcome = await sendTransactionGroup(fx.Grantee, {
+        Items: [
+            { EntityName: DETAILS_ENTITY, EntityObjectJSON: await pin.GetDataObjectJSON(), OperationType: 'Update' },
+            { EntityName: DETAILS_ENTITY, EntityObjectJSON: await post.GetDataObjectJSON(), OperationType: 'Create' }
+        ],
+        Variables: [
+            { Name: 'SharedConversationID', ItemIndex: 0, FieldName: 'ConversationID', Type: 'Define' },
+            { Name: 'SharedConversationID', ItemIndex: 1, FieldName: 'ConversationID', Type: 'Use' }
+        ]
+    });
+    assertRefusedWith(outcome, REFUSAL.TransactionVariable,
+        `CA8: ${fx.Grantee.Email} running a transaction group whose message takes its ConversationID from a variable`);
+
+    AssertEqual((await messagesWithText(ctx, fx, text)).length, 0, "CA8: rows carrying the refused group's new message");
+    await assertMessageUnchanged(ctx, before, "CA8: the owner's message after the refused group (its pin must not land)");
+}
+
+/** CA9 — `Role='user'` (lower case) is still a person's message: posting it as the owner is refused. Uses only Setup's conversation and grant. */
+async function checkCa9LowerCaseRoleCannotPostAsOwner(ctx: IntegrationCheckContext): Promise<void> {
+    const fx = readyFixture('CA9');
+    if (!fx) return;
+    const text = `${fx.RunTag} CA9: the grantee posting as the owner with a lower-case role ${MARKER}`;
+    const outcome = await sendDetailCreate(fx.Grantee, {
+        ConversationID: fx.ConversationID,
+        Role: 'user',
+        Message: text,
+        UserID: fx.Owner.UserID,
+        Status: 'Complete'
+    });
+    assertRefusedWith(outcome, REFUSAL.PostAsSelf,
+        `CA9: ${fx.Grantee.Email} posting with Role='user' and the owner's UserID`);
+    AssertEqual((await messagesWithText(ctx, fx, text)).length, 0, 'CA9: rows carrying the refused post');
+}
+
+/**
+ * CA10 — the grantee cannot move the owner's message into a conversation the grantee owns. Creates that conversation
+ * (Teardown removes it); depends on Setup's owner message, which a passing run leaves in the shared conversation.
+ */
+async function checkCa10MessageCannotMoveConversation(ctx: IntegrationCheckContext): Promise<void> {
+    const fx = readyFixture('CA10');
+    if (!fx) return;
+    const before = await readOwnerMessage(ctx, fx, 'CA10');
+    const granteeConversationId = await createConversation(fx.Grantee, `IT115 grantee's own conversation ${fx.RunTag}`);
+    fx.GranteeConversationIDs.push(granteeConversationId);
+
+    const message = await loadMessage(fx.Grantee, fx.OwnerMessageID);
+    message.ConversationID = granteeConversationId;
+    const outcome = await attemptSave(message);
+    assertRefusedWith(outcome, REFUSAL.MovedConversation,
+        `CA10: ${fx.Grantee.Email} moving the owner's message into a conversation the grantee owns`);
+
+    await assertMessageUnchanged(ctx, before, "CA10: the owner's message after the refused move");
+    AssertEqual((await readMessages(ctx, `ConversationID = '${granteeConversationId}'`)).length, 0,
+        "CA10: messages in the grantee's own conversation");
 }
 
 export const ConversationAuthorshipClientChecks: NamedCheck[] = [
@@ -753,6 +932,24 @@ export const ConversationAuthorshipClientChecks: NamedCheck[] = [
         Name: "CA7: a grantee sending the update mutation with forged OldValues___ (claimed author, claimed agent role) is still refused, and the row does not move",
         RequiresMutation: true,
         Fn: checkCa7ForgedOldValuesCannotClaimAuthorship
+    },
+    {
+        Id: `${BUNDLE}.CA8`,
+        Name: "CA8: a grantee's transaction group whose conversation message takes a field from a 'Use' variable is refused, and nothing is written",
+        RequiresMutation: true,
+        Fn: checkCa8TransactionVariableCannotFillAMessage
+    },
+    {
+        Id: `${BUNDLE}.CA9`,
+        Name: "CA9: a grantee posting with Role='user' (lower case) and the owner's UserID is refused, and no row exists",
+        RequiresMutation: true,
+        Fn: checkCa9LowerCaseRoleCannotPostAsOwner
+    },
+    {
+        Id: `${BUNDLE}.CA10`,
+        Name: "CA10: a grantee moving the owner's message into a conversation the grantee owns is refused, and it stays put",
+        RequiresMutation: true,
+        Fn: checkCa10MessageCannotMoveConversation
     }
 ];
 

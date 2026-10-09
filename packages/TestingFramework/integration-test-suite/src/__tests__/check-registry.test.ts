@@ -185,7 +185,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
-        ['conversation-authorship-client', ConversationAuthorshipClientChecks, 7], // CA1-CA7 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7 forges OldValues___ (IT115)
+        ['conversation-authorship-client', ConversationAuthorshipClientChecks, 10], // CA1-CA10 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message (IT115)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
@@ -274,7 +274,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'communication': 5,
         'concurrent': 2,
         'content-vectorization': 10,
-        'conversation-authorship-client': 7,
+        'conversation-authorship-client': 10,
         'conversation-compaction': 18,
         'trailing-runtime-state': 6,
         'dataset-cache': 4,
@@ -442,12 +442,15 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'content-vectorization.CV8',
         'content-vectorization.CV9',
         'conversation-authorship-client.CA1',
+        'conversation-authorship-client.CA10',
         'conversation-authorship-client.CA2',
         'conversation-authorship-client.CA3',
         'conversation-authorship-client.CA4',
         'conversation-authorship-client.CA5',
         'conversation-authorship-client.CA6',
         'conversation-authorship-client.CA7',
+        'conversation-authorship-client.CA8',
+        'conversation-authorship-client.CA9',
         'entity-actions.EA1',
         'entity-actions.EA2',
         'entity-actions.EA3',

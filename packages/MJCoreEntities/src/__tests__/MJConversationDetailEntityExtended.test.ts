@@ -26,7 +26,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     return { ...actual, RegisterClass: () => (target: unknown) => target };
 });
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
     class BaseEntityResult {
         Success = false;
         Type: 'create' | 'update' | 'delete' = 'create';
@@ -41,6 +42,7 @@ vi.mock('@memberjunction/core', () => {
     return {
         BaseEntity: class {},
         BaseEntityResult,
+        EntityFieldInfo: actual.EntityFieldInfo,
         LogError: mocks.logError,
         UserInfo: class {},
         WellKnownUserSource: {
@@ -72,7 +74,7 @@ vi.mock('../generated/entity_subclasses', () => ({
                 Load: async () => mocks.conversationVisible(user?.ID) !== false,
             }),
         };
-        public Role: 'AI' | 'Error' | 'User' = 'User';
+        public Role: string = 'User';
         public UserID: string | null = null;
         public Fields: { Name: string; Dirty: boolean; OldValue?: unknown }[] = [];
 
@@ -108,9 +110,10 @@ type Harness = {
     ConversationID: string;
     IsSaved: boolean;
     ContextCurrentUser: { ID: string } | null;
-    Role: 'AI' | 'Error' | 'User';
+    Role: string;
     UserID: string | null;
     Fields: { Name: string; Dirty: boolean; OldValue?: unknown }[];
+    TransactionGroup?: { Variables: { EntityObject: unknown; Type: 'Define' | 'Use' }[] };
     ResultHistory: MockResultEntry[];
     LatestResult: MockResultEntry | null;
     Save: () => Promise<boolean>;
@@ -242,12 +245,18 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
     }
 
     /** An existing person's message written by `authorID` (null: no UserID, which reads as the owner). */
-    async function savedMessageAs(userID: string, authorID: string | null, dirty: string[]): Promise<Harness> {
+    async function savedMessageAs(
+        userID: string,
+        authorID: string | null,
+        dirty: string[],
+        storedRole = 'User'
+    ): Promise<Harness> {
         const entity = await messageAs(userID);
         entity.IsSaved = true;
         entity.UserID = authorID;
+        entity.Role = storedRole;
         entity.Fields = [
-            { Name: 'Role', Dirty: dirty.includes('Role'), OldValue: 'User' },
+            { Name: 'Role', Dirty: dirty.includes('Role'), OldValue: storedRole },
             { Name: 'UserID', Dirty: dirty.includes('UserID'), OldValue: authorID },
             ...dirty.filter((name) => name !== 'Role' && name !== 'UserID').map((name) => ({ Name: name, Dirty: true })),
         ];
@@ -284,6 +293,17 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
 
             expect(await entity.Save()).toBe(false);
             expect(entity.LatestResult?.CompleteMessage).toBe('You can post a message only as yourself.');
+        });
+
+        it("refuses posting as someone else with the role in another case or padded, which validation and the database accept", async () => {
+            for (const role of ['user', 'USER', 'User ']) {
+                const entity = await messageAs(GRANTEE);
+                entity.Role = role;
+                entity.UserID = OTHER;
+
+                expect(await entity.Save()).toBe(false);
+                expect(entity.LatestResult?.CompleteMessage).toBe('You can post a message only as yourself.');
+            }
         });
 
         it('lets a person post as themselves, in any case of their ID', async () => {
@@ -333,6 +353,30 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
 
             expect(await entity.Save()).toBe(false);
             expect(entity.LatestResult?.CompleteMessage).toBe("A message's role cannot be changed.");
+        });
+
+        it("refuses turning an agent's reply into a person's message: that would post as anyone", async () => {
+            const entity = await savedMessageAs(GRANTEE, OTHER, ['Role', 'Message'], 'AI');
+            entity.Role = 'User';
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe("A message's role cannot be changed.");
+        });
+
+        it('refuses moving a person\'s message to another conversation, its author included', async () => {
+            const someoneElses = await savedMessageAs(GRANTEE, OTHER, ['ConversationID']);
+            expect(await someoneElses.Save()).toBe(false);
+            expect(someoneElses.LatestResult?.CompleteMessage).toBe('A message cannot be moved to another conversation.');
+
+            const own = await savedMessageAs(OWNER, null, ['ConversationID']);
+            expect(await own.Save()).toBe(false);
+        });
+
+        it('treats a stored role in another case as a person\'s message', async () => {
+            const entity = await savedMessageAs(GRANTEE, OTHER, ['Message'], 'user');
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe('Only the person who wrote this message can change it.');
         });
 
         it('refuses an author handing their message to someone else, or to no one', async () => {
@@ -401,6 +445,36 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
         const entity = await messageAs(GRANTEE);
 
         expect(await entity.Save()).toBe(true);
+        expect(entity.UserID).toBe(GRANTEE);
+    });
+
+    it('still refuses posting as someone else when no one can find the conversation', async () => {
+        mocks.conversationVisible.mockReturnValue(false);
+        const entity = await messageAs(GRANTEE);
+        entity.UserID = OTHER;
+
+        expect(await entity.Save()).toBe(false);
+        expect(entity.LatestResult?.CompleteMessage).toBe('You can post a message only as yourself.');
+    });
+
+    it('refuses a message a transaction variable fills in at submit, after this check', async () => {
+        const entity = await messageAs(GRANTEE);
+        entity.TransactionGroup = { Variables: [{ EntityObject: entity, Type: 'Use' }] };
+
+        expect(await entity.Save()).toBe(false);
+        expect(entity.LatestResult?.CompleteMessage).toBe(
+            'A conversation message cannot take its values from a transaction variable.'
+        );
+    });
+
+    it("allows a message whose own values define a variable, or whose group's variables are another item's", async () => {
+        const defines = await messageAs(GRANTEE);
+        defines.TransactionGroup = { Variables: [{ EntityObject: defines, Type: 'Define' }] };
+        expect(await defines.Save()).toBe(true);
+
+        const other = await messageAs(GRANTEE);
+        other.TransactionGroup = { Variables: [{ EntityObject: {}, Type: 'Use' }] };
+        expect(await other.Save()).toBe(true);
     });
 
     it('checks access before authorship: a person without a grant is told they have no access', async () => {

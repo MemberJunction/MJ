@@ -41,6 +41,7 @@ import {
     TransactionInputType,
     TransactionItemInputType,
     TransactionOperationType,
+    TransactionVariableType,
 } from '../resolvers/TransactionGroupResolver.js';
 import type { AppContext } from '../types.js';
 
@@ -57,7 +58,10 @@ class FakeTransactionGroup {
     public AddTransaction(label: string): void {
         this.Enrolled.push(label);
     }
-    public AddVariable(): void { /* no variables in these tests */ }
+    public Variables: unknown[] = [];
+    public AddVariable(variable: unknown): void {
+        this.Variables.push(variable);
+    }
     public async Submit(): Promise<boolean> {
         this.SubmitCalled = true;
         // TransactionGroupBase.Submit(): an empty group is "nothing to do" and returns true.
@@ -286,5 +290,33 @@ describe('ExecuteTransactionGroup — rows refused server-side (issue #4309)', (
 
         expect(result.Success).toBe(true);
         expect(group.Enrolled).toHaveLength(0);
+    });
+
+    it("registers the group's variables before any row's Save(), so a server-side check can see them", async () => {
+        // A 'Use' variable sets its field at Submit(), after every Save()-time check has passed. A check
+        // that depends on a field's final value (who a conversation message is from) can refuse such a
+        // row only if the variable is already on the group when its Save() runs.
+        const variablesAtSave: number[] = [];
+        class RecordingEntity extends FakeEntity {
+            public override async Save(): Promise<boolean> {
+                variablesAtSave.push(this.TransactionGroup?.Variables.length ?? -1);
+                return super.Save();
+            }
+        }
+        const entities = [
+            new RecordingEntity('MJ: User Roles', { accepts: true }),
+            new RecordingEntity('MJ: User Roles', { accepts: true }),
+        ];
+        const { context } = buildContext(entities);
+        const input = buildGroupInput(2);
+        input.Variables = [
+            { Name: 'v', ItemIndex: 0, FieldName: 'ID', Type: TransactionVariableType.Define },
+            { Name: 'v', ItemIndex: 1, FieldName: 'UserID', Type: TransactionVariableType.Use },
+        ];
+
+        const result = await new TransactionResolver().ExecuteTransactionGroup(input, context);
+
+        expect(result.Success).toBe(true);
+        expect(variablesAtSave).toEqual([2, 2]);
     });
 });

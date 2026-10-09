@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { CompositeKey, IMetadataProvider, KeyValuePair, LogError, Metadata, TransactionVariable, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, KeyValuePair, LogError, Metadata, TransactionVariable, TransactionGroupBase, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -143,10 +143,17 @@ export class TransactionResolver extends ResolverBase {
             // branch, and report success for writes that never happened.
             const refusals: string[] = [];
 
+            // instantiate an entity object for every item first, so the group's variables are known
+            // BEFORE any Save()/Delete() runs below: a 'Use' variable sets its field at Submit(), after
+            // every server-side write check has passed, so an entity whose check depends on a field's
+            // final value must be able to see that a variable will set it.
+            for (const item of group.Items) {
+                entityObjects.push(await md.GetEntityObject(item.EntityName, context.userPayload.userRecord));
+            }
+            this.AddNetworkVariables(group, entityObjects, tg);
+
             for (const [index, item] of group.Items.entries()) {
-                // instantiate a new entity object for the item
-                const entity = await md.GetEntityObject(item.EntityName, context.userPayload.userRecord);
-                entityObjects.push(entity); // save for later for mapping variables if needed
+                const entity = entityObjects[index];
 
                 // get the values from the payload
                 const itemValues = SafeJSONParse(item.EntityObjectJSON);
@@ -211,21 +218,6 @@ export class TransactionResolver extends ResolverBase {
                 return await this.PrepareReturnValue(false, entityObjects, objectValues, group);
             }
 
-            // now, we need to set the variables
-            if (group.Variables && group.Variables.length > 0) {
-                for (const networkVar of group.Variables) {
-                    // for each variable, add it to the transaction group and map the index from the network payload to the specific entity object loaded up above
-                    if (networkVar.ItemIndex >= 0 && networkVar.ItemIndex < entityObjects.length) {
-                        const entityObject = entityObjects[networkVar.ItemIndex];
-                        const newVar = new TransactionVariable(networkVar.Name, entityObject, networkVar.FieldName, networkVar.Type);
-                        tg.AddVariable(newVar);
-                    }
-                    else {
-                        throw new Error(`TransactionResolver::ExecuteTransactionGroup --- Error\n\n' + 'Invalid ItemIndex ${networkVar.ItemIndex} in TransactionVariable "${JSON.stringify(networkVar)}"`);
-                    }
-                }
-            }
-
             // after all that, we are ready to roll, so let's run the TG
             if (await tg.Submit()) {
                 // success!
@@ -239,6 +231,22 @@ export class TransactionResolver extends ResolverBase {
         catch (err) {
             LogError(err);
             throw new Error('TransactionResolver::ExecuteTransactionGroup --- Error\n\n' + err);
+        }
+    }
+
+    /**
+     * Adds the network payload's variables to the group, mapping each one's item index to the entity
+     * object built for that item.
+     */
+    protected AddNetworkVariables(group: TransactionInputType, entityObjects: BaseEntity[], tg: TransactionGroupBase): void {
+        for (const networkVar of group.Variables ?? []) {
+            if (networkVar.ItemIndex >= 0 && networkVar.ItemIndex < entityObjects.length) {
+                const entityObject = entityObjects[networkVar.ItemIndex];
+                tg.AddVariable(new TransactionVariable(networkVar.Name, entityObject, networkVar.FieldName, networkVar.Type));
+            }
+            else {
+                throw new Error(`TransactionResolver::ExecuteTransactionGroup --- Error\n\n' + 'Invalid ItemIndex ${networkVar.ItemIndex} in TransactionVariable "${JSON.stringify(networkVar)}"`);
+            }
         }
     }
 

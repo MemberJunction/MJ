@@ -2,6 +2,7 @@ import {
     BaseEntity,
     BaseEntityResult,
     EntityDeleteOptions,
+    EntityFieldInfo,
     EntitySaveOptions,
     IMetadataProvider,
     LogError,
@@ -33,6 +34,14 @@ const OWNER_ONLY_RATING_FIELDS = ['UserRating', 'UserFeedback'];
  * (pinning, hiding, bookkeeping the server writes) keep the conversation-level rules.
  */
 const AUTHORED_FIELDS = ['UserID', 'Role', 'Message', 'ArtifactID', 'ArtifactVersionID', 'MediaType', 'ParentID'];
+
+/**
+ * Whether a `Role` value is a person's message. Compared the way validation and the database's CHECK constraint
+ * compare it (trimmed, any case), so `'user'` or `'User '`, which both store, cannot slip past these rules.
+ */
+function isPersonRole(role: string | null | undefined): boolean {
+    return role != null && EntityFieldInfo.NormalizeValueListValue(role) === 'user';
+}
 
 /**
  * Server-side defense-in-depth for conversation sharing. The Angular chat UI
@@ -103,6 +112,12 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
             // Server code writing as the system user (agent replies, transcripts) may write any message.
             return true;
         }
+        if (this.TransactionGroup?.Variables.some((v) => v.EntityObject === this && v.Type === 'Use')) {
+            // A transaction variable sets its field after this check has passed, at submit, to any value an earlier
+            // item in the group produced: a person's message would be checked with one author and saved with another.
+            this.recordDenied('A conversation message cannot take its values from a transaction variable.', resultType);
+            return false;
+        }
 
         try {
             const conversation = await provider.GetEntityObject<MJConversationEntity>(
@@ -113,9 +128,13 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
             if (!loaded) {
                 // The person cannot read the conversation. If it exists, it is hidden from them (a row filter), and
                 // they may not write to it. If no one can find it, it is missing or being created in this same
-                // transaction: let the foreign key and the base save decide, as before.
-                if (await this.conversationExists(provider)) {
-                    this.recordDenied('You do not have access to this conversation.', resultType);
+                // transaction: let the foreign key and the base save decide, as before, but a person's message in it
+                // is still theirs (no one is its owner yet, so an empty UserID gets the poster's).
+                const refusal = (await this.conversationExists(provider))
+                    ? 'You do not have access to this conversation.'
+                    : this.authorshipRefusal(operation, user, null, false);
+                if (refusal) {
+                    this.recordDenied(refusal, resultType);
                     return false;
                 }
                 return true;
@@ -193,7 +212,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
 
     /** A new person's message names its author as the poster, or names no one (filled in for a grantee). */
     private postRefusal(user: UserInfo, isOwner: boolean): string | null {
-        if (this.Role !== 'User') {
+        if (!isPersonRole(this.Role)) {
             return null;
         }
         if (!this.UserID) {
@@ -208,17 +227,26 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
         return UUIDsEqual(this.UserID, user.ID) ? null : 'You can post a message only as yourself.';
     }
 
-    /** An existing person's message: only its author changes who wrote it and what it says, and no one its role. */
+    /**
+     * An existing person's message: only its author changes who wrote it and what it says, no one its role (to or
+     * from `User`), and no one moves it to another conversation.
+     */
     private changeRefusal(user: UserInfo, ownerID: string | null): string | null {
-        if (this.originalFieldText('Role') !== 'User') {
+        const wasPerson = isPersonRole(this.originalFieldText('Role'));
+        if (this.isFieldDirty('Role') && (wasPerson || isPersonRole(this.Role))) {
+            return "A message's role cannot be changed.";
+        }
+        if (!wasPerson) {
             return null;
         }
-        const changed = AUTHORED_FIELDS.filter((name) => this.Fields.find((f) => f.Name === name)?.Dirty);
+        if (this.isFieldDirty('ConversationID')) {
+            // Moving it would take it out of its conversation (a delete) and, with no UserID, make it read as the
+            // other conversation's owner's.
+            return 'A message cannot be moved to another conversation.';
+        }
+        const changed = AUTHORED_FIELDS.filter((name) => this.isFieldDirty(name));
         if (changed.length === 0) {
             return null;
-        }
-        if (changed.includes('Role')) {
-            return "A message's role cannot be changed.";
         }
         const author = this.originalFieldText('UserID') ?? ownerID;
         if (!author || !UUIDsEqual(author, user.ID)) {
@@ -232,7 +260,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
 
     /** A person's message is deleted by its author or by the conversation's owner. */
     private deleteRefusal(user: UserInfo, ownerID: string | null, isOwner: boolean): string | null {
-        if (this.Role !== 'User' || isOwner) {
+        if (!isPersonRole(this.Role) || isOwner) {
             return null;
         }
         const author = this.UserID || ownerID;
@@ -249,6 +277,10 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
         }
         const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', systemUser);
         return conversation.Load(this.ConversationID);
+    }
+
+    private isFieldDirty(name: string): boolean {
+        return !!this.Fields.find((f) => f.Name === name)?.Dirty;
     }
 
     /** A field's value as loaded, before this save's changes; `null` when it was empty or is not text. */

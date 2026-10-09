@@ -2350,6 +2350,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * Whether the edit pencil shows: the conversation's owner, on a message they wrote (no `UserID`, which reads as
+   * the owner, or their own). The server lets only a message's author change its text, so the owner editing a
+   * grantee's message would always be refused.
+   */
+  public get CanEditMessage(): boolean {
+    return this.IsConversationOwner && (!this.message?.UserID || UUIDsEqual(this.message.UserID, this.CurrentUser.ID));
+  }
+
+  /**
    * Get agent response form from message
    * Uses ResponseForm property from MJConversationDetailEntity
    *
