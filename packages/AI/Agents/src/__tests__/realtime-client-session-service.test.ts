@@ -2892,3 +2892,78 @@ describe('RealtimeClientSessionService — session-scoped tool caches are bounde
         expect(service.ExposeSessionWireActionMaps().Get(`session-${maxSize + 4}`)).toBeDefined();
     });
 });
+
+describe('RealtimeClientSessionService.PrepareClientSession: the avatar status for the call', () => {
+    /** A model that renders avatars and grants every one it is asked for. */
+    class AvatarModel extends MockRealtimeModel {
+        public override SupportsAvatarOutput(model: string): boolean {
+            return model === 'mock-realtime';
+        }
+        public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+            const minted = await super.CreateClientSession(params);
+            return params.Avatar ? { ...minted, AvatarStatus: { Requested: true, Granted: true } } : minted;
+        }
+    }
+
+    /** A service whose avatar resolution the test sets, counting how often it runs. */
+    class StatusService extends TestableService {
+        public Resolution: RealtimeAvatarResolution = {};
+        public Resolutions = 0;
+        protected override ResolveSessionAvatar(): RealtimeAvatarResolution {
+            this.Resolutions++;
+            return this.Resolution;
+        }
+        public UseModel(model: MockRealtimeModel): void {
+            this.Model = model;
+            this.ResolveModelResult = { Model: model, ModelID: 'm1', VendorID: 'v1', APIName: 'mock-realtime' };
+        }
+    }
+
+    const BEN = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' as const };
+    let log: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => { log = vi.spyOn(console, 'log').mockImplementation(() => undefined); });
+    afterEach(() => log.mockRestore());
+    const avatarLines = (): string[] => log.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('mint avatar '));
+
+    it('returns no status, and logs none, when the agent asked for no avatar', async () => {
+        const svc = new StatusService();
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.Success).toBe(true);
+        expect('AvatarStatus' in result).toBe(false);
+        expect(avatarLines()).toEqual([]);
+    });
+
+    it('says the voice model shows none when the model renders no avatar, though a face resolved', async () => {
+        const svc = new StatusService();
+        svc.Resolution = { Avatar: BEN };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+        expect(avatarLines()).toEqual(['[RealtimeCoAgent] mint avatar model=mock-realtime shown=false reason=endpoint']);
+    });
+
+    it("passes the driver's grant through on a model that renders avatars", async () => {
+        const svc = new StatusService();
+        svc.UseModel(new AvatarModel());
+        svc.Resolution = { Avatar: BEN };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.AvatarStatus).toEqual({ Requested: true, Granted: true });
+        expect(avatarLines()).toEqual(['[RealtimeCoAgent] mint avatar model=mock-realtime shown=true reason=none']);
+    });
+
+    it("gives the persona reason when no face resolved on a model that renders avatars", async () => {
+        const svc = new StatusService();
+        svc.UseModel(new AvatarModel());
+        svc.Resolution = { Reason: 'no-binding' };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'no-binding' });
+    });
+
+    it('resolves the avatar once per prepare, and the session params ask for the face it found', async () => {
+        const svc = new StatusService();
+        svc.Resolution = { Avatar: BEN };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(svc.Resolutions).toBe(1);
+        expect(result.SessionParams?.Avatar).toEqual(BEN);
+        expect(svc.Model.LastParams?.Avatar).toEqual(BEN);
+    });
+});

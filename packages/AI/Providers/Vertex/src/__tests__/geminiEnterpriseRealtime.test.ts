@@ -382,6 +382,28 @@ describe('GeminiEnterpriseRealtime', () => {
             expect(downgraded.generationConfig?.responseModalities).toEqual(['AUDIO']);
             expect(downgraded.avatarConfig).toBeUndefined();
         });
+
+        it('says whether the avatar shows: granted on 3.8 Live, and why not for a custom avatar or a model without avatars', async () => {
+            const granted = await mint(serviceAccountKey(), makeParams({ Avatar: { AvatarID: 'Ben', PersonaName: 'Ben' } }));
+            expect(granted.Minted.AvatarStatus).toEqual({ Requested: true, Granted: true });
+            expect(granted.Driver.SupportsAvatarOutput('gemini-3.8-live')).toBe(true);
+
+            const custom = await mint(serviceAccountKey(), makeParams({ Avatar: { AvatarID: 'Mine', Kind: 'custom' } }));
+            expect(custom.Minted.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'custom-disabled' });
+
+            const thinking = await mint(serviceAccountKey(), makeParams({ Model: 'gemini-3.8-live-extended-thinking', Avatar: { AvatarID: 'Ben' } }));
+            expect(thinking.Minted.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+            expect(thinking.Driver.SupportsAvatarOutput('gemini-3.8-live-extended-thinking')).toBe(false);
+        });
+
+        it('returns no avatar status when the session asked for none, and never puts it in the pact', async () => {
+            const { Minted } = await mint();
+            expect('AvatarStatus' in Minted).toBe(false);
+            const asked = await mint(serviceAccountKey(), makeParams({ Avatar: { AvatarID: 'Ben' } }));
+            for (const key of ['AvatarStatus', 'Granted', 'Requested']) {
+                expect(JSON.stringify(asked.Minted.SessionConfig), key).not.toContain(key);
+            }
+        });
     });
 
     describe('bridged sessions', () => {

@@ -47,6 +47,7 @@ import {
     IRealtimeSession,
     IsZeroDataRetention,
     JSONObject,
+    RealtimeAvatarStatus,
     RealtimeSessionParams,
     RealtimeToolCall,
     RealtimeToolDefinition
@@ -72,7 +73,7 @@ import {
     type RealtimeSessionClientTools
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ResolveRealtimeAvatar, type RealtimeAvatarResolution } from './realtime-avatar-resolution';
+import { ResolveRealtimeAvatar, ResolveRealtimeAvatarStatus, type RealtimeAvatarResolution } from './realtime-avatar-resolution';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
 import { AgentRunner } from '../AgentRunner';
@@ -368,6 +369,12 @@ export interface RealtimeClientSessionPrepResult {
      * `RealtimeSessionRunnerDeps.NarrationPaceMs`.
      */
     NarrationPaceMs?: number;
+    /**
+     * The live avatar the session asked for and whether it shows: granted, or audio only and why
+     * ({@link ResolveRealtimeAvatarStatus}). Absent when the voiced agent asked for no avatar (its video setting is
+     * off). The transport layer returns it in the mint result, so the call can say why it shows no avatar.
+     */
+    AvatarStatus?: RealtimeAvatarStatus;
 }
 
 /**
@@ -487,6 +494,11 @@ export interface RealtimeSessionParamsPrep {
     SessionParams?: RealtimeSessionParams;
     /** The resolved channel scope + client-tool tiers, when the input carried channel candidates. */
     ClientPolicy?: RealtimeSessionClientPolicy;
+    /**
+     * The avatar the session asks for, or why there is none; empty when the voiced agent asked for none. The session
+     * params carry the request itself (`SessionParams.Avatar`); this keeps the reason for the call's avatar status.
+     */
+    AvatarResolution?: RealtimeAvatarResolution;
 }
 
 /**
@@ -812,6 +824,7 @@ export class RealtimeClientSessionService {
             const message = error instanceof Error ? error.message : String(error);
             return { Success: false, ErrorMessage: `Failed to mint client realtime session: ${message}` };
         }
+        const avatarStatus = this.resolveMintedAvatarStatus(prep, clientConfig);
 
         // Best-effort observability: create a server-side co-agent run (+ prompt run) so the voice
         // session is visible in the agent-run timeline and delegated runs can nest under it. A
@@ -837,7 +850,26 @@ export class RealtimeClientSessionService {
             EffectiveConfig: effectiveConfig,
             ClientPolicy: clientPolicy,
             NarrationPaceMs: GetNarrationPaceMs(effectiveConfig) ?? undefined,
+            ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
         };
+    }
+
+    /**
+     * The call's avatar status once the driver has minted the session (see {@link ResolveRealtimeAvatarStatus}), with one
+     * log line saying whether the avatar shows. `undefined`, and no line, when the session asked for no avatar.
+     */
+    private resolveMintedAvatarStatus(prep: RealtimeSessionParamsPrep, clientConfig: ClientRealtimeSessionConfig): RealtimeAvatarStatus | undefined {
+        const model = prep.Resolution?.Model;
+        const apiName = prep.Resolution?.APIName ?? clientConfig.Model;
+        const status = ResolveRealtimeAvatarStatus({
+            Resolution: prep.AvatarResolution ?? {},
+            ModelSupportsAvatarOutput: model?.SupportsAvatarOutput(apiName) ?? false,
+            DriverStatus: clientConfig.AvatarStatus,
+        });
+        if (status) {
+            console.log(`[RealtimeCoAgent] mint avatar model=${apiName} shown=${status.Granted} reason=${status.Reason ?? 'none'}`);
+        }
+        return status;
     }
 
     /**
@@ -1047,17 +1079,18 @@ export class RealtimeClientSessionService {
         // folds the app tier into the capability manifest the prompt renders. The scoped input is what
         // the prompt/tool builders see, so a vetoed channel is absent from the framing as well as the tools.
         const scoped = await this.scopeSessionInput(effectiveInput, effectiveConfig, contextUser, provider, zeroDataRetention);
+        const avatar = this.ResolveSessionAvatar(scoped.Input, coAgent, effectiveConfig, resolution.ModelID, resolution.ModelVendorID);
         const sessionParams: RealtimeSessionParams = {
             ...(await this.buildSessionParams(
                 scoped.Input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
-                resolution.ModelID, resolution.ModelVendorID,
+                resolution.ModelID, resolution.ModelVendorID, avatar,
             )),
             ZeroDataRetention: zeroDataRetention,
         };
 
         return {
             Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams,
-            ClientPolicy: scoped.ClientPolicy,
+            ClientPolicy: scoped.ClientPolicy, AvatarResolution: avatar,
         };
     }
 
@@ -2357,6 +2390,7 @@ export class RealtimeClientSessionService {
      * @param driverClass The resolved vendor's DriverClass — matches per-provider voice settings.
      * @param modelID The resolved `MJ: AI Models` id — keys the model-catalog `ModelConfiguration` cascade.
      * @param modelVendorID The resolved `MJ: AI Model Vendors` ROW id — the cascade's most-specific layer.
+     * @param resolvedAvatar The session's avatar resolution, when the caller already made it; resolved here otherwise.
      * @returns The assembled session params.
      */
     protected async buildSessionParams(
@@ -2368,7 +2402,8 @@ export class RealtimeClientSessionService {
         effectiveConfig?: RealtimeCoAgentConfig,
         driverClass?: string,
         modelID?: string,
-        modelVendorID?: string
+        modelVendorID?: string,
+        resolvedAvatar?: RealtimeAvatarResolution
     ): Promise<RealtimeSessionParams> {
         const directTools = this.BuildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass, input.AgentSessionID);
         const hasDirectTools = directTools.length > 0 || (input.ExtraTools != null && input.ExtraTools.length > 0);
@@ -2380,7 +2415,7 @@ export class RealtimeClientSessionService {
         const tools = this.appendHostTools(this.buildStableToolSet(combinedExtra), input.HostTools);
         // Hoisted (rather than built inline at the return) so the mint log below can report the voice
         // that ACTUALLY reached the driver — see the `voice=` field. Same bag, built once.
-        const avatar = this.ResolveSessionAvatar(input, coAgent, effectiveConfig, modelID, modelVendorID);
+        const avatar = resolvedAvatar ?? this.ResolveSessionAvatar(input, coAgent, effectiveConfig, modelID, modelVendorID);
         const configBag = this.withAvatarVoice(this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID), avatar, input);
         WarnOnUnmatchedProviderVoice(effectiveConfig, driverClass, 'RealtimeClientSessionService');
 

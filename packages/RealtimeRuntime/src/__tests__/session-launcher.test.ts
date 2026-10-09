@@ -71,12 +71,23 @@ class MintProvider {
     public readonly sessionId = 'transport-1';
     public Calls: GqlCall[] = [];
     public RejectChannelScoping = false;
+    public RejectAvatarStatus = false;
+    /** Which rejection a server that predates both names first (a validation error carries one message). */
+    public AvatarRejectionFirst = false;
     public Entities: unknown[] = [{ Name: 'MJ: AI Agent Channels' }];
     public async ExecuteGQL(query: string, variables: Record<string, unknown>): Promise<unknown> {
         this.Calls.push({ query, variables });
         if (query.includes('mutation StartRealtimeClientSession')) {
-            if (this.RejectChannelScoping && query.includes('channelCandidatesJson')) {
-                throw new Error('Unknown argument "channelCandidatesJson" on field "Mutation.StartRealtimeClientSession".');
+            const rejections = [
+                this.RejectChannelScoping && query.includes('channelCandidatesJson')
+                    ? 'Unknown argument "channelCandidatesJson" on field "Mutation.StartRealtimeClientSession".'
+                    : null,
+                this.RejectAvatarStatus && query.includes('AvatarStatusJson')
+                    ? 'Cannot query field "AvatarStatusJson" on type "StartRealtimeClientSessionResult".'
+                    : null,
+            ].filter((message): message is string => message !== null);
+            if (rejections.length > 0) {
+                throw new Error(this.AvatarRejectionFirst ? rejections[rejections.length - 1] : rejections[0]);
             }
             return { StartRealtimeClientSession: mintResult() };
         }
@@ -194,6 +205,76 @@ describe('DefaultRealtimeSessionLauncher', () => {
         expect(provider.mints()).toHaveLength(2); // rejected, then the plain mutation
         await launcher.Launch(request({ ChannelCandidatesJson: '[]' }), context);
         expect(provider.mints()).toHaveLength(3); // asked once; the second mint went straight to the plain mutation
+    });
+
+    it('asks for the avatar status in every mint, with or without channel scoping', async () => {
+        const provider = new MintProvider();
+        const launcher = new DefaultRealtimeSessionLauncher();
+        const context: RealtimeSessionLaunchContext = { Provider: provider as unknown as IMetadataProvider };
+        await launcher.Launch(request(), context);
+        await launcher.Launch(request({ ChannelCandidatesJson: '[]' }), context);
+        const [plain, scoped] = provider.mints();
+        expect(plain.query).toContain('AvatarStatusJson');
+        expect(plain.query).not.toContain('ClientPolicyJson');
+        expect(scoped.query).toContain('AvatarStatusJson');
+        expect(scoped.query).toContain('ClientPolicyJson');
+    });
+
+    it('drops only the avatar status for a server that predates it, keeping channel scoping, and remembers', async () => {
+        const provider = new MintProvider();
+        provider.RejectAvatarStatus = true;
+        const launcher = new DefaultRealtimeSessionLauncher();
+        const context: RealtimeSessionLaunchContext = { Provider: provider as unknown as IMetadataProvider };
+        const result = await launcher.Launch(request({ ChannelCandidatesJson: '[{"Key":"Echo"}]' }), context);
+        expect(result.EphemeralToken).toBe('t');
+        const [rejected, retried] = provider.mints();
+        expect(rejected.query).toContain('AvatarStatusJson');
+        expect(retried.query).not.toContain('AvatarStatusJson');
+        expect(retried.query).toContain('$channelCandidatesJson');
+        expect(retried.query).toContain('ClientPolicyJson');
+        expect(retried.variables['channelCandidatesJson']).toBe('[{"Key":"Echo"}]');
+
+        await launcher.Launch(request({ ChannelCandidatesJson: '[]' }), context);
+        expect(provider.mints()).toHaveLength(3); // asked once; the next mint went straight to the mutation without it
+        expect(provider.mints()[2].query).not.toContain('AvatarStatusJson');
+        expect(provider.mints()[2].query).toContain('$channelCandidatesJson');
+    });
+
+    it('keeps the avatar status when only channel scoping falls back', async () => {
+        const provider = new MintProvider();
+        provider.RejectChannelScoping = true;
+        await new DefaultRealtimeSessionLauncher().Launch(request({ ChannelCandidatesJson: '[]' }), { Provider: provider as unknown as IMetadataProvider });
+        const [, retried] = provider.mints();
+        expect(retried.query).not.toContain('channelCandidatesJson');
+        expect(retried.query).toContain('AvatarStatusJson');
+    });
+
+    it.each([false, true])('drops both, one at a time, for a server that predates both (avatar named first: %s)', async (avatarFirst) => {
+        const provider = new MintProvider();
+        provider.RejectChannelScoping = true;
+        provider.RejectAvatarStatus = true;
+        provider.AvatarRejectionFirst = avatarFirst;
+        const launcher = new DefaultRealtimeSessionLauncher();
+        const context: RealtimeSessionLaunchContext = { Provider: provider as unknown as IMetadataProvider };
+        const result = await launcher.Launch(request({ ChannelCandidatesJson: '[]' }), context);
+        expect(result.EphemeralToken).toBe('t');
+        expect(provider.mints()).toHaveLength(3);
+        const last = provider.mints()[2].query;
+        expect(last).not.toContain('channelCandidatesJson');
+        expect(last).not.toContain('AvatarStatusJson');
+
+        await launcher.Launch(request({ ChannelCandidatesJson: '[]' }), context);
+        expect(provider.mints()).toHaveLength(4);
+    });
+
+    it('surfaces a failure that keeps naming an extension it already dropped, instead of retrying forever', async () => {
+        const provider = new MintProvider();
+        provider.ExecuteGQL = async (query: string, variables: Record<string, unknown>) => {
+            provider.Calls.push({ query, variables });
+            throw new Error('Cannot query field "AvatarStatusJson" on type "StartRealtimeClientSessionResult".');
+        };
+        await expect(new DefaultRealtimeSessionLauncher().Launch(request(), { Provider: provider as unknown as IMetadataProvider })).rejects.toThrow('AvatarStatusJson');
+        expect(provider.mints()).toHaveLength(2);
     });
 
     it('surfaces any other mint failure instead of swallowing it', async () => {

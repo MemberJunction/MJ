@@ -10,11 +10,13 @@ import { MJStorageMediaPlayerComponent, MediaTranscriptCue } from '@memberjuncti
 import {
   REALTIME_CAPTURES_OFF,
   REALTIME_CAPTURE_OFFERS_NONE,
+  type RealtimeAvatarNotice,
   type RealtimeCaptureOffers,
   type RealtimeCaptureState,
   type RealtimeCaptureStates,
   type RealtimeConnectionState,
 } from '@memberjunction/realtime-runtime';
+import { MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 import { BuildReviewThreadItems, RealtimeSessionReview, RealtimeSessionReviewTurn } from '../../services/realtime-session-review.service';
@@ -47,10 +49,13 @@ import { ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
 import {
-  MediaMoveMenuComponent, MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
-  type MediaMoveRequest, type MediaShareRequest, type MediaStagePipRectChange
+  AvatarNoticeText, MediaMoveMenuComponent, MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
+  type AvatarNoticeOverrides, type MediaMoveRequest, type MediaShareRequest, type MediaStagePipRectChange
 } from '@memberjunction/ng-realtime-media';
 import { MediaLayoutPrefs, RecordPipRect, type MediaPipRect } from '@memberjunction/ai-realtime-client/media';
+
+/** How long the call's avatar notice stays before it hides itself (N5: it also has a dismiss button). */
+const AVATAR_NOTICE_VISIBLE_MS = 10_000;
 
 /**
  * A request to open an entity record, emitted by the call overlay's gear-gated developer
@@ -161,7 +166,8 @@ export interface RealtimeAvatarCaption {
     MediaStageSurfaceDirective,
     MediaStagePipActionsDirective,
     RealtimeWhiteboardBoardComponent,
-    MJStorageMediaPlayerComponent
+    MJStorageMediaPlayerComponent,
+    MJAlertComponent
   ],
   templateUrl: './realtime-session-overlay.component.html',
   styleUrl: './realtime-session-overlay.component.css'
@@ -192,6 +198,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** The active environment id, threaded to the surface panel's artifact viewer. */
   @Input() EnvironmentID = '';
+
+  /**
+   * The host's own words for why the call shows no avatar, per reason (for example its product's name for "this app").
+   * A reason it leaves out keeps the stock line from `ng-realtime-media` (`AVATAR_NOTICE_TEXT`).
+   */
+  @Input() AvatarNoticeLabels: AvatarNoticeOverrides | null = null;
 
   // ── Declarative UI configuration (host controls every aspect of the surface) ──
   //
@@ -737,8 +749,66 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // Live/idle flips: reset/ratchet disclosure + re-evaluate the review-vs-live branch.
       this.realtime.Active$.subscribe(active => this.onActiveChanged(active)),
       // Connection lifecycle drives chrome (the `connecting` loader) + the public output.
-      this.realtime.ConnectionState$.subscribe(state => this.onConnectionStateChanged(state))
+      this.realtime.ConnectionState$.subscribe(state => this.onConnectionStateChanged(state)),
+      // Why the call shows no avatar its agent asked for: once per call, after it connects.
+      this.realtime.AvatarNotice$.subscribe(notice => this.onAvatarNotice(notice))
     );
+  }
+
+  /** The runtime's notice for this call (`null` when none). */
+  private avatarNotice: RealtimeAvatarNotice | null = null;
+
+  /** The notice the user dismissed or that hid itself; this call does not show it again. */
+  private avatarNoticeDone: RealtimeAvatarNotice | null = null;
+
+  /** Hides the notice {@link AVATAR_NOTICE_VISIBLE_MS} after it appears. */
+  private avatarNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Why this live call shows no avatar its agent asked for, while the notice shows: from the moment the call connects
+   * until the user dismisses it or it hides itself. `null` otherwise, and always in review.
+   */
+  public get AvatarNotice(): RealtimeAvatarNotice | null {
+    const notice = this.avatarNotice;
+    return notice && notice !== this.avatarNoticeDone && !this.IsReviewing ? notice : null;
+  }
+
+  /** The notice's line, in the host's words when it gave some ({@link AvatarNoticeLabels}). */
+  public get AvatarNoticeMessage(): string {
+    const notice = this.AvatarNotice;
+    return notice ? AvatarNoticeText(notice.Reason, this.AvatarNoticeLabels, this.AgentName) : '';
+  }
+
+  /** The user dismissed the notice: it does not come back in this call. */
+  public OnAvatarNoticeDismissed(): void {
+    this.finishAvatarNotice();
+  }
+
+  /** A new notice starts its timer; a call's end (`null`) takes it away. */
+  private onAvatarNotice(notice: RealtimeAvatarNotice | null): void {
+    if (notice === this.avatarNotice) {
+      return;
+    }
+    this.clearAvatarNoticeTimer();
+    this.avatarNotice = notice;
+    if (notice && notice !== this.avatarNoticeDone) {
+      this.avatarNoticeTimer = setTimeout(() => this.ngZone.run(() => this.finishAvatarNotice()), AVATAR_NOTICE_VISIBLE_MS);
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Hides the current notice for the rest of its call. */
+  private finishAvatarNotice(): void {
+    this.clearAvatarNoticeTimer();
+    this.avatarNoticeDone = this.avatarNotice;
+    this.cdr.markForCheck();
+  }
+
+  private clearAvatarNoticeTimer(): void {
+    if (this.avatarNoticeTimer !== null) {
+      clearTimeout(this.avatarNoticeTimer);
+      this.avatarNoticeTimer = null;
+    }
   }
 
   /** The video sources the agent can or could see right now (see {@link RealtimeSessionService.VideoSources$}). */
@@ -1578,6 +1648,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   ngOnDestroy(): void {
     this.stopAudioVisualLoop();
     this.stopResizeObserver();
+    this.clearAvatarNoticeTimer();
     if (this.IsPanelResizing) {
       this.teardownPanelResize();
       this.IsPanelResizing = false;

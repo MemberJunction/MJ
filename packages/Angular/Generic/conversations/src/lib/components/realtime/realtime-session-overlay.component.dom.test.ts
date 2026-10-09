@@ -9,6 +9,7 @@ import {
   REALTIME_CAPTURE_OFFERS_NONE,
   ReadChannelSurfacePlacement,
   type ChannelSurfacePlacement,
+  type RealtimeAvatarNotice,
   type RealtimeCaption,
   type RealtimeCaptureOffers,
   type RealtimeCaptureState,
@@ -16,12 +17,13 @@ import {
   type RealtimeChannelFocusEvent,
   type RealtimeConnectionState,
 } from '@memberjunction/realtime-runtime';
-import { renderComponentFixture, query, queryAll, click, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, click, overlayQueryAll, clearOverlayContainers, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import type { MediaPlacement, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { RealtimeSessionOverlayComponent } from './realtime-session-overlay.component';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeAvatarChannel } from './avatar/realtime-avatar-channel';
+import type { RealtimeSessionReview } from '../../services/realtime-session-review.service';
 
 /** Every surface creation, destruction, bind and unbind, in order. */
 const lifecycle: string[] = [];
@@ -78,6 +80,8 @@ function fakeSession() {
   const sources$ = new BehaviorSubject<readonly VideoSourceState[]>([]);
   /** The call's captions, as the runtime grows them. */
   const captions$ = new BehaviorSubject<RealtimeCaption[]>([]);
+  /** Why the call shows no avatar, as the runtime publishes it once per call. */
+  const notice$ = new BehaviorSubject<RealtimeAvatarNotice | null>(null);
   /** The capture calls the overlay made, in order. */
   const calls: string[] = [];
   const service = {
@@ -96,6 +100,7 @@ function fakeSession() {
     VideoSources$: sources$.asObservable(),
     Captures$: captures$.asObservable(),
     CaptureOffers$: offers$.asObservable(),
+    AvatarNotice$: notice$.asObservable(),
     StartCamera: async (): Promise<RealtimeCaptureState> => {
       calls.push('StartCamera');
       return { Status: 'starting' };
@@ -134,7 +139,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, activity$, captures$, offers$, captions$, sources$, calls };
+  return { service, channels$, focus$, activity$, captures$, offers$, captions$, sources$, notice$, calls };
 }
 
 /**
@@ -727,6 +732,157 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(surface(f).classList.contains('stage-surface--stage')).toBe(true);
       expect(surface(f).classList.contains('stage-surface--in-slot')).toBe(false);
       expect(avatarBox(f)?.classList.contains('stage-surface--pip')).toBe(true);
+    });
+  });
+
+  describe('the avatar notice', () => {
+    const ENDPOINT: RealtimeAvatarNotice = { Reason: 'endpoint' };
+    const NOTICE_MS = 10_000;
+
+    /** A placeholder past session, for review mode. */
+    const REVIEW: RealtimeSessionReview = {
+      SessionID: 'past-1', AgentID: 'agent-1', AgentName: 'Sage', TargetAgentID: 'agent-1', ConversationID: null,
+      Status: 'Closed', CloseReason: null, StartedAt: null, LastActiveAt: null, ClosedAt: null,
+      RecordingFileID: null, RecordingStartedAt: null, RecordingMedia: null,
+      Turns: [], DelegatedRuns: [], ChannelStates: [], Legs: [], Artifacts: [],
+    };
+
+    /** A live call in the given chrome; the test publishes the runtime's notice. */
+    const renderCall = async (chrome: 'orb' | 'console' = 'console', inputs: Record<string, unknown> = {}) => {
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } },
+        ],
+        inputs: { Chrome: chrome, AgentName: 'Sage', ...inputs },
+        autoDetect: true,
+      });
+      await settle();
+      return { f, ...session };
+    };
+
+    const alertOf = (f: Awaited<ReturnType<typeof renderCall>>['f']): HTMLElement | null =>
+      query(f, 'mj-alert.call-avatar-notice') as HTMLElement | null;
+    const textOf = (f: Awaited<ReturnType<typeof renderCall>>['f']): string | undefined => alertOf(f)?.textContent?.trim();
+
+    /** The handle of the notice's 10 s timer, from a spy on `setTimeout`. */
+    const noticeTimer = (timers: { mock: { calls: unknown[][]; results: Array<{ value: unknown }> } }): unknown => {
+      const index = timers.mock.calls.findIndex((call) => call[1] === NOTICE_MS);
+      return index >= 0 ? timers.mock.results[index].value : undefined;
+    };
+
+    it('says why under the banner once the call has a notice, as a polite status with a dismiss button', async () => {
+      const { f, notice$ } = await renderCall('console');
+      expect(alertOf(f)).toBeNull();
+      notice$.next(ENDPOINT);
+      await settle();
+      const alert = alertOf(f);
+      expect(textOf(f)).toBe("Audio only: this voice model can't show an avatar");
+      expect(alert?.getAttribute('role')).toBe('status');
+      expect(alert?.classList.contains('mj-alert--info')).toBe(true);
+      expect(alert?.classList.contains('mj-alert--sm')).toBe(true);
+      expect(alert?.querySelector('.mj-alert__icon')?.classList.contains('fa-video-slash')).toBe(true);
+      expect(alert?.querySelector('.mj-alert__dismiss')?.getAttribute('aria-label')).toBe('Dismiss');
+      expect(alert?.previousElementSibling?.tagName).toBe('MJ-REALTIME-AGENT-BANNER');
+    });
+
+    it('says it in the orb chrome too', async () => {
+      const { f, notice$ } = await renderCall('orb');
+      notice$.next({ Reason: 'host' });
+      await settle();
+      expect(query(f, '.hero')).not.toBeNull();
+      expect(textOf(f)).toBe("Audio only: this app can't show the avatar");
+    });
+
+    it("uses the host's own words for a reason it gives", async () => {
+      const { f, notice$ } = await renderCall('console', { AvatarNoticeLabels: { host: "Audio only: the Example widget can't show the avatar" } });
+      notice$.next({ Reason: 'host' });
+      await settle();
+      expect(textOf(f)).toBe("Audio only: the Example widget can't show the avatar");
+    });
+
+    it('goes when dismissed and does not come back in that call; the next call says its own', async () => {
+      const { f, notice$ } = await renderCall();
+      notice$.next(ENDPOINT);
+      await settle();
+      click(f, 'mj-alert.call-avatar-notice .mj-alert__dismiss');
+      await settle();
+      expect(alertOf(f)).toBeNull();
+      notice$.next(ENDPOINT);
+      await settle();
+      expect(alertOf(f)).toBeNull();
+      notice$.next(null);
+      notice$.next({ Reason: 'browser' });
+      await settle();
+      expect(textOf(f)).toBe("Audio only: this browser can't play the avatar");
+    });
+
+    it('hides itself after 10 s and stays hidden', async () => {
+      const { f, notice$ } = await renderCall();
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        notice$.next(ENDPOINT);
+        await vi.advanceTimersByTimeAsync(NOTICE_MS - 1);
+        expect(f.componentInstance.AvatarNotice).toEqual(ENDPOINT);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(f.componentInstance.AvatarNotice).toBeNull();
+        await vi.runOnlyPendingTimersAsync(); // the render Angular scheduled on the faked clock
+        expect(alertOf(f)).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+      notice$.next(ENDPOINT);
+      await settle();
+      expect(alertOf(f)).toBeNull();
+    });
+
+    /** A call showing a notice, with spies on the timers, so a test can see the notice's timer stop. */
+    const renderWithTimer = async () => {
+      const timers = vi.spyOn(globalThis, 'setTimeout');
+      const cleared = vi.spyOn(globalThis, 'clearTimeout');
+      const call = await renderCall();
+      call.notice$.next(ENDPOINT);
+      await settle();
+      const timer = noticeTimer(timers);
+      expect(timer).toBeDefined();
+      return { ...call, timer, cleared };
+    };
+
+    it('goes when the call ends, and its timer stops', async () => {
+      const { f, notice$, timer, cleared } = await renderWithTimer();
+      notice$.next(null);
+      await settle();
+      expect(alertOf(f)).toBeNull();
+      expect(cleared).toHaveBeenCalledWith(timer);
+    });
+
+    it('stops its timer when dismissed', async () => {
+      const { f, timer, cleared } = await renderWithTimer();
+      click(f, 'mj-alert.call-avatar-notice .mj-alert__dismiss');
+      expect(cleared).toHaveBeenCalledWith(timer);
+    });
+
+    it('stops its timer when the overlay goes', async () => {
+      const { f, timer, cleared } = await renderWithTimer();
+      f.destroy();
+      expect(cleared).toHaveBeenCalledWith(timer);
+    });
+
+    it('says nothing in review, even with a notice', async () => {
+      const { f, notice$ } = await renderCall('console', { ReviewData: REVIEW });
+      notice$.next(ENDPOINT);
+      await settle();
+      expect(f.componentInstance.IsReviewing).toBe(true);
+      expect(alertOf(f)).toBeNull();
+    });
+
+    it('has no axe violations while it shows', async () => {
+      const { f, notice$ } = await renderCall();
+      notice$.next(ENDPOINT);
+      await settle();
+      expect(alertOf(f)).not.toBeNull();
+      await ExpectNoAxeViolations(f);
     });
   });
 });

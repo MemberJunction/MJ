@@ -17,7 +17,8 @@
  *    leakage refusal, sign-off-reason gate, and the lifecycle state machine (RD9),
  *  - live avatars (RD13): a tagged persona with a face on the session's vendor, bound to the voiced agent, becomes the
  *    session's avatar request through the real session prep, on a run-scoped placeholder key (nothing is minted, no
- *    network); its fixture rows are deleted afterwards,
+ *    network); without that face, the prep asks for no avatar and says why (`no-binding`); its fixture rows are
+ *    deleted afterwards,
  *  - realtime driver wiring (RD14): every Active realtime vendor row's DriverClass resolves to a BaseRealtimeModel in the
  *    ClassFactory, so a driver missing from the class-registration manifest is caught,
  *  - avatar video pricing (RD16): a tagged co-agent-shaped prompt run on Gemini 3.8 Live × Vertex AI stores a minute of
@@ -65,7 +66,7 @@ import { ProductionModelPromotionGate, detectSingleFeatureDominance } from '@mem
 import type { PromoteModelRequest } from '@memberjunction/predictive-studio';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
-import { NamedCheck } from '@memberjunction/testing-integration';
+import { NamedCheck, type IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const TAG = '(mj-integration-test — safe to delete)';
 
@@ -151,6 +152,8 @@ interface AvatarFixtureAnchors {
 /** The rows RD13 creates, in creation order; deleted in reverse. */
 interface AvatarFixture {
     Rows: BaseEntity[];
+    /** The persona's face binding on the session's vendor, once saved; the no-binding leg removes it. */
+    Face?: MJAIPersonaVendorEntity;
     AvatarID: string;
     Voice: string;
     PersonaName: string;
@@ -238,7 +241,9 @@ async function createAvatarFixture(ctx: { User: UserInfo }, anchors: AvatarFixtu
     persona.IsActive = true;
     await saveFixtureRow(fixture, persona, 'persona');
     await saveFixtureRow(fixture, await personaBinding(md, ctx, persona.ID, anchors, anchors.AudioModalityID, fixture.Voice), 'voice binding');
-    await saveFixtureRow(fixture, await personaBinding(md, ctx, persona.ID, anchors, anchors.VideoModalityID, fixture.AvatarID), 'face binding');
+    const face = await personaBinding(md, ctx, persona.ID, anchors, anchors.VideoModalityID, fixture.AvatarID);
+    await saveFixtureRow(fixture, face, 'face binding');
+    fixture.Face = face;
     const modelPersona = await md.GetEntityObject<MJAIModelPersonaEntity>('MJ: AI Model Personas', ctx.User);
     modelPersona.NewRecord();
     modelPersona.ModelID = anchors.Model.ID;
@@ -369,6 +374,31 @@ function assertAvatarRunPriced(run: MJAIPromptRunEntity, anchors: AvatarPricingA
     AssertEqual(JSON.stringify([tokenLine.Input, tokenLine.Output, tokenLine.Cost]), JSON.stringify([RD16_INPUT_TOKENS, 2000, expected.Tokens]), "RD16: the token line prices the output without the video's tokens");
     AssertEqual(JSON.stringify([videoLine.Modality, videoLine.Measure, videoLine.Output, videoLine.Cost]), JSON.stringify(['Video', 'Seconds', 60, expected.Video]), 'RD16: the video line prices 60 s at the per-minute price');
     AssertEqual(ReadRealtimeUsageRecord(run.ModelSpecificResponseDetails)?.Output?.VideoSeconds, 60, 'RD16: the usage record stays beside the lines');
+}
+
+/** Whether the co-agent has a face on the session's vendor: it would then answer for a voiced agent without one. */
+function coAgentHasFace(engine: AIEngineBase, anchors: AvatarFixtureAnchors): boolean {
+    const faces = engine.GetModelPersonas(anchors.Model.ID, 'Video', anchors.VendorRow.VendorID!);
+    return engine.GetAgentPersonas(anchors.CoAgent.ID).some((ap) => faces.some((f) => UUIDsEqual(f.Persona.ID, ap.Persona.ID)));
+}
+
+/**
+ * RD13's no-binding leg: the voiced agent's persona loses its face on the vendor (its voice stays), and the prep asks for
+ * no avatar and says why. Skipped, loudly, when the co-agent has a face on the vendor, since that face would answer.
+ */
+async function assertNoBindingReason(ctx: IntegrationCheckContext, service: RealtimeClientSessionService, anchors: AvatarFixtureAnchors, fixture: AvatarFixture): Promise<void> {
+    if (coAgentHasFace(AIEngineBase.Instance, anchors)) {
+        console.warn(`  ⚠ realtime-deterministic.RD13 no-binding leg SKIPPED — the co-agent '${anchors.CoAgent.Name}' has a face on this vendor, which would answer for the voiced agent`);
+        return;
+    }
+    const face = fixture.Face!;
+    Assert(await face.Delete(), `RD13: the fixture face binding did not delete: ${face.LatestResult?.CompleteMessage}`);
+    fixture.Rows.splice(fixture.Rows.indexOf(face), 1);
+    await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider);
+    const prep = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, true), ctx.User, ctx.Provider);
+    Assert(prep.Success, `RD13: the prep without a face failed: ${prep.ErrorMessage}`);
+    AssertEqual(prep.SessionParams?.Avatar, undefined, 'RD13: a voiced agent without a face on this vendor asks for no avatar');
+    AssertEqual(prep.AvatarResolution?.Reason, 'no-binding', 'RD13: the prep says why: the persona has no face on this vendor');
 }
 
 export const RealtimeDeterministicChecks: NamedCheck[] = [
@@ -1134,7 +1164,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
     },
     {
         Id: 'realtime-deterministic.RD13',
-        Name: "RD13: a voiced agent's persona with a face on the session's vendor becomes the session's avatar request (run-scoped key, no network)",
+        Name: "RD13: a voiced agent's persona with a face on the session's vendor becomes the session's avatar request; without the face, no-binding (run-scoped key, no network)",
         Fn: async (ctx): Promise<void> => {
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const anchors = findAvatarFixtureAnchors(AIEngineBase.Instance);
@@ -1152,6 +1182,8 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 const off = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, false), ctx.User, ctx.Provider);
                 Assert(off.Success, `RD13: the prep with the video setting off failed: ${off.ErrorMessage}`);
                 AssertEqual(off.SessionParams?.Avatar, undefined, 'RD13: with the video setting off, the session asks for no avatar');
+                AssertEqual(off.AvatarResolution?.Reason, undefined, 'RD13: with the video setting off, there is no reason to give');
+                await assertNoBindingReason(ctx, service, anchors, fixture);
             } finally {
                 await deleteAvatarFixture(fixture);
                 await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider).catch(() => undefined);

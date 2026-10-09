@@ -3751,6 +3751,16 @@ describe('RealtimeClientSessionResolver — channel scoping at mint (Realtime Ch
         expect(JSON.parse(result.ClientPolicyJson ?? 'null')).toEqual(POLICY);
     });
 
+    it('returns the avatar status as AvatarStatusJson, and none when the prepare reported none', async () => {
+        setupStart({ AvatarStatus: { Requested: true, Granted: false, Reason: 'endpoint' } });
+        const result = await start(undefined);
+        expect(JSON.parse(result.AvatarStatusJson ?? 'null')).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+
+        setupStart();
+        const none = await start(undefined);
+        expect(none.AvatarStatusJson).toBeUndefined();
+    });
+
     it('sends no candidates and returns no policy when the caller reported none (a client that predates scoping)', async () => {
         setupStart();
         const result = await start(undefined);

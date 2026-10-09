@@ -10,6 +10,7 @@ import {
     type Content,
 } from '@google/genai';
 import type {
+    ClientRealtimeSessionConfig,
     IRealtimeSession,
     RealtimeSessionParams,
     RealtimeTranscript,
@@ -1398,12 +1399,15 @@ class EnterpriseBridged extends TestGeminiRealtime {
 const BEN: RealtimeSessionParams['Avatar'] = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' };
 
 /** The connect config a client-direct mint carried, and the warnings it logged. */
-async function mintWithWarnings(driver: ClientDirectTestable, params: RealtimeSessionParams): Promise<{ sc: Record<string, unknown>; config: Record<string, unknown>; warnings: string[] }> {
+async function mintWithWarnings(
+    driver: ClientDirectTestable,
+    params: RealtimeSessionParams,
+): Promise<{ sc: Record<string, unknown>; config: Record<string, unknown>; warnings: string[]; minted: ClientRealtimeSessionConfig }> {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
         const cfg = await driver.CreateClientSession(params);
         const sc = cfg.SessionConfig as Record<string, unknown>;
-        return { sc, config: sc['config'] as Record<string, unknown>, warnings: warn.mock.calls.map((c) => String(c[0])) };
+        return { sc, config: sc['config'] as Record<string, unknown>, warnings: warn.mock.calls.map((c) => String(c[0])), minted: cfg };
     } finally {
         warn.mockRestore();
     }
@@ -1516,5 +1520,54 @@ describe('SessionPactFor: the pact a client-direct mint returns', () => {
         const pact = driver.Pact('gemini-3.8-live', config);
         (pact['config'] as Record<string, unknown>)['responseModalities'] = ['TEXT'];
         expect(config.responseModalities).toEqual(['AUDIO']);
+    });
+});
+
+describe("live avatars: the mint says whether the avatar shows, and why not", () => {
+    it('on the Developer API: asked for, not granted, the endpoint renders none', async () => {
+        const { minted } = await mintWithWarnings(new ClientDirectTestable('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        expect(minted.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+    });
+
+    it('on Enterprise 3.8 Live: granted', async () => {
+        const { minted } = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        expect(minted.AvatarStatus).toEqual({ Requested: true, Granted: true });
+    });
+
+    it('a custom avatar, an empty id and a model without avatars each carry their reason', async () => {
+        const custom = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: { AvatarID: 'Mine', Kind: 'custom' } }));
+        expect(custom.minted.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'custom-disabled' });
+        const blank = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: { AvatarID: '  ' } }));
+        expect(blank.minted.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'unknown-avatar' });
+        const et = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live-extended-thinking', Avatar: BEN }));
+        expect(et.minted.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+    });
+
+    it('says nothing when the session asked for no avatar, even when the config bag asks for video', async () => {
+        const plain = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live' }));
+        expect('AvatarStatus' in plain.minted).toBe(false);
+        const bag = await mintWithWarnings(
+            new EnterpriseClientDirect('k'),
+            makeParams({ Model: 'gemini-3.8-live', Config: { responseModalities: ['VIDEO'], avatarConfig: { avatarName: 'Ben' } } }),
+        );
+        expect('AvatarStatus' in bag.minted).toBe(false);
+    });
+
+    it('keeps the status out of the driver pact', async () => {
+        const { sc, config } = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        for (const key of ['AvatarStatus', 'avatarStatus', 'Requested', 'Granted', 'Reason']) {
+            expect(sc[key], key).toBeUndefined();
+            expect(config[key], key).toBeUndefined();
+        }
+    });
+
+    it('renders avatars only for 3.8 Live on Enterprise', () => {
+        const enterprise = new EnterpriseClientDirect('k');
+        const developer = new ClientDirectTestable('k');
+        expect(enterprise.SupportsAvatarOutput('gemini-3.8-live')).toBe(true);
+        expect(enterprise.SupportsAvatarOutput('gemini-3.8-live-extended-thinking')).toBe(false);
+        expect(enterprise.SupportsAvatarOutput('gemini-3.1-flash-live-preview')).toBe(false);
+        expect(developer.SupportsAvatarOutput('gemini-3.8-live')).toBe(false);
+        expect(developer.SupportsAvatarOutput('gemini-3.1-flash-live-preview')).toBe(false);
     });
 });

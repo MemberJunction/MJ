@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import type { ResolvedAgentPersona, ResolvedModelPersona } from '@memberjunction/ai-engine-base';
 import type { MJAIAgentPersonaEntity, MJAIPersonaEntity, MJAIPersonaVendorEntity } from '@memberjunction/core-entities';
-import { ResolveRealtimeAvatar, type RealtimeAvatarPersonaSource } from '../realtime/realtime-avatar-resolution';
+import { ResolveRealtimeAvatar, ResolveRealtimeAvatarStatus, type RealtimeAvatarPersonaSource } from '../realtime/realtime-avatar-resolution';
 import { BuildRealtimeOverridesJson, ResolveEffectiveRealtimeConfig, type RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
 
 const MODEL = 'model-38-live';
@@ -126,5 +126,40 @@ describe('ResolveRealtimeAvatar', () => {
         const effective = ResolveEffectiveRealtimeConfig(null, null, BuildRealtimeOverridesJson(MODEL, 'Puck', 'Ben'), target);
         const result = ResolveRealtimeAvatar({ EffectiveConfig: effective, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX }, source());
         expect(result.Avatar).toEqual({ AvatarID: 'Ben', PersonaName: 'Ben', Source: 'override', Kind: 'preset', Resolution: 'standard' });
+    });
+});
+
+describe('ResolveRealtimeAvatarStatus', () => {
+    const BEN = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' as const };
+
+    it('says nothing when the session asked for no avatar, whatever the model and driver say', () => {
+        expect(ResolveRealtimeAvatarStatus({ Resolution: {}, ModelSupportsAvatarOutput: true, DriverStatus: { Requested: true, Granted: true } })).toBeUndefined();
+        expect(ResolveRealtimeAvatarStatus({ Resolution: {}, ModelSupportsAvatarOutput: false })).toBeUndefined();
+    });
+
+    it('says the voice model shows none when the model renders no avatar, before the persona reasons', () => {
+        const endpoint = { Requested: true, Granted: false, Reason: 'endpoint' };
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Avatar: BEN }, ModelSupportsAvatarOutput: false })).toEqual(endpoint);
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'no-binding' }, ModelSupportsAvatarOutput: false })).toEqual(endpoint);
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'unknown-avatar' }, ModelSupportsAvatarOutput: false })).toEqual(endpoint);
+    });
+
+    it("gives the resolution's reason when the model renders avatars but no face resolved, never the driver's status", () => {
+        const granted = { Requested: true, Granted: true };
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'no-binding' }, ModelSupportsAvatarOutput: true, DriverStatus: granted }))
+            .toEqual({ Requested: true, Granted: false, Reason: 'no-binding' });
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'unknown-avatar' }, ModelSupportsAvatarOutput: true }))
+            .toEqual({ Requested: true, Granted: false, Reason: 'unknown-avatar' });
+    });
+
+    it("passes the driver's decision through when a face resolved on a model that renders avatars", () => {
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Avatar: BEN }, ModelSupportsAvatarOutput: true, DriverStatus: { Requested: true, Granted: true } }))
+            .toEqual({ Requested: true, Granted: true });
+        expect(ResolveRealtimeAvatarStatus({
+            Resolution: { Avatar: { ...BEN, Kind: 'custom' } },
+            ModelSupportsAvatarOutput: true,
+            DriverStatus: { Requested: true, Granted: false, Reason: 'custom-disabled' },
+        })).toEqual({ Requested: true, Granted: false, Reason: 'custom-disabled' });
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Avatar: BEN }, ModelSupportsAvatarOutput: true })).toBeUndefined();
     });
 });

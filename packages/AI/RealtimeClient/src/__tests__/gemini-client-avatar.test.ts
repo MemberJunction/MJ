@@ -181,7 +181,8 @@ describe('GeminiRealtimeClient avatar playout', () => {
             expect(videos).toEqual([]);
             expect(client.LastConnectArgs?.Config).toEqual({ systemInstruction: 'be the voice', responseModalities: ['AUDIO'] });
             expect(warnings(warn, `Avatar "${STAND_IN_AVATAR_NAME}" not used: the host shows no agent video`)).toBe(1);
-            expect(warnings(warn, 'Reason: downgraded')).toBe(1);
+            expect(warnings(warn, 'Reason: host.')).toBe(1);
+            expect(warnings(warn, 'Reason: browser')).toBe(0);
         });
 
         it("a browser that can't play the avatar's type gets an audio-only session, said once", async () => {
@@ -194,6 +195,8 @@ describe('GeminiRealtimeClient avatar playout', () => {
             expect(client.LastConnectArgs?.Config?.responseModalities).toEqual(['AUDIO']);
             expect(client.LastConnectArgs?.Config?.avatarConfig).toBeUndefined();
             expect(warnings(warn, `cannot play ${GEMINI_AVATAR_MP4_TYPE}`)).toBe(1);
+            expect(warnings(warn, 'Reason: browser.')).toBe(1);
+            expect(warnings(warn, 'Reason: host')).toBe(0);
         });
 
         it('an audio-only session plays model output as before: video dropped, untyped parts as PCM', async () => {

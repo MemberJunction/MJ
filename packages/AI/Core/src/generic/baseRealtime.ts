@@ -192,6 +192,21 @@ export abstract class BaseRealtimeModel extends BaseModel {
     }
 
     /**
+     * Whether this driver's sessions can render a live avatar for the model, on the endpoint the driver serves.
+     *
+     * Defaults to `false`: a driver whose models render no avatar says nothing more. A driver that renders one for some
+     * models (Gemini Enterprise) overrides it. The client-session service reads it to tell a call that asked for an
+     * avatar "this voice model can't show an avatar" ({@link RealtimeAvatarUnavailableReason} `'endpoint'`), whichever
+     * driver serves it.
+     *
+     * @param _model The provider's API name for the model.
+     * @returns `true` when sessions on this model can render a live avatar; `false` otherwise.
+     */
+    public SupportsAvatarOutput(_model: string): boolean {
+        return false;
+    }
+
+    /**
      * Static fallback list of provider-native voices supported by this driver when metadata personas
      * are not present or sparse.
      *
@@ -331,6 +346,13 @@ export interface ClientRealtimeSessionConfig {
      * opaquely and never read or rewrite its fields.
      */
     SessionConfig: JSONObject;
+
+    /**
+     * The driver's decision at mint about the live avatar the session asked for: granted, or audio only and why. Unlike
+     * {@link SessionConfig} it is not part of the driver pact, so the server can merge it with its own reasons and hand
+     * it to the call. Absent when the session asked for no avatar, and from drivers that render none.
+     */
+    AvatarStatus?: RealtimeAvatarStatus;
 }
 
 /**
@@ -861,9 +883,23 @@ export interface RealtimeAvatarSettings {
  * - `'custom-disabled'`: custom avatars are not enabled;
  * - `'unknown-avatar'`: the request names no avatar the vendor knows;
  * - `'no-binding'`: the persona has no avatar on this vendor;
- * - `'downgraded'`: the host could not show video, so it asked for audio.
+ * - `'host'`: the avatar was granted, but the app showing the call asked for no agent video;
+ * - `'browser'`: the avatar was granted and the app asked for it, but the browser could not play it.
  */
-export type RealtimeAvatarUnavailableReason = 'endpoint' | 'bridged' | 'custom-disabled' | 'unknown-avatar' | 'no-binding' | 'downgraded';
+export type RealtimeAvatarUnavailableReason = 'endpoint' | 'bridged' | 'custom-disabled' | 'unknown-avatar' | 'no-binding' | 'host' | 'browser';
+
+/**
+ * Whether a session asked for a live avatar and got one, and why not when it didn't. The mint returns it
+ * ({@link ClientRealtimeSessionConfig.AvatarStatus}), so a call that shows no avatar can say why.
+ */
+export interface RealtimeAvatarStatus {
+    /** Whether the session asked for an avatar: the voiced agent's video setting is on. */
+    Requested: boolean;
+    /** Whether the model renders the avatar in this session. */
+    Granted: boolean;
+    /** Why the session runs audio-only, when it asked for an avatar and was not granted one. */
+    Reason?: RealtimeAvatarUnavailableReason;
+}
 
 /**
  * A transcript event emitted by the model for either the user's speech or the assistant's

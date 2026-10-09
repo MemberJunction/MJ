@@ -277,6 +277,12 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* The avatar notice under the banner: mj-alert brings its own tint, border and text colours; this only places it. */
+.call-avatar-notice {
+  flex-shrink: 0;
+  margin: var(--mj-space-2) var(--mj-space-5) 0;
+}
+
 /* ---------- FOCUS-BOARD mode (whiteboard "Focus board" toggle) ----------
    The main call column collapses away entirely and the focused channel's surface fills
    the stage; a compact floating call pill keeps the live call reachable. */

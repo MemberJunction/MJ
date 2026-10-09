@@ -76,20 +76,39 @@ export interface IRealtimeSessionLauncher {
    *
    * @param request The inputs the runtime resolved for this start.
    * @param context The provider the session runs on.
-   * @returns The minted session, including `ClientPolicyJson` when the launcher's mint scoped channels.
+   * @returns The minted session, including `ClientPolicyJson` when the launcher's mint scoped channels and
+   *   `AvatarStatusJson` when the server reports the session's avatar status.
    */
   Launch(request: RealtimeSessionLaunchRequest, context: RealtimeSessionLaunchContext): Promise<StartRealtimeClientSessionResult>;
 }
 
 /**
- * Whether a mint failure is a GraphQL validation rejection of the channel-scoping extension — the
- * signature of a server that predates it ("Unknown argument "channelCandidatesJson"…", "Cannot query
- * field "ClientPolicyJson"…"). Only that exact case is recoverable; any other failure is a real mint
- * failure and must surface.
+ * The optional extensions of the stock mint. A server that predates one rejects it at validation; the launcher then
+ * mints without that one alone, so each extension falls back, and is remembered, on its own.
  */
-function isUnsupportedChannelScopingError(error: unknown): boolean {
+interface MintExtensions {
+  /** Scope the session's channels: the `channelCandidatesJson` argument and the `ClientPolicyJson` field. */
+  ChannelScoping: boolean;
+  /** The session's live-avatar status: the `AvatarStatusJson` field. */
+  AvatarStatus: boolean;
+}
+
+/**
+ * The extension a mint failure rejects, when the failure is a GraphQL validation rejection of one the mint asked for —
+ * the signature of a server that predates it ("Unknown argument "channelCandidatesJson"…", "Cannot query field
+ * "ClientPolicyJson"…", "Cannot query field "AvatarStatusJson"…"). Only that case is recoverable; any other failure is a
+ * real mint failure and must surface. A rejection names one field at a time, so a server that predates both extensions
+ * is found out in two steps.
+ */
+function unsupportedExtension(error: unknown, asked: MintExtensions): keyof MintExtensions | null {
   const message = error instanceof Error ? error.message : String(error);
-  return message.includes('channelCandidatesJson') || message.includes('ClientPolicyJson');
+  if (asked.AvatarStatus && message.includes('AvatarStatusJson')) {
+    return 'AvatarStatus';
+  }
+  if (asked.ChannelScoping && (message.includes('channelCandidatesJson') || message.includes('ClientPolicyJson'))) {
+    return 'ChannelScoping';
+  }
+  return null;
 }
 
 /**
@@ -97,15 +116,18 @@ function isUnsupportedChannelScopingError(error: unknown): boolean {
  * provider. This is what every host gets unless it installs another.
  *
  * When the session has channel candidates it asks the server to scope them (`channelCandidatesJson`)
- * and to return the resolved policy (`ClientPolicyJson`). A server that predates channel scoping rejects
- * that argument/field at validation, in which case the launcher mints with the original mutation instead
- * and the runtime resolves the scope locally — a new client must keep working against an older server,
- * and a failed mint over an optional extension would be the worst way to find out they differ. The
- * fallback is remembered per launcher instance so a long-lived runtime asks once.
+ * and to return the resolved policy (`ClientPolicyJson`). It also asks for the session's live-avatar status
+ * (`AvatarStatusJson`), which the call reads to say why it shows no avatar. A server that predates either
+ * extension rejects it at validation, in which case the launcher mints without that extension alone (the
+ * runtime then resolves the channel scope locally, or shows no avatar notice) — a new client must keep
+ * working against an older server, and a failed mint over an optional extension would be the worst way to
+ * find out they differ. Each fallback is remembered per launcher instance so a long-lived runtime asks once.
  */
 export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher {
   /** Whether the server rejected the channel-scoping extension of the mint; set once and kept. */
   private serverLacksChannelScoping = false;
+  /** Whether the server rejected the avatar-status field of the mint; set once and kept. */
+  private serverLacksAvatarStatus = false;
 
   public async Launch(request: RealtimeSessionLaunchRequest, context: RealtimeSessionLaunchContext): Promise<StartRealtimeClientSessionResult> {
     // The session's provider is the GraphQL one in every shipped host; this is the same narrowing the runtime applies for its relay mutations.
@@ -136,31 +158,53 @@ export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher 
     };
   }
 
+  /**
+   * Runs the mint with every extension this server has not rejected, dropping one at a time when the server rejects it
+   * at validation. Each retry asks for one extension fewer, so the loop ends.
+   */
   private async executeMintMutation(
     transport: GraphQLDataProvider,
     variables: Record<string, JSONValue>,
     channelCandidatesJson: string | null
   ): Promise<{ StartRealtimeClientSession?: StartRealtimeClientSessionResult } | undefined> {
-    if (channelCandidatesJson === null || this.serverLacksChannelScoping) {
-      return transport.ExecuteGQL(this.buildMintMutation(false), variables);
-    }
-    try {
-      return await transport.ExecuteGQL(this.buildMintMutation(true), { ...variables, channelCandidatesJson });
-    } catch (error) {
-      if (!isUnsupportedChannelScopingError(error)) {
-        throw error;
+    let asked: MintExtensions = {
+      ChannelScoping: channelCandidatesJson !== null && !this.serverLacksChannelScoping,
+      AvatarStatus: !this.serverLacksAvatarStatus,
+    };
+    for (;;) {
+      try {
+        const mintVariables = asked.ChannelScoping ? { ...variables, channelCandidatesJson } : variables;
+        return await transport.ExecuteGQL(this.buildMintMutation(asked), mintVariables);
+      } catch (error) {
+        const unsupported = unsupportedExtension(error, asked);
+        if (!unsupported) {
+          throw error;
+        }
+        this.rememberUnsupported(unsupported);
+        asked = { ...asked, [unsupported]: false };
       }
-      console.warn('[RealtimeSession] The server does not support channel scoping — minting without it and resolving channels locally.');
-      this.serverLacksChannelScoping = true;
-      return transport.ExecuteGQL(this.buildMintMutation(false), variables);
     }
   }
 
-  /** The `StartRealtimeClientSession` document, with or without the channel-scoping extension. */
-  private buildMintMutation(withChannelScoping: boolean): string {
-    const extraVariable = withChannelScoping ? ', $channelCandidatesJson: String' : '';
-    const extraArgument = withChannelScoping ? ', channelCandidatesJson: $channelCandidatesJson' : '';
-    const extraField = withChannelScoping ? '\n          ClientPolicyJson' : '';
+  /** Remembers that the server lacks an extension of the mint, and says so once. */
+  private rememberUnsupported(extension: keyof MintExtensions): void {
+    if (extension === 'ChannelScoping') {
+      console.warn('[RealtimeSession] The server does not support channel scoping — minting without it and resolving channels locally.');
+      this.serverLacksChannelScoping = true;
+      return;
+    }
+    console.warn('[RealtimeSession] The server does not report the avatar status — minting without it; the call shows no avatar notice.');
+    this.serverLacksAvatarStatus = true;
+  }
+
+  /** The `StartRealtimeClientSession` document, with the extensions asked for. */
+  private buildMintMutation(asked: MintExtensions): string {
+    const extraVariable = asked.ChannelScoping ? ', $channelCandidatesJson: String' : '';
+    const extraArgument = asked.ChannelScoping ? ', channelCandidatesJson: $channelCandidatesJson' : '';
+    const extraField = [asked.ChannelScoping ? 'ClientPolicyJson' : '', asked.AvatarStatus ? 'AvatarStatusJson' : '']
+      .filter((field) => field.length > 0)
+      .map((field) => `\n          ${field}`)
+      .join('');
     return `
       mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String, $mediaCollectionId: String, $applicationId: String, $appContextJson: String${extraVariable}) {
         StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt, mediaCollectionId: $mediaCollectionId, applicationId: $applicationId, appContextJson: $appContextJson${extraArgument}) {

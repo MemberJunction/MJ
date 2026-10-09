@@ -469,13 +469,16 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         return session.liveConfig;
     }
 
-    /** The one line for a granted avatar this session won't show, in the server driver's format. */
+    /**
+     * The one line for a granted avatar this session won't show, in the server driver's format: `browser` when the host
+     * asked for the agent's video and this browser can't play it, `host` when the host asked for none.
+     */
     private avatarDowngradeMessage(config: LiveConnectConfig, grant: GeminiAvatarGrant): string {
         const requested = this.AllTracks.some(
             (t) => t.Descriptor.Direction === 'outbound' && String(t.Descriptor.Modality).trim().toLowerCase() === 'video'
         );
         const why = requested ? `this browser cannot play ${grant.Encoding ?? GEMINI_AVATAR_MP4_TYPE}` : 'the host shows no agent video';
-        const reason: RealtimeAvatarUnavailableReason = 'downgraded';
+        const reason: RealtimeAvatarUnavailableReason = requested ? 'browser' : 'host';
         return `[GeminiRealtimeClient] Avatar "${config.avatarConfig?.avatarName ?? ''}" not used: ${why}. The call is audio only. Reason: ${reason}.`;
     }
 

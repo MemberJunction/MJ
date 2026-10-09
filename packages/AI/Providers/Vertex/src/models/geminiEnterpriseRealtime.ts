@@ -118,9 +118,9 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
 
     /**
      * Mints a client-direct session through MJAPI's relay: a relay session whose policy opens every upstream connection
-     * with the setup written from the connect config and a fresh bearer token; the relay URL as `EphemeralToken`; and a
-     * pact whose config holds only what the browser needs to state (the response modalities, and the avatar's name when
-     * one is granted).
+     * with the setup written from the connect config and a fresh bearer token; the relay URL as `EphemeralToken`; a pact
+     * whose config holds only what the browser needs to state (the response modalities, and the avatar's name when one is
+     * granted); and, when the session asked for an avatar, the avatar status the call reads to say why it shows none.
      *
      * @param params The session parameters (model, system prompt, tools, config bag, avatar request).
      * @throws When the key cannot be read or names a location that is not a Google Cloud location.
@@ -141,6 +141,7 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
             DriverClass: DRIVER_CLASS,
             MaxSessionSeconds: params.MaxSessionSeconds,
         });
+        const avatarStatus = this.AvatarStatusFor(params, config);
         return {
             Provider: CLIENT_PROVIDER,
             Model: params.Model,
@@ -148,6 +149,7 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
             EphemeralToken: BuildRealtimeRelayUrl(ResolveRealtimeProxyBaseWsUrl(params), ticket.ID),
             ExpiresAt: ticket.ExpiresAt,
             SessionConfig: this.SessionPactFor(params.Model, config, GeminiEnterpriseRealtime.browserConnectConfig(config)),
+            ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
         };
     }
 

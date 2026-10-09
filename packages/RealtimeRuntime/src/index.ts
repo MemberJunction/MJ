@@ -46,6 +46,9 @@ export {
     type RealtimeSessionRunOptions,
 } from './session/RealtimeSessionRuntime';
 
+// Why a connected call shows no avatar its agent asked for (`RealtimeSessionRuntime.AvatarNotice$`).
+export { ResolveAvatarNotice, type RealtimeAvatarNotice } from './session/avatar-notice';
+
 // How a session is minted — the seam an app implements to replace the stock mint.
 export {
     DefaultRealtimeSessionLauncher,

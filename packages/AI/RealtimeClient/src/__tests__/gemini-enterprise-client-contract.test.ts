@@ -13,7 +13,7 @@ import { BaseRealtimeClient, type RealtimeClientTranscript, type RealtimeClientU
 import { GeminiRealtimeClient, type IGeminiAudioPlayback, type IGeminiMicCapture } from '../drivers/geminiRealtimeClient';
 import { GeminiEnterpriseRealtimeClient } from '../drivers/geminiEnterpriseRealtimeClient';
 import { GEMINI_AVATAR_MP4_TYPE, type IAvatarVideoPlayout, type VideoPlayoutOptions } from '../media/videoPlayout';
-import { InstallFakeMse } from './helpers/fake-mse';
+import { FakeMediaSource, InstallFakeMse } from './helpers/fake-mse';
 import { AvatarInitSegment, AvatarVideoFragment, PieceToBase64 } from './helpers/fmp4-pieces';
 import { FakeAvatarPlayout, FakeGeminiPlayback, FakeMediaStream, FakeMicCapture, FakeTrack } from './helpers/realtime-fakes';
 
@@ -275,6 +275,28 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
         it('states AUDIO for a session without an avatar, even when the minted config names no modalities', async () => {
             expect(modalitiesOf((await connect(enterprisePact())).Socket)).toEqual(['AUDIO']);
             expect(modalitiesOf((await connect(enterprisePact({ Config: {} }))).Socket)).toEqual(['AUDIO']);
+        });
+
+        it('states AUDIO when the config names an avatar the mint did not grant (no avatar block): VIDEO follows the live track', async () => {
+            expect(modalitiesOf((await connect(enterprisePact({ Config: { avatarConfig: { avatarName: 'Ben' } } }))).Socket)).toEqual(['AUDIO']);
+        });
+    });
+
+    describe('the downgrade line (inherited from the Gemini client)', () => {
+        const downgradeLines = (): string[] =>
+            vi.mocked(console.warn).mock.calls.map((call) => String(call[0])).filter((line) => line.includes('[GeminiRealtimeClient] Avatar "Ben" not used'));
+
+        it("says 'host' when the host shows no agent video", async () => {
+            await connect(enterprisePact({ Avatar: true, ShowAvatar: false }));
+            expect(downgradeLines()).toEqual(['[GeminiRealtimeClient] Avatar "Ben" not used: the host shows no agent video. The call is audio only. Reason: host.']);
+        });
+
+        it("says 'browser', and asks for audio, when the host shows the avatar but this browser can't play it", async () => {
+            FakeMediaSource.Supported = false;
+            const { Socket } = await connect(enterprisePact({ Avatar: true }));
+            expect(modalitiesOf(Socket)).toEqual(['AUDIO']);
+            expect(setupOf(Socket)['avatarConfig']).toBeUndefined();
+            expect(downgradeLines()).toEqual([`[GeminiRealtimeClient] Avatar "Ben" not used: this browser cannot play ${GEMINI_AVATAR_MP4_TYPE}. The call is audio only. Reason: browser.`]);
         });
     });
 

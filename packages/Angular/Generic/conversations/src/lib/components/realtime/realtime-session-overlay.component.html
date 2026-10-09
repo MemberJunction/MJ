@@ -39,6 +39,19 @@
         (CloseRequested)="OnReviewClose()">
       </mj-realtime-agent-banner>
 
+      <!-- Why the call shows no avatar its agent asked for: once per call, from the moment it connects, until the user
+           dismisses it or it hides itself after 10 s. Never in review. -->
+      @if (AvatarNotice) {
+        <mj-alert class="call-avatar-notice"
+                  Variant="info"
+                  Size="sm"
+                  Icon="fa-solid fa-video-slash"
+                  [Message]="AvatarNoticeMessage"
+                  Dismissible
+                  (Dismissed)="OnAvatarNoticeDismissed()">
+        </mj-alert>
+      }
+
       <!-- Ephemeral narration with no active working card to anchor to → under the banner -->
       @if (!IsReviewing && State.Narration && !State.ActiveCallId && Disclosure.ShowThread) {
         <div class="banner-live-note" role="status" aria-live="polite">

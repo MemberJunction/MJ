@@ -29,5 +29,6 @@ export * from './generic/realtimeToolBatchBarrier';
 export * from './generic/realtimeSessionResumption';
 export * from './generic/realtimeTracks';
 export * from './generic/realtimeAgentVision';
+export * from './generic/realtimeAvatarStatus';
 export * from './generic/realtimeVideoFrames';
 export * from './generic/fmp4Reader';

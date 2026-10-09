@@ -193,6 +193,25 @@ describe('BaseRealtimeModel client-direct capability', () => {
     });
 });
 
+describe('BaseRealtimeModel avatar output', () => {
+    it('SupportsAvatarOutput defaults to false for every model', () => {
+        const model = makeModel();
+        expect(model.SupportsAvatarOutput('gpt-realtime-2')).toBe(false);
+        expect(model.SupportsAvatarOutput('gemini-3.8-live')).toBe(false);
+    });
+
+    it('a driver may answer per model', () => {
+        class AvatarModel extends MockRealtimeModel {
+            public override SupportsAvatarOutput(model: string): boolean {
+                return model === 'avatar-model';
+            }
+        }
+        const model = new AvatarModel('test-api-key');
+        expect(model.SupportsAvatarOutput('avatar-model')).toBe(true);
+        expect(model.SupportsAvatarOutput('other-model')).toBe(false);
+    });
+});
+
 describe('IRealtimeSession', () => {
     let session: MockRealtimeSession;
 

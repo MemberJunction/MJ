@@ -4,7 +4,7 @@ import { UserInfoEngine, type MJAIAgentChannelEntity, type MJAIAgentChannelEntit
 import { AddRealtimeUsageRecord, AIEngineBase, HasRealtimeUsage, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, ParseRealtimeAvatarStatus, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import {
   AppContextSnapshot,
   CompareExposure,
@@ -46,6 +46,7 @@ import {
   REQUESTED_TRACKS_SESSION_KEY
 } from '@memberjunction/ai-realtime-client';
 import { DefaultRealtimeSessionLauncher, type IRealtimeSessionLauncher } from './session-launcher';
+import { RequestsAgentVideo, ResolveAvatarNotice, type RealtimeAvatarNotice } from './avatar-notice';
 import { ClientSessionDeadline } from './client-session-deadline';
 import {
   RealtimeCaptures,
@@ -434,6 +435,13 @@ export interface StartRealtimeClientSessionResult {
    * own proxy; the runtime then resolves the scope locally from code defaults and host declarations.
    */
   ClientPolicyJson?: string | null;
+  /**
+   * OPTIONAL — the session's live-avatar status (`RealtimeAvatarStatus` from `@memberjunction/ai`) as JSON: whether the
+   * voiced agent asked for an avatar, whether the model renders it, and why not. The runtime reads it after connecting
+   * to publish {@link RealtimeSessionRuntime.AvatarNotice$}. Absent from a server that predates it, when the agent asked
+   * for no avatar, and from a host that mints for itself and does not pass it on; the call then shows no notice.
+   */
+  AvatarStatusJson?: string | null;
 }
 
 /**
@@ -612,6 +620,21 @@ export class RealtimeSessionRuntime {
    * follows it through its context, and counts as used once it arrives, so the host shows that channel's surface.
    */
   public readonly AgentVideo$: Observable<MediaVideoSource | null> = this._agentVideo$.asObservable();
+
+  private readonly _avatarNotice$ = new BehaviorSubject<RealtimeAvatarNotice | null>(null);
+  /**
+   * Why the call shows no avatar the agent asked for: set once per call, after it connects, when the model renders none,
+   * the persona has no face for it, the app shows no agent video (`host`) or the browser can't play it (`browser`).
+   * `null` when there is nothing to say (no avatar asked for, the avatar shows, or the mint reported no status) and after
+   * the call ends. A provider resume inside the call does not set it again. A host turns the reason into words once,
+   * for example "Audio only: this voice model can't show an avatar".
+   */
+  public readonly AvatarNotice$: Observable<RealtimeAvatarNotice | null> = this._avatarNotice$.asObservable();
+
+  /** Synchronous access to {@link AvatarNotice$}'s current value. */
+  public get CurrentAvatarNotice(): RealtimeAvatarNotice | null {
+    return this._avatarNotice$.value;
+  }
 
   /**
    * Channel requests to enter / leave the FOCUS layout (see
@@ -1372,13 +1395,16 @@ export class RealtimeSessionRuntime {
         throw microphone.Error;
       }
 
-      await client.Connect(this.BuildClientConfig(session), microphone.Stream);
+      const clientConfig = this.BuildClientConfig(session);
+      await client.Connect(clientConfig, microphone.Stream);
       if (this.startGeneration !== generation) {
         await this.unwindAbandonedStart(session, client);
         return;
       }
-      // Tracks are negotiated now, so a capture can tell whether the model takes video.
+      // Tracks are negotiated now, so a capture can tell whether the model takes video, and the call whether it shows
+      // the avatar its agent asked for.
       this.openCaptures(client, cameraCheck);
+      this.publishAvatarNotice(session, clientConfig, client);
 
       // Notify active channels that the session client is connected and tracks are established
       for (const channel of this._activeChannels$.value) {
@@ -1431,6 +1457,21 @@ export class RealtimeSessionRuntime {
       this.startLivenessPulse();
     } catch (error) {
       await this.failSessionStart(error);
+    }
+  }
+
+  /**
+   * Tells the host, once per call, why it shows no avatar ({@link AvatarNotice$}): from the mint's status, whether this
+   * session asked for the agent's video, and whether that track is live now that the call is connected.
+   */
+  private publishAvatarNotice(session: StartRealtimeClientSessionResult, config: ClientRealtimeSessionConfig, client: BaseRealtimeClient): void {
+    const notice = ResolveAvatarNotice(
+      ParseRealtimeAvatarStatus(session.AvatarStatusJson),
+      RequestsAgentVideo(config),
+      client.IsTrackEstablished('video', 'outbound')
+    );
+    if (notice) {
+      this._avatarNotice$.next(notice);
     }
   }
 
@@ -4272,6 +4313,9 @@ export class RealtimeSessionRuntime {
     this.narrationTemplate = null;
     this.clientToolHandlers.clear();
     this._modelName$.next(null);
+    if (this._avatarNotice$.value !== null) {
+      this._avatarNotice$.next(null);
+    }
     this.SetMinimized(false);
     this._active$.next(false);
     if (this._connectionState$.value !== 'error') {

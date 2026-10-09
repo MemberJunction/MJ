@@ -48,6 +48,7 @@ import {
     type RealtimeInputFrame,
     type RealtimeResumeAttempt,
     type RealtimeAvatarSettings,
+    type RealtimeAvatarStatus,
     type RealtimeAvatarUnavailableReason,
 } from '@memberjunction/ai';
 import {
@@ -272,6 +273,16 @@ export class GeminiRealtime extends BaseRealtimeModel {
     }
 
     /**
+     * Whether the model renders a live avatar on this driver's endpoint, from its Live profile: never on the Developer
+     * API; on Gemini Enterprise for the models whose profile says so.
+     *
+     * @param model The model's API name.
+     */
+    public override SupportsAvatarOutput(model: string): boolean {
+        return ResolveGeminiLiveProfile(model, this.Endpoint).SupportsAvatarOutput;
+    }
+
+    /**
      * Gemini Live sessions accept dynamically-defined tools at connect/mint time.
      */
     public static override readonly SupportsDynamicToolSet = true;
@@ -320,6 +331,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
         if (!token.name) {
             throw new Error('Gemini auth-token mint returned no token name');
         }
+        const avatarStatus = this.AvatarStatusFor(params, config);
         return {
             Provider: 'gemini',
             Model: params.Model,
@@ -328,6 +340,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
             // The browser passes the full config to live.connect; the token lock above makes its
             // values authoritative even if a client tampers.
             SessionConfig: this.SessionPactFor(params.Model, config),
+            ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
         };
     }
 
@@ -719,7 +732,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
             'custom-disabled': 'custom avatars are not enabled',
             'unknown-avatar': 'the request names no avatar',
             'no-binding': 'the persona has no avatar on this vendor',
-            downgraded: 'the host could not show video',
+            host: 'the app showing the call asks for no agent video',
+            browser: 'the browser cannot play the avatar',
         };
         const persona = request.PersonaName ? ` (persona ${request.PersonaName})` : '';
         return `[GeminiRealtime] Avatar "${request.AvatarID}"${persona} not used: ${why[reason]}. The call is audio only. Reason: ${reason}.`;
@@ -749,6 +763,26 @@ export class GeminiRealtime extends BaseRealtimeModel {
         }
         console.warn(this.avatarUnavailableMessage(params.Avatar, params.Model, 'bridged'));
         return { ...params, Avatar: undefined };
+    }
+
+    /**
+     * What the mint tells the call about the avatar the session asked for: granted, or audio only and why. `undefined` when
+     * it asked for none. Read from the connect config {@link BuildConnectConfig} built, so it says what the session does:
+     * an `avatarConfig` there is the grant. Every Gemini driver returns it on its minted config.
+     *
+     * @param params The session parameters (the avatar request).
+     * @param config The connect config the session was built with.
+     */
+    protected AvatarStatusFor(params: RealtimeSessionParams, config: LiveConnectConfig): RealtimeAvatarStatus | undefined {
+        const request = params.Avatar;
+        if (!request) {
+            return undefined;
+        }
+        if (config.avatarConfig) {
+            return { Requested: true, Granted: true };
+        }
+        const reason = this.avatarUnavailableReason(request, params.Model);
+        return reason ? { Requested: true, Granted: false, Reason: reason } : { Requested: true, Granted: false };
     }
 
     /**

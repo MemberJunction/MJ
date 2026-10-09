@@ -9,12 +9,13 @@
  * 4. else none. The model's own first persona is never used: an agent with no persona gets no face.
  *
  * Whether the session can render the avatar is the driver's call (the model and endpoint); this only decides which one
- * to ask for.
+ * to ask for. Once the driver has minted the session, {@link ResolveRealtimeAvatarStatus} merges the two into the status
+ * the call gets, so a call that shows no avatar can say why.
  *
  * @module @memberjunction/ai-agents
  */
 
-import type { RealtimeAvatarSettings, RealtimeAvatarUnavailableReason } from '@memberjunction/ai';
+import type { RealtimeAvatarSettings, RealtimeAvatarStatus, RealtimeAvatarUnavailableReason } from '@memberjunction/ai';
 import type { ResolvedAgentPersona, ResolvedModelPersona } from '@memberjunction/ai-engine-base';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { RealtimeCoAgentConfig } from './realtime-coagent-config';
@@ -87,6 +88,39 @@ function firstFaceOf(agentId: string, faces: ResolvedModelPersona[], personas: R
         }
     }
     return undefined;
+}
+
+/** What a session's avatar status is made from, once the driver has minted it. */
+export interface RealtimeAvatarStatusInput {
+    /** The session's avatar resolution: an avatar, a reason there is none, or neither when the agent asked for none. */
+    Resolution: RealtimeAvatarResolution;
+    /** Whether the resolved model renders avatars on its endpoint (`BaseRealtimeModel.SupportsAvatarOutput`). */
+    ModelSupportsAvatarOutput: boolean;
+    /** The driver's decision at mint (`ClientRealtimeSessionConfig.AvatarStatus`), when it reported one. */
+    DriverStatus?: RealtimeAvatarStatus;
+}
+
+/**
+ * The status a call gets about the avatar its agent asked for. Nothing when the agent asked for none (its video
+ * setting is off). Otherwise audio only with `endpoint` when the model renders no avatar on its endpoint, whatever
+ * driver serves it; then the resolution's reason (`unknown-avatar`, `no-binding`); else the driver's own decision
+ * (granted, or `custom-disabled` and the like).
+ *
+ * @param input The resolution, the model's capability and the driver's decision.
+ * @returns The status for the call, or `undefined` when the session asked for no avatar or the driver reported none.
+ */
+export function ResolveRealtimeAvatarStatus(input: RealtimeAvatarStatusInput): RealtimeAvatarStatus | undefined {
+    const { Avatar: avatar, Reason: reason } = input.Resolution;
+    if (!avatar && !reason) {
+        return undefined;
+    }
+    if (!input.ModelSupportsAvatarOutput) {
+        return { Requested: true, Granted: false, Reason: 'endpoint' };
+    }
+    if (reason) {
+        return { Requested: true, Granted: false, Reason: reason };
+    }
+    return input.DriverStatus;
 }
 
 /** The avatar request for a face, and the same persona's voice on the vendor. */
