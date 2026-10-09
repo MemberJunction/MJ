@@ -15,10 +15,14 @@
  * - **Turns.** `generationComplete` ends the turn's video, so it plays to its true end and holds the last frame;
  *   `turnComplete` is the fallback. `interrupted` stops the video at once and drops the turn's late parts until its
  *   `turnComplete`. A resume lets a turn the drop cut off play out what arrived, without a flush.
+ * - **Usage.** The seconds of video the model generated count from the fragments' durations (Core's reader, timed by
+ *   the latest init segment): video that arrives inside a model turn, from its first part until `generationComplete`;
+ *   an interrupted turn counts what arrived before `interrupted`. Video after `generationComplete` (idle frames while
+ *   the avatar listens) does not count. A flush never subtracts: generated video is billed whether or not it played.
  *
  * @module @memberjunction/ai-realtime-client
  */
-import { IsPcmAudioMimeType, ReadFmp4Init, SniffFmp4Piece } from '@memberjunction/ai';
+import { Fmp4VideoSeconds, IsPcmAudioMimeType, ReadFmp4Init, SniffFmp4Piece, type Fmp4Init } from '@memberjunction/ai';
 import type { IRealtimePcmPlayback } from '../audio/pcmPlayback';
 import type { MediaVideoSource } from '../media/model';
 import type { IAvatarVideoPlayout } from '../media/videoPlayout';
@@ -41,6 +45,8 @@ interface AvatarTurn {
     VideoEnded: boolean;
     /** From `interrupted` until this turn's `turnComplete`: media parts are dropped. */
     Dropping: boolean;
+    /** `generationComplete` arrived: the turn's later video is not counted as generated. */
+    GenerationComplete: boolean;
     /** When the turn's first PCM part arrived (epoch ms), for the separate-voice log. */
     VoiceStartedAt: number | null;
     /** When the turn's first video part arrived (epoch ms), for the separate-voice log. */
@@ -51,7 +57,7 @@ interface AvatarTurn {
 type AvatarPartKind = 'video' | 'voice' | 'other';
 
 function newTurn(): AvatarTurn {
-    return { HasVideo: false, HasVoice: false, VideoEnded: false, Dropping: false, VoiceStartedAt: null, VideoStartedAt: null };
+    return { HasVideo: false, HasVoice: false, VideoEnded: false, Dropping: false, GenerationComplete: false, VoiceStartedAt: null, VideoStartedAt: null };
 }
 
 /**
@@ -65,6 +71,10 @@ export class GeminiAvatarOutput {
     /** Whether the avatar's video carries the voice: the grant's word until the first readable init segment decides. */
     private videoCarriesVoice: boolean;
     private voiceDecided = false;
+    /** The latest readable init segment: its video track's timescale times the fragments. */
+    private init: Fmp4Init | null = null;
+    /** Seconds of video generated and not yet taken by {@link TakeVideoSeconds}. */
+    private pendingVideoSeconds = 0;
 
     /**
      * @param playout The avatar's video player, created with `CarriesVoice` from the grant.
@@ -112,8 +122,22 @@ export class GeminiAvatarOutput {
         return false;
     }
 
-    /** `generationComplete`: the turn's media is all in, so its video plays to the true end and holds the last frame. */
+    /**
+     * Takes the seconds of avatar video generated since the last call, for the session's usage, and starts counting
+     * from 0 again: each second is taken once.
+     */
+    public TakeVideoSeconds(): number {
+        const seconds = this.pendingVideoSeconds;
+        this.pendingVideoSeconds = 0;
+        return seconds;
+    }
+
+    /**
+     * `generationComplete`: the turn's media is all in, so its video plays to the true end and holds the last frame.
+     * Video that still arrives in this turn is not counted as generated.
+     */
     public GenerationComplete(): void {
+        this.turn.GenerationComplete = true;
         this.endTurnVideo();
     }
 
@@ -163,8 +187,8 @@ export class GeminiAvatarOutput {
     }
 
     private acceptVideo(piece: ArrayBuffer): void {
-        if (!this.voiceDecided && SniffFmp4Piece(piece) === 'init') {
-            this.followInit(piece);
+        if (SniffFmp4Piece(piece) === 'init') {
+            this.takeInit(piece);
         }
         if (!this.turn.HasVideo) {
             this.startTurnVideo();
@@ -172,6 +196,32 @@ export class GeminiAvatarOutput {
         // More media came, so the turn's video is not over even if generationComplete said so.
         this.turn.VideoEnded = false;
         this.playout.Append(piece);
+        this.countGeneratedVideo(piece);
+    }
+
+    /** Keeps an init segment's tracks to time the fragments by; the session's first readable one also decides the voice. */
+    private takeInit(piece: ArrayBuffer): void {
+        const init = ReadFmp4Init(piece);
+        if (!init) {
+            return;
+        }
+        this.init = init;
+        if (!this.voiceDecided) {
+            this.followInit(init);
+        }
+    }
+
+    /** Adds a video piece's seconds to the generated video, while its turn's generation has not completed. */
+    private countGeneratedVideo(piece: ArrayBuffer): void {
+        if (this.turn.GenerationComplete) {
+            return;
+        }
+        const seconds = this.init ? Fmp4VideoSeconds(piece, this.init) : null;
+        if (seconds === null) {
+            this.reportOnce('uncounted-video', "[GeminiRealtimeClient] Could not read the avatar video's duration; that video is not counted in usage.");
+            return;
+        }
+        this.pendingVideoSeconds += seconds;
     }
 
     /** The turn's first video part: when the video carries the voice, PCM the turn queued would double it, so it stops. */
@@ -202,13 +252,9 @@ export class GeminiAvatarOutput {
      * Follows the session's first readable init segment: an audio track means the video carries the voice; none means the
      * video plays muted and the voice comes as PCM. Logged once when that disagrees with the grant.
      */
-    private followInit(init: ArrayBuffer): void {
-        const tracks = ReadFmp4Init(init)?.Tracks;
-        if (!tracks) {
-            return;
-        }
+    private followInit(init: Fmp4Init): void {
         this.voiceDecided = true;
-        const hasAudio = tracks.some((track) => track.Handler === 'soun');
+        const hasAudio = init.Tracks.some((track) => track.Handler === 'soun');
         if (hasAudio === this.videoCarriesVoice) {
             return;
         }

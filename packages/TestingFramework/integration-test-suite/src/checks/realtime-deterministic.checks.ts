@@ -1,5 +1,5 @@
 /**
- * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD14).
+ * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD14, RD16).
  *
  * Domain 10 deterministic legs — NO live sessions, NO sidecar, NO model calls:
  *  - realtime metadata integrity: agent channels (RD1), Realtime model → vendor DriverClass
@@ -19,7 +19,10 @@
  *    session's avatar request through the real session prep, on a run-scoped placeholder key (nothing is minted, no
  *    network); its fixture rows are deleted afterwards,
  *  - realtime driver wiring (RD14): every Active realtime vendor row's DriverClass resolves to a BaseRealtimeModel in the
- *    ClassFactory, so a driver missing from the class-registration manifest is caught.
+ *    ClassFactory, so a driver missing from the class-registration manifest is caught,
+ *  - avatar video pricing (RD16): a tagged co-agent-shaped prompt run on Gemini 3.8 Live × Vertex AI stores a minute of
+ *    avatar usage through the real usage write and is finalized; its cost is the token row's line plus the video line
+ *    priced from the model vendor's configuration, and both lines are written into its details; the run is deleted.
  *
  * Every fixture row is tagged '(mj-integration-test — safe to delete)' and deleted in the same
  * check's finally block, so the bundle needs no shared lifecycle.
@@ -27,7 +30,7 @@
 import { BaseEntity, Metadata, ProviderType, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseRealtimeModel, type AIAPIKey } from '@memberjunction/ai';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIEngineBase, ReadCostLines, ReadRealtimeUsageRecord, RoundCost, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import type { MJAIAgentEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { RealtimeClientSessionService, type PrepareClientSessionInput, type RealtimeSessionParamsPrep } from '@memberjunction/ai-agents';
 import {
@@ -38,8 +41,10 @@ import {
     MJAIAgentSessionEntity,
     MJAIAgentSessionBridgeEntity,
     MJAIBridgeProviderEntity,
+    MJAIModelCostEntity,
     MJAIModelPersonaEntity,
     MJAIModelVendorEntity,
+    MJAIPromptRunEntity,
     MJAIPersonaEntity,
     MJAIPersonaVendorEntity,
     MJInteractionEntity,
@@ -285,6 +290,85 @@ function assertAvatarResolved(prep: RealtimeSessionParamsPrep, anchors: AvatarFi
     AssertEqual(avatar!.Source, 'persona', 'RD13: the avatar came from the voiced agent\'s persona');
     AssertEqual(avatar!.Kind, 'preset', 'RD13: the binding\'s avatar settings reach the request');
     AssertEqual(prep.SessionParams?.Config?.['voice'], fixture.Voice, 'RD13: the face\'s persona supplies the session\'s voice');
+}
+
+// ── RD16: avatar video priced at finalize ──────────────────────────────────────────────────────────
+
+/** One speaking minute on Gemini 3.8 Live: Google counts the avatar's 60 s of video as 371,520 of the 373,520 output tokens. */
+const RD16_USAGE: RealtimeUsageRecord = {
+    Input: { TextTokens: 7900, AudioTokens: 2100 },
+    Output: { AudioTokens: 2000, VideoTokens: 371520, VideoSeconds: 60 },
+};
+const RD16_INPUT_TOKENS = 10000;
+const RD16_OUTPUT_TOKENS = 373520;
+
+/** What RD16 prices with: the Vertex AI rows for Gemini 3.8 Live, and a prompt to hang the run on. */
+interface AvatarPricingAnchors {
+    ModelID: string;
+    VendorID: string;
+    PromptID: string;
+    CostRow: MJAIModelCostEntity;
+    /** The model vendor's avatar video price per minute, from its resolved configuration. */
+    PricePerMinute: number;
+}
+
+/** The anchors RD16 needs, or why the deployment cannot supply them. */
+async function findAvatarPricingAnchors(engine: AIEngineBase, user: UserInfo): Promise<AvatarPricingAnchors | string> {
+    const model = engine.Models.find((m) => m.Name.trim().toLowerCase() === 'gemini 3.8 live');
+    const vendor = engine.Vendors.find((v) => v.Name.trim().toLowerCase() === 'vertex ai');
+    if (!model || !vendor) {
+        return !model ? "no 'Gemini 3.8 Live' model" : "no 'Vertex AI' vendor";
+    }
+    const row = engine.ModelVendors.find((mv) => UUIDsEqual(mv.ModelID, model.ID) && UUIDsEqual(mv.VendorID, vendor.ID) && engine.IsInferenceProvider(mv));
+    const price = row ? engine.GetEffectiveModelConfiguration(model.ID, row.ID)?.Realtime?.Pricing?.AvatarVideoOutput : undefined;
+    const costRow = engine.GetActiveModelCost(model.ID, vendor.ID, 'Realtime', 'Tokens');
+    const promptID = await firstID('MJ: AI Prompts', user);
+    if (typeof price?.Price !== 'number' || !costRow || !promptID) {
+        return typeof price?.Price !== 'number' ? 'the Vertex AI model-vendor row has no Realtime.Pricing.AvatarVideoOutput price'
+            : !costRow ? 'no Active Realtime token cost row for Gemini 3.8 Live on Vertex AI'
+            : 'no AI prompt to hang the prompt run on';
+    }
+    return { ModelID: model.ID, VendorID: vendor.ID, PromptID: promptID, CostRow: costRow, PricePerMinute: price.Price };
+}
+
+/** A tagged, Running prompt run shaped like a realtime co-agent's, started two minutes ago (the stored video is capped at the elapsed time + 30 s). */
+async function createAvatarPricingRun(anchors: AvatarPricingAnchors, user: UserInfo): Promise<MJAIPromptRunEntity> {
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const run = await md.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', user);
+    run.NewRecord();
+    run.PromptID = anchors.PromptID;
+    run.ModelID = anchors.ModelID;
+    run.VendorID = anchors.VendorID;
+    run.RunAt = new Date(Date.now() - 120_000);
+    run.RunType = 'Single';
+    run.Status = 'Running';
+    run.Messages = JSON.stringify([{ role: 'system', content: TAG }]);
+    Assert(await run.Save(), `RD16: the fixture prompt run did not save: ${run.LatestResult?.CompleteMessage}`);
+    return run;
+}
+
+/** The cost RD16 expects from the rows it priced with: the token row over 10,000 in and 2,000 out, plus 60 s of video. */
+function expectedAvatarRunCost(anchors: AvatarPricingAnchors, engine: AIEngineBase): { Tokens: number; Video: number } {
+    const divisor = engine.GetPriceCalculator(anchors.CostRow)?.UnitsPerBillingUnit ?? 1_000_000;
+    const videoTokens = RD16_USAGE.Output?.VideoTokens ?? 0;
+    const tokens = (RD16_INPUT_TOKENS * Number(anchors.CostRow.InputPricePerUnit) + (RD16_OUTPUT_TOKENS - videoTokens) * Number(anchors.CostRow.OutputPricePerUnit)) / divisor;
+    return { Tokens: RoundCost(tokens), Video: RoundCost(((RD16_USAGE.Output?.VideoSeconds ?? 0) / 60) * anchors.PricePerMinute) };
+}
+
+/** Asserts the finalized run: its cost is the two lines, both written beside the stored usage, and the token total is Google's. */
+function assertAvatarRunPriced(run: MJAIPromptRunEntity, anchors: AvatarPricingAnchors, expected: { Tokens: number; Video: number }): void {
+    AssertEqual(run.Status, 'Completed', 'RD16: the finalized prompt run is Completed');
+    Assert(Math.abs(Number(run.Cost) - (expected.Tokens + expected.Video)) < 1e-8, `RD16: Cost should be ${expected.Tokens} + ${expected.Video}, was ${run.Cost}`);
+    Assert(Math.abs(Number(run.TotalCost) - Number(run.Cost)) < 1e-8, `RD16: TotalCost should include the video line, was ${run.TotalCost}`);
+    AssertEqual(run.CostCurrency, anchors.CostRow.Currency, "RD16: the cost is in the token row's currency");
+    AssertEqual(run.TokensCompletion, RD16_OUTPUT_TOKENS, "RD16: TokensCompletion keeps Google's total, video tokens included");
+    const lines = ReadCostLines(run.ModelSpecificResponseDetails);
+    AssertEqual(lines.length, 2, 'RD16: CostLines holds the token line and the video line');
+    const [tokenLine, videoLine] = lines;
+    Assert(tokenLine.Modality === null && UUIDsEqual(tokenLine.CostRowID ?? '', anchors.CostRow.ID), 'RD16: the first line is the token cost row');
+    AssertEqual(JSON.stringify([tokenLine.Input, tokenLine.Output, tokenLine.Cost]), JSON.stringify([RD16_INPUT_TOKENS, 2000, expected.Tokens]), "RD16: the token line prices the output without the video's tokens");
+    AssertEqual(JSON.stringify([videoLine.Modality, videoLine.Measure, videoLine.Output, videoLine.Cost]), JSON.stringify(['Video', 'Seconds', 60, expected.Video]), 'RD16: the video line prices 60 s at the per-minute price');
+    AssertEqual(ReadRealtimeUsageRecord(run.ModelSpecificResponseDetails)?.Output?.VideoSeconds, 60, 'RD16: the usage record stays beside the lines');
 }
 
 export const RealtimeDeterministicChecks: NamedCheck[] = [
@@ -1090,6 +1174,37 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             AssertEqual(unresolved.length, 0, `RD14: ${unresolved.length} realtime vendor DriverClass(es) resolve to no BaseRealtimeModel registration: ${unresolved.join('; ')}`);
             const skipped = rows.length - checked.length;
             console.log(`      → ${checked.length} realtime vendor DriverClass(es) resolve${skipped > 0 ? `; ${skipped} not loaded in this process (see RD14_NOT_IN_THIS_PROCESS)` : ''}`);
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD16',
+        Name: "RD16: a co-agent prompt run's avatar video is priced at finalize (Gemini 3.8 Live × Vertex AI): Cost = token line + video line, CostLines written",
+        Fn: async (ctx): Promise<void> => {
+            await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
+            const anchors = await findAvatarPricingAnchors(AIEngineBase.Instance, ctx.User);
+            if (typeof anchors === 'string') {
+                console.warn(`  ⚠ realtime-deterministic.RD16 SKIPPED — ${anchors}`);
+                return;
+            }
+            const service = new RealtimeClientSessionService();
+            let runID: string | undefined;
+            try {
+                runID = (await createAvatarPricingRun(anchors, ctx.User)).ID;
+                Assert(await service.AccumulatePromptRunUsage(runID, RD16_INPUT_TOKENS, RD16_OUTPUT_TOKENS, ctx.User, ctx.Provider, RD16_USAGE), 'RD16: the usage write failed');
+                await service.FinalizeCoAgentRun(null, runID, ctx.User, ctx.Provider, true, null);
+                const run = await new Metadata().GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', ctx.User); // global-provider-ok: integration test script — single-provider process by design
+                Assert(await run.Load(runID), `RD16: could not reload the fixture prompt run ${runID}`);
+                const expected = expectedAvatarRunCost(anchors, AIEngineBase.Instance);
+                assertAvatarRunPriced(run, anchors, expected);
+                console.log(`      → Cost ${run.Cost} ${run.CostCurrency} = ${expected.Tokens} (tokens) + ${expected.Video} (60 s of avatar video); fixture removed`);
+            } finally {
+                if (runID) {
+                    const fixture = await new Metadata().GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', ctx.User); // global-provider-ok: integration test script — single-provider process by design
+                    if (await fixture.Load(runID)) {
+                        await fixture.Delete().catch(() => undefined);
+                    }
+                }
+            }
         }
     }
 ];

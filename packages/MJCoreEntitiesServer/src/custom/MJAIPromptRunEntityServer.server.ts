@@ -1,8 +1,37 @@
-import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
-import { ModelUsageUnitKind } from "@memberjunction/ai";
+import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
+import { NormalizeUUID, RegisterClass, UUIDsEqual } from "@memberjunction/global";
+import { AIModelConfiguration, ModelUsageUnitKind } from "@memberjunction/ai";
 import { MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
-import { AIEngineBase, BasePriceUnitType, NormalizedUsage } from "@memberjunction/ai-engine-base";
+import type { MJAIModelCostEntity } from "@memberjunction/core-entities";
+import {
+    AIEngineBase,
+    AvatarVideoUnpricedReason,
+    BasePriceUnitType,
+    BuildCostLines,
+    ExcludeAvatarVideoTokens,
+    NormalizedUsage,
+    PricedAvatarVideo,
+    PriceAvatarVideoOutput,
+    PromptRunCostLine,
+    ReadRealtimeUsageRecord,
+    RealtimeUsageRecord,
+    WriteCostLines
+} from "@memberjunction/ai-engine-base";
+
+/** The run's default cost row, the calculator its unit type names, and the quantities that calculator prices. */
+interface DefaultRunPricing {
+    CostRow: MJAIModelCostEntity;
+    Calculator: BasePriceUnitType;
+    Usage: NormalizedUsage;
+}
+
+/** What each reason an avatar's video stays priced as before means, for the one log line. */
+const AVATAR_VIDEO_UNPRICED_REASONS: Record<AvatarVideoUnpricedReason, string> = {
+    'no-price': 'the model vendor configuration has no usable Realtime.Pricing.AvatarVideoOutput price',
+    'unit': "the avatar video price's unit is not 'Per Minute'",
+    'currency': "the avatar video price is not in the cost row's currency",
+    'no-seconds': 'the run stored video tokens but no video seconds to price',
+};
 
 /**
  * What a prompt run recorded about the work it did, in whichever measure applies.
@@ -234,44 +263,28 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
     }
     
     /**
-     * Calculates the cost for this prompt run based on token usage and active pricing
+     * Calculates the cost for this prompt run based on token usage and active pricing.
+     *
+     * A realtime run that stored a usage record (`ModelSpecificResponseDetails.RealtimeUsage`) may add an avatar
+     * video line: its output video seconds at the per-minute price in the model vendor's resolved configuration
+     * (`Realtime.Pricing.AvatarVideoOutput`). The output tokens the provider counted as video then leave the default
+     * row's output bucket, and the run's cost lines are written into its details (`CostLines`). Without a default
+     * row the run stays unpriced, video or not; without a usable video price the run prices as before.
      */
     protected async CalculateAndSetCost(): Promise<void> {
         try {
             // Ensure AI metadata is loaded
             await AIEngineBase.Instance.Config(false, this.ContextCurrentUser);
-            
-            // Select the cost row by the measure this run actually recorded, not just by
-            // model+vendor: a model with rows in two measures would otherwise hand back whichever
-            // started most recently and be refused below, reporting a measure mismatch where the
-            // real answer was "pick the other row".
+
             const recorded = this.RecordedUsage();
-            const activeCost = AIEngineBase.Instance.GetActiveModelCost(
-                this.ModelID,
-                this.VendorID,
-                this.ResolveProcessingType(),
-                recorded.unitsKind ?? 'Tokens'
-            );
-
-            if (!activeCost) {
-                LogError(
-                    `No active cost configuration priced in ${recorded.unitsKind ?? 'Tokens'} found for ` +
-                    `Model: ${this.ModelID}, Vendor: ${this.VendorID}`
-                );
+            const pricing = this.resolveDefaultPricing(recorded);
+            if (!pricing) {
                 return;
             }
-
-            // Resolve the calculator the cost row's unit type names (logs and returns null when
-            // the unit type or its driver class is missing)
-            const priceCalculator = AIEngineBase.Instance.GetPriceCalculator(activeCost);
-            if (!priceCalculator) {
-                return;
-            }
-
-            const usage = this.BuildNormalizedUsage(priceCalculator, recorded);
-            if (!usage) {
-                return;
-            }
+            const record = ReadRealtimeUsageRecord(this.ModelSpecificResponseDetails);
+            const video = record ? this.priceAvatarVideo(record, pricing.CostRow.Currency) : null;
+            // The video's tokens leave a token-measured default line only; a run measured in seconds has none to give.
+            const usage = video && pricing.Calculator.UnitKind === 'Tokens' ? this.withoutVideoTokens(pricing.Usage, video) : pricing.Usage;
 
             // Token pricing prices each input bucket at its own rate: uncached/net-new (TokensPrompt)
             // at the standard input rate, cache reads/writes at CacheReadPricePerUnit /
@@ -280,22 +293,98 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             // single-bucket behavior for models without cache pricing — while models that DO have
             // cache rates get the (usually much cheaper) cached-token cost instead of being billed as
             // full input. Continuous-media pricing ignores the cache buckets entirely.
-            const normalizedCost = priceCalculator.CalculateCost(activeCost, usage);
-
-            // Set the cost fields
-            this.Cost = normalizedCost;
-            this.CostCurrency = activeCost.Currency;
-            
-            // Update total cost (for leaf nodes, total = cost)
-            if (!this.ParentID) {
-                // This is a root prompt run, so total cost = cost
-                this.TotalCost = normalizedCost;
+            const defaultCost = pricing.Calculator.CalculateCost(pricing.CostRow, usage);
+            this.setCost(defaultCost + (video?.Cost ?? 0), pricing.CostRow.Currency);
+            if (record) {
+                const measure = recorded.unitsKind ?? 'Tokens';
+                this.writeCostLines(BuildCostLines({ CostRowID: pricing.CostRow.ID, Measure: measure, Usage: usage, Cost: defaultCost }, video));
             }
-            // For child nodes, TotalCost will be calculated during rollup
-            
         } catch (err) {
             LogError(`Error calculating cost for AIPromptRun ${this.ID}: ${err}`);
             // Don't throw - we don't want to prevent saving just because cost calc failed
+        }
+    }
+
+    /**
+     * The run's default cost row, its calculator and the quantities it prices; `null` (logged) when the run cannot be
+     * priced. The row is selected by the measure this run actually recorded, not just by model+vendor: a model with
+     * rows in two measures would otherwise hand back whichever started most recently and be refused, reporting a
+     * measure mismatch where the real answer was "pick the other row".
+     */
+    private resolveDefaultPricing(recorded: RecordedRunUsage): DefaultRunPricing | null {
+        const costRow = AIEngineBase.Instance.GetActiveModelCost(
+            this.ModelID,
+            this.VendorID,
+            this.ResolveProcessingType(),
+            recorded.unitsKind ?? 'Tokens'
+        );
+        if (!costRow) {
+            LogError(
+                `No active cost configuration priced in ${recorded.unitsKind ?? 'Tokens'} found for ` +
+                `Model: ${this.ModelID}, Vendor: ${this.VendorID}`
+            );
+            return null;
+        }
+        // Resolve the calculator the cost row's unit type names (logs and returns null when
+        // the unit type or its driver class is missing)
+        const calculator = AIEngineBase.Instance.GetPriceCalculator(costRow);
+        const usage = calculator ? this.BuildNormalizedUsage(calculator, recorded) : null;
+        return calculator && usage ? { CostRow: costRow, Calculator: calculator, Usage: usage } : null;
+    }
+
+    /**
+     * The run's avatar video line, priced from the model vendor's resolved configuration; `null` when the run stored
+     * no avatar video, or when the video cannot be priced on its own line (one log line), in which case it prices as
+     * before.
+     */
+    private priceAvatarVideo(record: RealtimeUsageRecord, rowCurrency: string): PricedAvatarVideo | null {
+        const pricing = PriceAvatarVideoOutput(record, this.resolveModelConfiguration(), rowCurrency);
+        if (pricing?.Priced === false) {
+            LogStatus(
+                `[AIPromptRun cost] AIPromptRun ${this.ID}: avatar video is priced as before, not on its own line: ` +
+                `${AVATAR_VIDEO_UNPRICED_REASONS[pricing.Reason]}.`
+            );
+        }
+        return pricing?.Priced ? pricing : null;
+    }
+
+    /**
+     * The model configuration the run's model resolves to on its vendor (type < model < vendor defaults < model
+     * vendor). The model-vendor row is the run's vendor's inference-provider row, or any row for that vendor.
+     */
+    private resolveModelConfiguration(): AIModelConfiguration | null {
+        const engine = AIEngineBase.Instance;
+        const rows = (engine.ModelVendorsByModelID.get(NormalizeUUID(this.ModelID)) ?? []).filter((row) => UUIDsEqual(row.VendorID, this.VendorID));
+        const modelVendor = rows.find((row) => engine.IsInferenceProvider(row)) ?? rows[0];
+        return engine.GetEffectiveModelConfiguration(this.ModelID, modelVendor?.ID);
+    }
+
+    /** The default row's quantities without the output tokens a priced video line covers (logged when they ran out). */
+    private withoutVideoTokens(usage: NormalizedUsage, video: PricedAvatarVideo): NormalizedUsage {
+        const exclusion = ExcludeAvatarVideoTokens(usage, video.VideoTokens);
+        if (exclusion.Clamped) {
+            LogStatus(
+                `[AIPromptRun cost] AIPromptRun ${this.ID}: ${video.VideoTokens} video tokens exceed the ${usage.output} ` +
+                `output tokens recorded; the default line prices no output.`
+            );
+        }
+        return exclusion.Usage;
+    }
+
+    /** Sets the run's cost; a root run's total is its cost, a child's is rolled up by its parent. */
+    private setCost(cost: number, currency: string): void {
+        this.Cost = cost;
+        this.CostCurrency = currency;
+        if (!this.ParentID) {
+            this.TotalCost = cost;
+        }
+    }
+
+    /** Writes the run's cost lines into its details, beside the usage record they price. */
+    private writeCostLines(lines: PromptRunCostLine[]): void {
+        const details = WriteCostLines(this.ModelSpecificResponseDetails, lines);
+        if (details !== null) {
+            this.ModelSpecificResponseDetails = details;
         }
     }
 

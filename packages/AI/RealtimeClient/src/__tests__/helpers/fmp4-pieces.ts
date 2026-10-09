@@ -37,11 +37,28 @@ function fullBox(type: string, ...payload: Uint8Array[]): Uint8Array {
     return box(type, new Uint8Array(4), ...payload);
 }
 
-function trak(id: number, handler: string, entry: Uint8Array): Uint8Array {
+/** A track whose `mdhd` gives `timescale` units a second, as Gemini's avatar tracks do (90 kHz video, 24 kHz audio). */
+function trak(id: number, handler: string, entry: Uint8Array, timescale: number): Uint8Array {
     const tkhd = fullBox('tkhd', new Uint8Array(8), u32(id), new Uint8Array(68));
     const hdlr = fullBox('hdlr', u32(0), ascii(handler), new Uint8Array(13));
     const stbl = box('stbl', fullBox('stsd', u32(1), entry));
-    return box('trak', tkhd, box('mdia', fullBox('mdhd', new Uint8Array(20)), hdlr, box('minf', stbl)));
+    const mdhd = fullBox('mdhd', new Uint8Array(8), u32(timescale), new Uint8Array(8));
+    return box('trak', tkhd, box('mdia', mdhd, hdlr, box('minf', stbl)));
+}
+
+/** One 24 fps video frame at the video track's 90 kHz timescale, as Gemini writes each video fragment. */
+const VIDEO_FRAME_UNITS = 3750;
+/** One AAC frame at the audio track's 24 kHz timescale. */
+const AUDIO_FRAME_UNITS = 1024;
+
+/** The seconds of video one {@link AvatarVideoFragment} frame carries. */
+export const AVATAR_FRAME_SECONDS = VIDEO_FRAME_UNITS / 90000;
+
+/** A track fragment: `tfhd` (default-base-is-moof, a default sample duration) and a `trun` of `samples` samples. */
+function traf(trackID: number, sampleUnits: number, samples: number): Uint8Array {
+    const tfhd = box('tfhd', Uint8Array.of(0, 0x02, 0x00, 0x08), u32(trackID), u32(sampleUnits));
+    const trun = box('trun', Uint8Array.of(0, 0, 0, 0x01), u32(samples), u32(0));
+    return box('traf', tfhd, trun);
 }
 
 const AVC1 = box('avc1', new Uint8Array(6), Uint8Array.of(0, 1), new Uint8Array(70), box('avcC', Uint8Array.of(1, 0x42, 0xc0, 0x1f, 0xff, 0xe0, 0)));
@@ -52,15 +69,29 @@ const ESDS = fullBox(
 );
 const MP4A = box('mp4a', new Uint8Array(6), Uint8Array.of(0, 1), new Uint8Array(8), Uint8Array.of(0, 1, 0, 16), new Uint8Array(4), u32(24000 * 65536), ESDS);
 
-/** An init segment (`ftyp` + `moov`): an H.264 video track, and an AAC-LC audio track unless `audio` is false. */
-export function AvatarInitSegment(audio = true): ArrayBuffer {
-    const traks = audio ? [trak(1, 'vide', AVC1), trak(2, 'soun', MP4A)] : [trak(1, 'vide', AVC1)];
+/**
+ * An init segment (`ftyp` + `moov`): an H.264 video track at `videoTimescale` units a second (Gemini's 90 kHz by
+ * default), and an AAC-LC audio track at 24 kHz unless `audio` is false.
+ */
+export function AvatarInitSegment(audio = true, videoTimescale = 90000): ArrayBuffer {
+    const video = trak(1, 'vide', AVC1, videoTimescale);
+    const traks = audio ? [video, trak(2, 'soun', MP4A, 24000)] : [video];
     return concat(box('ftyp', ascii('iso5'), u32(512)), box('moov', fullBox('mvhd', new Uint8Array(96)), ...traks)).slice().buffer;
 }
 
-/** A media fragment (`moof` + `mdat`); `sequence` makes each one's bytes distinct. */
+/** A media fragment (`moof` + `mdat`) with no samples; `sequence` makes each one's bytes distinct. */
 export function AvatarFragment(sequence = 1): ArrayBuffer {
     return concat(box('moof', fullBox('mfhd', u32(sequence))), box('mdat', u32(sequence))).slice().buffer;
+}
+
+/** A video fragment of `frames` 24 fps frames ({@link AVATAR_FRAME_SECONDS} each), as Gemini sends one per frame. */
+export function AvatarVideoFragment(frames = 1, sequence = 1): ArrayBuffer {
+    return concat(box('moof', fullBox('mfhd', u32(sequence)), traf(1, VIDEO_FRAME_UNITS, frames)), box('mdat', u32(sequence))).slice().buffer;
+}
+
+/** An audio-only fragment of a muxed avatar (Gemini alternates video and audio fragments): one AAC frame, no video. */
+export function AvatarAudioFragment(sequence = 1): ArrayBuffer {
+    return concat(box('moof', fullBox('mfhd', u32(sequence)), traf(2, AUDIO_FRAME_UNITS, 1)), box('mdat', u32(sequence))).slice().buffer;
 }
 
 /** A media segment that opens with `styp`, as CMAF writers send it. */

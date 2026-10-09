@@ -116,8 +116,14 @@ import {
     IsActionAllowedForDirectInvocation
 } from './realtime-coagent-config';
 import { SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtime-vendor-resolution';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIEngineBase, MergeRealtimeUsageRecord, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import { BuildSessionChannelPolicy, type RealtimeChannelRegistryRow } from './realtime-channel-policy';
+
+/**
+ * How many seconds of avatar video a run may store beyond its elapsed time: usage is client-reported, so the stored
+ * output video seconds are capped at the run's elapsed time plus this grace (relays land a few seconds late).
+ */
+const VIDEO_SECONDS_GRACE = 30;
 
 /**
  * Context passed to {@link PrepareClientSessionInput.ResolveHostTools} describing the
@@ -1795,9 +1801,15 @@ export class RealtimeClientSessionService {
      * high-frequency usage checkpoint never overwrites freshly-appended transcript turns (and vice-versa).
      * Best-effort: load/save failures log and return `false`, never throw.
      *
+     * The per-modality details add into the usage record the run keeps in `ModelSpecificResponseDetails`
+     * (`RealtimeUsage.Input` / `.Output`, which pricing reads at finalize); every other key there is kept. The
+     * stored output video seconds never exceed the run's elapsed time plus 30 seconds: usage is client-reported,
+     * and avatar video carries a price.
+     *
      * @param promptRunID The co-agent observability prompt run.
      * @param inputDelta Input-token delta to add (caller clamps to >= 0).
      * @param outputDelta Output-token delta to add (caller clamps to >= 0).
+     * @param details Per-modality usage to add (input and output blocks, avatar video seconds included).
      * @returns `true` when the accumulated usage was persisted.
      */
     public async AccumulatePromptRunUsage(
@@ -1806,6 +1818,7 @@ export class RealtimeClientSessionService {
         outputDelta: number,
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        details?: RealtimeUsageRecord,
     ): Promise<boolean> {
         return this.serializePromptRunWrite(promptRunID, async () => {
             try {
@@ -1817,6 +1830,9 @@ export class RealtimeClientSessionService {
                 promptRun.TokensPrompt = (promptRun.TokensPrompt ?? 0) + inputDelta;
                 promptRun.TokensCompletion = (promptRun.TokensCompletion ?? 0) + outputDelta;
                 promptRun.TokensUsed = (promptRun.TokensPrompt ?? 0) + (promptRun.TokensCompletion ?? 0);
+                if (details) {
+                    this.mergeUsageDetails(promptRun, details);
+                }
                 if (!(await promptRun.Save())) {
                     LogError(`AccumulatePromptRunUsage: prompt run ${promptRunID} save failed: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                     return false;
@@ -1827,6 +1843,29 @@ export class RealtimeClientSessionService {
                 return false;
             }
         });
+    }
+
+    /**
+     * Adds relayed per-modality usage into the run's usage record, with the output video seconds capped at the run's
+     * elapsed time plus {@link VIDEO_SECONDS_GRACE}. Details that are not a JSON object are left alone (logged).
+     */
+    private mergeUsageDetails(promptRun: MJAIPromptRunEntityExtended, details: RealtimeUsageRecord): void {
+        const runAt = promptRun.RunAt ? new Date(promptRun.RunAt).getTime() : Number.NaN;
+        const elapsedSeconds = Math.max(0, (Date.now() - runAt) / 1000);
+        const merged = MergeRealtimeUsageRecord(promptRun.ModelSpecificResponseDetails, details, {
+            MaxOutputVideoSeconds: Number.isFinite(elapsedSeconds) ? elapsedSeconds + VIDEO_SECONDS_GRACE : undefined,
+        });
+        if (!merged) {
+            LogError(`AccumulatePromptRunUsage: prompt run ${promptRun.ID} has details that are not a JSON object — usage details dropped.`);
+            return;
+        }
+        if (merged.ClampedVideoSeconds > 0) {
+            LogStatus(
+                `AccumulatePromptRunUsage: prompt run ${promptRun.ID} reported ${merged.ClampedVideoSeconds} s more avatar video than ` +
+                    `the run's elapsed time plus ${VIDEO_SECONDS_GRACE} s allows; the stored seconds are capped.`,
+            );
+        }
+        promptRun.ModelSpecificResponseDetails = merged.Details;
     }
 
     /** Parses the prompt run's `Messages` JSON into a mutable chat-message array (tolerant: `[]` on empty/malformed). */

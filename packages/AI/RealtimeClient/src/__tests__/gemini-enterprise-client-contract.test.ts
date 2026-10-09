@@ -9,11 +9,12 @@ vi.mock('@google/genai', async () => vi.importActual<typeof import('@google/gena
 
 import { MJGlobal } from '@memberjunction/global';
 import type { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
-import { BaseRealtimeClient, type RealtimeClientTranscript } from '../generic/baseRealtimeClient';
+import { BaseRealtimeClient, type RealtimeClientTranscript, type RealtimeClientUsage } from '../generic/baseRealtimeClient';
 import { GeminiRealtimeClient, type IGeminiAudioPlayback, type IGeminiMicCapture } from '../drivers/geminiRealtimeClient';
 import { GeminiEnterpriseRealtimeClient } from '../drivers/geminiEnterpriseRealtimeClient';
 import { GEMINI_AVATAR_MP4_TYPE, type IAvatarVideoPlayout, type VideoPlayoutOptions } from '../media/videoPlayout';
 import { InstallFakeMse } from './helpers/fake-mse';
+import { AvatarInitSegment, AvatarVideoFragment, PieceToBase64 } from './helpers/fmp4-pieces';
 import { FakeAvatarPlayout, FakeGeminiPlayback, FakeMediaStream, FakeMicCapture, FakeTrack } from './helpers/realtime-fakes';
 
 // ── A fake browser WebSocket ────────────────────────────────────────────────────────────────────────────
@@ -274,6 +275,43 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
         it('states AUDIO for a session without an avatar, even when the minted config names no modalities', async () => {
             expect(modalitiesOf((await connect(enterprisePact())).Socket)).toEqual(['AUDIO']);
             expect(modalitiesOf((await connect(enterprisePact({ Config: {} }))).Socket)).toEqual(['AUDIO']);
+        });
+    });
+
+    describe('usage', () => {
+        /** A model part as Google sends it: base64 bytes and a MIME type. */
+        function videoPart(piece: ArrayBuffer): JSONObject {
+            return { inlineData: { mimeType: 'video/mp4', data: PieceToBase64(piece) } };
+        }
+
+        it("counts the avatar's video seconds, as the Gemini client does", async () => {
+            const { Client, Socket } = await connect(enterprisePact({ Avatar: true }));
+            const usages: RealtimeClientUsage[] = [];
+            Client.OnUsage((u) => usages.push(u));
+            Socket.Receive({ setupComplete: {} });
+            Socket.Receive({ serverContent: { modelTurn: { role: 'model', parts: [videoPart(AvatarInitSegment()), videoPart(AvatarVideoFragment(24))] } } });
+            Socket.Receive({ serverContent: { generationComplete: true } });
+
+            await vi.waitFor(() => expect(usages).toHaveLength(1));
+            expect(Object.keys(usages[0])).toEqual(['OutputTokenDetails']);
+            expect(usages[0].OutputTokenDetails?.VideoSeconds).toBeCloseTo(1, 9);
+        });
+
+        it("reads Vertex AI's response split (candidatesTokensDetails), VIDEO included, through the web SDK", async () => {
+            const { Client, Socket } = await connect(enterprisePact({ Avatar: true }));
+            const usages: RealtimeClientUsage[] = [];
+            Client.OnUsage((u) => usages.push(u));
+            Socket.Receive({ setupComplete: {} });
+            Socket.Receive({
+                usageMetadata: {
+                    promptTokenCount: 120,
+                    candidatesTokenCount: 6292,
+                    candidatesTokensDetails: [{ modality: 'AUDIO', tokenCount: 100 }, { modality: 'VIDEO', tokenCount: 6192 }],
+                },
+            });
+
+            await vi.waitFor(() => expect(usages).toHaveLength(1));
+            expect(usages[0]).toMatchObject({ InputTokens: 120, OutputTokens: 6292, OutputTokenDetails: { AudioTokens: 100, VideoTokens: 6192 } });
         });
     });
 

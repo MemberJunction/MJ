@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, it, expect } from 'vitest';
-import { ReadFmp4Init, SniffFmp4Piece } from '../generic/fmp4Reader';
+import { Fmp4VideoSeconds, ReadFmp4Init, SniffFmp4Piece, type Fmp4Init } from '../generic/fmp4Reader';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -95,18 +95,87 @@ interface TrakOptions {
     Entry?: Uint8Array;
     TkhdVersion?: 0 | 1;
     Without?: 'tkhd' | 'hdlr';
+    /** The `mdhd` timescale; absent writes 0, which names none. */
+    Timescale?: number;
+    MdhdVersion?: 0 | 1;
+}
+
+/** An `mdhd` box: creation and modification times (64-bit in version 1), the timescale, a duration, language. */
+function mdhd(timescale = 0, version: 0 | 1 = 0): Uint8Array {
+    const times = zeros(version === 1 ? 16 : 8);
+    return fullBox('mdhd', version, times, u32(timescale), zeros(version === 1 ? 8 : 4), zeros(4));
 }
 
 function trak(options: TrakOptions): Uint8Array {
     const stbl = box('stbl', fullBox('stsd', 0, u32(1), options.Entry ?? zeros(0)), fullBox('stts', 0, u32(0)));
-    const mdia = box('mdia', fullBox('mdhd', 0, zeros(20)), ...(options.Without === 'hdlr' ? [] : [hdlr(options.Handler)]), box('minf', stbl));
+    const handler = options.Without === 'hdlr' ? [] : [hdlr(options.Handler)];
+    const mdia = box('mdia', mdhd(options.Timescale, options.MdhdVersion), ...handler, box('minf', stbl));
     return box('trak', ...(options.Without === 'tkhd' ? [] : [tkhd(options.ID, options.TkhdVersion ?? 0)]), mdia);
 }
 
 const FTYP = box('ftyp', ascii('iso5'), u32(512), ascii('iso5iso6mp41'));
 
+/** A `trex` box: the track id, a sample description index, then the default sample duration, size and flags. */
+function trex(trackID = 0, defaultDuration = 0): Uint8Array {
+    return fullBox('trex', 0, u32(trackID), u32(1), u32(defaultDuration), u32(0), u32(0));
+}
+
 function moov(...traks: Uint8Array[]): Uint8Array {
-    return box('moov', fullBox('mvhd', 0, zeros(96)), ...traks, box('mvex', fullBox('trex', 0, zeros(20))));
+    return moovWith([trex()], ...traks);
+}
+
+function moovWith(trexes: Uint8Array[], ...traks: Uint8Array[]): Uint8Array {
+    return box('moov', fullBox('mvhd', 0, zeros(96)), ...traks, box('mvex', ...trexes));
+}
+
+/** A full box with flags. */
+function flaggedBox(type: string, flags: number, ...payload: Uint8Array[]): Uint8Array {
+    return box(type, bytes(0, (flags >> 16) & 0xff, (flags >> 8) & 0xff, flags & 0xff), ...payload);
+}
+
+interface TrafOptions {
+    TrackID: number;
+    /** The `tfhd` default sample duration (sets its flag); absent leaves the duration to the samples or `trex`. */
+    DefaultDuration?: number;
+    /** Writes a base data offset and a sample description index ahead of the default duration. */
+    WithOffsets?: boolean;
+    /** The `trun` sample count, when the samples carry no duration of their own. */
+    SampleCount?: number;
+    /** Each sample's own duration (`trun` flag 0x100), each followed by a size (0x200). */
+    SampleDurations?: number[];
+}
+
+/** A track fragment as ffmpeg and Gemini write one: `tfhd` (default-base-is-moof), `tfdt`, one `trun`. */
+function traf(options: TrafOptions): Uint8Array {
+    let tfhdFlags = 0x020000;
+    const tfhdFields: Uint8Array[] = [u32(options.TrackID)];
+    if (options.WithOffsets) {
+        tfhdFlags |= 0x01 | 0x02;
+        tfhdFields.push(u32(0), u32(4096), u32(1));
+    }
+    if (options.DefaultDuration !== undefined) {
+        tfhdFlags |= 0x08;
+        tfhdFields.push(u32(options.DefaultDuration));
+    }
+    const durations = options.SampleDurations;
+    const records = durations ? durations.flatMap((duration) => [u32(duration), u32(100)]) : [];
+    const trunFlags = 0x01 | (durations ? 0x100 | 0x200 : 0);
+    const trun = flaggedBox('trun', trunFlags, u32(durations?.length ?? options.SampleCount ?? 1), u32(0), ...records);
+    return box('traf', flaggedBox('tfhd', tfhdFlags, ...tfhdFields), fullBox('tfdt', 1, zeros(8)), trun);
+}
+
+/** A media fragment piece: `moof` (with the given track fragments) + `mdat`. */
+function fragment(...trafs: Uint8Array[]): Uint8Array {
+    return concat(box('moof', fullBox('mfhd', 0, u32(1)), ...trafs), box('mdat', zeros(16)));
+}
+
+/** What an init declares, for pieces the reader must be able to read. */
+function initOf(piece: Uint8Array): Fmp4Init {
+    const init = ReadFmp4Init(piece);
+    if (!init) {
+        throw new Error('The init segment did not read');
+    }
+    return init;
 }
 
 const VIDEO_TRAK = trak({ ID: 1, Handler: 'vide', Entry: avcEntry() });
@@ -295,14 +364,126 @@ describe('ReadFmp4Init', () => {
     });
 });
 
+describe('ReadFmp4Init timing', () => {
+    it("reads each track's timescale from its mdhd", () => {
+        const init = concat(FTYP, moov(trak({ ID: 1, Handler: 'vide', Entry: avcEntry(), Timescale: 90000 }), trak({ ID: 2, Handler: 'soun', Entry: mp4aEntry(), Timescale: 24000 })));
+        expect(ReadFmp4Init(init)?.Tracks.map((t) => t.Timescale)).toEqual([90000, 24000]);
+    });
+
+    it('reads the timescale after 64-bit times in a version 1 mdhd', () => {
+        const init = concat(FTYP, moov(trak({ ID: 1, Handler: 'vide', Entry: avcEntry(), Timescale: 12288, MdhdVersion: 1 })));
+        expect(ReadFmp4Init(init)?.Tracks[0].Timescale).toBe(12288);
+    });
+
+    it('names no timescale when the mdhd says 0', () => {
+        expect(ReadFmp4Init(MUXED_INIT)?.Tracks[0].Timescale).toBeUndefined();
+    });
+
+    it("reads each track's default sample duration from its trex, and names none for a 0", () => {
+        const traks = [trak({ ID: 1, Handler: 'vide', Entry: avcEntry(), Timescale: 90000 }), trak({ ID: 2, Handler: 'soun', Entry: mp4aEntry(), Timescale: 24000 })];
+        const init = concat(FTYP, moovWith([trex(1, 3600), trex(2, 0)], ...traks));
+        expect(ReadFmp4Init(init)?.Tracks.map((t) => t.DefaultSampleDuration)).toEqual([3600, undefined]);
+    });
+});
+
+describe('Fmp4VideoSeconds', () => {
+    const VIDEO_90K = trak({ ID: 1, Handler: 'vide', Entry: avcEntry(), Timescale: 90000 });
+    const AUDIO_24K = trak({ ID: 2, Handler: 'soun', Entry: mp4aEntry(), Timescale: 24000 });
+    const MUXED = initOf(concat(FTYP, moov(VIDEO_90K, AUDIO_24K)));
+    /** One 24 fps frame at a 90 kHz timescale, as Gemini's avatar video writes it. */
+    const FRAME = 3750;
+
+    describe('durations', () => {
+        it("reads a one-sample fragment's duration from the tfhd default, as Gemini sends it", () => {
+            expect(Fmp4VideoSeconds(fragment(traf({ TrackID: 1, DefaultDuration: FRAME })), MUXED)).toBe(FRAME / 90000);
+        });
+
+        it('multiplies the tfhd default by the trun sample count', () => {
+            expect(Fmp4VideoSeconds(fragment(traf({ TrackID: 1, DefaultDuration: FRAME, SampleCount: 24 })), MUXED)).toBeCloseTo(1, 12);
+        });
+
+        it("adds up each sample's own duration when the trun records them, over the default", () => {
+            const piece = fragment(traf({ TrackID: 1, DefaultDuration: 1, SampleDurations: [3000, 3750, 4500] }));
+            expect(Fmp4VideoSeconds(piece, MUXED)).toBe(11250 / 90000);
+        });
+
+        it("falls back to the init's trex default when the fragment gives no duration, and the tfhd default wins over it", () => {
+            const init = initOf(concat(FTYP, moovWith([trex(1, 3600)], VIDEO_90K)));
+            expect(Fmp4VideoSeconds(fragment(traf({ TrackID: 1, SampleCount: 2 })), init)).toBe(7200 / 90000);
+            expect(Fmp4VideoSeconds(fragment(traf({ TrackID: 1, DefaultDuration: FRAME })), init)).toBe(FRAME / 90000);
+        });
+
+        it('reads the default duration past the base data offset and sample description index the tfhd flags announce', () => {
+            expect(Fmp4VideoSeconds(fragment(traf({ TrackID: 1, DefaultDuration: FRAME, WithOffsets: true })), MUXED)).toBe(FRAME / 90000);
+        });
+
+        it('adds up every moof in the piece', () => {
+            const piece = concat(fragment(traf({ TrackID: 1, DefaultDuration: FRAME })), fragment(traf({ TrackID: 1, DefaultDuration: 7500 })));
+            expect(Fmp4VideoSeconds(piece, MUXED)).toBe(11250 / 90000);
+        });
+    });
+
+    describe('only the video track counts', () => {
+        it("reads 0 from an audio-only fragment of a muxed stream (Gemini alternates the two tracks' fragments)", () => {
+            expect(Fmp4VideoSeconds(fragment(traf({ TrackID: 2, DefaultDuration: 1024 })), MUXED)).toBe(0);
+        });
+
+        it('counts the video samples of a fragment that holds both tracks, in the video timescale', () => {
+            const piece = fragment(traf({ TrackID: 1, DefaultDuration: FRAME }), traf({ TrackID: 2, DefaultDuration: 1024 }));
+            expect(Fmp4VideoSeconds(piece, MUXED)).toBe(FRAME / 90000);
+        });
+
+        it('reads 0 from a piece without a moof: an init segment, or a styp alone', () => {
+            expect(Fmp4VideoSeconds(concat(FTYP, moov(VIDEO_90K)), MUXED)).toBe(0);
+            expect(Fmp4VideoSeconds(box('styp', ascii('msdh')), MUXED)).toBe(0);
+        });
+    });
+
+    describe('what it does not read', () => {
+        it('is null when the init declares no video track, or its video track no timescale', () => {
+            const audioOnly = initOf(concat(FTYP, moov(AUDIO_24K)));
+            const untimed = initOf(MUXED_INIT);
+            const piece = fragment(traf({ TrackID: 1, DefaultDuration: FRAME }));
+            expect(Fmp4VideoSeconds(piece, audioOnly)).toBeNull();
+            expect(Fmp4VideoSeconds(piece, untimed)).toBeNull();
+        });
+
+        it('is null when no box gives the video samples a duration', () => {
+            expect(Fmp4VideoSeconds(fragment(traf({ TrackID: 1, SampleCount: 2 })), MUXED)).toBeNull();
+        });
+
+        it("is null when the trun's sample records run past it", () => {
+            const piece = fragment(traf({ TrackID: 1, SampleDurations: [FRAME, FRAME] }));
+            const trunAt = offsetOf(piece, 'trun');
+            const count = new DataView(piece.buffer).getUint32(trunAt + 12);
+            const overrun = piece.slice();
+            new DataView(overrun.buffer).setUint32(trunAt + 12, count + 1);
+            expect(Fmp4VideoSeconds(overrun, MUXED)).toBeNull();
+        });
+
+        it('is null when a track fragment has no readable tfhd, or a box runs past the piece', () => {
+            const noTfhd = fragment(box('traf', fullBox('tfdt', 1, zeros(8))));
+            const piece = fragment(traf({ TrackID: 1, DefaultDuration: FRAME }));
+            expect(Fmp4VideoSeconds(noTfhd, MUXED)).toBeNull();
+            expect(Fmp4VideoSeconds(withBoxSize(piece, 0, piece.length + 1), MUXED)).toBeNull();
+        });
+
+        it('reads the same from a view into a larger buffer as from the piece alone', () => {
+            const piece = fragment(traf({ TrackID: 1, DefaultDuration: FRAME }));
+            const larger = concat(zeros(7), piece, zeros(5));
+            expect(Fmp4VideoSeconds(larger.subarray(7, 7 + piece.length), MUXED)).toBe(FRAME / 90000);
+        });
+    });
+});
+
 describe('the committed stand-in avatars (fixtures/make-avatar-standin.sh)', () => {
     it('muxed: an H.264 video track and an AAC-LC audio track, then 48 one-frame fragments', () => {
         const [init, ...fragments] = fixturePieces('avatar-standin-muxed.mp4');
         expect(SniffFmp4Piece(init)).toBe('init');
         expect(ReadFmp4Init(init)).toEqual({
             Tracks: [
-                { TrackID: 1, Handler: 'vide', Codec: 'avc1.42c01f' },
-                { TrackID: 2, Handler: 'soun', Codec: 'mp4a.40.2' },
+                { TrackID: 1, Handler: 'vide', Codec: 'avc1.42c01f', Timescale: 12288 },
+                { TrackID: 2, Handler: 'soun', Codec: 'mp4a.40.2', Timescale: 24000 },
             ],
         });
         expect(fragments).toHaveLength(48);
@@ -311,8 +492,22 @@ describe('the committed stand-in avatars (fixtures/make-avatar-standin.sh)', () 
 
     it('video only: one H.264 track, no audio track', () => {
         const [init, ...fragments] = fixturePieces('avatar-standin-video-only.mp4');
-        expect(ReadFmp4Init(init)?.Tracks).toEqual([{ TrackID: 1, Handler: 'vide', Codec: 'avc1.42c01f' }]);
+        expect(ReadFmp4Init(init)?.Tracks).toEqual([{ TrackID: 1, Handler: 'vide', Codec: 'avc1.42c01f', Timescale: 12288 }]);
         expect(fragments).toHaveLength(48);
+    });
+
+    it('video only: 48 fragments of one 24 fps frame each make 2 seconds', () => {
+        const [init, ...fragments] = fixturePieces('avatar-standin-video-only.mp4');
+        const seconds = fragments.map((piece) => Fmp4VideoSeconds(piece, initOf(init)));
+        expect(seconds.every((s) => s === 512 / 12288)).toBe(true);
+        expect(seconds.reduce<number>((total, s) => total + (s ?? 0), 0)).toBeCloseTo(2, 9);
+    });
+
+    it("muxed: counts the video track's samples (25,101 units at 12,288 a second), never the audio track's", () => {
+        const [init, ...fragments] = fixturePieces('avatar-standin-muxed.mp4');
+        const seconds = fragments.map((piece) => Fmp4VideoSeconds(piece, initOf(init)) ?? Number.NaN);
+        expect(seconds[0]).toBe(1037 / 12288);
+        expect(seconds.reduce((total, s) => total + s, 0)).toBeCloseTo(25101 / 12288, 9);
     });
 });
 

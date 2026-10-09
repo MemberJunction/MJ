@@ -1,7 +1,7 @@
 import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine, type MJAIAgentChannelEntity, type MJAIAgentChannelEntity_IChannelUIConfig } from '@memberjunction/core-entities';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AddRealtimeUsageRecord, AIEngineBase, HasRealtimeUsage, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
@@ -87,6 +87,16 @@ import {
  * default when the caller doesn't pass an explicit consent value.
  */
 export const REALTIME_RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
+
+/**
+ * Relays usage onto the co-agent prompt run: token deltas, and the per-modality detail blocks as a
+ * JSON record (sent only when there are any; see `RelayRealtimeUsage` in MJServer).
+ */
+const RELAY_REALTIME_USAGE_MUTATION = `
+  mutation RelayRealtimeUsage($agentSessionId: String!, $inputTokens: Int!, $outputTokens: Int!, $usageDetailsJson: String) {
+    RelayRealtimeUsage(agentSessionId: $agentSessionId, inputTokens: $inputTokens, outputTokens: $outputTokens, usageDetailsJson: $usageDetailsJson)
+  }
+`;
 
 // Tree-shaking prevention: the OpenAI client is resolved dynamically through the
 // ClassFactory (by the server-reported Provider key), so this static call is what keeps
@@ -860,6 +870,11 @@ export class RealtimeSessionRuntime {
   private pendingUsageInput = 0;
   /** Accumulated output-token delta since the last flush. */
   private pendingUsageOutput = 0;
+  /**
+   * Accumulated per-modality usage since the last flush (input and output detail blocks, avatar
+   * video seconds included), relayed in full; `null` when no update carried any.
+   */
+  private pendingUsageDetails: RealtimeUsageRecord | null = null;
   /** Pending debounced usage flush; also force-flushed at teardown. */
   private usageFlushTimer: ReturnType<typeof setTimeout> | null = null;
   /** Active push-status subscription that feeds delegation progress; cleared on teardown. */
@@ -3802,16 +3817,29 @@ export class RealtimeSessionRuntime {
   /**
    * Accumulates one usage DELTA from the realtime client (per-response token counts —
    * the `OnUsage` contract shape) and schedules the debounced relay. Negative / non-finite
-   * values are clamped to 0; an all-zero delta is dropped without arming the timer.
+   * values are clamped to 0; an all-zero delta is dropped without arming the timer. The
+   * update's input and output detail blocks add into the pending details by the record's
+   * rules (amounts add up, inbound video running totals keep the larger value), so an update
+   * that carries only avatar video seconds still counts.
    */
   private onUsageDelta(usage: RealtimeClientUsage): void {
     const input = this.clampUsageDelta(usage.InputTokens);
     const output = this.clampUsageDelta(usage.OutputTokens);
-    if (input === 0 && output === 0) {
+    const details = AddRealtimeUsageRecord(null, { Input: usage.InputTokenDetails, Output: usage.OutputTokenDetails });
+    const hasDetails = HasRealtimeUsage(details);
+    if (input === 0 && output === 0 && !hasDetails) {
       return;
     }
     this.pendingUsageInput += input;
     this.pendingUsageOutput += output;
+    if (hasDetails) {
+      this.pendingUsageDetails = AddRealtimeUsageRecord(this.pendingUsageDetails, details);
+    }
+    this.armUsageFlush();
+  }
+
+  /** Schedules the debounced usage relay unless one is already pending. */
+  private armUsageFlush(): void {
     if (!this.usageFlushTimer) {
       this.usageFlushTimer = setTimeout(() => {
         this.usageFlushTimer = null;
@@ -3838,23 +3866,25 @@ export class RealtimeSessionRuntime {
     const sessionId = agentSessionId ?? this.agentSessionId;
     const input = this.pendingUsageInput;
     const output = this.pendingUsageOutput;
-    if (!sessionId || (input === 0 && output === 0)) {
+    const details = this.pendingUsageDetails;
+    if (!sessionId || (input === 0 && output === 0 && !details)) {
       return;
     }
     this.pendingUsageInput = 0;
     this.pendingUsageOutput = 0;
+    this.pendingUsageDetails = null;
     try {
-      const mutation = `
-        mutation RelayRealtimeUsage($agentSessionId: String!, $inputTokens: Int!, $outputTokens: Int!) {
-          RelayRealtimeUsage(agentSessionId: $agentSessionId, inputTokens: $inputTokens, outputTokens: $outputTokens)
-        }
-      `;
-      await this.gql().ExecuteGQL(mutation, { agentSessionId: sessionId, inputTokens: input, outputTokens: output });
+      // The details argument is sent only when there are details, so a token-only relay is unchanged.
+      const variables = { agentSessionId: sessionId, inputTokens: input, outputTokens: output, ...(details ? { usageDetailsJson: JSON.stringify(details) } : {}) };
+      await this.gql().ExecuteGQL(RELAY_REALTIME_USAGE_MUTATION, variables);
     } catch (error) {
       console.error('[RealtimeSession] Failed to relay usage telemetry:', error);
       // Re-accumulate so a later debounce / the teardown flush retries the same deltas.
       this.pendingUsageInput += input;
       this.pendingUsageOutput += output;
+      if (details) {
+        this.pendingUsageDetails = AddRealtimeUsageRecord(this.pendingUsageDetails, details);
+      }
     }
   }
 
@@ -3866,6 +3896,7 @@ export class RealtimeSessionRuntime {
     }
     this.pendingUsageInput = 0;
     this.pendingUsageOutput = 0;
+    this.pendingUsageDetails = null;
   }
 
   // ── Delegated-run progress streaming ───────────────────────────────────────

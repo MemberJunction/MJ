@@ -83,7 +83,10 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 
 vi.mock('../AIAgentPermissionHelper', () => ({ AIAgentPermissionHelper: {}, EffectiveAgentPermissions: class {} }));
 
+import { ParseModelConfiguration, ResolveEffectiveModelConfiguration, type AIModelConfiguration } from '@memberjunction/ai';
 import { AIEngineBase } from '../BaseAIEngine';
+import { PerMillionTokensPriceUnitType } from '../PriceUnitTypes';
+import { ExcludeAvatarVideoTokens, PriceAvatarVideoOutput, RoundCost } from '../RealtimeCostLines';
 
 /** A field value in a seed file. */
 type SeedValue = string | number | boolean | null | SeedObject;
@@ -322,5 +325,35 @@ describe('Gemini 3.8 Live on Vertex AI — the token cost row', () => {
         expect(rows).toHaveLength(1);
         expect(rows[0]).not.toHaveProperty('PriceTypeID');
         expect(String(rows[0]['Comments'])).toMatch(/VERIFY against the Vertex AI price list/);
+    });
+});
+
+describe('Gemini 3.8 Live on Vertex AI — the avatar video price, as pricing reads it', () => {
+    /** One speaking minute: Google counts the avatar's 60 s of video as 371,520 of the 373,520 output tokens. */
+    const minute = { Output: { AudioTokens: 2000, VideoTokens: 371520, VideoSeconds: 60 } };
+
+    /** The model's configuration on a vendor, as the database stores it (JSON text): the model's bag under the model-vendor row's. */
+    function configurationOn(vendorID: string): AIModelConfiguration | null {
+        const text = (value: SeedValue | undefined): string | null => (value ? JSON.stringify(value) : null);
+        const model = seeds.Models.find((m) => m.primaryKey?.ID === MODEL);
+        const row = modelVendors.find((mv) => mv['ModelID'] === MODEL && mv['VendorID'] === vendorID);
+        return ResolveEffectiveModelConfiguration(ParseModelConfiguration(text(model?.fields['ModelConfiguration'])), ParseModelConfiguration(text(row?.['ModelConfiguration'])));
+    }
+
+    it("prices a speaking minute on Vertex AI: the token row's $0.0165 plus the row's $0.37152 of video, $0.38802", () => {
+        const costRow = AIEngineBase.Instance.GetActiveModelCost(MODEL, VERTEX, 'Realtime');
+        if (!costRow) {
+            throw new Error('metadata seeds no Vertex AI token cost row for Gemini 3.8 Live');
+        }
+        const video = PriceAvatarVideoOutput(minute, configurationOn(VERTEX), costRow.Currency);
+        const tokens = new PerMillionTokensPriceUnitType().CalculateCost(costRow, ExcludeAvatarVideoTokens({ input: 10000, output: 373520 }, 371520).Usage);
+
+        expect(video).toEqual({ Priced: true, Seconds: 60, Cost: 0.37152, VideoTokens: 371520 });
+        expect(RoundCost(tokens)).toBe(0.0165);
+        expect(RoundCost(tokens + (video?.Priced ? video.Cost : 0))).toBe(0.38802);
+    });
+
+    it('has no avatar video price on Google: the price sits on the Vertex AI row, not on the model', () => {
+        expect(PriceAvatarVideoOutput(minute, configurationOn(GOOGLE), 'USD')).toEqual({ Priced: false, Reason: 'no-price' });
     });
 });

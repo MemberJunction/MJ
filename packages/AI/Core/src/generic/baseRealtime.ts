@@ -985,15 +985,21 @@ export interface RealtimeUsage {
     InputTokenDetails?: RealtimeUsageModalityDetail;
 
     /**
-     * Per-modality breakdown of the output tokens, when the provider reports one.
-     * See {@link RealtimeUsage.InputTokenDetails}.
+     * Per-modality breakdown of the output tokens, when the provider reports one, and the seconds of
+     * avatar video generated since the last update (`VideoSeconds`). An update may carry only those
+     * seconds, with both token totals 0. See {@link RealtimeUsage.InputTokenDetails}.
      */
     OutputTokenDetails?: RealtimeUsageModalityDetail;
 }
 
 /**
  * Per-modality token counts inside a {@link RealtimeUsage} update. All fields optional — providers
- * report different subsets (OpenAI GA: text/audio/cached on input, text/audio on output).
+ * report different subsets (OpenAI GA: text/audio/cached on input, text/audio on output; Gemini Live:
+ * text/audio/image on input, text/audio/video on output).
+ *
+ * Every token field is an amount for this update, like the totals. The video fields differ by
+ * direction: inbound they are the session's running totals (snapshots), outbound `VideoSeconds` is
+ * an amount for this update.
  */
 export interface RealtimeUsageModalityDetail {
     /** Text-modality tokens. */
@@ -1006,18 +1012,27 @@ export interface RealtimeUsageModalityDetail {
      * inbound video frames under promptTokensDetails.IMAGE).
      */
     ImageTokens?: number;
+    /**
+     * Video-modality tokens, as the provider reports them (Gemini Live: `responseTokensDetails` VIDEO for
+     * a generated avatar's video). Part of the update's output total when the provider counts them there.
+     */
+    VideoTokens?: number;
     /** Tokens served from the provider's prompt cache (billed at the cached rate). */
     CachedTokens?: number;
     /**
-     * Cumulative inbound video frames processed on video tracks (usage basis 'frames').
-     * Client-side telemetry signal providing fine-grained frame counting and rate attribution.
-     * Comparing VideoFrames against ImageTokens enables operational drift detection for dropped frames.
+     * Inbound only: the video frames sent so far on the session's video tracks (usage basis 'frames'),
+     * a running total rather than an amount for this update. Client-side telemetry; comparing it
+     * against ImageTokens surfaces dropped frames.
      */
     VideoFrames?: number;
     /**
-     * Cumulative inbound or outbound video duration in seconds (usage basis 'seconds').
-     * Represents the wall-clock span between first and last sent frames (span-not-sum) for stream telemetry.
-     * Provider-reported ImageTokens remains the authoritative financial billing basis.
+     * Seconds of video (usage basis 'seconds'). The two directions mean different things:
+     * - **Inbound** (`InputTokenDetails`): the wall-clock span between the first and last frame sent so
+     *   far (span-not-sum), a running total for telemetry. Provider-reported ImageTokens remain the
+     *   billing basis.
+     * - **Outbound** (`OutputTokenDetails`): the seconds of video the model generated since the last
+     *   update (an avatar's video, from its fragment durations), an amount like the token fields.
+     *   Consumers add the updates up.
      */
     VideoSeconds?: number;
 }

@@ -25,6 +25,7 @@ import {
     type LiveConnectConfig,
     type LiveServerContent,
     type LiveServerMessage,
+    type ModalityTokenCount,
     type Transcription,
 } from '@google/genai';
 import { BaseRealtimeClient, RealtimeClientState, REQUESTED_TRACKS_SESSION_KEY } from '../generic/baseRealtimeClient';
@@ -47,6 +48,14 @@ const GEMINI_INPUT_SAMPLE_RATE = 16000;
 const GEMINI_INPUT_AUDIO_MIME_TYPE = 'audio/pcm;rate=16000';
 /** Gemini Live emits model audio as 16-bit signed PCM, 24 kHz, mono. */
 const GEMINI_OUTPUT_SAMPLE_RATE = 24000;
+
+/** The detail field each Gemini `usageMetadata` modality's token count goes into; other modalities are not kept. */
+const GEMINI_MODALITY_TOKEN_FIELDS: Partial<Record<string, 'TextTokens' | 'AudioTokens' | 'ImageTokens' | 'VideoTokens'>> = {
+    TEXT: 'TextTokens',
+    AUDIO: 'AudioTokens',
+    IMAGE: 'ImageTokens',
+    VIDEO: 'VideoTokens',
+};
 
 // ── Legacy video-capability fallback ───────────────────────────────────────────
 //
@@ -194,7 +203,9 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  *   `toolCall.functionCalls` → {@link OnToolCall} (callID→name cached for
  *   {@link SendToolResult}), `interrupted` → playback flush + `'listening'`,
  *   `turnComplete` → busy cleared + queued sends flushed, `usageMetadata` → {@link OnUsage}
- *   (per-turn prompt/response token deltas — see {@link handleUsageMetadata}).
+ *   (per-turn prompt/response token deltas with their modality split — see {@link handleUsageMetadata}).
+ *   An avatar's generated video seconds go to {@link OnUsage} in updates of their own
+ *   (`OutputTokenDetails.VideoSeconds`) at each turn boundary.
  * - **Busy mapping**: Gemini has no `response.created` frame, so `IsBusy` is set EAGERLY when
  *   this client triggers a response (text / narration / tool result) and on the first model
  *   output of a turn (audio part or output-transcription delta); cleared on `turnComplete`,
@@ -487,8 +498,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
     }
 
-    /** Stops the avatar's video and releases its element; the session then has no avatar. */
+    /**
+     * Stops the avatar's video and releases its element; the session then has no avatar. The video it generated and
+     * did not yet report is emitted first.
+     */
     private disposeAvatarOutput(): void {
+        this.emitAvatarVideoSeconds();
         this.avatarOutput?.Dispose();
         this.avatarOutput = null;
     }
@@ -1073,6 +1088,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      */
     private handleResumed(): void {
         this.avatarOutput?.Resumed();
+        this.emitAvatarVideoSeconds();
         this.finalizeUserTranscript();
         this.finalizeAssistantTranscript();
         this.responseActive = false;
@@ -1147,22 +1163,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * the server-bridged `GeminiRealtime` driver forwards the same payload to `IRealtimeSession.OnUsage`.
      */
     private handleUsageMetadata(usageMetadata: NonNullable<LiveServerMessage['usageMetadata']>): void {
-        let inputDetails: RealtimeUsageModalityDetail | undefined;
-        if (usageMetadata.promptTokensDetails && Array.isArray(usageMetadata.promptTokensDetails)) {
-            for (const detail of usageMetadata.promptTokensDetails) {
-                if (typeof detail.tokenCount === 'number') {
-                    inputDetails = inputDetails ?? {};
-                    const mod = String(detail.modality ?? '').toUpperCase();
-                    if (mod === 'AUDIO') {
-                        inputDetails.AudioTokens = (inputDetails.AudioTokens ?? 0) + detail.tokenCount;
-                    } else if (mod === 'TEXT') {
-                        inputDetails.TextTokens = (inputDetails.TextTokens ?? 0) + detail.tokenCount;
-                    } else if (mod === 'IMAGE') {
-                        inputDetails.ImageTokens = (inputDetails.ImageTokens ?? 0) + detail.tokenCount;
-                    }
-                }
-            }
-        }
+        let inputDetails = GeminiRealtimeClient.modalityTokens(usageMetadata.promptTokensDetails);
+        // The response side: TEXT and AUDIO, and VIDEO for a generated avatar (when Google reports it).
+        const outputDetails = GeminiRealtimeClient.modalityTokens(usageMetadata.responseTokensDetails);
         /**
          * Cost Attribution Note (F6 & Reviewer Item 29):
          * Inbound video frames are sent as individual JPEG images (V5) and billed on the video pricing tier
@@ -1180,20 +1183,51 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
          * and provider-received ImageTokens immediately surfaces frame drops or network throttling in production.
          */
         if (this.videoFramesSent > 0) {
-            inputDetails = inputDetails ?? {};
-            inputDetails.VideoFrames = this.videoFramesSent;
-            inputDetails.VideoSeconds = this.VideoSeconds;
+            inputDetails = { ...inputDetails, VideoFrames: this.videoFramesSent, VideoSeconds: this.VideoSeconds };
         }
         this.emitUsage({
             InputTokens: typeof usageMetadata.promptTokenCount === 'number' ? usageMetadata.promptTokenCount : undefined,
             OutputTokens: typeof usageMetadata.responseTokenCount === 'number' ? usageMetadata.responseTokenCount : undefined,
             ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+            ...(outputDetails ? { OutputTokenDetails: outputDetails } : {}),
             ...(this.videoFramesSent > 0 ? {
                 VideoFrames: this.videoFramesSent,
                 VideoSeconds: this.VideoSeconds,
             } : {}),
             Raw: usageMetadata,
         });
+    }
+
+    /**
+     * Gemini's per-modality token counts (`promptTokensDetails` or `responseTokensDetails`) as a detail block: TEXT,
+     * AUDIO, IMAGE and VIDEO. `undefined` when Gemini sent no count for a modality it names.
+     */
+    private static modalityTokens(details: ModalityTokenCount[] | undefined): RealtimeUsageModalityDetail | undefined {
+        if (!Array.isArray(details)) {
+            return undefined;
+        }
+        let block: RealtimeUsageModalityDetail | undefined;
+        for (const detail of details) {
+            const field = GEMINI_MODALITY_TOKEN_FIELDS[String(detail.modality ?? '').toUpperCase()];
+            if (field && typeof detail.tokenCount === 'number') {
+                block = block ?? {};
+                block[field] = (block[field] ?? 0) + detail.tokenCount;
+            }
+        }
+        return block;
+    }
+
+    /**
+     * Emits the avatar video generated since the last emission as an update of its own
+     * (`OutputTokenDetails.VideoSeconds`, an amount): called where a turn's counting ends (generation complete,
+     * turn complete, resumed; an interrupted turn ends at its turn complete) and before the avatar output is
+     * disposed, so every second is emitted once, whenever Google's `usageMetadata` arrives.
+     */
+    private emitAvatarVideoSeconds(): void {
+        const seconds = this.avatarOutput?.TakeVideoSeconds() ?? 0;
+        if (seconds > 0) {
+            this.emitUsage({ OutputTokenDetails: { VideoSeconds: seconds } });
+        }
     }
 
     /** Translates one {@link LiveServerContent} frame in provider-documented signal order. */
@@ -1230,6 +1264,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      */
     private handleGenerationComplete(): void {
         this.avatarOutput?.GenerationComplete();
+        this.emitAvatarVideoSeconds();
         if (this.idleSignal === 'turnComplete') {
             this.responseActive = false;
         }
@@ -1398,6 +1433,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      */
     private handleTurnComplete(): void {
         this.avatarOutput?.TurnComplete();
+        this.emitAvatarVideoSeconds();
         this.finalizeAssistantTranscript();
         this.finalizeThoughtTranscript();
         if (this.idleSignal === 'turnComplete') {

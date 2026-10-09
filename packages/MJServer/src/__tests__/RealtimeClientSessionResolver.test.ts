@@ -29,7 +29,10 @@ interface FakeChannelRow {
 const engineCoAgentsMock = vi.fn((): FakeCoAgentRow[] => []);
 const engineChannelsMock = vi.fn((): FakeChannelRow[] => []);
 const engineConfigMock = vi.fn(async (): Promise<void> => undefined);
-vi.mock('@memberjunction/ai-engine-base', () => ({
+// PARTIAL mock: the engine and the permission helper are stubbed; the pure usage-record functions (read, merge)
+// stay real, so the usage relay's details tests assert what is actually stored.
+vi.mock('@memberjunction/ai-engine-base', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
     AIAgentPermissionHelper: {
         HasPermission: (...args: unknown[]) => hasPermissionMock(...(args as [])),
     },
@@ -2431,6 +2434,69 @@ describe('RealtimeClientSessionResolver.RelayRealtimeUsage', () => {
         expect(promptRun.TokensPrompt).toBe(9);
         expect(promptRun.TokensCompletion).toBe(3);
         expect(promptRun.TokensUsed).toBe(12);
+    });
+
+    describe('per-modality details (usageDetailsJson)', () => {
+        /** The usage record the run's details hold after the relay. */
+        function storedRecord(promptRun: FakeSession): unknown {
+            const details = promptRun['ModelSpecificResponseDetails'];
+            return typeof details === 'string' ? (JSON.parse(details) as Record<string, unknown>)['RealtimeUsage'] : undefined;
+        }
+
+        it('adds the relayed blocks into the usage record on the prompt run', async () => {
+            const { provider, promptRun } = makeUsageProvider({});
+            currentProvider = provider;
+            const details = JSON.stringify({ Input: { TextTokens: 60, AudioTokens: 40 }, Output: { AudioTokens: 100, VideoTokens: 6192, VideoSeconds: 1.5 } });
+
+            const ok = await makeResolver().RelayRealtimeUsage('session-1', 100, 6292, makeCtx(), details);
+
+            expect(ok).toBe(true);
+            expect(promptRun.TokensCompletion).toBe(6292);
+            expect(storedRecord(promptRun)).toEqual({ Input: { TextTokens: 60, AudioTokens: 40 }, Output: { AudioTokens: 100, VideoTokens: 6192, VideoSeconds: 1.5 } });
+        });
+
+        it('stores a relay that carries only avatar video seconds, rather than treating it as a no-op', async () => {
+            const { provider, promptRun } = makeUsageProvider({});
+            currentProvider = provider;
+
+            const ok = await makeResolver().RelayRealtimeUsage('session-1', 0, 0, makeCtx(), JSON.stringify({ Output: { VideoSeconds: 2.25 } }));
+
+            expect(ok).toBe(true);
+            expect(promptRun.Save).toHaveBeenCalled();
+            expect(storedRecord(promptRun)).toEqual({ Output: { VideoSeconds: 2.25 } });
+        });
+
+        it('is a no-op for details with nothing in them and no tokens', async () => {
+            const { provider, promptRun } = makeUsageProvider({});
+            currentProvider = provider;
+
+            for (const details of ['{"Output":{"VideoSeconds":0}}', '{broken', '{"Output":{"Bogus":5}}']) {
+                await expect(makeResolver().RelayRealtimeUsage('session-1', 0, 0, makeCtx(), details)).resolves.toBe(true);
+            }
+            expect(promptRun.Load).not.toHaveBeenCalled();
+        });
+
+        it('drops details longer than a relay ever needs, and still stores the tokens', async () => {
+            const { provider, promptRun } = makeUsageProvider({});
+            currentProvider = provider;
+            const oversized = JSON.stringify({ Output: { VideoSeconds: 2 }, Padding: 'x'.repeat(5000) });
+
+            const ok = await makeResolver().RelayRealtimeUsage('session-1', 10, 5, makeCtx(), oversized);
+
+            expect(ok).toBe(true);
+            expect(promptRun.TokensPrompt).toBe(10);
+            expect(storedRecord(promptRun)).toBeUndefined();
+        });
+
+        it('keeps only the fields a block defines, with usable values', async () => {
+            const { provider, promptRun } = makeUsageProvider({});
+            currentProvider = provider;
+            const details = JSON.stringify({ Output: { VideoSeconds: -3, AudioTokens: 'lots', VideoTokens: 12, Injected: 1 }, Other: { TextTokens: 1 } });
+
+            await makeResolver().RelayRealtimeUsage('session-1', 1, 1, makeCtx(), details);
+
+            expect(storedRecord(promptRun)).toEqual({ Output: { VideoTokens: 12 } });
+        });
     });
 });
 

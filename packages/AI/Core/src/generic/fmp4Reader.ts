@@ -6,8 +6,10 @@
  * - {@link SniffFmp4Piece} says what a piece opens with, from the type of its first box alone. A part that names no
  *   MIME type is video when this recognizes it.
  * - {@link ReadFmp4Init} reads the tracks an init segment declares: each one's id, its handler (`vide` for video,
- *   `soun` for audio) and its codec as RFC 6381 writes it (`avc1.42c01f`, `mp4a.40.2`). The browser client follows the
- *   handlers (does the video carry the voice?) and opens its Media Source buffer with the codecs.
+ *   `soun` for audio), its codec as RFC 6381 writes it (`avc1.42c01f`, `mp4a.40.2`) and its timescale. The browser
+ *   client follows the handlers (does the video carry the voice?) and opens its Media Source buffer with the codecs.
+ * - {@link Fmp4VideoSeconds} says how many seconds of video a media fragment carries, from its sample durations on the
+ *   init's video track. A session counts the avatar video it generated with it.
  *
  * Pure: no DOM and no Node APIs, so a browser and a server read the same pieces with the same code. A box whose size
  * runs past the box or piece that holds it, or a track without the boxes that identify it, reads as `null`: the reader
@@ -31,6 +33,16 @@ export interface Fmp4Track {
      * `undefined` for a sample entry this reader does not know.
      */
     Codec?: string;
+    /**
+     * The track's timescale (`mdhd`): how many units of the track's media time make a second. Its fragments' sample
+     * durations count in these units. `undefined` when the `mdhd` box is missing or says 0.
+     */
+    Timescale?: number;
+    /**
+     * The sample duration the init's `trex` box gives the track's fragments, in its timescale, used when a fragment
+     * gives none of its own. `undefined` when the init gives none (or gives 0).
+     */
+    DefaultSampleDuration?: number;
 }
 
 /** What an init segment declares. */
@@ -73,6 +85,20 @@ const MPEG4_AUDIO_OBJECT_TYPE = 0x40;
 const ES_DESCRIPTOR_TAG = 0x03;
 const DECODER_CONFIG_DESCRIPTOR_TAG = 0x04;
 const DECODER_SPECIFIC_INFO_TAG = 0x05;
+/** `tfhd` flags: a 64-bit base data offset follows the track id. */
+const TFHD_BASE_DATA_OFFSET = 0x01;
+/** `tfhd` flags: a sample description index follows. */
+const TFHD_SAMPLE_DESCRIPTION_INDEX = 0x02;
+/** `tfhd` flags: a default sample duration follows. */
+const TFHD_DEFAULT_SAMPLE_DURATION = 0x08;
+/** `trun` flags: a data offset follows the sample count. */
+const TRUN_DATA_OFFSET = 0x01;
+/** `trun` flags: the first sample's flags follow. */
+const TRUN_FIRST_SAMPLE_FLAGS = 0x04;
+/** `trun` flags: each sample's record starts with its duration. */
+const TRUN_SAMPLE_DURATION = 0x100;
+/** The `trun` flags that each add four bytes to every sample's record, in record order. */
+const TRUN_SAMPLE_FIELDS = [TRUN_SAMPLE_DURATION, 0x200, 0x400, 0x800];
 
 /**
  * What a piece of fragmented MP4 opens with, read from the type of its first box (bytes 4 to 8): `'init'` for `ftyp`,
@@ -102,19 +128,44 @@ export function SniffFmp4Piece(bytes: ArrayBuffer | ArrayBufferView): Fmp4PieceK
 export function ReadFmp4Init(bytes: ArrayBuffer | ArrayBufferView): Fmp4Init | null {
     const view = viewOf(bytes);
     const moov = readBoxes(view, 0, view.byteLength)?.find((box) => box.Type === 'moov');
-    const traks = moov ? childBoxes(view, moov)?.filter((box) => box.Type === 'trak') : null;
-    if (!traks) {
+    const moovBoxes = moov ? childBoxes(view, moov) : null;
+    const traks = moovBoxes?.filter((box) => box.Type === 'trak');
+    if (!moovBoxes || !traks) {
         return null;
     }
+    const defaultDurations = readTrexDefaults(view, moovBoxes.find((box) => box.Type === 'mvex'));
     const tracks: Fmp4Track[] = [];
     for (const trak of traks) {
-        const track = readTrack(view, trak);
+        const track = readTrack(view, trak, defaultDurations);
         if (!track) {
             return null;
         }
         tracks.push(track);
     }
     return { Tracks: tracks };
+}
+
+/**
+ * The seconds of video a piece of the stream carries: the durations of its samples on the init's video track, in that
+ * track's timescale (`mdhd`), summed over every `moof` box in the piece. A sample's duration comes from its `trun`
+ * record, else the fragment's `tfhd` default, else the init's `trex` default. Another track's fragments add nothing,
+ * so an audio-only fragment of a muxed stream reads as 0, and so does a piece without a `moof` box (an init segment).
+ *
+ * `null` when the init declares no video track with a timescale, or the piece cannot be read: a box whose size runs
+ * past what holds it, a fragment without a readable `tfhd`, or video samples that no box gives a duration.
+ *
+ * @param bytes A piece of the stream, as an `ArrayBuffer` or a view of one.
+ * @param init What the stream's init segment declares ({@link ReadFmp4Init}).
+ */
+export function Fmp4VideoSeconds(bytes: ArrayBuffer | ArrayBufferView, init: Fmp4Init): number | null {
+    const track = init.Tracks.find((candidate) => candidate.Handler === 'vide');
+    if (!track?.Timescale) {
+        return null;
+    }
+    const view = viewOf(bytes);
+    const moofs = readBoxes(view, 0, view.byteLength)?.filter((box) => box.Type === 'moof');
+    const units = moofs ? sumOrNull(moofs, (moof) => moofDuration(view, moof, track)) : null;
+    return units === null ? null : units / track.Timescale;
 }
 
 /** A `DataView` over exactly the given bytes, whether they came as a buffer or as a view into a larger one. */
@@ -188,18 +239,131 @@ function findPath(view: DataView, parent: Fmp4Box, ...types: string[]): Fmp4Box 
     return box;
 }
 
-/** One `trak` box as a track: its id, its handler and its codec. `null` without a readable `tkhd` and `hdlr`. */
-function readTrack(view: DataView, trak: Fmp4Box): Fmp4Track | null {
+/**
+ * One `trak` box as a track: its id, its handler, its codec, its timescale and the `trex` default sample duration.
+ * `null` without a readable `tkhd` and `hdlr`.
+ */
+function readTrack(view: DataView, trak: Fmp4Box, defaultDurations: Map<number, number>): Fmp4Track | null {
     const tkhd = findChild(view, trak, 'tkhd');
     const mdia = findChild(view, trak, 'mdia');
     const hdlr = mdia ? findChild(view, mdia, 'hdlr') : null;
     const trackID = tkhd ? readTrackID(view, tkhd) : null;
     const handler = hdlr ? readHandler(view, hdlr) : null;
-    if (trackID === null || handler === null) {
+    if (!mdia || trackID === null || handler === null) {
         return null;
     }
-    const stsd = mdia ? findPath(view, mdia, 'minf', 'stbl', 'stsd') : null;
-    return { TrackID: trackID, Handler: handler, Codec: stsd ? readCodec(view, stsd) : undefined };
+    const stsd = findPath(view, mdia, 'minf', 'stbl', 'stsd');
+    const mdhd = findChild(view, mdia, 'mdhd');
+    return {
+        TrackID: trackID,
+        Handler: handler,
+        Codec: stsd ? readCodec(view, stsd) : undefined,
+        Timescale: mdhd ? readTimescale(view, mdhd) : undefined,
+        DefaultSampleDuration: defaultDurations.get(trackID),
+    };
+}
+
+/** `mdhd`'s timescale: after the version and flags, and the creation and modification times (64-bit in version 1). */
+function readTimescale(view: DataView, mdhd: Fmp4Box): number | undefined {
+    if (mdhd.End - mdhd.Start < FULL_BOX_HEADER_BYTES) {
+        return undefined;
+    }
+    const offset = mdhd.Start + FULL_BOX_HEADER_BYTES + (view.getUint8(mdhd.Start) === 1 ? 16 : 8);
+    const timescale = offset + 4 <= mdhd.End ? view.getUint32(offset) : 0;
+    return timescale > 0 ? timescale : undefined;
+}
+
+/** The default sample duration each `trex` box in `mvex` gives a track (after its id and sample description index), when above 0. */
+function readTrexDefaults(view: DataView, mvex: Fmp4Box | undefined): Map<number, number> {
+    const defaults = new Map<number, number>();
+    const trexes = (mvex ? childBoxes(view, mvex) : null)?.filter((box) => box.Type === 'trex') ?? [];
+    for (const trex of trexes) {
+        const fields = trex.Start + FULL_BOX_HEADER_BYTES;
+        if (fields + 12 <= trex.End && view.getUint32(fields + 8) > 0) {
+            defaults.set(view.getUint32(fields), view.getUint32(fields + 8));
+        }
+    }
+    return defaults;
+}
+
+/** The sample durations `track` has in one `moof` box, in its timescale: 0 when the box holds no fragment of it. */
+function moofDuration(view: DataView, moof: Fmp4Box, track: Fmp4Track): number | null {
+    const trafs = childBoxes(view, moof)?.filter((box) => box.Type === 'traf');
+    return trafs ? sumOrNull(trafs, (traf) => trafDuration(view, traf, track)) : null;
+}
+
+/** One track fragment's (`traf`) sample durations: 0 when it belongs to another track. */
+function trafDuration(view: DataView, traf: Fmp4Box, track: Fmp4Track): number | null {
+    const boxes = childBoxes(view, traf);
+    const tfhd = boxes?.find((box) => box.Type === 'tfhd');
+    const header = tfhd ? readTfhd(view, tfhd) : null;
+    if (!boxes || !header) {
+        return null;
+    }
+    if (header.TrackID !== track.TrackID) {
+        return 0;
+    }
+    const defaultDuration = header.DefaultSampleDuration ?? track.DefaultSampleDuration;
+    return sumOrNull(boxes.filter((box) => box.Type === 'trun'), (trun) => trunDuration(view, trun, defaultDuration));
+}
+
+/** `tfhd`'s track id, and its default sample duration when its flags say one follows the optional fields before it. */
+function readTfhd(view: DataView, tfhd: Fmp4Box): { TrackID: number; DefaultSampleDuration?: number } | null {
+    const fields = tfhd.Start + FULL_BOX_HEADER_BYTES;
+    if (fields + 4 > tfhd.End) {
+        return null;
+    }
+    const flags = readFlags(view, tfhd);
+    const trackID = view.getUint32(fields);
+    if (!(flags & TFHD_DEFAULT_SAMPLE_DURATION)) {
+        return { TrackID: trackID };
+    }
+    const offset = fields + 4 + (flags & TFHD_BASE_DATA_OFFSET ? 8 : 0) + (flags & TFHD_SAMPLE_DESCRIPTION_INDEX ? 4 : 0);
+    return offset + 4 <= tfhd.End ? { TrackID: trackID, DefaultSampleDuration: view.getUint32(offset) } : null;
+}
+
+/**
+ * A `trun` box's sample durations added up: each sample's own when its records carry one, else the sample count times
+ * the default. `null` when there is no default to fall back on, or the records run past the box.
+ */
+function trunDuration(view: DataView, trun: Fmp4Box, defaultDuration: number | undefined): number | null {
+    const fields = trun.Start + FULL_BOX_HEADER_BYTES;
+    if (fields + 4 > trun.End) {
+        return null;
+    }
+    const flags = readFlags(view, trun);
+    const count = view.getUint32(fields);
+    const first = fields + 4 + (flags & TRUN_DATA_OFFSET ? 4 : 0) + (flags & TRUN_FIRST_SAMPLE_FLAGS ? 4 : 0);
+    const recordBytes = 4 * TRUN_SAMPLE_FIELDS.filter((field) => flags & field).length;
+    if (first + count * recordBytes > trun.End) {
+        return null;
+    }
+    if (!(flags & TRUN_SAMPLE_DURATION)) {
+        return defaultDuration === undefined ? null : count * defaultDuration;
+    }
+    let units = 0;
+    for (let i = 0; i < count; i++) {
+        units += view.getUint32(first + i * recordBytes);
+    }
+    return units;
+}
+
+/** A full box's 24 bits of flags, after its version byte. */
+function readFlags(view: DataView, box: Fmp4Box): number {
+    return (view.getUint8(box.Start + 1) << 16) | (view.getUint8(box.Start + 2) << 8) | view.getUint8(box.Start + 3);
+}
+
+/** The sum of `read` over `items`, or `null` as soon as one of them reads `null`. */
+function sumOrNull<T>(items: readonly T[], read: (item: T) => number | null): number | null {
+    let total = 0;
+    for (const item of items) {
+        const value = read(item);
+        if (value === null) {
+            return null;
+        }
+        total += value;
+    }
+    return total;
 }
 
 /** `tkhd`'s track id: after the version and flags, and the creation and modification times (64-bit in version 1). */

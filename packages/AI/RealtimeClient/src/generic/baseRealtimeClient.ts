@@ -118,7 +118,9 @@ export interface RealtimeClientToolCall {
  * simply never emit):
  * - **OpenAI** — emits per-response deltas from the GA `response.done` frame's `usage` payload.
  * - **Gemini** — emits per-turn deltas from `LiveServerMessage.usageMetadata`
- *   (`promptTokenCount` / `responseTokenCount` are per-response counts, not cumulative).
+ *   (`promptTokenCount` / `responseTokenCount` are per-response counts, not cumulative), and,
+ *   in an avatar session, the seconds of avatar video each turn generated, in updates of their
+ *   own that carry only `OutputTokenDetails.VideoSeconds`.
  * - **ElevenLabs** — the Conversational AI socket exposes no usage events; never emits.
  * - **AssemblyAI** — the streaming STT socket exposes no token-usage events; never emits.
  */
@@ -134,7 +136,10 @@ export interface RealtimeClientUsage {
     DurationSeconds?: number;
     /** Per-modality breakdown of input tokens (text, audio, image/video). */
     InputTokenDetails?: RealtimeUsageModalityDetail;
-    /** Per-modality breakdown of output tokens (text, audio). */
+    /**
+     * Per-modality breakdown of output tokens (text, audio, video), and the seconds of avatar video
+     * generated since the last update (`VideoSeconds`, an amount like the tokens).
+     */
     OutputTokenDetails?: RealtimeUsageModalityDetail;
     /** Cumulative video frames processed or sent across inbound video tracks. */
     VideoFrames?: number;
