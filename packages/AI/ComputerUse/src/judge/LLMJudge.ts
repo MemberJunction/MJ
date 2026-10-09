@@ -71,6 +71,7 @@ export class LLMJudge extends BaseJudge {
         request.CurrentUrl = context.CurrentUrl;
         request.Diagnostics = context.CurrentDiagnosticsDigest || undefined;
         request.ValidationCriteria = context.ValidationCriteria;
+        request.RubricCriteria = context.RubricCriteria;
         request.ApplicationContext = context.ApplicationContext;
         request.Signal = context.Signal;
         return request;
@@ -141,11 +142,12 @@ export class LLMJudge extends BaseJudge {
         if (!Array.isArray(rawCriteria) || rawCriteria.length === 0) {
             return verdict;
         }
-        const criteria: CriterionVerdict[] = rawCriteria.map(c => ({
-            criterion: String(c.criterion ?? ''),
-            met: c.met === true,
-            evidence: String(c.evidence ?? ''),
-        }));
+        const criteria: CriterionVerdict[] = rawCriteria.map(c => {
+            const verdict: CriterionVerdict = { criterion: String(c.criterion ?? ''), met: c.met === true, evidence: String(c.evidence ?? '') };
+            if (typeof c.key === 'string' && c.key.length > 0) verdict.key = c.key;
+            if (typeof c.level === 'string' && c.level.length > 0) verdict.level = c.level;
+            return verdict;
+        });
         const rubric = EvaluateRubric(criteria);
         verdict.CriteriaVerdicts = criteria;
         // Impossible stays the model's call; the rubric governs Done/coverage.
@@ -227,5 +229,5 @@ interface JudgeParsedResponse {
     reason?: string;
     feedback?: string;
     /** Per-criterion rubric verdicts, when a rubric was supplied. */
-    criteria?: Array<{ criterion?: string; met?: boolean; evidence?: string }>;
+    criteria?: Array<{ criterion?: string; met?: boolean; evidence?: string; key?: unknown; level?: unknown }>;
 }

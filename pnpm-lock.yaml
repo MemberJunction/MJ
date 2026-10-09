@@ -1326,6 +1326,12 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.3
         version: link:../../MJGlobal
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.3
+        version: link:../../Rubrics/Engine
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.3
+        version: link:../../Rubrics/Base
       '@memberjunction/testing-engine':
         specifier: 6.2.0-edge.3
         version: link:../../TestingFramework/Engine

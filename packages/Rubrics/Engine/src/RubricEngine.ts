@@ -1,6 +1,7 @@
 import { SnapshotFromRows, type RubricAnswer, type RubricNodeSnapshot, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
-import { ShapeContent, type RubricSubjectContent } from './content.js';
+import { SelectEvenly, ShapeContent, type RubricSubjectContent, type RubricSubjectImage } from './content.js';
+import { RUBRIC_SUBJECT_MAX_IMAGES } from './promptData.js';
 import { HumanRubricEvaluator, type EvaluationDraftStore, type RubricTaskStore } from './HumanRubricEvaluator.js';
 import { RubricEvaluator, type BaseRubricEvaluator } from './RubricEvaluator.js';
 import { CreateRubricEvaluator, ResolveRubricEvaluatorSelection } from './evaluatorRegistry.js';
@@ -43,7 +44,8 @@ export interface RubricEvaluationStore {
 
 /** Rows the engine reads, and the one write that creates a Draft version. Tests pass a fake. */
 export interface RubricRecords {
-    rows(entityName: string, filter: string, orderBy?: string): Promise<Record<string, unknown>[]>;
+    /** Rows of an entity. `fields` limits the columns read; all readable columns when omitted. */
+    rows(entityName: string, filter: string, orderBy?: string, fields?: string[]): Promise<Record<string, unknown>[]>;
     createDraft(input: { rubricId?: string; rubricName?: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }>;
 }
 
@@ -111,6 +113,9 @@ export interface EvaluateRecordResult {
  * evaluator becomes a Failed evaluation with ErrorMessage. It does not score
  * on its own: AI and deterministic evaluators call RubricScoring.
  */
+const TEST_RUN_SUBJECT = 'MJ: Test Runs';
+const TEST_RUN_OUTPUTS = 'MJ: Test Run Outputs';
+
 const emptyRecords: RubricRecords = {
     async rows() { return []; },
     async createDraft() { throw new Error('This engine has no rubric catalog.'); },
@@ -245,7 +250,9 @@ export class RubricEngine {
             loadRecord: input.content ? undefined : async (entityName, recordId) => {
                 const rows = await this.records.rows(entityName, `ID=${sqlLiteral(recordId)}`);
                 if (!rows[0]) throw new Error('subject not found or not readable');
-                return rows[0];
+                const record = { ...rows[0] };
+                if (entityName === TEST_RUN_SUBJECT) record.Images = await this.testRunImages(recordId);
+                return record;
             },
         });
         if (done.evaluation.status === 'Failed') {
@@ -420,7 +427,34 @@ export class RubricEngine {
         if (input.subjectEntityName === 'MJ: Conversations') {
             record.Details = await this.records.rows('MJ: Conversation Details', `ConversationID=${sqlLiteral(input.subjectRecordId)}`, '__mj_CreatedAt');
         }
+        if (input.subjectEntityName === TEST_RUN_SUBJECT) {
+            record.Images = await this.testRunImages(input.subjectRecordId);
+        }
         return ShapeContent(input.subjectEntityName, record);
+    }
+
+    /**
+     * Up to RUBRIC_SUBJECT_MAX_IMAGES saved screenshots of a test run: the first, the last, and a
+     * spread between. Lists the outputs without their data, then reads only the chosen ones.
+     */
+    private async testRunImages(testRunId: string): Promise<RubricSubjectImage[]> {
+        const listed = await this.records.rows(
+            TEST_RUN_OUTPUTS,
+            `TestRunID=${sqlLiteral(testRunId)} AND MimeType LIKE 'image/%'`,
+            'Sequence',
+            ['ID', 'Sequence', 'StepNumber', 'Name', 'MimeType'],
+        );
+        const picked = SelectEvenly(listed, RUBRIC_SUBJECT_MAX_IMAGES);
+        if (picked.length === 0) return [];
+        const ids = picked.map(row => sqlLiteral(text(row.ID))).join(', ');
+        const full = await this.records.rows(TEST_RUN_OUTPUTS, `ID IN (${ids})`, 'Sequence');
+        return full
+            .filter(row => typeof row.InlineData === 'string' && String(row.InlineData).length > 0)
+            .map(row => ({
+                label: row.StepNumber == null ? text(row.Name) || 'output' : `step ${text(row.StepNumber)}`,
+                mimeType: text(row.MimeType) || 'image/png',
+                data: String(row.InlineData).replace(/^data:[^,]*,/, ''),
+            }));
     }
 
     }

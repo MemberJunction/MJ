@@ -1,4 +1,4 @@
-import type { ScoreAnswer, ScoreQuestion } from '@memberjunction/ai';
+import type { ChatMessageContent, ScoreAnswer, ScoreQuestion } from '@memberjunction/ai';
 import type { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
@@ -79,7 +79,8 @@ export interface RubricPromptRequest {
     Prompt: RubricPromptRef;
     Judge?: RubricPromptRef;
     Data: RubricPromptData;
-    Subject: string;
+    /** The subject message: delimited text, then any frames as image blocks. */
+    Subject: ChatMessageContent;
     /** Pins the model. Otherwise the choosing prompt's model bindings choose. */
     ModelID?: string;
     /** Which prompt's bindings choose the model: the evaluator prompt (System, the default) or the judge. */

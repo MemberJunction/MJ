@@ -1435,9 +1435,10 @@ import {
     RubricCalibrationTestDriver,
 } from '@memberjunction/testing-engine';
 
-// @memberjunction/computer-use-engine (2 classes)
+// @memberjunction/computer-use-engine (3 classes)
 import {
     ComputerUseAction,
+    ComputerUseRubricEvaluator,
     ComputerUseTestDriver,
 } from '@memberjunction/computer-use-engine';
 
@@ -2646,6 +2647,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PromptEvalDriver,
     RubricCalibrationTestDriver,
     ComputerUseAction,
+    ComputerUseRubricEvaluator,
     ComputerUseTestDriver,
     IntegrationTestDriver,
     BraveWebSearchProvider,
@@ -2680,11 +2682,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateDocumentAction,
     CreateEmployeeAction,
     CreateFormContributionAction,
-    CreateInteractiveFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
@@ -2850,7 +2852,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1149;
+export const CLASS_REGISTRATIONS_COUNT = 1150;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -23,6 +23,12 @@ export * from './action/ComputerUseAction.js';
 // ─── Test Driver Exports ──────────────────────────────────
 export * from './test-driver/ComputerUseTestDriver.js';
 export * from './test-driver/types.js';
+export * from './test-driver/rubric-subject.js';
+export * from './test-driver/rubric-frames.js';
+export * from './test-driver/rubric-judge-criteria.js';
+
+// ─── Rubric Evaluator Exports ─────────────────────────────
+export * from './rubric/ComputerUseRubricEvaluator.js';
 
 // ─── Utility Exports ──────────────────────────────────────
 export * from './utils/judge-frequency-parser.js';

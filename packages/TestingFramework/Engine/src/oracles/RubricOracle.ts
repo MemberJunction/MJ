@@ -1,5 +1,5 @@
 import '@memberjunction/ai-agents';
-import { ProviderRubricEngine } from '@memberjunction/rubrics';
+import { ProviderRubricEngine, type RubricSubjectContent } from '@memberjunction/rubrics';
 import type { OracleConfig, OracleInput, OracleResult } from '../types';
 import type { IOracle } from './IOracle';
 
@@ -13,7 +13,7 @@ export interface RubricOracleEngine {
         contextRecordId?: string;
         passThreshold?: number | null;
         evaluatorConfig?: unknown;
-        content?: { text?: string; data?: Record<string, unknown> };
+        content?: RubricSubjectContent;
     }): Promise<{
         evaluationId: string;
         score: number | null;
@@ -53,7 +53,7 @@ export class RubricOracle implements IOracle {
             contextRecordId: input.test?.ID,
             passThreshold: settings.passThreshold ?? null,
             evaluatorConfig: settings.evaluator,
-            content: RubricOracleContent(input),
+            content: input.subjectContent ?? RubricOracleContent(input),
         });
         const passed = result.outcome === 'Passed' || result.outcome === 'Scored';
         const label = settings.versionLabel ?? settings.rubricVersionId ?? 'published';

@@ -547,6 +547,8 @@ Test configuration JSON structure (stored in `TestEntity.Configuration`):
         config?: Record<string, unknown>;
     }>;
     scoringWeights?: Record<string, number>; // Oracle weight overrides
+    rubricFrames?: number;                   // Frames the after-run rubric judge sees (default 6, 0 = transcript only)
+    judgeWithRubric?: boolean;               // A published rubric drives the in-run judge (default true)
     agentRunId?: string;                     // Link to agent run
     actions?: Array<{                        // MJ Actions as tools
         actionName?: string;
@@ -628,9 +630,16 @@ Expected test outcomes JSON (stored in `TestEntity.ExpectedOutcomes`):
     finalUrlPattern?: string;        // Regex for final URL validation
     minConfidence?: number;          // Judge confidence threshold (0.0-1.0)
     maxSteps?: number;               // Max steps allowed
-    judgeValidationCriteria?: string[];  // Custom criteria (future use)
+    judgeValidationCriteria?: string[];  // Criteria for the in-run judge (ignored when a rubric drives it)
 }
 ```
+
+### Rubrics
+
+A computer use test is judged by a rubric when one resolves (`--rubric`, `Test.RubricID`, the suite's `RubricID`, or a `rubric` oracle).
+
+- **Rubric drives the judge** (default, `judgeWithRubric` not `false`, no checkpoints, no explicit `evaluator` on the rubric oracle): the published version's leaves are rendered through *Rubric Criterion* and passed to the in-run judge as `RunComputerUseParams.RubricCriteria`. The judge echoes each criterion key and chooses a level. After the run, the `rubric` oracle uses the `ComputerUse` evaluator, which stores that final verdict as the `MJ: Rubric Evaluations` row and links the judge's prompt run. No second model call is made.
+- **Rubric judged after the run** (otherwise): the `rubric` oracle defaults to the `Rubric Judge - Computer Use` prompt on vision models. It reads a step transcript (`BuildRubricSubject`) and up to `rubricFrames` screenshots (`SelectRubricFrames`): checkpoint frames, judge verdict changes, a spread of steps, and the final frame captured after the last action.
 
 ## Advanced Usage
 
@@ -888,23 +897,7 @@ Map to ActionResultSimple (if from action)
 
 ### Judge Integration
 
-```typescript
-// MJLLMJudge extends base LLMJudge
-class MJLLMJudge extends LLMJudge {
-    private judgePromptEntity: AIPromptEntityExtended;
-
-    get JudgePromptEntity(): AIPromptEntityExtended {
-        return this.judgePromptEntity;
-    }
-}
-
-// MJComputerUseEngine uses it
-const judge = new MJLLMJudge(
-    (request) => this.executeJudgePrompt(request),
-    judgePromptEntity,
-    params.JudgePrompt
-);
-```
+The engine builds its judge itself (heuristics first, then the LLM judge). `MJComputerUseEngine` overrides `executeJudgePrompt`, so every LLM judge call runs the resolved judge prompt (by default `Computer Use - Judge`) through `AIPromptRunner`, with the current screenshot as an image message and `validationCriteria` / `rubricCriteria` as template data. `MJLLMJudge` is exported for callers that build a judge directly; the engine does not use it.
 
 ## Best Practices
 

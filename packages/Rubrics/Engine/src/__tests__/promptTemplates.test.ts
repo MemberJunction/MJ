@@ -127,6 +127,21 @@ describe('Shipped judge templates', () => {
         expect(judges.length).toBeGreaterThanOrEqual(16);
     });
 
+    it('ships a vision judge for computer use runs bound to image-capable models', () => {
+        const judgesFile = new URL('../../../../../metadata/prompts/.rubric-judge-prompts.json', import.meta.url);
+        const records = JSON.parse(readFileSync(judgesFile, 'utf8')) as { fields: { Name: string; TemplateText: string }; relatedEntities?: Record<string, { fields: { ModelID: string } }[]> }[];
+        const judge = records.find(item => item.fields.Name === 'Rubric Judge - Computer Use');
+        expect(judge?.fields.TemplateText).toBe('@file:templates/rubrics/judges/computer-use.template.md');
+        expect(judge?.relatedEntities?.['MJ: AI Prompt Models']?.map(row => row.fields.ModelID)).toContain('@lookup:MJ: AI Models.Name=Gemini 3.6 Flash');
+        expect(template('judges/computer-use.template.md')).toContain('# Judge: Computer Use');
+        expect(template('judges/computer-use.template.md')).toContain('cite the frame');
+    });
+
+    it('lets evidence name an attached frame', () => {
+        const evaluator = template('rubric-evaluator.template.md');
+        expect(evaluator).toContain('{"frame": "<frame label>"}');
+    });
+
     it.each(judges)('%s renders as plain guidance inside the evaluator', name => {
         const prompt = composed('SinglePass', `judges/${name}`);
         expect(prompt).toContain(template(`judges/${name}`).trim().split('\n')[0]);

@@ -11,6 +11,7 @@ import {
   MJTestRunEntity,
   MJAIAgentRunEntity
 } from '@memberjunction/core-entities';
+import type { RubricSubjectContent } from '@memberjunction/rubrics';
 import { IOracle } from './oracles/IOracle';
 
 // Re-export all types from EngineBase for convenience
@@ -365,4 +366,10 @@ export interface OracleInput {
    * to participate in the same transaction/connection as the calling test run.
    */
   provider?: IMetadataProvider;
+
+  /**
+   * What a rubric judge reads about this run. When set, the rubric oracle sends it
+   * instead of the raw expected and actual output.
+   */
+  subjectContent?: RubricSubjectContent;
 }

@@ -1,5 +1,5 @@
 export { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction, GetRubricSubjectAction, SubmitHumanRubricAction } from './actions.js';
-export { AgentRunContent, ConversationContent, FallbackContent, PromptRunContent, RubricContentRegistry, TestRunContent, type RubricContentProvider, type RubricSubjectContent } from './content.js';
+export { AgentRunContent, ConversationContent, FallbackContent, PromptRunContent, RubricContentRegistry, SelectEvenly, TestRunContent, type RubricContentProvider, type RubricSubjectContent, type RubricSubjectImage } from './content.js';
 export { DeterministicRubricEvaluator, type DeterministicRule } from './DeterministicRubricEvaluator.js';
 export { RubricEngine, type EvaluateParams, type EvaluateRecordInput, type EvaluateRecordResult, type RubricEvaluationRecord, type RubricEvaluationStore, type RubricRecords } from './RubricEngine.js';
 export { ProviderDecisionService, ProviderPromptService, ProviderRubricEngine, RegisterRubricAgentRunner } from './providerRecords.js';
@@ -9,7 +9,7 @@ export {
     RUBRIC_JUDGE_PLACEHOLDER, type LLMDecision, type LLMRubricResult, type RubricPromptRunner, type RubricRunnerRequest,
 } from './LLMRubricEvaluator.js';
 export {
-    BuildCriteriaPromptData, BuildCriterionPromptData, BuildRubricVersionPromptData, BuildSubjectMessage, LeafNodes, RUBRIC_SUBJECT_BUDGET, SubjectBody,
+    BuildCriteriaPromptData, BuildCriterionPromptData, BuildRubricVersionPromptData, BuildSubjectContent, BuildSubjectMessage, LeafNodes, RUBRIC_SUBJECT_BUDGET, RUBRIC_SUBJECT_MAX_IMAGES, SubjectBody,
     type RubricCriterionPromptData, type RubricCriterionTemplateData, type RubricLevelPromptData, type RubricPromptData, type RubricScalePromptData, type RubricVersionPromptData,
 } from './promptData.js';
 export { ChosenLevel, DEFAULT_DECISION_PROMPT, DecisionRubricEvaluator, ScoreQuestionForCriterion } from './DecisionRubricEvaluator.js';

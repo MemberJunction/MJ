@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import type { ChatMessageContent, ChatMessageContentBlock } from '@memberjunction/ai';
 import type { NotApplicablePolicy, RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { RubricSubjectContent } from './content.js';
 import type { RubricPromptMode } from './evaluatorServices.js';
@@ -140,6 +141,25 @@ export function BuildSubjectMessage(content: RubricSubjectContent): string {
         body,
         `</rubric-subject ${nonce}>`,
     ].join('\n');
+}
+
+/** The most images one subject message carries. */
+export const RUBRIC_SUBJECT_MAX_IMAGES = 8;
+
+/**
+ * The subject as the user message content: the delimited text, then each frame behind a text
+ * block that names it, so a rationale can cite the frame label. A string when there are no frames.
+ */
+export function BuildSubjectContent(content: RubricSubjectContent): ChatMessageContent {
+    const text = BuildSubjectMessage(content);
+    const images = (content.images ?? []).slice(0, RUBRIC_SUBJECT_MAX_IMAGES);
+    if (images.length === 0) return text;
+    const blocks: ChatMessageContentBlock[] = [{ type: 'text', content: `${text}\nThe frames named below follow as images. Cite a frame by its label.` }];
+    for (const image of images) {
+        blocks.push({ type: 'text', content: `Frame "${image.label}":` });
+        blocks.push({ type: 'image_url', content: `data:${image.mimeType};base64,${image.data}`, mimeType: image.mimeType });
+    }
+    return blocks;
 }
 
 /** The subject's text and its data as JSON, one after the other. */

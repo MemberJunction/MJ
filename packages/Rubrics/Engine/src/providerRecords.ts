@@ -28,9 +28,9 @@ interface RubricProvider {
  */
 export function ProviderRecords(provider: RubricProvider, user: unknown): RubricRecords {
     return {
-        async rows(entityName, filter, orderBy) {
+        async rows(entityName, filter, orderBy, fields) {
             const view = RunView.FromMetadataProvider(provider as never);
-            const result = await view.RunView({ EntityName: entityName, ExtraFilter: filter, OrderBy: orderBy, ResultType: 'simple', MaxRows: 5000 }, user as never);
+            const result = await view.RunView({ EntityName: entityName, ExtraFilter: filter, OrderBy: orderBy, Fields: fields, ResultType: 'simple', MaxRows: 5000 }, user as never);
             if (!result.Success) throw new Error(result.ErrorMessage || `Could not read ${entityName}.`);
             return (result.Results ?? []) as Record<string, unknown>[];
         },

@@ -27,7 +27,9 @@
     "@memberjunction/actions-base": "6.2.0-edge.3",
     "@memberjunction/actions": "6.2.0-edge.3",
     "@memberjunction/computer-use": "6.2.0-edge.3",
-    "@memberjunction/testing-engine": "6.2.0-edge.3"
+    "@memberjunction/testing-engine": "6.2.0-edge.3",
+    "@memberjunction/rubrics": "6.2.0-edge.3",
+    "@memberjunction/rubrics-base": "6.2.0-edge.3"
   },
   "peerDependencies": {
     "playwright": ">=1.40.0"

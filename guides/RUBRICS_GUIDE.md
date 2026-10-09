@@ -294,6 +294,29 @@ graph TD
   is used. An explicit `rubric` oracle's own `evaluator` wins over the link's settings.
 - A test that already has an `llm-judge` oracle keeps it, and the agent's default rubric is not added beside
   it. Rubrics named on the run, the test, or the suite are still added.
+- The same resolution runs in every driver (Agent Eval, Prompt Eval, Decision Eval, Computer Use), through
+  `BaseTestDriver.ResolveRubricForRun`. Only Agent Eval has the agent default as a source.
+- A rubric that has only a Draft (for example right after `mj test promote-criteria`) adds no oracle; the run
+  log says so. Publish the draft to start judging. A `rubric` oracle that names such a rubric itself still fails.
+
+### Computer use tests
+
+A computer use test with a resolved, published rubric runs one judge, not two. The rubric's leaves are
+rendered through *Rubric Criterion* and given to the in-run judge with their keys and level labels; the run
+stops when every criterion is met, as before. After the run, the `rubric` oracle uses the **ComputerUse**
+evaluator, which turns the final judge verdict (one level per key) into the stored evaluation and links the
+judge's prompt run as `AIPromptRunID`. No second model call is made.
+
+| Setting | Default | Effect |
+|---|---|---|
+| `Configuration.judgeWithRubric` | `true` | `false` keeps `judgeValidationCriteria` in the loop and judges the rubric after the run with *Rubric Judge - Computer Use* |
+| `Configuration.rubricFrames` | `6` | How many run frames the after-run judge sees. `0` sends the transcript only |
+
+The rubric is judged after the run instead when `judgeWithRubric` is `false`, when the test has checkpoints, or
+when the `rubric` oracle names its own `evaluator`. The after-run judge reads a transcript of the steps (goal,
+URLs, reasoning, errors, in-run verdicts), not the raw output, plus the chosen frames: checkpoint frames,
+judge verdict changes, a spread of steps, and the final frame, captured after the last action. Use
+`judgeWithRubric: false` when a criterion needs the whole path (for example "never showed an error").
 
 ### Moving inline criteria to a rubric
 
@@ -564,6 +587,7 @@ graph LR
 | `Agent` | Agent | The **Rubric Evaluation Agent**, a Loop agent that can read the rubric and the subject | `AgentID` |
 | `Deterministic` | Deterministic | Each criterion's `EvaluatorConfig.Deterministic` rule. No model call | none |
 | `Human` | Human | A person, through the scoring form or the Submit Human Rubric action. The engine never runs it | — |
+| `ComputerUse` | AIPrompt | Nothing. Reads a computer use run's in-run judge verdicts (one level per criterion key) from the subject and links the judge's prompt run. Registered by `@memberjunction/computer-use-engine` | none |
 
 `AI` is accepted as the old name for `Agent`, and `AIPrompt` as a name for `LLM`. Names are case-insensitive.
 
@@ -579,6 +603,12 @@ criteria do not require evidence. The Decision evaluator refuses a rubric with a
 before calling anything, writes each rationale as the chosen level and its probability, and leaves a criterion
 on a numeric scale unanswered (it is listed in the run metadata as `UnaskedCriteria`). Use LLM when you need
 written rationale, quotes, or numeric scales.
+
+A subject may carry **frames** (`RubricSubjectContent.images`): each one is sent as an image block after the
+subject text, behind a text block that names it (`Frame "step 7":`). A judge may cite a frame as evidence with
+`{"frame": "step 7"}`; a frame that was not attached is dropped like an unknown quote. At most
+`RUBRIC_SUBJECT_MAX_IMAGES` (8) frames are sent. Bind a vision model to the judge and set `ModelSelection:
+"Judge"` so it is used; the shipped `Rubric Judge - Computer Use` is bound that way.
 
 The LLM evaluator sends the rubric as the system message and the subject as a separate, delimited user
 message, so subject text cannot rewrite the instructions. Its prompts are metadata you can swap, see
@@ -887,6 +917,9 @@ until a round closes, express it as entity permissions or row-level filters in y
 
 The judge sees what the content provider for the subject's entity returns: `text`, `data`, and `files`.
 Built-in providers cover `MJ: Test Runs`, `MJ: AI Agent Runs`, `MJ: AI Prompt Runs`, and `MJ: Conversations`.
+When the engine loads a test run itself (re-scoring, human review, calibration), it attaches a spread of the
+run's saved `MJ: Test Run Outputs` screenshots as frames. In-run oracles pass the frames the driver chose,
+because the outputs are saved after the oracles run.
 For anything else, the record's readable columns become `data`. Register a provider when your subject's
 meaning lives elsewhere, for example in an attached document or child rows:
 

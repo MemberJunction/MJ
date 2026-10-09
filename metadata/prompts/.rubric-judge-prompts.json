@@ -286,5 +286,56 @@
       "lastModified": "2026-10-06T20:21:53.413Z",
       "checksum": "c5cf86bd1486cf2ab0797dda526aab68f56fda3725d7444e1a894de6aa5b2032"
     }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Computer Use",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/computer-use.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "How to judge a browser automation run: from the attached frames and the step transcript, with the final frame as the result and the in-run judge's verdicts treated as part of the subject. Bound to vision models; a computer use test's rubric oracle names it with ModelSelection Judge."
+    },
+    "primaryKey": {
+      "ID": "8D32D24E-1DBA-411B-B87A-63B93B04756B"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.6 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 100
+          },
+          "primaryKey": {
+            "ID": "B70BE465-4E06-40CE-AE3D-535D42A927C5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 80
+          },
+          "primaryKey": {
+            "ID": "7AD779A1-27BE-40E4-AEF3-71A83BC3F2F5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 60
+          },
+          "primaryKey": {
+            "ID": "F081CC47-DC75-4191-BCAB-07F9398BB624"
+          }
+        }
+      ]
+    }
   }
 ]

@@ -1,3 +1,4 @@
+import type { ChatMessageContent } from '@memberjunction/ai';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { CleanAndParseJSON, RegisterClass } from '@memberjunction/global';
 import type { RubricSubjectContent } from './content.js';
@@ -6,7 +7,7 @@ import type {
     RubricEvaluatorContext, RubricEvaluatorRun, RubricEvaluatorType, RubricJsonValue, RubricPromptMode, RubricPromptRef,
 } from './evaluatorServices.js';
 import {
-    BuildCriteriaPromptData, BuildRubricVersionPromptData, BuildSubjectMessage, LeafNodes,
+    BuildCriteriaPromptData, BuildRubricVersionPromptData, BuildSubjectContent, LeafNodes,
     type RubricCriterionPromptData, type RubricPromptData,
 } from './promptData.js';
 
@@ -28,7 +29,8 @@ export const MAX_RUBRIC_SAMPLES = 9;
 /** One call's input: the template data the prompts render, and the subject as its own user message. */
 export interface RubricRunnerRequest {
     Data: RubricPromptData;
-    Subject: string;
+    /** The subject message: delimited text, then any frames as image blocks. */
+    Subject: ChatMessageContent;
 }
 
 /** Runs one evaluator prompt call. Tests return JSON. Production goes through the prompt service. */
@@ -42,7 +44,8 @@ export interface LLMDecision {
     value?: number;
     notApplicable?: boolean;
     rationale?: string;
-    evidence?: { quote?: string }[];
+    /** A verbatim quote from the subject text, or the label of an attached frame. */
+    evidence?: { quote?: string; frame?: string }[];
     /** SinglePass only. PerCriterion ignores this and uses the chosen level's probability. */
     confidence?: number;
     chosen?: string;
@@ -79,7 +82,8 @@ export function PromptRef(id: string | undefined, name: string | undefined, fall
  * SinglePass asks once for the whole rubric. PerCriterion asks once per leaf, and confidence is the
  * probability of the chosen level. Samples runs the rubric several times and keeps each criterion's
  * median level. Unknown keys are dropped and counted. Levels map by label. A numeric value outside
- * the scale throws before scoring. A quote that is not in the subject text is dropped.
+ * the scale throws before scoring. A quote that is not in the subject text, or a frame that was not
+ * attached, is dropped.
  */
 @RegisterClass(BaseRubricEvaluator, 'LLM')
 export class LLMRubricEvaluator extends BaseRubricEvaluator {
@@ -156,6 +160,7 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
         subject: { entityName: string; recordId: string } = { entityName: '', recordId: '' },
     ): Promise<LLMRubricResult> {
         const text = content.text ?? '';
+        const frames = new Set((content.images ?? []).map(image => image.label));
         const decisions = this.mode === 'SinglePass'
             ? await this.singlePass(version, content, criteria, subject)
             : await this.perCriterion(version, content, criteria, subject);
@@ -175,6 +180,11 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
             }
             const evidence: EvidenceRef[] = [];
             for (const item of decision.evidence ?? []) {
+                if (item.frame !== undefined) {
+                    if (frames.has(item.frame)) evidence.push({ ref: `frame:${item.frame}` });
+                    else droppedQuotes += 1;
+                    continue;
+                }
                 if (!item.quote || !text.includes(item.quote)) {
                     droppedQuotes += 1;
                     continue;
@@ -276,7 +286,7 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
     private async singlePass(
         version: RubricVersionSnapshot, content: RubricSubjectContent, criteria: RubricCriterionPromptData[], subject: { entityName: string; recordId: string },
     ): Promise<LLMDecision[]> {
-        const raw = await this.promptRunner.run({ Data: PromptData(version, 'SinglePass', criteria, subject), Subject: BuildSubjectMessage(content) });
+        const raw = await this.promptRunner.run({ Data: PromptData(version, 'SinglePass', criteria, subject), Subject: BuildSubjectContent(content) });
         const parsed = CleanAndParseJSON<{ decisions?: LLMDecision[] } | LLMDecision[]>(raw);
         if (!parsed) return [];
         return Array.isArray(parsed) ? parsed : parsed.decisions ?? [];
@@ -287,7 +297,7 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
     ): Promise<LLMDecision[]> {
         const decisions: LLMDecision[] = [];
         for (const criterion of criteria) {
-            const raw = await this.promptRunner.run({ Data: PromptData(version, 'PerCriterion', [criterion], subject), Subject: BuildSubjectMessage(content) });
+            const raw = await this.promptRunner.run({ Data: PromptData(version, 'PerCriterion', [criterion], subject), Subject: BuildSubjectContent(content) });
             const parsed = CleanAndParseJSON<LLMDecision>(raw);
             decisions.push({ ...(parsed ?? {}), key: criterion.Key });
         }

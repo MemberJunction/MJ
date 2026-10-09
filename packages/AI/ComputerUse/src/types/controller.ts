@@ -11,6 +11,7 @@
 
 import { BrowserAction } from './browser.js';
 import { JsonSchema } from './tools.js';
+import type { RubricJudgeCriterion } from './judge.js';
 
 // ─── Controller Prompt Request ─────────────────────────────
 /**
@@ -268,6 +269,9 @@ export class JudgePromptRequest {
      * is derived as all-criteria-met.
      */
     public ValidationCriteria?: string[];
+
+    /** Rubric criteria with keys and levels, when the run supplied them. */
+    public RubricCriteria?: RubricJudgeCriterion[];
 
     /**
      * The same free-form application context the controller receives. The judge

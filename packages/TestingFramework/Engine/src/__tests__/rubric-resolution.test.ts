@@ -20,7 +20,7 @@ const suites = [
 ];
 
 describe('rubric resolution', () => {
-    it('honors a test rubric and a run override on the drivers that score a test run', () => {
+    it('resolves the rubric through the base driver in every driver that scores a test run', () => {
         expect(OraclesWithNamedRubric([{ type: 'trace-no-errors', weight: 1 }], { testRubricId: 'from-test' })).toEqual([
             { type: 'trace-no-errors', weight: 1 },
             { type: 'rubric', config: { rubricId: 'from-test' } },
@@ -31,12 +31,12 @@ describe('rubric resolution', () => {
         const directory = dirname(fileURLToPath(import.meta.url));
         for (const file of ['../drivers/PromptEvalDriver.ts', '../drivers/DecisionEvalDriver.ts']) {
             const source = readFileSync(join(directory, file), 'utf8');
-            expect(source).toMatch(/OraclesWithNamedRubric/);
-            expect(source).toMatch(/testRunId: context\.testRun\.ID/);
+            expect(source).toMatch(/ResolveRubricForRun\(/);
+            expect(source).toMatch(/BuildOracleInput\(/);
         }
         const computerUse = readFileSync(join(directory, '../../../../AI/MJComputerUse/src/test-driver/ComputerUseTestDriver.ts'), 'utf8');
-        expect(computerUse).toMatch(/OraclesWithNamedRubric/);
-        expect(computerUse).toMatch(/testRunId: context\.testRun\.ID/);
+        expect(computerUse).toMatch(/ResolveRubricForRun\(/);
+        expect(computerUse).toMatch(/BuildOracleInput\(/);
     });
 
     it('uses the first source that names a rubric', () => {
