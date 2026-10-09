@@ -5,7 +5,9 @@
  *   because raw SQL never applies the row-level filters that confine it;
  * - the SQL runs only on the read-only database login, never on the read-write pool, and is
  *   refused when no read-only login is configured;
- * - it runs through the provider's ad-hoc read path, which accepts one read statement only.
+ * - it runs through the provider's ad-hoc read path, which accepts one read statement only;
+ * - the host's ad-hoc SQL authorizer (MJServer registers ExecuteAdhocQuery's table check) must
+ *   accept the SQL, and the host's timeout limit applies.
  *
  * `BaseEntity.Provider` is the global read-write provider; it is replaced with a stand-in that records
  * calls, so a run that falls back to it is caught.
@@ -13,17 +15,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BaseEntity, type MagicLinkScope, type RunQueryParams, type RunQueryResult } from '@memberjunction/core';
 
-const h = vi.hoisted(() => ({
-    readWriteExecuteSQL: vi.fn(),
-    readOnlyRunQuery: vi.fn(),
-    hasReadOnlyProvider: true,
-}));
+const h = vi.hoisted(() => {
+    const readOnlyRunQuery = vi.fn();
+    return {
+        readWriteExecuteSQL: vi.fn(),
+        readOnlyRunQuery,
+        readOnlyProvider: { RunQuery: readOnlyRunQuery },
+        hasReadOnlyProvider: true,
+        authorize: vi.fn(),
+        clampTimeoutSeconds: vi.fn(),
+        hasAuthorizer: true,
+    };
+});
 
 vi.mock('@memberjunction/actions', () => ({
     BaseAction: class BaseAction {},
     ActionEngineServer: {
         Instance: {
-            GetReadOnlyProvider: async () => (h.hasReadOnlyProvider ? { RunQuery: h.readOnlyRunQuery } : null),
+            GetReadOnlyProvider: async () => (h.hasReadOnlyProvider ? h.readOnlyProvider : null),
+            get AdhocSQLAuthorizer() {
+                return h.hasAuthorizer ? { Authorize: h.authorize, ClampTimeoutSeconds: h.clampTimeoutSeconds } : null;
+            },
         },
     },
 }));
@@ -65,8 +77,12 @@ beforeEach(() => {
         { PlatformKey: 'sqlserver', ExecuteSQL: h.readWriteExecuteSQL } as unknown as ReturnType<typeof BaseEntity.Provider>
     );
     h.hasReadOnlyProvider = true;
+    h.hasAuthorizer = true;
     h.readWriteExecuteSQL.mockReset().mockResolvedValue(ROWS);
     h.readOnlyRunQuery.mockReset().mockResolvedValue(queryResult({}));
+    h.authorize.mockReset().mockReturnValue(null);
+    // The host's limit: what was asked for, else 30 seconds, never more than 60.
+    h.clampTimeoutSeconds.mockReset().mockImplementation((requested?: number) => Math.min(requested && requested > 0 ? requested : 30, 60));
 });
 
 describe('Run Ad-hoc Query: who may run it', () => {
@@ -130,6 +146,52 @@ describe('Run Ad-hoc Query: where it runs', () => {
         const result = await run(USER);
 
         expect(result.WasTruncated).toBe(true);
+    });
+});
+
+describe('Run Ad-hoc Query: the host\'s ad-hoc SQL checks', () => {
+    it('refuses when the host registered no SQL authorizer', async () => {
+        h.hasAuthorizer = false;
+
+        const result = await run(USER);
+
+        expect(result.Success).toBe(false);
+        expect(result.ResultCode).toBe('PERMISSION_DENIED');
+        expect(h.readOnlyRunQuery).not.toHaveBeenCalled();
+        expect(h.readWriteExecuteSQL).not.toHaveBeenCalled();
+    });
+
+    it('refuses SQL the host refuses, without running it', async () => {
+        h.authorize.mockReturnValue("Invalid ad-hoc SQL: entity 'MJ: Rubric Evaluations' is row-level-security filtered for you");
+
+        const result = await run(USER);
+
+        expect(result.Success).toBe(false);
+        expect(result.ResultCode).toBe('PERMISSION_DENIED');
+        expect(result.Message).toMatch(/row-level-security filtered/);
+        expect(h.readOnlyRunQuery).not.toHaveBeenCalled();
+    });
+
+    it('reports a host refusal of the statement shape as NOT_SELECT_STATEMENT', async () => {
+        h.authorize.mockReturnValue('RenderPipeline: only a single read query may be run here, and this SQL is not one: it contains more than one statement.');
+
+        const result = await run(USER);
+
+        expect(result.ResultCode).toBe('NOT_SELECT_STATEMENT');
+        expect(h.readOnlyRunQuery).not.toHaveBeenCalled();
+    });
+
+    it('asks the host about the SQL it will run, on the read-only provider, for the caller', async () => {
+        await run(USER);
+
+        expect(h.authorize).toHaveBeenCalledWith(SQL, h.readOnlyProvider, USER);
+    });
+
+    it('runs with the timeout the host allows', async () => {
+        await run(USER, [{ Name: 'Timeout', Type: 'Input', Value: 600 }]);
+
+        expect(h.clampTimeoutSeconds).toHaveBeenCalledWith(600);
+        expect(sentQuery().TimeoutSeconds).toBe(60);
     });
 });
 

@@ -19,12 +19,14 @@ vi.mock('@memberjunction/global', () => ({
 }));
 vi.mock('@memberjunction/actions', () => ({
     BaseAction: class BaseAction {},
-    // The read-only provider the action runs its SQL on, answering with the rows under test.
+    // The read-only provider the action runs its SQL on, answering with the rows under test, and a
+    // host SQL authorizer that accepts the query.
     ActionEngineServer: {
         Instance: {
             GetReadOnlyProvider: async () => ({
                 RunQuery: async () => ({ Success: true, Results: h.rows, RowCount: h.rows.length, TotalRowCount: h.rows.length, ErrorMessage: '' }),
             }),
+            AdhocSQLAuthorizer: { Authorize: () => null, ClampTimeoutSeconds: () => 30 },
         },
     },
 }));

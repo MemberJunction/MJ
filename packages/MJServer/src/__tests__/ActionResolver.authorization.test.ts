@@ -10,9 +10,10 @@ import 'reflect-metadata';
  * Policy under test:
  * - scope-limited sessions (anonymous magic-link guests, widget guests, resource-scoped links)
  *   are refused before anything loads;
- * - an Owner may run any action;
+ * - an Owner may run any action, decided before anything is read;
  * - any other user must hold one of the authorizations linked to the action through
- *   `MJ: Action Authorizations`; an action with none is refused.
+ *   `MJ: Action Authorizations`; an action with none runs only when its class authorizes its
+ *   caller itself (`BaseAction.AuthorizesCaller`), and is refused otherwise.
  */
 import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest';
 
@@ -48,8 +49,9 @@ import {
   type RunViewResult,
 } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { ActionEngineServer } from '@memberjunction/actions';
-import { MJActionEntityExtended, type ActionResult, type RunActionParams } from '@memberjunction/actions-base';
+import { MJGlobal } from '@memberjunction/global';
+import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
+import { MJActionEntityExtended, type ActionResult, type ActionResultSimple, type RunActionParams } from '@memberjunction/actions-base';
 import { ActionResolver, type RunActionInput } from '../resolvers/ActionResolver.js';
 import type { AppContext, UserPayload } from '../types.js';
 
@@ -57,7 +59,7 @@ import type { AppContext, UserPayload } from '../types.js';
 
 const ACTION_ENTITY = new EntityInfo({
   ID: 'entity-actions', Name: 'MJ: Actions', SchemaName: '__mj', BaseTable: 'Action', BaseView: 'vwActions',
-  Fields: ['ID', 'Name'].map((field, index) => ({
+  Fields: ['ID', 'Name', 'Type', 'DriverClass'].map((field, index) => ({
     ID: `entity-actions-${field}`, EntityID: 'entity-actions', Sequence: index + 1, Name: field, Entity: 'MJ: Actions',
     Type: field === 'ID' ? 'uniqueidentifier' : 'nvarchar', IsPrimaryKey: field === 'ID',
   })),
@@ -65,7 +67,7 @@ const ACTION_ENTITY = new EntityInfo({
 
 const makeAction = (fields: Pick<MJActionEntityExtended, 'ID' | 'Name'>): MJActionEntityExtended => {
   const action = new MJActionEntityExtended(ACTION_ENTITY);
-  action.Hydrate(fields);
+  action.Hydrate({ Type: 'Custom', DriverClass: null, ...fields });
   return action;
 };
 
@@ -75,8 +77,23 @@ const UNGRANTED_ACTION = makeAction({ ID: '22F9505E-3BEB-400E-A49F-A74D135C5A93'
 const GRANTED_ACTION = makeAction({ ID: 'A11C0000-0000-4000-8000-000000000002', Name: 'Send To Audience' });
 /** An action linked only to an authorization that has been switched off. */
 const INACTIVE_GRANT_ACTION = makeAction({ ID: 'A11C0000-0000-4000-8000-000000000003', Name: 'Archive Audience' });
+/** The Database Designer's "Create Entity" from metadata/actions: no Action Authorization rows ship for it. */
+const SELF_AUTHORIZING_ACTION = makeAction({ ID: 'F4CBD4ED-C258-468B-8F50-F12E4C74A431', Name: 'Create Entity' });
+
+/**
+ * Stands in for the Database Designer's Create Entity class, which checks the caller's Schema
+ * Management authorization itself. Registered the way `@RegisterClass` registers the real one.
+ */
+class SelfAuthorizingCreateEntity extends BaseAction {
+  public static readonly AuthorizesCaller = true;
+  protected async InternalRunAction(): Promise<ActionResultSimple> {
+    return { Success: true, ResultCode: 'SUCCESS' };
+  }
+}
+MJGlobal.Instance.ClassFactory.Register(BaseAction, SelfAuthorizingCreateEntity, 'Create Entity');
 
 const UI_ROLE_ID = 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E';
+const DEVELOPER_ROLE_ID = 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E';
 const OTHER_ROLE_ID = 'A11C0000-0000-4000-8000-0000000000F1';
 
 const AUDIENCE_AUTH = new AuthorizationInfo({ ID: 'A11C0000-0000-4000-8000-0000000000A1', Name: 'Run Audience Actions', IsActive: true });
@@ -100,6 +117,7 @@ const makeUser = (fields: Pick<UserInfo, 'ID' | 'Name' | 'Email' | 'Type'>, role
 
 const UI_USER = makeUser({ ID: 'user-ui', Name: 'Pat', Email: 'pat@example.com', Type: 'User' }, [UI_ROLE_ID]);
 const OTHER_USER = makeUser({ ID: 'user-other', Name: 'Sam', Email: 'sam@example.com', Type: 'User' }, [OTHER_ROLE_ID]);
+const DEVELOPER = makeUser({ ID: 'user-dev', Name: 'Dana', Email: 'dana@example.com', Type: 'User' }, [DEVELOPER_ROLE_ID]);
 // `Type` is an nchar column, so the database pads it.
 const OWNER = makeUser({ ID: 'user-owner', Name: 'Olive', Email: 'olive@example.com', Type: 'Owner          ' }, []);
 const SYSTEM_USER = makeUser({ ID: 'user-system', Name: 'System', Email: 'system@example.com', Type: 'Owner' }, []);
@@ -119,12 +137,13 @@ const ENGINE_RESULT: ActionResult = { Success: true, Message: 'ran', RunParams: 
 
 let engineRun: MockInstance<ActionEngineServer['RunAction']>;
 let engineConfig: MockInstance<ActionEngineServer['Config']>;
+let viewRun: MockInstance<RunView['RunView']>;
 const sentParams = (): RunActionParams => engineRun.mock.calls[0][0];
 
 beforeEach(() => {
   vi.restoreAllMocks();
   engineConfig = vi.spyOn(ActionEngineServer.prototype, 'Config').mockResolvedValue(undefined);
-  vi.spyOn(ActionEngineServer.prototype, 'Actions', 'get').mockReturnValue([UNGRANTED_ACTION, GRANTED_ACTION, INACTIVE_GRANT_ACTION]);
+  vi.spyOn(ActionEngineServer.prototype, 'Actions', 'get').mockReturnValue([UNGRANTED_ACTION, GRANTED_ACTION, INACTIVE_GRANT_ACTION, SELF_AUTHORIZING_ACTION]);
   engineRun = vi.spyOn(ActionEngineServer.prototype, 'RunAction').mockResolvedValue(ENGINE_RESULT);
   vi.spyOn(UserCache.prototype, 'GetSystemUser').mockReturnValue(SYSTEM_USER);
   vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
@@ -132,7 +151,7 @@ beforeEach(() => {
     AuthorizationRoles: AUTHORIZATION_ROLES,
   } as unknown as ReturnType<typeof Metadata.Provider>);
   // No database: answer the `MJ: Action Authorizations` lookup from the fixture above.
-  vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
+  viewRun = vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
     const actionID = Object.keys(ACTION_AUTHORIZATIONS).find((id) => params.ExtraFilter?.includes(id));
     const rows = params.EntityName === 'MJ: Action Authorizations' && actionID
       ? ACTION_AUTHORIZATIONS[actionID].map((AuthorizationID) => ({ ActionID: actionID, AuthorizationID }))
@@ -196,11 +215,28 @@ describe('RunAction: per-action authorization', () => {
     expect(sentParams().ContextUser).toBe(UI_USER);
   });
 
-  it('runs any action for an Owner', async () => {
+  it('runs any action for an Owner, deciding before reading any Action Authorization', async () => {
     const result = await runAction(OWNER, { ActionID: UNGRANTED_ACTION.ID });
 
     expect(result.Success).toBe(true);
     expect(sentParams().Action).toBe(UNGRANTED_ACTION);
+    expect(viewRun).not.toHaveBeenCalled();
+  });
+
+  it('runs an unlinked action whose class authorizes its caller, so the action decides: a Developer may run Create Entity', async () => {
+    const result = await runAction(DEVELOPER, { ActionID: SELF_AUTHORIZING_ACTION.ID });
+
+    expect(result.Success).toBe(true);
+    expect(sentParams().Action).toBe(SELF_AUTHORIZING_ACTION);
+    expect(sentParams().ContextUser).toBe(DEVELOPER);
+  });
+
+  it('still refuses that Developer an unlinked action whose class does not authorize its caller', async () => {
+    const result = await runAction(DEVELOPER, { ActionID: UNGRANTED_ACTION.ID });
+
+    expect(result.Success).toBe(false);
+    expect(result.Message).toMatch(/not authorized to run action/i);
+    expect(engineRun).not.toHaveBeenCalled();
   });
 
   it('still reports an unknown action ID as not found', async () => {

@@ -63,6 +63,7 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { ActionEngineServer } from '@memberjunction/actions';
+import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
@@ -738,8 +739,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // This must happen before any request handler calls GetAPIKeyEngine()
   GetAPIKeyEngine();
 
-  // Actions that run caller-supplied SQL (Run Ad-hoc Query) run only on the read-only login.
+  // Actions that run caller-supplied SQL (Run Ad-hoc Query) run only on the read-only login, with
+  // ExecuteAdhocQuery's table check and timeout limit.
   ActionEngineServer.Instance.SetReadOnlyProviderFactory(() => CreateReadOnlyProvider(dataSources));
+  ActionEngineServer.Instance.SetAdhocSQLAuthorizer(CreateAdhocSQLAuthorizer(configInfo.databaseSettings.requestTimeout));
 
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);

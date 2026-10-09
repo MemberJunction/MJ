@@ -11,7 +11,7 @@ import { CopyScalarsAndArrays, EscapeSQLString, UUIDsEqual } from "@memberjuncti
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IsScopeLimitedPrincipal } from "../auth/scopeLimitedPrincipal.js";
-import { EvaluateActionRunAuthorization } from "../auth/actionAuthorization.js";
+import { EvaluateActionRunAuthorization, IsOwner } from "../auth/actionAuthorization.js";
 
 /**
  * Input type for action parameters
@@ -180,9 +180,10 @@ export class ActionResolver extends ResolverBase {
    * Mutation for running an action.
    *
    * Scope-limited sessions are refused. Any other caller must be authorized for the action — see
-   * {@link EvaluateActionRunAuthorization}: an Owner may run any action, and anyone else needs a role
-   * that holds an authorization linked to the action through `MJ: Action Authorizations`. The run is
-   * always logged.
+   * {@link EvaluateActionRunAuthorization}: an Owner may run any action; anyone else needs a role that
+   * holds an authorization linked to the action through `MJ: Action Authorizations`, or, when the
+   * action has no such link, an action class that authorizes its caller itself. The run is always
+   * logged.
    * @param input The input parameters for running the action
    * @param ctx The GraphQL context containing user authentication information
    * @returns The result of running the action
@@ -242,10 +243,14 @@ export class ActionResolver extends ResolverBase {
    * @throws Error when the caller may not run the action
    */
   private async assertCanRunAction(action: MJActionEntityExtended, user: UserInfo, providers: Array<ProviderInfo>): Promise<void> {
+    if (IsOwner(user)) {
+      return; // an Owner may run any action, so nothing needs to be read
+    }
     const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
     const actionAuthorizationIDs = await this.loadActionAuthorizationIDs(action.ID, provider);
     const authorizations = (provider ?? Metadata.Provider).Authorizations; // global-provider-ok: fallback only when the request carries no provider
-    const decision = EvaluateActionRunAuthorization(user, actionAuthorizationIDs, authorizations);
+    const actionAuthorizesCaller = ActionEngineServer.Instance.ActionAuthorizesCaller(action);
+    const decision = EvaluateActionRunAuthorization(user, actionAuthorizationIDs, authorizations, actionAuthorizesCaller);
     if (!decision.Allowed) {
       throw new Error(`Not authorized to run action ${action.ID}: ${decision.Reason}`);
     }
