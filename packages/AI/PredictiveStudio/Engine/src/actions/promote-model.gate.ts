@@ -48,13 +48,6 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
       return { kind: 'not-found' };
     }
 
-    // A model with no trained artifact can't score anything, so it must never reach
-    // Published — refuse with the plain "needs training" message instead of letting it
-    // look deployable and then fail every record at run time.
-    if (request.targetStatus === 'Published' && !ModelHasTrainedArtifact(model)) {
-      return { kind: 'needs-training', message: ModelNeedsTrainingMessage(model.ID) };
-    }
-
     // Always evaluate leakage so a sign-off override of a FLAGGED model can be
     // audited. A clean (non-flagged) model needs neither a sign-off nor a reason.
     const leakage = await this.detectLeakage(model, request.contextUser, request.provider);
@@ -210,6 +203,13 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     const allowed = ProductionModelPromotionGate.ALLOWED_TRANSITIONS[currentStatus] ?? [];
     if (!allowed.includes(targetStatus)) {
       return { kind: 'invalid-transition', currentStatus, targetStatus };
+    }
+    // A model with no trained artifact can't score anything, so it must never reach
+    // Published — refuse with the plain "needs training" message instead of letting it
+    // look deployable and then fail every record at run time. Checked after the
+    // lifecycle rule, so an illegal jump is still reported as an invalid transition.
+    if (targetStatus === 'Published' && !ModelHasTrainedArtifact(model)) {
+      return { kind: 'needs-training', message: ModelNeedsTrainingMessage(model.ID) };
     }
     model.Status = targetStatus;
     const saved = await model.Save();

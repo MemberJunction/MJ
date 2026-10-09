@@ -328,6 +328,13 @@ describe('ProductionModelPromotionGate — leakage sign-off gate', () => {
     expect(outcome.kind).toBe('promoted');
   });
 
+  it('reports an illegal Draft → Published jump as invalid-transition even when the model has no artifact', async () => {
+    const model = new FakeModel({ tenure: 0.5, city: 0.5 });
+    model.ArtifactFileID = null;
+    const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Published' }));
+    expect(outcome.kind).toBe('invalid-transition');
+  });
+
   it('returns not-found when the model does not load', async () => {
     const outcome = await new TestableGate(null).promote(req());
     expect(outcome.kind).toBe('not-found');
