@@ -1,0 +1,71 @@
+:host {
+    display: block;
+    width: 100%;
+}
+
+.mj-chart-svg {
+    position: absolute;
+    inset: 0;
+    display: block;
+    overflow: visible;
+}
+
+/* Fill mode: the frame measures the height its parent gives the chart host, so the host must take it all. */
+:host(.mj-chart-fill) {
+    height: 100%;
+}
+
+/*
+ * SVG text inherits its size from the frame's .mj-chart, the one place --mj-chart-font-size resolves.
+ * Resolving the variable again here would apply a relative value (1.5em, 150%) a second time against
+ * the already-scaled parent: the text would render at 2.25x while the layout measured 1.5x.
+ */
+
+.mj-chart-grid {
+    stroke: var(--mj-chart-grid-color, var(--mj-border-default));
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.mj-chart-axis-label {
+    fill: var(--mj-chart-axis-color, var(--mj-text-muted));
+    font-size: inherit;
+}
+
+.mj-chart-mark {
+    cursor: pointer;
+    transition: opacity 120ms ease;
+}
+
+.mj-chart-mark-inactive {
+    opacity: 0.55;
+}
+
+.mj-chart-focus {
+    fill: none;
+    stroke: var(--mj-focus-ring-color);
+    stroke-width: 2;
+    pointer-events: none;
+}
+
+.mj-chart-center-label {
+    fill: var(--mj-chart-label-color, var(--mj-text-secondary));
+    font-size: inherit;
+}
+
+.mj-chart-center-value {
+    fill: var(--mj-chart-value-color, var(--mj-text-primary));
+    font-size: 1.67em;
+    font-weight: 600;
+}
+
+.mj-chart-percent-label {
+    fill: var(--mj-chart-label-color, var(--mj-text-secondary));
+    font-size: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mj-chart-mark {
+        transition: none;
+    }
+}
