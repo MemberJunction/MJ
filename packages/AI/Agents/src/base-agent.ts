@@ -883,7 +883,6 @@ export class BaseAgent {
     }
 
     /**
-    /**
      * Applies the run's bound parameters to one call (`ExecuteAgentParams.boundActionParams`): a bound
      * value replaces whatever the model sent under its name, and the override is logged with the run and
      * step IDs. The rules are {@link ApplyBoundActionParams}'s; this adds only the log line.

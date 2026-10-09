@@ -47,6 +47,8 @@ export function BindingsForAction(bound: BoundActionParams | undefined, actionID
 /**
  * The parameters the model may be shown: every parameter whose name is not bound. With no bindings
  * the input array is returned as is, so an unbound run renders exactly what it rendered before.
+ * Find Best Action and Find Candidate Actions keep their own copy of this rule
+ * (`BaseFindActionsAction.visibleParams` in core-actions); a parity test there runs both on the same inputs.
  */
 export function UnboundParams(params: readonly MJActionParamEntity[], bindings: ActionBindings | undefined): readonly MJActionParamEntity[] {
     if (!bindings) {

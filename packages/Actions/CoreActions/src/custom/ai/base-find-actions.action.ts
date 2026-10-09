@@ -28,7 +28,9 @@ export abstract class BaseFindActionsAction extends BaseAction {
     /**
      * The action's parameters minus any the calling agent run binds (`Context.BoundActionParams`): keys are
      * Action IDs compared as UUIDs, names compare case-insensitively. The same rule `@memberjunction/ai-agents`
-     * applies to its catalog (`UnboundParams`), kept inline so this action module does not load the agent runtime.
+     * applies to its catalog, `UnboundParams(params, BindingsForAction(bound, actionID))` in
+     * `packages/AI/Agents/src/bound-action-params.ts`; it is kept inline so this action module does not load the agent
+     * runtime. `__tests__/bound-params-parity.test.ts` runs both on the same inputs: change them together.
      */
     private visibleParams(definitions: MJActionParamEntity[], bound: BoundActionParams | undefined, actionID: string): MJActionParamEntity[] {
         const key = bound ? Object.keys(bound).find(id => UUIDsEqual(id, actionID)) : undefined;
