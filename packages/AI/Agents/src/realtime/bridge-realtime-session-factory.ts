@@ -26,6 +26,7 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
 import { RealtimeClientSessionService, RealtimeHostToolsResolver } from './realtime-client-session-service';
 import { SelectRealtimeVendorForModel } from './realtime-vendor-resolution';
+import { RealtimeModelShowsAvatar } from './realtime-video-output-gate';
 
 /**
  * The context a bridge passes to {@link CreateBridgeRealtimeSession}. Structurally compatible with the
@@ -275,7 +276,8 @@ export interface RealtimeModelVoiceOption extends RealtimeVoiceOption {
     /**
      * The avatar that comes with this voice: the `APIName` of the persona's preset Video binding on the model's vendor,
      * which is what `realtime.video.avatarId` takes. Absent when the persona has no such binding there, or only a custom
-     * one (custom avatars are not supported).
+     * one (custom avatars are not supported), and on a model that shows no avatar there (its Video/Output row turns
+     * video off, or its driver renders none on that vendor's endpoint).
      */
     AvatarID?: string;
     /** The persona's preview image (`MJ: AI Personas.PreviewImageURL`), when it has one. */
@@ -298,8 +300,11 @@ export interface RealtimeModelVoices {
  * returned (a model you can't actually run isn't worth offering). Voices come from the driver
  * ({@link BaseRealtimeModel.SupportedVoices}) — the near-term, driver-owned source of truth.
  * A persona voice whose persona also has a preset Video binding on the same vendor names that avatar
- * ({@link RealtimeModelVoiceOption.AvatarID}); driver voices never do. A persona with a face doesn't
- * stand in for its plain voice, so the plain voice is listed too.
+ * ({@link RealtimeModelVoiceOption.AvatarID}), when the model shows avatars on that vendor
+ * ({@link RealtimeModelShowsAvatar}: its Video/Output row allows video or it has none, and the driver
+ * renders avatars on its endpoint); driver voices never do. So the picker marks a voice "Comes with an
+ * avatar" only where a call can show one. A persona with a face doesn't stand in for its plain voice, so
+ * the plain voice is listed too.
  *
  * @param contextUser The user the engine config runs as (server-side).
  * @param provider The request-scoped metadata provider (multi-provider safe).
@@ -328,13 +333,16 @@ export async function GetRealtimeModelVoices(
             continue; // no active vendor with a resolvable key — not runnable, so omit
         }
 
-        // 1. Consult metadata first (Personas & PersonaVendors carry curated names/descriptions, and avatars)
-        const voices = personaVoiceOptions(model.ID, selection.VendorID);
-
-        // 2. Union with driver SupportedVoices: append the driver voices no persona offers plainly, unless excluded
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
             BaseRealtimeModel, driverClass, resolveAPIKey(driverClass),
         );
+
+        // 1. Consult metadata first (Personas & PersonaVendors carry curated names/descriptions, and avatars where the
+        //    model shows them on this vendor)
+        const showsAvatar = instance ? RealtimeModelShowsAvatar({ ModelID: model.ID, APIName: selection.APIName, Model: instance }, AIEngine.Instance) : false;
+        const voices = personaVoiceOptions(model.ID, selection.VendorID, showsAvatar);
+
+        // 2. Union with driver SupportedVoices: append the driver voices no persona offers plainly, unless excluded
         appendDriverVoices(voices, instance?.SupportedVoices ?? [], model.ID, selection.VendorID);
 
         out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: voices });
@@ -360,13 +368,15 @@ function appendDriverVoices(voices: RealtimeModelVoiceOption[], driverVoices: Re
 }
 
 /**
- * The model's persona voices on a vendor, one per persona, in persona order. A persona whose preset Video binding on the
- * same vendor the model supports carries that binding's `APIName` as its avatar (the face the session asks for when the
- * voice is picked); a binding on any other vendor doesn't count, nor does a custom one, and with no vendor there is
- * nothing to match.
+ * The model's persona voices on a vendor, one per persona, in persona order. On a model that shows avatars there, a
+ * persona whose preset Video binding on the same vendor the model supports carries that binding's `APIName` as its avatar
+ * (the face the session asks for when the voice is picked); a binding on any other vendor doesn't count, nor does a custom
+ * one, and with no vendor there is nothing to match. On a model that shows none, no voice comes with an avatar.
+ *
+ * @param showsAvatar Whether the model shows avatars on this vendor ({@link RealtimeModelShowsAvatar}).
  */
-function personaVoiceOptions(modelID: string, vendorID: string): RealtimeModelVoiceOption[] {
-    const faces = vendorID ? AIEngine.Instance.GetModelPersonas(modelID, 'Video', vendorID).filter(isPresetFace) : [];
+function personaVoiceOptions(modelID: string, vendorID: string, showsAvatar: boolean): RealtimeModelVoiceOption[] {
+    const faces = vendorID && showsAvatar ? AIEngine.Instance.GetModelPersonas(modelID, 'Video', vendorID).filter(isPresetFace) : [];
     return AIEngine.Instance.GetModelPersonas(modelID, 'Audio', vendorID).map((voice) => {
         const face = faces.find((f) => UUIDsEqual(f.Persona.ID, voice.Persona.ID));
         const image = voice.Persona.PreviewImageURL?.trim();

@@ -266,6 +266,17 @@ export interface RealtimeClientError {
  *    such a session with a clear error instead of failing at the provider. A driver that speaks
  *    its provider's protocol through the relay opts in by overriding
  *    {@link BaseRealtimeClient.SupportsRelayTransport}.
+ * 12. **The agent's video keeps the voice's rules.** A driver whose model sends the agent's video
+ *    hands it over through {@link emitRemoteVideo} once per session, and only while its outbound
+ *    video track is live; an audio-only session hands over nothing and never plays a video part as
+ *    audio. Its player gets each frame as the model sent it (a `RealtimeVideoFrame`, in order).
+ *    Barge-in flushes the video with the voice (obligation #3) and the cut turn's late media never
+ *    plays; a turn's end lets its video play out; a video that carries the voice never plays it
+ *    twice; each second of generated video is reported once (`OutputTokenDetails.VideoSeconds`); a
+ *    resumed session keeps its video; `Disconnect` releases it. A driver whose voice and video share
+ *    a media timeline queues its PCM at its media times and gives the player its voice playback as the
+ *    clock (`VideoPlayoutOptions.Clock`). The video conformance kit
+ *    (`@memberjunction/ai-realtime-client/testing`) checks each rule.
  */
 export abstract class BaseRealtimeClient {
     // ── Registered handlers (single-handler style, like IRealtimeSession) ─────

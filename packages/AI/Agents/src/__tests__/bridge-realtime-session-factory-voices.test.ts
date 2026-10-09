@@ -57,6 +57,10 @@ const mockPersonaVendors = [
     { PersonaID: 'p-fable', VendorID: 'v1', APIName: 'fable' },
 ];
 
+/** The Video modality, and the `MJ: AI Model Modalities` rows the avatar gate reads (none unless a test adds some). */
+const VIDEO_MODALITY = { ID: 'modality-video', Name: 'Video' };
+const mockModelModalities: Array<{ ModelID: string; ModalityID: string; Direction: 'Input' | 'Output'; IsSupported: boolean }> = [];
+
 const mockGetModelPersonaExclusions = vi.fn((modelId: string, _modality?: string, _vendorId?: string) => {
     if (modelId === 'm1') {
         return ['fable'];
@@ -74,6 +78,8 @@ vi.mock('@memberjunction/aiengine', () => ({
                 GetModelPersonaExclusions: mockGetModelPersonaExclusions,
                 ModelPersonas: mockModelPersonas,
                 PersonaVendors: mockPersonaVendors,
+                ModelModalities: mockModelModalities,
+                GetModalityByName: (name: string) => (name.toLowerCase() === 'video' ? VIDEO_MODALITY : undefined),
             };
         },
     },
@@ -110,6 +116,16 @@ vi.mock('../realtime/realtime-vendor-resolution', () => ({
 }));
 
 let createInstanceCalls = 0;
+/**
+ * The vendor API names whose driver renders an avatar on its endpoint (`SupportsAvatarOutput`). Every model with a face
+ * renders one unless a test says otherwise.
+ */
+const AVATAR_MODEL_API_NAMES = new Set<string>();
+const ALL_AVATAR_MODEL_API_NAMES = ['gpt-live-1', 'vendorless', 'shared-voice-live'];
+/** Every API name the drivers were asked about. */
+const avatarQuestions: string[] = [];
+/** Driver classes the ClassFactory can't create (it returns null). */
+const UNCREATABLE_DRIVERS = new Set<string>();
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
     return {
@@ -117,9 +133,16 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
         MJGlobal: {
             Instance: {
                 ClassFactory: {
-                    CreateInstance: (_base: unknown, _driverClass: string) => {
+                    CreateInstance: (_base: unknown, driverClass: string) => {
                         createInstanceCalls++;
+                        if (UNCREATABLE_DRIVERS.has(driverClass)) {
+                            return null;
+                        }
                         return {
+                            SupportsAvatarOutput: (apiName: string): boolean => {
+                                avatarQuestions.push(apiName);
+                                return AVATAR_MODEL_API_NAMES.has(apiName);
+                            },
                             SupportedVoices: [
                                 { ID: 'fallback-voice', Name: 'Fallback Voice' },
                                 { ID: 'fable', Name: 'Fable (Excluded on m1)' },
@@ -148,6 +171,11 @@ describe('GetRealtimeModelVoices', () => {
     beforeEach(() => {
         createInstanceCalls = 0;
         mockGetModelPersonas.mockClear();
+        avatarQuestions.length = 0;
+        UNCREATABLE_DRIVERS.clear();
+        mockModelModalities.length = 0;
+        AVATAR_MODEL_API_NAMES.clear();
+        ALL_AVATAR_MODEL_API_NAMES.forEach((name) => AVATAR_MODEL_API_NAMES.add(name));
     });
 
     it('emits metadata personas first and unions driver SupportedVoices as a superset', async () => {
@@ -242,5 +270,76 @@ describe('GetRealtimeModelVoices', () => {
             { ID: 'Puck', Name: 'Avery', PersonaID: 'p-avery', AvatarID: 'Avery', PreviewImageURL: 'https://img.example.test/avery.png' },
             { ID: 'Puck', Name: 'Puck (driver)' },
         ]);
+    });
+
+    describe('on a model that renders no avatar on its endpoint', () => {
+        beforeEach(() => {
+            AVATAR_MODEL_API_NAMES.delete('gpt-live-1');
+        });
+
+        it('marks no voice, even one whose persona has a preset face on the vendor, and looks for no faces', async () => {
+            const voices = await voicesOf('m1');
+            expect(voices.filter((v) => v.AvatarID)).toEqual([]);
+            expect(voices.find((v) => v.PersonaID === 'p-avery')).toEqual({
+                ID: 'Puck',
+                Name: 'Avery',
+                PersonaID: 'p-avery',
+                PreviewImageURL: 'https://img.example.test/avery.png',
+            });
+            expect(mockGetModelPersonas.mock.calls.some(([model, modality]) => model === 'm1' && modality === 'Video')).toBe(false);
+        });
+
+        it("lets the persona's plain voice stand in for the driver's voice of the same id", async () => {
+            const voices = await voicesOf('m1');
+            expect(voices.map((v) => v.ID)).toEqual(['alloy', 'echo', 'Puck', 'casey', 'fallback-voice', 'Avery', 'driver-face']);
+        });
+
+        it('still marks the voices of a model that renders avatars', async () => {
+            expect((await voicesOf('m5')).find((v) => v.PersonaID === 'p-ben')?.AvatarID).toBe('Ben');
+        });
+    });
+
+    describe("by the model's Video/Output row (the Modalities gate)", () => {
+        const videoOutputRow = (modelId: string, isSupported: boolean): void => {
+            mockModelModalities.push({ ModelID: modelId, ModalityID: VIDEO_MODALITY.ID, Direction: 'Output', IsSupported: isSupported });
+        };
+
+        it('marks no voice on a model whose row turns video off, though its driver renders avatars, and looks for no faces', async () => {
+            videoOutputRow('m1', false);
+            const voices = await voicesOf('m1');
+            expect(voices.filter((v) => v.AvatarID)).toEqual([]);
+            expect(mockGetModelPersonas.mock.calls.some(([model, modality]) => model === 'm1' && modality === 'Video')).toBe(false);
+            // Another model's row decides nothing here.
+            expect((await voicesOf('m5')).find((v) => v.PersonaID === 'p-ben')?.AvatarID).toBe('Ben');
+        });
+
+        it('marks the voices of a model whose row allows video and whose driver renders avatars', async () => {
+            videoOutputRow('m1', true);
+            expect((await voicesOf('m1')).filter((v) => v.AvatarID).map((v) => v.PersonaID)).toEqual(['p-avery']);
+        });
+
+        it('marks no voice on a model whose row allows video when its driver renders none on the endpoint', async () => {
+            videoOutputRow('m1', true);
+            AVATAR_MODEL_API_NAMES.delete('gpt-live-1');
+            expect((await voicesOf('m1')).filter((v) => v.AvatarID)).toEqual([]);
+        });
+
+        it("ignores an input row and another modality's output row", async () => {
+            mockModelModalities.push({ ModelID: 'm1', ModalityID: VIDEO_MODALITY.ID, Direction: 'Input', IsSupported: false });
+            mockModelModalities.push({ ModelID: 'm1', ModalityID: 'modality-audio', Direction: 'Output', IsSupported: false });
+            expect((await voicesOf('m1')).filter((v) => v.AvatarID).map((v) => v.PersonaID)).toEqual(['p-avery']);
+        });
+    });
+
+    it("marks no voice when the model's driver can't be created: nothing says it renders avatars", async () => {
+        UNCREATABLE_DRIVERS.add('LiveDriver');
+        const voices = await voicesOf('m1');
+        expect(voices.filter((v) => v.AvatarID)).toEqual([]);
+        expect(voices.map((v) => v.ID)).toEqual(['alloy', 'echo', 'Puck', 'casey']);
+    });
+
+    it("asks each model's driver whether it renders avatars by the vendor's API name for the model", async () => {
+        await GetRealtimeModelVoices();
+        expect([...avatarQuestions].sort()).toEqual(['gpt-4o-realtime', 'gpt-live-1', 'shared-voice-live', 'vendorless']);
     });
 });

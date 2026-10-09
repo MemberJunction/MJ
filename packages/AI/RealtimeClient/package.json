@@ -13,12 +13,19 @@
     "./media": {
       "types": "./dist/media/index.d.ts",
       "default": "./dist/media/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
     }
   },
   "typesVersions": {
     "*": {
       "media": [
         "dist/media/index.d.ts"
+      ],
+      "testing": [
+        "dist/testing/index.d.ts"
       ]
     }
   },
