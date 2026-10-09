@@ -200,8 +200,8 @@ export abstract class BaseRealtimeBridge {
 
     /**
      * Registers a handler invoked when an inbound camera or screen source the driver was sending stops: the person
-     * stopped letting agents see them, left, stopped sharing or turned the camera off. The engine tells the model, so it
-     * stops describing what it can no longer see.
+     * stopped letting agents see them, left, stopped sharing or turned the camera off, or the driver moved the model's
+     * view to another source. The engine tells the model, so it stops describing what it can no longer see.
      *
      * **No-op by default** (NOT capability-gated): a driver that sends no inbound video has no source to end, so
      * registering is always safe. Drivers that send camera or screen frames override it.

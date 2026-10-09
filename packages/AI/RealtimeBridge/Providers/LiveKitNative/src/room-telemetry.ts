@@ -92,6 +92,22 @@ export interface RoomVideoTelemetry {
     encodeQueueDepth?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
     /** Encode worker failures on this thread since the process started. */
     encodeWorkerRestarts?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /**
+     * Sources the ranking replaced while they could still be read: a screen was shared, or a speaker took the view. Not
+     * counted: a source that ended (an opt-out, a leave, an unpublish, a mute, its stream ending).
+     */
+    sourceSwitches?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Changes the hold delayed (a speaker who had not led long enough, a camera inside its dwell), each counted once. */
+    switchesHeld?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Active-speaker updates LiveKit sent the bot. */
+    activeSpeakerUpdates?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /**
+     * Most recent time from picking a source to its first frame reaching the bridge, in ms (subscription, first keyframe,
+     * sampling, encode): after a switch, how long the model saw nothing.
+     */
+    switchGapMsLast?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Longest such gap so far, in ms. */
+    switchGapMsMax?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
 }
 
 /** Telemetry snapshot for the room client. */

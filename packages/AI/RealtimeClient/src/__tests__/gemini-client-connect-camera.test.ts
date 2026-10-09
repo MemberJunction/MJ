@@ -70,7 +70,7 @@ describe('GeminiRealtimeClient: the camera passed to Connect', () => {
 
         expect(arbiter.GetActiveSourceIDs()).toEqual(['connect-camera']);
         const notes = client.Fake.ClientContents.flatMap((content) => content.turns ?? []).flatMap((turn) => turn.parts ?? []).map((part) => part.text);
-        expect(notes).toContain('[The agent is now viewing: Camera]');
+        expect(notes).toContain('[You can now see: Camera]');
         expect(arbiter.PushFrame('wb', FAKE_FRAME_BASE64)).toBe(false);
     });
 

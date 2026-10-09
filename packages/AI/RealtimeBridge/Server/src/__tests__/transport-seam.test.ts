@@ -56,12 +56,15 @@ class MockRealtimeSession implements IRealtimeSession {
     public readonly Heard: ArrayBuffer[] = [];
     public readonly HeardFrames: RealtimeInputFrame[] = [];
     public readonly SpokenUpdates: string[] = [];
+    /** Everything that reached the model, in order: `video frame` / `audio frame`, and each note's text. */
+    public readonly Log: string[] = [];
     private outputHandler?: (chunk: ArrayBuffer) => void;
     private transcriptHandler?: (t: RealtimeTranscript) => void;
 
     public SendInput(frame: RealtimeInputFrame): void {
         this.HeardFrames.push(frame);
         this.Heard.push(frame.Data);
+        this.Log.push(`${frame.Kind} frame`);
     }
     public async RegisterTools(): Promise<void> {
         /* no-op for tests */
@@ -98,6 +101,7 @@ class MockRealtimeSession implements IRealtimeSession {
     public readonly Notes: string[] = [];
     public SendContextNote(text: string): void {
         this.Notes.push(text);
+        this.Log.push(text);
     }
 
     /** Capability flag + capture for the live-reconfigure path (§6). */
@@ -294,6 +298,7 @@ describe('AIBridgeEngine — transport seam round-trip (LoopbackBridge + mock se
             { Kind: 'video', MimeType: 'image/jpeg', TimestampMs: 1234 },
         ]);
         expect(new Uint8Array(session.HeardFrames[1].Data)).toEqual(new Uint8Array([0xff, 0xd8]));
+        expect(session.Notes).toEqual([]); // a frame with no SourceID is not tracked, so nothing is said about it
 
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
@@ -352,12 +357,12 @@ describe('AIBridgeEngine — transport seam round-trip (LoopbackBridge + mock se
         loopback.EmitVideoSourceEnded({ Track: 'video-in', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
         loopback.EmitVideoSourceEnded({ Track: 'video-in', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
 
-        expect(session.Notes).toEqual(["[The agent can no longer see: Ada's camera]"]);
+        expect(session.Notes).toEqual(["[You can now see: Ada's camera]", "[You can no longer see: Ada's camera]"]);
 
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
 
-    it('says nothing about a source whose frames never reached the model', async () => {
+    it('says nothing about the end of a source whose frames never reached the model', async () => {
         const session = new MockRealtimeSession(VIDEO_SESSION);
         const { provider } = makeProvider(() => makeBridgeRow());
         const active = await engine().StartBridgeSession(baseParams(session, provider));
@@ -366,7 +371,76 @@ describe('AIBridgeEngine — transport seam round-trip (LoopbackBridge + mock se
         loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:bo:screen', SourceLabel: "Bo's screen" });
         loopback.EmitVideoSourceEnded({ Track: 'video-in', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
 
-        expect(session.Notes).toEqual([]);
+        expect(session.Notes).toEqual(["[You can now see: Bo's screen]"]);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('tells the model what it can now see right before the first frame of a source, and only once', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+        const ada = { SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" };
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+        loopback.EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2) });
+
+        expect(session.Log).toEqual(["[You can now see: Ada's camera]", 'video frame', 'video frame', 'audio frame']);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it("on a switch, says the old source ended, then names the new one right before its first frame", async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+        const bob = { SourceID: 'participant:bob:camera', SourceLabel: "Bob's camera" };
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...bob });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', ...bob });
+        loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:ada:screen', SourceLabel: "Ada's screen" });
+
+        expect(session.Log).toEqual([
+            "[You can now see: Bob's camera]",
+            'video frame',
+            "[You can no longer see: Bob's camera]",
+            "[You can now see: Ada's screen]",
+            'video frame',
+        ]);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('names a source again when it is seen again after it ended', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+        const ada = { SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" };
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', ...ada });
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+
+        expect(session.Notes).toEqual(["[You can now see: Ada's camera]", "[You can no longer see: Ada's camera]", "[You can now see: Ada's camera]"]);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('names a source the driver gave no label by its kind, never by its SourceID', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:ada:screen' });
+        loopback.EmitVideoSourceEnded({ Track: 'screen-in', SourceID: 'participant:ada:screen' });
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:bob:camera' });
+
+        expect(session.Notes).toEqual([
+            "[You can now see: a participant's screen]",
+            "[You can no longer see: a participant's screen]",
+            "[You can now see: a participant's camera]",
+        ]);
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
 

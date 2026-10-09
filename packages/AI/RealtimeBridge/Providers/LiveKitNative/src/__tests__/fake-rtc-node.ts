@@ -30,12 +30,14 @@ export const ROOM_EVENT = {
     TrackSubscribed: 'trackSubscribed',
     TrackUnsubscribed: 'trackUnsubscribed',
     TrackSubscriptionFailed: 'trackSubscriptionFailed',
+    TrackPublished: 'trackPublished',
     TrackUnpublished: 'trackUnpublished',
     TrackMuted: 'trackMuted',
     TrackUnmuted: 'trackUnmuted',
     ParticipantConnected: 'participantConnected',
     ParticipantDisconnected: 'participantDisconnected',
     ParticipantAttributesChanged: 'participantAttributesChanged',
+    ActiveSpeakersChanged: 'activeSpeakersChanged',
     Disconnected: 'disconnected',
 };
 export const TRACK_KIND = { KIND_AUDIO: 1, KIND_VIDEO: 2 };

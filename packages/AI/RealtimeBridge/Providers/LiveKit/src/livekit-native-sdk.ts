@@ -157,6 +157,16 @@ export interface NativeRoomVideoOptions {
     ScreenMaxDimension?: number;
     /** JPEG quality from 1 to 100. Default 80, the browser sampler's 0.8. */
     JpegQuality?: number;
+    /**
+     * How long (ms) a person must lead the room's active-speaker list before the agent's view moves to their camera, so a
+     * short interjection doesn't move it. Default 1500.
+     */
+    SpeakerOnsetMs?: number;
+    /**
+     * How long (ms) a camera stays in view, counted from its first frame, before another camera may replace it. A shared
+     * screen, a withdrawn consent or an ended source never waits. Default 4000.
+     */
+    SpeakerHoldMs?: number;
 }
 
 /** One participant as the native room client reports it. Mapped onto {@link LiveKitParticipant}. */
@@ -318,6 +328,10 @@ export interface LiveKitNativeSdkConfig {
     VideoScreenMaxDimension?: number;
     /** Override of the JPEG quality (1-100). */
     VideoJpegQuality?: number;
+    /** Override of how long (ms) a person must lead the active-speaker list before the view moves to their camera. */
+    VideoSpeakerOnsetMs?: number;
+    /** Override of how long (ms) a camera stays in view, from its first frame, before another camera may replace it. */
+    VideoSpeakerHoldMs?: number;
 }
 
 /**
@@ -340,6 +354,8 @@ export function NativeVideoOptionsFor(config: LiveKitNativeSdkConfig): NativeRoo
         CameraMaxDimension: config.VideoCameraMaxDimension,
         ScreenMaxDimension: config.VideoScreenMaxDimension,
         JpegQuality: config.VideoJpegQuality,
+        SpeakerOnsetMs: config.VideoSpeakerOnsetMs,
+        SpeakerHoldMs: config.VideoSpeakerHoldMs,
     };
 }
 
@@ -826,6 +842,8 @@ export function ReadNativeConfig(config?: Record<string, unknown>): LiveKitNativ
         VideoCameraMaxDimension: readNumber(cfg.VideoCameraMaxDimension),
         VideoScreenMaxDimension: readNumber(cfg.VideoScreenMaxDimension),
         VideoJpegQuality: readNumber(cfg.VideoJpegQuality),
+        VideoSpeakerOnsetMs: readNumber(cfg.VideoSpeakerOnsetMs),
+        VideoSpeakerHoldMs: readNumber(cfg.VideoSpeakerHoldMs),
     };
 }
 

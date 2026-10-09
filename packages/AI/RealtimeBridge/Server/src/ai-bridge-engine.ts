@@ -643,9 +643,10 @@ export interface ActiveBridgeSession {
     LastInboundSpeaker?: string;
 
     /**
-     * The camera and screen sources whose frames reached the current model session (`SourceID` → `SourceLabel`), so
-     * that when one ends the model is told it can no longer see it, and only about sources it actually saw. Cleared
-     * when a recovered session replaces the model.
+     * The camera and screen sources whose frames reached the current model session (`SourceID` → the label the model was
+     * given). A source not in it is new to the model, which is told what it can now see before its first frame; when one
+     * in it ends, the model is told it can no longer see it (and only about sources it actually saw). Cleared when a
+     * recovered session replaces the model.
      */
     SeenVideoSources: Map<string, string>;
 
@@ -1231,7 +1232,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * Two hooks, one per direction:
      * - **Inbound** (`bridge.OnMedia` → `session.SendInput`): what the agent HEARS (and, for a video model, SEES).
      *   Each inbound {@link BridgeMediaFrame} from the endpoint is unwrapped to its raw `ArrayBuffer` payload and
-     *   streamed straight to the model. Camera and screen frames go only to a session that declares inbound video.
+     *   streamed straight to the model. Camera and screen frames go only to a session that declares inbound video; the
+     *   first frame of a source new to the model session is preceded by a note naming it, and the end of a source the
+     *   model saw is followed by one (see {@link VideoSourceSeenNote}, {@link VideoSourceEndedNote}).
      * - **Outbound** (`session.OnOutput` → `bridge.SendMedia`): what the agent SAYS. Each model
      *   output `ArrayBuffer` is wrapped in an outbound audio {@link BridgeMediaFrame} and sent into
      *   the meeting/call.
@@ -1279,15 +1282,15 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                     this.diagInbound.add(active.SessionBridgeID);
                     LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). The agent is HEARING you.`, verboseOnly: true });
                 }
+                if (kind === 'video') {
+                    this.tellModelVideoSourceSeen(active, frame);
+                }
                 active.RealtimeSession.SendInput({
                     Data: chunk,
                     Kind: kind,
                     MimeType: frame.MimeType,
                     TimestampMs: frame.TimestampMs,
                 });
-                if (kind === 'video' && frame.SourceID) {
-                    active.SeenVideoSources.set(frame.SourceID, frame.SourceLabel ?? frame.SourceID);
-                }
             }
         });
         Bridge.OnVideoSourceEnded((source: BridgeVideoSourceEnd) => this.tellModelVideoSourceEnded(active, source));
@@ -1295,9 +1298,28 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     /**
+     * Tells the model what it can now see, right before the first frame of a camera or screen new to the current model
+     * session: the first source, the next one after a switch, a source seen again after it ended, or a replacement
+     * session's first frame. Records the source, so its end is reported. A frame without a `SourceID` is not tracked.
+     * Reads `active.RealtimeSession` each time: a recovered session replaces it.
+     *
+     * @param active The live bridged session.
+     * @param frame The camera or screen frame about to be sent.
+     */
+    private tellModelVideoSourceSeen(active: ActiveBridgeSession, frame: BridgeMediaFrame): void {
+        if (!frame.SourceID || active.SeenVideoSources.has(frame.SourceID)) {
+            return;
+        }
+        const label = frame.SourceLabel ?? fallbackVideoSourceLabel(frame.Track);
+        active.SeenVideoSources.set(frame.SourceID, label);
+        active.RealtimeSession.SendContextNote?.(VideoSourceSeenNote(label));
+    }
+
+    /**
      * Tells the model it can no longer see a camera or screen whose frames reached it (the person stopped letting agents
-     * see them, left, stopped sharing or turned the camera off), so it stops describing the last frame as current.
-     * A source the model never saw is ignored. Reads `active.RealtimeSession` each time: a recovered session replaces it.
+     * see them, left, stopped sharing or turned the camera off, or the view moved to another source), so it stops
+     * describing the last frame as current. A source the model never saw is ignored. Reads `active.RealtimeSession` each
+     * time: a recovered session replaces it.
      *
      * @param active The live bridged session.
      * @param source The source that ended, as the driver reported it.
@@ -3235,12 +3257,29 @@ function mediaKindOf(track: BridgeMediaTrackKind): RealtimeMediaKind {
     return track === 'video-in' || track === 'screen-in' ? 'video' : 'audio';
 }
 
+/** The name a camera or screen gets in a note when its driver gave none: never its `SourceID`. */
+function fallbackVideoSourceLabel(track: BridgeMediaTrackKind): string {
+    return track === 'screen-in' ? "a participant's screen" : "a participant's camera";
+}
+
 /**
- * The note that tells the model a camera or screen it was seeing has ended ("[The agent can no longer see: Ada's
- * camera]"). Worded like the call's own source notes (`VideoSourceArbiter`: "[The agent is now viewing: Camera]").
+ * The note that tells the model what it can now see, sent right before the first frame of a camera or screen new to its
+ * session ("[You can now see: Ada's screen]"). Paired with {@link VideoSourceEndedNote}. In the second person, like the
+ * engine's other meeting notes, so in a room with other agents it can't be read as another agent's view.
+ *
+ * @param sourceLabel The source's human-readable name.
+ */
+export function VideoSourceSeenNote(sourceLabel: string): string {
+    return `[You can now see: ${sourceLabel}]`;
+}
+
+/**
+ * The note that tells the model a camera or screen it was seeing has stopped ("[You can no longer see: Bob's camera]"):
+ * the person stopped letting agents see them, left, stopped sharing or turned the camera off, or the view moved to
+ * another source. Paired with {@link VideoSourceSeenNote}.
  *
  * @param sourceLabel The source's human-readable name.
  */
 export function VideoSourceEndedNote(sourceLabel: string): string {
-    return `[The agent can no longer see: ${sourceLabel}]`;
+    return `[You can no longer see: ${sourceLabel}]`;
 }

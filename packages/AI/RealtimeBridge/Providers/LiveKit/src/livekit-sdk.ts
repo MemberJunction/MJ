@@ -102,7 +102,10 @@ export interface LiveKitVideoFrame {
     TimestampMs: number;
 }
 
-/** A camera or screen the room client stopped reading: the person opted out, left, stopped sharing or turned it off. */
+/**
+ * A camera or screen the room client stopped reading: the person opted out, left, stopped sharing or turned it off, or
+ * the client moved the agent's view to another source.
+ */
 export interface LiveKitVideoSourceEnd {
     /** The participant whose source it was. */
     ParticipantIdentity: string;

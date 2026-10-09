@@ -287,7 +287,7 @@ describe('RealtimeSessionRuntime — the "agent can see" sources', () => {
         expect(sources[0].Enabled).toBe(false);
         // The channel's own note covers it: the arbiter must not say the same thing a second time.
         expect(ExposureFakeClient.Notes.filter((n) => n.includes('exposure_changed'))).toHaveLength(1);
-        expect(ExposureFakeClient.Notes.filter((n) => n.includes('turned off the agent'))).toEqual([]);
+        expect(ExposureFakeClient.Notes.filter((n) => n.includes('You can no longer see'))).toEqual([]);
         await runtime.EndRealtimeSession();
     });
 
@@ -301,6 +301,19 @@ describe('RealtimeSessionRuntime — the "agent can see" sources', () => {
         let sources: ReadonlyArray<{ Enabled: boolean }> = [];
         runtime.VideoSources$.subscribe((s) => (sources = s));
         expect(sources[0].Enabled).toBe(true);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('a source that is not a channel is switched at the arbiter, which tells the model in the second person', async () => {
+        const runtime = await startSession(policyFor('pixels'));
+        VisionChannel.Instance!.Arbiter().RegisterSource({ SourceID: 'screen-share', Label: 'Screen', Kind: 'screen' });
+        ExposureFakeClient.Notes.length = 0;
+        expect(runtime.SetVideoSourceEnabled('screen-share', false)).toBe(true);
+        expect(runtime.SetVideoSourceEnabled('screen-share', true)).toBe(true);
+        expect(ExposureFakeClient.Notes.filter((n) => n.includes('Screen'))).toEqual([
+            '[You can no longer see: Screen (the user turned it off)]',
+            '[You can now see: Screen (turned back on)]',
+        ]);
         await runtime.EndRealtimeSession();
     });
 

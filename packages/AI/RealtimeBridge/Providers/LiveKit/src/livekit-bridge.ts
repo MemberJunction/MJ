@@ -313,7 +313,7 @@ export class LiveKitBridge extends BaseRealtimeBridge {
 
     /**
      * Registers the handler for a camera or screen the room client stopped reading (the person opted out, left, stopped
-     * sharing or turned it off), so the engine can tell the model.
+     * sharing or turned it off, or the client moved the agent's view to another source), so the engine can tell the model.
      *
      * @param handler Invoked with each source that ended.
      */

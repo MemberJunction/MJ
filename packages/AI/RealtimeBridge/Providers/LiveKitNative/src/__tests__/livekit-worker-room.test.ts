@@ -295,6 +295,37 @@ describe('CreateMediaWorkerRoomClient (the worker session\'s default client)', (
         expect(subscribeCamera()).toBeUndefined();
         expect(cam.subscribeCalls).toEqual([false]);
     });
+
+    it('in a media worker, switches to a newly shared screen and posts the camera ended, then the screen: no new protocol', async () => {
+        const { fake, subscribeCamera } = roomWithAdasCamera();
+        const posted: MediaWorkerEvent[] = [];
+        const port: MediaWorkerPort = {
+            postMessage: (m) => {
+                posted.push(m);
+            },
+            on() {},
+        };
+        const session = new MediaWorkerSession(port, { clientFactory: (o) => CreateMediaWorkerRoomClient(o, async () => fake.module) });
+        await session.HandleCommand({ type: 'connect', id: 'c1', args: ARGS, options: { sampleRate: 24000, channels: 1, inboundSampleRate: 16000, video: WATCH } });
+        subscribeCamera()!.push({ frame: i420Frame(32, 24), rotation: 0 });
+        await flush();
+
+        const screen = new FakePublication('TR_bob_screen', TRACK_SOURCE.SOURCE_SCREENSHARE);
+        const bob = fakePerson('bob', 'Bob', { ...LETS_AGENTS_SEE }, [screen]);
+        fake.remote.push(bob);
+        const track = { kind: TRACK_KIND.KIND_VIDEO };
+        fake.emit(ROOM_EVENT.TrackSubscribed, track, screen, bob); // auto-subscribed: read at once
+        fake.cap.streamFor(track)!.push({ frame: i420Frame(32, 24), rotation: 0 });
+        await flush();
+
+        const video = posted.flatMap((m) => {
+            if (m.type === 'videoFrame') {
+                return [`frame ${m.frame.participantIdentity} ${m.frame.source}`];
+            }
+            return m.type === 'videoSourceEnded' ? [`ended ${m.source.participantIdentity} ${m.source.source}`] : [];
+        });
+        expect(video).toEqual(['frame ada camera', 'ended ada camera', 'frame bob screen']);
+    });
 });
 
 describe('IsVideoEncodeWorkerEnabled', () => {

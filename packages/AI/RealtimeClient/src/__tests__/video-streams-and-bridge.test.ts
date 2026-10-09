@@ -158,7 +158,7 @@ describe('ChannelInboundVideoBridge registers with the arbiter', () => {
         expect(wb.PushFrame('w2')).toBe(false);
         // The switch was announced as a context note on the model connection.
         const notes = client.Fake.ClientContents.flatMap((c) => c.turns ?? []).flatMap((t) => t.parts ?? []).map((p) => p.text);
-        expect(notes).toContain('[The agent is now viewing: Camera]');
+        expect(notes).toContain('[You can now see: Camera]');
         wb.Stop();
         cam.Stop();
     });

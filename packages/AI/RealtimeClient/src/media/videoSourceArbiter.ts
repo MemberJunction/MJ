@@ -12,10 +12,13 @@
  *   for every enabled source (a future multi-stream model) frames pass through untouched, each tagged
  *   with its source id. Otherwise it ranks the sources by a POLICY (data, overridable) and forwards only
  *   the top N.
- * - **The model is told when the choice changes** (`[The agent is now viewing: Camera]`), because a model
+ * - **The model is told when the choice changes** (`[You can now see: Camera]`), because a model
  *   that silently starts seeing something else will describe the old thing.
  * - **The user can switch a source off.** A disabled source is not a candidate, sends nothing, and the
- *   model is told it was turned off.
+ *   model is told it was turned off (`[You can no longer see: Camera (the user turned it off)]`).
+ *
+ * The notes speak to the model in the second person, as one set with the notes a meeting's bot sends
+ * (`[You can now see: …]`, `[You can no longer see: …]`).
  * - **The rate comes only from the negotiated track.** Pacing is read from the sink
  *   (`InboundVideoRate`), never a constant here.
  *
@@ -151,12 +154,12 @@ export interface VideoSourceArbiterOptions {
     /**
      * The note sent when the set of sources the model sees changes while sources are being arbitrated.
      * Receives the labels now in view. Return `null` to send nothing. Default:
-     * `[The agent is now viewing: <label>]` (labels joined with ", ").
+     * `[You can now see: <label>]` (labels joined with ", ").
      */
     FormatSwitchNote?: (labels: readonly string[]) => string | null;
-    /** The note sent when a source is turned off. Default: `[The user turned off the agent's view of: <label>]`. */
+    /** The note sent when a source is turned off. Default: `[You can no longer see: <label> (the user turned it off)]`. */
     FormatDisabledNote?: (label: string) => string | null;
-    /** The note sent when a source is turned back on. Default: `[The agent can see <label> again]`. */
+    /** The note sent when a source is turned back on. Default: `[You can now see: <label> (turned back on)]`. */
     FormatEnabledNote?: (label: string) => string | null;
     /** Reports a problem (a throwing sink). Defaults to `console.error`; the arbiter never throws into a caller's timer. */
     OnError?: (context: string, error: unknown) => void;
@@ -512,19 +515,17 @@ export class VideoSourceArbiter {
             return;
         }
         const labels = active.map((id) => this.sources.get(id)?.Label ?? id);
-        this.sendNote(
-            this.options.FormatSwitchNote ? this.options.FormatSwitchNote(labels) : `[The agent is now viewing: ${labels.join(', ')}]`
-        );
+        this.sendNote(this.options.FormatSwitchNote ? this.options.FormatSwitchNote(labels) : `[You can now see: ${labels.join(', ')}]`);
     }
 
     // ── plumbing ────────────────────────────────────────────────────────────
 
     private formatDisabledNote(label: string): string | null {
-        return this.options.FormatDisabledNote ? this.options.FormatDisabledNote(label) : `[The user turned off the agent's view of: ${label}]`;
+        return this.options.FormatDisabledNote ? this.options.FormatDisabledNote(label) : `[You can no longer see: ${label} (the user turned it off)]`;
     }
 
     private formatEnabledNote(label: string): string | null {
-        return this.options.FormatEnabledNote ? this.options.FormatEnabledNote(label) : `[The agent can see ${label} again]`;
+        return this.options.FormatEnabledNote ? this.options.FormatEnabledNote(label) : `[You can now see: ${label} (turned back on)]`;
     }
 
     private now(): number {

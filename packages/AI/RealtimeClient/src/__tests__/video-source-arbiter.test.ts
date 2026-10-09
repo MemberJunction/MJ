@@ -77,7 +77,7 @@ describe('VideoSourceArbiter', () => {
             arbiter.RegisterSource({ SourceID: 'wb', Label: 'Whiteboard' });
             arbiter.RegisterSource({ SourceID: 'cam', Label: 'Camera', Kind: 'camera' });
             expect(arbiter.GetActiveSourceIDs()).toEqual(['cam']);
-            expect(sink.Notes).toEqual(['[The agent is now viewing: Camera]']);
+            expect(sink.Notes).toEqual(['[You can now see: Camera]']);
             expect(arbiter.PushFrame('wb', 'W')).toBe(false); // the surface is not what the model sees now
             expect(arbiter.PushFrame('cam', 'C')).toBe(true);
             expect(sink.Frames.map((f) => f.Source)).toEqual(['cam']);
@@ -87,7 +87,7 @@ describe('VideoSourceArbiter', () => {
             arbiter.RegisterSource({ SourceID: 'cam', Label: 'Camera', Kind: 'camera' });
             arbiter.RegisterSource({ SourceID: 'scr', Label: 'Screen', Kind: 'screen' });
             expect(arbiter.GetActiveSourceIDs()).toEqual(['scr']);
-            expect(sink.Notes.at(-1)).toBe('[The agent is now viewing: Screen]');
+            expect(sink.Notes.at(-1)).toBe('[You can now see: Screen]');
         });
 
         it('an explicit user pick beats a newer capture', () => {
@@ -95,7 +95,7 @@ describe('VideoSourceArbiter', () => {
             arbiter.RegisterSource({ SourceID: 'cam', Label: 'Camera', Kind: 'camera' });
             expect(arbiter.SelectSource('wb')).toBe(true);
             expect(arbiter.GetActiveSourceIDs()).toEqual(['wb']);
-            expect(sink.Notes.at(-1)).toBe('[The agent is now viewing: Whiteboard]');
+            expect(sink.Notes.at(-1)).toBe('[You can now see: Whiteboard]');
         });
 
         it('with no capture, the focused surface wins over a newer unfocused one', () => {
@@ -104,7 +104,7 @@ describe('VideoSourceArbiter', () => {
             expect(arbiter.GetActiveSourceIDs()).toEqual(['rb']); // newest, nothing focused
             arbiter.SetFocusedSource('wb');
             expect(arbiter.GetActiveSourceIDs()).toEqual(['wb']);
-            expect(sink.Notes.at(-1)).toBe('[The agent is now viewing: Whiteboard]');
+            expect(sink.Notes.at(-1)).toBe('[You can now see: Whiteboard]');
         });
 
         it('focusing a CHANNEL focuses its sources, including one that registers afterwards, and clearing it releases them', () => {
@@ -136,7 +136,7 @@ describe('VideoSourceArbiter', () => {
             sink.Notes.length = 0;
             arbiter.UnregisterSource('cam');
             expect(arbiter.GetActiveSourceIDs()).toEqual(['wb']);
-            expect(sink.Notes).toEqual(['[The agent is now viewing: Whiteboard]']);
+            expect(sink.Notes).toEqual(['[You can now see: Whiteboard]']);
         });
 
         it('the last source leaving after arbitration is silent (there is nothing to switch to)', () => {
@@ -212,7 +212,7 @@ describe('VideoSourceArbiter', () => {
             arbiter.RegisterSource({ SourceID: 'cam', Label: 'Camera', Kind: 'camera' });
             arbiter.RegisterSource({ SourceID: 'scr', Label: 'Screen', Kind: 'screen' });
             expect(arbiter.GetActiveSourceIDs()).toEqual(['scr', 'cam']);
-            expect(sink.Notes.at(-1)).toBe('[The agent is now viewing: Screen, Camera]');
+            expect(sink.Notes.at(-1)).toBe('[You can now see: Screen, Camera]');
             expect(arbiter.PushFrame('wb', 'W')).toBe(false);
         });
     });
@@ -311,7 +311,7 @@ describe('VideoSourceArbiter', () => {
         it('a disabled source sends nothing and the model is told it was turned off', () => {
             arbiter.RegisterSource({ SourceID: 'wb', Label: 'Whiteboard' });
             expect(arbiter.SetSourceEnabled('wb', false)).toBe(true);
-            expect(sink.Notes).toEqual(["[The user turned off the agent's view of: Whiteboard]"]);
+            expect(sink.Notes).toEqual(["[You can no longer see: Whiteboard (the user turned it off)]"]);
             expect(arbiter.PushFrame('wb', 'X')).toBe(false);
             expect(arbiter.GetSources()[0]).toMatchObject({ Enabled: false, Active: false });
         });
@@ -321,7 +321,7 @@ describe('VideoSourceArbiter', () => {
             arbiter.SetSourceEnabled('wb', false);
             sink.Notes.length = 0;
             arbiter.SetSourceEnabled('wb', true);
-            expect(sink.Notes).toEqual(['[The agent can see Whiteboard again]']);
+            expect(sink.Notes).toEqual(['[You can now see: Whiteboard (turned back on)]']);
             expect(arbiter.PushFrame('wb', 'X')).toBe(true);
         });
 
@@ -331,7 +331,7 @@ describe('VideoSourceArbiter', () => {
             sink.Notes.length = 0;
             arbiter.SetSourceEnabled('cam', false);
             expect(arbiter.GetActiveSourceIDs()).toEqual(['wb']);
-            expect(sink.Notes).toEqual(["[The user turned off the agent's view of: Camera]"]);
+            expect(sink.Notes).toEqual(["[You can no longer see: Camera (the user turned it off)]"]);
         });
 
         it('registers a source the agent may not see yet disabled: it is no candidate and the model hears nothing', () => {
@@ -344,6 +344,18 @@ describe('VideoSourceArbiter', () => {
             expect(arbiter.GetSources().find((s) => s.SourceID === 'cam')).toMatchObject({ Enabled: false, ChannelKey: 'Camera' });
             arbiter.RegisterSource({ SourceID: 'cam', Label: 'Camera', Kind: 'camera', Enabled: true });
             expect(arbiter.GetSources().find((s) => s.SourceID === 'cam')?.Enabled).toBe(false); // an update keeps the state
+        });
+
+        it('a host can word the off and on notes itself, or send none', () => {
+            const custom = new VideoSourceArbiter(sink, {
+                Now: () => clock,
+                FormatDisabledNote: (label) => `hidden: ${label}`,
+                FormatEnabledNote: () => null,
+            });
+            custom.RegisterSource({ SourceID: 'wb', Label: 'Whiteboard' });
+            custom.SetSourceEnabled('wb', false);
+            custom.SetSourceEnabled('wb', true);
+            expect(sink.Notes).toEqual(['hidden: Whiteboard']);
         });
 
         it('notify:false lets a caller send its own note without the model hearing it twice', () => {

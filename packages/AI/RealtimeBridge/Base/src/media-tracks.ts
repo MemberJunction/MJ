@@ -102,8 +102,8 @@ export type BridgeAvatarFailure = 'decoder-failed' | 'publish-failed';
 
 /**
  * An inbound video source that stopped: the person stopped letting agents see them, left, stopped sharing or turned
- * their camera off. A driver that sends camera or screen frames reports it so the host can tell the model, which would
- * otherwise go on describing the last frame it saw.
+ * their camera off, or the driver moved the model's view to another source. A driver that sends camera or screen frames
+ * reports it so the host can tell the model, which would otherwise go on describing the last frame it saw.
  */
 export interface BridgeVideoSourceEnd {
     /** The plane the source was on: a camera (`video-in`) or a shared screen (`screen-in`). */

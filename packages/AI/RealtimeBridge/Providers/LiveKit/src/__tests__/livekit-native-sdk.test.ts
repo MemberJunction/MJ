@@ -238,6 +238,8 @@ describe('LiveKitNativeMeetingSdk — video in (what the agent sees)', () => {
             CameraMaxDimension: undefined,
             ScreenMaxDimension: undefined,
             JpegQuality: undefined,
+            SpeakerOnsetMs: undefined,
+            SpeakerHoldMs: undefined,
         });
         expect(NativeVideoOptionsFor({ ...watching, AgentVision: false })).toBeUndefined();
         expect(NativeVideoOptionsFor({ ...watching, AgentVision: undefined })).toBeUndefined();
@@ -252,6 +254,20 @@ describe('LiveKitNativeMeetingSdk — video in (what the agent sees)', () => {
             ScreenMaxDimension: 960,
             JpegQuality: 70,
         });
+    });
+
+    it('passes the hold overrides through: how long a speaker leads before their camera is shown, and how long a camera stays', () => {
+        expect(NativeVideoOptionsFor({ ...watching, VideoSpeakerOnsetMs: 2000, VideoSpeakerHoldMs: 6000 })).toMatchObject({
+            SpeakerOnsetMs: 2000,
+            SpeakerHoldMs: 6000,
+        });
+    });
+
+    it('reads the hold keys from Configuration: only positive numbers count', () => {
+        expect(ReadNativeConfig({ VideoSpeakerOnsetMs: 2000, VideoSpeakerHoldMs: 6000 })).toMatchObject({ VideoSpeakerOnsetMs: 2000, VideoSpeakerHoldMs: 6000 });
+        const loose = ReadNativeConfig({ VideoSpeakerOnsetMs: '2000', VideoSpeakerHoldMs: 0 });
+        expect(loose.VideoSpeakerOnsetMs).toBeUndefined();
+        expect(loose.VideoSpeakerHoldMs).toBeUndefined();
     });
 
     it('gives the room client the Video options at connect when watching, and none otherwise', async () => {

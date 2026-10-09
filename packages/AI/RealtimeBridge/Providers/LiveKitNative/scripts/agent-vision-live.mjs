@@ -36,13 +36,31 @@
  * NOT covered: the bridge/engine/model above the room client, several people at once, real camera content (synthetic
  * frames compress unusually well), network between this host and a remote server, the person in another process.
  *
+ * SWITCH SCENARIO (VISION_SCENARIO=switch): which source the bot shows the model, and how switches behave live.
+ *   Two people with a synthetic camera each (Ada joins first, so her camera is read first); Bob also publishes a
+ *   microphone. Consent for both, then: Bob talks (a tone on his microphone) so he leads LiveKit's active-speaker list
+ *   -> Bob shares a screen -> the bot itself talks (a tone through publishAudio) -> Bob stops sharing -> settle.
+ *   Reported:
+ *   - which source the bot read when (one line per run of frames from one source), and each switch: what it replaced,
+ *     when it happened after its trigger, and how long the model saw nothing (the gap between the two sources' frames)
+ *   - expected (the default hold: 1.5 s onset, 4 s dwell): Ada's camera, then Bob's camera about 1.5 s plus LiveKit's
+ *     own detection after he starts talking, then Bob's screen at once, no switch while the bot talks, then Bob's camera
+ *     (the last speaker) when the share stops
+ *   - the active-speaker updates LiveKit sent, as Ada's room saw them (Ada subscribes to everyone, so she is sent every
+ *     speaker): how many, the interval while Bob talked, the order of identities when several spoke, and whether the
+ *     bot itself appeared (its own updates are dropped)
+ *   - the bot's video telemetry: sourceSwitches, switchesHeld, activeSpeakerUpdates, switchGapMsLast / Max
+ *   - the ended sources the bot reported, with times
+ *
  * Requirements (environment ONLY; the script exits immediately if any is missing):
  *   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET
  *   Optional: VISION_DURATION_S (default 10; the baseline is as long), VISION_SOURCE=camera|screen (default camera),
  *             VISION_WIDTH / VISION_HEIGHT (default 1280 x 720), VISION_FPS (default 30), VISION_RATE (default 1),
  *             VISION_ENCODER=worker|in-process (default worker), VISION_WORKER_MEDIA=on (default off),
  *             VISION_CRASH_ENCODER=1 (kill the encode worker halfway through the window; VISION_ENCODER=worker on the
- *             main thread only, since a media worker's encode worker cannot be reached from here)
+ *             main thread only, since a media worker's encode worker cannot be reached from here),
+ *             VISION_SCENARIO=switch (the switch scenario above; VISION_SOURCE, VISION_DURATION_S and
+ *             VISION_CRASH_ENCODER do not apply to it)
  * Build first:  pnpm run build   (this script statically imports ../dist/index.js)
  * Run:          LIVEKIT_URL=... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... node scripts/agent-vision-live.mjs
  */
@@ -85,6 +103,13 @@ const WARMUP_MS = DURATION_MS;
 const SETTLE_MS = 3000;
 const PERSON = 'vision-person';
 const BOT = 'agent-vision-under-test';
+const SCENARIO = process.env.VISION_SCENARIO === 'switch' ? 'switch' : 'single';
+/** The switch scenario's people: Ada joins first; Bob talks and shares a screen. */
+const ADA = 'vision-ada';
+const BOB = 'vision-bob';
+/** Microphone audio the people publish: 48 kHz mono in 10 ms frames. */
+const MIC_RATE = 48000;
+const MIC_FRAME_SAMPLES = 480;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // `livekit-server-sdk` (tokens + the server API) is not a dependency of this package; it is resolved from the sibling
@@ -109,8 +134,8 @@ async function bounded(label, promise, limitMs = 8000) {
     if (outcome !== 'done') console.log(`[vision] teardown step '${label}' ended with: ${outcome}`);
 }
 
-async function mintToken(room, identity) {
-    const at = new AccessToken(LIVEKIT_KEY, LIVEKIT_SECRET, { identity, name: identity === PERSON ? 'Vision Person' : 'Agent', ttl: '10m' });
+async function mintToken(room, identity, name = identity === PERSON ? 'Vision Person' : 'Agent') {
+    const at = new AccessToken(LIVEKIT_KEY, LIVEKIT_SECRET, { identity, name, ttl: '10m' });
     at.addGrant({ room, roomJoin: true, canPublish: true, canSubscribe: true });
     return at.toJwt();
 }
@@ -189,7 +214,9 @@ async function startBot(roomName) {
     });
     const frames = [];
     const ended = [];
-    client.onVideoFrame((f) => frames.push({ at: performance.now(), bytes: f.data.byteLength, width: f.width, height: f.height, source: f.source }));
+    client.onVideoFrame((f) =>
+        frames.push({ at: performance.now(), bytes: f.data.byteLength, width: f.width, height: f.height, source: f.source, who: f.participantIdentity }),
+    );
     client.onVideoSourceEnded((s) => ended.push({ at: performance.now(), ...s }));
     await client.connect({ url: LIVEKIT_URL, token: await mintToken(roomName, BOT), name: 'Agent' });
     return { client, frames, ended };
@@ -333,8 +360,227 @@ function report(r) {
     console.log(`opt-out request -> source reported ended    : ${fmtMs(r.endedAfterOptOutMs)} ${r.ended.length ? JSON.stringify(r.ended.map(({ at, ...rest }) => rest)) : ''}`);
 }
 
+// ── switch scenario ─────────────────────────────────────────────────────────────
+
+/** Publishes a synthetic camera or screen share on `room`, paced in real time; returns its sid and a stop function. */
+async function publishSyntheticVideo(rtc, room, kind) {
+    const source = new rtc.VideoSource(WIDTH, HEIGHT);
+    const track = rtc.LocalVideoTrack.createVideoTrack(kind, source);
+    const trackSource = kind === 'screen' ? rtc.TrackSource.SOURCE_SCREENSHARE : rtc.TrackSource.SOURCE_CAMERA;
+    const publication = await room.localParticipant.publishTrack(track, new rtc.TrackPublishOptions({ source: trackSource }));
+    const frames = renderFrames(15);
+    let running = true;
+    const pump = (async () => {
+        const t0 = performance.now();
+        for (let k = 0; running; k++) {
+            source.captureFrame(new rtc.VideoFrame(frames[k % frames.length], WIDTH, HEIGHT, rtc.VideoBufferType.I420));
+            const wait = t0 + ((k + 1) * 1000) / FPS - performance.now();
+            if (wait > 0) await sleep(wait);
+        }
+    })();
+    return {
+        sid: publication.sid,
+        async stop() {
+            running = false;
+            await bounded(`${kind} pump`, pump);
+            void track;
+        },
+    };
+}
+
+/** One 10 ms frame of a 440 Hz tone (loud enough to lead the speaker list), or of silence. */
+function micFrame(rtc, k, loud) {
+    const samples = new Int16Array(MIC_FRAME_SAMPLES);
+    if (loud) {
+        for (let i = 0; i < samples.length; i++) {
+            samples[i] = Math.round(0.3 * 32767 * Math.sin((2 * Math.PI * 440 * (k * MIC_FRAME_SAMPLES + i)) / MIC_RATE));
+        }
+    }
+    return new rtc.AudioFrame(samples, MIC_RATE, 1, MIC_FRAME_SAMPLES);
+}
+
+/** Publishes a microphone that sends silence until `talking` is set, paced in real time. */
+async function publishMicrophone(rtc, room) {
+    const source = new rtc.AudioSource(MIC_RATE, 1);
+    const track = rtc.LocalAudioTrack.createAudioTrack('microphone', source);
+    await room.localParticipant.publishTrack(track, new rtc.TrackPublishOptions({ source: rtc.TrackSource.SOURCE_MICROPHONE }));
+    const mic = { talking: false, running: true };
+    const pump = (async () => {
+        const t0 = performance.now();
+        for (let k = 0; mic.running; k++) {
+            await source.captureFrame(micFrame(rtc, k, mic.talking));
+            const wait = t0 + (k + 1) * 10 - performance.now();
+            if (wait > 0) await sleep(wait);
+        }
+    })();
+    mic.stop = async () => {
+        mic.running = false;
+        await bounded('microphone pump', pump);
+        void track;
+    };
+    return mic;
+}
+
+/**
+ * A person in the switch scenario: a camera, optionally a microphone, and a screen they can start and stop sharing. The
+ * observer subscribes to everyone: LiveKit appears to send a participant only the speakers it subscribes to (run 1's
+ * observer, subscribed to nobody, got no update while the bot got six), so speaker updates are read there.
+ */
+async function startSwitchPerson(rtc, roomName, identity, name, withMicrophone, observer = false) {
+    const room = new rtc.Room();
+    await room.connect(LIVEKIT_URL, await mintToken(roomName, identity, name), { autoSubscribe: observer, dynacast: false });
+    const camera = await publishSyntheticVideo(rtc, room, 'camera');
+    const mic = withMicrophone ? await publishMicrophone(rtc, room) : undefined;
+    let screen;
+    return {
+        room,
+        mic,
+        async startScreen() {
+            screen = await publishSyntheticVideo(rtc, room, 'screen');
+        },
+        async stopScreen() {
+            if (screen) {
+                await screen.stop();
+                await room.localParticipant.unpublishTrack(screen.sid);
+                screen = undefined;
+            }
+        },
+        async stop() {
+            await this.stopScreen();
+            await mic?.stop();
+            await camera.stop();
+            await room.disconnect();
+        },
+    };
+}
+
+/** Records every active-speaker update a room receives: when, and who (in LiveKit's order). */
+function recordSpeakerUpdates(rtc, room) {
+    const updates = [];
+    room.on(rtc.RoomEvent.ActiveSpeakersChanged, (speakers) => updates.push({ at: performance.now(), who: speakers.map((p) => p.identity) }));
+    return updates;
+}
+
+/** Feeds the bot's own voice track a tone for `ms`, at the client's default outbound rate (24 kHz, 20 ms frames). */
+async function botTalks(client, ms) {
+    const rate = 24000;
+    const perFrame = 480;
+    const t0 = performance.now();
+    for (let k = 0; performance.now() - t0 < ms; k++) {
+        const pcm = new Int16Array(perFrame);
+        for (let i = 0; i < perFrame; i++) {
+            pcm[i] = Math.round(0.3 * 32767 * Math.sin((2 * Math.PI * 330 * (k * perFrame + i)) / rate));
+        }
+        client.publishAudio(pcm.buffer);
+        const wait = t0 + (k + 1) * 20 - performance.now();
+        if (wait > 0) await sleep(wait);
+    }
+}
+
+/** The phases of the switch scenario; returns when each started (performance.now()). */
+async function runSwitchPhases(roomService, roomName, bob, bot) {
+    const marks = { consent: performance.now() };
+    await roomService.updateParticipant(roomName, ADA, { attributes: AgentVisionAttributes(true) });
+    await roomService.updateParticipant(roomName, BOB, { attributes: AgentVisionAttributes(true) });
+    await sleep(6000);
+    marks.bobTalks = performance.now();
+    bob.mic.talking = true;
+    await sleep(8000);
+    bob.mic.talking = false;
+    marks.bobShares = performance.now();
+    await bob.startScreen();
+    await sleep(6000);
+    marks.botTalks = performance.now();
+    await botTalks(bot.client, 3000);
+    await sleep(1000);
+    marks.bobStopsSharing = performance.now();
+    await bob.stopScreen();
+    await sleep(6000);
+    marks.end = performance.now();
+    return marks;
+}
+
+async function runSwitch() {
+    const rtc = await DefaultRtcNodeLoader();
+    const roomName = `vision-switch-${Date.now()}`;
+    const roomService = new RoomServiceClient(serverApiHost(LIVEKIT_URL), LIVEKIT_KEY, LIVEKIT_SECRET);
+    console.log(`Agent vision switch check  server=${LIVEKIT_URL}  ${WIDTH}x${HEIGHT}@${FPS}fps  rate=${RATE}fps  encoder=${ENCODER}  room on the ${WORKER_MEDIA ? 'media worker' : 'main thread'}`);
+    const ada = await startSwitchPerson(rtc, roomName, ADA, 'Ada', false, true);
+    const bob = await startSwitchPerson(rtc, roomName, BOB, 'Bob', true);
+    const speakerUpdates = recordSpeakerUpdates(rtc, ada.room);
+    const bot = await startBot(roomName);
+    await sleep(1000);
+    const marks = await runSwitchPhases(roomService, roomName, bob, bot);
+    const telemetry = await readTelemetry(bot.client);
+    await bounded('bot disconnect', bot.client.disconnect());
+    await bounded('bob stop', bob.stop());
+    await bounded('ada stop', ada.stop());
+    return { marks, frames: bot.frames, ended: bot.ended, speakerUpdates, telemetry };
+}
+
+/** Runs of consecutive frames from one source: who, which kind, first and last frame, and how many. */
+function sourceRuns(frames) {
+    const runs = [];
+    for (const f of frames) {
+        const label = `${f.who} ${f.source}`;
+        const last = runs[runs.length - 1];
+        if (last && last.label === label) {
+            last.lastAt = f.at;
+            last.count++;
+        } else {
+            runs.push({ label, firstAt: f.at, lastAt: f.at, count: 1 });
+        }
+    }
+    return runs;
+}
+
+/** The interval between speaker updates while Bob talked, as min / median / max. */
+function speakerCadence(updates, fromMs, toMs) {
+    const times = updates.filter((u) => u.at >= fromMs && u.at < toMs).map((u) => u.at);
+    const gaps = times.slice(1).map((t, i) => t - times[i]).sort((a, b) => a - b);
+    if (gaps.length === 0) return `${times.length} update(s), no interval`;
+    return `${times.length} updates, interval min ${fmtMs(gaps[0])} / median ${fmtMs(gaps[Math.floor(gaps.length / 2)])} / max ${fmtMs(gaps[gaps.length - 1])}`;
+}
+
+/** The first frame of a source after a moment, as "label at +Xms". */
+function firstFrameAfter(frames, fromMs, who, source) {
+    const f = frames.find((x) => x.at >= fromMs && x.who === who && x.source === source);
+    return f ? `+${fmtMs(f.at - fromMs)}` : 'never';
+}
+
+function reportSwitch(r) {
+    const m = r.marks;
+    const rel = (t) => `${((t - m.consent) / 1000).toFixed(2)}s`;
+    console.log('\nsources read (relative to consent):');
+    let previous;
+    for (const run of sourceRuns(r.frames)) {
+        const gap = previous ? `; gap since ${previous.label}'s last frame ${fmtMs(run.firstAt - previous.lastAt)}` : '';
+        console.log(`  ${run.label.padEnd(18)} ${rel(run.firstAt)} -> ${rel(run.lastAt)}  (${run.count} frames${gap})`);
+        previous = run;
+    }
+    console.log(`\nBob starts talking -> Bob's camera first frame   : ${firstFrameAfter(r.frames, m.bobTalks, BOB, 'camera')}`);
+    console.log(`Bob shares a screen -> Bob's screen first frame   : ${firstFrameAfter(r.frames, m.bobShares, BOB, 'screen')}`);
+    const duringBot = r.frames.filter((f) => f.at >= m.botTalks && f.at < m.bobStopsSharing).map((f) => `${f.who} ${f.source}`);
+    console.log(`while the bot talks, sources read (expect Bob's screen only): ${[...new Set(duringBot)].join(', ') || 'none'}`);
+    console.log(`Bob stops sharing -> Bob's camera first frame     : ${firstFrameAfter(r.frames, m.bobStopsSharing, BOB, 'camera')}`);
+    console.log(`\nspeaker updates (Ada's room), while Bob talked  : ${speakerCadence(r.speakerUpdates, m.bobTalks, m.bobShares)}`);
+    const multi = r.speakerUpdates.filter((u) => u.who.length > 1).slice(0, 5).map((u) => `[${u.who.join(', ')}]`);
+    console.log(`updates naming several speakers (first 5)      : ${multi.join(' ') || 'none'}`);
+    console.log(`the bot appeared in an update                  : ${r.speakerUpdates.some((u) => u.who.includes(BOT)) ? 'yes' : 'no'}`);
+    const v = r.telemetry.video;
+    console.log(
+        `bot telemetry                                  : sourceSwitches=${v?.sourceSwitches ?? 'n/a'} switchesHeld=${v?.switchesHeld ?? 'n/a'} ` +
+            `activeSpeakerUpdates=${v?.activeSpeakerUpdates ?? 'n/a'} switchGapMs last/max=${fmtMs(v?.switchGapMsLast)} / ${fmtMs(v?.switchGapMsMax)}`,
+    );
+    console.log(`ended sources reported                         : ${r.ended.map((e) => `${e.participantIdentity} ${e.source} at ${rel(e.at)}`).join(', ') || 'none'}`);
+}
+
 try {
-    report(await run());
+    if (SCENARIO === 'switch') {
+        reportSwitch(await runSwitch());
+    } else {
+        report(await run());
+    }
     process.exit(0);
 } catch (err) {
     console.error(`[vision] run failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);

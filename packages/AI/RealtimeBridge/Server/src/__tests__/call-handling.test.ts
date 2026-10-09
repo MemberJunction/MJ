@@ -231,16 +231,70 @@ describe('model session loss', () => {
         const loopback = active.Bridge as LoopbackBridge;
         const ada = { SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" };
         loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+        expect(first.Notes).toEqual(["[You can now see: Ada's camera]"]);
 
         first.EmitClose();
         await vi.waitFor(() => expect(active.RealtimeSession).toBe(second));
         loopback.EmitVideoSourceEnded({ Track: 'video-in', ...ada });
         expect(second.Notes).toEqual([]);
 
-        // Once the replacement has seen the camera itself, it is told when the camera ends.
+        // Once the replacement sees the camera itself, it is told what it sees, and when the camera ends.
         loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
         loopback.EmitVideoSourceEnded({ Track: 'video-in', ...ada });
-        expect(second.Notes).toEqual(["[The agent can no longer see: Ada's camera]"]);
+        expect(second.Notes).toEqual(["[You can now see: Ada's camera]", "[You can no longer see: Ada's camera]"]);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('says nothing while the model session is being replaced, and names the source to the replacement on its first frame', async () => {
+        const takesVideo: RealtimeSessionCapabilities['SupportedInboundTracks'] = [
+            { Modality: 'audio', Direction: 'inbound' },
+            { Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: 1 },
+        ];
+        const first = new MockSession(takesVideo);
+        const second = new MockSession(takesVideo);
+        let release: (session: IRealtimeSession) => void = () => undefined;
+        const recover = vi.fn(() => new Promise<IRealtimeSession>((resolve) => {
+            release = resolve;
+        }));
+        const active = await engine().StartBridgeSession(params(first, makeProvider({ bridge: makeRow() }), { RecoverRealtimeSession: recover }));
+        const loopback = active.Bridge as LoopbackBridge;
+        const bob = { SourceID: 'participant:bob:screen', SourceLabel: "Bob's screen" };
+
+        first.EmitClose();
+        await vi.waitFor(() => expect(recover).toHaveBeenCalled());
+        loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...bob }); // while the model is replaced
+        release(second);
+        await vi.waitFor(() => expect(active.RealtimeSession).toBe(second));
+        expect(first.Notes).toEqual([]);
+        expect(second.Notes).toEqual([]);
+
+        loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...bob });
+        expect(second.Notes).toEqual(["[You can now see: Bob's screen]"]);
+        expect(second.Heard).toHaveLength(1);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('after the avatar is taken down, the audio-only replacement is told what it sees on its first frame', async () => {
+        const takesVideo: RealtimeSessionCapabilities['SupportedInboundTracks'] = [
+            { Modality: 'audio', Direction: 'inbound' },
+            { Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: 1 },
+        ];
+        const first = new MockSession(takesVideo);
+        const second = new MockSession(takesVideo);
+        const active = await engine().StartBridgeSession(
+            params(first, makeProvider({ bridge: makeRow() }), { RecoverRealtimeSessionWithoutAvatar: async () => second as IRealtimeSession }),
+        );
+        const loopback = active.Bridge as LoopbackBridge;
+        const ada = { SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" };
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+
+        loopback.EmitAvatarUnavailable('decoder-failed');
+        await vi.waitFor(() => expect(active.RealtimeSession).toBe(second));
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', ...ada });
+
+        expect(first.Notes).toEqual(["[You can now see: Ada's camera]"]);
+        expect(second.Notes).toEqual(["[You can now see: Ada's camera]", "[You can no longer see: Ada's camera]"]);
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
 

@@ -237,6 +237,12 @@ describe('LiveKitRtcNodeRoomClient — participant video wiring', () => {
         return { ada: fakePerson('ada', 'Ada', { ...LETS_AGENTS_SEE }, [cam, screen]), cam, screen };
     }
 
+    /** Ada with a camera only (with a screen too, the screen would rank first). */
+    function adaWithCamera(): { ada: FakeParticipant; cam: FakePublication } {
+        const cam = new FakePublication('TR_cam', TRACK_SOURCE.SOURCE_CAMERA);
+        return { ada: fakePerson('ada', 'Ada', { ...LETS_AGENTS_SEE }, [cam]), cam };
+    }
+
     it('without video options, reads no video and unsubscribes every video track as it arrives (every meeting)', async () => {
         const { ada, cam, screen } = adaWithCameraAndScreen();
         const { module, cap, emit, inboundFramesFor } = makeFakeRtc([ada]);
@@ -262,7 +268,7 @@ describe('LiveKitRtcNodeRoomClient — participant video wiring', () => {
     });
 
     it('with video options, reads a consenting camera and reports video telemetry', async () => {
-        const { ada, cam } = adaWithCameraAndScreen();
+        const { ada, cam } = adaWithCamera();
         const { module, cap, emit } = makeFakeRtc([ada]);
         const client = new LiveKitRtcNodeRoomClient(24000, 24000, 1, async () => module, { Video: WATCH });
         const seen: NativeRoomVideoFrame[] = [];
@@ -279,7 +285,7 @@ describe('LiveKitRtcNodeRoomClient — participant video wiring', () => {
     });
 
     it('createRoomClient passes Video to the in-process client, and omits it when the agent does not watch', async () => {
-        const watched = adaWithCameraAndScreen();
+        const watched = adaWithCamera();
         const one = makeFakeRtc([watched.ada]);
         const watching = CreateLiveKitRtcNodeModule({ Loader: async () => one.module }).createRoomClient({ Video: WATCH });
         await watching.connect(connectArgs);
@@ -293,6 +299,60 @@ describe('LiveKitRtcNodeRoomClient — participant video wiring', () => {
         two.emit(ROOM_EVENT.TrackSubscribed, { kind: TRACK_KIND.KIND_VIDEO }, unwatched.cam, unwatched.ada);
         expect(two.cap.videoStreams).toHaveLength(0);
         expect(unwatched.cam.subscribeCalls).toEqual([false]);
+    });
+
+    it('with video options, a published screen share takes the view from the camera (TrackPublished is wired)', async () => {
+        const { ada, cam } = adaWithCamera();
+        const { module, cap, emit } = makeFakeRtc([ada]);
+        const client = new LiveKitRtcNodeRoomClient(24000, 24000, 1, async () => module, { Video: WATCH });
+        await client.connect(connectArgs);
+        emit(ROOM_EVENT.TrackSubscribed, { kind: TRACK_KIND.KIND_VIDEO }, cam, ada);
+
+        const screen = new FakePublication('TR_screen', TRACK_SOURCE.SOURCE_SCREENSHARE);
+        ada.trackPublications.set(screen.sid, screen);
+        emit(ROOM_EVENT.TrackPublished, screen, ada);
+        expect(cap.videoStreams[0].cancelled).toBe(true);
+        expect(cam.lastSubscribe).toBe(false);
+        expect(screen.subscribeCalls).toEqual([true]);
+    });
+
+    it("with video options, the active speaker's camera takes the view after the onset (ActiveSpeakersChanged is wired)", async () => {
+        const { ada, cam } = adaWithCamera();
+        const bobCam = new FakePublication('TR_bob_cam', TRACK_SOURCE.SOURCE_CAMERA);
+        const bob = fakePerson('bob', 'Bob', { ...LETS_AGENTS_SEE }, [bobCam]);
+        const { module, emit } = makeFakeRtc([ada, bob]);
+        const clock = { now: 0 };
+        const timers: Array<() => void> = [];
+        const client = new LiveKitRtcNodeRoomClient(24000, 24000, 1, async () => module, {
+            Video: { ...WATCH, SpeakerOnsetMs: 100, SpeakerHoldMs: 100 },
+            Now: () => clock.now,
+            Timer: (callback) => {
+                timers.push(callback);
+                return () => undefined;
+            },
+        });
+        await client.connect(connectArgs);
+        emit(ROOM_EVENT.TrackSubscribed, { kind: TRACK_KIND.KIND_VIDEO }, cam, ada);
+        emit(ROOM_EVENT.ActiveSpeakersChanged, [bob]);
+        expect(timers).toHaveLength(1);
+
+        clock.now = 101;
+        timers[0]();
+        expect(cam.lastSubscribe).toBe(false);
+        expect(bobCam.lastSubscribe).toBe(true);
+        expect(client.GetTelemetry().video).toMatchObject({ activeSpeakerUpdates: 1, sourceSwitches: 1 });
+    });
+
+    it('without video options, publish and speaker events touch nothing', async () => {
+        const { ada, cam, screen } = adaWithCameraAndScreen();
+        const { module, emit } = makeFakeRtc([ada]);
+        const client = new LiveKitRtcNodeRoomClient(24000, 24000, 1, async () => module);
+        await client.connect(connectArgs);
+        emit(ROOM_EVENT.TrackPublished, screen, ada);
+        emit(ROOM_EVENT.ActiveSpeakersChanged, [ada]);
+        expect(cam.subscribeCalls).toEqual([]);
+        expect(screen.subscribeCalls).toEqual([]);
+        expect(client.GetTelemetry().video).toBeUndefined();
     });
 });
 
