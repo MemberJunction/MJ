@@ -2,18 +2,18 @@
  * A realtime session's `Config` JSON is writable by the session owner: the UI and Widget Guest
  * roles hold Create/Update on `MJ: AI Agent Sessions`, row-scoped only to their own sessions. These
  * tests edit `Config` the way such an owner could and check that the relay mutations do not take
- * authority from it: the target agent is re-authorized for the caller, direct actions are not read
- * from it, and run ids are used only when they are records of the session.
+ * authority from it: the target agent is re-authorized for the caller, and run ids are used only
+ * when they are records of the session.
  */
 // type-graphql decorators on the resolver need the reflect-metadata polyfill loaded first.
 import 'reflect-metadata';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const hasPermissionMock = vi.fn(async (_agentID: string): Promise<boolean> => true);
+const hasPermissionMock = vi.fn(async (_agentID: string, _user?: unknown, _permission?: string): Promise<boolean> => true);
 vi.mock('@memberjunction/ai-engine-base', () => ({
     AIAgentPermissionHelper: {
-        HasPermission: (agentID: string) => hasPermissionMock(agentID),
+        HasPermission: (agentID: string, user: unknown, permission: string) => hasPermissionMock(agentID, user, permission),
     },
     AIEngineBase: {
         GetProviderInstance: vi.fn(),
@@ -154,10 +154,20 @@ function makePubSub(): PubSubEngine {
 }
 
 function relay(resolver: RealtimeClientSessionResolver): Promise<string> {
-    return resolver.ExecuteRealtimeSessionTool(
-        SESSION_ID, 'call-1', 'invoke-target-agent', '{"request":"hi"}', makeCtx(), makePubSub(),
-    );
+    return relayTool(resolver, 'invoke-target-agent', '{"request":"hi"}');
 }
+
+function relayTool(resolver: RealtimeClientSessionResolver, toolName: string, argsJson = '{}'): Promise<string> {
+    return resolver.ExecuteRealtimeSessionTool(SESSION_ID, 'call-1', toolName, argsJson, makeCtx(), makePubSub());
+}
+
+/** A scoped anonymous magic-link caller: the relay runs its work as the system user. */
+const SCOPED_ANONYMOUS = { ID: USER_ID, Email: 'guest@magic-link.local', IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'c3-scope' } };
+/** A public web-widget guest: anonymous, but not elevated. */
+const WIDGET_GUEST = { ID: USER_ID, Email: 'guest@widget.local', IsMagicLinkAnonymous: true, WidgetGuestContext: { WidgetID: 'c3c3c3c3-0000-4000-8000-0000000000b1' } };
+/** A resource-scoped magic-link session: a normal role pinned to one shared resource. */
+const RESOURCE_SCOPED = { ID: USER_ID, Email: 'invitee@example.com', MagicLinkScope: { ResourceID: 'c3-shared-resource' } };
+const SYSTEM_USER = { ID: 'c3c3c3c3-0000-4000-8000-0000000000aa', Email: 'system@example.com' } as UserInfo;
 
 function relayInput(): ExecuteRelayedToolInput {
     return executeRelayedToolMock.mock.calls[0][0] as ExecuteRelayedToolInput;
@@ -191,13 +201,15 @@ describe('ExecuteRealtimeSessionTool — target agent named in Config', () => {
     });
 
     it('refuses before elevating a scoped anonymous caller to the system user', async () => {
-        const anonymous = { ID: USER_ID, Email: 'guest@magic-link.local', IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'c3-scope' } };
-        getSystemUserMock.mockReturnValue({ ID: 'c3c3c3c3-0000-4000-8000-0000000000aa', Email: 'system@example.com' } as UserInfo);
+        getSystemUserMock.mockReturnValue(SYSTEM_USER);
         hasPermissionMock.mockImplementation(async (agentID: string) => agentID !== OTHER_AGENT_ID);
         makeProvider(makeSession({ targetAgentID: OTHER_AGENT_ID }));
 
-        await expect(relay(makeResolver(anonymous))).rejects.toThrow(/not authorized/i);
+        await expect(relay(makeResolver(SCOPED_ANONYMOUS))).rejects.toThrow(/not authorized/i);
         expect(executeRelayedToolMock).not.toHaveBeenCalled();
+        // CanRun was asked about the caller, never the system user.
+        expect(hasPermissionMock).toHaveBeenCalledWith(OTHER_AGENT_ID, SCOPED_ANONYMOUS, 'run');
+        expect(hasPermissionMock.mock.calls.every(([, user]) => user === SCOPED_ANONYMOUS)).toBe(true);
     });
 
     it('relays when the caller can run the target agent', async () => {
@@ -205,16 +217,6 @@ describe('ExecuteRealtimeSessionTool — target agent named in Config', () => {
 
         await expect(relay(makeResolver())).resolves.toBe('{"ok":true}');
         expect(relayInput().TargetAgentID).toBe(TARGET_ID);
-    });
-});
-
-describe('ExecuteRealtimeSessionTool — directActions in Config', () => {
-    it('does not hand the directActions stored in the session config to the relay', async () => {
-        makeProvider(makeSession({ targetAgentID: TARGET_ID, directActions: { enabled: true, actionNames: ['*'] } }));
-
-        await relay(makeResolver());
-
-        expect(relayInput().DirectActions).toBeUndefined();
     });
 });
 

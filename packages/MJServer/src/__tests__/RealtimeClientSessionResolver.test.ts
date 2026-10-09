@@ -2933,6 +2933,30 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(prepInput.UserID).toBe('anon-1');
     });
 
+    /** Starts a session as `resolver`'s caller and returns the input the prepare service received. */
+    async function startAndCapturePrepInput(resolver: RealtimeClientSessionResolver, userID: string): Promise<{ ExcludeDirectActions?: boolean }> {
+        currentProvider = makeProvider(() => makeSessionEntity({ UserID: userID }));
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-start', UserID: userID }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: { Provider: 'openai', Model: 'gpt-realtime', EphemeralToken: 'ek_abc', ExpiresAt: '2026-01-01T00:00:00Z', SessionConfig: {} },
+        });
+        await resolver.StartRealtimeClientSession('target-1', makeCtx());
+        return prepareClientSessionMock.mock.calls[0][0] as { ExcludeDirectActions?: boolean };
+    }
+
+    it('prepares a scope-limited caller\'s session with no direct actions', async () => {
+        const prepInput = await startAndCapturePrepInput(makeAnonResolver(), 'anon-1');
+
+        expect(prepInput.ExcludeDirectActions).toBe(true);
+    });
+
+    it('prepares a caller that is not scope-limited with direct actions', async () => {
+        const prepInput = await startAndCapturePrepInput(makeResolver(), 'user-1');
+
+        expect(prepInput.ExcludeDirectActions).toBe(false);
+    });
+
     it('junction-links delegated artifacts under the SYSTEM user and stamps the hidden anchor with the SESSION owner', async () => {
         const session = makeSessionEntity({ UserID: 'anon-1' });
         const junctions: FakeSession[] = [];

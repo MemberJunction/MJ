@@ -483,8 +483,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * serialized result for the browser to relay back to the model.
      *
      * Ownership-gated. The target agent id is read from the session config and `CanRun` on it is
-     * checked for the caller on every call, because the owner can edit the config. Heartbeats the
-     * session on success.
+     * checked for the caller on every call, because the owner can edit the config. A direct-action
+     * call from a scope-limited caller is refused before any elevation. Heartbeats the session on
+     * success.
      *
      * @returns The serialized tool result JSON.
      */
@@ -585,6 +586,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             });
         };
     }
+
 
     /**
      * Rolls the session's `pendingFeedbackRunID` forward after a relayed tool call. The id we just
@@ -1165,8 +1167,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
-     * Authorization gate for {@link RealtimeClientSessionResolver.StartRealtimeClientSession}: the
-     * caller must be able to run the **target** agent. Denial throws (no session is created).
+     * Authorization gate for the **target** agent: the caller must be able to run it. Denial throws.
+     * {@link RealtimeClientSessionResolver.StartRealtimeClientSession} runs it before any session is
+     * created, and {@link RealtimeClientSessionResolver.ExecuteRealtimeSessionTool} runs it on every
+     * relayed call, because the owner can edit the target in the session config.
      */
     private async assertCanRunTarget(
         targetAgentId: string,

@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { SessionRunIDVerifier } from '../agentSessions/SessionRunIDVerifier.js';
 
 const SESSION_ID = 'd3d3d3d3-0000-4000-8000-000000000001';
@@ -29,6 +30,10 @@ function issuedViews(runViews: ReturnType<typeof vi.fn>): RunViewParams[] {
 
 beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
+});
+
+afterEach(() => {
+    UserCache.Instance.SetUsers([]);
 });
 
 describe('SessionRunIDVerifier.Verify', () => {
@@ -61,7 +66,21 @@ describe('SessionRunIDVerifier.Verify', () => {
         const [runsView] = issuedViews(runViews);
         expect(runsView.EntityName).toBe('MJ: AI Agent Runs');
         expect(runsView.ExtraFilter).toBe(`AgentSessionID='${SESSION_ID}' AND ID IN ('${CO_RUN_ID}', '${PAUSED_RUN_ID}')`);
+        // No system user is cached here, so the lookup runs as the acting user.
         expect(runViews.mock.calls[0][1]).toBe(USER);
+    });
+
+    it('runs the lookup as the system user when one is available', async () => {
+        // Row-level security can hide a session's own runs from its owner: a web-widget guest's
+        // delegated runs carry no ConversationID, so the guest's run filter does not match them.
+        const systemUser = { ID: UserCache.Instance.SYSTEM_USER_ID, Email: 'system@example.com' } as unknown as UserInfo;
+        UserCache.Instance.SetUsers([systemUser]);
+        const { provider, runViews } = makeProvider({ 'MJ: AI Agent Runs': [{ ID: PAUSED_RUN_ID }] });
+
+        const result = await new SessionRunIDVerifier().Verify(SESSION_ID, { PendingFeedbackRunID: PAUSED_RUN_ID }, USER, provider);
+
+        expect(result.PendingFeedbackRunID).toBe(PAUSED_RUN_ID);
+        expect(runViews.mock.calls[0][1]).toBe(systemUser);
     });
 
     it('keeps the prompt run and step that belong to the session\'s co-agent run', async () => {
