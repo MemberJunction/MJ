@@ -231,6 +231,49 @@ describe('MediaTileComponent (DOM)', () => {
       f.destroy();
       expect(camera.Detaches).toBe(1);
     });
+
+    describe('AvatarVideoFit', () => {
+      const whole = (f: ReturnType<typeof render>) => query(f, '.tile__video')?.classList.contains('tile__video--whole');
+
+      it("shows an avatar whole by default, and when the host asks for 'contain'", () => {
+        const f = render(participant({ Role: 'agent', Video: { avatar: elementSource() } }));
+        expect(whole(f)).toBe(true);
+        expect(f.componentInstance.ShowsWholeVideo).toBe(true);
+        expect(whole(render(participant({ Role: 'agent', Video: { avatar: elementSource() } }), { AvatarVideoFit: 'contain' }))).toBe(true);
+      });
+
+      it("fits the whole video in the tile's styles, and fills it otherwise", () => {
+        const fit = (f: ReturnType<typeof render>) => getComputedStyle(query(f, '.tile__video') as HTMLElement).objectFit;
+        expect(fit(render(participant({ Role: 'agent', Video: { avatar: elementSource() } })))).toBe('contain');
+        expect(fit(render(participant({ Role: 'agent', Video: { avatar: elementSource() } }), { AvatarVideoFit: 'cover' }))).toBe('cover');
+        expect(fit(render(participant({ Video: { camera: elementSource() } })))).toBe('cover');
+      });
+
+      it("fills the tile with an avatar when the host asks for 'cover'", () => {
+        const f = render(participant({ Role: 'agent', Video: { avatar: elementSource() } }), { AvatarVideoFit: 'cover' });
+        expect(whole(f)).toBe(false);
+        expect(f.componentInstance.ShowsWholeVideo).toBe(false);
+      });
+
+      it('fills the tile with any other video, whatever the fit', () => {
+        expect(whole(render(participant({ Video: { camera: elementSource() } })))).toBe(false);
+        expect(whole(render(participant({ Video: { screen: elementSource() } })))).toBe(false);
+        expect(whole(render(participant({ Video: { camera: elementSource() } }), { AvatarVideoFit: 'contain' }))).toBe(false);
+        // An avatar the tile does not show (a shared screen is preferred) changes nothing.
+        expect(whole(render(participant({ Video: { avatar: elementSource(), screen: elementSource() } })))).toBe(false);
+      });
+
+      it('follows the participant as their video changes', () => {
+        const f = render(participant({ Role: 'agent' }));
+        expect(whole(f)).toBe(false);
+        f.componentRef.setInput('Participant', participant({ Role: 'agent', Video: { avatar: elementSource() } }));
+        f.detectChanges();
+        expect(whole(f)).toBe(true);
+        f.componentRef.setInput('Participant', participant({ Role: 'agent' }));
+        f.detectChanges();
+        expect(whole(f)).toBe(false);
+      });
+    });
   });
   describe('out of frames (StallAfterMs)', () => {
     /** Frame callbacks the tile's video registered: jsdom has none of its own. */

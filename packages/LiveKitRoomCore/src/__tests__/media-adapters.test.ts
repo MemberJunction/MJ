@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Track, type Participant } from 'livekit-client';
+import { REALTIME_AGENT_AVATAR_TRACK_NAME } from '@memberjunction/ai';
 import type { MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { ToLiveKitDeviceKind, ToMediaDevice, ToMediaDeviceKind, ToMediaParticipant, ToScreenShareCaptureOptions } from '../media-adapters';
 import type { LiveKitParticipantView } from '../types';
@@ -19,7 +20,7 @@ class FakeTrack {
 }
 
 /** A livekit-client participant reduced to what the adapter reads: its publications and its live level. */
-function fakeRaw(publications: Partial<Record<Track.Source, { track?: FakeTrack; isMuted: boolean }>>): Participant {
+function fakeRaw(publications: Partial<Record<Track.Source, { track?: FakeTrack; isMuted: boolean; trackName?: string }>>): Participant {
     return {
         audioLevel: 0,
         getTrackPublication: (source: Track.Source) => publications[source],
@@ -102,6 +103,49 @@ describe('ToMediaParticipant', () => {
         expect(ToMediaParticipant(view(fakeRaw({}), { AgentCanSee: true })).AgentCanSee).toBe(true);
         expect(ToMediaParticipant(view(fakeRaw({}), { AgentCanSee: false })).AgentCanSee).toBeUndefined();
         expect(ToMediaParticipant(view(fakeRaw({}))).AgentCanSee).toBeUndefined();
+    });
+
+    describe("an agent's avatar", () => {
+        /** A participant whose camera track carries a name: the avatar's, or a camera's. */
+        const withCamera = (trackName: string, over: Partial<LiveKitParticipantView> = {}, isMuted = false) =>
+            ToMediaParticipant(view(fakeRaw({ [Track.Source.Camera]: { track: new FakeTrack(), isMuted, trackName } }), { HasVideo: true, ...over }));
+
+        it("shows an agent's camera track under the avatar's name as its avatar, preferred, and not as a camera", () => {
+            const agent = withCamera(REALTIME_AGENT_AVATAR_TRACK_NAME, { Role: 'agent' });
+            expect(agent.Video.avatar?.Kind).toBe('element');
+            expect(agent.Video.camera).toBeUndefined();
+            expect(agent.PreferredVideo).toBe('avatar');
+        });
+
+        it("attaches the avatar's track as it attaches a camera's", () => {
+            const track = new FakeTrack();
+            const raw = fakeRaw({ [Track.Source.Camera]: { track, isMuted: false, trackName: REALTIME_AGENT_AVATAR_TRACK_NAME } });
+            const source = ToMediaParticipant(view(raw, { Role: 'agent' })).Video.avatar;
+            const detach = source?.Kind === 'element' ? source.Attach(element) : (): void => undefined;
+            expect(track.Attached).toEqual([element]);
+            detach();
+            expect(track.Detached).toEqual([element]);
+        });
+
+        it("keeps an agent's camera under another name a camera", () => {
+            const agent = withCamera('camera', { Role: 'agent' });
+            expect(agent.Video.camera?.Kind).toBe('element');
+            expect(agent.Video.avatar).toBeUndefined();
+            expect(agent.PreferredVideo).toBe('camera');
+        });
+
+        it("keeps a person's camera a camera, whatever its track is named", () => {
+            for (const role of ['participant', 'host'] as const) {
+                const person = withCamera(REALTIME_AGENT_AVATAR_TRACK_NAME, { Role: role });
+                expect(person.Video.camera?.Kind).toBe('element');
+                expect(person.Video.avatar).toBeUndefined();
+            }
+        });
+
+        it('prefers a screen the agent shares, and shows no avatar while its track is muted', () => {
+            expect(withCamera(REALTIME_AGENT_AVATAR_TRACK_NAME, { Role: 'agent', IsScreenSharing: true }).PreferredVideo).toBe('screen');
+            expect(withCamera(REALTIME_AGENT_AVATAR_TRACK_NAME, { Role: 'agent' }, true).Video).toEqual({});
+        });
     });
 
     it('shows media from outside LiveKit in place of the tracks and the level it covers', () => {

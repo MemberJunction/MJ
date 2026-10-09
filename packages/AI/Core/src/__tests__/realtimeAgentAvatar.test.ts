@@ -4,12 +4,22 @@ import {
     AgentAvatarAudioOnlyAttributes,
     ReadAgentAvatarAttribute,
     REALTIME_AGENT_AVATAR_ATTRIBUTE,
+    REALTIME_AGENT_AVATAR_TRACK_NAME,
 } from '../generic/realtimeAgentAvatar';
 import { REALTIME_AVATAR_UNAVAILABLE_REASONS } from '../generic/realtimeAvatarStatus';
+import { REALTIME_AGENT_CAN_SEE_ATTRIBUTE, REALTIME_AGENT_WATCHES_ATTRIBUTE } from '../generic/realtimeAgentVision';
 
 describe('mj.agentAvatar', () => {
     it('is the attribute the room and the bot share', () => {
         expect(REALTIME_AGENT_AVATAR_ATTRIBUTE).toBe('mj.agentAvatar');
+    });
+
+    it('names the camera track the bot publishes the avatar on, which the room shows as the avatar', () => {
+        expect(REALTIME_AGENT_AVATAR_TRACK_NAME).toBe('agent-avatar');
+    });
+
+    it('shares no name with the agent-vision attributes', () => {
+        expect([REALTIME_AGENT_CAN_SEE_ATTRIBUTE, REALTIME_AGENT_WATCHES_ATTRIBUTE]).not.toContain(REALTIME_AGENT_AVATAR_ATTRIBUTE);
     });
 
     describe('AgentAvatarAttributes (the bot token at join)', () => {

@@ -13,6 +13,7 @@ import {
   LiveKitPreviewRoomController,
   LiveKitRoomEventBus,
   type ILiveKitRoomController,
+  type LiveKitAvatarAudioOnly,
   type LiveKitParticipantView,
   type LiveKitRoomState,
 } from '@memberjunction/livekit-room-core';
@@ -531,5 +532,159 @@ describe('MJLiveKitRoomComponent: the add-agent voice list (DOM)', () => {
     pick(f, 0);
     expect(f.componentInstance.AddVoice).toBeNull();
     expect(f.componentInstance.AddVoiceOption).toBeNull();
+  });
+});
+
+/**
+ * DOM spec for the notice that an agent's avatar can't be shown: over the room, where the agent-vision notice goes, one
+ * per agent whose bot says audio only, once per join, for everyone in the room. The room is the real one, on a fake
+ * controller whose state the test changes through the controller's events, as LiveKit's controller does.
+ */
+describe("MJLiveKitRoomComponent: an agent's avatar that can't be shown (DOM)", () => {
+  beforeEach(() => {
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    clearOverlayContainers();
+  });
+
+  /** An agent named for its identity, audio only when given a reason (or `{}` for none it names). */
+  const agent = (identity: string, audioOnly?: LiveKitAvatarAudioOnly): LiveKitParticipantView => ({
+    ...person(identity, { Agent: true }),
+    DisplayName: identity[0].toUpperCase() + identity.slice(1),
+    ...(audioOnly ? { AvatarAudioOnly: audioOnly } : {}),
+  });
+
+  /** The binding in a meeting with its room shown; `state` reports the room's people as the room's state changes. */
+  const render = () => {
+    const controller = fakeController({ Remote: [] });
+    const f = renderComponentFixture(MJLiveKitRoomComponent, {
+      providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => controller }],
+      inputs: { AutoStart: false, Mode: 'join', ShowPreJoin: false },
+    });
+    f.componentInstance.ServerUrl = 'wss://example.test';
+    f.componentInstance.Token = 'token';
+    f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+    f.detectChanges();
+    const state = (remote: LiveKitParticipantView[]) => {
+      controller.Events.Emit('stateChanged', { ...controller.State, Remote: remote });
+      f.detectChanges();
+    };
+    const emit = (event: 'disconnected' | 'reconnected') => {
+      if (event === 'disconnected') {
+        controller.Events.Emit('disconnected', { Reason: 'client-initiated' });
+      } else {
+        controller.Events.Emit('reconnected', { State: controller.State });
+      }
+      f.detectChanges();
+    };
+    return { f, state, emit };
+  };
+  const notices = (f: ReturnType<typeof render>['f']) =>
+    Array.from(f.nativeElement.querySelectorAll('mj-alert.mj-lk-notice--avatar') as NodeListOf<HTMLElement>);
+  const texts = (f: ReturnType<typeof render>['f']) => notices(f).map((n) => n.textContent?.trim());
+  const SAGE_BRIDGED = "Audio only for Sage: the avatar can't be shown in this meeting";
+  const SAGE_FAILED = "Audio only for Sage: the avatar couldn't be shown in this meeting";
+
+  it("shows everyone joining a meeting why an agent is audio only, as an info notice that announces itself", () => {
+    const { f, state } = render();
+    state([person('ada'), agent('sage', { Reason: 'bridged' })]);
+    expect(texts(f)).toEqual([SAGE_BRIDGED]);
+    const [notice] = notices(f);
+    expect(notice.classList.contains('mj-alert--info')).toBe(true);
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(notice.querySelector('.mj-alert__icon')?.classList.contains('fa-video-slash')).toBe(true);
+    expect(notice.closest('.mj-lk-notices')).not.toBeNull();
+  });
+
+  it('shows it when an agent turns audio only during the meeting', () => {
+    const { f, state } = render();
+    state([agent('sage')]);
+    expect(texts(f)).toEqual([]);
+    state([agent('sage', {})]);
+    expect(texts(f)).toEqual([SAGE_FAILED]);
+  });
+
+  it("names the agent on a call reason's line too", () => {
+    const { f, state } = render();
+    state([agent('sage', { Reason: 'endpoint' })]);
+    expect(texts(f)).toEqual(["Audio only for Sage: this voice model can't show an avatar"]);
+  });
+
+  it('shows nothing for an agent whose avatar shows, nor for a person', () => {
+    const { f, state } = render();
+    state([agent('sage'), { ...person('ada'), AvatarAudioOnly: { Reason: 'bridged' } }]);
+    expect(notices(f)).toEqual([]);
+  });
+
+  it('shows one per agent, stacked under the notice about what the agent sees', () => {
+    const { f, state } = render();
+    f.componentInstance.AgentVisionNotice = "Couldn't change what the agent sees: LiveKit is unreachable.";
+    state([agent('sage', { Reason: 'bridged' }), agent('rowan', {})]);
+    const stack = Array.from(f.nativeElement.querySelectorAll('.mj-lk-notices > mj-alert') as NodeListOf<HTMLElement>);
+    expect(stack.map((a) => a.textContent?.trim())).toEqual([
+      "Couldn't change what the agent sees: LiveKit is unreachable.",
+      SAGE_BRIDGED,
+      "Audio only for Rowan: the avatar couldn't be shown in this meeting",
+    ]);
+  });
+
+  it('shows it once per join: not again on later states, after a dismissal or across a reconnect', () => {
+    const { f, state, emit } = render();
+    state([agent('sage', { Reason: 'bridged' })]);
+    (notices(f)[0].querySelector('button[aria-label="Dismiss"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(notices(f)).toEqual([]);
+    state([agent('sage', {})]);
+    emit('reconnected');
+    state([agent('sage', { Reason: 'bridged' })]);
+    expect(notices(f)).toEqual([]);
+  });
+
+  it('shows it again after "Try again", which joins anew', async () => {
+    vi.spyOn(GraphQLLiveKitClient.prototype, 'MintClientToken').mockResolvedValue({ Success: true, ServerUrl: 'wss://example.test', Token: 'token-2', Identity: 'ada', RoomName: 'room-1' });
+    const { f, state } = render();
+    state([agent('sage', { Reason: 'bridged' })]);
+    (notices(f)[0].querySelector('button[aria-label="Dismiss"]') as HTMLButtonElement).click();
+    f.componentInstance.RoomName = 'room-1';
+    await f.componentInstance.Start();
+    f.detectChanges();
+    state([agent('sage', { Reason: 'bridged' })]);
+    expect(texts(f)).toEqual([SAGE_BRIDGED]);
+  });
+
+  it('goes when the room disconnects, and shows again when the user joins anew', () => {
+    const { f, state, emit } = render();
+    state([agent('sage', { Reason: 'bridged' })]);
+    emit('disconnected');
+    expect(notices(f)).toEqual([]);
+    state([agent('sage', { Reason: 'bridged' })]);
+    expect(texts(f)).toEqual([SAGE_BRIDGED]);
+  });
+
+  it("uses the host's own words as written when it gives some (AvatarNoticeLabels), naming the agent for {Agent}", () => {
+    const { f, state } = render();
+    f.componentInstance.AvatarNoticeLabels = { bridged: 'Acme Meet shows {Agent} as audio only here', host: "Audio only: Acme Meet can't show the avatar" };
+    state([agent('sage', { Reason: 'bridged' }), agent('rowan', {}), agent('ivy', { Reason: 'host' })]);
+    expect(texts(f)).toEqual([
+      'Acme Meet shows Sage as audio only here',
+      "Audio only for Rowan: the avatar couldn't be shown in this meeting",
+      "Audio only: Acme Meet can't show the avatar",
+    ]);
+  });
+
+  it('hides itself after ten seconds', () => {
+    vi.useFakeTimers();
+    const { f, state } = render();
+    state([agent('sage', { Reason: 'bridged' })]);
+    vi.advanceTimersByTime(9_999);
+    f.detectChanges();
+    expect(texts(f)).toEqual([SAGE_BRIDGED]);
+    vi.advanceTimersByTime(1);
+    f.detectChanges();
+    expect(notices(f)).toEqual([]);
   });
 });

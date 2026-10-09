@@ -27,11 +27,18 @@ import { VideoFrameWatch } from '../video-frame-watch';
 export class MediaTilePlaceholderDirective {}
 
 /**
+ * How a tile fits a video into its box: `'cover'` fills the box and crops what overflows; `'contain'` shows the whole
+ * video, with bars where its shape differs from the box's.
+ */
+export type MediaTileVideoFit = 'cover' | 'contain';
+
+/**
  * `mj-media-tile`: one participant. Their video (the preferred one, else a shared screen, the camera, the avatar),
  * or their picture or initials when there is none; name, role badge, mute and screen-sharing indicators, an
  * "AI-generated video" label while it shows an avatar, connection quality, an active-speaker ring, an optional audio
- * meter and a pin button. With {@link StallAfterMs} set, a video that stops sending frames cross-fades to the picture or
- * initials until its frames come back. Content marked {@link MediaTilePlaceholderDirective} takes the picture's place,
+ * meter and a pin button. Video fills the tile, except an avatar, which shows whole ({@link AvatarVideoFit}). With
+ * {@link StallAfterMs} set, a video that stops sending frames cross-fades to the picture or initials until its frames
+ * come back. Content marked {@link MediaTilePlaceholderDirective} takes the picture's place,
  * and content marked `mjMediaTileActions` (such as a "Move to…" menu) sits in the top corner beside the pin, shown on
  * hover or focus: `<mj-media-tile><mj-media-move-menu mjMediaTileActions …></mj-media-move-menu></mj-media-tile>`.
  *
@@ -51,6 +58,7 @@ export class MediaTilePlaceholderDirective {}
         [class.tile__video--hidden]="!HasVideo"
         [class.tile__video--stalled]="Stalled"
         [class.tile__video--mirrored]="IsMirrored"
+        [class.tile__video--whole]="ShowsWholeVideo"
         autoplay
         playsinline
         [muted]="true"
@@ -171,6 +179,11 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
    * come back; until its first frame, too. `null` (the default): the video always shows. Read when a video is attached.
    */
   @Input() public StallAfterMs: number | null = null;
+  /**
+   * How an avatar fits the tile. `'contain'` (the default) shows the whole avatar, with bars where its shape differs from
+   * the tile's, so a portrait avatar keeps its face in any box. `'cover'` fills the tile, as every other video does.
+   */
+  @Input() public AvatarVideoFit: MediaTileVideoFit = 'contain';
 
   /** The host's own placeholder, shown instead of the picture or initials. */
   @ContentChild(MediaTilePlaceholderDirective) public Placeholder?: MediaTilePlaceholderDirective;
@@ -230,8 +243,12 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
    * one) cannot be seen, so the tile says so for as long as it shows one.
    */
   public get IsAvatarVideo(): boolean {
-    const avatar = this.Participant?.Video.avatar;
-    return avatar !== undefined && this.chooseVideo() === avatar && !this.Stalled;
+    return this.showsAvatar() && !this.Stalled;
+  }
+
+  /** Whether the video shows whole rather than filling the tile: it is the avatar, and {@link AvatarVideoFit} says so. */
+  public get ShowsWholeVideo(): boolean {
+    return this.AvatarVideoFit === 'contain' && this.showsAvatar();
   }
 
   /** The participant's level reader, or `null` when there is none to meter. */
@@ -291,5 +308,11 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
     const video = this.Participant?.Video ?? {};
     const preferred = this.Participant?.PreferredVideo;
     return (preferred ? video[preferred] : undefined) ?? video.screen ?? video.camera ?? video.avatar ?? null;
+  }
+
+  /** Whether the video the tile chose is the participant's avatar, frames or not. */
+  private showsAvatar(): boolean {
+    const avatar = this.Participant?.Video.avatar;
+    return avatar !== undefined && this.chooseVideo() === avatar;
   }
 }

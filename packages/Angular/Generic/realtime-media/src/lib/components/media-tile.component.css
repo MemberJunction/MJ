@@ -77,6 +77,11 @@
   transform: scaleX(-1);
 }
 
+/* An avatar shown whole (AvatarVideoFit 'contain', the default): the whole frame, with black bars beside or above it. */
+.tile__video--whole {
+  object-fit: contain;
+}
+
 .tile__placeholder {
   position: absolute;
   inset: 0;

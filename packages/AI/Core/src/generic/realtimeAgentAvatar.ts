@@ -2,8 +2,9 @@
  * @fileoverview Whether an agent's bot shows its avatar in a meeting: the participant attribute that says so.
  *
  * An agent whose persona has a face can appear in a meeting room (LiveKit today) as a talking avatar: its bot decodes
- * the model's avatar video and publishes it as a camera track. The bot's `mj.agentAvatar` attribute tells the room what
- * became of that avatar, so the room can explain an agent that shows only its picture:
+ * the model's avatar video and publishes it as a camera track named {@link REALTIME_AGENT_AVATAR_TRACK_NAME}, which the
+ * room shows as generated video. The bot's `mj.agentAvatar` attribute tells the room what became of that avatar, so the
+ * room can explain an agent that shows only its picture:
  *
  * - `'on'`: the avatar was granted; the bot publishes it when the agent first speaks;
  * - `'audio-only:<reason>'`: the agent asked for an avatar and is heard without one, for the given
@@ -23,6 +24,12 @@ import type { RealtimeParticipantAttributes } from './realtimeAgentVision';
 
 /** The attribute on an agent's bot that says what became of its avatar: `'on'` or `'audio-only:<reason>'`. */
 export const REALTIME_AGENT_AVATAR_ATTRIBUTE = 'mj.agentAvatar';
+
+/**
+ * The name of the camera track an agent's bot publishes its avatar on. The room shows an agent's camera track by this
+ * name as the agent's avatar, labelled as generated video; a person's track by this name stays a camera.
+ */
+export const REALTIME_AGENT_AVATAR_TRACK_NAME = 'agent-avatar';
 
 /** The value of {@link REALTIME_AGENT_AVATAR_ATTRIBUTE} while the avatar is granted. */
 const AVATAR_ON = 'on';

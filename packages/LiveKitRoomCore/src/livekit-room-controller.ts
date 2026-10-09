@@ -32,6 +32,7 @@ import {
 import { BehaviorSubject, Observable } from 'rxjs';
 import { AllowsAgentVision, IsAgentWatching } from '@memberjunction/ai';
 import { CapturedSurfaceOf, type DisplayCaptureSurface } from '@memberjunction/ai-realtime-client/media';
+import { ReadAvatarAudioOnly } from './agent-avatar';
 import { LiveKitRoomEventBus } from './events';
 import { ApplyBackgroundEffect, ApplyNoiseFilter } from './livekit-effects';
 import { ToScreenShareCaptureOptions } from './media-adapters';
@@ -636,13 +637,18 @@ export class LiveKitRoomController implements ILiveKitRoomController {
     });
   }
 
-  /** Maps a livekit-client participant onto the normalized {@link LiveKitParticipantView}. */
+  /**
+   * Maps a livekit-client participant onto the normalized {@link LiveKitParticipantView}. An agent whose bot says the
+   * meeting can't show its avatar carries why ({@link LiveKitParticipantView.AvatarAudioOnly}).
+   */
   private buildView(participant: Participant): LiveKitParticipantView {
+    const role = this.roleResolver(participant);
+    const avatarAudioOnly = role === 'agent' ? ReadAvatarAudioOnly(participant.attributes) : undefined;
     return {
       Identity: participant.identity,
       DisplayName: participant.name && participant.name.length > 0 ? participant.name : participant.identity,
       IsLocal: this.room?.localParticipant === participant,
-      Role: this.roleResolver(participant),
+      Role: role,
       IsSpeaking: this.computeIsSpeaking(participant),
       AudioLevel: participant.audioLevel ?? 0,
       HasAudio: this.hasLiveTrack(participant, Track.Source.Microphone),
@@ -650,6 +656,7 @@ export class LiveKitRoomController implements ILiveKitRoomController {
       IsScreenSharing: this.hasLiveTrack(participant, Track.Source.ScreenShare),
       ConnectionQuality: this.mapConnectionQuality(participant.connectionQuality),
       AgentCanSee: AllowsAgentVision(participant.attributes) && this.room !== null && agentWatchesIn(this.room),
+      ...(avatarAudioOnly ? { AvatarAudioOnly: avatarAudioOnly } : {}),
       Raw: participant,
     };
   }

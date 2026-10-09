@@ -80,6 +80,13 @@ describe('RealtimeAvatarSurfaceComponent (DOM)', () => {
     expect(text(fixture, '.tile__chip')).toBe('AI-generated video');
   });
 
+  it("shows the agent's whole video, the full portrait with bars, wherever the surface is placed", () => {
+    const { fixture } = render(player());
+    frame();
+    fixture.detectChanges();
+    expect(query(fixture, '.tile__video')?.classList.contains('tile__video--whole')).toBe(true);
+  });
+
   it("shows the orb until the video's first frame, and again after a second without one", () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
     const { fixture } = render(player());

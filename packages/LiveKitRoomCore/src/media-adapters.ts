@@ -19,6 +19,7 @@ import type {
     MediaParticipant,
     MediaVideoSource,
 } from '@memberjunction/ai-realtime-client/media';
+import { IsAgentAvatarTrack } from './agent-avatar';
 import type { LiveKitDevice, LiveKitParticipantView } from './types';
 
 /** One source per track: LiveKit attaches the track to the element, keeping its own autoplay handling. */
@@ -45,8 +46,10 @@ const DISPLAY_SURFACES: Record<DisplayCaptureSurface, LiveKitDisplaySurface> = {
 
 /**
  * A LiveKit participant as a `/media` participant. The camera and the shared screen become element sources,
- * absent while unpublished or muted; the tile prefers the screen while one is shared, as the LiveKit tile did. Media
- * the view carries from outside LiveKit (`Media`) replaces the tracks and level it covers.
+ * absent while unpublished or muted; the tile prefers the screen while one is shared, as the LiveKit tile did. An
+ * agent's avatar, which its bot publishes as a camera track of its own name, is the participant's avatar, not a camera,
+ * so a tile labels it as generated video. Media the view carries from outside LiveKit (`Media`) replaces the tracks and
+ * level it covers.
  */
 export function ToMediaParticipant(view: LiveKitParticipantView): MediaParticipant {
     let participant = participants.get(view);
@@ -89,22 +92,30 @@ export function ToScreenShareCaptureOptions(surface?: DisplayCaptureSurface): Sc
 }
 
 function buildMediaParticipant(view: LiveKitParticipantView): MediaParticipant {
-    const camera = videoSourceOf(view.Raw.getTrackPublication(Track.Source.Camera));
-    const screen = videoSourceOf(view.Raw.getTrackPublication(Track.Source.ScreenShare));
+    const video = videosOf(view);
     const raw = view.Raw;
     return {
         Identity: view.Identity,
         DisplayName: view.DisplayName,
         Role: view.IsLocal ? 'self' : view.Role,
         IsSpeaking: view.IsSpeaking,
-        Video: { ...(camera ? { camera } : {}), ...(screen ? { screen } : {}), ...view.Media?.Video },
-        PreferredVideo: view.IsScreenSharing ? 'screen' : 'camera',
+        Video: video,
+        PreferredVideo: view.IsScreenSharing ? 'screen' : video.avatar ? 'avatar' : 'camera',
         IsMuted: !view.HasAudio,
         ConnectionQuality: view.ConnectionQuality,
         // The live level, not the view's snapshot: a meter reads it on every frame.
         GetAudioLevel: view.Media?.GetAudioLevel ?? (() => raw.audioLevel),
         ...(view.AgentCanSee ? { AgentCanSee: true } : {}),
     };
+}
+
+/** The participant's videos by kind: an agent's avatar track is its avatar, any other camera track its camera. */
+function videosOf(view: LiveKitParticipantView): MediaParticipant['Video'] {
+    const cameraPublication = view.Raw.getTrackPublication(Track.Source.Camera);
+    const camera = videoSourceOf(cameraPublication);
+    const screen = videoSourceOf(view.Raw.getTrackPublication(Track.Source.ScreenShare));
+    const cameraKind = IsAgentAvatarTrack(view.Role, cameraPublication?.trackName) ? 'avatar' : 'camera';
+    return { ...(camera ? { [cameraKind]: camera } : {}), ...(screen ? { screen } : {}), ...view.Media?.Video };
 }
 
 /** The publication's track as an element source, or `undefined` when there is no live track to show. */

@@ -1,7 +1,8 @@
 /**
  * @fileoverview The room side of an agent's avatar over `@livekit/rtc-node`: a `VideoSource` sized to the avatar, a camera
- * track named {@link AVATAR_TRACK_NAME} published with LiveKit's default simulcast layers (the full portrait), frames
- * captured as I420, and the bot's own participant attributes.
+ * track named `REALTIME_AGENT_AVATAR_TRACK_NAME` (`@memberjunction/ai`, which the room reads too) published with
+ * LiveKit's default simulcast layers (the full portrait), frames captured as I420, and the bot's own participant
+ * attributes.
  *
  * The camera track and the voice's microphone track name no `stream`, so LiveKit bundles them into one stream by their
  * sources, which browsers can lip-sync as one group (VERIFY with a live run).
@@ -9,13 +10,11 @@
  * @module @memberjunction/ai-bridge-livekit-native
  */
 
+import { REALTIME_AGENT_AVATAR_TRACK_NAME } from '@memberjunction/ai';
 import { LogError } from '@memberjunction/core';
 import type { AvatarVideoFrame } from './avatar-h264-decoder';
 import type { AvatarVideoOutlet } from './avatar-publisher';
 import type { RtcLocalParticipant, RtcLocalVideoTrack, RtcNodeModule, RtcVideoSource } from './livekit-rtc-node-room';
-
-/** The name of the bot's avatar camera track: the room shows an agent's camera track by this name as its avatar. */
-export const AVATAR_TRACK_NAME = 'agent-avatar';
 
 /** Publishes and feeds the avatar's camera track on one room's local participant. */
 export class RtcNodeAvatarOutlet implements AvatarVideoOutlet {
@@ -46,7 +45,7 @@ export class RtcNodeAvatarOutlet implements AvatarVideoOutlet {
             throw new Error('@livekit/rtc-node has no video publishing (VideoSource, VideoFrame, LocalVideoTrack)');
         }
         const source = new VideoSource(width, height);
-        const track = LocalVideoTrack.createVideoTrack(AVATAR_TRACK_NAME, source);
+        const track = LocalVideoTrack.createVideoTrack(REALTIME_AGENT_AVATAR_TRACK_NAME, source);
         // A camera, with LiveKit's default simulcast layers; codec and bitrates are LiveKit's defaults for the size.
         const options = new this.rtc.TrackPublishOptions({ source: this.rtc.TrackSource.SOURCE_CAMERA, simulcast: true });
         const publication = await this.participant.publishTrack(track, options);

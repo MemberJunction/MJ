@@ -4,7 +4,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLLiveKitClient, LiveKitRoomTurnState, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
 import { LIVEKIT_ROOM_CONTROLLER_FACTORY, LiveKitRoomComponent, LiveKitTurnStateComponent, SummarizeFloor, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
-import { LOCAL_MEDIA_CONTROLLER_FACTORY } from '@memberjunction/ng-realtime-media';
+import { AvatarNoticeText, LOCAL_MEDIA_CONTROLLER_FACTORY, type AvatarNoticeOverrides } from '@memberjunction/ng-realtime-media';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
 import { MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -19,6 +19,7 @@ import {
   type LiveKitRoomError,
   type LiveKitRoomState,
 } from '@memberjunction/livekit-room-core';
+import { AgentAvatarNotices, type AgentAvatarNotice } from './agent-avatar-notices';
 import { TURN_POLL_DEFAULT_INTERVAL_MS, TurnStatePoller } from './turn-state-poller';
 import {
   BuildRosterTurnBadge,
@@ -159,7 +160,8 @@ export interface AgentInRoom {
         (PipRectsChange)="OnPipRectsChange($event)"
         (AgentVisionChange)="OnAgentVisionChange($event)"
         (Connected)="Connected.emit($event)"
-        (Disconnected)="Disconnected.emit($event)"
+        (Disconnected)="OnRoomDisconnected($event)"
+        (StateChanged)="OnRoomStateChanged($event)"
         (EndForAll)="EndMeeting()"
         (ParticipantJoined)="ParticipantJoined.emit($event)"
         (ParticipantLeft)="ParticipantLeft.emit($event)"
@@ -168,8 +170,16 @@ export interface AgentInRoom {
         (ErrorOccurred)="ErrorOccurred.emit($event)"
       ></mj-livekit-room>
 
-      @if (AgentVisionNotice) {
-        <mj-alert class="mj-lk-notice" Variant="error" Size="sm" [Message]="AgentVisionNotice" [Dismissible]="true" (Dismissed)="AgentVisionNotice = null"></mj-alert>
+      @if (AgentVisionNotice || AvatarNotices.length > 0) {
+        <div class="mj-lk-notices">
+          @if (AgentVisionNotice) {
+            <mj-alert class="mj-lk-notice" Variant="error" Size="sm" [Message]="AgentVisionNotice" [Dismissible]="true" (Dismissed)="AgentVisionNotice = null"></mj-alert>
+          }
+          @for (notice of AvatarNotices; track notice.Identity) {
+            <mj-alert class="mj-lk-notice mj-lk-notice--avatar" Variant="info" Size="sm" Icon="fa-solid fa-video-slash"
+              [Message]="AvatarNoticeLine(notice)" [Dismissible]="true" (Dismissed)="OnAvatarNoticeDismissed(notice.Identity)"></mj-alert>
+          }
+        </div>
       }
 
       @if (Mode === 'agent' && EnableAgentManagement && resolvedRoomName) {
@@ -327,14 +337,21 @@ export interface AgentInRoom {
         width: 100%;
         height: 100%;
       }
-      /* Over the room, under its header, clear of the agents panel at the bottom left. */
-      .mj-lk-notice {
+      /* Over the room, under its header, clear of the agents panel at the bottom left: what the agent sees, then one
+         notice per agent whose avatar can't be shown. */
+      .mj-lk-notices {
         position: absolute;
         top: 64px;
         left: 50%;
         transform: translateX(-50%);
         z-index: 41;
         width: min(480px, calc(100% - 32px));
+        display: flex;
+        flex-direction: column;
+        gap: var(--mj-space-2);
+      }
+      .mj-lk-notice {
+        margin: 0;
       }
       .mj-lk-agents {
         position: absolute;
@@ -820,6 +837,12 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public ShowPreJoin = false;
   /** @see LiveKitRoomComponent.EnableAgentVisionControl */
   @Input() public EnableAgentVisionControl = true;
+  /**
+   * The host's own words for why the room shows an agent without its avatar, per reason (for example its product's name
+   * for "this app"), shown as written; `{Agent}` stands for the agent's name. A reason it leaves out keeps the stock
+   * line, which names the agent, and a reason the room doesn't know always does.
+   */
+  @Input() public AvatarNoticeLabels: AvatarNoticeOverrides | null = null;
   /** Enable the server-authorized recording control (composite egress). */
   @Input() public EnableRecording = false;
   /** @see LiveKitRoomComponent.E2EEPassphrase */
@@ -906,6 +929,22 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
    * dismiss it or choose again; `null` when there is nothing to say.
    */
   public AgentVisionNotice: string | null = null;
+
+  /** Which agents' notices show that the meeting can't show their avatar: once per agent per join. */
+  private readonly avatarNotices = new AgentAvatarNotices(() => this.cdr.markForCheck());
+
+  /**
+   * The notices over the room that an agent's avatar can't be shown, oldest first: one per agent per join, for everyone
+   * in the room, from the agent's bot. Each hides itself after a while or when dismissed.
+   */
+  public get AvatarNotices(): readonly AgentAvatarNotice[] {
+    return this.avatarNotices.Visible;
+  }
+
+  /** A notice's line, naming the agent, in the host's words when it gave some ({@link AvatarNoticeLabels}). */
+  public AvatarNoticeLine(notice: AgentAvatarNotice): string {
+    return AvatarNoticeText(notice.Reason ?? null, this.AvatarNoticeLabels, notice.AgentName, { NameAgent: true });
+  }
 
   /** @deprecated Use {@link ResolvedRoomName}. */
   public get resolvedRoomName(): string | null {
@@ -1018,6 +1057,22 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.cdr.markForCheck();
   }
 
+  /** The room's state changed: a notice shows for each agent whose bot newly says the meeting can't show its avatar. */
+  public OnRoomStateChanged(state: LiveKitRoomState): void {
+    this.avatarNotices.Update(state);
+  }
+
+  /** The room disconnected: its notices go, and joining again shows each agent's once more. */
+  public OnRoomDisconnected(event: LiveKitDisconnectedEvent): void {
+    this.avatarNotices.Reset();
+    this.Disconnected.emit(event);
+  }
+
+  /** The user dismissed an agent's avatar notice: it does not show again in this join. */
+  public OnAvatarNoticeDismissed(identity: string): void {
+    this.avatarNotices.Dismiss(identity);
+  }
+
   /**
    * The settings engine for this component's provider. A host that never ran startup (lazy startup) can hand back an
    * engine that has not loaded the user's settings; the loaded global one is used then.
@@ -1032,6 +1087,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.TileMoves = this.layoutPrefs.LoadMoves();
     this.PipRects = this.layoutPrefs.LoadPipRects();
     this.destroyRef.onDestroy(() => this.turnPoller?.Dispose());
+    this.destroyRef.onDestroy(() => this.avatarNotices.Dispose());
     if (this.AutoStart) {
       void this.Start();
     }
@@ -1048,10 +1104,11 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
    */
   @Input() public ConnectTimeoutMs = 25000;
 
-  /** Resolves the connection (mints a token and, in agent mode, starts the agent session). */
+  /** Resolves the connection (mints a token and, in agent mode, starts the agent session). A new join, too. */
   public async Start(): Promise<void> {
     this.Loading = true;
     this.errorMessage = null;
+    this.avatarNotices.Reset();
     this.cdr.markForCheck();
     try {
       if (this.Mode === 'preview') {

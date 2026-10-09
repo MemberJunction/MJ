@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConnectionQuality, ConnectionState, DisconnectReason, RoomEvent, Track, type Room, type RoomOptions, type ScreenShareCaptureOptions } from 'livekit-client';
 import { DEFAULT_SPEECH_ROOM_OPTIONS, LiveKitRoomController } from '../livekit-room-controller';
-import { REALTIME_AGENT_CAN_SEE_ATTRIBUTE, REALTIME_AGENT_WATCHES_ATTRIBUTE } from '@memberjunction/ai';
+import { REALTIME_AGENT_AVATAR_ATTRIBUTE, REALTIME_AGENT_CAN_SEE_ATTRIBUTE, REALTIME_AGENT_WATCHES_ATTRIBUTE } from '@memberjunction/ai';
 
 /** A publication reduced to what the controller reads: whether it is muted, and a screen share's track settings. */
 interface FakePublication {
@@ -355,6 +355,57 @@ describe('LiveKitRoomController', () => {
       room.emit(RoomEvent.ParticipantAttributesChanged, { [REALTIME_AGENT_WATCHES_ATTRIBUTE]: '' }, agent);
       expect(controller.State.AgentWatching).toBe(false);
       expect(viewOf('ada')?.AgentCanSee).toBe(false);
+    });
+  });
+
+  describe("an agent's avatar", () => {
+    const AGENT = JSON.stringify({ mjRole: 'agent' });
+    /** Adds a remote participant with the given attributes, as LiveKit reports a join. */
+    const join = (identity: string, attributes: Record<string, string>, metadata?: string) => {
+      const p = new FakeParticipant(identity, identity, metadata);
+      p.attributes = attributes;
+      room.remoteParticipants.set(identity, p);
+      room.emit(RoomEvent.ParticipantConnected, p);
+      return p;
+    };
+    const viewOf = (identity: string) => controller.State.Remote.find((r) => r.Identity === identity);
+
+    beforeEach(async () => {
+      await controller.Connect('wss://x', 'token');
+    });
+
+    it("marks an agent whose bot says audio only, with the bot's reason", () => {
+      join('sage', { [REALTIME_AGENT_AVATAR_ATTRIBUTE]: 'audio-only:bridged' }, AGENT);
+      expect(viewOf('sage')?.AvatarAudioOnly).toEqual({ Reason: 'bridged' });
+    });
+
+    it('marks it without a reason when the reason is one the room does not know', () => {
+      join('sage', { [REALTIME_AGENT_AVATAR_ATTRIBUTE]: 'audio-only:some-newer-reason' }, AGENT);
+      expect(viewOf('sage')?.AvatarAudioOnly).toEqual({});
+    });
+
+    it("reads the bot's own failures as reasons", () => {
+      join('sage', { [REALTIME_AGENT_AVATAR_ATTRIBUTE]: 'audio-only:decoder-missing' }, AGENT);
+      expect(viewOf('sage')?.AvatarAudioOnly).toEqual({ Reason: 'decoder-missing' });
+    });
+
+    it('marks no agent whose avatar shows or that asked for none', () => {
+      join('sage', { [REALTIME_AGENT_AVATAR_ATTRIBUTE]: 'on' }, AGENT);
+      join('rowan', {}, AGENT);
+      expect(viewOf('sage')).not.toHaveProperty('AvatarAudioOnly');
+      expect(viewOf('rowan')).not.toHaveProperty('AvatarAudioOnly');
+    });
+
+    it('marks nobody who is not an agent, whatever their attributes say', () => {
+      join('ada', { [REALTIME_AGENT_AVATAR_ATTRIBUTE]: 'audio-only:bridged' });
+      expect(viewOf('ada')).not.toHaveProperty('AvatarAudioOnly');
+    });
+
+    it('follows the bot as it changes the attribute', () => {
+      const sage = join('sage', { [REALTIME_AGENT_AVATAR_ATTRIBUTE]: 'on' }, AGENT);
+      sage.attributes = { [REALTIME_AGENT_AVATAR_ATTRIBUTE]: 'audio-only:bridged' };
+      room.emit(RoomEvent.ParticipantAttributesChanged, sage.attributes, sage);
+      expect(viewOf('sage')?.AvatarAudioOnly).toEqual({ Reason: 'bridged' });
     });
   });
 

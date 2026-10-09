@@ -11,6 +11,7 @@
  */
 
 import type { Participant, RoomOptions, Track } from 'livekit-client';
+import type { RealtimeAvatarUnavailableReason } from '@memberjunction/ai';
 import type { CapturedDisplaySurface, MediaParticipant } from '@memberjunction/ai-realtime-client/media';
 
 /**
@@ -53,6 +54,15 @@ export interface LiveKitE2EEOptions {
 export type LiveKitParticipantMedia = Partial<Pick<MediaParticipant, 'Video' | 'GetAudioLevel'>>;
 
 /**
+ * An agent whose voice reaches the meeting without its avatar: its bot's `mj.agentAvatar` attribute
+ * (`REALTIME_AGENT_AVATAR_ATTRIBUTE` in `@memberjunction/ai`) says audio only.
+ */
+export interface LiveKitAvatarAudioOnly {
+  /** Why, when the bot gave a reason this room knows; absent for one it doesn't (a newer bot's). */
+  Reason?: RealtimeAvatarUnavailableReason;
+}
+
+/**
  * A normalized view of one room participant. This is what a UI grid renders — one tile per view.
  * {@link Raw} is included so the UI can attach the participant's video/audio tracks to DOM elements.
  */
@@ -82,6 +92,12 @@ export interface LiveKitParticipantView {
    * `@memberjunction/ai`) and an agent in the room watches ({@link LiveKitRoomState.AgentWatching}). Absent means no.
    */
   AgentCanSee?: boolean;
+  /**
+   * Set on an agent whose avatar the meeting can't show, from its bot's attribute. Absent while the avatar shows, when
+   * the agent asked for none, and on anyone who is not an agent. The avatar itself is the bot's camera track named
+   * `REALTIME_AGENT_AVATAR_TRACK_NAME` (`@memberjunction/ai`), which `ToMediaParticipant` shows as the avatar.
+   */
+  AvatarAudioOnly?: LiveKitAvatarAudioOnly;
   /**
    * The underlying livekit-client participant, exposed ONLY so a UI layer can attach media tracks
    * (`view.Raw.getTrackPublication(...)?.track?.attach(el)`). Do not mutate it directly — drive the

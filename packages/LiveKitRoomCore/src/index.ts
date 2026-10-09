@@ -62,6 +62,7 @@ export type {
   LiveKitTrackKind,
   LiveKitParticipantView,
   LiveKitParticipantMedia,
+  LiveKitAvatarAudioOnly,
   LiveKitDataMessage,
   LiveKitRoomError,
   LiveKitLocalMediaState,

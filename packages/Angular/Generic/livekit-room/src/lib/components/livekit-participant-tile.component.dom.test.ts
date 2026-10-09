@@ -20,7 +20,10 @@ class FakeTrack {
  * (whose own spec, in ng-realtime-media, covers the tile) and plays the participant's voice, as the tile did.
  */
 describe('LiveKitParticipantTileComponent (DOM, deprecated wrapper)', () => {
-  const makeView = (publications: Record<string, { track: FakeTrack; isMuted: boolean }> = {}, over: Partial<LiveKitParticipantView> = {}): LiveKitParticipantView =>
+  const makeView = (
+    publications: Record<string, { track: FakeTrack; isMuted: boolean; trackName?: string }> = {},
+    over: Partial<LiveKitParticipantView> = {},
+  ): LiveKitParticipantView =>
     ({
       Identity: 'p1',
       DisplayName: 'Ada Lovelace',
@@ -54,6 +57,17 @@ describe('LiveKitParticipantTileComponent (DOM, deprecated wrapper)', () => {
     const f = render(makeView({ camera: { track: camera, isMuted: false } }));
     expect(camera.Attached).toEqual([query(f, '.tile__video')]);
     expect(f.componentInstance.HasVideo).toBe(true);
+  });
+
+  it("shows an agent's avatar track whole, labelled as generated video, and a person's camera filling the tile", () => {
+    // 'agent-avatar' is the name the bot publishes the avatar under (REALTIME_AGENT_AVATAR_TRACK_NAME, @memberjunction/ai).
+    const avatarTrack = { track: new FakeTrack(), isMuted: false, trackName: 'agent-avatar' };
+    const agent = render(makeView({ camera: avatarTrack }, { Role: 'agent', HasVideo: true }));
+    expect(query(agent, '.tile__video')?.classList.contains('tile__video--whole')).toBe(true);
+    expect(query(agent, '.tile__chip')?.textContent?.trim()).toBe('AI-generated video');
+    const person = render(makeView({ camera: { ...avatarTrack, track: new FakeTrack() } }, { HasVideo: true }));
+    expect(query(person, '.tile__video')?.classList.contains('tile__video--whole')).toBe(false);
+    expect(query(person, '.tile__chip')).toBeNull();
   });
 
   it('shows the sharing chip and the shared screen while the participant shares', () => {

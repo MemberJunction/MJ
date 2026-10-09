@@ -973,6 +973,49 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     });
   });
 
+  describe("an agent's avatar", () => {
+    /** A participant whose camera track carries a name: 'agent-avatar' is the one the bot publishes the avatar under. */
+    const withTrack = (identity: string, trackName: string, agent: boolean): LiveKitParticipantView => {
+      const camera = { track: fakeTrack(), isMuted: false, trackName };
+      return {
+        ...person(identity, { Agent: agent }),
+        HasVideo: true,
+        Raw: { audioLevel: 0, getTrackPublication: (source: string) => (source === 'camera' ? camera : undefined) },
+      } as unknown as LiveKitParticipantView;
+    };
+    const whole = (f: ReturnType<typeof render>, name: string) => tileOf(f, name)?.querySelector('.tile__video')?.classList.contains('tile__video--whole');
+    const chips = (f: ReturnType<typeof render>, name: string) =>
+      Array.from(tileOf(f, name)?.querySelectorAll('.tile__chip') ?? []).map((c) => c.textContent?.trim());
+
+    it.each(['grid', 'spotlight', 'split'])('shows the whole avatar, labelled as generated video, in %s', (layout) => {
+      const f = render(room([withTrack('sage', 'agent-avatar', true), withTrack('ada', 'camera', false)]).controller, { Layout: layout });
+      expect(whole(f, 'sage')).toBe(true);
+      expect(chips(f, 'sage')).toEqual(['AI-generated video']);
+    });
+
+    it("fills the tile with a person's camera, unlabelled, whatever its track is named", () => {
+      const f = render(room([withTrack('sage', 'agent-avatar', true), withTrack('ada', 'agent-avatar', false)]).controller, { Layout: 'grid' });
+      expect(whole(f, 'ada')).toBe(false);
+      expect(chips(f, 'ada')).toEqual([]);
+    });
+
+    it("shows an agent's camera under another name as a camera", () => {
+      const f = render(room([withTrack('sage', 'camera', true)]).controller, { Layout: 'grid' });
+      expect(whole(f, 'sage')).toBe(false);
+      expect(chips(f, 'sage')).toEqual([]);
+    });
+
+    it('shows the whole avatar in a picture-in-picture box too', () => {
+      const f = render(room([withTrack('sage', 'agent-avatar', true), person('ada')]).controller, { Layout: 'grid' });
+      (tileOf(f, 'sage')?.querySelector('mj-media-move-menu button') as HTMLButtonElement).click();
+      f.detectChanges();
+      (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((el) => el.textContent?.trim() === 'Picture-in-picture')?.click();
+      f.detectChanges();
+      expect(names(f, '.lk-room__pip-tile')).toEqual(['sage']);
+      expect(query(f, '.lk-room__pip-tile .tile__video')?.classList.contains('tile__video--whole')).toBe(true);
+    });
+  });
+
   describe('on the preview controller', () => {
     // jsdom does not play media: a stream source's <video> calls play(), and pause() when it lets go.
     beforeEach(() => {
