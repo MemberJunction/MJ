@@ -26,6 +26,11 @@ export interface RealtimeUsageRecord {
     Input?: RealtimeUsageModalityDetail;
     /** What came out: tokens and avatar `VideoSeconds` added up. */
     Output?: RealtimeUsageModalityDetail;
+    /**
+     * The provider's session duration so far, in seconds (GPT-Live reports it): a running total, so adding keeps the
+     * larger value. Only a server-side session writes it; a relayed record never carries it.
+     */
+    DurationSeconds?: number;
 }
 
 /** Limits {@link MergeRealtimeUsageRecord} applies to the stored record. */
@@ -75,19 +80,24 @@ export function AddRealtimeUsageRecord(record: RealtimeUsageRecord | null | unde
             result[direction] = block;
         }
     }
+    const duration = largerRunningTotal(record?.DurationSeconds, update.DurationSeconds);
+    if (duration !== undefined) {
+        result.DurationSeconds = duration;
+    }
     return result;
 }
 
 /**
  * Reads a usage record from a JSON string: the relayed argument of `RelayRealtimeUsage`. Keeps only the fields a
- * modality block defines, and only values that are finite numbers of at least 0. `null` for an absent, blank or
- * malformed string, or one that names no usage.
+ * modality block defines, and only values that are finite numbers of at least 0; a relayed `DurationSeconds` is
+ * dropped (only a server-side session writes it). `null` for an absent, blank or malformed string, or one that names
+ * no usage.
  *
  * @param json The JSON text of a {@link RealtimeUsageRecord}.
  */
 export function ParseRealtimeUsageRecord(json: string | null | undefined): RealtimeUsageRecord | null {
     const parsed = ParseModelResponseDetails(json);
-    return parsed ? readRecord(parsed) : null;
+    return parsed ? readRecord(parsed, false) : null;
 }
 
 /**
@@ -99,16 +109,19 @@ export function ParseRealtimeUsageRecord(json: string | null | undefined): Realt
  */
 export function ReadRealtimeUsageRecord(details: string | null | undefined): RealtimeUsageRecord | null {
     const stored = ParseModelResponseDetails(details)?.[REALTIME_USAGE_DETAILS_KEY];
-    return IsPlainObject(stored) ? readRecord(stored) : null;
+    return IsPlainObject(stored) ? readRecord(stored, true) : null;
 }
 
 /**
- * Whether a record holds any usage: a field above 0 in either direction.
+ * Whether a record holds any usage: a field above 0 in either direction, or a session duration above 0.
  *
  * @param record The record, or nothing.
  */
 export function HasRealtimeUsage(record: RealtimeUsageRecord | null | undefined): boolean {
-    return DIRECTIONS.some((direction) => MODALITY_FIELDS.some((field) => (usableNumber(record?.[direction]?.[field]) ?? 0) > 0));
+    return (
+        DIRECTIONS.some((direction) => MODALITY_FIELDS.some((field) => (usableNumber(record?.[direction]?.[field]) ?? 0) > 0)) ||
+        (usableNumber(record?.DurationSeconds) ?? 0) > 0
+    );
 }
 
 /**
@@ -131,9 +144,13 @@ export function MergeRealtimeUsageRecord(
     }
     const storedValue = root[REALTIME_USAGE_DETAILS_KEY];
     const stored: JSONObject = IsPlainObject(storedValue) ? storedValue : {};
-    const sum = AddRealtimeUsageRecord(readRecord(stored), update);
+    const sum = AddRealtimeUsageRecord(readRecord(stored, true), update);
     const clamped = clampOutputVideoSeconds(sum, options.MaxOutputVideoSeconds);
-    root[REALTIME_USAGE_DETAILS_KEY] = { ...stored, ...blocksAsJson(stored, sum) };
+    root[REALTIME_USAGE_DETAILS_KEY] = {
+        ...stored,
+        ...blocksAsJson(stored, sum),
+        ...(sum.DurationSeconds !== undefined ? { DurationSeconds: sum.DurationSeconds } : {}),
+    };
     return { Details: JSON.stringify(root), ClampedVideoSeconds: clamped };
 }
 
@@ -159,8 +176,11 @@ function addBlock(
     return result;
 }
 
-/** A record's blocks from a JSON object, keeping only defined fields with usable values. `null` when it names none. */
-function readRecord(value: JSONObject): RealtimeUsageRecord | null {
+/**
+ * A record from a JSON object, keeping only defined fields with usable values; the session duration only when
+ * `withDuration` (a stored record, never a relayed one). `null` when it names no usage.
+ */
+function readRecord(value: JSONObject, withDuration: boolean): RealtimeUsageRecord | null {
     const record: RealtimeUsageRecord = {};
     for (const direction of DIRECTIONS) {
         const block = readBlock(value[direction]);
@@ -168,7 +188,11 @@ function readRecord(value: JSONObject): RealtimeUsageRecord | null {
             record[direction] = block;
         }
     }
-    return record.Input || record.Output ? record : null;
+    const duration = withDuration ? usableNumber(value.DurationSeconds) : undefined;
+    if (duration !== undefined) {
+        record.DurationSeconds = roundSeconds(duration);
+    }
+    return record.Input || record.Output || record.DurationSeconds !== undefined ? record : null;
 }
 
 /** One modality block from a JSON value: the defined fields whose values are finite numbers of at least 0. */
@@ -224,5 +248,17 @@ function usableNumber(value: JSONValue | number | undefined): number | undefined
 
 /** Seconds to the millisecond; counts of tokens and frames to whole numbers. */
 function roundField(field: ModalityField, value: number): number {
-    return field === 'VideoSeconds' ? Math.round(value * 1000) / 1000 : Math.floor(value);
+    return field === 'VideoSeconds' ? roundSeconds(value) : Math.floor(value);
+}
+
+/** Seconds to the millisecond. */
+function roundSeconds(value: number): number {
+    return Math.round(value * 1000) / 1000;
+}
+
+/** The larger of two running totals in seconds, or `undefined` when neither is usable. */
+function largerRunningTotal(current: number | undefined, update: number | undefined): number | undefined {
+    const a = usableNumber(current);
+    const b = usableNumber(update);
+    return a === undefined && b === undefined ? undefined : roundSeconds(Math.max(a ?? 0, b ?? 0));
 }

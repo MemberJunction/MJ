@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
+    MediaModality,
     Modality,
     type AuthToken,
     type CreateAuthTokenParameters,
@@ -487,6 +488,93 @@ describe('GeminiRealtime', () => {
             driver.Fake.Emit({ usageMetadata: { promptTokenCount: 120, responseTokenCount: 45 } } as LiveServerMessage);
 
             expect(usages).toEqual([{ InputTokens: 120, OutputTokens: 45 }]);
+        });
+
+        it('reports the response split by modality as OutputTokenDetails, beside the prompt split', () => {
+            const usages: RealtimeUsage[] = [];
+            session.OnUsage((u) => usages.push(u));
+
+            driver.Fake.Emit({
+                usageMetadata: {
+                    promptTokenCount: 120,
+                    responseTokenCount: 45,
+                    promptTokensDetails: [
+                        { modality: MediaModality.AUDIO, tokenCount: 100 },
+                        { modality: MediaModality.TEXT, tokenCount: 20 },
+                    ],
+                    responseTokensDetails: [
+                        { modality: MediaModality.AUDIO, tokenCount: 40 },
+                        { modality: MediaModality.TEXT, tokenCount: 5 },
+                    ],
+                },
+            } as LiveServerMessage);
+
+            expect(usages).toEqual([{
+                InputTokens: 120,
+                OutputTokens: 45,
+                InputTokenDetails: { AudioTokens: 100, TextTokens: 20 },
+                OutputTokenDetails: { AudioTokens: 40, TextTokens: 5 },
+            }]);
+        });
+
+        it('sums a modality reported twice, and leaves OutputTokenDetails out when the response has no split', () => {
+            const usages: RealtimeUsage[] = [];
+            session.OnUsage((u) => usages.push(u));
+
+            driver.Fake.Emit({
+                usageMetadata: {
+                    responseTokenCount: 33,
+                    responseTokensDetails: [
+                        { modality: MediaModality.AUDIO, tokenCount: 10 },
+                        { modality: MediaModality.AUDIO, tokenCount: 20 },
+                        { modality: MediaModality.IMAGE, tokenCount: 3 },
+                    ],
+                },
+            } as LiveServerMessage);
+            driver.Fake.Emit({ usageMetadata: { promptTokenCount: 7, responseTokenCount: 2 } } as LiveServerMessage);
+
+            expect(usages).toEqual([
+                { InputTokens: 0, OutputTokens: 33, OutputTokenDetails: { AudioTokens: 30, ImageTokens: 3 } },
+                { InputTokens: 7, OutputTokens: 2 },
+            ]);
+        });
+
+        it("reports VIDEO tokens as VideoTokens in both directions (a generated avatar's are the response's)", () => {
+            const usages: RealtimeUsage[] = [];
+            session.OnUsage((u) => usages.push(u));
+
+            driver.Fake.Emit({
+                usageMetadata: {
+                    promptTokenCount: 300,
+                    responseTokenCount: 6292,
+                    promptTokensDetails: [{ modality: MediaModality.VIDEO, tokenCount: 300 }],
+                    responseTokensDetails: [
+                        { modality: MediaModality.AUDIO, tokenCount: 100 },
+                        { modality: MediaModality.VIDEO, tokenCount: 6192 },
+                    ],
+                },
+            } as LiveServerMessage);
+
+            expect(usages).toEqual([{
+                InputTokens: 300,
+                OutputTokens: 6292,
+                InputTokenDetails: { VideoTokens: 300 },
+                OutputTokenDetails: { AudioTokens: 100, VideoTokens: 6192 },
+            }]);
+        });
+
+        it('keeps no block for a report whose counts are all in modalities it does not map', () => {
+            const usages: RealtimeUsage[] = [];
+            session.OnUsage((u) => usages.push(u));
+
+            driver.Fake.Emit({
+                usageMetadata: {
+                    promptTokenCount: 9,
+                    promptTokensDetails: [{ modality: MediaModality.DOCUMENT, tokenCount: 9 }],
+                },
+            } as LiveServerMessage);
+
+            expect(usages).toEqual([{ InputTokens: 9, OutputTokens: 0 }]);
         });
 
         it('fires OnInterruption when serverContent.interrupted is true', () => {

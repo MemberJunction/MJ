@@ -80,6 +80,7 @@ import { AgentRunner } from '../AgentRunner';
 import { AgentRunWatchdog } from '../agent-run-watchdog';
 import { DelegationNarrator } from './realtime-delegation-narrator';
 import { FilterAllowedAgentsByCanRun } from './realtime-coagent-resolution';
+import { BridgeRealtimeUsageRecorder } from './bridge-realtime-usage-recorder';
 import {
     RealtimeToolBroker,
     RealtimeToolBrokerDeps,
@@ -514,7 +515,10 @@ export interface BridgeRealtimeRuntime {
     CoAgentRunID?: string;
     /** The `MJ: AI Prompt Runs` row id for the session's system prompt. */
     PromptRunID?: string;
-    /** Finalizes the co-agent + prompt run. Idempotent; safe to call from multiple teardown paths. */
+    /**
+     * Writes the session's last usage, then finalizes the co-agent + prompt run; usage reported afterwards is not
+     * stored. Idempotent; safe to call from multiple teardown paths.
+     */
     Finalize: (success: boolean) => Promise<void>;
     /**
      * Aborts every delegated run currently in flight for this session (and drops pending narration). This is the
@@ -556,6 +560,27 @@ export interface BridgeLocalToolHandler {
 
 /** Runtime handles by their realtime session, so the layer that only holds the session can reach its runtime. */
 const bridgeRuntimes = new WeakMap<IRealtimeSession, BridgeRealtimeRuntime>();
+
+/** The ids of a voice session's co-agent observability rows (see `createCoAgentObservabilityRun`). */
+interface CoAgentObservabilityRunIds {
+    CoAgentRunID: string;
+    PromptRunID?: string;
+    CoAgentRunStepID?: string;
+}
+
+/** What `wireBridgeToolCalls` needs from a bridged session's wiring. */
+interface BridgeToolCallWiring {
+    Input: PrepareClientSessionInput;
+    Prep: RealtimeSessionParamsPrep;
+    /** The co-agent run delegated runs nest under. */
+    ParentRunID?: string;
+    AllowedAgents: ExecuteRelayedToolInput['AllowedAgents'];
+    Narrator: DelegationNarrator;
+    /** Reads the host's local tool handler at call time (it is installed after wiring). */
+    LocalToolHandler: () => BridgeLocalToolHandler | undefined;
+    ContextUser: UserInfo;
+    Provider: IMetadataProvider;
+}
 
 /**
  * Returns the runtime wired onto a bridged realtime session by
@@ -884,10 +909,13 @@ export class RealtimeClientSessionService {
      * Responsibilities, in order:
      * 1. Create the co-agent observability run (+ prompt run + step) so the voice session shows up in the
      *    agent-run timeline and delegated runs nest under it (best-effort; a failure just omits the ids).
-     * 2. Wire `session.OnToolCall` → `ExecuteRelayedTool` → `session.SendToolResult`.
-     * 3. Guarantee finalize-once: wrap `session.Close()` and listen for an unexpected drop (`OnClose`), both
+     * 2. Record the session's usage on the co-agent prompt run, as client-direct calls do: `session.OnUsage` →
+     *    {@link BridgeRealtimeUsageRecorder} → {@link AccumulatePromptRunUsage}, every 10 s and once more at finalize.
+     * 3. Wire `session.OnToolCall` → `ExecuteRelayedTool` → `session.SendToolResult`.
+     * 4. Guarantee finalize-once: wrap `session.Close()` and listen for an unexpected drop (`OnClose`), both
      *    routed through one idempotent finalizer. The bridge teardown calls `Close()`, so the run finalizes
-     *    on graceful end; a dropped socket finalizes via `OnClose`.
+     *    on graceful end; a dropped socket finalizes via `OnClose`. The finalizer writes the session's last
+     *    usage before it finalizes the runs, so the prompt run is priced from its final counts.
      *
      * @param session The live realtime session the bridge owns (from `model.StartSession`).
      * @param input The same prep input used to build the session (carries AgentSessionID, TargetAgentID, …).
@@ -927,53 +955,20 @@ export class RealtimeClientSessionService {
             input.UserID || contextUser?.ID, input.AgentSessionID,
             contextUser, provider, input.ConversationID,
         );
+        const usage = this.wireBridgeUsage(session, obs?.PromptRunID, contextUser, provider);
+        const finalize = this.createBridgeFinalizer(obs, usage, contextUser, provider);
 
-        let finalized = false;
-        const finalize = async (success: boolean): Promise<void> => {
-            if (finalized) {
-                return;
-            }
-            finalized = true;
-            await this.FinalizeCoAgentRun(
-                obs?.CoAgentRunID ?? null, obs?.PromptRunID ?? null,
-                contextUser, provider, success, obs?.CoAgentRunStepID ?? null,
-            );
-        };
-
-        // Tool calls → the shared delegation entry point, then hand the serialized result back to the model.
-        session.OnToolCall(async (call) => {
-            try {
-                const resultJson = localToolHandler?.Handles(call.ToolName)
-                    ? await localToolHandler.Execute(call)
-                    : (await narrator.Track(() => this.ExecuteRelayedTool(
-                        {
-                            AgentSessionID: input.AgentSessionID,
-                            ParentRunID: obs?.CoAgentRunID,
-                            TargetAgentID: input.TargetAgentID,
-                            AllowedAgents: allowedAgents,
-                            DirectActions: prep.EffectiveConfig?.realtime?.directActions,
-                            OnProgress: (progress) => narrator.HandleProgress(progress),
-                            Call: call,
-                        },
-                        contextUser, provider,
-                    ))).ResultJson;
-                await session.SendToolResult(call.CallID, resultJson);
-            } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
-                LogError(`WireBridgeRealtimeSession: tool '${call.ToolName}' failed: ${message}`);
-                await session.SendToolResult(call.CallID, JSON.stringify({ success: false, error: message }));
-            }
+        this.wireBridgeToolCalls(session, {
+            Input: input,
+            Prep: prep,
+            ParentRunID: obs?.CoAgentRunID,
+            AllowedAgents: allowedAgents,
+            Narrator: narrator,
+            LocalToolHandler: () => localToolHandler,
+            ContextUser: contextUser,
+            Provider: provider,
         });
-
-        // Finalize on graceful teardown (the bridge calls Close()) and on an unexpected drop. Both routed
-        // through the idempotent finalizer, so double-fire is harmless.
-        const originalClose = session.Close.bind(session);
-        session.Close = async (): Promise<void> => {
-            narrator.Cancel();
-            await finalize(true);
-            await originalClose();
-        };
-        session.OnClose?.(() => { void finalize(true); });
+        this.finalizeOnBridgeClose(session, narrator, finalize);
 
         const runtime: BridgeRealtimeRuntime = {
             CoAgentRunID: obs?.CoAgentRunID,
@@ -989,6 +984,99 @@ export class RealtimeClientSessionService {
         };
         bridgeRuntimes.set(session, runtime);
         return runtime;
+    }
+
+    /**
+     * Records a bridged session's usage on its co-agent prompt run. The recorder is the session's only `OnUsage`
+     * subscriber: drivers keep one usage handler. Without a prompt run there is nowhere to record, so nothing subscribes
+     * and one line is logged, as the client-direct relay logs a dropped delta.
+     */
+    private wireBridgeUsage(
+        session: IRealtimeSession,
+        promptRunID: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): BridgeRealtimeUsageRecorder | undefined {
+        if (!promptRunID) {
+            LogStatus('WireBridgeRealtimeSession: the session has no co-agent prompt run, so its usage is not recorded.');
+            return undefined;
+        }
+        const recorder = new BridgeRealtimeUsageRecorder(
+            (write) => this.AccumulatePromptRunUsage(promptRunID, write.InputTokens, write.OutputTokens, contextUser, provider, write.Details),
+            `prompt run ${promptRunID}`,
+        );
+        session.OnUsage((usage) => recorder.Add(usage));
+        return recorder;
+    }
+
+    /**
+     * The bridged session's idempotent finalizer. It closes the usage recorder first (no more updates; the unwritten
+     * usage is written), so the prompt run's cost, computed when finalize stamps `CompletedAt`, covers the whole session.
+     */
+    private createBridgeFinalizer(
+        obs: CoAgentObservabilityRunIds | null,
+        usage: BridgeRealtimeUsageRecorder | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): (success: boolean) => Promise<void> {
+        let finalized = false;
+        return async (success: boolean): Promise<void> => {
+            if (finalized) {
+                return;
+            }
+            finalized = true;
+            await usage?.Close();
+            await this.FinalizeCoAgentRun(
+                obs?.CoAgentRunID ?? null, obs?.PromptRunID ?? null,
+                contextUser, provider, success, obs?.CoAgentRunStepID ?? null,
+            );
+        };
+    }
+
+    /** Tool calls → the host's local handler or the shared delegation entry point, then the result back to the model. */
+    private wireBridgeToolCalls(session: IRealtimeSession, wiring: BridgeToolCallWiring): void {
+        session.OnToolCall(async (call) => {
+            try {
+                const localHandler = wiring.LocalToolHandler();
+                const resultJson = localHandler?.Handles(call.ToolName)
+                    ? await localHandler.Execute(call)
+                    : (await wiring.Narrator.Track(() => this.ExecuteRelayedTool(
+                        {
+                            AgentSessionID: wiring.Input.AgentSessionID,
+                            ParentRunID: wiring.ParentRunID,
+                            TargetAgentID: wiring.Input.TargetAgentID,
+                            AllowedAgents: wiring.AllowedAgents,
+                            DirectActions: wiring.Prep.EffectiveConfig?.realtime?.directActions,
+                            OnProgress: (progress) => wiring.Narrator.HandleProgress(progress),
+                            Call: call,
+                        },
+                        wiring.ContextUser, wiring.Provider,
+                    ))).ResultJson;
+                await session.SendToolResult(call.CallID, resultJson);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                LogError(`WireBridgeRealtimeSession: tool '${call.ToolName}' failed: ${message}`);
+                await session.SendToolResult(call.CallID, JSON.stringify({ success: false, error: message }));
+            }
+        });
+    }
+
+    /**
+     * Finalizes on graceful teardown (the bridge calls `Close()`) and on an unexpected drop. Both go through the
+     * idempotent finalizer, so a double fire is harmless.
+     */
+    private finalizeOnBridgeClose(
+        session: IRealtimeSession,
+        narrator: DelegationNarrator,
+        finalize: (success: boolean) => Promise<void>,
+    ): void {
+        const originalClose = session.Close.bind(session);
+        session.Close = async (): Promise<void> => {
+            narrator.Cancel();
+            await finalize(true);
+            await originalClose();
+        };
+        session.OnClose?.(() => { void finalize(true); });
     }
 
     /**

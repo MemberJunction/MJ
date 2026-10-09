@@ -148,6 +148,20 @@ export interface GeminiConnectArgs {
 /** The callbacks a {@link GeminiRealtimeSession} hands its connector for one connection. */
 type GeminiConnectionCallbacks = Pick<GeminiConnectArgs, 'OnMessage' | 'OnError' | 'OnClose'>;
 
+/** A usage report's per-modality token counts (`promptTokensDetails`, `responseTokensDetails`). */
+type GeminiModalityTokenCounts = NonNullable<LiveServerMessage['usageMetadata']>['promptTokensDetails'];
+
+/**
+ * The detail field each Gemini usage modality's token count goes into (the browser client keeps the same table); other
+ * modalities are not kept.
+ */
+const GEMINI_MODALITY_TOKEN_FIELDS: Partial<Record<string, 'TextTokens' | 'AudioTokens' | 'ImageTokens' | 'VideoTokens'>> = {
+    TEXT: 'TextTokens',
+    AUDIO: 'AudioTokens',
+    IMAGE: 'ImageTokens',
+    VIDEO: 'VideoTokens',
+};
+
 /**
  * Opens one Live connection for a session, resuming an earlier one when `handle` is given. Built by
  * {@link GeminiRealtime.StartSession} around {@link GeminiRealtime.connectLiveSession}.
@@ -1836,34 +1850,41 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     /**
-     * Emits an incremental usage update, defaulting missing token counts to zero,
-     * and attributing modality breakdown (text, audio, image/video) when reported.
+     * Emits an incremental usage update, defaulting missing token counts to zero, with the per-modality breakdown
+     * (text, audio, image, video) of the prompt and of the response when Google reports one. A generated avatar's tokens
+     * arrive as the response's VIDEO.
      */
     private handleUsage(usageMetadata: LiveServerMessage['usageMetadata']): void {
         if (!usageMetadata) {
             return;
         }
-        let inputDetails: RealtimeUsageModalityDetail | undefined;
-        if (usageMetadata.promptTokensDetails && Array.isArray(usageMetadata.promptTokensDetails)) {
-            for (const detail of usageMetadata.promptTokensDetails) {
-                if (typeof detail.tokenCount === 'number') {
-                    inputDetails = inputDetails ?? {};
-                    const mod = String(detail.modality ?? '').toUpperCase();
-                    if (mod === 'AUDIO') {
-                        inputDetails.AudioTokens = (inputDetails.AudioTokens ?? 0) + detail.tokenCount;
-                    } else if (mod === 'TEXT') {
-                        inputDetails.TextTokens = (inputDetails.TextTokens ?? 0) + detail.tokenCount;
-                    } else if (mod === 'IMAGE') {
-                        inputDetails.ImageTokens = (inputDetails.ImageTokens ?? 0) + detail.tokenCount;
-                    }
-                }
-            }
-        }
+        const inputDetails = this.modalityTokenDetails(usageMetadata.promptTokensDetails);
+        const outputDetails = this.modalityTokenDetails(usageMetadata.responseTokensDetails);
         this.usageHandler?.({
             InputTokens: usageMetadata.promptTokenCount ?? 0,
             OutputTokens: usageMetadata.responseTokenCount ?? 0,
             ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+            ...(outputDetails ? { OutputTokenDetails: outputDetails } : {}),
         });
+    }
+
+    /**
+     * Sums a usage report's per-modality token counts into the fields {@link GEMINI_MODALITY_TOKEN_FIELDS} names.
+     * `undefined` when the report has no count for a modality the table names.
+     */
+    private modalityTokenDetails(counts: GeminiModalityTokenCounts): RealtimeUsageModalityDetail | undefined {
+        if (!Array.isArray(counts)) {
+            return undefined;
+        }
+        let details: RealtimeUsageModalityDetail | undefined;
+        for (const count of counts) {
+            const field = GEMINI_MODALITY_TOKEN_FIELDS[String(count.modality ?? '').toUpperCase()];
+            if (field && typeof count.tokenCount === 'number') {
+                details = details ?? {};
+                details[field] = (details[field] ?? 0) + count.tokenCount;
+            }
+        }
+        return details;
     }
 
     /** Drops all registered handlers so a closed session can't fire stale callbacks. */

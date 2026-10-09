@@ -7,7 +7,7 @@
  * subclass — no DB, no models.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { IRealtimeSession, RealtimeToolCall } from '@memberjunction/ai';
+import type { IRealtimeSession, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
@@ -27,6 +27,8 @@ import {
     PrepareClientSessionInput,
 } from '../realtime/realtime-client-session-service';
 import type { RealtimeToolBroker } from '../realtime/realtime-tool-broker';
+import type { RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
+import { BRIDGE_USAGE_FLUSH_MS } from '../realtime/bridge-realtime-usage-recorder';
 
 const contextUser = { ID: 'user-1', Email: 'u@example.com' } as unknown as UserInfo;
 const provider = {} as unknown as IMetadataProvider;
@@ -35,6 +37,7 @@ type ToolHandler = (call: RealtimeToolCall) => void | Promise<void>;
 
 class FakeSession {
     public ToolHandler?: ToolHandler;
+    public UsageHandler?: (usage: RealtimeUsage) => void;
     public readonly Results: Array<{ callID: string; output: string }> = [];
     public readonly Notes: string[] = [];
     public readonly Spoken: string[] = [];
@@ -50,7 +53,9 @@ class FakeSession {
         this.Results.push({ callID, output });
     }
     OnInterruption(): void {}
-    OnUsage(): void {}
+    OnUsage(handler: (usage: RealtimeUsage) => void): void {
+        this.UsageHandler = handler;
+    }
     OnError(): void {}
     SendContextNote(text: string): void {
         this.Notes.push(text);
@@ -67,9 +72,29 @@ class FakeSession {
 class WiringService extends RealtimeClientSessionService {
     public LastRelayed?: ExecuteRelayedToolInput;
     public RelayImpl: (input: ExecuteRelayedToolInput) => Promise<{ ResultJson: string; Success: boolean }> = async () => ({ ResultJson: '{"ok":true}', Success: true });
+    /** The observability ids the next wiring gets; a prompt run id turns usage recording on. */
+    public ObservabilityIds: { CoAgentRunID: string; PromptRunID?: string } = { CoAgentRunID: 'co-run-1' };
+    /** Usage writes and finalizes, in order. */
+    public readonly Events: string[] = [];
+    public readonly UsageWrites: Array<{ PromptRunID: string; Input: number; Output: number; Details?: RealtimeUsageRecord }> = [];
 
-    protected override async createCoAgentObservabilityRun(): Promise<{ CoAgentRunID: string } | null> {
-        return { CoAgentRunID: 'co-run-1' };
+    protected override async createCoAgentObservabilityRun(): Promise<{ CoAgentRunID: string; PromptRunID?: string } | null> {
+        return { ...this.ObservabilityIds };
+    }
+    public override async AccumulatePromptRunUsage(
+        promptRunID: string,
+        inputDelta: number,
+        outputDelta: number,
+        _user: UserInfo,
+        _provider: IMetadataProvider,
+        details?: RealtimeUsageRecord,
+    ): Promise<boolean> {
+        this.UsageWrites.push({ PromptRunID: promptRunID, Input: inputDelta, Output: outputDelta, ...(details ? { Details: details } : {}) });
+        this.Events.push(`usage:${promptRunID}`);
+        return true;
+    }
+    public override async FinalizeCoAgentRun(_coAgentRunID: string | null, promptRunID: string | null): Promise<void> {
+        this.Events.push(`finalize:${promptRunID}`);
     }
     protected override resolveCoAgentSystemPrompt() {
         return { Text: '', PromptID: null };
@@ -281,5 +306,97 @@ describe('WireBridgeRealtimeSession — spoken progress', () => {
         await session.ToolHandler?.(call('invoke-target-agent'));
         expect(session.Notes).toEqual([]);
         expect(session.Spoken).toEqual([]);
+    });
+});
+
+describe('WireBridgeRealtimeSession — usage', () => {
+    beforeEach(() => vi.useFakeTimers());
+
+    /** Wires a session on `svc` whose co-agent prompt run is `promptRunID`. */
+    async function wireWithPromptRun(svc: WiringService, promptRunID: string): Promise<FakeSession> {
+        svc.ObservabilityIds = { CoAgentRunID: `co-${promptRunID}`, PromptRunID: promptRunID };
+        const fake = new FakeSession();
+        await svc.WireBridgeRealtimeSession(fake as unknown as IRealtimeSession, input, makePrep([]), contextUser, provider);
+        return fake;
+    }
+
+    it("writes the session's usage to its co-agent prompt run, with the per-modality details", async () => {
+        const svc = new WiringService();
+        const fake = await wireWithPromptRun(svc, 'pr-1');
+
+        fake.UsageHandler?.({
+            InputTokens: 120,
+            OutputTokens: 45,
+            InputTokenDetails: { AudioTokens: 100, TextTokens: 20 },
+            OutputTokenDetails: { AudioTokens: 45 },
+        });
+        await vi.advanceTimersByTimeAsync(BRIDGE_USAGE_FLUSH_MS);
+
+        expect(svc.UsageWrites).toEqual([{
+            PromptRunID: 'pr-1',
+            Input: 120,
+            Output: 45,
+            Details: { Input: { AudioTokens: 100, TextTokens: 20 }, Output: { AudioTokens: 45 } },
+        }]);
+    });
+
+    it('subscribes nothing when the session has no co-agent prompt run', async () => {
+        const svc = new WiringService();
+        const fake = new FakeSession();
+
+        await svc.WireBridgeRealtimeSession(fake as unknown as IRealtimeSession, input, makePrep([]), contextUser, provider);
+
+        expect(fake.UsageHandler).toBeUndefined();
+    });
+
+    it('writes the last usage before it finalizes the runs, when the bridge closes the session', async () => {
+        const svc = new WiringService();
+        const fake = await wireWithPromptRun(svc, 'pr-1');
+
+        fake.UsageHandler?.({ InputTokens: 7, OutputTokens: 3 });
+        await (fake as unknown as IRealtimeSession).Close();
+
+        expect(svc.Events).toEqual(['usage:pr-1', 'finalize:pr-1']);
+        expect(svc.UsageWrites).toEqual([{ PromptRunID: 'pr-1', Input: 7, Output: 3 }]);
+        expect(fake.Closed).toBe(true);
+    });
+
+    it('stores nothing the session reports after it was closed', async () => {
+        const svc = new WiringService();
+        const fake = await wireWithPromptRun(svc, 'pr-1');
+
+        await (fake as unknown as IRealtimeSession).Close();
+        fake.UsageHandler?.({ InputTokens: 50, OutputTokens: 5 });
+        await vi.advanceTimersByTimeAsync(BRIDGE_USAGE_FLUSH_MS);
+
+        expect(svc.UsageWrites).toEqual([]);
+        expect(svc.Events).toEqual(['finalize:pr-1']);
+    });
+
+    it("keeps a replaced session's usage on its own run; the replacement records on its own", async () => {
+        const svc = new WiringService();
+        const lost = await wireWithPromptRun(svc, 'pr-lost');
+        const replacement = await wireWithPromptRun(svc, 'pr-new');
+
+        lost.UsageHandler?.({ InputTokens: 10, OutputTokens: 1 });
+        replacement.UsageHandler?.({ InputTokens: 20, OutputTokens: 2 });
+        await (lost as unknown as IRealtimeSession).Close();
+
+        expect(svc.UsageWrites).toEqual([{ PromptRunID: 'pr-lost', Input: 10, Output: 1 }]);
+        await vi.advanceTimersByTimeAsync(BRIDGE_USAGE_FLUSH_MS);
+        expect(svc.UsageWrites).toEqual([
+            { PromptRunID: 'pr-lost', Input: 10, Output: 1 },
+            { PromptRunID: 'pr-new', Input: 20, Output: 2 },
+        ]);
+    });
+
+    it('registers no usage handler on the fallback runtime (no co-agent resolved)', async () => {
+        const svc = new WiringService();
+        const fake = new FakeSession();
+        const prep = { ...makePrep([]), CoAgent: undefined } as RealtimeSessionParamsPrep;
+
+        await svc.WireBridgeRealtimeSession(fake as unknown as IRealtimeSession, input, prep, contextUser, provider);
+
+        expect(fake.UsageHandler).toBeUndefined();
     });
 });

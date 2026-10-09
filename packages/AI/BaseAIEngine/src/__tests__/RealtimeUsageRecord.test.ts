@@ -63,6 +63,12 @@ describe('AddRealtimeUsageRecord', () => {
         expect(AddRealtimeUsageRecord(null, { Input: { AudioTokens: 9 } })).toEqual({ Input: { AudioTokens: 9 } });
         expect(AddRealtimeUsageRecord(undefined, {})).toEqual({});
     });
+
+    it('keeps the larger session duration: a running total, to the millisecond', () => {
+        expect(AddRealtimeUsageRecord({ DurationSeconds: 45 }, { DurationSeconds: 40 })).toEqual({ DurationSeconds: 45 });
+        expect(AddRealtimeUsageRecord({ DurationSeconds: 45 }, { DurationSeconds: 50.12345 })).toEqual({ DurationSeconds: 50.123 });
+        expect(AddRealtimeUsageRecord(null, { DurationSeconds: -1 })).toEqual({});
+    });
 });
 
 describe('HasRealtimeUsage', () => {
@@ -74,6 +80,11 @@ describe('HasRealtimeUsage', () => {
     it('is false for nothing, empty blocks or zeros', () => {
         expect(HasRealtimeUsage(null)).toBe(false);
         expect(HasRealtimeUsage({ Input: {}, Output: { AudioTokens: 0 } })).toBe(false);
+        expect(HasRealtimeUsage({ DurationSeconds: 0 })).toBe(false);
+    });
+
+    it('is true for a session duration alone', () => {
+        expect(HasRealtimeUsage({ DurationSeconds: 12 })).toBe(true);
     });
 });
 
@@ -92,12 +103,22 @@ describe('ParseRealtimeUsageRecord', () => {
             expect(ParseRealtimeUsageRecord(json)).toBeNull();
         }
     });
+
+    it('drops a relayed DurationSeconds: only a server-side session writes it', () => {
+        expect(ParseRealtimeUsageRecord(JSON.stringify({ Output: { AudioTokens: 3 }, DurationSeconds: 99 }))).toEqual({ Output: { AudioTokens: 3 } });
+        expect(ParseRealtimeUsageRecord(JSON.stringify({ DurationSeconds: 99 }))).toBeNull();
+    });
 });
 
 describe('ReadRealtimeUsageRecord', () => {
     it('reads the record under RealtimeUsage', () => {
         const details = JSON.stringify({ RealtimeUsage: { Output: { VideoSeconds: 60, VideoTokens: 371520 } }, CostLines: [] });
         expect(ReadRealtimeUsageRecord(details)).toEqual({ Output: { VideoSeconds: 60, VideoTokens: 371520 } });
+    });
+
+    it('reads a stored session duration, to the millisecond', () => {
+        expect(ReadRealtimeUsageRecord(JSON.stringify({ RealtimeUsage: { DurationSeconds: 42 } }))).toEqual({ DurationSeconds: 42 });
+        expect(ReadRealtimeUsageRecord(JSON.stringify({ RealtimeUsage: { DurationSeconds: 42.00049 } }))).toEqual({ DurationSeconds: 42 });
     });
 
     it('is null, never a throw, for details that are malformed or hold no record', () => {
@@ -124,9 +145,16 @@ describe('MergeRealtimeUsageRecord', () => {
     });
 
     it("keeps keys of the stored record and its blocks that it does not define (another writer's)", () => {
-        const details = JSON.stringify({ RealtimeUsage: { DurationSeconds: 61, Output: { AudioTokens: 1, Note: 'kept' } } });
+        const details = JSON.stringify({ RealtimeUsage: { Writer: 'other', Output: { AudioTokens: 1, Note: 'kept' } } });
         const merged = MergeRealtimeUsageRecord(details, { Output: { AudioTokens: 2 } });
-        expect(storedRecord(merged?.Details)).toEqual({ DurationSeconds: 61, Output: { AudioTokens: 3, Note: 'kept' } });
+        expect(storedRecord(merged?.Details)).toEqual({ Writer: 'other', Output: { AudioTokens: 3, Note: 'kept' } });
+    });
+
+    it('stores the session duration, keeping the larger value', () => {
+        const details = JSON.stringify({ RealtimeUsage: { DurationSeconds: 61 } });
+        expect(storedRecord(MergeRealtimeUsageRecord(details, { DurationSeconds: 50, Output: { AudioTokens: 1 } })?.Details))
+            .toEqual({ DurationSeconds: 61, Output: { AudioTokens: 1 } });
+        expect(storedRecord(MergeRealtimeUsageRecord(details, { DurationSeconds: 70 })?.Details)).toEqual({ DurationSeconds: 70 });
     });
 
     it('caps the stored output video seconds and reports what it dropped', () => {

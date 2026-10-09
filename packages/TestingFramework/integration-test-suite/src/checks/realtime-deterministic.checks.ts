@@ -1,5 +1,5 @@
 /**
- * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD14, RD16).
+ * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD16).
  *
  * Domain 10 deterministic legs — NO live sessions, NO sidecar, NO model calls:
  *  - realtime metadata integrity: agent channels (RD1), Realtime model → vendor DriverClass
@@ -21,6 +21,8 @@
  *    deleted afterwards,
  *  - realtime driver wiring (RD14): every Active realtime vendor row's DriverClass resolves to a BaseRealtimeModel in the
  *    ClassFactory, so a driver missing from the class-registration manifest is caught,
+ *  - a bridged (server-held) realtime session's usage landing on its co-agent prompt run before
+ *    finalize prices it, through the real wiring with a usage-only stand-in session (RD15),
  *  - avatar video pricing (RD16): a tagged co-agent-shaped prompt run on Gemini 3.8 Live × Vertex AI stores a minute of
  *    avatar usage through the real usage write and is finalized; its cost is the token row's line plus the video line
  *    priced from the model vendor's configuration, and both lines are written into its details; the run is deleted.
@@ -30,24 +32,25 @@
  */
 import { BaseEntity, Metadata, ProviderType, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { BaseRealtimeModel, type AIAPIKey } from '@memberjunction/ai';
+import { BaseRealtimeModel, type AIAPIKey, type IRealtimeSession, type RealtimeUsage } from '@memberjunction/ai';
 import { AIEngineBase, ReadCostLines, ReadRealtimeUsageRecord, RoundCost, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import type { MJAIAgentEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
-import { RealtimeClientSessionService, type PrepareClientSessionInput, type RealtimeSessionParamsPrep } from '@memberjunction/ai-agents';
+import { REALTIME_AGENT_TYPE_NAME, RealtimeClientSessionService, type PrepareClientSessionInput, type RealtimeSessionParamsPrep } from '@memberjunction/ai-agents';
 import {
     MJAIAgentChannelSchema,
     MJAIAgentChannelEntity,
     MJAIAgentCoAgentEntity,
     MJAIAgentPersonaEntity,
+    MJAIAgentRunEntity,
     MJAIAgentSessionEntity,
     MJAIAgentSessionBridgeEntity,
     MJAIBridgeProviderEntity,
     MJAIModelCostEntity,
     MJAIModelPersonaEntity,
     MJAIModelVendorEntity,
-    MJAIPromptRunEntity,
     MJAIPersonaEntity,
     MJAIPersonaVendorEntity,
+    MJAIPromptRunEntity,
     MJInteractionEntity,
     MJInteractionEventEntity,
     MJMeetingEntity,
@@ -58,6 +61,7 @@ import {
     MJUserEntity,
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { AIEngine } from '@memberjunction/aiengine';
 import { BaseRealtimeBridge } from '@memberjunction/ai-bridge-base';
 import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '@memberjunction/ai-bridge-server';
 import { HandoffOfferRegistry, RoomAuthorizationService, OFFER_UNAVAILABLE } from '@memberjunction/livekit-room-server';
@@ -67,6 +71,7 @@ import type { PromoteModelRequest } from '@memberjunction/predictive-studio';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, type IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { DeepDeleteRunTrees } from './_it-live-agent-harness';
 
 const TAG = '(mj-integration-test — safe to delete)';
 
@@ -399,6 +404,176 @@ async function assertNoBindingReason(ctx: IntegrationCheckContext, service: Real
     Assert(prep.Success, `RD13: the prep without a face failed: ${prep.ErrorMessage}`);
     AssertEqual(prep.SessionParams?.Avatar, undefined, 'RD13: a voiced agent without a face on this vendor asks for no avatar');
     AssertEqual(prep.AvatarResolution?.Reason, 'no-binding', 'RD13: the prep says why: the persona has no face on this vendor');
+}
+
+// ── RD15: a bridged session's usage ─────────────────────────────────────────
+
+/** RD15 opens no model session: the wiring reads only the resolution's ids. */
+class UnopenedRealtimeModel extends BaseRealtimeModel {
+    public async StartSession(): Promise<IRealtimeSession> {
+        throw new Error('RD15 opens no realtime model session.');
+    }
+}
+
+/** A model session that only reports usage: RD15's stand-in for a provider socket (no network, no media). */
+class UsageReportingSession implements IRealtimeSession {
+    private usageHandler?: (usage: RealtimeUsage) => void;
+    public SendInput(): void { /* no media */ }
+    public async RegisterTools(): Promise<void> { /* no tools */ }
+    public OnOutput(): void { /* no audio out */ }
+    public OnTranscript(): void { /* no transcript */ }
+    public OnToolCall(): void { /* no tool calls */ }
+    public async SendToolResult(): Promise<void> { /* no tool calls */ }
+    public OnInterruption(): void { /* no barge-in */ }
+    public OnError(): void { /* no errors */ }
+    public OnUsage(handler: (usage: RealtimeUsage) => void): void {
+        this.usageHandler = handler;
+    }
+    public async Close(): Promise<void> { /* no socket */ }
+    /** Reports usage as a driver does after a turn. */
+    public Report(usage: RealtimeUsage): void {
+        this.usageHandler?.(usage);
+    }
+}
+
+/** The session service without the run watchdog: RD15 finalizes its own run, and must not start process-wide timers. */
+class UsageCheckSessionService extends RealtimeClientSessionService {
+    public override KeepCoAgentRunAlive(): void { /* RD15 finalizes its own run */ }
+}
+
+/** What RD15 wires a bridged session against. */
+interface BridgedUsageFixture {
+    CoAgent: MJAIAgentEntityExtended;
+    ModelID: string;
+    VendorID: string;
+    /** Whether the model and vendor have an active Tokens price, so finalize must give the run a cost. */
+    Priced: boolean;
+}
+
+/** One turn's usage, as the Gemini driver reports it; output video seconds stand in for an avatar's. */
+const RD15_TURN: RealtimeUsage = {
+    InputTokens: 1200,
+    OutputTokens: 300,
+    InputTokenDetails: { AudioTokens: 1000, TextTokens: 200 },
+    OutputTokenDetails: { AudioTokens: 300, VideoSeconds: 2.5 },
+};
+/** A duration-only update (a running total), as GPT-Live reports it. */
+const RD15_DURATION: RealtimeUsage = { InputTokens: 0, OutputTokens: 0, DurationSeconds: 42 };
+/** Usage reported after the session was closed: never stored. */
+const RD15_LATE: RealtimeUsage = { InputTokens: 999, OutputTokens: 999 };
+
+/** Whether an agent has the active system prompt that gives its voice session a co-agent prompt run (first by ExecutionOrder). */
+function hasActiveSystemPrompt(agentID: string): boolean {
+    const engine = AIEngine.Instance;
+    const first = (engine.AgentPrompts ?? [])
+        .filter(ap => UUIDsEqual(ap.AgentID, agentID) && ap.Status === 'Active')
+        .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
+    return !!first && (engine.Prompts ?? []).some(p => UUIDsEqual(p.ID, first.PromptID));
+}
+
+/** An active Realtime co-agent with a system prompt, and a Realtime model-vendor pair (a priced one when there is one). */
+function findBridgedUsageFixture(): BridgedUsageFixture | undefined {
+    const engine = AIEngine.Instance;
+    const realtimeType = (engine.AgentTypes ?? []).find(t => t.Name?.trim().toLowerCase() === REALTIME_AGENT_TYPE_NAME.toLowerCase());
+    const coAgent = realtimeType
+        ? (engine.Agents ?? []).find(a => a.Status === 'Active' && UUIDsEqual(a.TypeID, realtimeType.ID) && hasActiveSystemPrompt(a.ID))
+        : undefined;
+    const realtimeModels = (engine.Models ?? []).filter(m => m.IsActive && m.AIModelType?.trim().toLowerCase() === 'realtime');
+    const pairs = (engine.ModelVendors ?? []).filter(mv => realtimeModels.some(m => UUIDsEqual(m.ID, mv.ModelID)));
+    const priced = pairs.find(mv => AIEngineBase.Instance.GetActiveModelCost(mv.ModelID, mv.VendorID, 'Realtime', 'Tokens') !== null);
+    const pair = priced ?? pairs[0];
+    if (!coAgent || !pair) {
+        return undefined;
+    }
+    return { CoAgent: coAgent, ModelID: pair.ModelID, VendorID: pair.VendorID, Priced: !!priced };
+}
+
+/** The prep a host hands the wiring after `PrepareRealtimeSessionParams`: the co-agent and the resolved model's ids. */
+function bridgedUsagePrep(fixture: BridgedUsageFixture): RealtimeSessionParamsPrep {
+    return {
+        Success: true,
+        CoAgent: fixture.CoAgent,
+        Resolution: { Model: new UnopenedRealtimeModel(''), ModelID: fixture.ModelID, VendorID: fixture.VendorID, APIName: 'rd15-unopened' },
+    };
+}
+
+/** Loads one row fresh from the database (no cache). */
+async function loadFresh<T extends BaseEntity>(entityName: string, id: string, user: UserInfo): Promise<T | undefined> {
+    const r = await new RunView().RunView<T>(
+        { EntityName: entityName, ExtraFilter: `ID='${id}'`, ResultType: 'entity_object', BypassCache: true }, user,
+    );
+    return r.Success ? r.Results?.[0] : undefined;
+}
+
+/** The stored record's quantities, as RD15 reads them back. */
+interface StoredRealtimeUsage {
+    Input?: { AudioTokens?: number; TextTokens?: number };
+    Output?: { AudioTokens?: number; VideoSeconds?: number };
+    DurationSeconds?: number;
+}
+
+/** Asserts the prompt run holds the turn's tokens and record, finalized, and nothing from after close. */
+function assertPromptRunUsage(promptRun: MJAIPromptRunEntity): void {
+    AssertEqual(promptRun.TokensPrompt, 1200, 'TokensPrompt holds the reported input (the late update not added)');
+    AssertEqual(promptRun.TokensCompletion, 300, 'TokensCompletion holds the reported output');
+    AssertEqual(promptRun.TokensUsed, 1500, 'TokensUsed is their sum');
+    AssertEqual(promptRun.Status, 'Completed', 'the prompt run was finalized');
+    Assert(promptRun.CompletedAt != null, 'finalize stamped CompletedAt');
+    const details: { RealtimeUsage?: StoredRealtimeUsage } = JSON.parse(promptRun.ModelSpecificResponseDetails ?? '{}');
+    const record = details.RealtimeUsage;
+    AssertEqual(record?.Input?.AudioTokens, 1000, 'RealtimeUsage.Input.AudioTokens');
+    AssertEqual(record?.Input?.TextTokens, 200, 'RealtimeUsage.Input.TextTokens');
+    AssertEqual(record?.Output?.AudioTokens, 300, 'RealtimeUsage.Output.AudioTokens');
+    AssertEqual(record?.Output?.VideoSeconds, 2.5, 'RealtimeUsage.Output.VideoSeconds');
+    AssertEqual(record?.DurationSeconds, 42, 'RealtimeUsage.DurationSeconds (a running total)');
+}
+
+/** Asserts the run was priced at finalize (when it can be) and that the co-agent run carries its totals. */
+function assertPricedAndRolledUp(promptRun: MJAIPromptRunEntity, coAgentRun: MJAIAgentRunEntity, mustBePriced: boolean): void {
+    if (mustBePriced) {
+        Assert(promptRun.Cost != null, 'an active Tokens price exists and pricing runs on this Save path, yet finalize left Cost NULL');
+    } else {
+        console.warn('  ⚠ realtime-deterministic.RD15: cost not asserted — no Realtime model-vendor pair has an active Tokens price, '
+            + 'or the prompt run server subclass (pricing) is not active on this Save path');
+    }
+    AssertEqual(coAgentRun.TotalPromptTokensUsed, 1200, 'co-agent run TotalPromptTokensUsed (roll-up)');
+    AssertEqual(coAgentRun.TotalCompletionTokensUsed, 300, 'co-agent run TotalCompletionTokensUsed (roll-up)');
+    const expectedCost = promptRun.TotalCost ?? promptRun.Cost ?? 0;
+    Assert(Math.abs((coAgentRun.TotalCost ?? 0) - expectedCost) < 1e-9, `co-agent run TotalCost ${coAgentRun.TotalCost} != prompt run ${expectedCost}`);
+}
+
+/**
+ * Wires a usage-only stand-in session through the real `WireBridgeRealtimeSession`, reports a turn and a duration,
+ * closes it (which finalizes the runs), reports once more, and checks what landed. Adds the co-agent run it created
+ * to `cleanup` as soon as it exists, so the caller deletes it even when an assertion fails.
+ */
+async function runBridgedUsageScenario(ctx: IntegrationCheckContext, fixture: BridgedUsageFixture, cleanup: string[]): Promise<void> {
+    const session = new UsageReportingSession();
+    const input: PrepareClientSessionInput = { TargetAgentID: fixture.CoAgent.ID, AgentSessionID: '', UserID: ctx.User.ID };
+    const runtime = await new UsageCheckSessionService().WireBridgeRealtimeSession(session, input, bridgedUsagePrep(fixture), ctx.User, ctx.Provider);
+    const coAgentRunID = runtime.CoAgentRunID;
+    const promptRunID = runtime.PromptRunID;
+    if (coAgentRunID) {
+        cleanup.push(coAgentRunID);
+    }
+    if (!coAgentRunID || !promptRunID) {
+        Assert(false, 'the wiring created no co-agent run and prompt run: the usage has nowhere to land');
+        return;
+    }
+    session.Report(RD15_TURN);
+    session.Report(RD15_DURATION);
+    await session.Close();
+    session.Report(RD15_LATE);
+    // The agent run is read first: prompt-run-linkage.test.ts scans the text after each prompt-run query for the
+    // agent-run id column, which AIPromptRun does not have.
+    const coAgentRun = await loadFresh<MJAIAgentRunEntity>('MJ: AI Agent Runs', coAgentRunID, ctx.User);
+    const promptRun = await loadFresh<MJAIPromptRunEntity>('MJ: AI Prompt Runs', promptRunID, ctx.User);
+    Assert(!!promptRun && !!coAgentRun, 'the co-agent prompt run or agent run did not read back');
+    if (promptRun && coAgentRun) {
+        assertPromptRunUsage(promptRun);
+        const pricingActive = serverInvariantsActive(ctx.Provider.ProviderType, 'MJ: AI Prompt Runs');
+        assertPricedAndRolledUp(promptRun, coAgentRun, fixture.Priced && pricingActive);
+    }
 }
 
 export const RealtimeDeterministicChecks: NamedCheck[] = [
@@ -1206,6 +1381,27 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             AssertEqual(unresolved.length, 0, `RD14: ${unresolved.length} realtime vendor DriverClass(es) resolve to no BaseRealtimeModel registration: ${unresolved.join('; ')}`);
             const skipped = rows.length - checked.length;
             console.log(`      → ${checked.length} realtime vendor DriverClass(es) resolve${skipped > 0 ? `; ${skipped} not loaded in this process (see RD14_NOT_IN_THIS_PROCESS)` : ''}`);
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD15',
+        Name: "RD15: a bridged session's usage lands on its co-agent prompt run before finalize prices it; usage after close is not stored",
+        Fn: async (ctx): Promise<void> => {
+            await AIEngine.Instance.Config(false, ctx.User, ctx.Provider);
+            await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
+            const fixture = findBridgedUsageFixture();
+            if (!fixture) {
+                console.warn('  ⚠ realtime-deterministic.RD15 SKIPPED — no Active Realtime co-agent with a system prompt, '
+                    + 'or no Realtime model-vendor row, in this deployment');
+                return;
+            }
+            const cleanup: string[] = [];
+            try {
+                await runBridgedUsageScenario(ctx, fixture, cleanup);
+            } finally {
+                await DeepDeleteRunTrees(ctx.Provider, ctx.User, cleanup);
+            }
+            console.log(`      → usage stored on the co-agent prompt run, priced at finalize${fixture.Priced ? '' : ' (no price row: cost not asserted)'}; runs removed`);
         }
     },
     {
