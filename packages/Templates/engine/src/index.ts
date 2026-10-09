@@ -1,4 +1,7 @@
 export * from './TemplateEngine';
+export * from './NunjucksSandbox';
 export * from './extensions/AIPrompt.extension';
 export * from './extensions/TemplateEmbed.extension';
-export * from './extensions/TemplateExtensionBase';export * from './operations/TemplateRunOperation';
+export * from './extensions/TemplateExtensionBase';
+export * from './operations/TemplateRunOperation';
+export * from './operations/TemplateRunAuthorization';
