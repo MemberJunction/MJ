@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
     logError: vi.fn(),
     getUserAvailableResources: vi.fn(),
     engineConfig: vi.fn(),
+    isSystemUser: vi.fn(),
+    getSystemUser: vi.fn(),
+    conversationVisible: vi.fn(),
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -35,7 +38,18 @@ vi.mock('@memberjunction/core', () => {
             return this.Message;
         }
     }
-    return { BaseEntity: class {}, BaseEntityResult, LogError: mocks.logError };
+    return {
+        BaseEntity: class {},
+        BaseEntityResult,
+        LogError: mocks.logError,
+        UserInfo: class {},
+        WellKnownUserSource: {
+            Instance: {
+                IsSystemUser: (user: unknown) => mocks.isSystemUser(user),
+                GetSystemUser: async () => mocks.getSystemUser(),
+            },
+        },
+    };
 });
 
 /** Shape of the mocked `BaseEntityResult` — mirrors the real class's public surface. */
@@ -53,12 +67,14 @@ vi.mock('../generated/entity_subclasses', () => ({
         public ContextCurrentUser: { ID: string } | null = { ID: 'system-1' };
         public ProviderToUse: unknown = {
             ProviderType: 'Database',
-            GetEntityObject: async () => ({
+            GetEntityObject: async (_name: string, user: { ID: string } | undefined) => ({
                 UserID: 'anon-1',
-                Load: async () => true,
+                Load: async () => mocks.conversationVisible(user?.ID) !== false,
             }),
         };
-        public Fields: { Name: string; Dirty: boolean }[] = [];
+        public Role: 'AI' | 'Error' | 'User' = 'User';
+        public UserID: string | null = null;
+        public Fields: { Name: string; Dirty: boolean; OldValue?: unknown }[] = [];
 
         public ResultHistory: MockResultEntry[] = [];
         public get LatestResult(): MockResultEntry | null {
@@ -92,7 +108,9 @@ type Harness = {
     ConversationID: string;
     IsSaved: boolean;
     ContextCurrentUser: { ID: string } | null;
-    Fields: { Name: string; Dirty: boolean }[];
+    Role: 'AI' | 'Error' | 'User';
+    UserID: string | null;
+    Fields: { Name: string; Dirty: boolean; OldValue?: unknown }[];
     ResultHistory: MockResultEntry[];
     LatestResult: MockResultEntry | null;
     Save: () => Promise<boolean>;
@@ -116,6 +134,9 @@ describe('MJConversationDetailEntityExtended owner gate', () => {
         mocks.superDelete.mockResolvedValue(true);
         mocks.engineConfig.mockResolvedValue(undefined);
         mocks.getUserAvailableResources.mockReturnValue([]);
+        mocks.isSystemUser.mockReturnValue(false);
+        mocks.getSystemUser.mockResolvedValue({ ID: 'system-account' });
+        mocks.conversationVisible.mockReturnValue(true);
     });
 
     it('records "You do not have access to this conversation." on a NEW record when a non-owner without a grant saves', async () => {
@@ -195,5 +216,199 @@ describe('MJConversationDetailEntityExtended owner gate', () => {
         expect(entity.LatestResult?.CompleteMessage).toBe(
             'Only the conversation owner can set or change the rating and feedback on this message.'
         );
+    });
+});
+
+describe('MJConversationDetailEntityExtended: who a message is from (A19)', () => {
+    const OWNER = 'anon-1';
+    const GRANTEE = 'grantee-1';
+    const OTHER = 'other-1';
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mocks.superSave.mockResolvedValue(true);
+        mocks.superDelete.mockResolvedValue(true);
+        mocks.engineConfig.mockResolvedValue(undefined);
+        mocks.getUserAvailableResources.mockReturnValue([{ ResourceRecordID: 'conv-1', PermissionLevel: 'Edit' }]);
+        mocks.isSystemUser.mockReturnValue(false);
+        mocks.getSystemUser.mockResolvedValue({ ID: 'system-account' });
+        mocks.conversationVisible.mockReturnValue(true);
+    });
+
+    async function messageAs(userID: string): Promise<Harness> {
+        const entity = await makeEntity();
+        entity.ContextCurrentUser = { ID: userID };
+        return entity;
+    }
+
+    /** An existing person's message written by `authorID` (null: no UserID, which reads as the owner). */
+    async function savedMessageAs(userID: string, authorID: string | null, dirty: string[]): Promise<Harness> {
+        const entity = await messageAs(userID);
+        entity.IsSaved = true;
+        entity.UserID = authorID;
+        entity.Fields = [
+            { Name: 'Role', Dirty: dirty.includes('Role'), OldValue: 'User' },
+            { Name: 'UserID', Dirty: dirty.includes('UserID'), OldValue: authorID },
+            ...dirty.filter((name) => name !== 'Role' && name !== 'UserID').map((name) => ({ Name: name, Dirty: true })),
+        ];
+        return entity;
+    }
+
+    describe('posting', () => {
+        it("refuses a grantee's message naming another person", async () => {
+            const entity = await messageAs(GRANTEE);
+            entity.UserID = OTHER;
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe('You can post a message only as yourself.');
+            expect(mocks.superSave).not.toHaveBeenCalled();
+        });
+
+        it("saves a grantee's message with no UserID as the grantee's", async () => {
+            const entity = await messageAs(GRANTEE);
+
+            expect(await entity.Save()).toBe(true);
+            expect(entity.UserID).toBe(GRANTEE);
+        });
+
+        it("leaves the owner's message with no UserID empty: it already reads as the owner", async () => {
+            const entity = await messageAs(OWNER);
+
+            expect(await entity.Save()).toBe(true);
+            expect(entity.UserID).toBeNull();
+        });
+
+        it('refuses the owner posting as someone else', async () => {
+            const entity = await messageAs(OWNER);
+            entity.UserID = GRANTEE;
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe('You can post a message only as yourself.');
+        });
+
+        it('lets a person post as themselves, in any case of their ID', async () => {
+            const entity = await messageAs(GRANTEE);
+            entity.UserID = GRANTEE.toUpperCase();
+
+            expect(await entity.Save()).toBe(true);
+        });
+    });
+
+    describe('changing a message', () => {
+        it("refuses a grantee changing another person's words", async () => {
+            const entity = await savedMessageAs(GRANTEE, OTHER, ['Message']);
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe('Only the person who wrote this message can change it.');
+            expect(entity.LatestResult?.Type).toBe('update');
+        });
+
+        it("refuses the owner changing a grantee's words", async () => {
+            const entity = await savedMessageAs(OWNER, GRANTEE, ['Message']);
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe('Only the person who wrote this message can change it.');
+        });
+
+        it("refuses a grantee changing a message with no UserID: it is the owner's", async () => {
+            const entity = await savedMessageAs(GRANTEE, null, ['Message']);
+
+            expect(await entity.Save()).toBe(false);
+        });
+
+        it('lets an author edit their own message, and the owner edit theirs', async () => {
+            expect(await (await savedMessageAs(GRANTEE, GRANTEE, ['Message'])).Save()).toBe(true);
+            expect(await (await savedMessageAs(OWNER, null, ['Message'])).Save()).toBe(true);
+        });
+
+        it("still lets a grantee pin another person's message: pinning is not authorship", async () => {
+            const entity = await savedMessageAs(GRANTEE, OTHER, ['IsPinned']);
+
+            expect(await entity.Save()).toBe(true);
+        });
+
+        it("refuses anyone changing a person's message's role, its author included", async () => {
+            const entity = await savedMessageAs(GRANTEE, GRANTEE, ['Role']);
+            entity.Role = 'AI';
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe("A message's role cannot be changed.");
+        });
+
+        it('refuses an author handing their message to someone else, or to no one', async () => {
+            const toOther = await savedMessageAs(GRANTEE, GRANTEE, ['UserID']);
+            toOther.UserID = OTHER;
+            expect(await toOther.Save()).toBe(false);
+
+            const toNoOne = await savedMessageAs(GRANTEE, GRANTEE, ['UserID']);
+            toNoOne.UserID = null;
+            expect(await toNoOne.Save()).toBe(false);
+        });
+    });
+
+    describe('deleting a message', () => {
+        it("refuses a grantee deleting another person's message", async () => {
+            const entity = await messageAs(GRANTEE);
+            entity.UserID = OTHER;
+
+            expect(await entity.Delete()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe("Only the message's author or the conversation's owner can delete it.");
+            expect(mocks.superDelete).not.toHaveBeenCalled();
+        });
+
+        it('lets its author delete it, and the owner delete anyone\'s', async () => {
+            const own = await messageAs(GRANTEE);
+            own.UserID = GRANTEE;
+            expect(await own.Delete()).toBe(true);
+
+            const someoneElses = await messageAs(OWNER);
+            someoneElses.UserID = GRANTEE;
+            expect(await someoneElses.Delete()).toBe(true);
+        });
+    });
+
+    it('lets the system user write any message, with no grant and naming anyone', async () => {
+        mocks.isSystemUser.mockReturnValue(true);
+        mocks.getUserAvailableResources.mockReturnValue([]);
+        const entity = await messageAs('system-account');
+        entity.UserID = OTHER;
+
+        expect(await entity.Save()).toBe(true);
+        expect(await entity.Delete()).toBe(true);
+        expect(mocks.engineConfig).not.toHaveBeenCalled();
+    });
+
+    it("keeps today's rules for agent replies until the chat stops writing them from the browser", async () => {
+        const entity = await messageAs(GRANTEE);
+        entity.Role = 'AI';
+        entity.UserID = OTHER;
+
+        expect(await entity.Save()).toBe(true);
+    });
+
+    it('refuses a person who cannot read a conversation that exists (hidden by a row filter)', async () => {
+        mocks.conversationVisible.mockImplementation((userID: string | undefined) => userID === 'system-account');
+        const entity = await messageAs(GRANTEE);
+
+        expect(await entity.Save()).toBe(false);
+        expect(entity.LatestResult?.CompleteMessage).toBe('You do not have access to this conversation.');
+        expect(await entity.Delete()).toBe(false);
+        expect(mocks.superSave).not.toHaveBeenCalled();
+    });
+
+    it('lets the save through when no one can find the conversation: the foreign key decides, as before', async () => {
+        mocks.conversationVisible.mockReturnValue(false);
+        const entity = await messageAs(GRANTEE);
+
+        expect(await entity.Save()).toBe(true);
+    });
+
+    it('checks access before authorship: a person without a grant is told they have no access', async () => {
+        mocks.getUserAvailableResources.mockReturnValue([]);
+        const entity = await messageAs(GRANTEE);
+        entity.UserID = OTHER;
+
+        expect(await entity.Save()).toBe(false);
+        expect(entity.LatestResult?.CompleteMessage).toBe('You do not have access to this conversation.');
     });
 });
