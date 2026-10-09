@@ -932,6 +932,7 @@ export class ResolverBase {
     label: string,
     provider?: IMetadataProvider,
     user?: UserInfo,
+    options?: { LeaveUnparseableToProvider?: boolean },
   ): void {
     if (!clause?.trim()) return;
 
@@ -945,6 +946,9 @@ export class ResolverBase {
         ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`
         : `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`;
     const parser = new SQLParser(wrapped, dialect);
+    // A clause the provider checks again on its own (an aggregate expression) leaves text the parser
+    // cannot read to that per-item check instead of failing the whole request.
+    if (!parser.IsValid && options?.LeaveUnparseableToProvider) return;
     if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
       throw new Error(
         `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`,
@@ -1063,10 +1067,10 @@ export class ResolverBase {
    * admin-authored format may splice the term in unquoted; `createViewUserSearchSQL` re-applies
    * `ValidateUserProvidedSQLClause` for exactly those entities.
    *
-   * Each `Aggregates[].expression` is a SQL fragment too (spliced into the aggregate SELECT
-   * list), so it gets the same screen. The provider then requires each one to be a single
-   * aggregate call over the entity's columns (`CheckAggregateExpression`) and refuses the rest
-   * per aggregate.
+   * Each `Aggregates[].expression` gets the same screen, except that text the parser cannot read
+   * goes on to the provider, which refuses it per aggregate. The provider never runs the caller's
+   * aggregate text: it runs the SQL that `CheckAggregateExpression` rebuilds from a single
+   * aggregate call over the entity's columns, and refuses everything else per aggregate.
    */
   protected screenClientViewClauses(
     clauses: {
@@ -1083,7 +1087,7 @@ export class ResolverBase {
     this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider, user);
     this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
     for (const aggregate of clauses.aggregates ?? []) {
-      this.assertClientClauseUsesEntityBaseViews(aggregate?.expression, 'Aggregate', provider, user);
+      this.assertClientClauseUsesEntityBaseViews(aggregate?.expression, 'Aggregate', provider, user, { LeaveUnparseableToProvider: true });
     }
   }
 

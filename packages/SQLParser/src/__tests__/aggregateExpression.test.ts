@@ -5,7 +5,7 @@ import { CheckAggregateExpression } from '../index.js';
 const ss = new SQLServerDialect();
 const pg = new PostgreSQLDialect();
 
-const COLUMNS = ['ID', 'Name', 'Status', 'Type', 'Amount', 'Price', 'Quantity', 'Discount', 'StartDate', 'EndDate', '__mj_UpdatedAt', 'Total Amount'];
+const COLUMNS = ['ID', 'Name', 'Status', 'Type', 'Amount', 'Price', 'Quantity', 'Discount', 'StartDate', 'EndDate', '__mj_UpdatedAt', 'Total Amount', 'User'];
 
 describe('CheckAggregateExpression — SQL Server', () => {
     it.each([
@@ -41,9 +41,15 @@ describe('CheckAggregateExpression — SQL Server', () => {
         'SUM(CAST(Amount AS DECIMAL(18,2)))',
         "STRING_AGG(Name, ', ')",
         'STDEV(Amount)',
+        'COUNT_BIG(Amount)',
+        "MAX(REPLACE(Name, 'a', 'b'))",
+        'SUM(1e3)',
         '  SUM(Amount)  ',
     ])('allows %s', (expression) => {
-        expect(CheckAggregateExpression(expression, ss, COLUMNS)).toEqual({ IsAllowed: true, Reason: null });
+        const check = CheckAggregateExpression(expression, ss, COLUMNS);
+        expect(check.IsAllowed).toBe(true);
+        expect(check.Reason).toBeNull();
+        expect(check.SQL).toEqual(expect.any(String));
     });
 
     it.each([
@@ -54,6 +60,8 @@ describe('CheckAggregateExpression — SQL Server', () => {
         ['COUNT(*);', /statement separator/],
         ['COUNT(*) -- trailing', /comment/],
         ['SUM(Amount /* x */)', /comment/],
+        ["COUNT(CASE WHEN Name LIKE 'C:\\%' THEN 1 END)", /backslash/],
+        ['MAX([a\\b])', /backslash/],
         ['SUM(Amount) + 1', /single aggregate function call/],
         ['COUNT(*), MAX(Name)', /single aggregate function call/],
         ['COUNT(*) AS Total', /single aggregate function call/],
@@ -76,11 +84,20 @@ describe('CheckAggregateExpression — SQL Server', () => {
         ['MAX(USER_NAME())', /USER_NAME/],
         ['MAX(DATEPART(Secret, StartDate))', /"Secret".*not a column/],
         ['MAX(Amount COLLATE Latin1_General_CS_AS)', /not allow/],
+        ['MAX(CAST(Amount AS VARBINARY(8)))', /VARBINARY/],
         ['MAX(@@VERSION)', /could not be parsed/],
     ])('refuses %s', (expression, reason) => {
         const check = CheckAggregateExpression(expression, ss, COLUMNS);
         expect(check.IsAllowed).toBe(false);
         expect(check.Reason).toMatch(reason);
+        expect(check.SQL).toBeNull();
+    });
+
+    it('refuses a backslash inside a quoted string, where the parser and the database read the string differently', () => {
+        // node-sql-parser reads \' as an escaped quote; SQL Server does not. Without the refusal, the
+        // database reads the harmless subquery here as code while the parser reads it as string content.
+        const check = CheckAggregateExpression("MAX(LEN('\\' + (SELECT 1) + '--'\n))", ss, COLUMNS);
+        expect(check).toEqual({ IsAllowed: false, Reason: expect.stringMatching(/backslash/), SQL: null });
     });
 
     it('matches columns case-insensitively and refuses every name outside the list', () => {
@@ -89,7 +106,7 @@ describe('CheckAggregateExpression — SQL Server', () => {
     });
 
     it('refuses a non-string expression', () => {
-        expect(CheckAggregateExpression(undefined as unknown as string, ss, COLUMNS)).toEqual({ IsAllowed: false, Reason: 'it is empty' });
+        expect(CheckAggregateExpression(undefined as unknown as string, ss, COLUMNS)).toEqual({ IsAllowed: false, Reason: 'it is empty', SQL: null });
     });
 });
 
@@ -109,7 +126,10 @@ describe('CheckAggregateExpression — PostgreSQL', () => {
         'MAX(LENGTH("Name"))',
         `AVG(DATE_PART('day', "EndDate"))`,
     ])('allows %s', (expression) => {
-        expect(CheckAggregateExpression(expression, pg, COLUMNS)).toEqual({ IsAllowed: true, Reason: null });
+        const check = CheckAggregateExpression(expression, pg, COLUMNS);
+        expect(check.IsAllowed).toBe(true);
+        expect(check.Reason).toBeNull();
+        expect(check.SQL).toEqual(expect.any(String));
     });
 
     it.each([
@@ -127,5 +147,56 @@ describe('CheckAggregateExpression — PostgreSQL', () => {
         const check = CheckAggregateExpression(expression, pg, COLUMNS);
         expect(check.IsAllowed).toBe(false);
         expect(check.Reason).toMatch(reason);
+        expect(check.SQL).toBeNull();
+    });
+
+    it('refuses a backslash inside a quoted string, where the parser and the database read the string differently', () => {
+        // Same disagreement as on SQL Server: PostgreSQL (standard_conforming_strings on) does not treat
+        // \' as an escape inside '…', node-sql-parser does.
+        const check = CheckAggregateExpression("MAX(LENGTH('\\' || (SELECT 1) || '--'\n))", pg, COLUMNS);
+        expect(check).toEqual({ IsAllowed: false, Reason: expect.stringMatching(/backslash/), SQL: null });
+    });
+});
+
+describe('CheckAggregateExpression — the SQL to run is rebuilt from the checked parse tree', () => {
+    it.each([
+        ['COUNT(*)', 'COUNT(*)'],
+        ['count(*)', 'COUNT(*)'],
+        ['COUNT(DISTINCT Status)', 'COUNT(DISTINCT [Status])'],
+        ['sum(amount)', 'SUM([Amount])'],
+        ['MIN([Total Amount])', 'MIN([Total Amount])'],
+        ['MAX("Name")', 'MAX([Name])'],
+        ['MAX(User)', 'MAX([User])'],
+        ['SUM(Quantity * Price * (1 - Discount/100))', 'SUM(([Quantity] * [Price]) * (1 - ([Discount] / 100)))'],
+        ["COUNT(CASE WHEN Status = 'Active' THEN 1 END)", "COUNT(CASE WHEN [Status] = 'Active' THEN 1 END)"],
+        ["SUM(CASE WHEN Type = 'Credit' THEN Amount ELSE -Amount END)", "SUM(CASE WHEN [Type] = 'Credit' THEN [Amount] ELSE - [Amount] END)"],
+        ["COUNT(CASE WHEN Status IN ('A', 'B') AND Amount BETWEEN 1 AND 5 THEN 1 END)", "COUNT(CASE WHEN ([Status] IN ('A', 'B')) AND ([Amount] BETWEEN 1 AND 5) THEN 1 END)"],
+        ["COUNT(CASE WHEN Status IS NOT NULL AND Name LIKE 'A%' THEN 1 END)", "COUNT(CASE WHEN ([Status] IS NOT NULL) AND ([Name] LIKE 'A%') THEN 1 END)"],
+        ['COUNT(CASE WHEN NOT (Amount > 1) THEN 1 END)', 'COUNT(CASE WHEN NOT ([Amount] > 1) THEN 1 END)'],
+        ["COUNT(CASE Status WHEN 'A' THEN 1 ELSE 0 END)", "COUNT(CASE [Status] WHEN 'A' THEN 1 ELSE 0 END)"],
+        ["COUNT(CASE WHEN Name = 'it''s -- x' THEN 1 END)", "COUNT(CASE WHEN [Name] = 'it''s -- x' THEN 1 END)"],
+        ["MAX(N'abc')", "MAX(N'abc')"],
+        ['SUM(ISNULL(Amount, 0))', 'SUM(ISNULL([Amount], 0))'],
+        ['AVG(DATEDIFF(day, StartDate, GETDATE()))', 'AVG(DATEDIFF(day, [StartDate], GETDATE()))'],
+        ['SUM(CAST(Amount AS DECIMAL(18,2)))', 'SUM(CAST([Amount] AS DECIMAL(18, 2)))'],
+        ['MAX(CAST(Name AS NVARCHAR(MAX)))', 'MAX(CAST([Name] AS NVARCHAR(MAX)))'],
+        ["STRING_AGG(Name, ', ')", "STRING_AGG([Name], ', ')"],
+        ['STDEV(Amount)', 'STDEV([Amount])'],
+        ['SUM(1.50)', 'SUM(1.50)'],
+        // A unary minus over a negative number keeps its space, so the rebuilt SQL never contains `--`.
+        ['SUM(- -1)', 'SUM(- -1)'],
+    ])('SQL Server: %s runs as %s', (expression, sql) => {
+        expect(CheckAggregateExpression(expression, ss, COLUMNS).SQL).toBe(sql);
+    });
+
+    it.each([
+        ['SUM(Amount)', 'SUM("Amount")'],
+        ['MAX(user)', 'MAX("User")'],
+        ['SUM("Amount"::numeric)', 'SUM(CAST("Amount" AS NUMERIC))'],
+        [`COUNT(CASE WHEN "Status" = 'Active' THEN 1 END)`, `COUNT(CASE WHEN "Status" = 'Active' THEN 1 END)`],
+        [`STRING_AGG("Name", ',')`, `STRING_AGG("Name", ',')`],
+        [`AVG(DATE_PART('day', "EndDate"))`, `AVG(DATE_PART('day', "EndDate"))`],
+    ])('PostgreSQL: %s runs as %s', (expression, sql) => {
+        expect(CheckAggregateExpression(expression, pg, COLUMNS).SQL).toBe(sql);
     });
 });

@@ -2352,11 +2352,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
-     * Refuses every aggregate expression that is not a single aggregate function call over this
-     * entity's columns ({@link CheckAggregateExpression}, read for this provider's dialect) before
-     * the base builder splices the rest into `SELECT <expression> AS [Agg_N] FROM <view> WHERE …`.
-     * A refused expression becomes a per-aggregate error in request order. The rest keep
-     * consecutive `Agg_N` aliases, so their values still line up with the request.
+     * Builds the aggregate query without running the caller's text. Each expression must be a single
+     * aggregate function call over this entity's columns: the query runs the SQL that
+     * {@link CheckAggregateExpression} rebuilds from the checked parse tree (with this provider's
+     * dialect), once the keyword validator has also accepted that SQL. A refused expression becomes a
+     * per-aggregate error in request order. The accepted ones are aliased `Agg_0`, `Agg_1`, … in
+     * request order, which is how `RunViewCore` reads their values back.
      */
     protected override BuildAggregateSQL(
         aggregates: { expression: string; alias?: string }[],
@@ -2365,19 +2366,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         baseView: string,
         whereSQL: string,
     ): { aggregateSQL: string | null; validationErrors: AggregateResult[] } {
-        const requested = aggregates ?? [];
         const columns = entityInfo.Fields.map((f) => f.Name);
-        const checks = requested.map((agg) => CheckAggregateExpression(agg.expression, this.Dialect, columns));
-        const built = super.BuildAggregateSQL(requested.filter((_, i) => checks[i].IsAllowed), entityInfo, schemaName, baseView, whereSQL);
-        const builderErrors = new Map(built.validationErrors.map((e) => [e.expression, e]));
+        const items: string[] = [];
         const validationErrors: AggregateResult[] = [];
-        requested.forEach((agg, i) => {
-            const error = checks[i].IsAllowed
-                ? builderErrors.get(agg.expression)
-                : { expression: agg.expression, alias: agg.alias || agg.expression, value: null, error: `Invalid aggregate expression: ${checks[i].Reason}` };
-            if (error) validationErrors.push(error);
-        });
-        return { aggregateSQL: built.aggregateSQL, validationErrors };
+        for (const agg of aggregates ?? []) {
+            const screened = this.screenAggregateExpression(agg.expression, columns);
+            if ('SQL' in screened) {
+                items.push(`${screened.SQL} AS ${this.QuoteIdentifier(`Agg_${items.length}`)}`);
+            } else {
+                validationErrors.push({ expression: agg.expression, alias: agg.alias || agg.expression, value: null, error: screened.Error });
+            }
+        }
+        if (items.length === 0) return { aggregateSQL: null, validationErrors };
+        const where = whereSQL ? ` WHERE ${whereSQL}` : '';
+        return { aggregateSQL: `SELECT ${items.join(', ')} FROM ${this.QuoteSchemaAndView(schemaName, baseView)}${where}`, validationErrors };
+    }
+
+    /** The SQL to run for one caller aggregate expression, or why it is refused. */
+    private screenAggregateExpression(expression: string, columns: string[]): { SQL: string } | { Error: string } {
+        const check = CheckAggregateExpression(expression, this.Dialect, columns);
+        if (!check.IsAllowed || check.SQL === null) return { Error: `Invalid aggregate expression: ${check.Reason}` };
+        const keywordCheck = SQLExpressionValidator.Instance.validate(check.SQL, { context: 'aggregate', entityFields: columns });
+        return keywordCheck.valid ? { SQL: check.SQL } : { Error: keywordCheck.error || 'Validation failed' };
     }
 
     /**
