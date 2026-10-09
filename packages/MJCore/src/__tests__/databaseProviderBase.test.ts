@@ -35,6 +35,11 @@ class TestSQLServerProvider extends DatabaseProviderBase {
         return this.ValidateUserProvidedSQLClause(clause);
     }
 
+    /** Test-only passthrough — BuildAggregateSQL is protected on the base class. */
+    public TestBuildAggregateSQL(expressions: string[], entityInfo: EntityInfo) {
+        return this.BuildAggregateSQL(expressions.map(expression => ({ expression })), entityInfo, entityInfo.SchemaName, entityInfo.BaseView, '');
+    }
+
     // RLS test hooks
     public checkRecordRLSResult = true;
     public checkCreateRLSResult = true;
@@ -97,6 +102,11 @@ class TestPostgreSQLProvider extends DatabaseProviderBase {
     /** Test-only passthrough — ValidateUserProvidedSQLClause is protected on the base class. */
     public TestValidateUserProvidedSQLClause(clause: string): boolean {
         return this.ValidateUserProvidedSQLClause(clause);
+    }
+
+    /** Test-only passthrough — BuildAggregateSQL is protected on the base class. */
+    public TestBuildAggregateSQL(expressions: string[], entityInfo: EntityInfo) {
+        return this.BuildAggregateSQL(expressions.map(expression => ({ expression })), entityInfo, entityInfo.SchemaName, entityInfo.BaseView, '');
     }
 }
 
@@ -507,6 +517,14 @@ describe('DatabaseProviderBase', () => {
                 const pg = new TestPostgreSQLProvider();
                 expect(pg.TestValidateUserProvidedSQLClause("Name = $$'$$ ; SELECT 1 ; --'")).toBe(false);
             });
+
+            it.each([
+                ['UNION', 'ID = ¥1UNION SELECT 1'],
+                ['EXEC', 'ID = £1EXEC sp_who'],
+            ])('rejects %s written directly after a currency-prefixed number on SQL Server', (_label, clause) => {
+                // SQL Server reads ¥1 and £1 as money literals, so the keyword after them is a separate token.
+                expect(provider.TestValidateUserProvidedSQLClause(clause)).toBe(false);
+            });
         });
 
         describe("reads the clause with the provider's dialect", () => {
@@ -540,6 +558,30 @@ describe('DatabaseProviderBase', () => {
             const start = Date.now();
             provider.TestValidateUserProvidedSQLClause(clause);
             expect(Date.now() - start).toBeLessThan(1000);
+        });
+    });
+
+    describe("BuildAggregateSQL reads aggregate expressions with the provider's dialect", () => {
+        const entity = () => new EntityInfo({
+            ID: 'agg-entity', Name: 'Agg Entity', SchemaName: '__mj', BaseTable: 'AggEntity', BaseView: 'vwAggEntities',
+            EntityFields: [{ ID: 'agg-field', EntityID: 'agg-entity', Name: 'Amount', Type: 'decimal' }],
+        });
+
+        it('accepts a bracket identifier that contains a quote on SQL Server', () => {
+            const result = sqlServer.TestBuildAggregateSQL(["SUM([Customer's Total])"], entity());
+            expect(result.validationErrors).toEqual([]);
+            expect(result.aggregateSQL).toContain("SUM([Customer's Total])");
+        });
+
+        it('accepts an E string with an escaped quote on PostgreSQL', () => {
+            const result = pgProvider.TestBuildAggregateSQL(["STRING_AGG(Name, E'\\'')"], entity());
+            expect(result.validationErrors).toEqual([]);
+        });
+
+        it('rejects a stacked statement hidden behind bracket identifiers', () => {
+            const result = sqlServer.TestBuildAggregateSQL(["COUNT(*) AS [a'] ; SELECT 1 ; SELECT COUNT(*) AS [b'], COUNT(*)"], entity());
+            expect(result.aggregateSQL).toBeNull();
+            expect(result.validationErrors).toHaveLength(1);
         });
     });
 });

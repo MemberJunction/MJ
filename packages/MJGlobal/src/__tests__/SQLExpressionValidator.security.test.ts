@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SQLExpressionValidator, StripSQLStringLiterals } from '../SQLExpressionValidator';
+import { SQLScreeningDialect } from '../SQLScreeningScanner';
 
 /**
  * Adversarial security tests for SQLExpressionValidator.
@@ -404,6 +405,60 @@ describe('SQLExpressionValidator - Security', () => {
       const r = validator.validate('ID = 1SELECT 1', { context: 'where_clause' });
       expect(r.valid).toBe(false);
       expect(r.trigger).toBe('SELECT');
+    });
+  });
+
+  /**
+   * SQL Server runs the first statement of a batch as a procedure call without EXEC, and a quoted
+   * name is valid there. So a full query must open with the SELECT or WITH keyword itself, read as
+   * a token: not a quoted name, a literal or a longer word that starts with those letters.
+   */
+  describe('a full query must open with the SELECT or WITH keyword', () => {
+    const DIALECT_SETTINGS: Array<[string, SQLScreeningDialect | undefined]> = [
+      ['sqlserver', 'sqlserver'],
+      ['postgresql', 'postgresql'],
+      ['no dialect', undefined],
+    ];
+    const OPENERS = [
+      "[sp_executesql] N'SELECT 2' SELECT 1",
+      '[sp_who] SELECT 1',
+      `"sp_executesql" N'SELECT 2' SELECT 1`,
+      '"sp_who" SELECT 1',
+      "N'x' SELECT 1",
+      '1 SELECT 1',
+      'WithdrawFunds 1',
+      'SelectiveDelete 5',
+    ];
+    for (const [label, dialect] of DIALECT_SETTINGS) {
+      it.each(OPENERS)(`refuses %s (${label})`, sql => {
+        const r = validator.ValidateFullQuery(sql, dialect);
+        expect(r.valid).toBe(false);
+      });
+    }
+
+    it.each([
+      'select Name from __mj.vwUsers',
+      '-- header\n/* block */\nWITH cte AS (SELECT 1 AS One) SELECT One FROM cte',
+    ])('accepts %s', sql => {
+      expect(validator.ValidateFullQuery(sql, 'sqlserver').valid).toBe(true);
+      expect(validator.ValidateFullQuery(sql, 'postgresql').valid).toBe(true);
+    });
+  });
+
+  /**
+   * SQL Server reads a currency symbol such as ¥, £ or € as the start of a money literal, so the
+   * keyword written directly after the amount is a separate token.
+   */
+  describe('a keyword written against a currency-prefixed number', () => {
+    it.each<SQLScreeningDialect | undefined>(['sqlserver', undefined])('stays visible in a where clause (%s)', dialect => {
+      const r = validator.validate('ID = ¥1SELECT 1', { context: 'where_clause', Dialect: dialect });
+      expect(r.valid).toBe(false);
+      expect(validator.validate('ID = £1EXEC sp_who', { context: 'where_clause', Dialect: dialect }).valid).toBe(false);
+    });
+
+    it.each<SQLScreeningDialect | undefined>(['sqlserver', undefined])('stays visible in a full query (%s)', dialect => {
+      expect(validator.ValidateFullQuery('SELECT £1EXEC sp_who', dialect).valid).toBe(false);
+      expect(validator.ValidateFullQuery("SELECT €1WAITFOR DELAY '00:00:01'", dialect).valid).toBe(false);
     });
   });
 

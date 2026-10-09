@@ -107,6 +107,42 @@ describe('ScanSQLForScreening', () => {
     });
   });
 
+  describe('leading word', () => {
+    it.each<SQLScreeningDialect>(['sqlserver', 'postgresql'])('skips whitespace and comments (%s)', dialect => {
+      expect(ScanSQLForScreening('  -- c\n /* b */ select 1', dialect).LeadingWord).toBe('select');
+      expect(ScanSQLForScreening('WithdrawFunds 1', dialect).LeadingWord).toBe('WithdrawFunds');
+    });
+
+    it.each<[string, string, SQLScreeningDialect]>([
+      ['a bracket identifier', '[sp_who] SELECT 1', 'sqlserver'],
+      ['a double-quoted identifier', '"sp_who" SELECT 1', 'postgresql'],
+      ['a literal', "N'x' SELECT 1", 'sqlserver'],
+      ['a number', '1 SELECT 1', 'postgresql'],
+      ['a symbol', '(SELECT 1)', 'sqlserver'],
+      ['a Unicode space', ' SELECT 1', 'sqlserver'],
+      ['a word followed by a non-ASCII character', 'SELECT€1', 'sqlserver'],
+      ['nothing but a comment', '-- only a comment', 'postgresql'],
+    ])('is null when %s comes first', (_label, sql, dialect) => {
+      expect(ScanSQLForScreening(sql, dialect).LeadingWord).toBeNull();
+    });
+  });
+
+  describe('SQL Server words', () => {
+    it('reads letters of any script as part of a word', () => {
+      const scan = ScanSQLForScreening('Café = 1', 'sqlserver');
+      expect(scan.LeadingWord).toBe('Café');
+      expect(scan.Code).toBe('Café = 1');
+    });
+
+    it('reads a currency symbol as code, so the keyword after a money literal is a separate token', () => {
+      expect(ScanSQLForScreening('ID = ¥1SELECT 1', 'sqlserver').Code).toBe('ID = ¥1 SELECT 1');
+    });
+
+    it('reads non-ASCII characters as part of a word on PostgreSQL', () => {
+      expect(ScanSQLForScreening('ID = ¥1SELECT 1', 'postgresql').Code).toBe('ID = ¥1SELECT 1');
+    });
+  });
+
   describe('token boundaries', () => {
     it('separates a word written against a literal', () => {
       expect(ScanSQLForScreening("Name = N'x'UNION SELECT 1", 'sqlserver').Code).toBe('Name =  UNION SELECT 1');
@@ -133,6 +169,7 @@ describe('ScanSQLForScreening', () => {
       ['a Unicode line separator in a line comment', 'SELECT 1 --a ; SELECT 2', 'sqlserver'],
       ['an E string followed by a continuation segment', "x = E'a'\n'\\'' ; SELECT 1 ; --'", 'postgresql'],
       ['a number followed by E and a word on SQL Server', 'ID = 1EXEC sp_who', 'sqlserver'],
+      ['a money literal followed by E and a word on SQL Server', 'ID = £1EXEC sp_who', 'sqlserver'],
     ])('rejects %s', (_label, sql, dialect) => {
       const scan = ScanSQLForScreening(sql, dialect);
       expect(scan.Classified).toBe(false);

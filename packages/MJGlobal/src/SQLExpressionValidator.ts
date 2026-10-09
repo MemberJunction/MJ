@@ -315,7 +315,7 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
       if (!functionCheck.valid) return functionCheck;
     }
 
-    const contextCheck = this.checkContextRules(scan.Code, options);
+    const contextCheck = this.checkContextRules(scan, options);
     if (!contextCheck.valid) return contextCheck;
 
     // Optional field reference validation (lenient - just logs warnings)
@@ -445,12 +445,12 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
   /**
    * Context-specific validation rules
    */
-  private checkContextRules(expression: string, options: SQLValidationOptions): SQLValidationResult {
+  private checkContextRules(scan: SQLScreeningScan, options: SQLValidationOptions): SQLValidationResult {
     // For aggregate context, require at least one aggregate function (unless explicitly disabled)
     if (options.context === 'aggregate' && options.requireAggregate !== false) {
       const hasAggregate = ALLOWED_SQL_FUNCTIONS.aggregates.some(fn => {
         const pattern = new RegExp(`\\b${fn}\\s*\\(`, 'i');
-        return pattern.test(expression);
+        return pattern.test(scan.Code);
       });
 
       if (!hasAggregate) {
@@ -462,10 +462,11 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
       }
     }
 
-    // For full_query context, the query must start with SELECT or WITH (CTE). Comments are already blanked.
+    // For full_query context, the first token (after comments) must be the unquoted keyword SELECT or
+    // WITH. SQL Server runs a batch that opens with any other name, quoted or not, as a procedure call.
     if (options.context === 'full_query') {
-      const upper = expression.trim().toUpperCase();
-      if (!upper.startsWith('SELECT') && !upper.startsWith('WITH')) {
+      const leadingWord = scan.LeadingWord?.toUpperCase();
+      if (leadingWord !== 'SELECT' && leadingWord !== 'WITH') {
         return {
           valid: false,
           error: 'Ad-hoc query must start with SELECT or WITH',

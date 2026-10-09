@@ -59,6 +59,13 @@ export interface SQLScreeningScan {
      * so quoting a name does not hide it.
      */
     CodeWithIdentifiers: string;
+    /**
+     * The first token that is not whitespace or a comment, when that token is an unquoted word and
+     * the character after it is ASCII, so every server ends the word in the same place. Null when a
+     * literal, quoted identifier, number or symbol comes first, or there is no token. Checks for the
+     * statement's opening keyword read this.
+     */
+    LeadingWord: string | null;
 }
 
 /** Lexical rules that differ between dialects. */
@@ -82,8 +89,11 @@ const LEXICAL_RULES: Record<SQLScreeningDialect, LexicalRules> = {
     sqlserver: {
         BracketIdentifiers: true,
         PostgresStrings: false,
-        WordStart: /[A-Za-z_@#\u0080-￿]/,
-        WordPart: /[A-Za-z0-9_@#$\u0080-￿]/,
+        // Letters and digits of any script. Other non-ASCII characters are not part of a word: SQL
+        // Server reads a currency symbol such as ¥ as the start of a money literal, so in `¥1SELECT`
+        // the keyword is a separate token.
+        WordStart: /[\p{L}_@#]/u,
+        WordPart: /[\p{L}\p{N}_@#$]/u,
         BareExponent: true,
     },
     postgresql: {
@@ -97,6 +107,9 @@ const LEXICAL_RULES: Record<SQLScreeningDialect, LexicalRules> = {
 
 const DIGIT = /[0-9]/;
 const WHITESPACE = /\s/;
+/** Whitespace every server skips. Other Unicode spaces count as a token when finding the leading word. */
+const ASCII_WHITESPACE = /[ \t\n\r\f\v]/;
+const NON_ASCII = /[^\x00-\x7f]/;
 
 /**
  * A numeric literal at `lastIndex` (sticky). An exponent needs digits, so in PostgreSQL's `1e'…'`
@@ -147,6 +160,9 @@ class SQLScreeningScanner {
     private readonly codeWithIdentifiers: string[] = [];
     private commentCount = 0;
     private pos = 0;
+    /** Offset of the first token that is not whitespace or a comment, once one is reached. */
+    private leadingTokenStart: number | null = null;
+    private leadingWord: string | null = null;
 
     constructor(
         private readonly sql: string,
@@ -171,6 +187,7 @@ class SQLScreeningScanner {
         const next = this.sql[this.pos + 1] ?? '';
         if (c === '-' && next === '-') return this.readLineComment();
         if (c === '/' && next === '*') return this.readBlockComment();
+        if (this.leadingTokenStart === null && !ASCII_WHITESPACE.test(c)) this.leadingTokenStart = this.pos;
         if (c === "'") return this.readString(this.pos + 1);
         if ((c === 'N' || c === 'n') && next === "'") return this.readString(this.pos + 2);
         if (this.rules.PostgresStrings && (c === 'E' || c === 'e') && next === "'") return this.readEscapeString();
@@ -279,6 +296,9 @@ class SQLScreeningScanner {
     private readWord(): string | null {
         let j = this.pos + 1;
         while (j < this.sql.length && this.rules.WordPart.test(this.sql[j])) j++;
+        if (this.pos === this.leadingTokenStart && !NON_ASCII.test(this.sql[j] ?? '')) {
+            this.leadingWord = this.sql.slice(this.pos, j);
+        }
         this.emitCode(j);
         return null;
     }
@@ -372,6 +392,7 @@ class SQLScreeningScanner {
             CommentCount: this.commentCount,
             Code: this.code.join(''),
             CodeWithIdentifiers: this.codeWithIdentifiers.join(''),
+            LeadingWord: this.leadingWord,
         };
     }
 }

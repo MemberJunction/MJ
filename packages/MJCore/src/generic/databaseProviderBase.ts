@@ -1361,6 +1361,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             const result = validator.validate(agg.expression, {
                 context: 'aggregate',
                 entityFields: fieldNames,
+                Dialect: this.PlatformKey,
             });
 
             if (!result.valid) {
