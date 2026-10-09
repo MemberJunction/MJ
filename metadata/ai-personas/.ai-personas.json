@@ -333,6 +333,20 @@
   },
   {
     "fields": {
+      "Name": "Ben",
+      "Description": "Google's \"Ben\" live avatar, speaking with the upbeat, energetic Puck voice. Shows a face on Gemini 3.8 Live through Gemini Enterprise (Vertex AI).",
+      "Tone": "Upbeat",
+      "SpeakingStyle": "Energetic and friendly",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "99D35270-C907-4457-BD8E-E675A396A8C5"
+    }
+  },
+  {
+    "fields": {
       "Name": "Ivy",
       "Description": "Clear, friendly, and natural female voice optimized for conversation.",
       "Tone": "Friendly",
