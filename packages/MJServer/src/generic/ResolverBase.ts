@@ -1062,6 +1062,11 @@ export class ResolverBase {
    * The single place that is not true is a field carrying `UserSearchParamFormatAPI`, whose
    * admin-authored format may splice the term in unquoted; `createViewUserSearchSQL` re-applies
    * `ValidateUserProvidedSQLClause` for exactly those entities.
+   *
+   * Each `Aggregates[].expression` is a SQL fragment too (spliced into the aggregate SELECT
+   * list), so it gets the same screen. The provider then requires each one to be a single
+   * aggregate call over the entity's columns (`CheckAggregateExpression`) and refuses the rest
+   * per aggregate.
    */
   protected screenClientViewClauses(
     clauses: {
@@ -1069,6 +1074,7 @@ export class ResolverBase {
       orderBy?: string | null;
       userSearchString?: string | null;
       overrideExcludeFilter?: string | null;
+      aggregates?: AggregateExpression[] | null;
     },
     provider?: IMetadataProvider,
     user?: UserInfo,
@@ -1076,6 +1082,9 @@ export class ResolverBase {
     this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider, user);
     this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider, user);
     this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
+    for (const aggregate of clauses.aggregates ?? []) {
+      this.assertClientClauseUsesEntityBaseViews(aggregate?.expression, 'Aggregate', provider, user);
+    }
   }
 
   /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
@@ -1223,7 +1232,7 @@ export class ResolverBase {
       // Screen at this boundary: parse, reject writes, allow only entity BaseViews the
       // acting user can read (subqueries do not inherit the top entity's permission check).
       this.screenClientViewClauses(
-        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
+        { extraFilter, orderBy, userSearchString, overrideExcludeFilter, aggregates },
         provider as unknown as IMetadataProvider,
         user,
       );
@@ -1390,6 +1399,7 @@ export class ResolverBase {
             orderBy: param.orderBy,
             userSearchString: param.userSearchString,
             overrideExcludeFilter: param.overrideExcludeFilter,
+            aggregates: param.aggregates,
           },
           md,
           contextUser ?? undefined,

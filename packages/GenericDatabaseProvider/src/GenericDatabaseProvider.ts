@@ -86,7 +86,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser, IsReadOnlyQuery } from '@memberjunction/sql-parser';
+import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
@@ -2350,6 +2350,35 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
     // InternalRunView Helpers
     /**************************************************************************/
+
+    /**
+     * Refuses every aggregate expression that is not a single aggregate function call over this
+     * entity's columns ({@link CheckAggregateExpression}, read for this provider's dialect) before
+     * the base builder splices the rest into `SELECT <expression> AS [Agg_N] FROM <view> WHERE …`.
+     * A refused expression becomes a per-aggregate error in request order. The rest keep
+     * consecutive `Agg_N` aliases, so their values still line up with the request.
+     */
+    protected override BuildAggregateSQL(
+        aggregates: { expression: string; alias?: string }[],
+        entityInfo: EntityInfo,
+        schemaName: string,
+        baseView: string,
+        whereSQL: string,
+    ): { aggregateSQL: string | null; validationErrors: AggregateResult[] } {
+        const requested = aggregates ?? [];
+        const columns = entityInfo.Fields.map((f) => f.Name);
+        const checks = requested.map((agg) => CheckAggregateExpression(agg.expression, this.Dialect, columns));
+        const built = super.BuildAggregateSQL(requested.filter((_, i) => checks[i].IsAllowed), entityInfo, schemaName, baseView, whereSQL);
+        const builderErrors = new Map(built.validationErrors.map((e) => [e.expression, e]));
+        const validationErrors: AggregateResult[] = [];
+        requested.forEach((agg, i) => {
+            const error = checks[i].IsAllowed
+                ? builderErrors.get(agg.expression)
+                : { expression: agg.expression, alias: agg.alias || agg.expression, value: null, error: `Invalid aggregate expression: ${checks[i].Reason}` };
+            if (error) validationErrors.push(error);
+        });
+        return { aggregateSQL: built.aggregateSQL, validationErrors };
+    }
 
     /**
      * Returns the SELECT list for a single-record load: `*` normally, or an explicit list of
