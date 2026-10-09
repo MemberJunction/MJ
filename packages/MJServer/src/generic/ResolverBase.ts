@@ -1925,6 +1925,11 @@ export class ResolverBase {
    * Comments is the one dirty field, and "dirty" compared against client-supplied OldValues lets a
    * caller pin forged audit columns as both old and new values. It doesn't track its own changes, so
    * nothing else forces the load.
+   *
+   * `MJ: Data Context Items` always loads from the database for the same reason: its server class
+   * lets only an administrator save an item that holds SQL, and decides that from the item's `Type`
+   * and `SQL`. Hydrated from OldValues, a client could leave both out, and the stored procedure would
+   * keep the stored SQL item while the rule saw none.
    */
   protected MustLoadTruthFromDatabase(
     entityInfo: EntityInfo,
@@ -1932,9 +1937,11 @@ export class ResolverBase {
     hasDeniedReadFields: boolean,
     hasNarrowedAuditPayload: boolean
   ): boolean {
+    const entityName = entityInfo.Name.trim().toLowerCase();
     return (
       entityInfo.TrackRecordChanges ||
-      entityInfo.Name.trim().toLowerCase() === 'mj: record changes' ||
+      entityName === 'mj: record changes' ||
+      entityName === 'mj: data context items' ||
       !input.OldValues___ ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
