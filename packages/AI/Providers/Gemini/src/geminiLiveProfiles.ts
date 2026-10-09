@@ -31,8 +31,9 @@ export type GeminiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
 /**
  * Which Gemini endpoint serves a Live session: the Gemini Developer API (an API key) or Gemini Enterprise (Vertex AI,
- * Google Cloud credentials). The protocol is the same; some outputs are not. On the Developer API, `gemini-3.8-live`
- * refuses every avatar field and returns audio for a VIDEO request (probed 2026-10-08).
+ * Google Cloud credentials). The protocol is the same; some outputs and values are not. On the Developer API,
+ * `gemini-3.8-live` refuses every avatar field and returns audio for a VIDEO request (probed 2026-10-08); Gemini
+ * Enterprise refuses one turn coverage ({@link GEMINI_LIVE_ENDPOINT_PROFILES}).
  */
 export type GeminiLiveEndpoint = 'developer' | 'enterprise';
 
@@ -49,8 +50,18 @@ export interface GeminiLiveAvatarFacts {
     AvatarAudioMuxed?: boolean;
 }
 
-/** A model profile resolved for one endpoint: the model's facts plus what it renders there. */
-export interface GeminiLiveResolvedProfile extends GeminiLiveModelProfile, GeminiLiveAvatarFacts {
+/** What an endpoint accepts whatever the model: facts of the endpoint's API, which every profile resolved for it carries. */
+export interface GeminiLiveEndpointProfile {
+    /**
+     * The turn coverages the endpoint accepts in `realtimeInputConfig.turnCoverage`. A session sends one of these
+     * ({@link ResolveGeminiTurnCoverage}); a configured coverage outside the list is sent as `audioActivityOnly`, which
+     * every endpoint accepts.
+     */
+    AcceptedTurnCoverages: readonly RealtimeTurnCoverage[];
+}
+
+/** A model profile resolved for one endpoint: the model's facts, what it renders there, and what the endpoint accepts. */
+export interface GeminiLiveResolvedProfile extends GeminiLiveModelProfile, GeminiLiveAvatarFacts, GeminiLiveEndpointProfile {
     /** The endpoint this profile was resolved for. */
     Endpoint: GeminiLiveEndpoint;
 }
@@ -114,7 +125,11 @@ export interface GeminiLiveModelProfile {
      */
     ProactiveAudioAlwaysOn: boolean;
 
-    /** The model's OWN turn-coverage default, i.e. what we get if we say nothing. */
+    /**
+     * The model's OWN turn-coverage default, i.e. what we get if we say nothing, as the Developer API documents it. MJ
+     * never relies on it: every session states its coverage, one its endpoint accepts
+     * ({@link GeminiLiveEndpointProfile.AcceptedTurnCoverages}).
+     */
     ProviderDefaultTurnCoverage: RealtimeTurnCoverage;
 
     /** Whether the model supports inbound video input stream. */
@@ -253,6 +268,19 @@ export const GEMINI_LIVE_ENDPOINT_OVERLAYS: readonly GeminiLiveEndpointOverlay[]
 ];
 
 /**
+ * What each endpoint accepts whatever the model.
+ *
+ * Turn coverage: the Developer API takes both of MJ's coverages; its `RealtimeInputConfig.TurnCoverage` enum documents
+ * `TURN_INCLUDES_ONLY_ACTIVITY` and `TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO`. Gemini Enterprise does not take the
+ * second: a live Vertex AI session (2026-10-09) closed at setup with 1007 "Invalid value at
+ * 'setup.realtime_input_config.turn_coverage'" on both `v1` and `v1beta1`, and opened with `TURN_INCLUDES_ONLY_ACTIVITY`.
+ */
+export const GEMINI_LIVE_ENDPOINT_PROFILES: Readonly<Record<GeminiLiveEndpoint, GeminiLiveEndpointProfile>> = {
+    developer: { AcceptedTurnCoverages: ['audioActivityOnly', 'audioActivityAndAllVideo'] },
+    enterprise: { AcceptedTurnCoverages: ['audioActivityOnly'] },
+};
+
+/**
  * The environment variable that gives a model id this table doesn't know the profile of one it does:
  * `<model id>=<known model id>`, comma-separated (`gemini-live-3.8-preview-1009=gemini-3.8-live`). For when Google names
  * a model differently from the table: the catalog's `APIName` is still what Google is sent; only what the model accepts
@@ -276,7 +304,7 @@ const resolvedProfiles = new Map<string, GeminiLiveResolvedProfile>();
 /**
  * Resolves the profile for a model id on an endpoint: the model's row (an alias from
  * {@link GEMINI_LIVE_MODEL_ALIASES_ENV}, else the longest prefix), plus what it renders on that endpoint
- * ({@link GEMINI_LIVE_ENDPOINT_OVERLAYS}).
+ * ({@link GEMINI_LIVE_ENDPOINT_OVERLAYS}) and what the endpoint accepts ({@link GEMINI_LIVE_ENDPOINT_PROFILES}).
  *
  * Case- and whitespace-insensitive because model ids reach us from metadata that humans edit.
  * Never throws and never returns undefined — an unknown model gets
@@ -291,7 +319,7 @@ export function ResolveGeminiLiveProfile(model: string | null | undefined, endpo
     const key = `${endpoint}|${row.MatchPrefix}`;
     let resolved = resolvedProfiles.get(key);
     if (!resolved) {
-        resolved = { ...row, ...avatarFactsFor(row, endpoint), Endpoint: endpoint };
+        resolved = { ...row, ...avatarFactsFor(row, endpoint), ...GEMINI_LIVE_ENDPOINT_PROFILES[endpoint], Endpoint: endpoint };
         resolvedProfiles.set(key, resolved);
     }
     return resolved;
@@ -423,4 +451,35 @@ export function ResolveGeminiThinkingLevel(
         };
     }
     return { Level: want as GeminiThinkingLevel };
+}
+
+/** The coverage a session sends when it asks for none, or for one its endpoint doesn't accept: audio activity only. */
+const FALLBACK_TURN_COVERAGE: RealtimeTurnCoverage = 'audioActivityOnly';
+
+/** The turn coverage a session sends, and the configured one it doesn't send, if any. */
+export interface GeminiTurnCoverageResolution {
+    /** The coverage to send. */
+    Coverage: RealtimeTurnCoverage;
+    /** The configured coverage that is not sent: one the endpoint doesn't accept, or a value that is not a coverage. */
+    Refused?: string;
+}
+
+/**
+ * Picks the turn coverage to send on the profile's endpoint.
+ *
+ * Nothing configured gives audio only: video frames are billed and use context, so the costly coverage is asked for,
+ * never inherited. A configured coverage the endpoint accepts is sent. Any other value (`audioActivityAndAllVideo` on
+ * Gemini Enterprise, or one that is not a coverage) gives audio only as well and comes back as `Refused`, so the caller
+ * can name both in its log line. Never throws: a coverage Google would refuse must not cost the user the session.
+ *
+ * @param requested The configured coverage (`ModelConfiguration.Realtime.TurnDetection.Coverage`), if any.
+ * @param profile A profile resolved for the session's endpoint; its {@link GeminiLiveEndpointProfile.AcceptedTurnCoverages} decide.
+ */
+export function ResolveGeminiTurnCoverage(requested: string | null | undefined, profile: GeminiLiveEndpointProfile): GeminiTurnCoverageResolution {
+    const want = String(requested ?? '').trim();
+    if (want.length === 0) {
+        return { Coverage: FALLBACK_TURN_COVERAGE };
+    }
+    const accepted = profile.AcceptedTurnCoverages.find((coverage) => coverage === want);
+    return accepted ? { Coverage: accepted } : { Coverage: FALLBACK_TURN_COVERAGE, Refused: want };
 }

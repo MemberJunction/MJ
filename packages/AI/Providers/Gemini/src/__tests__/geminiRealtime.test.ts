@@ -13,6 +13,7 @@ import {
 import type {
     ClientRealtimeSessionConfig,
     IRealtimeSession,
+    JSONValue,
     RealtimeSessionParams,
     RealtimeTranscript,
     RealtimeToolCall,
@@ -1501,6 +1502,96 @@ async function mintWithWarnings(
     }
 }
 
+/** The connect config a bridged (server-side) session opened with, and the warnings it logged. */
+async function startWithWarnings(driver: TestGeminiRealtime, params: RealtimeSessionParams): Promise<{ config: Record<string, unknown>; warnings: string[] }> {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+        await driver.StartSession(params);
+        return { config: (driver.LastConnectArgs?.Config ?? {}) as Record<string, unknown>, warnings: warn.mock.calls.map((c) => String(c[0])) };
+    } finally {
+        warn.mockRestore();
+    }
+}
+
+describe('C4 on each endpoint: a session sends only a turn coverage its endpoint accepts', () => {
+    const ALL_VIDEO = 'TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO';
+    const ONLY_ACTIVITY = 'TURN_INCLUDES_ONLY_ACTIVITY';
+    const ENTERPRISE_LINE =
+        '[GeminiRealtime] Turn coverage "audioActivityAndAllVideo" is not one Gemini Enterprise accepts for gemini-3.8-live ' +
+        '(it accepts audioActivityOnly); sent "audioActivityOnly" (TURN_INCLUDES_ONLY_ACTIVITY) instead.';
+
+    /** Session params whose catalog coverage (the bag's `turnDetection.Coverage`) is `coverage`. */
+    const asks = (coverage: string, extra: Record<string, JSONValue> = {}): RealtimeSessionParams =>
+        makeParams({ Model: 'gemini-3.8-live', Config: { turnDetection: { Coverage: coverage }, ...extra } });
+    const coverageOf = (config: Record<string, unknown>): unknown => (config['realtimeInputConfig'] as Record<string, unknown> | undefined)?.['turnCoverage'];
+    const coverageLines = (warnings: string[]): string[] => warnings.filter((line) => line.includes('Turn coverage'));
+
+    it('a bridged Gemini Enterprise session that asks for all video sends only activity, and one line names both', async () => {
+        const { config, warnings } = await startWithWarnings(new EnterpriseBridged('k'), asks('audioActivityAndAllVideo'));
+        expect(coverageOf(config)).toBe(ONLY_ACTIVITY);
+        expect(coverageLines(warnings)).toEqual([ENTERPRISE_LINE]);
+    });
+
+    it('a Gemini Enterprise mint does the same', async () => {
+        const { config, warnings } = await mintWithWarnings(new EnterpriseClientDirect('k'), asks('audioActivityAndAllVideo'));
+        expect(coverageOf(config)).toBe(ONLY_ACTIVITY);
+        expect(coverageLines(warnings)).toEqual([ENTERPRISE_LINE]);
+    });
+
+    it('never puts TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO in a Gemini Enterprise config, however it is asked for', async () => {
+        const requests: Array<[string, RealtimeSessionParams]> = [
+            ['the catalog coverage, padded', asks(' audioActivityAndAllVideo ')],
+            ['a raw realtimeInputConfig in the bag', makeParams({ Model: 'gemini-3.8-live', Config: { realtimeInputConfig: { turnCoverage: ALL_VIDEO } } })],
+            ['both, in a meeting', asks('audioActivityAndAllVideo', { realtimeInputConfig: { turnCoverage: ALL_VIDEO }, disableAutoResponse: true })],
+            ['Extended Thinking', { ...asks('audioActivityAndAllVideo'), Model: 'gemini-3.8-live-extended-thinking' }],
+            ['an unknown model', { ...asks('audioActivityAndAllVideo'), Model: 'gemini-9.9-live-future' }],
+            ['an avatar published into a room', { ...asks('audioActivityAndAllVideo'), Avatar: { AvatarID: 'Ben', PersonaName: 'Ben', Delivery: 'room' } }],
+        ];
+        for (const [label, params] of requests) {
+            const bridged = await startWithWarnings(new EnterpriseBridged('k'), params);
+            const minted = await mintWithWarnings(new EnterpriseClientDirect('k'), params);
+            for (const [path, config] of [['bridged', bridged.config], ['minted', minted.config]] as const) {
+                expect(coverageOf(config), `${label}, ${path}`).toBe(ONLY_ACTIVITY);
+                expect(JSON.stringify(config), `${label}, ${path}`).not.toContain(ALL_VIDEO);
+            }
+        }
+    });
+
+    it('the Developer API still sends TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO when the catalog asks, bridged and minted, with no line', async () => {
+        const bridged = await startWithWarnings(new TestGeminiRealtime('k'), asks('audioActivityAndAllVideo'));
+        const minted = await mintWithWarnings(new ClientDirectTestable('k'), asks('audioActivityAndAllVideo'));
+        expect(coverageOf(bridged.config)).toBe(ALL_VIDEO);
+        expect(coverageOf(minted.config)).toBe(ALL_VIDEO);
+        expect(coverageLines([...bridged.warnings, ...minted.warnings])).toEqual([]);
+    });
+
+    it('logs nothing on either endpoint when the session asks for nothing or for audioActivityOnly', async () => {
+        for (const driver of [new TestGeminiRealtime('k'), new EnterpriseBridged('k')]) {
+            for (const params of [makeParams({ Model: 'gemini-3.8-live' }), asks('audioActivityOnly')]) {
+                const { config, warnings } = await startWithWarnings(driver, params);
+                expect(coverageOf(config)).toBe(ONLY_ACTIVITY);
+                expect(coverageLines(warnings)).toEqual([]);
+            }
+        }
+    });
+
+    it('sends only activity for a value that is not a coverage, on the Developer API too, and names it', async () => {
+        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), asks('allInput'));
+        expect(coverageOf(config)).toBe(ONLY_ACTIVITY);
+        expect(coverageLines(warnings)).toEqual([
+            '[GeminiRealtime] Turn coverage "allInput" is not one the Gemini Developer API accepts for gemini-3.8-live ' +
+                '(it accepts audioActivityOnly, audioActivityAndAllVideo); sent "audioActivityOnly" (TURN_INCLUDES_ONLY_ACTIVITY) instead.',
+        ]);
+    });
+
+    it('quotes the configured value as JSON, so a quote or a line break in it cannot split the log line', async () => {
+        const { warnings } = await startWithWarnings(new EnterpriseBridged('k'), asks('all"video\nnext'));
+        const [line] = coverageLines(warnings);
+        expect(line).toContain('Turn coverage "all\\"video\\nnext" is not one Gemini Enterprise accepts');
+        expect(line).not.toContain('\n');
+    });
+});
+
 describe('live avatars: the driver asks for one only where the endpoint renders it', () => {
     it('stays audio-only on the Developer API, logging why, with no avatar block in the mint', async () => {
         const { sc, config, warnings } = await mintWithWarnings(new ClientDirectTestable('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
@@ -1509,6 +1600,11 @@ describe('live avatars: the driver asks for one only where the endpoint renders 
         expect(sc['avatar']).toBeUndefined();
         expect(warnings.filter((w) => w.includes('Reason: endpoint'))).toHaveLength(1);
         expect(warnings.find((w) => w.includes('Reason: endpoint'))).toContain('Avatar "Ben" (persona Ben) not used: gemini-3.8-live on the Gemini Developer API renders no avatar');
+    });
+
+    it('names Gemini Enterprise in that line for a model that renders no avatar there', async () => {
+        const { warnings } = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live-extended-thinking', Avatar: BEN }));
+        expect(warnings.find((w) => w.includes('Reason: endpoint'))).toContain('not used: gemini-3.8-live-extended-thinking on Gemini Enterprise renders no avatar');
     });
 
     it('asks for video and the avatar at 2 Mbps on Enterprise 3.8 Live, and mints the avatar block', async () => {

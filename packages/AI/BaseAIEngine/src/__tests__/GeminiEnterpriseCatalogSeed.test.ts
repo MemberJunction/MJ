@@ -182,6 +182,14 @@ function activeDriverRows(modelID: string): EngineRow[] {
         .sort((a, b) => Number(b['Priority'] ?? 0) - Number(a['Priority'] ?? 0));
 }
 
+/** The model's configuration on a vendor, as the database stores it (JSON text): the model's bag under the model-vendor row's. */
+function configurationOn(vendorID: string): AIModelConfiguration | null {
+    const text = (value: SeedValue | undefined): string | null => (value ? JSON.stringify(value) : null);
+    const model = seeds.Models.find((m) => m.primaryKey?.ID === MODEL);
+    const row = modelVendors.find((mv) => mv['ModelID'] === MODEL && mv['VendorID'] === vendorID);
+    return ResolveEffectiveModelConfiguration(ParseModelConfiguration(text(model?.fields['ModelConfiguration'])), ParseModelConfiguration(text(row?.['ModelConfiguration'])));
+}
+
 /** The persona names and wire names the engine resolves for the model on a vendor, in the model's order. */
 function personasOn(vendorID: string, modality: 'Audio' | 'Video'): Array<[string, string]> {
     return AIEngineBase.Instance.GetModelPersonas(MODEL, modality, vendorID).map((p) => [p.Persona.Name, p.PersonaVendor.APIName]);
@@ -332,14 +340,6 @@ describe('Gemini 3.8 Live on Vertex AI — the avatar video price, as pricing re
     /** One speaking minute: Google counts the avatar's 60 s of video as 371,520 of the 373,520 output tokens. */
     const minute = { Output: { AudioTokens: 2000, VideoTokens: 371520, VideoSeconds: 60 } };
 
-    /** The model's configuration on a vendor, as the database stores it (JSON text): the model's bag under the model-vendor row's. */
-    function configurationOn(vendorID: string): AIModelConfiguration | null {
-        const text = (value: SeedValue | undefined): string | null => (value ? JSON.stringify(value) : null);
-        const model = seeds.Models.find((m) => m.primaryKey?.ID === MODEL);
-        const row = modelVendors.find((mv) => mv['ModelID'] === MODEL && mv['VendorID'] === vendorID);
-        return ResolveEffectiveModelConfiguration(ParseModelConfiguration(text(model?.fields['ModelConfiguration'])), ParseModelConfiguration(text(row?.['ModelConfiguration'])));
-    }
-
     it("prices a speaking minute on Vertex AI: the token row's $0.0165 plus the row's $0.37152 of video, $0.38802", () => {
         const costRow = AIEngineBase.Instance.GetActiveModelCost(MODEL, VERTEX, 'Realtime');
         if (!costRow) {
@@ -355,5 +355,29 @@ describe('Gemini 3.8 Live on Vertex AI — the avatar video price, as pricing re
 
     it('has no avatar video price on Google: the price sits on the Vertex AI row, not on the model', () => {
         expect(PriceAvatarVideoOutput(minute, configurationOn(GOOGLE), 'USD')).toEqual({ Priced: false, Reason: 'no-price' });
+    });
+});
+
+describe('Gemini 3.8 Live on Vertex AI — the turn coverage a session asks for', () => {
+    /** The model's own `ModelConfiguration`, without any vendor row. */
+    const modelConfiguration = (): AIModelConfiguration | null =>
+        ParseModelConfiguration(JSON.stringify(seeds.Models.find((m) => m.primaryKey?.ID === MODEL)?.fields['ModelConfiguration'] ?? null));
+    /** The Realtime section of the model's configuration on a vendor, empty when there is none. */
+    const realtimeOn = (vendorID: string): NonNullable<AIModelConfiguration['Realtime']> => configurationOn(vendorID)?.Realtime ?? {};
+
+    it('asks for audioActivityOnly on Vertex AI, which refuses TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO at setup', () => {
+        expect(realtimeOn(VERTEX).TurnDetection?.Coverage).toBe('audioActivityOnly');
+    });
+
+    it('keeps audioActivityAndAllVideo on the model and on Google, whose Developer API accepts it', () => {
+        expect(modelConfiguration()?.Realtime?.TurnDetection?.Coverage).toBe('audioActivityAndAllVideo');
+        expect(realtimeOn(GOOGLE).TurnDetection?.Coverage).toBe('audioActivityAndAllVideo');
+    });
+
+    it("differs from Google's Realtime configuration only in the coverage and the avatar video price", () => {
+        const { TurnDetection: vertexTurns, Pricing: _pricing, ...vertex } = realtimeOn(VERTEX);
+        const { TurnDetection: googleTurns, ...google } = realtimeOn(GOOGLE);
+        expect(vertex).toEqual(google);
+        expect({ ...vertexTurns, Coverage: undefined }).toEqual({ ...googleTurns, Coverage: undefined });
     });
 });

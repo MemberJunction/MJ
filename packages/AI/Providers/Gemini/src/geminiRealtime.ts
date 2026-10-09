@@ -51,11 +51,13 @@ import {
     type RealtimeAvatarStatus,
     type RealtimeAvatarUnavailableReason,
     type RealtimeVideoFrame,
+    type RealtimeTurnCoverage,
 } from '@memberjunction/ai';
 import {
     ResolveGeminiLiveProfile,
     ResolveGeminiMaxInboundVideoStreams,
     ResolveGeminiThinkingLevel,
+    ResolveGeminiTurnCoverage,
     GEMINI_LIVE_FALLBACK_PROFILE,
     type GeminiThinkingLevel,
     type GeminiLiveModelProfile,
@@ -75,6 +77,9 @@ const GEMINI_INPUT_AUDIO_MIME_TYPE = 'audio/pcm;rate=16000';
 
 /** Image types Gemini Live accepts as video input frames. */
 const GEMINI_VIDEO_INPUT_MIME_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png']);
+
+/** The endpoints' names in log lines. */
+const GEMINI_ENDPOINT_NAMES: Readonly<Record<GeminiLiveEndpoint, string>> = { developer: 'the Gemini Developer API', enterprise: 'Gemini Enterprise' };
 
 /** Meeting-mode watchdog: how long to wait for a turn after `activityEnd` before clearing a latched `responseActive` (shorter than the bridge's floor safety timer). */
 const GEMINI_MEETING_RESPONSE_WATCHDOG_MS = 5000;
@@ -738,9 +743,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
 
     /** The one log line for an avatar the session asked for and won't render. */
     private avatarUnavailableMessage(request: RealtimeAvatarSettings, model: string, reason: RealtimeAvatarUnavailableReason): string {
-        const endpointName = this.Endpoint === 'enterprise' ? 'Gemini Enterprise' : 'the Gemini Developer API';
         const why: Record<RealtimeAvatarUnavailableReason, string> = {
-            endpoint: `${model} on ${endpointName} renders no avatar`,
+            endpoint: `${model} on ${GEMINI_ENDPOINT_NAMES[this.Endpoint]} renders no avatar`,
             bridged: "a session on the server (a meeting or a phone call) whose host can't publish video",
             'custom-disabled': 'custom avatars are not enabled',
             'unknown-avatar': 'the request names no avatar',
@@ -845,8 +849,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
     }
 
     /**
-     * Enforces what the TARGET model actually accepts, and states what MJ wants rather than
-     * inheriting a provider default.
+     * Enforces what the TARGET model, on the session's endpoint, actually accepts, and states what MJ
+     * wants rather than inheriting a provider default.
      *
      * Every rule here fails at SESSION MINT if broken — upstream of all UI code, the same failure
      * class as an illegal tool name — so none of it can be left to discover at connect time. Facts
@@ -918,19 +922,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
             delete config.thinkingConfig;
         }
 
-        // C4 — turn coverage is STATED, never inherited. The SDK's enum doc says coverage defaults to
-        // TURN_INCLUDES_ONLY_ACTIVITY while the 3.8 model page says the default includes all video;
-        // sending it explicitly makes that contradiction irrelevant. Absent config means audio-only,
-        // because video frames are billed and consume context, so the expensive option must be asked
-        // for rather than inherited.
-        const coverage = coverageSetting ?? 'audioActivityOnly';
-        config.realtimeInputConfig = {
-            ...(config.realtimeInputConfig ?? {}),
-            turnCoverage:
-                coverage === 'audioActivityAndAllVideo'
-                    ? TurnCoverage.TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO
-                    : TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
-        };
+        GeminiRealtime.applyTurnCoverage(config, coverageSetting, profile, params.Model);
 
         // C5 / C5a / C5b — state behavior on every declaration, whatever its origin.
         // Drops the !SupportsBlockingExecution gate so 3.8-live bag tools are stated too.
@@ -971,6 +963,42 @@ export class GeminiRealtime extends BaseRealtimeModel {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * C4 — turn coverage is STATED, never inherited. The SDK's enum doc says coverage defaults to
+     * TURN_INCLUDES_ONLY_ACTIVITY while the 3.8 model page says the default includes all video; sending it explicitly
+     * makes that contradiction irrelevant. Absent config means audio only, because video frames are billed and consume
+     * context, so the expensive option must be asked for rather than inherited. Only a coverage the session's endpoint
+     * accepts is sent ({@link ResolveGeminiTurnCoverage}): Gemini Enterprise closes the setup on
+     * TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO, so a session there that asks for it gets audio only, and one line names
+     * what was asked for and what was sent. The setup the relay writes and a bridged session's both come from here.
+     *
+     * @param config The connect config being built.
+     * @param requested The bag's `turnDetection.Coverage`, if any.
+     * @param profile The model's profile on the session's endpoint.
+     * @param model The model id, for the log line.
+     */
+    private static applyTurnCoverage(config: LiveConnectConfig, requested: string | undefined, profile: GeminiLiveResolvedProfile, model: string): void {
+        const coverage = ResolveGeminiTurnCoverage(requested, profile);
+        const wire = GeminiRealtime.mapTurnCoverage(coverage.Coverage);
+        if (coverage.Refused !== undefined) {
+            console.warn(
+                `[GeminiRealtime] Turn coverage ${JSON.stringify(coverage.Refused)} is not one ${GEMINI_ENDPOINT_NAMES[profile.Endpoint]} ` +
+                    `accepts for ${model} (it accepts ${profile.AcceptedTurnCoverages.join(', ')}); sent "${coverage.Coverage}" (${wire}) instead.`
+            );
+        }
+        config.realtimeInputConfig = { ...(config.realtimeInputConfig ?? {}), turnCoverage: wire };
+    }
+
+    /** Maps MJ's turn coverage onto the SDK's {@link TurnCoverage} wire value. */
+    private static mapTurnCoverage(coverage: RealtimeTurnCoverage): TurnCoverage {
+        switch (coverage) {
+            case 'audioActivityOnly':
+                return TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY;
+            case 'audioActivityAndAllVideo':
+                return TurnCoverage.TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO;
         }
     }
 

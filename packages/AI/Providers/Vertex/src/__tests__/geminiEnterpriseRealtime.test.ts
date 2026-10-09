@@ -9,6 +9,7 @@ import {
     RealtimeProxyRegistry,
     type ClientRealtimeSessionConfig,
     type RealtimeRelayGrant,
+    type RealtimeRelayOpenIntent,
     type RealtimeSessionParams,
     type RealtimeToolCall,
 } from '@memberjunction/ai';
@@ -35,6 +36,12 @@ const AVATAR_TYPE = 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"';
 const SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 const FILE_EMAIL = 'file-sa@stand-in-project.iam.gserviceaccount.com';
 const KEY_FILE_PROBLEM = /its Vertex AI key names a key file, which only the environment key \(AI_VENDOR_API_KEY__GeminiEnterpriseRealtime\) may do/;
+/** The turn coverage Vertex AI refuses at setup (1007), and the one it accepts. */
+const ALL_VIDEO_COVERAGE = 'TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO';
+const ONLY_ACTIVITY_COVERAGE = 'TURN_INCLUDES_ONLY_ACTIVITY';
+const ENTERPRISE_COVERAGE_LINE =
+    '[GeminiRealtime] Turn coverage "audioActivityAndAllVideo" is not one Gemini Enterprise accepts for gemini-3.8-live ' +
+    '(it accepts audioActivityOnly); sent "audioActivityOnly" (TURN_INCLUDES_ONLY_ACTIVITY) instead.';
 
 let keyDir: string;
 let keyFilePath: string;
@@ -180,6 +187,9 @@ describe('GeminiEnterpriseRealtime', () => {
     beforeEach(() => {
         warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     });
+
+    /** The warnings so far that are about turn coverage. */
+    const coverageLines = (): string[] => warn.mock.calls.map((call: unknown[]) => String(call[0])).filter((line: string) => line.includes('Turn coverage'));
 
     afterEach(() => {
         vi.restoreAllMocks();
@@ -454,6 +464,31 @@ describe('GeminiEnterpriseRealtime', () => {
             expect(thinking.Driver.SupportsAvatarOutput('gemini-3.8-live-extended-thinking')).toBe(false);
         });
 
+        it('never asks Vertex AI for TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO, which it refuses at setup: every setup the relay can send has only activity', async () => {
+            const params = makeParams({ Config: { proxyBaseUrl: MJAPI, turnDetection: { Coverage: 'audioActivityAndAllVideo' } }, Avatar: { AvatarID: 'Ben', PersonaName: 'Ben' } });
+            const { Minted } = await mint(serviceAccountKey(), params);
+            const grant = openFresh(Minted);
+            const intents: RealtimeRelayOpenIntent[] = [
+                { ResumeHandle: null, AudioOnly: false },
+                { ResumeHandle: null, AudioOnly: true },
+                { ResumeHandle: 'stand-in-handle', AudioOnly: false },
+                { ResumeHandle: 'stand-in-handle', AudioOnly: true },
+            ];
+            for (const intent of intents) {
+                const [frame] = grant.Policy.OpeningFrames(intent);
+                expect(frame, JSON.stringify(intent)).not.toContain(ALL_VIDEO_COVERAGE);
+                expect((JSON.parse(frame) as { setup: LiveClientSetup }).setup.realtimeInputConfig?.turnCoverage, JSON.stringify(intent)).toBe(ONLY_ACTIVITY_COVERAGE);
+            }
+            expect(JSON.stringify(Minted)).not.toContain(ALL_VIDEO_COVERAGE);
+            expect(coverageLines()).toEqual([ENTERPRISE_COVERAGE_LINE]);
+        });
+
+        it('sends only activity, and says nothing about it, when the session asks for no coverage', async () => {
+            const { Minted } = await mint();
+            expect(openingSetup(openFresh(Minted)).realtimeInputConfig?.turnCoverage).toBe(ONLY_ACTIVITY_COVERAGE);
+            expect(coverageLines()).toEqual([]);
+        });
+
         it('returns no avatar status when the session asked for none, and never puts it in the pact', async () => {
             const { Minted } = await mint();
             expect('AvatarStatus' in Minted).toBe(false);
@@ -520,6 +555,26 @@ describe('GeminiEnterpriseRealtime', () => {
             expect(typeof session.OnVideoFrame).toBe('function');
             const elsewhere = await driver.StartSession(makeParams({ Avatar: { AvatarID: 'Ben' } }));
             expect(elsewhere.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'bridged' });
+        });
+
+        it('never asks Vertex AI for TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO on a bridged session: audio, the room avatar, and a resumed connection', async () => {
+            const driver = new TestEnterprise(serviceAccountKey());
+            const asks = (avatar?: RealtimeSessionParams['Avatar']): RealtimeSessionParams =>
+                makeParams({ Config: { proxyBaseUrl: MJAPI, turnDetection: { Coverage: 'audioActivityAndAllVideo' } }, Avatar: avatar });
+            await driver.StartSession(asks());
+            await driver.StartSession(asks({ AvatarID: 'Ben', Delivery: 'room' }));
+            // Google ends the room session's connection; the session resumes on a new one with the same config.
+            const room = driver.Connects[1].callbacks;
+            room.onmessage(Object.assign(new LiveServerMessage(), { sessionResumptionUpdate: { newHandle: 'stand-in-handle', resumable: true } }));
+            room.onmessage(Object.assign(new LiveServerMessage(), { goAway: { timeLeft: '60s' } }));
+            await vi.waitFor(() => expect(driver.Connects).toHaveLength(3));
+            expect(driver.Connects[2].config?.sessionResumption).toEqual({ handle: 'stand-in-handle' });
+            for (const connect of driver.Connects) {
+                expect(connect.config?.realtimeInputConfig?.turnCoverage).toBe(ONLY_ACTIVITY_COVERAGE);
+                expect(JSON.stringify(connect.config)).not.toContain(ALL_VIDEO_COVERAGE);
+            }
+            expect(driver.Connects[1].config?.avatarConfig?.avatarName).toBe('Ben');
+            expect(coverageLines()).toEqual([ENTERPRISE_COVERAGE_LINE, ENTERPRISE_COVERAGE_LINE]); // one per session
         });
 
         it('builds the bridged client again after a build that failed, and keeps one that worked', async () => {

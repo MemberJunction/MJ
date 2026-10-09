@@ -3,9 +3,12 @@ import {
     ResolveGeminiLiveProfile,
     ResolveGeminiMaxInboundVideoStreams,
     ResolveGeminiThinkingLevel,
+    ResolveGeminiTurnCoverage,
     GEMINI_LIVE_FALLBACK_PROFILE,
     GEMINI_LIVE_ENDPOINT_OVERLAYS,
+    GEMINI_LIVE_ENDPOINT_PROFILES,
     GEMINI_LIVE_MODEL_ALIASES_ENV,
+    type GeminiLiveEndpoint,
 } from '../geminiLiveProfiles';
 
 describe('ResolveGeminiLiveProfile', () => {
@@ -36,7 +39,12 @@ describe('ResolveGeminiLiveProfile', () => {
 
     it('falls back permissively for an unknown model rather than refusing to connect', () => {
         for (const id of ['gemini-9.9-live-future', '', '   ', null, undefined]) {
-            expect(ResolveGeminiLiveProfile(id as string)).toEqual({ ...GEMINI_LIVE_FALLBACK_PROFILE, SupportsAvatarOutput: false, Endpoint: 'developer' });
+            expect(ResolveGeminiLiveProfile(id as string)).toEqual({
+                ...GEMINI_LIVE_FALLBACK_PROFILE,
+                SupportsAvatarOutput: false,
+                ...GEMINI_LIVE_ENDPOINT_PROFILES.developer,
+                Endpoint: 'developer',
+            });
         }
     });
 
@@ -70,8 +78,10 @@ describe('ResolveGeminiLiveProfile by endpoint (live avatars)', () => {
     });
 
     it('keeps every other fact of the model row on Enterprise', () => {
-        const { Endpoint: _e, SupportsAvatarOutput: _s, AvatarOutputEncoding: _a, AvatarAudioMuxed: _m, ...enterprise } = ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise');
-        const { Endpoint: _e2, SupportsAvatarOutput: _s2, AvatarOutputEncoding: _a2, AvatarAudioMuxed: _m2, ...developer } = ResolveGeminiLiveProfile('gemini-3.8-live');
+        const { Endpoint: _e, SupportsAvatarOutput: _s, AvatarOutputEncoding: _a, AvatarAudioMuxed: _m, AcceptedTurnCoverages: _c, ...enterprise } =
+            ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise');
+        const { Endpoint: _e2, SupportsAvatarOutput: _s2, AvatarOutputEncoding: _a2, AvatarAudioMuxed: _m2, AcceptedTurnCoverages: _c2, ...developer } =
+            ResolveGeminiLiveProfile('gemini-3.8-live');
         expect(enterprise).toEqual(developer);
     });
 
@@ -230,6 +240,70 @@ describe('ResolveGeminiThinkingLevel', () => {
         for (const [v, p] of [['low', et], ['minimal', et], ['high', live]] as const) {
             const r = ResolveGeminiThinkingLevel(v, p);
             expect(Boolean(r.Level) && Boolean(r.Warning)).toBe(false);
+        }
+    });
+});
+
+describe('turn coverage by endpoint', () => {
+    const ENDPOINTS: GeminiLiveEndpoint[] = ['developer', 'enterprise'];
+    const MODELS = ['gemini-3.8-live', 'gemini-3.8-live-extended-thinking', 'gemini-3.1-flash-live-preview', 'gemini-9.9-live-future', undefined];
+
+    it('the Developer API accepts both coverages', () => {
+        expect(GEMINI_LIVE_ENDPOINT_PROFILES.developer.AcceptedTurnCoverages).toEqual(['audioActivityOnly', 'audioActivityAndAllVideo']);
+    });
+
+    it('Gemini Enterprise accepts only audioActivityOnly: Vertex AI closes the setup on TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO', () => {
+        expect(GEMINI_LIVE_ENDPOINT_PROFILES.enterprise.AcceptedTurnCoverages).toEqual(['audioActivityOnly']);
+    });
+
+    it('every endpoint accepts audioActivityOnly, the coverage a refused one is sent as', () => {
+        for (const endpoint of ENDPOINTS) {
+            expect(GEMINI_LIVE_ENDPOINT_PROFILES[endpoint].AcceptedTurnCoverages, endpoint).toContain('audioActivityOnly');
+            expect(ResolveGeminiTurnCoverage('not-a-coverage', GEMINI_LIVE_ENDPOINT_PROFILES[endpoint]).Coverage, endpoint).toBe('audioActivityOnly');
+        }
+    });
+
+    it("every profile resolved for an endpoint carries that endpoint's coverages, whatever the model", () => {
+        for (const endpoint of ENDPOINTS) {
+            for (const model of MODELS) {
+                expect(ResolveGeminiLiveProfile(model, endpoint).AcceptedTurnCoverages, `${endpoint} ${model}`).toEqual(
+                    GEMINI_LIVE_ENDPOINT_PROFILES[endpoint].AcceptedTurnCoverages
+                );
+            }
+        }
+        expect(ResolveGeminiLiveProfile('gemini-3.8-live').AcceptedTurnCoverages).toContain('audioActivityAndAllVideo');
+        expect(ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise').AcceptedTurnCoverages).not.toContain('audioActivityAndAllVideo');
+    });
+});
+
+describe('ResolveGeminiTurnCoverage', () => {
+    const developer = ResolveGeminiLiveProfile('gemini-3.8-live');
+    const enterprise = ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise');
+
+    it('sends audio only when nothing is configured, on either endpoint, refusing nothing', () => {
+        for (const profile of [developer, enterprise]) {
+            for (const requested of [undefined, null, '', '   ']) {
+                expect(ResolveGeminiTurnCoverage(requested, profile), `${profile.Endpoint} ${String(requested)}`).toEqual({ Coverage: 'audioActivityOnly' });
+            }
+        }
+    });
+
+    it('sends a configured coverage the endpoint accepts, trimmed', () => {
+        expect(ResolveGeminiTurnCoverage('audioActivityAndAllVideo', developer)).toEqual({ Coverage: 'audioActivityAndAllVideo' });
+        expect(ResolveGeminiTurnCoverage(' audioActivityAndAllVideo ', developer)).toEqual({ Coverage: 'audioActivityAndAllVideo' });
+        expect(ResolveGeminiTurnCoverage('audioActivityOnly', developer)).toEqual({ Coverage: 'audioActivityOnly' });
+        expect(ResolveGeminiTurnCoverage(' audioActivityOnly', enterprise)).toEqual({ Coverage: 'audioActivityOnly' });
+    });
+
+    it('sends audio only for audioActivityAndAllVideo on Gemini Enterprise, and returns what it did not send', () => {
+        expect(ResolveGeminiTurnCoverage('audioActivityAndAllVideo', enterprise)).toEqual({ Coverage: 'audioActivityOnly', Refused: 'audioActivityAndAllVideo' });
+    });
+
+    it('sends audio only for a value that is not a coverage, on either endpoint, and returns it', () => {
+        for (const profile of [developer, enterprise]) {
+            for (const requested of ['allInput', 'AudioActivityAndAllVideo', 'TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO']) {
+                expect(ResolveGeminiTurnCoverage(requested, profile), `${profile.Endpoint} ${requested}`).toEqual({ Coverage: 'audioActivityOnly', Refused: requested });
+            }
         }
     });
 });

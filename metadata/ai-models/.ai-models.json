@@ -25636,6 +25636,9 @@
           }
         },
         {
+          "_comments": [
+            "Realtime.TurnDetection.Coverage is audioActivityOnly on this row, unlike the model's and the Google row's: Gemini Enterprise refuses TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO at session setup (1007, invalid value at setup.realtime_input_config.turn_coverage; found against Vertex AI on 2026-10-09). The Gemini Enterprise driver sends only activity there whatever is configured."
+          ],
           "fields": {
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
@@ -25655,7 +25658,7 @@
                   "SupportsScheduling": true
                 },
                 "TurnDetection": {
-                  "Coverage": "audioActivityAndAllVideo"
+                  "Coverage": "audioActivityOnly"
                 },
                 "FullDuplex": true,
                 "Pricing": {
