@@ -28,6 +28,14 @@ import { IConversationsRuntimeContext } from '../context/IConversationsRuntimeCo
 export interface CompletionEvent {
     conversationDetailId: string;
     agentRunId: string;
+    /**
+     * The conversation the completed message belongs to, when the publisher knows it. A turn the
+     * client started is already on screen, so its completion is matched by `conversationDetailId`
+     * alone. A turn started server-side — a durable workflow's follow-up — completes on a message
+     * the client has never loaded; this is what lets it tell that the message belongs to the
+     * conversation it is showing and reload it.
+     */
+    conversationId?: string;
     /** Whether the agent execution succeeded. */
     success?: boolean;
     /** Error message if the agent execution failed. */
@@ -549,6 +557,7 @@ export class ConversationStreaming {
             if (type === 'complete') {
                 const agentRunId = (data.agentRunId as string | undefined) ?? '';
                 const conversationDetailId = data.conversationDetailId as string | undefined;
+                const conversationId = data.conversationId as string | undefined;
                 const success = data.success as boolean | undefined;
                 const errorMessage = data.errorMessage as string | undefined;
 
@@ -574,6 +583,7 @@ export class ConversationStreaming {
                     this.CompletionEvents$.next({
                         conversationDetailId,
                         agentRunId,
+                        conversationId,
                         success,
                         errorMessage,
                     });

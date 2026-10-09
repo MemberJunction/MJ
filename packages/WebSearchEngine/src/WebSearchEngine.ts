@@ -35,6 +35,13 @@ interface ProviderEntry {
     Provider: BaseWebSearchProvider;
 }
 
+/** The providers a request will try, plus anything the caller should know about how they were chosen. */
+interface ResolvedCandidates {
+    Entries: ProviderEntry[];
+    /** See {@link WebSearchResult.Notice}. When set, `IncludeAnswer` is dropped before the drivers run. */
+    Notice?: string;
+}
+
 /** Internal shape for a fail-closed exit. */
 interface FailureShape {
     code: WebSearchResultCode;
@@ -179,15 +186,25 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
             );
         }
 
-        const candidates = params.Provider
+        const resolved = params.Provider
             ? this.resolveExplicit(params)
             : this.resolveByPriority(params);
 
-        if ('code' in candidates) {
-            return this.fail(candidates, attempts);
+        if ('code' in resolved) {
+            return this.fail(resolved, attempts);
         }
 
-        return this.runCandidates(candidates, { ...params, Query: query }, contextUser, attempts);
+        // A degraded resolution means the drivers must not be asked for what none can give:
+        // a hits-only driver handed IncludeAnswer=true would either ignore it or reject it.
+        const effective: WebSearchParams = resolved.Notice
+            ? { ...params, Query: query, IncludeAnswer: false }
+            : { ...params, Query: query };
+
+        const result = await this.runCandidates(resolved.Entries, effective, contextUser, attempts);
+        if (resolved.Notice) {
+            result.Notice = resolved.Notice;
+        }
+        return result;
     }
 
     /** Try each candidate in order, honouring the transient/permanent distinction. */
@@ -274,7 +291,7 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
      * Each rejection is a distinct code so a caller can tell "you never configured this" from
      * "its key is missing" from "it cannot do answers" — three different fixes.
      */
-    private resolveExplicit(params: WebSearchParams): ProviderEntry[] | FailureShape {
+    private resolveExplicit(params: WebSearchParams): ResolvedCandidates | FailureShape {
         const wanted = params.Provider!.trim().toLowerCase();
         const entry = this._entries.find(
             (e) => e.Name.toLowerCase() === wanted || e.DriverClass.toLowerCase() === wanted,
@@ -302,26 +319,41 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
             };
         }
 
-        return [entry];
+        return { Entries: [entry] };
     }
 
     /** Providers that loaded but cannot serve, keyed by lowercased name and driver class. */
     private _unavailable = new Map<string, FailureShape>();
 
-    /** Eligible providers in priority order, or a failure describing why none qualified. */
-    private resolveByPriority(params: WebSearchParams): ProviderEntry[] | FailureShape {
-        const eligible = this._entries.filter(
-            (e) => !params.IncludeAnswer || e.Provider.Capabilities.Answer,
-        );
-        if (eligible.length === 0) {
-            return {
-                code: 'NO_ELIGIBLE_PROVIDER',
-                message: params.IncludeAnswer
-                    ? 'No available provider can produce a synthesized answer. Configure Tavily or Perplexity, or drop IncludeAnswer.'
-                    : 'No available web search provider.',
-            };
+    /**
+     * Eligible providers in priority order.
+     *
+     * `IncludeAnswer` is a *preference*, not a requirement. When an answer-capable provider is
+     * available it is preferred; when none is, the engine serves plain results from the full
+     * priority list and says so in `Notice` rather than failing. The alternative — refusing the
+     * whole search because an optional nicety could not be honoured — turned a working Google
+     * Custom Search install into five consecutive failures the first time a model decided that
+     * "also return a synthesized answer" sounded helpful. An agent can read hits; it cannot read
+     * an error. A caller that names a provider and demands an answer it cannot give still fails
+     * (see {@link resolveExplicit}): that is a caller mistake, and this is not.
+     *
+     * `_entries` is non-empty here — `Search` handles the empty list before resolving.
+     */
+    private resolveByPriority(params: WebSearchParams): ResolvedCandidates {
+        if (!params.IncludeAnswer) {
+            return { Entries: this._entries };
         }
-        return eligible;
+        const answerers = this._entries.filter((e) => e.Provider.Capabilities.Answer);
+        if (answerers.length > 0) {
+            return { Entries: answerers };
+        }
+        return {
+            Entries: this._entries,
+            Notice:
+                'IncludeAnswer was requested but no available provider can synthesize an answer, so plain ' +
+                `results were served from ${this._entries.map((e) => e.Name).join(', ')} instead. ` +
+                'No configured provider declares the Answer capability; add one that does to get synthesized answers.',
+        };
     }
 
     private fail(failure: FailureShape, attempts: WebSearchAttempt[]): WebSearchResult {

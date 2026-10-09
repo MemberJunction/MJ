@@ -440,15 +440,30 @@ export type TaskContinuationParams = {
     /** How many continuation hops preceded this one, so a re-submitted graph can carry depth + 1. */
     ReinvokeDepth: number;
     /**
-     * Per-task outcome. Deliberately carries a `summary` and an `outputRef`, not inline payloads —
-     * a ten-task graph's full outputs would swamp the continuation turn's context window, and the
-     * agent can pull what it actually needs by task ID.
+     * Per-task outcome.
+     *
+     * `Output` is the task's output payload, truncated to a bounded size per task. It used to be
+     * left out on the theory that the agent would "pull what it needs by task ID" — but no
+     * conversational agent has a tool that reads a task's output, so the continuation turn arrived
+     * knowing only that N characters existed somewhere. The agent could not present the result it
+     * had been reinvoked to present, and answered "would you like to see the results?" instead.
+     * A bounded inline copy is what lets the follow-up actually say what happened; the task rows
+     * remain the complete record when the cap bites.
      */
     Tasks: Array<{
         TaskID: string;
         Name: string;
         Status: string;
         Summary?: string;
+        /** The task's output, truncated to the dispatcher's per-task cap. Absent when the task produced none. */
+        /**
+         * The agent's own answer for the task — its run's `Message` — bounded like `Output`. A Loop
+         * agent answers in prose here and keeps only partial state in its payload, so a follow-up
+         * given `Output` alone presented JSON where the user asked for a table. Absent for tasks
+         * that did not run an agent, or whose agent wrote no message.
+         */
+        Message?: string;
+        Output?: string;
         ErrorMessage?: string;
     }>;
     /** One-line human-readable roll-up. */

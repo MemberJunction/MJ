@@ -146,14 +146,39 @@ export class LoopAgentType extends BaseAgentType {
     /**
      * Resolves whether this agent may emit durable task graphs.
      *
-     * Read from the merged three-level params bag (schema defaults → agent config → runtime
-     * override), so a per-run override behaves like every other Loop parameter. Absent means NO:
+     * Precedence matches the prompt-side merge in `BaseAgent.buildAgentTypePromptParams`: a
+     * per-run override in `params.data.__agentTypePromptParams` wins when it says anything; the
+     * agent's own `AgentTypePromptParams` config decides otherwise. Absent everywhere means NO:
      * this is the one Loop flag whose default is off, because the capability creates durable rows
      * that outlive the run rather than merely adding prompt text (D3).
+     *
+     * **Why the config is consulted here.** The merged bag that renders the prompt lives in the
+     * prompt's template data, not in `params.data`, and nothing in a normal run ever puts it
+     * there. An earlier version read `params.data` alone, so the gate saw an empty bag on every
+     * real run and refused every graph — including from agents whose prompt had just invited one,
+     * because the prompt is rendered from the merge and the gate was not. The prompt told the
+     * planner to emit `Tasks`; the gate told it it was not allowed to; the model concluded the
+     * feature was off and tried to run the workflow by hand. Not one task graph was submitted.
      */
     private taskGraphsEnabled(params: ExecuteAgentParams<any, any>): boolean {
-        const promptParams = params?.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
-        return promptParams?.enableTaskGraphs === true;
+        const runtime = params?.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        if (runtime && runtime.enableTaskGraphs !== undefined) {
+            return runtime.enableTaskGraphs === true;
+        }
+        return this.agentConfigEnablesTaskGraphs(params?.agent?.AgentTypePromptParams);
+    }
+
+    /** The agent-level opt-in, read from the raw `AgentTypePromptParams` JSON. Unparseable means NO. */
+    private agentConfigEnablesTaskGraphs(raw: string | null | undefined): boolean {
+        if (!raw) {
+            return false;
+        }
+        try {
+            const parsed = JSON.parse(raw) as Record<string, unknown> | null;
+            return parsed?.enableTaskGraphs === true;
+        } catch {
+            return false;
+        }
     }
 
     /**

@@ -4,6 +4,17 @@ import { UserPayload } from '../types.js';
 
 export const PUSH_STATUS_UPDATES_TOPIC = 'PUSH_STATUS_UPDATES';
 
+/**
+ * The `sessionId` a publisher uses to reach EVERY live session of one user.
+ *
+ * A push is normally addressed to the browser session that started the work, which is the right
+ * scope for a turn the user is watching. Work that finishes outside any request — a durable task
+ * graph settling minutes later and posting its follow-up — has no session to address, and before
+ * this the conversation showed nothing until the user happened to reload. The owner check still
+ * applies in full: a broadcast reaches only connections authenticated as `ownerUserId`.
+ */
+export const BROADCAST_SESSION_ID = '*';
+
 @ObjectType()
 export class PushStatusNotification {
   @Field(() => String, { nullable: true })
@@ -189,7 +200,7 @@ export function StatusUpdatesFilter(data: {
   context: StatusUpdatesFilterContext | undefined;
 }): boolean {
   const { payload, args, context } = data;
-  if (payload.sessionId !== args.sessionId) {
+  if (payload.sessionId !== BROADCAST_SESSION_ID && payload.sessionId !== args.sessionId) {
     return false;
   }
   const connectionUserId: string | undefined = context?.userPayload?.userRecord?.ID;

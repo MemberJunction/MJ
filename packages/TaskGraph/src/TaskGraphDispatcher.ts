@@ -416,6 +416,20 @@ type GraphState = {
     handledFailureIDs: Set<string>;
 };
 
+/**
+ * Per-task cap on the output inlined into a continuation. Generous enough for a report-sized
+ * result (a Markdown table, a summary), small enough that a ten-task graph does not swamp the
+ * follow-up turn's context. The task row keeps the full payload.
+ */
+export const MAX_CONTINUATION_OUTPUT_CHARS = 6000;
+
+/** The output a continuation carries for one task: the payload, cut at the cap with a marker. */
+export function TruncateContinuationOutput(payload: string | null | undefined, maxChars: number = MAX_CONTINUATION_OUTPUT_CHARS): string | undefined {
+    if (!payload) return undefined;
+    if (payload.length <= maxChars) return payload;
+    return `${payload.slice(0, maxChars)}\n…[truncated ${payload.length - maxChars} chars; the task record holds the full output]`;
+}
+
 export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
@@ -1974,19 +1988,26 @@ export class TaskGraphDispatcher implements IShutdownable {
         const summary = this.buildContinuationSummary(parent, graph);
         LogStatus(`[TaskGraphDispatcher] Graph ${parent.ID} finished — ${summary}`);
 
+        const tasks = [...graph.entityById.values()];
+        const agentMessages = await this.loadTaskAgentMessages(provider, tasks);
+        // The graph's own budget when its spec set one, else the default — see TaskGraphSpec.continuationOutputChars.
+        const outputChars = meta.continuationOutputChars ?? MAX_CONTINUATION_OUTPUT_CHARS;
         const params: TaskContinuationParams = {
             ParentTaskID: parent.ID,
             WorkflowName: parent.Name,
             ConversationDetailID: parent.ConversationDetailID ?? null,
             SubmittedByAgentRunID: meta.submittedByAgentRunID,
             ReinvokeDepth: meta.reinvokeDepth,
-            Tasks: [...graph.entityById.values()].map((t) => ({
+            Tasks: tasks.map((t) => ({
                 TaskID: t.ID,
                 Name: t.Name,
                 Status: t.Status,
-                // A reference, not the payload. Inlining every task's output would swamp the
-                // continuation turn's context; the agent pulls what it needs by task ID.
                 Summary: t.OutputPayload ? `output available (${t.OutputPayload.length} chars)` : undefined,
+                // A bounded copy of the payload itself — see `TaskContinuationParams.Tasks` for
+                // why a reference alone left the follow-up turn unable to present anything.
+                Output: TruncateContinuationOutput(t.OutputPayload, outputChars),
+                // The agent's own answer, beside the payload — see `TaskContinuationParams.Tasks.Message`.
+                Message: TruncateContinuationOutput(agentMessages.get(t.ID), outputChars),
                 ErrorMessage: t.ErrorMessage ?? undefined,
             })),
             Summary: summary,
@@ -2054,6 +2075,35 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /** One line describing how the graph ended, for the completion log and message delivery. */
+    /**
+     * Each agent-run task's `Message` — the agent's prose answer — keyed by task ID. One query for
+     * the whole graph. Tasks without an agent run, runs that wrote no message, and a failed read
+     * all yield no entry; the continuation then carries the output alone, as it did before.
+     */
+    private async loadTaskAgentMessages(provider: IMetadataProvider, tasks: MJTaskEntity[]): Promise<Map<string, string>> {
+        const byRunID = new Map<string, string>();
+        for (const t of tasks) {
+            if (t.AgentRunID) byRunID.set(t.AgentRunID.toLowerCase(), t.ID);
+        }
+        const messages = new Map<string, string>();
+        if (byRunID.size === 0) return messages;
+        try {
+            const idList = [...byRunID.keys()].map((id) => `'${id}'`).join(',');
+            const rows = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; Message: string | null }>(
+                { EntityName: 'MJ: AI Agent Runs', ExtraFilter: `ID IN (${idList})`, Fields: ['ID', 'Message'], ResultType: 'simple' },
+                this.contextUser,
+            );
+            for (const row of rows.Success ? rows.Results ?? [] : []) {
+                const taskID = byRunID.get(row.ID.toLowerCase());
+                const message = row.Message?.trim();
+                if (taskID && message) messages.set(taskID, message);
+            }
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not load the agent messages for a settled graph — the continuation carries outputs only`, undefined, e);
+        }
+        return messages;
+    }
+
     private buildContinuationSummary(parent: MJTaskEntity, graph: GraphState): string {
         const counts = new Map<string, number>();
         for (const node of graph.nodes) counts.set(node.status, (counts.get(node.status) ?? 0) + 1);

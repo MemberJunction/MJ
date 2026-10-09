@@ -616,6 +616,8 @@
             "ModelSelectionMode": "Agent",
             "ArtifactCreationMode": "Never",
             "ExposeAsAction": false,
+            "MessageMode": "Latest",
+            "MaxMessages": 10,
             "AgentTypePromptParams": {
               "includeForEachDocs": false,
               "includeWhileDocs": false,

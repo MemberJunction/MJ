@@ -344,6 +344,28 @@ describe('ConversationStreaming', () => {
             });
         });
 
+        it('carries the conversationId when the publisher supplies one', async () => {
+            // A server-started turn (a durable workflow's follow-up) completes on a message the
+            // client has never loaded. The conversationId is how a view tells that the message
+            // belongs to the conversation it is showing and reloads it.
+            const events: CompletionEvent[] = [];
+            streaming.completionEvents$.subscribe((e) => events.push(e));
+
+            await dispatchAgentProgress(streaming, {
+                data: { type: 'complete', agentRunId: 'run-2', conversationDetailId: 'detail-9', conversationId: 'conv-7', success: true },
+            });
+
+            expect(events).toHaveLength(1);
+            expect(events[0]).toMatchObject({ conversationDetailId: 'detail-9', conversationId: 'conv-7', success: true });
+        });
+
+        it('leaves conversationId undefined for a completion that does not carry one', async () => {
+            const events: CompletionEvent[] = [];
+            streaming.completionEvents$.subscribe((e) => events.push(e));
+            await dispatchAgentProgress(streaming, { data: { type: 'complete', agentRunId: 'run-3', conversationDetailId: 'detail-3' } });
+            expect(events[0].conversationId).toBeUndefined();
+        });
+
         it('lets a late-mounting component replay a recent completion', async () => {
             await dispatchAgentProgress(streaming, {
                 data: {

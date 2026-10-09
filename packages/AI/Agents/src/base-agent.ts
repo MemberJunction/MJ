@@ -10633,6 +10633,13 @@ The context is now within limits. Please retry your request with the recovered c
                 agent: subAgent,
                 conversationMessages: subAgentMessages,
                 contextUser: params.contextUser,
+                // The conversation this turn belongs to. A sub-agent that submits a durable task
+                // graph stamps it with `conversationDetailId`; without this the graph has no
+                // conversation, its continuation has nowhere to post, and the work it did is lost
+                // — which is exactly what happened when the Workflow Planner (a sub-agent of Sage)
+                // submitted the graph the user had just approved.
+                conversationId: params.conversationId,
+                conversationDetailId: params.conversationDetailId,
                 cancellationToken: params.cancellationToken,
                 onProgress: params.onProgress,
                 onStreaming: params.onStreaming,
@@ -13282,7 +13289,29 @@ The context is now within limits. Please retry your request with the recovered c
                 // This ensures parent agents can override child Chat steps
                 return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
             }
-            
+
+            // A sub-agent that handed its work to the durable dispatcher and PARKED — its result
+            // carries `parkedOnTaskID`, set by the parkedOnWorkflow branch of finalizeAgentRun — has
+            // nothing more for this turn to do: the dispatcher reinvokes the ROOT of this chain with
+            // the results when the graph settles. Continuing the loop here handed the model the
+            // sub-agent's "started" report as if it were a result to act on. It invoked the planner
+            // again, which submitted the same graph a second time, and then answered the user with
+            // its own hand-off text instead of the report. Relay the report and end the turn.
+            // The explicit marker, not the row's Paused status: other mechanisms may pause a run.
+            if (subAgentResult.success && subAgentResult.parkedOnTaskID) {
+                const parkedStep: BaseAgentNextStep<SR, SC> = {
+                    step: 'Chat',
+                    terminate: true,
+                    message: subAgentResult.agentRun.Message || `${subAgentRequest.name} started a workflow and is waiting for it to finish.`,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: mergedPayload,
+                    responseForm: subAgentResult.responseForm,
+                    actionableCommands: subAgentResult.actionableCommands,
+                    automaticCommands: subAgentResult.automaticCommands
+                };
+                return await this.validateChatNextStep(params, parkedStep, mergedPayload, this._agentRun!, stepEntity!);
+            }
+
             // Add user message with the sub-agent results using markdown format
             // and expiration metadata so it persists across multiple prompt turns
             const resultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
@@ -17386,6 +17415,9 @@ The context is now within limits. Please retry your request with the recovered c
             ? this.resolveMediaPlaceholdersInPayload(finalStep.actionableCommands)
             : finalStep.actionableCommands;
 
+        // The graph this run parked on, surfaced on the result so a parent reads an explicit marker
+        // rather than inferring "parked" from the row's Paused status.
+        let parkedOnTaskID: string | undefined;
         if (this._agentRun) {
             // A run waiting on a workflow has NOT completed, so it gets no completion time. The
             // dispatcher stamps this when the graph settles; until then the absence is the honest
@@ -17410,6 +17442,7 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.Status = 'Failed';
             }
             else if (parkedOnWorkflow) {
+                parkedOnTaskID = this._awaitingWorkflowTaskID ?? undefined;
                 // Waiting on a task graph the dispatcher is still executing. `Paused` rather than a
                 // new status because it already exists on the entity AND the conversation's process
                 // panel already reads it as in-progress (`Status === 'Running' || === 'Paused'`), so
@@ -17482,7 +17515,8 @@ The context is now within limits. Please retry your request with the recovered c
             mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined,
             fileOutputs: this._fileOutputs.length > 0 ? this._fileOutputs : undefined,
             feedbackRequestId: this._feedbackRequestId || undefined,
-            resolvedStorageAccountId: this._resolvedStorageAccountId || undefined
+            resolvedStorageAccountId: this._resolvedStorageAccountId || undefined,
+            parkedOnTaskID
         };
     }
 

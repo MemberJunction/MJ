@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "Workflow Follow-Up",
+      "Description": "The message the conversation's agent is reinvoked with when a durable task graph it submitted settles: the rendered outcome ({{ outcome }}: per-task status, each agent's answer, each output) followed by the instruction to present the results in the form the user asked for and not to start the workflow again. Rendered by TaskGraphContinuationDeliverer as the user-role turn; never executed as a prompt of its own, so it names no model. Data: outcome, workflowName, summary, tasks.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/workflow-follow-up.template.md",
+      "Status": "Active",
+      "ResponseFormat": "Text",
+      "PromptRole": "User",
+      "PromptPosition": "Last",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    }
+  }
+]
