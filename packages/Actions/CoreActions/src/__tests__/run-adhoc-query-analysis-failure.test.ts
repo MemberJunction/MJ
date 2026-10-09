@@ -15,20 +15,21 @@ type ParamBag = { Params: Param[] };
 
 vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => (target: unknown) => target,
-    MJGlobal: { Instance: {} },
     SQLExpressionValidator: { Instance: { validateFullQuery: () => ({ valid: true }) } },
 }));
-vi.mock('@memberjunction/actions', () => ({ BaseAction: class BaseAction {} }));
+vi.mock('@memberjunction/actions', () => ({
+    BaseAction: class BaseAction {},
+    // The read-only provider the action runs its SQL on, answering with the rows under test.
+    ActionEngineServer: {
+        Instance: {
+            GetReadOnlyProvider: async () => ({
+                RunQuery: async () => ({ Success: true, Results: h.rows, RowCount: h.rows.length, TotalRowCount: h.rows.length, ErrorMessage: '' }),
+            }),
+        },
+    },
+}));
 vi.mock('@memberjunction/actions-base', () => ({ RunActionParams: class RunActionParams {} }));
-vi.mock('@memberjunction/core', () => ({
-    LogError: vi.fn(),
-    BaseEntity: { Provider: { PlatformKey: 'sqlserver', ExecuteSQL: async () => h.rows } },
-}));
-vi.mock('@memberjunction/generic-database-provider', () => ({
-    QueryCompositionEngine: class QueryCompositionEngine { public HasCompositionTokens(): boolean { return false; } },
-    QueryPagingEngine: { WrapWithMaxRows: (query: string) => query },
-}));
-vi.mock('@memberjunction/sqlserver-dataprovider', () => ({ SQLServerDataProvider: class SQLServerDataProvider {} }));
+vi.mock('@memberjunction/core', () => ({ LogError: vi.fn() }));
 vi.mock('@memberjunction/ai-core-plus', () => ({ AIPromptParams: class AIPromptParams {} }));
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: { Instance: { Config: vi.fn().mockResolvedValue(undefined), Prompts: [{ Name: 'Analyze Query Data', Category: 'MJ: System' }] } },
