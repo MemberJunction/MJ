@@ -93,6 +93,11 @@ class TestPostgreSQLProvider extends DatabaseProviderBase {
     protected async InternalExecuteQueryFromSpec(_spec: QueryExecutionSpec, _contextUser?: UserInfo): Promise<RunQueryResult> {
         throw new Error('Not supported.');
     }
+
+    /** Test-only passthrough — ValidateUserProvidedSQLClause is protected on the base class. */
+    public TestValidateUserProvidedSQLClause(clause: string): boolean {
+        return this.ValidateUserProvidedSQLClause(clause);
+    }
 }
 
 describe('DatabaseProviderBase', () => {
@@ -470,6 +475,63 @@ describe('DatabaseProviderBase', () => {
                 ['IN list', `Status IN ('Active', 'Pending')`],
             ])('accepts %s', (_label, clause) => {
                 expect(provider.TestValidateUserProvidedSQLClause(clause)).toBe(true);
+            });
+        });
+
+        /**
+         * A quote inside a T-SQL `[…]` identifier, or a quote a PostgreSQL `E'…'` or `$$…$$`
+         * string treats as text, opens no literal. A screen that reads it as one hides the `;` and
+         * the statement after it. Each payload runs a harmless `SELECT 1` on the database it targets.
+         */
+        describe('rejects payloads hidden by identifiers, dialect strings and literal adjacency', () => {
+            it('rejects a stacked statement hidden behind a bracket identifier containing a quote', () => {
+                expect(provider.TestValidateUserProvidedSQLClause("Name = [a'] ; SELECT 1 ; SELECT [b']")).toBe(false);
+            });
+
+            it('rejects a stacked statement that closes the view filter, hidden behind bracket identifiers', () => {
+                const clause = "1 = (SELECT 1 AS [a'])) ; SELECT 1 ; SELECT * FROM __mj.vwUserViews WHERE (1 = (SELECT 1 AS [b'])";
+                expect(provider.TestValidateUserProvidedSQLClause(clause)).toBe(false);
+            });
+
+            it('rejects a denied keyword written directly after a literal', () => {
+                // SQL Server ends N'x' at the quote, so UNION starts a new token.
+                expect(provider.TestValidateUserProvidedSQLClause("Name = N'x'UNION SELECT 1")).toBe(false);
+            });
+
+            it('rejects a stacked statement hidden behind a PostgreSQL E-string escaped quote', () => {
+                const pg = new TestPostgreSQLProvider();
+                expect(pg.TestValidateUserProvidedSQLClause("Name = E'\\'' ; SELECT 1 ; --'")).toBe(false);
+            });
+
+            it('rejects a stacked statement hidden behind a PostgreSQL dollar-quoted string', () => {
+                const pg = new TestPostgreSQLProvider();
+                expect(pg.TestValidateUserProvidedSQLClause("Name = $$'$$ ; SELECT 1 ; --'")).toBe(false);
+            });
+        });
+
+        describe("reads the clause with the provider's dialect", () => {
+            it.each([
+                ['a bracket identifier that contains a quote', "[Customer's Name] = 'x'"],
+                ['a keyword inside a bracket identifier', '[Delete Flag] = 1'],
+                ['a keyword inside a double-quoted identifier', '"Update" = 1'],
+            ])('accepts %s on SQL Server', (_label, clause) => {
+                expect(provider.TestValidateUserProvidedSQLClause(clause)).toBe(true);
+            });
+
+            it('rejects an extended stored procedure name even when it is quoted', () => {
+                expect(provider.TestValidateUserProvidedSQLClause('[xp_cmdshell] = 1')).toBe(false);
+            });
+
+            it.each([
+                ['an E string with an escaped quote', "Name = E'it\\'s'"],
+                ['a dollar-quoted string that contains a quote', "Name = $$it's$$"],
+                ['a backslash in a plain literal', "Path = 'C:\\temp\\'"],
+            ])('accepts %s on PostgreSQL', (_label, clause) => {
+                expect(new TestPostgreSQLProvider().TestValidateUserProvidedSQLClause(clause)).toBe(true);
+            });
+
+            it('treats a bracket as code on PostgreSQL, so it cannot hide a statement', () => {
+                expect(new TestPostgreSQLProvider().TestValidateUserProvidedSQLClause('Tags[1] = 1 ; SELECT 1')).toBe(false);
             });
         });
 

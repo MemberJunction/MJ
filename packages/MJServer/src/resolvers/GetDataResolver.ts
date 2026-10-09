@@ -159,7 +159,7 @@ export class GetDataResolver {
                         // The read-only pool is the primary control, but if it is ever
                         // misconfigured to a read-write login this validator still refuses DML/DDL
                         // (mirrors AdhocQueryResolver).
-                        const validation = SQLExpressionValidator.Instance.validateFullQuery(resolvedSQL);
+                        const validation = SQLExpressionValidator.Instance.ValidateFullQuery(resolvedSQL, platform);
                         if (!validation.valid) {
                             return { result: null, error: validation.error || 'SQL validation failed' };
                         }
