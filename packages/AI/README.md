@@ -115,7 +115,7 @@ Each provider implements one or more capability interfaces from `@memberjunction
 | **Fireworks** | `@memberjunction/ai-fireworks` | x | | | | | | |
 | **OpenRouter** | `@memberjunction/ai-openrouter` | x | | | | | | x |
 | **Cloudflare Workers AI** | `@memberjunction/ai-cloudflare` | | | | | | | x |
-| **System One endpoint** | `@memberjunction/ai-systemone` | | | | | | | x |
+| **System One endpoint, Perplexity** | `@memberjunction/ai-systemone` | | | | | | | x |
 | **Cerebras** | `@memberjunction/ai-cerebras` | x | | | | | | |
 | **MiniMax** | `@memberjunction/ai-minimax` | x | | | | | | |
 | **Zhipu (Z.AI)** | `@memberjunction/ai-zhipu` | x | | | | | | |

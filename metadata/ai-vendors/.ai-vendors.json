@@ -532,5 +532,15 @@
     "primaryKey": {
       "ID": "1DD8AAAA-E1F3-4FA2-993C-A76AE9153FE3"
     }
+  },
+  {
+    "fields": {
+      "Name": "Perplexity",
+      "Description": "Perplexity develops the open-weight pplx-decider-v1-27b decision model and serves it through its Decisions API at POST https://api.perplexity.ai/v1/decisions, authenticated with a Perplexity API key sent as a bearer token. That API is the model's only managed host. MJ reaches it through the PerplexityDecision driver.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "BFD5FBBC-FDDD-4BB0-B6CF-3BE0A48F6F93"
+    }
   }
 ]
