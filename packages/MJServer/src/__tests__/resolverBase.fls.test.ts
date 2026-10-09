@@ -547,6 +547,18 @@ describe('ResolverBase.MustLoadTruthFromDatabase: Update row filters (#4919)', (
         expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, null)).toBe(true);
     });
 
+    it('loads the stored row under an API-key Update row filter, even for a role-exempt user', () => {
+        const entity = entityWithInternFilter({});
+        const keyBound = (permissionType: 'Read' | 'Update') => {
+            const user = buildUser([HR_ROLE_ID]); // no role filter: only the key binding narrows this caller
+            user.APIKeyRowFilters = [{ EntityID: ENTITY_ID, PermissionType: permissionType, FilterID: DRAFTS_ONLY }];
+            return user;
+        };
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([HR_ROLE_ID]))).toBe(false);
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, keyBound('Update'))).toBe(true);
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, keyBound('Read'))).toBe(false);
+    });
+
     it('ignores a Read-only row filter: only the Update filter gates this save', () => {
         const entity = entityWithInternFilter({ ReadRLSFilterID: DRAFTS_ONLY });
         expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([INTERN_ROLE_ID]))).toBe(false);
