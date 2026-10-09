@@ -86,6 +86,8 @@ const FULL_CUSTOM_FORM_NOTE =
  */
 @RegisterClass(BaseAction, "__GetFormCompositionForEntity")
 export class GetFormCompositionForEntityAction extends BaseAction {
+    /** Reads only with the caller's permissions. */
+    public static readonly AuthorizesCaller = true;
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {

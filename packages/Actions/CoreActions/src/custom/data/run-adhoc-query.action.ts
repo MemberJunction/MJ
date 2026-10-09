@@ -17,6 +17,9 @@ import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
  * - The SQL runs only on the host's read-only database login
  *   ({@link ActionEngineServer.GetReadOnlyProvider}), never on the read-write pool; with no read-only
  *   login configured the action refuses.
+ * - The host's ad-hoc SQL checks ({@link ActionEngineServer.AdhocSQLAuthorizer}) must accept the SQL:
+ *   MJServer registers ExecuteAdhocQuery's own check, so the SQL must be one read statement and every
+ *   table it reads an entity view the caller may read in full. The host also limits the timeout.
  * - It runs through the provider's ad-hoc read path (`RunQuery` with `SQL`), which accepts one read
  *   statement only, refuses functions that read outside the query, and enforces the timeout and row
  *   limit in the database.
@@ -73,13 +76,18 @@ export class RunAdhocQueryAction extends BaseAction {
             if (this.isScopeLimitedPrincipal(params.ContextUser)) {
                 return this.permissionDenied('Run Ad-hoc Query is not permitted for scope-limited sessions.');
             }
+            const authorizer = ActionEngineServer.Instance.AdhocSQLAuthorizer;
+            if (!authorizer) {
+                return this.permissionDenied('Ad-hoc query execution is not configured on this server: no ad-hoc SQL authorizer is registered.');
+            }
             const readOnlyProvider = await ActionEngineServer.Instance.GetReadOnlyProvider();
             if (!readOnlyProvider) {
                 return this.permissionDenied('No read-only data source is available for ad-hoc query execution: the read-only database login is not configured on this server.');
             }
 
             const maxRows = this.positiveOrDefault(this.getNumericParam(params, "maxrows", 1000), 1000);
-            const timeout = this.positiveOrDefault(this.getNumericParam(params, "timeout", 30), 30);
+            const requestedTimeout = this.getNumericParam(params, "timeout", 0);
+            const timeout = authorizer.ClampTimeoutSeconds(requestedTimeout > 0 ? requestedTimeout : undefined);
             const dataFormat = this.getStringParam(params, "dataformat") || 'csv';
             const analysisRequest = this.getStringParam(params, "analysisrequest");
             const returnType = this.getStringParam(params, "returntype") ||
@@ -99,6 +107,12 @@ export class RunAdhocQueryAction extends BaseAction {
                     ResultCode: 'DANGEROUS_QUERY',
                     Message: securityValidation.error || 'SQL validation failed'
                 } as ActionResultSimple;
+            }
+
+            // The host's checks for caller SQL, on the SQL as it will run.
+            const refusal = authorizer.Authorize(normalizedQuery, readOnlyProvider, params.ContextUser);
+            if (refusal) {
+                return this.authorizationRefusal(refusal);
             }
 
             try {
@@ -258,6 +272,22 @@ export class RunAdhocQueryAction extends BaseAction {
         return Number.isFinite(value) && value > 0 ? value : defaultValue;
     }
 
+    /** Maps the host's refusal of the SQL to the action's result codes. */
+    private authorizationRefusal(message: string): ActionResultSimple {
+        const statementCode = this.statementRefusalCode(message);
+        return statementCode
+            ? { Success: false, ResultCode: statementCode, Message: message }
+            : { Success: false, ResultCode: "PERMISSION_DENIED", Message: `Not permitted to run this query: ${message}` };
+    }
+
+    /** The result code for SQL refused for its shape or for a function it calls; null for any other refusal. */
+    private statementRefusalCode(message: string): 'NOT_SELECT_STATEMENT' | 'DANGEROUS_QUERY' | null {
+        if (/single read query|read-only statement|write statement|write\/DDL|multiple statements/i.test(message)) {
+            return "NOT_SELECT_STATEMENT";
+        }
+        return /may not call/i.test(message) ? "DANGEROUS_QUERY" : null;
+    }
+
     /** Maps a failed run to the action's result codes. */
     private queryFailure(errorMessage: string, timeoutSeconds: number): ActionResultSimple {
         if (/time(d)?\s?out/i.test(errorMessage)) {
@@ -267,11 +297,9 @@ export class RunAdhocQueryAction extends BaseAction {
                 Message: `Query execution exceeded ${timeoutSeconds} second timeout. Consider optimizing query or increasing timeout parameter.`
             };
         }
-        if (/single read query|write statement|multiple statements/i.test(errorMessage)) {
-            return { Success: false, ResultCode: "NOT_SELECT_STATEMENT", Message: errorMessage };
-        }
-        if (/may not call/i.test(errorMessage)) {
-            return { Success: false, ResultCode: "DANGEROUS_QUERY", Message: errorMessage };
+        const statementCode = this.statementRefusalCode(errorMessage);
+        if (statementCode) {
+            return { Success: false, ResultCode: statementCode, Message: errorMessage };
         }
         if (/permission|denied/i.test(errorMessage)) {
             return { Success: false, ResultCode: "PERMISSION_DENIED", Message: `Insufficient permissions to execute query: ${errorMessage}` };
