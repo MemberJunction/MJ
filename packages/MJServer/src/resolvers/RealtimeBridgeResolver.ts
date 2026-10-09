@@ -263,7 +263,10 @@ export class LiveKitAgentVisionResult {
   ErrorMessage?: string;
 }
 
-/** A selectable provider-native voice for the dev voice picker. */
+/**
+ * A selectable provider-native voice for the dev voice picker: one per persona, or one per voice only the driver declares.
+ * Two personas can share an `ID` (a voice, and the same voice with a face); `PersonaID` tells them apart.
+ */
 @ObjectType()
 export class RealtimeVoiceOptionResult {
   @Field(() => String)
@@ -271,6 +274,22 @@ export class RealtimeVoiceOptionResult {
 
   @Field(() => String)
   Name: string;
+
+  /** The persona this voice belongs to (`MJ: AI Personas.ID`). Null for a voice only the driver declares. */
+  @Field(() => String, { nullable: true })
+  PersonaID?: string;
+
+  /**
+   * The avatar that comes with this voice: the `APIName` of its persona's preset Video binding on the model's vendor,
+   * which is what `realtime.video.avatarId` takes. Null for a voice without one, and for every voice only the driver
+   * declares.
+   */
+  @Field(() => String, { nullable: true })
+  AvatarID?: string;
+
+  /** The persona's preview image URL, or null when it has none. */
+  @Field(() => String, { nullable: true })
+  PreviewImageURL?: string;
 }
 
 /** An active Realtime model with the voices its driver supports — feeds the dev model/voice picker. */

@@ -104,8 +104,9 @@ interface InviteeChoice {
                 <label class="mj-lk-prejoin__label" for="mj-lk-voice">Voice <span class="mj-lk-prejoin__dev">dev</span></label>
                 <select id="mj-lk-voice" class="mj-input mj-lk-prejoin__select" (change)="onVoiceChange($event)">
                   <option value="">Default voice</option>
-                  @for (v of selectedModelVoices; track v.ID) {
-                    <option [value]="v.ID" [selected]="v.ID === selectedVoice">{{ v.Name }}</option>
+                  <!-- One option per persona: two personas can share a voice id (a voice, and the same voice with a face). -->
+                  @for (v of selectedModelVoices; track v.PersonaID ?? v.ID) {
+                    <option [value]="v.ID" [selected]="v === SelectedVoiceOption">{{ v.Name }}</option>
                   }
                 </select>
               }
@@ -859,6 +860,12 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
     this.SelectedVoice = value;
   }
 
+  /**
+   * The voice option picked in the pre-join picker (one of {@link SelectedModelVoices}), or null. Kept beside
+   * {@link SelectedVoice} because two personas can share a voice id: the option, not the id, says which one shows picked.
+   */
+  public SelectedVoiceOption: RealtimeVoiceOption | null = null;
+
   /** Voices for the model chosen in the pre-join picker. */
   public get SelectedModelVoices(): RealtimeVoiceOption[] {
     return this.RealtimeModels.find((m) => UUIDsEqual(m.ModelID, this.SelectedModelId))?.Voices ?? [];
@@ -873,6 +880,7 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
   public OnModelChange(event: Event): void {
     this.SelectedModelId = (event.target as HTMLSelectElement).value || null;
     this.SelectedVoice = null;
+    this.SelectedVoiceOption = null;
   }
 
   /** @deprecated Use {@link OnModelChange}. */
@@ -880,9 +888,13 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
     return this.OnModelChange(event);
   }
 
-  /** Records the pre-join VOICE choice. */
+  /**
+   * Records the pre-join VOICE choice: the picked option, found by its position (two personas can share a voice id, so
+   * the value can't tell them apart; option 0 is "Default voice"), and its voice id.
+   */
   public OnVoiceChange(event: Event): void {
-    this.SelectedVoice = (event.target as HTMLSelectElement).value || null;
+    this.SelectedVoiceOption = this.SelectedModelVoices[(event.target as HTMLSelectElement).selectedIndex - 1] ?? null;
+    this.SelectedVoice = this.SelectedVoiceOption?.ID ?? null;
   }
 
   /** @deprecated Use {@link OnVoiceChange}. */

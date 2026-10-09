@@ -88,12 +88,24 @@ export interface LiveKitAgentRoomSessionResult {
   Identity: string;
 }
 
-/** A selectable provider-native voice (dev voice picker). */
+/**
+ * A selectable provider-native voice (dev voice picker): one per persona, or one per voice only the driver declares.
+ * Two personas can share an `ID` (a voice, and the same voice with a face); `PersonaID` tells them apart.
+ */
 export interface RealtimeVoiceOption {
   /** The provider-native voice id sent to the model (e.g. `echo`). */
   ID: string;
   /** The human label shown in the picker (e.g. `Echo`). */
   Name: string;
+  /** The persona this voice belongs to (`MJ: AI Personas.ID`), or null/absent for a voice only the driver declares. */
+  PersonaID?: string | null;
+  /**
+   * The avatar that comes with this voice (the `APIName` of its persona's preset Video binding on the model's vendor,
+   * which is what `realtime.video.avatarId` takes), or null/absent when it has none.
+   */
+  AvatarID?: string | null;
+  /** The persona's preview image URL, or null/absent when it has none. */
+  PreviewImageURL?: string | null;
 }
 
 /** An active Realtime model with the voices its driver supports (dev model/voice picker). */
@@ -390,7 +402,8 @@ export class GraphQLLiveKitClient {
 
   /**
    * Fetches active Realtime models with each driver's supported voices — populates the dev model/voice
-   * picker. Best-effort: any failure resolves to `[]` so the picker simply offers no overrides.
+   * picker. A persona voice also names the avatar that comes with it and the persona's preview image.
+   * Best-effort: any failure resolves to `[]` so the picker simply offers no overrides.
    *
    * @returns The active realtime models + their voices.
    */
@@ -404,6 +417,9 @@ export class GraphQLLiveKitClient {
             Voices {
               ID
               Name
+              PersonaID
+              AvatarID
+              PreviewImageURL
             }
           }
         }

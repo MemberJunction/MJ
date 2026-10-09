@@ -214,8 +214,9 @@ export interface AgentInRoom {
                     @if (addVoices.length) {
                       <select class="mj-input mj-lk-agents__select mj-lk-agents__select--sm" (change)="onAddVoiceChange($event)" title="Voice (dev override)">
                         <option value="">Default voice</option>
-                        @for (v of addVoices; track v.ID) {
-                          <option [value]="v.ID" [selected]="v.ID === addVoice">{{ v.Name }}</option>
+                        <!-- One option per persona: two personas can share a voice id (a voice, and the same voice with a face). -->
+                        @for (v of addVoices; track v.PersonaID ?? v.ID) {
+                          <option [value]="v.ID" [selected]="v === AddVoiceOption">{{ v.Name }}</option>
                         }
                       </select>
                     }
@@ -659,6 +660,11 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public set addVoice(value: string | null) {
     this.AddVoice = value;
   }
+  /**
+   * The voice option picked in the "Add an agent" picker (one of {@link AddVoices}), or null. Kept beside
+   * {@link AddVoice} because two personas can share a voice id: the option, not the id, says which one shows picked.
+   */
+  public AddVoiceOption: RealtimeVoiceOption | null = null;
   /** Exposed for template use — platform-safe UUID equality (SQL upper vs PG lower). */
   public UUIDsEqual = UUIDsEqual;
   /** True while an Add request is in flight. */
@@ -747,6 +753,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public OnAddModelChange(event: Event): void {
     this.AddModelId = (event.target as HTMLSelectElement).value || null;
     this.AddVoice = null;
+    this.AddVoiceOption = null;
   }
 
   /** @deprecated Use {@link OnAddModelChange}. */
@@ -754,9 +761,13 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     return this.OnAddModelChange(event);
   }
 
-  /** Records the add-agent VOICE choice. */
+  /**
+   * Records the add-agent VOICE choice: the picked option, found by its position (two personas can share a voice id,
+   * so the value can't tell them apart; option 0 is "Default voice"), and its voice id.
+   */
   public OnAddVoiceChange(event: Event): void {
-    this.AddVoice = (event.target as HTMLSelectElement).value || null;
+    this.AddVoiceOption = this.AddVoices[(event.target as HTMLSelectElement).selectedIndex - 1] ?? null;
+    this.AddVoice = this.AddVoiceOption?.ID ?? null;
   }
 
   /** @deprecated Use {@link OnAddVoiceChange}. */
@@ -1167,6 +1178,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       this.AddTargetId = null;
       this.AddModelId = null;
       this.AddVoice = null;
+      this.AddVoiceOption = null;
       this.AddTurnMode = null;
       this.AddTurnAddressing = null;
       this.syncTurnPolling();

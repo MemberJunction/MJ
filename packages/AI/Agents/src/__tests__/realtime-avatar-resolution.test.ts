@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import type { ResolvedAgentPersona, ResolvedModelPersona } from '@memberjunction/ai-engine-base';
 import type { MJAIAgentPersonaEntity, MJAIPersonaEntity, MJAIPersonaVendorEntity } from '@memberjunction/core-entities';
 import { ResolveRealtimeAvatar, type RealtimeAvatarPersonaSource } from '../realtime/realtime-avatar-resolution';
-import type { RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
+import { BuildRealtimeOverridesJson, ResolveEffectiveRealtimeConfig, type RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
 
 const MODEL = 'model-38-live';
 const VERTEX = 'vendor-vertex';
@@ -118,5 +118,13 @@ describe('ResolveRealtimeAvatar', () => {
         const unknown = ResolveRealtimeAvatar(
             { EffectiveConfig: { realtime: { video: { enabled: true, avatarId: 'Nobody' } } }, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL }, s);
         expect(unknown).toEqual({ Reason: 'unknown-avatar' });
+    });
+
+    it("asks for the avatar a picker override names, even when the voiced agent's video setting is off", () => {
+        // The picker's override (voice + the avatar that comes with it) is the top layer of the effective config.
+        const target = JSON.stringify({ realtime: { video: { enabled: false } } });
+        const effective = ResolveEffectiveRealtimeConfig(null, null, BuildRealtimeOverridesJson(MODEL, 'Puck', 'Ben'), target);
+        const result = ResolveRealtimeAvatar({ EffectiveConfig: effective, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX }, source());
+        expect(result.Avatar).toEqual({ AvatarID: 'Ben', PersonaName: 'Ben', Source: 'override', Kind: 'preset', Resolution: 'standard' });
     });
 });

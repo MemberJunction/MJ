@@ -12,8 +12,9 @@ import {
     AfterViewInit,
     inject,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { UserInfo } from '@memberjunction/core';
@@ -44,6 +45,11 @@ export interface RealtimeAgentPick {
     PreferredModelId: string | null;
     /** Explicit provider-native voice id (e.g. `echo`), or `null` for the configured/default voice. */
     PreferredVoice: string | null;
+    /**
+     * The avatar that comes with the picked voice (its `RealtimeVoiceOption.AvatarID`), or `null`/absent when the voice
+     * has none or no voice was picked. The session then asks for that face, with video on.
+     */
+    PreferredAvatarId?: string | null;
     /** Explicit co-agent id (`MJ: AI Agents.ID`, Realtime type), or `null` for the server's resolution chain. */
     CoAgentId: string | null;
     /** Whether the user consented to recording this call (mic + agent audio). */
@@ -69,9 +75,12 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
  * candidates (filtered from that same set), and the defaults to preselect;
  * the picker emits the user's choice. The data it loads itself:
  * - the compact "Voice model" option list (active Realtime models via a
- *   narrow RunView) — loaded and rendered ONLY when the current user holds
- *   the `Realtime: Advanced Session Controls` authorization (pure UX
- *   disclosure; the server enforces the authorization on the mint), and
+ *   narrow RunView) and each model's voices — loaded and rendered ONLY when
+ *   the current user holds the `Realtime: Advanced Session Controls`
+ *   authorization (pure UX disclosure; the server enforces the authorization
+ *   on the mint). The voice list marks the voices whose persona comes with an
+ *   avatar (a camera icon) and shows a persona's preview image when it has
+ *   one; picking such a voice also picks its avatar, and
  * - the chosen co-agent's pairing rows (`MJ: AI Agent Co Agents`, Active 'CoAgent'-type rows): a
  *   co-agent with pairing rows may only front its paired targets, so the
  *   agent list constrains to those rows (Sequence order) with the IsDefault
@@ -89,7 +98,7 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
 @Component({
     standalone: true,
     selector: 'mj-realtime-agent-picker',
-    imports: [MJButtonDirective],
+    imports: [MJButtonDirective, MJDropdownComponent, FormsModule],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
         <div class="mj-voice-picker" (click)="$event.stopPropagation()">
@@ -168,22 +177,49 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
                     </select>
                 </div>
                 @if (SelectedModelVoices.length) {
-                    <div class="mj-voice-picker__select-row mj-voice-picker__select-row--model">
-                        <label class="mj-voice-picker__select-label" for="mjRealtimeVoiceSelect">
+                    <div class="mj-voice-picker__select-row mj-voice-picker__select-row--model mj-voice-picker__voice-row">
+                        <span class="mj-voice-picker__select-label" id="mjRealtimeVoiceLabel">
                             <i class="fa-solid fa-waveform-lines"></i>
                             <span>Voice</span>
-                        </label>
-                        <select
-                            #voiceSelect
-                            id="mjRealtimeVoiceSelect"
-                            class="mj-voice-picker__select"
-                            [value]="SelectedVoiceId ?? ''"
-                            (change)="OnVoiceChange(voiceSelect.value)">
-                            <option value="">Default</option>
-                            @for (v of SelectedModelVoices; track v.ID) {
-                                <option [value]="v.ID">{{ v.Name }}</option>
+                        </span>
+                        <!-- No ValueField: an option is its voice object, one per persona, because two personas
+                             can share a voice id (a voice, and the same voice with a face). -->
+                        <mj-dropdown
+                            class="mj-voice-picker__voice-dropdown"
+                            InputId="mjRealtimeVoiceSelect"
+                            AriaLabelledBy="mjRealtimeVoiceLabel"
+                            AriaDescribedBy="mjRealtimeVoiceHint"
+                            [Data]="SelectedModelVoices"
+                            TextField="Name"
+                            DefaultItem="Default"
+                            [ngModel]="SelectedVoice"
+                            (ValueChange)="OnVoiceChange($event)">
+                            <ng-template #mjDropdownItem let-item>
+                                @if (VoiceOptionFor(item); as voice) {
+                                    <span class="mj-voice-picker__voice">
+                                        @if (PreviewImageFor(voice); as image) {
+                                            <img class="mj-voice-picker__voice-image" [src]="image" alt="" (error)="OnPreviewImageError(image)" />
+                                        }
+                                        <span class="mj-voice-picker__voice-name">{{ voice.Name }}</span>
+                                        @if (voice.AvatarID) {
+                                            <span class="mj-voice-picker__voice-avatar" title="Comes with an avatar">
+                                                <i class="fa-solid fa-video" aria-hidden="true"></i>
+                                                <span class="mj-voice-picker__sr-only">Comes with an avatar</span>
+                                            </span>
+                                        }
+                                    </span>
+                                }
+                            </ng-template>
+                        </mj-dropdown>
+                        <!-- Always present, so screen readers announce the hint when a pick adds it. -->
+                        <div class="mj-voice-picker__voice-hint" id="mjRealtimeVoiceHint" aria-live="polite">
+                            @if (SelectedVoiceHasAvatar) {
+                                <span class="mj-voice-picker__voice-hint-line">
+                                    <i class="fa-solid fa-video" aria-hidden="true"></i>
+                                    <span>Comes with an avatar</span>
+                                </span>
                             }
-                        </select>
+                        </div>
                     </div>
                 }
             }
@@ -328,6 +364,45 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
             outline: none;
         }
         .mj-voice-picker__select:focus { border-color: var(--mj-border-focus); }
+        /* The voice list is an mj-dropdown so its options can carry the avatar mark. The global dropdown styles size
+           it for forms; scoped to this row, its trigger matches the native selects above it. The row is a grid so
+           the hint sits under the dropdown, and an empty hint takes no space. */
+        .mj-voice-picker__voice-row {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            column-gap: 8px;
+            align-items: center;
+        }
+        .mj-voice-picker__voice-dropdown { min-width: 0; }
+        .mj-voice-picker__voice-hint { grid-column: 2; }
+        .mj-voice-picker__voice-hint-line {
+            display: flex; align-items: center; gap: 6px;
+            padding-top: 4px;
+            font-size: 11px; color: var(--mj-text-secondary);
+        }
+        .mj-voice-picker__voice-hint-line i { font-size: 10px; color: var(--mj-brand-primary); }
+        :host ::ng-deep .mj-voice-picker__voice-row .mj-dropdown {
+            min-height: 0;
+            padding: 5px 8px;
+            font-size: 12px;
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-subtle);
+            border-radius: 6px;
+        }
+        :host ::ng-deep .mj-voice-picker__voice-row .mj-dropdown--open,
+        :host ::ng-deep .mj-voice-picker__voice-row .mj-dropdown:focus-visible { border-color: var(--mj-border-focus); }
+        .mj-voice-picker__voice { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
+        .mj-voice-picker__voice-image {
+            width: 20px; height: 20px; flex-shrink: 0;
+            border-radius: 50%; object-fit: cover;
+            background: var(--mj-bg-surface-sunken);
+        }
+        .mj-voice-picker__voice-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mj-voice-picker__voice-avatar { flex-shrink: 0; font-size: 11px; color: var(--mj-brand-primary); }
+        .mj-voice-picker__sr-only {
+            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+            overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+        }
         .mj-voice-picker__record-row {
             display: flex; align-items: center; justify-content: space-between; gap: 10px;
             margin: 10px 12px 2px;
@@ -421,13 +496,29 @@ export class RealtimeAgentPickerComponent extends BaseAngularComponent implement
     /** Active Realtime models + their voices (for the voice selector); loaded only for authorized users. */
     public VoiceModels: RealtimeModelVoices[] = [];
 
+    /**
+     * The explicitly chosen voice option (one of {@link SelectedModelVoices}: a persona, so two personas sharing a voice
+     * id stay apart), or `null` for the configured/default voice.
+     */
+    public SelectedVoice: RealtimeVoiceOption | null = null;
+
     /** The explicitly chosen voice id, or `null` for the configured/default voice. */
-    public SelectedVoiceId: string | null = null;
+    public get SelectedVoiceId(): string | null {
+        return this.SelectedVoice?.ID ?? null;
+    }
+
+    /** Whether the chosen voice comes with an avatar: the hint under the voice list says so. */
+    public get SelectedVoiceHasAvatar(): boolean {
+        return !!this.SelectedVoice?.AvatarID?.trim();
+    }
 
     /** Voices for the currently-selected model (empty when no model picked or it declares none). */
     public get SelectedModelVoices(): RealtimeVoiceOption[] {
         return this.VoiceModels.find((m) => UUIDsEqual(m.ModelID, this.SelectedModelId))?.Voices ?? [];
     }
+
+    /** Preview images that failed to load; their voices show no image rather than a broken one. */
+    private readonly failedPreviewImages = new Set<string>();
 
     /** The explicitly chosen co-agent id, or `null` for "Auto (recommended)" (the server's chain). */
     public SelectedCoAgentId: string | null = null;
@@ -562,16 +653,39 @@ export class RealtimeAgentPickerComponent extends BaseAngularComponent implement
         this.cdr.markForCheck();
     }
 
-    /** Records the voice-model choice (`''` = Auto → `null`); clears the voice so it can't outlive a switch. */
+    /** Records the voice-model choice (`''` = Auto → `null`); clears the voice (and its avatar) so it can't outlive a switch. */
     public OnModelChange(value: string): void {
         this.SelectedModelId = value && value.length > 0 ? value : null;
-        this.SelectedVoiceId = null;
+        this.SelectedVoice = null;
         this.cdr.markForCheck();
     }
 
-    /** Records the voice choice (`''` = default → `null`). */
-    public OnVoiceChange(value: string): void {
-        this.SelectedVoiceId = value && value.length > 0 ? value : null;
+    /**
+     * Records the voice choice from the voice list: one of {@link SelectedModelVoices}, or `null` for "Default". The
+     * voice's avatar, when it has one, goes with it.
+     */
+    public OnVoiceChange(value: unknown): void {
+        this.SelectedVoice = this.VoiceOptionFor(value) ?? null;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * The voice an item of the voice list is. The list's items are {@link SelectedModelVoices}' own objects, matched by
+     * identity: an option is a persona, and two personas can share a voice id.
+     */
+    public VoiceOptionFor(item: unknown): RealtimeVoiceOption | undefined {
+        return this.SelectedModelVoices.find((voice) => voice === item);
+    }
+
+    /** The voice's persona preview image to show, or `null` when it has none or the image failed to load. */
+    public PreviewImageFor(voice: RealtimeVoiceOption): string | null {
+        const url = voice.PreviewImageURL?.trim();
+        return url && !this.failedPreviewImages.has(url) ? url : null;
+    }
+
+    /** Hides a preview image that failed to load. */
+    public OnPreviewImageError(url: string): void {
+        this.failedPreviewImages.add(url);
         this.cdr.markForCheck();
     }
 
@@ -719,10 +833,12 @@ export class RealtimeAgentPickerComponent extends BaseAngularComponent implement
 
     /** Dismiss when the user clicks anywhere outside the popover. (The phone
      *  button that opens it stops propagation, so the opening click never
-     *  reaches this handler.) */
+     *  reaches this handler.) The voice list opens in its own overlay outside
+     *  this element; a click on it, or on the backdrop that closes it, only
+     *  closes the list. */
     @HostListener('document:click', ['$event'])
     public OnDocumentClick(event: MouseEvent): void {
-        if (!this.elementRef.nativeElement.contains(event.target as Node)) {
+        if (!this.elementRef.nativeElement.contains(event.target as Node) && !this.isInDropdownOverlay(event.target)) {
             this.Cancelled.emit();
         }
     }
@@ -733,18 +849,25 @@ export class RealtimeAgentPickerComponent extends BaseAngularComponent implement
     }
 
     /**
-     * Assembles the emitted pick. The model preference is hard-gated on the
-     * authorization here (defense in depth — unauthorized users never see the selector,
-     * so `SelectedModelId` should already be null).
+     * Assembles the emitted pick. The model, voice and avatar preferences are hard-gated
+     * on the authorization here (defense in depth — unauthorized users never see the
+     * selectors, so they should already be null).
      */
     private buildPick(agent: MJAIAgentEntityExtended): RealtimeAgentPick {
+        const voice = this.CanOverrideSessionConfig ? this.SelectedVoice : null;
         return {
             Agent: agent,
             PreferredModelId: this.CanOverrideSessionConfig ? this.SelectedModelId : null,
-            PreferredVoice: this.CanOverrideSessionConfig ? this.SelectedVoiceId : null,
+            PreferredVoice: voice?.ID ?? null,
+            PreferredAvatarId: voice?.AvatarID?.trim() || null,
             CoAgentId: this.SelectedCoAgentId,
             RecordingConsent: this.RecordingConsent
         };
+    }
+
+    /** Whether a click landed in a dropdown's overlay (its option panel or the backdrop that closes it). */
+    private isInDropdownOverlay(target: EventTarget | null): boolean {
+        return target instanceof Element && target.closest('.mj-dropdown-panel, .mj-dropdown-backdrop') != null;
     }
 
     private isDefault(agent: MJAIAgentEntityExtended): boolean {

@@ -108,7 +108,10 @@ vi.mock('../resolvers/meetingRecordingRegistration', () => ({
     get correlateRecordingStart() { return this.CorrelateRecordingStart; },
 }));
 
-import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput, SetLiveKitAgentVisionInput, StartLiveKitAgentRoomSessionInput } from '../resolvers/RealtimeBridgeResolver';
+import { buildSchema, Query, Resolver } from 'type-graphql';
+import type { GraphQLObjectType } from 'graphql';
+import { GetRealtimeModelVoices } from '@memberjunction/ai-agents';
+import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput, SetLiveKitAgentVisionInput, StartLiveKitAgentRoomSessionInput, RealtimeModelVoicesResult } from '../resolvers/RealtimeBridgeResolver';
 import { RoomAuthorizationService } from '@memberjunction/livekit-room-server';
 import type { AppContext } from '../types.js';
 
@@ -447,4 +450,43 @@ describe('RealtimeBridgeResolver', () => {
       expect(h.startRecording).not.toHaveBeenCalled();
     });
   });
+
+  describe('GetRealtimeModelVoices', () => {
+    it("types each voice's persona, avatar and preview image as nullable strings", async () => {
+      const schema = await buildSchema({ resolvers: [VoiceProbeResolver], validate: false });
+      // Read the built type rather than printing the schema (printSchema's instanceOf checks fail when type-graphql
+      // and the test resolve separate copies of `graphql`).
+      const fields = (schema.getType('RealtimeVoiceOptionResult') as GraphQLObjectType).getFields();
+      expect(String(fields['ID'].type)).toBe('String!');
+      expect(String(fields['Name'].type)).toBe('String!');
+      expect(String(fields['PersonaID'].type)).toBe('String');
+      expect(String(fields['AvatarID'].type)).toBe('String');
+      expect(String(fields['PreviewImageURL'].type)).toBe('String');
+    });
+
+    it('returns the marks the agents package resolved, unchanged', async () => {
+      const models = [
+        {
+          ModelID: 'm1',
+          ModelName: 'Live Voice Model',
+          Voices: [
+            { ID: 'Puck', Name: 'Puck', PersonaID: 'p-puck' },
+            { ID: 'Puck', Name: 'Avery', PersonaID: 'p-avery', AvatarID: 'Avery', PreviewImageURL: 'https://img.example.test/avery.png' },
+            { ID: 'Kore', Name: 'Kore' },
+          ],
+        },
+      ];
+      vi.mocked(GetRealtimeModelVoices).mockResolvedValueOnce(models);
+      expect(await resolver.GetRealtimeModelVoices(ctx)).toEqual(models);
+    });
+  });
 });
+
+/** Exposes the voice-picker result type in a schema of its own, so the test reads the type the client queries. */
+@Resolver()
+class VoiceProbeResolver {
+  @Query(() => [RealtimeModelVoicesResult])
+  RealtimeVoices(): RealtimeModelVoicesResult[] {
+    return [];
+  }
+}

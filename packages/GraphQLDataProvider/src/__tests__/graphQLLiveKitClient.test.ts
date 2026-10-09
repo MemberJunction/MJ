@@ -134,6 +134,35 @@ describe('GraphQLLiveKitClient', () => {
     });
   });
 
+  describe('GetRealtimeModelVoices', () => {
+    it("selects each voice's persona, avatar and preview image, and returns them as the server sent them", async () => {
+      const models = [
+        {
+          ModelID: 'm1',
+          ModelName: 'Live Voice Model',
+          Voices: [
+            { ID: 'Puck', Name: 'Puck', PersonaID: 'p-puck', AvatarID: null, PreviewImageURL: null },
+            { ID: 'Puck', Name: 'Avery', PersonaID: 'p-avery', AvatarID: 'Avery', PreviewImageURL: 'https://img.example.test/avery.png' },
+            { ID: 'Kore', Name: 'Kore', PersonaID: null, AvatarID: null, PreviewImageURL: null },
+          ],
+        },
+      ];
+      const { provider, calls } = makeProvider({ GetRealtimeModelVoices: models });
+      const result = await new GraphQLLiveKitClient(provider).GetRealtimeModelVoices();
+
+      const voiceFields = /\bVoices\s*{([^}]*)}/.exec(calls[0].query)?.[1].split(/\s+/).filter(Boolean);
+      expect(voiceFields).toEqual(['ID', 'Name', 'PersonaID', 'AvatarID', 'PreviewImageURL']);
+      expect(result).toEqual(models);
+    });
+
+    it('resolves to an empty list when the query fails, so the picker offers no overrides', async () => {
+      const { provider } = makeProvider(() => {
+        throw new Error('network down');
+      });
+      expect(await new GraphQLLiveKitClient(provider).GetRealtimeModelVoices()).toEqual([]);
+    });
+  });
+
   describe('GetRoomTurnState', () => {
     const state = {
       RoomId: 'r1',

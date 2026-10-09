@@ -1508,32 +1508,41 @@ export function BuildVoiceMannerSection(config: RealtimeCoAgentConfig | null | u
  * two are kept in lockstep by `realtime-convergence-drift.test.ts`); the
  * server-bridged hosts (LiveKit, Zoom/Teams) build it here so both funnel into the one override slot.
  *
- * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}}}}`.
+ * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}},"video":{"enabled":true,"avatarId":"<a>"}}}`.
  *
  * The voice is filed PROVIDER-AGNOSTICALLY, which is what lets a host carry a voice at all: the vendor
  * is not known here (and on the default-model path is not known to the caller at any point before the
  * session is prepared), so naming one would be a guess. {@link GetProviderVoiceSettings} files this onto
  * whichever driver the framework resolves. See issue #3530.
  *
+ * A picked avatar also turns the session's video on (`enabled: true`): picking a face is asking for one, whatever the
+ * agent's own video setting. The session still accepts it only when it names a Video binding on the resolved vendor.
+ *
  * @param modelId The `MJ: AI Models` Name or ID to prefer, or null/empty for none.
  * @param voice The provider-native voice id (e.g. `echo`), or null/empty for none.
+ * @param avatarId The avatar to ask for (a Video binding's `APIName`), or null/empty for none.
  * @returns The JSON string, or `null` when nothing was overridden (keeps the cascade at its lower layers).
  */
 export function BuildRealtimeOverridesJson(
     modelId?: string | null,
-    voice?: string | null
+    voice?: string | null,
+    avatarId?: string | null
 ): string | null {
     const m = modelId?.trim() ?? '';
     const v = voice?.trim() ?? '';
-    if (m.length === 0 && v.length === 0) {
+    const a = avatarId?.trim() ?? '';
+    if (m.length === 0 && v.length === 0 && a.length === 0) {
         return null;
     }
-    const realtime: { modelPreference?: string; voice?: { default: { voice: string } } } = {};
+    const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { enabled: true; avatarId: string } } = {};
     if (m.length > 0) {
         realtime.modelPreference = m;
     }
     if (v.length > 0) {
         realtime.voice = { default: { voice: v } };
+    }
+    if (a.length > 0) {
+        realtime.video = { enabled: true, avatarId: a };
     }
     return JSON.stringify({ realtime });
 }

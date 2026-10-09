@@ -1445,7 +1445,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.ShowRealtimeAgentPicker = true;
   }
 
-  /** User confirmed an agent (+ optional co-agent / voice model) in the voice picker — start the call. */
+  /** User confirmed an agent (+ optional co-agent / voice model / voice and its avatar) in the voice picker — start the call. */
   public async OnRealtimeAgentPicked(pick: RealtimeAgentPick): Promise<void> {
     this.ShowRealtimeAgentPicker = false;
     this.persistCoAgentChoice(pick.CoAgentId);
@@ -1454,7 +1454,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       pick.Agent.Name || this.resolveRealtimeAgentName(),
       pick.PreferredModelId,
       pick.CoAgentId,
-      BuildRealtimeConfigOverridesJson(pick.PreferredModelId, pick.PreferredVoice),
+      BuildRealtimeConfigOverridesJson(pick.PreferredModelId, pick.PreferredVoice, pick.PreferredAvatarId),
       pick.RecordingConsent
     );
   }

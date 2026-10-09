@@ -6,7 +6,7 @@
  * resource's landing and what it hands the room, not the room itself.
  */
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, Output } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { IMetadataProvider } from '@memberjunction/core';
@@ -93,5 +93,90 @@ describe('LiveKitRoomResource: the preview room card (DOM)', () => {
     expect(room(f)).toBeNull();
     expect(f.componentInstance.RoomMode).toBe('agent');
     expect(titles(f)).toContain('Preview room');
+  });
+});
+
+/**
+ * The pre-join voice list: one option per persona, so two personas sharing a voice id (Puck, and Ben: Puck's voice with
+ * a face) are two options, only the picked one shows picked, and either hands the room the voice id.
+ */
+describe('LiveKitRoomResource: the pre-join voice list (DOM)', () => {
+  const MODELS: RealtimeModelVoices[] = [
+    {
+      ModelID: 'model-a',
+      ModelName: 'Live Voice Model',
+      Voices: [
+        { ID: 'Puck', Name: 'Puck', PersonaID: 'p-puck' },
+        { ID: 'Puck', Name: 'Ben', PersonaID: 'p-ben', AvatarID: 'Ben' },
+        { ID: 'Kore', Name: 'Kore' },
+      ],
+    },
+  ];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** The pre-join picker, as once the agents and models are loaded, with a voice model chosen. */
+  const picking = (): ComponentFixture<LiveKitRoomResource> => {
+    vi.spyOn(LiveKitRoomResource.prototype, 'ngOnInit').mockImplementation(() => undefined);
+    TestBed.configureTestingModule({
+      declarations: [LiveKitRoomResource],
+      imports: [StubAgentRoom, StubDialog],
+      providers: [{ provide: NavigationService, useValue: {} }],
+    });
+    const f = TestBed.createComponent(LiveKitRoomResource);
+    f.componentInstance.Phase = 'picking';
+    f.componentInstance.CanPickModelVoice = true;
+    f.componentInstance.RealtimeModels = MODELS;
+    f.componentInstance.SelectedModelId = 'model-a';
+    f.detectChanges();
+    return f;
+  };
+  const voiceSelect = (f: ComponentFixture<LiveKitRoomResource>) => f.nativeElement.querySelector('#mj-lk-voice') as HTMLSelectElement;
+  /** Picks the option at `index` (0 is "Default voice") the way the browser does. */
+  const pick = (f: ComponentFixture<LiveKitRoomResource>, index: number) => {
+    const select = voiceSelect(f);
+    select.selectedIndex = index;
+    select.dispatchEvent(new Event('change'));
+    f.detectChanges();
+  };
+  const picked = (f: ComponentFixture<LiveKitRoomResource>) =>
+    Array.from(voiceSelect(f).options).filter((o) => o.selected).map((o) => o.textContent?.trim());
+  const room = (f: ComponentFixture<LiveKitRoomResource>): StubAgentRoom | null =>
+    f.debugElement.query(By.directive(StubAgentRoom))?.componentInstance ?? null;
+
+  it('lists two personas that share a voice id as two options, with no duplicate keys', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const f = picking();
+    expect(Array.from(voiceSelect(f).options).map((o) => o.textContent?.trim())).toEqual(['Default voice', 'Puck', 'Ben', 'Kore']);
+    // Angular checks the keys when it updates a drawn list, not when it first draws one: check the list again.
+    f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+    f.detectChanges();
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('NG0955'))).toBe(false);
+  });
+
+  it('shows only the picked option as picked, and hands the room the voice id', () => {
+    const f = picking();
+    pick(f, 2);
+    expect(picked(f)).toEqual(['Ben']);
+    pick(f, 1);
+    expect(picked(f)).toEqual(['Puck']);
+
+    // Drawn again (back to the landing and in again), the list still shows the picked persona, not every match of its id.
+    for (const phase of ['landing', 'picking'] as const) {
+      f.componentInstance.Phase = phase;
+      f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+      f.detectChanges();
+    }
+    expect(picked(f)).toEqual(['Puck']);
+
+    pick(f, 2);
+    expect(f.componentInstance.SelectedVoice).toBe('Puck');
+
+    f.componentInstance.Phase = 'live';
+    f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+    f.detectChanges();
+    expect(room(f)?.RealtimeVoice).toBe('Puck');
   });
 });

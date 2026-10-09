@@ -5,7 +5,7 @@ import { By } from '@angular/platform-browser';
 import { renderComponentFixture, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
-import { GraphQLLiveKitClient } from '@memberjunction/graphql-dataprovider';
+import { GraphQLLiveKitClient, type RealtimeModelVoices } from '@memberjunction/graphql-dataprovider';
 import { LiveKitRoomComponent, LIVEKIT_ROOM_CONTROLLER_FACTORY } from '@memberjunction/ng-livekit-room';
 import { LOCAL_MEDIA_CONTROLLER_FACTORY } from '@memberjunction/ng-realtime-media';
 import {
@@ -434,5 +434,102 @@ describe('MJLiveKitRoomComponent: what the agent sees, in a meeting (DOM)', () =
     f.componentInstance.ResolvedRoomName = null;
     await flip(f);
     expect(set).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * DOM spec for the "Add an agent" voice list: one option per persona, so two personas sharing a voice id (Puck, and Ben:
+ * Puck's voice with a face) are two options, only the picked one shows picked, and either sends the voice id.
+ */
+describe('MJLiveKitRoomComponent: the add-agent voice list (DOM)', () => {
+  const MODELS: RealtimeModelVoices[] = [
+    {
+      ModelID: 'model-a',
+      ModelName: 'Live Voice Model',
+      Voices: [
+        { ID: 'Puck', Name: 'Puck', PersonaID: 'p-puck' },
+        { ID: 'Puck', Name: 'Ben', PersonaID: 'p-ben', AvatarID: 'Ben' },
+        { ID: 'Kore', Name: 'Kore' },
+      ],
+    },
+  ];
+  beforeEach(() => {
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    clearOverlayContainers();
+  });
+
+  /** The binding in an agent room with the agents panel open and a voice model chosen for the next agent. */
+  const render = () => {
+    const f = renderComponentFixture(MJLiveKitRoomComponent, {
+      providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => fakeController() }],
+      inputs: {
+        AutoStart: false,
+        Mode: 'agent',
+        ShowPreJoin: false,
+        CanPickModelVoice: true,
+        AvailableModels: MODELS,
+        AvailableAgents: [{ ID: 'agent-2', Name: 'Writing Coach' }],
+      },
+    });
+    f.componentInstance.ServerUrl = 'wss://example.test';
+    f.componentInstance.Token = 'token';
+    f.componentInstance.ResolvedRoomName = 'room-1';
+    f.componentInstance.ShowAgentsPanel = true;
+    f.componentInstance.AddModelId = 'model-a';
+    f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+    f.detectChanges();
+    return f;
+  };
+  const voiceSelect = (f: ReturnType<typeof render>) => f.nativeElement.querySelector('select[title="Voice (dev override)"]') as HTMLSelectElement;
+  /** Picks the option at `index` (0 is "Default voice") the way the browser does. */
+  const pick = (f: ReturnType<typeof render>, index: number) => {
+    const select = voiceSelect(f);
+    select.selectedIndex = index;
+    select.dispatchEvent(new Event('change'));
+    f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+    f.detectChanges();
+  };
+  const picked = (f: ReturnType<typeof render>) =>
+    Array.from(voiceSelect(f).options).filter((o) => o.selected).map((o) => o.textContent?.trim());
+  /** Closes and reopens the agents panel, which draws the voice list again from the picker's state. */
+  const redrawPanel = (f: ReturnType<typeof render>) => {
+    for (const open of [false, true]) {
+      f.componentInstance.ShowAgentsPanel = open;
+      f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+      f.detectChanges();
+    }
+  };
+
+  it('lists two personas that share a voice id as two options, with no duplicate keys', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const f = render();
+    expect(Array.from(voiceSelect(f).options).map((o) => o.textContent?.trim())).toEqual(['Default voice', 'Puck', 'Ben', 'Kore']);
+    // Angular checks the keys when it updates a drawn list, not when it first draws one: check the list again.
+    f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+    f.detectChanges();
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('NG0955'))).toBe(false);
+  });
+
+  it('shows only the picked option as picked, and either one sends the voice id', () => {
+    const f = render();
+    pick(f, 2);
+    expect(picked(f)).toEqual(['Ben']);
+    expect(f.componentInstance.AddVoice).toBe('Puck');
+
+    pick(f, 1);
+    expect(picked(f)).toEqual(['Puck']);
+    expect(f.componentInstance.AddVoice).toBe('Puck');
+
+    // Drawn again (the panel closed and reopened), the list still shows the picked persona, not every match of its id.
+    redrawPanel(f);
+    expect(picked(f)).toEqual(['Puck']);
+
+    pick(f, 0);
+    expect(f.componentInstance.AddVoice).toBeNull();
+    expect(f.componentInstance.AddVoiceOption).toBeNull();
   });
 });
