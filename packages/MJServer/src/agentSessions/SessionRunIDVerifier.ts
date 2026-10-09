@@ -6,6 +6,7 @@
  */
 import { IMetadataProvider, LogError, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, IsValidUUID, MJLruCache, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 const AGENT_RUN_ENTITY = 'MJ: AI Agent Runs';
 const AGENT_RUN_STEP_ENTITY = 'MJ: AI Agent Run Steps';
@@ -43,6 +44,11 @@ type LookupRow = Partial<RunStepRow> & { ID: string };
  * prompt run id are kept when they belong to that co-agent run: the step's `AgentRunID` is the
  * co-agent run, and the prompt run is the `TargetLogID` of one of its `Prompt` steps.
  *
+ * The lookups run as the system user when one is cached, else as the acting user. They are pinned
+ * to the session's id and return nothing to the caller, and row-level security can hide a session's
+ * own runs from its owner (a web-widget guest's delegated runs carry no `ConversationID`, which the
+ * guest's run filter keys on).
+ *
  * Successful lookups are cached per set of claims, so the frequent relays (transcript turns, usage
  * flushes, heartbeats) query once per session.
  */
@@ -56,9 +62,10 @@ export class SessionRunIDVerifier {
      * Returns the subset of `claimed` that belongs to the session. Never throws: when a lookup
      * fails, nothing is kept.
      *
-     * @param sessionID The `MJ: AI Agent Sessions` id the claims were read from.
+     * @param sessionID The `MJ: AI Agent Sessions` id the claims were read from. The caller must have
+     *   checked that the session is the caller's own.
      * @param claimed The run ids read from the session's `Config`.
-     * @param contextUser The user the lookups run as.
+     * @param contextUser The acting user; the lookups run as it only when no system user is cached.
      * @param provider The request-scoped metadata provider.
      * @returns The claims that are records of the session.
      */
@@ -115,7 +122,8 @@ export class SessionRunIDVerifier {
         const stepsQuery = this.stepsQuery(candidates);
         const queries = stepsQuery ? [this.runsQuery(sessionID, candidates), stepsQuery] : [this.runsQuery(sessionID, candidates)];
         try {
-            const [runs, steps] = await RunView.FromMetadataProvider(provider).RunViews<LookupRow>(queries, contextUser);
+            const lookupUser = UserCache.Instance.GetSystemUser() ?? contextUser;
+            const [runs, steps] = await RunView.FromMetadataProvider(provider).RunViews<LookupRow>(queries, lookupUser);
             const failed = [runs, steps].find((result) => result && !result.Success);
             if (!runs || failed) {
                 LogError(`SessionRunIDVerifier: run lookup failed for session ${sessionID}: ${failed?.ErrorMessage ?? 'no result'}`);
