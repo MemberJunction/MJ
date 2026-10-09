@@ -7,6 +7,7 @@ import {
 } from './public-api';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
+import { DATA_EXPLORER_DASHBOARDS_ROUTE } from './lib/guards/moved-nav-item-redirect';
 import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM, CompositeKey } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
@@ -763,6 +764,10 @@ const routes: Routes = [
     canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
   },
+  // A link to Data Explorer's Dashboards page opens the Library of the Dashboards app, with the link's query params,
+  // when Data Explorer no longer has that nav item and the user has the Dashboards app (NavigationService applies
+  // the same rule to pins and saved tabs)
+  DATA_EXPLORER_DASHBOARDS_ROUTE,
   // App navigation routes
   {
     path: 'app/:appName/:navItemName',

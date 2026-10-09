@@ -1,3 +1,5 @@
+import { MJLruCache } from '@memberjunction/global';
+
 /** Which rubric a test run uses. The first source that names one wins. */
 export interface RubricChoice {
     RubricId?: string;
@@ -5,6 +7,7 @@ export interface RubricChoice {
     /** Set when the caller named a version. That version is not replaced by the suite pin. */
     ExplicitVersion: boolean;
     Source: 'run' | 'oracle' | 'test' | 'suite' | 'agent' | 'none';
+    EvaluatorConfig?: Record<string, unknown> | string;
 }
 
 export interface RubricSuiteRow {
@@ -20,22 +23,36 @@ export interface RubricSuiteRow {
  */
 export function ResolveRubric(input: {
     run?: { rubricId?: string; versionId?: string };
-    oracle?: { rubricId?: string; rubricVersionId?: string };
+    oracle?: { rubricId?: string; rubricVersionId?: string; evaluator?: Record<string, unknown> | string };
     testRubricId?: string | null;
     suites?: RubricSuiteRow[];
     suiteId?: string;
     agentRubricId?: string | null;
+    agentEvaluatorConfig?: Record<string, unknown> | string;
 }): RubricChoice {
     if (input.run?.rubricId) {
         return { RubricId: input.run.rubricId, VersionId: input.run.versionId, ExplicitVersion: !!input.run.versionId, Source: 'run' };
     }
     if (input.oracle?.rubricId || input.oracle?.rubricVersionId) {
-        return { RubricId: input.oracle.rubricId, VersionId: input.oracle.rubricVersionId, ExplicitVersion: !!input.oracle.rubricVersionId, Source: 'oracle' };
+        return {
+            RubricId: input.oracle.rubricId,
+            VersionId: input.oracle.rubricVersionId,
+            ExplicitVersion: !!input.oracle.rubricVersionId,
+            Source: 'oracle',
+            EvaluatorConfig: input.oracle.evaluator,
+        };
     }
     if (input.testRubricId) return { RubricId: input.testRubricId, ExplicitVersion: false, Source: 'test' };
     const fromSuite = walkSuites(input.suites ?? [], input.suiteId);
     if (fromSuite) return { RubricId: fromSuite, ExplicitVersion: false, Source: 'suite' };
-    if (input.agentRubricId) return { RubricId: input.agentRubricId, ExplicitVersion: false, Source: 'agent' };
+    if (input.agentRubricId) {
+        return {
+            RubricId: input.agentRubricId,
+            ExplicitVersion: false,
+            Source: 'agent',
+            EvaluatorConfig: input.agentEvaluatorConfig,
+        };
+    }
     return { ExplicitVersion: false, Source: 'none' };
 }
 
@@ -57,12 +74,16 @@ function walkSuites(suites: RubricSuiteRow[], start?: string): string | undefine
  * An explicitly named version is returned and does not replace the pin.
  */
 export class PublishedVersionPin {
-    private readonly pinned = new Map<string, Map<string, string>>();
+    /**
+     * Bounded: the pin lives on a driver cached for the process lifetime, and standalone
+     * tests key it by TestRun ID, so a plain Map would grow with every execution.
+     */
+    private readonly pinned = new MJLruCache<string, Map<string, string>>({ maxSize: 5000, ttlMs: 6 * 60 * 60 * 1000 });
 
     public async Remember(suiteRunId: string, rubricId: string, explicitVersionId: string | undefined, lookupLatest: () => Promise<string | undefined>): Promise<string | undefined> {
         if (explicitVersionId) return explicitVersionId;
-        const suite = this.pinned.get(suiteRunId) ?? new Map<string, string>();
-        this.pinned.set(suiteRunId, suite);
+        const suite = this.pinned.Get(suiteRunId) ?? new Map<string, string>();
+        this.pinned.Set(suiteRunId, suite);
         const existing = suite.get(rubricId);
         if (existing) return existing;
         const latest = await lookupLatest();
@@ -92,10 +113,17 @@ export function EnsureImplicitRubricOracle(oracles: OracleConfigLike[] | undefin
     const pinned: Record<string, unknown> = { rubricId: choice.RubricId };
     if (versionId) pinned.rubricVersionId = versionId;
     if (versionLabel) pinned.versionLabel = versionLabel;
+    if (choice.EvaluatorConfig !== undefined) pinned.evaluator = choice.EvaluatorConfig;
     if (list.some(oracle => oracle.type === 'rubric')) {
-        return list.map(oracle => oracle.type === 'rubric'
-            ? { ...oracle, config: { ...oracle.config, ...pinned } }
-            : oracle);
+        return list.map(oracle => {
+            if (oracle.type !== 'rubric') return oracle;
+            const existingEvaluator = oracle.config?.evaluator;
+            const merged = { ...oracle.config, ...pinned };
+            if (existingEvaluator !== undefined) {
+                merged.evaluator = existingEvaluator;
+            }
+            return { ...oracle, config: merged };
+        });
     }
     return [...list, { type: 'rubric', config: pinned }];
 }
@@ -110,11 +138,13 @@ export function OraclesWithNamedRubric<T extends OracleConfigLike>(
 ): T[] {
     const list = [...(oracles ?? [])];
     const named = list.find(oracle => oracle.type === 'rubric')?.config;
+    const evaluator = named?.evaluator;
     const choice = ResolveRubric({
         run: input.runRubricId ? { rubricId: input.runRubricId, versionId: input.runVersionId } : undefined,
         oracle: named ? {
             rubricId: typeof named.rubricId === 'string' ? named.rubricId : undefined,
             rubricVersionId: typeof named.rubricVersionId === 'string' ? named.rubricVersionId : undefined,
+            evaluator: (typeof evaluator === 'string' || (typeof evaluator === 'object' && evaluator !== null)) ? evaluator as Record<string, unknown> | string : undefined,
         } : undefined,
         testRubricId: input.testRubricId,
     });

@@ -129,10 +129,18 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Picture from the data",
             "Purpose": "Evaluation",
             "IsDefault": true,
-            "Status": "Active"
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Infographic Agent"
+            }
           },
           "primaryKey": {
             "ID": "D71A4BF6-D5F2-41C6-8CB5-C1D723A696A2"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:55.351Z",
+            "checksum": "8c9f8e5196d2770cb1f47db132433ed0d3ae27f0b543d4b50df0d690fe0dacbe"
           }
         },
         {
@@ -142,10 +150,18 @@
             "Purpose": "SelfCheck",
             "IsDefault": true,
             "Status": "Disabled",
-            "MaxSelfCheckAttempts": 1
+            "MaxSelfCheckAttempts": 1,
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Infographic Agent"
+            }
           },
           "primaryKey": {
             "ID": "E62E39ED-AE22-47DA-819E-E34C5DF855F1"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:55.363Z",
+            "checksum": "114e111eca8dba2adbe3f6c1cc15af1335032e9f7234409c4cff862a50dfac36"
           }
         }
       ]

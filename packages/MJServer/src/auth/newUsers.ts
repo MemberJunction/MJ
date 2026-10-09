@@ -1,7 +1,8 @@
-import { ApplicationInfo, DatabaseProviderBase, EntitySaveOptions, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, EntitySaveOptions, LogError, LogStatus, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { ResolveConfiguredPrincipal } from "./principals.js";
 import { configInfo } from "../config.js";
+import { CreateIsolatedProvider } from "../isolatedProvider.js";
 import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityType, MJApplicationEntityEntityType, UserInfoEngine } from "@memberjunction/core-entities";
 
 export class NewUserBase {
@@ -16,8 +17,12 @@ export class NewUserBase {
                 return null;
             }
 
-            const md: Metadata = new Metadata(); // global-provider-ok: new-user creation runs in the JWT auth flow, before AppContext.providers is built
-            const user = await md.GetEntityObject<MJUserEntity>('MJ: Users', contextUser) // To-Do - change this to be a different defined user for the user creation process
+            // Everything here, metadata lookups, entity objects and the transaction, goes through ONE
+            // isolated provider. This runs in the JWT auth flow, before AppContext.providers exists, and
+            // the global Metadata.Provider is shared by every concurrent request: a transaction opened
+            // there nests into anyone else's and swallows their writes (see CreateIsolatedProvider).
+            const provider = await CreateIsolatedProvider();
+            const user = await provider.GetEntityObject<MJUserEntity>('MJ: Users', contextUser) // To-Do - change this to be a different defined user for the user creation process
             user.NewRecord();
             user.Name = email;
             user.IsActive = true;
@@ -38,7 +43,6 @@ export class NewUserBase {
             // Create the user and all of its role/application/app-entity records atomically.
             // If any Save fails partway through, the whole provisioning rolls back so we never
             // leave a half-created user with partial roles/applications behind.
-            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: new-user creation runs in the JWT auth flow, before AppContext.providers is built
             await provider.BeginTransaction();
             try {
                 if (!await user.Save()) {
@@ -48,13 +52,13 @@ export class NewUserBase {
                 if(configInfo.userHandling && configInfo.userHandling.newUserRoles){
                     LogStatus(`User ${user.Email} created, assigning roles`);
                     for (const role of configInfo.userHandling.newUserRoles) {
-                        const userRole = md.Roles.find(r => r.Name === role);
+                        const userRole = provider.Roles.find(r => r.Name === role);
                         if (!userRole) {
                             LogError(`Role ${role} not found in the database, cannot assign to new user ${user.Name}`);
                             continue;
                         }
 
-                        const userRoleEntity: MJUserRoleEntity = await md.GetEntityObject<MJUserRoleEntity>('MJ: User Roles', contextUser);
+                        const userRoleEntity: MJUserRoleEntity = await provider.GetEntityObject<MJUserRoleEntity>('MJ: User Roles', contextUser);
                         userRoleEntity.NewRecord();
                         userRoleEntity.UserID = user.ID;
                         userRoleEntity.RoleID = userRole.ID;
@@ -73,7 +77,7 @@ export class NewUserBase {
                     if (configInfo.userHandling.UserApplications && configInfo.userHandling.UserApplications.length > 0) {
                         for (const appName of configInfo.userHandling.UserApplications) {
                             const toLowerCase: string = appName.trim().toLocaleLowerCase();
-                            const application: ApplicationInfo | undefined = md.Applications.find(a => a.Name.trim().toLocaleLowerCase() === toLowerCase);
+                            const application: ApplicationInfo | undefined = provider.Applications.find(a => a.Name.trim().toLocaleLowerCase() === toLowerCase);
                             if (application) {
                                 applicationsToCreate.push(application);
                             } else {
@@ -85,12 +89,12 @@ export class NewUserBase {
                         // Bug F2: use the shared selector, which filters to Active apps flagged
                         // DefaultForNewUser (in DefaultSequence order). This path previously omitted the
                         // Status = 'Active' check, so an inactive default app could be provisioned here.
-                        applicationsToCreate = UserInfoEngine.GetDefaultApplicationsForNewUser(md);
+                        applicationsToCreate = UserInfoEngine.GetDefaultApplicationsForNewUser(provider);
                         LogStatus(`Found ${applicationsToCreate.length} active applications with DefaultForNewUser=true`);
                     }
 
                     for (const [appIndex, application] of applicationsToCreate.entries()) {
-                        const userApplication: MJUserApplicationEntity = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', contextUser);
+                        const userApplication: MJUserApplicationEntity = await provider.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', contextUser);
                         userApplication.NewRecord();
                         userApplication.UserID = user.ID;
                         userApplication.ApplicationID = application.ID;
@@ -102,7 +106,7 @@ export class NewUserBase {
                         }
                         LogStatus(`Created User Application ${application.Name} for new user ${user.Name}`);
 
-                        const rv: RunView = new RunView();
+                        const rv: RunView = RunView.FromMetadataProvider(provider);
                         // Boolean literal goes through the active provider's dialect:
                         //   SQL Server emits `= 1`, PostgreSQL emits `= TRUE`.
                         // This keeps the filter server-side (no client-side `.filter()`
@@ -125,7 +129,7 @@ export class NewUserBase {
                         LogStatus(`Creating ${defaultForNewUserEntities.length} User Application Entities for User Application ${application.Name} for new user ${user.Name}`);
 
                         for(const [index, appEntity] of defaultForNewUserEntities.entries()){
-                            const userAppEntity: MJUserApplicationEntityEntity = await md.GetEntityObject<MJUserApplicationEntityEntity>('MJ: User Application Entities', contextUser);
+                            const userAppEntity: MJUserApplicationEntityEntity = await provider.GetEntityObject<MJUserApplicationEntityEntity>('MJ: User Application Entities', contextUser);
                             userAppEntity.NewRecord();
                             userAppEntity.UserApplicationID = userApplication.ID;
                             userAppEntity.EntityID = appEntity.EntityID;

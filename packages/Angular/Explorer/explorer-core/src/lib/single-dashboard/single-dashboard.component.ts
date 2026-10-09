@@ -218,7 +218,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
       if (this.ResourceData.ResourceRecordID && this.ResourceData.ResourceRecordID.length > 0) {
         await this.DashboardEntity.Load(this.ResourceData.ResourceRecordID);
         // Log access to dashboard (fire-and-forget, don't await)
-        this.recentAccessService.logAccess('Dashboards', this.ResourceData.ResourceRecordID, 'dashboard');
+        this.recentAccessService.LogAccess('MJ: Dashboards', this.ResourceData.ResourceRecordID, 'dashboard');
 
         // now we have loaded and we need to get the UIConfigDetails
         const raw = this.DashboardEntity.UIConfigDetails;

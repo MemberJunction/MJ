@@ -1,0 +1,56 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Form Contributions",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Form Contributions&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow"
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:22:00.406Z",
+      "checksum": "5c90e75a952188402b6aa6f74ad2ef3f4c04aff4cc0698a891407cfec449265f"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Form Overrides",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Form Overrides&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow"
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:22:00.421Z",
+      "checksum": "26855fda14654b972c1d445c9174f100c1802e1950c78babfce34a1de2f9f62a"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Components",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Components&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow"
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:22:00.432Z",
+      "checksum": "2d7445ef2045a2e5a56311c94a558c8b8192ed52ba0261a105a9aa5e8fa928b9"
+    }
+  }
+]

@@ -220,6 +220,7 @@
     background: var(--mj-brand-primary) !important;
     color: white !important;
     border-radius: var(--mj-radius-md) var(--mj-radius-md) 0 0 !important;
+    outline-color: var(--mj-text-inverse);
 }
 
 ::ng-deep .query-content .mj-accordion-body {

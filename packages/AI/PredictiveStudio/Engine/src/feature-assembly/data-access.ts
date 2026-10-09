@@ -117,6 +117,10 @@ export class RunViewDataAccess implements IFeatureDataAccess {
         OrderBy: params.OrderBy ?? '',
         Fields: params.Fields,
         MaxRows: params.MaxRows,
+        // No explicit cap means "every matching row". Without this, RunView silently applies the
+        // entity's UserViewMaxRows (1000 by default) — training would quietly fit on the first
+        // 1000 rows of a larger population and scoring hydration could miss records.
+        IgnoreMaxRows: params.MaxRows == null,
         ResultType: 'simple',
       },
       this.contextUser,

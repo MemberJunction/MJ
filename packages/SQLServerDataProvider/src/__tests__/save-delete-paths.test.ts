@@ -81,8 +81,8 @@ class SaveDeleteTestProvider extends SQLServerDataProvider {
   }
 
   /** Exposes the save SQL pair (executed fullSQL, logged simpleSQL) for the replay-guard tests. */
-  public async SaveSQLForTest(entity: BaseEntity, isNew: boolean, user: UserInfo) {
-    return this.GenerateSaveSQL(entity, isNew, user, new EntitySaveOptions());
+  public async SaveSQLForTest(entity: BaseEntity, isNew: boolean, user: UserInfo, options = new EntitySaveOptions()) {
+    return this.GenerateSaveSQL(entity, isNew, user, options);
   }
 }
 
@@ -309,16 +309,96 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     expect(simpleSQL).not.toContain('spUpdateWidget');
   });
 
-  it('UPDATE: the logged simpleSQL is the plain spUpdate call, no guard', async () => {
+  it('UPDATE: the logged simpleSQL carries only the changed field + PK; the executed fullSQL still passes every column', async () => {
     const provider = makeProvider();
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
     entity.Set('Name', 'Renamed');
 
     const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+    const sfx = extractSuffix(fullSQL, 'Name');
+
+    // Executed form unchanged: every SP parameter, including untouched ones
+    expect(fullSQL).toContain(`@Description=@Description${sfx}`);
+    expect(fullSQL).toContain(`@IsActive=@IsActive${sfx}`);
+    expect(fullSQL).toContain('@ExternalID_Clear=1');
+
+    // Logged form: spUpdate with the changed field and the key, same suffix, nothing else
+    expect(simpleSQL).toBe(
+      `DECLARE @Name${sfx} NVARCHAR(100),\n        @ID${sfx} UNIQUEIDENTIFIER\n\n` +
+        `SET @Name${sfx} = N'Renamed'\nSET @ID${sfx} = 'w-0001'\n\n` +
+        `EXEC [dbo].spUpdateWidget @Name=@Name${sfx},\n                @ID=@ID${sfx}`,
+    );
+    expect(simpleSQL).not.toContain('IF NOT EXISTS');
+  });
+
+  it('UPDATE: a field changed to NULL is logged with its _Clear companion; untouched NULLs are not', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Description', null);
+
+    const { simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+
+    expect(simpleSQL).toContain('@Description=@Description');
+    expect(simpleSQL).toContain('@Description_Clear=1');
+    expect(simpleSQL).not.toContain('@Name=');
+    expect(simpleSQL).not.toContain('@ExternalID_Clear=1');
+  });
+
+  it('UPDATE that changed no proc parameter: logged as a comment, so a replay writes nothing', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+
+    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+
+    expect(fullSQL).toContain('EXEC [dbo].spUpdateWidget');
+    expect(simpleSQL).toMatch(/^-- Widgets \(.*w-0001.*\): saved with no field changes; nothing to replay$/);
+    expect(simpleSQL).not.toContain('EXEC');
+  });
+
+  it('forced UPDATE (IgnoreDirtyState, e.g. alwaysPush): logs the full row, which is what the caller asked to re-impose', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Renamed');
+    const options = Object.assign(new EntitySaveOptions(), { IgnoreDirtyState: true });
+
+    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER, options);
 
     expect(simpleSQL).toBe(fullSQL);
-    expect(simpleSQL).toContain('spUpdateWidget');
-    expect(simpleSQL).not.toContain('IF NOT EXISTS');
+    expect(simpleSQL).toContain('@Description=@Description');
+  });
+
+  it('UPDATE through a hand-written update proc (spUpdateGenerated off): logs the full row, since no ISNULL merge is promised', async () => {
+    const provider = makeProvider();
+    const info = makeWidgetEntityInfo();
+    info.spUpdateGenerated = false;
+    const entity = makeSavedWidgetEntity(info, TEST_USER);
+    entity.Set('Name', 'Renamed');
+
+    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+
+    expect(simpleSQL).toBe(fullSQL);
+    expect(simpleSQL).toContain('@Description=@Description');
+  });
+
+  it('UPDATE inside a TransactionGroup: the replay form reuses the save\'s suffix instead of allocating another ordinal', async () => {
+    const provider = makeProvider();
+    const group = new SQLServerTransactionGroup();
+    const first = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    first.Set('Name', 'One');
+    first.TransactionGroup = group;
+    const second = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    second.Set('Name', 'Two');
+    second.TransactionGroup = group;
+
+    const a = await provider.SaveSQLForTest(first, false, TEST_USER);
+    const b = await provider.SaveSQLForTest(second, false, TEST_USER);
+    const sfxA = extractSuffix(a.fullSQL, 'Name');
+    const sfxB = extractSuffix(b.fullSQL, 'Name');
+
+    // Same record twice in one group: the second gets _2 — not _3, which an extra allocation would give
+    expect(sfxB).toBe(`${sfxA}_2`);
+    expect(a.simpleSQL).toContain(`@Name${sfxA} NVARCHAR(100)`);
+    expect(b.simpleSQL).toContain(`@Name${sfxB} NVARCHAR(100)`);
   });
 
   it('CREATE without TrackRecordChanges: the guarded form still reaches the SQL logger as the fallback', async () => {
