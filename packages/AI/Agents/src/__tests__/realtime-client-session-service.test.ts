@@ -20,7 +20,7 @@ import {
 import { AIEngine } from '@memberjunction/aiengine';
 import * as coreModule from '@memberjunction/core';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { MJActionParamEntity } from '@memberjunction/core-entities';
+import { MJActionParamEntity, MJAIModalityEntity, MJAIModelModalityEntity } from '@memberjunction/core-entities';
 import { MJGlobal, MJLruCache } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
@@ -2984,5 +2984,72 @@ describe('RealtimeClientSessionService.PrepareClientSession: the avatar status f
         expect(svc.Resolutions).toBe(1);
         expect(result.SessionParams?.Avatar).toEqual(BEN);
         expect(svc.Model.LastParams?.Avatar).toEqual(BEN);
+    });
+
+    it("says the voice model shows none when its Video/Output row turns video off, though its driver renders avatars", async () => {
+        cacheVideoOutputRow('m1', false);
+        const svc = new StatusService();
+        svc.UseModel(new AvatarModel());
+        svc.Resolution = { Avatar: BEN };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+        expect(avatarLines()).toEqual(['[RealtimeCoAgent] mint avatar model=mock-realtime shown=false reason=endpoint']);
+    });
+
+    it("passes the driver's grant through when the model's Video/Output row allows video", async () => {
+        cacheVideoOutputRow('m1', true);
+        const svc = new StatusService();
+        svc.UseModel(new AvatarModel());
+        svc.Resolution = { Avatar: BEN };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.AvatarStatus).toEqual({ Requested: true, Granted: true });
+    });
+});
+
+/** Makes the AI engine's cache hold one Video/Output row for a model (restored by `vi.restoreAllMocks`). */
+function cacheVideoOutputRow(modelID: string, isSupported: boolean): void {
+    vi.spyOn(AIEngine.Instance, 'GetModalityByName').mockImplementation((name: string) =>
+        name.toLowerCase() === 'video' ? ({ ID: 'modality-video', Name: 'Video' } as unknown as MJAIModalityEntity) : undefined);
+    vi.spyOn(AIEngine.Instance, 'ModelModalities', 'get').mockReturnValue([
+        { ModelID: modelID, ModalityID: 'modality-video', Direction: 'Output', IsSupported: isSupported } as unknown as MJAIModelModalityEntity,
+    ]);
+}
+
+describe("RealtimeClientSessionService.ResolveSessionAvatar: the model's Video/Output row", () => {
+    /** Exposes the real avatar resolution (the engine's persona metadata is empty here). */
+    class GateService extends TestableService {
+        public CallResolveSessionAvatar(config: RealtimeCoAgentConfig | undefined): RealtimeAvatarResolution {
+            return this.ResolveSessionAvatar(makePrepInput(), makeCoAgent(), config, 'm1', undefined);
+        }
+    }
+    const VIDEO_ON: RealtimeCoAgentConfig = { realtime: { video: { enabled: true } } };
+    let log: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => { log = vi.spyOn(console, 'log').mockImplementation(() => undefined); });
+    afterEach(() => vi.restoreAllMocks());
+    const vetoLines = (): string[] => log.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('No avatar asked for'));
+
+    it('asks for no avatar when the row turns video off, with reason endpoint and one log line naming the model', () => {
+        cacheVideoOutputRow('m1', false);
+        vi.spyOn(AIEngine.Instance, 'Models', 'get').mockReturnValue([{ ID: 'm1', Name: 'Gemini 3.8 Live' } as unknown as MJAIModelEntityExtended]);
+        expect(new GateService().CallResolveSessionAvatar(VIDEO_ON)).toEqual({ Reason: 'endpoint' });
+        expect(vetoLines()).toEqual([
+            "[RealtimeCoAgent] No avatar asked for: the Video/Output modality row of 'Gemini 3.8 Live' turns video off (IsSupported false). The call is audio only. Reason: endpoint.",
+        ]);
+    });
+
+    it('resolves the personas as before when the row allows video or the model has none', () => {
+        cacheVideoOutputRow('m1', true);
+        expect(new GateService().CallResolveSessionAvatar(VIDEO_ON)).toEqual({ Reason: 'no-binding' });
+        vi.restoreAllMocks();
+        log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        cacheVideoOutputRow('another-model', false);
+        expect(new GateService().CallResolveSessionAvatar(VIDEO_ON)).toEqual({ Reason: 'no-binding' });
+        expect(vetoLines()).toEqual([]);
+    });
+
+    it('reads nothing and logs nothing while the video setting is off', () => {
+        cacheVideoOutputRow('m1', false);
+        expect(new GateService().CallResolveSessionAvatar({})).toEqual({});
+        expect(vetoLines()).toEqual([]);
     });
 });

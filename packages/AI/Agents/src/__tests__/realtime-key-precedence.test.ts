@@ -246,6 +246,13 @@ describe('probe: BaseAgent.StartBridgeRealtimeSession mints on the run\'s key', 
         expect(build.mock.calls.map(([input]) => input.AvatarDelivery)).toEqual(['room', undefined]);
     });
 
+    it('marks the session prep as server-side, with or without room delivery', async () => {
+        const build = vi.spyOn(proto, 'buildSessionParams');
+        await start(RUN_KEYS, { realtimeAvatarDelivery: 'room' });
+        await start(RUN_KEYS);
+        expect(build.mock.calls.map(([input]) => input.ServerSide)).toEqual([true, true]);
+    });
+
     it('RuntimeOnly with no run keys → no session, even though the platform holds a key', async () => {
         await expect(start(undefined, undefined, 'RuntimeOnly')).rejects.toThrow();
         expect(minted).toEqual([]);

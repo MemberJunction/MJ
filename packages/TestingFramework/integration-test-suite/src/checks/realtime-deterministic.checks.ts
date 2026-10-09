@@ -1,5 +1,5 @@
 /**
- * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD17).
+ * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD18).
  *
  * Domain 10 deterministic legs — NO live sessions, NO sidecar, NO model calls:
  *  - realtime metadata integrity: agent channels (RD1), Realtime model → vendor DriverClass
@@ -29,6 +29,10 @@
  *  - meeting avatars (RD17): the active LiveKit bridge provider lets an agent's bot publish video (its avatar rides
  *    `video-out`), and the native room module the bots join with answers the avatar probe (ffmpeg found or not, both
  *    reported) without opening anything.
+ *  - the Modalities gate for avatars (RD18): through the real session prep on a run-scoped placeholder key, Gemini 3.8
+ *    Live × Vertex AI asks for the voiced agent's face (its Video/Output row and its endpoint allow it); a tagged model
+ *    on the same driver and API name whose Video/Output row has IsSupported=false asks for none (`endpoint`); without
+ *    that row, its endpoint alone decides and it asks again. Its fixture rows are deleted afterwards.
  *
  * Every fixture row is tagged '(mj-integration-test — safe to delete)' and deleted in the same
  * check's finally block, so the bundle needs no shared lifecycle.
@@ -38,7 +42,14 @@ import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseRealtimeModel, type AIAPIKey, type IRealtimeSession, type RealtimeUsage } from '@memberjunction/ai';
 import { AIEngineBase, ReadCostLines, ReadRealtimeUsageRecord, RoundCost, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import type { MJAIAgentEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
-import { REALTIME_AGENT_TYPE_NAME, RealtimeClientSessionService, type PrepareClientSessionInput, type RealtimeSessionParamsPrep } from '@memberjunction/ai-agents';
+import {
+    REALTIME_AGENT_TYPE_NAME,
+    RealtimeClientSessionService,
+    ReadRealtimeVideoOutputRow,
+    RealtimeModelShowsAvatar,
+    type PrepareClientSessionInput,
+    type RealtimeSessionParamsPrep,
+} from '@memberjunction/ai-agents';
 import {
     MJAIAgentChannelSchema,
     MJAIAgentChannelEntity,
@@ -49,6 +60,7 @@ import {
     MJAIAgentSessionBridgeEntity,
     MJAIBridgeProviderEntity,
     MJAIModelCostEntity,
+    MJAIModelModalityEntity,
     MJAIModelPersonaEntity,
     MJAIModelVendorEntity,
     MJAIPersonaEntity,
@@ -157,9 +169,13 @@ interface AvatarFixtureAnchors {
     AudioModalityID: string;
 }
 
-/** The rows RD13 creates, in creation order; deleted in reverse. */
+/** The rows RD13 (and RD18) create, in creation order; deleted in reverse. */
 interface AvatarFixture {
+    /** The check that owns the fixture, for its messages. */
+    Check: 'RD13' | 'RD18';
     Rows: BaseEntity[];
+    /** The tagged persona, once saved. */
+    PersonaID?: string;
     /** The persona's face binding on the session's vendor, once saved; the no-binding leg removes it. */
     Face?: MJAIPersonaVendorEntity;
     AvatarID: string;
@@ -199,18 +215,29 @@ function pickRealtimeVendor(engine: AIEngineBase): { Model: MJAIModelEntityExten
 
 /** The anchors RD13 needs, or why the deployment cannot supply them. */
 function findAvatarFixtureAnchors(engine: AIEngineBase): AvatarFixtureAnchors | string {
+    return avatarAnchorsOn(engine, pickRealtimeVendor(engine), 'no Active realtime model with a vendor driver registered in this process');
+}
+
+/**
+ * The avatar anchors on one model and vendor row: the first Active Realtime-type agent (the co-agent), the first Active
+ * other agent without personas (the voiced agent), and the Video and Audio modalities; or why the deployment has none.
+ */
+function avatarAnchorsOn(
+    engine: AIEngineBase,
+    picked: { Model: MJAIModelEntityExtended; VendorRow: MJAIModelVendorEntity } | undefined,
+    noModel: string,
+): AvatarFixtureAnchors | string {
     const realtimeType = engine.AgentTypes.find((t) => t.Name.trim().toLowerCase() === 'realtime');
     const byName = (a: MJAIAgentEntityExtended, b: MJAIAgentEntityExtended): number => (a.Name ?? '').localeCompare(b.Name ?? '');
     const active = engine.Agents.filter((a) => a.Status === 'Active').sort(byName);
     const coAgent = realtimeType ? active.find((a) => UUIDsEqual(a.TypeID, realtimeType.ID)) : undefined;
     const target = active.find((a) => !UUIDsEqual(a.TypeID, realtimeType?.ID ?? '') && !engine.AgentPersonas.some((ap) => UUIDsEqual(ap.AgentID, a.ID)));
-    const picked = pickRealtimeVendor(engine);
     const video = engine.GetModalityByName('Video');
     const audio = engine.GetModalityByName('Audio');
     if (!coAgent || !target || !picked || !video || !audio) {
         return !coAgent ? 'no Active agent of the Realtime type (the co-agent)'
             : !target ? 'no Active non-realtime agent without personas to voice'
-            : !picked ? 'no Active realtime model with a vendor driver registered in this process'
+            : !picked ? noModel
             : "no 'Video' or 'Audio' row in MJ: AI Modalities";
     }
     return { CoAgent: coAgent, Target: target, Model: picked.Model, VendorRow: picked.VendorRow, VideoModalityID: video.ID, AudioModalityID: audio.ID };
@@ -218,7 +245,7 @@ function findAvatarFixtureAnchors(engine: AIEngineBase): AvatarFixtureAnchors | 
 
 /** Saves one fixture row, recording it for cleanup first so a half-built fixture is still removed. */
 async function saveFixtureRow(fixture: AvatarFixture, row: BaseEntity, what: string): Promise<void> {
-    Assert(await row.Save(), `RD13: the fixture ${what} did not save: ${row.LatestResult?.CompleteMessage}`);
+    Assert(await row.Save(), `${fixture.Check}: the fixture ${what} did not save: ${row.LatestResult?.CompleteMessage}`);
     fixture.Rows.push(row);
 }
 
@@ -248,17 +275,12 @@ async function createAvatarFixture(ctx: { User: UserInfo }, anchors: AvatarFixtu
     persona.Source = 'Custom';
     persona.IsActive = true;
     await saveFixtureRow(fixture, persona, 'persona');
+    fixture.PersonaID = persona.ID;
     await saveFixtureRow(fixture, await personaBinding(md, ctx, persona.ID, anchors, anchors.AudioModalityID, fixture.Voice), 'voice binding');
     const face = await personaBinding(md, ctx, persona.ID, anchors, anchors.VideoModalityID, fixture.AvatarID);
     await saveFixtureRow(fixture, face, 'face binding');
     fixture.Face = face;
-    const modelPersona = await md.GetEntityObject<MJAIModelPersonaEntity>('MJ: AI Model Personas', ctx.User);
-    modelPersona.NewRecord();
-    modelPersona.ModelID = anchors.Model.ID;
-    modelPersona.PersonaID = persona.ID;
-    modelPersona.Sequence = 9999;
-    modelPersona.IsSupported = true;
-    await saveFixtureRow(fixture, modelPersona, 'model persona row');
+    await saveFixtureRow(fixture, await modelPersonaRow(md, ctx, anchors.Model.ID, persona.ID), 'model persona row');
     const agentPersona = await md.GetEntityObject<MJAIAgentPersonaEntity>('MJ: AI Agent Personas', ctx.User);
     agentPersona.NewRecord();
     agentPersona.AgentID = anchors.Target.ID;
@@ -267,6 +289,17 @@ async function createAvatarFixture(ctx: { User: UserInfo }, anchors: AvatarFixtu
     agentPersona.IsAllowed = true;
     agentPersona.Sequence = 1;
     await saveFixtureRow(fixture, agentPersona, 'agent persona row');
+}
+
+/** A model persona row: the persona is one of the model's personas (unsaved). */
+async function modelPersonaRow(md: Metadata, ctx: { User: UserInfo }, modelID: string, personaID: string): Promise<MJAIModelPersonaEntity> {
+    const modelPersona = await md.GetEntityObject<MJAIModelPersonaEntity>('MJ: AI Model Personas', ctx.User);
+    modelPersona.NewRecord();
+    modelPersona.ModelID = modelID;
+    modelPersona.PersonaID = personaID;
+    modelPersona.Sequence = 9999;
+    modelPersona.IsSupported = true;
+    return modelPersona;
 }
 
 /** Deletes the fixture rows, newest first (FK-safe); never throws. */
@@ -303,6 +336,123 @@ function assertAvatarResolved(prep: RealtimeSessionParamsPrep, anchors: AvatarFi
     AssertEqual(avatar!.Source, 'persona', 'RD13: the avatar came from the voiced agent\'s persona');
     AssertEqual(avatar!.Kind, 'preset', 'RD13: the binding\'s avatar settings reach the request');
     AssertEqual(prep.SessionParams?.Config?.['voice'], fixture.Voice, 'RD13: the face\'s persona supplies the session\'s voice');
+}
+
+// ── RD18: the Modalities gate for avatars ──────────────────────────────────────────────────────────
+
+/** The driver and API name that render avatars: Gemini 3.8 Live on Gemini Enterprise (Vertex AI). */
+const RD18_AVATAR_DRIVER = 'GeminiEnterpriseRealtime';
+const RD18_AVATAR_API_NAME = 'gemini-3.8-live';
+
+/** The tagged model RD18 adds beside Gemini 3.8 Live: the same driver and API name, and its own Video/Output row. */
+interface GatedModelFixture {
+    Model: MJAIModelEntityExtended;
+    VendorRow: MJAIModelVendorEntity;
+    VideoOutput: MJAIModelModalityEntity;
+}
+
+/** Gemini 3.8 Live × Vertex AI: an Active realtime model's Active vendor row on the avatar driver and API name, its driver registered here. */
+function pickAvatarVendor(engine: AIEngineBase): { Model: MJAIModelEntityExtended; VendorRow: MJAIModelVendorEntity } | undefined {
+    for (const { Model, Rows } of realtimeVendorRows(engine)) {
+        const row = Rows.find((r) => r.DriverClass!.trim() === RD18_AVATAR_DRIVER && (r.APIName ?? '').trim().toLowerCase() === RD18_AVATAR_API_NAME);
+        if (row?.VendorID && resolvesRealtimeDriver(row.DriverClass!)) {
+            return { Model, VendorRow: row };
+        }
+    }
+    return undefined;
+}
+
+/** The anchors RD18 needs, or why the deployment cannot supply them. */
+function findModalitiesGateAnchors(engine: AIEngineBase): AvatarFixtureAnchors | string {
+    return avatarAnchorsOn(engine, pickAvatarVendor(engine),
+        `no Active realtime model with an Active '${RD18_AVATAR_DRIVER}' vendor row for '${RD18_AVATAR_API_NAME}' whose driver is registered in this process`);
+}
+
+/**
+ * The tagged model's name: `rd18-`, a five-character run id, and the fixture tag; 49 characters, since `MJ: AI Models.Name`
+ * is nvarchar(50) and the persona's longer stamp doesn't fit there. The tag is also in its Description.
+ */
+function gatedModelName(): string {
+    const runID = Math.floor(Math.random() * 36 ** 5).toString(36).padStart(5, '0');
+    return `rd18-${runID} ${TAG}`;
+}
+
+/** Saves the tagged model and its vendor row on the same vendor, driver and API name as the anchor's row. */
+async function createGatedModel(md: Metadata, ctx: { User: UserInfo }, anchors: AvatarFixtureAnchors, fixture: AvatarFixture): Promise<{ Model: MJAIModelEntityExtended; VendorRow: MJAIModelVendorEntity }> {
+    const model = await md.GetEntityObject<MJAIModelEntityExtended>('MJ: AI Models', ctx.User);
+    model.NewRecord();
+    model.Name = gatedModelName();
+    model.Description = TAG;
+    model.AIModelTypeID = anchors.Model.AIModelTypeID;
+    model.IsActive = true;
+    model.PowerRank = 0;
+    await saveFixtureRow(fixture, model, 'model');
+    const vendorRow = await md.GetEntityObject<MJAIModelVendorEntity>('MJ: AI Model Vendors', ctx.User);
+    vendorRow.NewRecord();
+    vendorRow.ModelID = model.ID;
+    vendorRow.VendorID = anchors.VendorRow.VendorID;
+    vendorRow.TypeID = anchors.VendorRow.TypeID;
+    vendorRow.DriverClass = anchors.VendorRow.DriverClass;
+    vendorRow.APIName = anchors.VendorRow.APIName;
+    vendorRow.Priority = 0;
+    vendorRow.Status = 'Active';
+    await saveFixtureRow(fixture, vendorRow, 'model vendor row');
+    return { Model: model, VendorRow: vendorRow };
+}
+
+/** Creates the tagged model, a Video/Output row on it with IsSupported=false, and the fixture persona as one of its personas. */
+async function createVideoOffModel(ctx: { User: UserInfo }, anchors: AvatarFixtureAnchors, fixture: AvatarFixture): Promise<GatedModelFixture> {
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const { Model, VendorRow } = await createGatedModel(md, ctx, anchors, fixture);
+    const videoOutput = await md.GetEntityObject<MJAIModelModalityEntity>('MJ: AI Model Modalities', ctx.User);
+    videoOutput.NewRecord();
+    videoOutput.ModelID = Model.ID;
+    videoOutput.ModalityID = anchors.VideoModalityID;
+    videoOutput.Direction = 'Output';
+    videoOutput.IsSupported = false;
+    videoOutput.Comments = TAG;
+    await saveFixtureRow(fixture, videoOutput, 'Video/Output row');
+    await saveFixtureRow(fixture, await modelPersonaRow(md, ctx, Model.ID, fixture.PersonaID!), 'model persona row on the tagged model');
+    return { Model, VendorRow, VideoOutput: videoOutput };
+}
+
+/** The anchors with the tagged model and its vendor row in place of Gemini 3.8 Live's. */
+function onGatedModel(anchors: AvatarFixtureAnchors, gated: GatedModelFixture): AvatarFixtureAnchors {
+    return { ...anchors, Model: gated.Model, VendorRow: gated.VendorRow };
+}
+
+/** RD18's first leg: Gemini 3.8 Live × Vertex AI, whose Video/Output row and endpoint both allow an avatar, asks for the face. */
+function assertGateOpen(prep: RealtimeSessionParamsPrep, anchors: AvatarFixtureAnchors, fixture: AvatarFixture): void {
+    Assert(prep.Success, `RD18: the prep on ${anchors.Model.Name} failed: ${prep.ErrorMessage}`);
+    const resolution = prep.Resolution!;
+    Assert(UUIDsEqual(resolution.ModelVendorID ?? '', anchors.VendorRow.ID), 'RD18: the prep must run on the Vertex AI row the run key covers');
+    AssertEqual(ReadRealtimeVideoOutputRow(anchors.Model.ID, AIEngineBase.Instance), 'supported', `RD18: ${anchors.Model.Name}'s Video/Output row allows video`);
+    Assert(RealtimeModelShowsAvatar(resolution, AIEngineBase.Instance), `RD18: ${anchors.Model.Name}'s row and its endpoint allow an avatar`);
+    AssertEqual(prep.SessionParams?.Avatar?.AvatarID, fixture.AvatarID, "RD18: the session asks for the voiced agent's face");
+    AssertEqual(prep.AvatarResolution?.Reason, undefined, 'RD18: with the gate open and a face, there is no reason to give');
+}
+
+/** RD18's second leg: the tagged model, on the same endpoint, whose Video/Output row has IsSupported=false, asks for none. */
+function assertGateClosedByRow(prep: RealtimeSessionParamsPrep, gated: GatedModelFixture): void {
+    Assert(prep.Success, `RD18: the prep on the tagged model failed: ${prep.ErrorMessage}`);
+    const resolution = prep.Resolution!;
+    Assert(UUIDsEqual(resolution.ModelVendorID ?? '', gated.VendorRow.ID), "RD18: the prep must run the tagged model on its own vendor row");
+    Assert(resolution.Model.SupportsAvatarOutput(resolution.APIName), `RD18: the endpoint alone renders avatars for '${resolution.APIName}' on ${resolution.DriverClass}`);
+    AssertEqual(ReadRealtimeVideoOutputRow(gated.Model.ID, AIEngineBase.Instance), 'unsupported', "RD18: the tagged model's Video/Output row turns video off");
+    Assert(!RealtimeModelShowsAvatar(resolution, AIEngineBase.Instance), 'RD18: the row turns the avatar off whatever the endpoint renders');
+    AssertEqual(prep.SessionParams?.Avatar, undefined, 'RD18: the session asks for no avatar');
+    AssertEqual(prep.AvatarResolution?.Reason, 'endpoint', 'RD18: the prep says why: this voice model shows no avatar (endpoint)');
+}
+
+/** RD18's third leg: with the tagged model's row deleted, its endpoint alone decides, and the session asks for the face again. */
+async function assertNoRowLeavesItToTheEndpoint(ctx: IntegrationCheckContext, service: RealtimeClientSessionService, anchors: AvatarFixtureAnchors, fixture: AvatarFixture, gated: GatedModelFixture): Promise<void> {
+    Assert(await gated.VideoOutput.Delete(), `RD18: the fixture Video/Output row did not delete: ${gated.VideoOutput.LatestResult?.CompleteMessage}`);
+    fixture.Rows.splice(fixture.Rows.indexOf(gated.VideoOutput), 1);
+    await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider);
+    const prep = await service.PrepareRealtimeSessionParams(avatarPrepInput(onGatedModel(anchors, gated), true), ctx.User, ctx.Provider);
+    Assert(prep.Success, `RD18: the prep on the tagged model without its row failed: ${prep.ErrorMessage}`);
+    AssertEqual(ReadRealtimeVideoOutputRow(gated.Model.ID, AIEngineBase.Instance), 'unstated', 'RD18: the tagged model has no Video/Output row now');
+    AssertEqual(prep.SessionParams?.Avatar?.AvatarID, fixture.AvatarID, 'RD18: with no row, the endpoint decides, and the session asks for the face');
 }
 
 // ── RD16: avatar video priced at finalize ──────────────────────────────────────────────────────────
@@ -1351,7 +1501,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 return;
             }
             const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-            const fixture: AvatarFixture = { Rows: [], AvatarID: `mj-it-avatar-${stamp}`, Voice: `mj-it-voice-${stamp}`, PersonaName: `mj-it-rd13-persona-${stamp} ${TAG}` };
+            const fixture: AvatarFixture = { Check: 'RD13', Rows: [], AvatarID: `mj-it-avatar-${stamp}`, Voice: `mj-it-voice-${stamp}`, PersonaName: `mj-it-rd13-persona-${stamp} ${TAG}` };
             try {
                 await createAvatarFixture(ctx, anchors, fixture);
                 await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider); // the engine reads the fixture rows now, not after its debounce
@@ -1464,6 +1614,33 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             const known = support.Supported === true || support.Reason === 'decoder-missing' || support.Reason === 'bridged';
             Assert(known, `RD17: the avatar probe answered with an unknown shape: ${JSON.stringify(support)}`);
             console.log(`      → video out allowed; meeting avatars on this host: ${support.Supported === true ? 'can be published' : `audio only (${support.Reason}${support.Detail ? `: ${support.Detail}` : ''})`}`);
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD18',
+        Name: "RD18: an avatar shows only when the model's Video/Output modality row and its endpoint allow it: Gemini 3.8 Live × Vertex AI asks for one; a tagged model on the same endpoint whose row has IsSupported=false asks for none (endpoint); without the row, the endpoint decides (run-scoped key, no network)",
+        Fn: async (ctx): Promise<void> => {
+            await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
+            const anchors = findModalitiesGateAnchors(AIEngineBase.Instance);
+            if (typeof anchors === 'string') {
+                console.warn(`  ⚠ realtime-deterministic.RD18 SKIPPED — ${anchors}`);
+                return;
+            }
+            const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+            const fixture: AvatarFixture = { Check: 'RD18', Rows: [], AvatarID: `mj-it-avatar-${stamp}`, Voice: `mj-it-voice-${stamp}`, PersonaName: `mj-it-rd18-persona-${stamp} ${TAG}` };
+            try {
+                await createAvatarFixture(ctx, anchors, fixture);
+                const gated = await createVideoOffModel(ctx, anchors, fixture);
+                await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider); // the engine reads the fixture rows now, not after its debounce
+                const service = new RealtimeClientSessionService();
+                assertGateOpen(await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, true), ctx.User, ctx.Provider), anchors, fixture);
+                assertGateClosedByRow(await service.PrepareRealtimeSessionParams(avatarPrepInput(onGatedModel(anchors, gated), true), ctx.User, ctx.Provider), gated);
+                await assertNoRowLeavesItToTheEndpoint(ctx, service, anchors, fixture, gated);
+            } finally {
+                await deleteAvatarFixture(fixture);
+                await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider).catch(() => undefined);
+            }
+            console.log(`      → ${anchors.Model.Name} on ${anchors.VendorRow.DriverClass} asks for the face; a tagged model there with IsSupported=false asks for none (endpoint), and with no row asks again; fixture removed`);
         }
     }
 ];

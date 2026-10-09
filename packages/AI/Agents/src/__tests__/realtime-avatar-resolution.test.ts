@@ -1,7 +1,7 @@
 /**
  * Which live avatar a realtime session asks for: the voiced agent's persona face when its video setting is on, then the
- * co-agent's, never the model's own first persona; an explicit avatar id only when it names a real binding; and the
- * avatar persona's voice to go with it.
+ * co-agent's, never the model's own first persona; an explicit avatar id only when it names a real binding; the avatar
+ * persona's voice to go with it; and none when the model's Video/Output row turns video off.
  */
 import { describe, it, expect } from 'vitest';
 import type { ResolvedAgentPersona, ResolvedModelPersona } from '@memberjunction/ai-engine-base';
@@ -120,6 +120,32 @@ describe('ResolveRealtimeAvatar', () => {
         expect(unknown).toEqual({ Reason: 'unknown-avatar' });
     });
 
+    it("asks for no avatar when the model's Video/Output row turns video off: reason endpoint, and no persona is read", () => {
+        const s = source();
+        s.Agents['target'] = [agentPersona(BEN, true)];
+        const result = ResolveRealtimeAvatar(
+            { EffectiveConfig: VIDEO_ON, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX, VideoOutputRow: 'unsupported' }, s);
+        expect(result).toEqual({ Reason: 'endpoint' });
+        expect(s.VendorsAsked).toEqual([]);
+    });
+
+    it("gives no reason for a turned-off row while the agent's video setting is off", () => {
+        expect(ResolveRealtimeAvatar(
+            { EffectiveConfig: { realtime: { video: { enabled: false } } }, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VideoOutputRow: 'unsupported' },
+            source(),
+        )).toEqual({});
+    });
+
+    it("resolves the persona's face when the row allows video, or the model has none (the driver decides then)", () => {
+        for (const row of ['supported', 'unstated'] as const) {
+            const s = source();
+            s.Agents['target'] = [agentPersona(BEN, true)];
+            const result = ResolveRealtimeAvatar(
+                { EffectiveConfig: VIDEO_ON, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX, VideoOutputRow: row }, s);
+            expect(result.Avatar?.AvatarID).toBe('Ben');
+        }
+    });
+
     it("asks for the avatar a picker override names, even when the voiced agent's video setting is off", () => {
         // The picker's override (voice + the avatar that comes with it) is the top layer of the effective config.
         const target = JSON.stringify({ realtime: { video: { enabled: false } } });
@@ -142,6 +168,11 @@ describe('ResolveRealtimeAvatarStatus', () => {
         expect(ResolveRealtimeAvatarStatus({ Resolution: { Avatar: BEN }, ModelSupportsAvatarOutput: false })).toEqual(endpoint);
         expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'no-binding' }, ModelSupportsAvatarOutput: false })).toEqual(endpoint);
         expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'unknown-avatar' }, ModelSupportsAvatarOutput: false })).toEqual(endpoint);
+    });
+
+    it("says the voice model shows none when the model's Video/Output row turned video off at the prep", () => {
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'endpoint' }, ModelSupportsAvatarOutput: false, DriverStatus: { Requested: true, Granted: true } }))
+            .toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
     });
 
     it("gives the resolution's reason when the model renders avatars but no face resolved, never the driver's status", () => {

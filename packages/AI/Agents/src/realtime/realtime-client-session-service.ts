@@ -74,6 +74,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ResolveRealtimeAvatar, ResolveRealtimeAvatarStatus, type RealtimeAvatarResolution } from './realtime-avatar-resolution';
+import { ReadRealtimeVideoOutputRow, RealtimeModelShowsAvatar } from './realtime-video-output-gate';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
 import { AgentRunner } from '../AgentRunner';
@@ -117,7 +118,7 @@ import {
     GetDirectActionsConfig,
     IsActionAllowedForDirectInvocation
 } from './realtime-coagent-config';
-import { SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtime-vendor-resolution';
+import { ListRealtimeVendorsForModel, SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtime-vendor-resolution';
 import { AIEngineBase, MergeRealtimeUsageRecord, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import { BuildSessionChannelPolicy, type RealtimeChannelRegistryRow } from './realtime-channel-policy';
 
@@ -279,6 +280,12 @@ export interface PrepareClientSessionInput {
      * render it there. Absent: a server-side session asks for no video (the driver logs `bridged`).
      */
     AvatarDelivery?: 'room';
+    /**
+     * `true` for a server-side session (a bridged meeting or a phone call), which can show the agent's avatar only when its
+     * host publishes it into a room ({@link AvatarDelivery} `'room'`). Without that, the default model walk's video
+     * preference skips the session: no model would bring it an avatar. Absent: a browser (client-direct) session.
+     */
+    ServerSide?: boolean;
     /**
      * Optional server-authoritative hard ceiling on the session's wall-clock duration, in seconds.
      * Threaded into {@link RealtimeSessionParams.MaxSessionSeconds} so a driver can bound the
@@ -890,11 +897,13 @@ export class RealtimeClientSessionService {
      * log line saying whether the avatar shows. `undefined`, and no line, when the session asked for no avatar.
      */
     private resolveMintedAvatarStatus(prep: RealtimeSessionParamsPrep, clientConfig: ClientRealtimeSessionConfig): RealtimeAvatarStatus | undefined {
-        const model = prep.Resolution?.Model;
-        const apiName = prep.Resolution?.APIName ?? clientConfig.Model;
+        const resolution = prep.Resolution;
+        const apiName = resolution?.APIName ?? clientConfig.Model;
         const status = ResolveRealtimeAvatarStatus({
             Resolution: prep.AvatarResolution ?? {},
-            ModelSupportsAvatarOutput: model?.SupportsAvatarOutput(apiName) ?? false,
+            ModelSupportsAvatarOutput: resolution
+                ? RealtimeModelShowsAvatar({ ModelID: resolution.ModelID, APIName: apiName, Model: resolution.Model }, AIEngine.Instance)
+                : false,
             DriverStatus: clientConfig.AvatarStatus,
         });
         if (status) {
@@ -2167,12 +2176,15 @@ export class RealtimeClientSessionService {
      *   {@link resolveConfiguredModelPreference}. METADATA preferences degrade gracefully — an
      *   unsatisfiable preference logs and FALLS THROUGH to the default (mirroring the co-agent
      *   resolution chain's tolerant metadata steps), it never breaks calls.
-     * - Without either: the existing default behavior via {@link resolveRealtimeModel}
-     *   (highest-PowerRank active Realtime model), with the generic {@link noModelMessage} on failure.
+     * - Without either: the default walk ({@link resolveDefaultRealtimeModel}): for a co-agent with video on, in a session
+     *   that could show an avatar (a browser session, or a server-side one with {@link PrepareClientSessionInput.AvatarDelivery}
+     *   `'room'`), the first candidate that shows one ({@link ResolveAvatarRealtimeModel}); else the existing default via
+     *   {@link resolveRealtimeModel} (highest-PowerRank active Realtime model), with the generic
+     *   {@link noModelMessage} on failure. The two explicit choices above win over the video preference.
      *
      * @param input The prepare-session input (carries the optional preferred model id).
      * @param coAgent The resolved co-agent (threaded to the default-resolution seam).
-     * @param effectiveConfig The resolved effective configuration (carries `modelPreference`).
+     * @param effectiveConfig The resolved effective configuration (carries `modelPreference` and the video setting).
      * @returns The resolution outcome (resolution or failure reason).
      */
     protected async resolveModelForSession(
@@ -2195,8 +2207,70 @@ export class RealtimeClientSessionService {
         if (fromConfig) {
             return { Resolution: fromConfig };
         }
-        const resolution = await this.resolveRealtimeModel(coAgent, resolveRunKey, scope);
+        const preferAvatar = effectiveConfig?.realtime?.video?.enabled === true && this.sessionCanShowAvatar(input);
+        const resolution = await this.resolveDefaultRealtimeModel(coAgent, preferAvatar, resolveRunKey, scope);
         return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage() };
+    }
+
+    /**
+     * Whether the session could show an avatar at all: a browser session, or a server-side one whose host publishes the
+     * avatar into a room. A phone call, or a meeting whose host can't publish video, can't.
+     */
+    private sessionCanShowAvatar(input: PrepareClientSessionInput): boolean {
+        return input.ServerSide !== true || input.AvatarDelivery === 'room';
+    }
+
+    /**
+     * The default walk. With `preferAvatar` (the co-agent's video setting is on and the session could show an avatar),
+     * it takes the first candidate that shows one ({@link ResolveAvatarRealtimeModel}). When none does, or without it, it
+     * takes {@link resolveRealtimeModel}'s choice; when one was preferred, one log line says the call stays audio only.
+     */
+    private async resolveDefaultRealtimeModel(
+        coAgent: MJAIAgentEntityExtended,
+        preferAvatar: boolean,
+        resolve: AIAPIKeyResolver,
+        credentialScope: AICredentialScope,
+    ): Promise<RealtimeModelResolution | null> {
+        const withAvatar = preferAvatar ? this.ResolveAvatarRealtimeModel(coAgent, resolve, credentialScope) : null;
+        if (withAvatar) {
+            return withAvatar;
+        }
+        const resolution = await this.resolveRealtimeModel(coAgent, resolve, credentialScope);
+        if (preferAvatar && resolution) {
+            LogStatus(
+                '[RealtimeCoAgent] Video is on, but no realtime model with a usable key shows an avatar (its Video/Output row ' +
+                    `and its endpoint): using '${resolution.ModelName ?? resolution.APIName}' on ${resolution.DriverClass ?? 'its driver'}, audio only.`,
+            );
+        }
+        return resolution;
+    }
+
+    /**
+     * For a co-agent with video on: the first candidate that shows an avatar and supports client-direct sessions, in the
+     * default walk's order (highest PowerRank first; a model's Active vendor rows by Priority, each with a usable key).
+     * A candidate shows an avatar when its model's Video/Output row allows video or it has none, and its driver renders
+     * avatars for the vendor's API name on its endpoint ({@link RealtimeModelShowsAvatar}). Every keyed vendor of a model
+     * is tried, not only the first. **Overridable seam.**
+     *
+     * @param coAgent The co-agent (reserved for future per-agent model preference).
+     * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
+     * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
+     * @returns The resolution, or `null` when no candidate shows an avatar.
+     */
+    protected ResolveAvatarRealtimeModel(coAgent: MJAIAgentEntityExtended, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolution | null {
+        const resolveKey = this.buildKeyChain(resolve, credentialScope);
+        for (const model of this.selectRealtimeModelCandidates(coAgent)) {
+            if (ReadRealtimeVideoOutputRow(model.ID, AIEngine.Instance) === 'unsupported') {
+                continue;
+            }
+            for (const vendor of ListRealtimeVendorsForModel(model.ID)) {
+                const resolution = this.instantiateRealtimeVendor(model, vendor, resolveKey);
+                if (resolution?.Model.SupportsClientDirect && RealtimeModelShowsAvatar(resolution, AIEngine.Instance)) {
+                    return resolution;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -2370,17 +2444,25 @@ export class RealtimeClientSessionService {
      * @returns The full resolution, or `null` when no vendor/key/driver can be satisfied.
      */
     protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolution | null {
-        // The run's keys first, then this service's own seam (which subclasses and tests override) —
-        // so a run-scoped credential wins without taking that seam away from anyone who replaced it.
-        // A scope that rules out the environment has no second step: the seam's default is the platform key.
-        const resolveKey: AIAPIKeyResolver = CredentialScopeAllows(credentialScope, 'Environment')
+        const resolveKey = this.buildKeyChain(resolve, credentialScope);
+        const vendor = this.selectRealtimeVendor(model.ID, resolveKey);
+        return vendor ? this.instantiateRealtimeVendor(model, vendor, resolveKey) : null;
+    }
+
+    /**
+     * The session's complete key chain for vendor selection and the mint (see {@link resolveVendorAndInstantiate}): the
+     * run's keys first, then this service's own seam (which subclasses and tests override), so a run-scoped credential
+     * wins without taking that seam away from anyone who replaced it. A scope that rules out the environment has no second
+     * step: the seam's default is the platform key.
+     */
+    private buildKeyChain(resolve: AIAPIKeyResolver | undefined, credentialScope: AICredentialScope): AIAPIKeyResolver {
+        return CredentialScopeAllows(credentialScope, 'Environment')
             ? (driverClass) => resolve?.(driverClass) ?? this.getAPIKeyForDriver(driverClass)
             : (driverClass) => resolve?.(driverClass);
-        const vendor = this.selectRealtimeVendor(model.ID, resolveKey);
-        if (!vendor) {
-            return null;
-        }
+    }
 
+    /** Instantiates a vendor's realtime driver with its key from the chain; `null` when the key or the driver is missing. */
+    private instantiateRealtimeVendor(model: MJAIModelEntityExtended, vendor: RealtimeVendorSelection, resolveKey: AIAPIKeyResolver): RealtimeModelResolution | null {
         const apiKey = resolveKey(vendor.DriverClass);
         if (!apiKey) {
             return null;
@@ -2430,7 +2512,9 @@ export class RealtimeClientSessionService {
 
     /**
      * The active models of AIModelType `Realtime`, sorted highest-PowerRank first — the candidate
-     * list {@link resolveRealtimeModel} walks until one yields a usable client-direct driver.
+     * list {@link resolveRealtimeModel} walks until one yields a usable client-direct driver, and
+     * {@link ResolveAvatarRealtimeModel} walks first for a co-agent with video on. Equal PowerRanks
+     * keep the engine's cached order (a stable sort).
      * Returns ALL candidates (not just the top pick) so a keyless or non-client-direct top model
      * falls through to the next usable one instead of dead-ending the whole resolution.
      *
@@ -2544,8 +2628,9 @@ export class RealtimeClientSessionService {
 
     /**
      * The live avatar this session asks for, if any: from the voiced agent's persona, or `realtime.video.avatarId`,
-     * when the agent's video setting is on (see `ResolveRealtimeAvatar`). Whether the session can render it is the
-     * driver's call. A seam so tests can supply a resolution without the engine's persona metadata.
+     * when the agent's video setting is on (see `ResolveRealtimeAvatar`). A model whose `MJ: AI Model Modalities`
+     * Video/Output row turns video off asks for none (reason `endpoint`, one log line); otherwise whether the session can
+     * render it is the driver's call. A seam so tests can supply a resolution without the engine's persona metadata.
      *
      * @param input The prepare-session input (the voiced agent).
      * @param coAgent The co-agent.
@@ -2564,8 +2649,15 @@ export class RealtimeClientSessionService {
             return {};
         }
         const vendorID = modelVendorID ? AIEngine.Instance.ModelVendors.find((mv) => UUIDsEqual(mv.ID, modelVendorID))?.VendorID : undefined;
+        const videoOutputRow = ReadRealtimeVideoOutputRow(modelID, AIEngine.Instance);
+        if (videoOutputRow === 'unsupported') {
+            LogStatus(
+                `[RealtimeCoAgent] No avatar asked for: the Video/Output modality row of '${this.findModelByID(modelID)?.Name ?? modelID}' ` +
+                    'turns video off (IsSupported false). The call is audio only. Reason: endpoint.',
+            );
+        }
         return ResolveRealtimeAvatar(
-            { EffectiveConfig: effectiveConfig, TargetAgentID: input.TargetAgentID, CoAgentID: coAgent.ID, ModelID: modelID, VendorID: vendorID },
+            { EffectiveConfig: effectiveConfig, TargetAgentID: input.TargetAgentID, CoAgentID: coAgent.ID, ModelID: modelID, VendorID: vendorID, VideoOutputRow: videoOutputRow },
             AIEngine.Instance,
         );
     }

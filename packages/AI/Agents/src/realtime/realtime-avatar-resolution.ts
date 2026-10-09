@@ -2,15 +2,16 @@
  * @fileoverview Which live avatar, if any, a realtime session asks for, and the voice that goes with it.
  *
  * A persona is a voice and a face: its Audio binding on a vendor is a voice, its Video binding an avatar. A session asks
- * for an avatar when the voiced agent's video setting is on (`realtime.video.enabled`) and a face resolves:
+ * for an avatar when the voiced agent's video setting is on (`realtime.video.enabled`), the model's Video/Output row
+ * doesn't turn video off (`IsSupported` false: reason `endpoint`), and a face resolves:
  * 1. `realtime.video.avatarId`, accepted only when it names an Active Video binding the model supports on the vendor;
  * 2. else the voiced (target) agent's personas, default first, the first with a face;
  * 3. else the co-agent's personas, the same way;
  * 4. else none. The model's own first persona is never used: an agent with no persona gets no face.
  *
- * Whether the session can render the avatar is the driver's call (the model and endpoint); this only decides which one
- * to ask for. Once the driver has minted the session, {@link ResolveRealtimeAvatarStatus} merges the two into the status
- * the call gets, so a call that shows no avatar can say why.
+ * Whether the session can render the avatar is otherwise the driver's call (its endpoint profile); this only decides
+ * which one to ask for. Once the driver has minted the session, {@link ResolveRealtimeAvatarStatus} merges the two into
+ * the status the call gets, so a call that shows no avatar can say why.
  *
  * @module @memberjunction/ai-agents
  */
@@ -19,6 +20,7 @@ import type { RealtimeAvatarSettings, RealtimeAvatarStatus, RealtimeAvatarUnavai
 import type { ResolvedAgentPersona, ResolvedModelPersona } from '@memberjunction/ai-engine-base';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { RealtimeCoAgentConfig } from './realtime-coagent-config';
+import type { RealtimeVideoOutputRow } from './realtime-video-output-gate';
 
 /** The persona lookups the resolution needs: `AIEngine` provides them; tests pass a fake. */
 export interface RealtimeAvatarPersonaSource {
@@ -38,16 +40,25 @@ export interface RealtimeAvatarResolutionInput {
     ModelID: string;
     /** The AI vendor serving it. Bindings on other vendors don't count. */
     VendorID?: string | null;
+    /**
+     * The model's Video/Output row (`ReadRealtimeVideoOutputRow`). `'unsupported'` turns video off: no avatar, reason
+     * `endpoint`. `'supported'`, `'unstated'` or absent leave it to the driver's endpoint profile at the mint.
+     */
+    VideoOutputRow?: RealtimeVideoOutputRow;
 }
 
 /** Which avatar to ask for, and its persona's voice; or why there is none. */
 export interface RealtimeAvatarResolution {
-    /** The avatar to ask for. Absent when the video setting is off or no face resolves. */
+    /** The avatar to ask for. Absent when the video setting is off, the model's row turns video off, or no face resolves. */
     Avatar?: RealtimeAvatarSettings;
     /** The avatar persona's voice on the same vendor, when it has one. */
     Voice?: string;
-    /** Why there is no avatar although the video setting is on. */
-    Reason?: Extract<RealtimeAvatarUnavailableReason, 'unknown-avatar' | 'no-binding'>;
+    /**
+     * Why there is no avatar although the video setting is on: the model's Video/Output row turns video off (`endpoint`),
+     * the requested avatar is not a face the model has on the vendor (`unknown-avatar`), or no persona has one
+     * (`no-binding`).
+     */
+    Reason?: Extract<RealtimeAvatarUnavailableReason, 'endpoint' | 'unknown-avatar' | 'no-binding'>;
 }
 
 /**
@@ -60,6 +71,9 @@ export function ResolveRealtimeAvatar(input: RealtimeAvatarResolutionInput, pers
     const video = input.EffectiveConfig?.realtime?.video;
     if (video?.enabled !== true) {
         return {};
+    }
+    if (input.VideoOutputRow === 'unsupported') {
+        return { Reason: 'endpoint' };
     }
     const vendorId = input.VendorID ?? undefined;
     const faces = personas.GetModelPersonas(input.ModelID, 'Video', vendorId);
@@ -94,7 +108,10 @@ function firstFaceOf(agentId: string, faces: ResolvedModelPersona[], personas: R
 export interface RealtimeAvatarStatusInput {
     /** The session's avatar resolution: an avatar, a reason there is none, or neither when the agent asked for none. */
     Resolution: RealtimeAvatarResolution;
-    /** Whether the resolved model renders avatars on its endpoint (`BaseRealtimeModel.SupportsAvatarOutput`). */
+    /**
+     * Whether the resolved model shows avatars (`RealtimeModelShowsAvatar`): its Video/Output row allows video or it has
+     * none, and its driver renders avatars on its endpoint (`BaseRealtimeModel.SupportsAvatarOutput`).
+     */
     ModelSupportsAvatarOutput: boolean;
     /** The driver's decision at mint (`ClientRealtimeSessionConfig.AvatarStatus`), when it reported one. */
     DriverStatus?: RealtimeAvatarStatus;
@@ -102,9 +119,9 @@ export interface RealtimeAvatarStatusInput {
 
 /**
  * The status a call gets about the avatar its agent asked for. Nothing when the agent asked for none (its video
- * setting is off). Otherwise audio only with `endpoint` when the model renders no avatar on its endpoint, whatever
- * driver serves it; then the resolution's reason (`unknown-avatar`, `no-binding`); else the driver's own decision
- * (granted, or `custom-disabled` and the like).
+ * setting is off). Otherwise audio only with `endpoint` when the model shows no avatar (its Video/Output row turns video
+ * off, or it renders none on its endpoint), whatever driver serves it; then the resolution's reason (`unknown-avatar`,
+ * `no-binding`); else the driver's own decision (granted, or `custom-disabled` and the like).
  *
  * @param input The resolution, the model's capability and the driver's decision.
  * @returns The status for the call, or `undefined` when the session asked for no avatar or the driver reported none.
