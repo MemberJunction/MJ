@@ -54,6 +54,14 @@ const SQL_SERVER_STACKED = "COUNT(*) AS [a'] ; SELECT 1 AS [b'], COUNT(*)";
 const POSTGRES_STACKED = "COUNT(*) + LENGTH(E'\\'') ; SELECT 1 AS x, COUNT(E'\\'')";
 
 /**
+ * node-sql-parser reads `\'` inside `'…'` as an escaped quote; SQL Server and PostgreSQL do not. In
+ * these single-call expressions the database reads the harmless subquery as code while the parser
+ * reads it as part of a string constant.
+ */
+const SQL_SERVER_BACKSLASH_STRING = "MAX(LEN('\\' + (SELECT 1) + '--'\n))";
+const POSTGRES_BACKSLASH_STRING = "MAX(LENGTH('\\' || (SELECT 1) || '--'\n))";
+
+/**
  * Runs the real `InternalRunView` / `RunViewCore` / `RunViewsWithCacheCheck` over entity fixtures.
  * `ExecuteSQL` records every statement and answers an aggregate query with `Agg_N = 100 + N` for
  * each `Agg_N` the statement selects, and every other query with no rows.
@@ -139,7 +147,8 @@ class AggregateTestProvider extends GenericDatabaseProviderTestBase {
 
 /** A readable entity with no row-level security, field-level security or external data source. */
 function widgetsEntity(): EntityInfo {
-    const fields = ['ID', 'Name', 'Sequence'].map((name) => ({ Name: name, CodeName: name }));
+    // `Database` is a real column whose name the keyword validator also treats as a keyword.
+    const fields = ['ID', 'Name', 'Sequence', 'Database'].map((name) => ({ Name: name, CodeName: name }));
     const id = fields[0];
     return {
         ID: 'ENT-Widgets',
@@ -202,6 +211,19 @@ describe('GenericDatabaseProvider.RunViewCore — aggregate expressions', () => 
         expect(response.results[0].aggregateResults?.[0].error).toMatch(/statement separator/);
     });
 
+    it.each([
+        ['sqlserver', SQL_SERVER_BACKSLASH_STRING],
+        ['postgresql', POSTGRES_BACKSLASH_STRING],
+    ] as const)('%s: an aggregate whose quoted string the parser and the database read differently never reaches the database', async (platform, expression) => {
+        const provider = new AggregateTestProvider(platform, [widgetsEntity()]);
+
+        const result = await provider.RunViewAs({ EntityName: ENTITY_NAME, Aggregates: [{ expression }] }, user);
+
+        expect(provider.ExecutedSQL.some((sql) => sql.includes('SELECT 1'))).toBe(false);
+        // Refused by the provider's own check, not left to the keyword validator behind it.
+        expect(result.AggregateResults?.[0].error).toMatch(/backslash/);
+    });
+
     it('a refused aggregate does not shift the values of the aggregates beside it', async () => {
         const provider = new AggregateTestProvider('sqlserver', [widgetsEntity()]);
 
@@ -217,7 +239,7 @@ describe('GenericDatabaseProvider.RunViewCore — aggregate expressions', () => 
             user,
         );
 
-        expect(provider.ExecutedSQL).toContain('SELECT COUNT(*) AS [Agg_0], SUM(Sequence) AS [Agg_1] FROM [__mj].[vwWidgets]');
+        expect(provider.ExecutedSQL).toContain('SELECT COUNT(*) AS [Agg_0], SUM([Sequence]) AS [Agg_1] FROM [__mj].[vwWidgets]');
         expect(result.AggregateResults?.map((a) => [a.alias, a.value])).toEqual([
             ['Total', 100],
             ['NotOneCall', null],
@@ -233,8 +255,8 @@ describe('GenericDatabaseProvider.RunViewCore — aggregate expressions', () => 
             {
                 EntityName: ENTITY_NAME,
                 Aggregates: [
-                    // One call over a column, but the keyword validator refuses REPLACE.
-                    { expression: "MAX(REPLACE(Name, 'a', 'b'))", alias: 'KeywordRefused' },
+                    // One call over a real column, but the keyword validator refuses the name.
+                    { expression: 'MAX(Database)', alias: 'KeywordRefused' },
                     { expression: 'SUM(Sequence) + 1', alias: 'ShapeRefused' },
                 ],
             },
@@ -245,7 +267,29 @@ describe('GenericDatabaseProvider.RunViewCore — aggregate expressions', () => 
         expect(result.AggregateResults?.map((a) => a.alias)).toEqual(['KeywordRefused', 'ShapeRefused']);
     });
 
-    it('ordinary aggregate expressions reach the database unchanged', async () => {
+    it('an aggregate the keyword validator refuses does not shift the values of the aggregates after it', async () => {
+        const provider = new AggregateTestProvider('sqlserver', [widgetsEntity()]);
+
+        const result = await provider.RunViewAs(
+            {
+                EntityName: ENTITY_NAME,
+                Aggregates: [
+                    { expression: 'MAX(Database)', alias: 'KeywordRefused' },
+                    { expression: 'COUNT(*)', alias: 'Total' },
+                ],
+            },
+            user,
+        );
+
+        expect(provider.ExecutedSQL).toContain('SELECT COUNT(*) AS [Agg_0] FROM [__mj].[vwWidgets]');
+        expect(result.AggregateResults?.map((a) => [a.alias, a.value])).toEqual([
+            ['KeywordRefused', null],
+            ['Total', 100],
+        ]);
+        expect(result.AggregateResults?.[0].error).toMatch(/DATABASE/);
+    });
+
+    it('the database runs each aggregate as rebuilt from its checked parse tree', async () => {
         const provider = new AggregateTestProvider('sqlserver', [widgetsEntity()]);
 
         const result = await provider.RunViewAs(
@@ -257,7 +301,7 @@ describe('GenericDatabaseProvider.RunViewCore — aggregate expressions', () => 
         );
 
         expect(provider.ExecutedSQL).toContain(
-            "SELECT AVG(Sequence * 2) AS [Agg_0], COUNT(CASE WHEN Name = 'x' THEN 1 END) AS [Agg_1] FROM [__mj].[vwWidgets]",
+            "SELECT AVG([Sequence] * 2) AS [Agg_0], COUNT(CASE WHEN [Name] = 'x' THEN 1 END) AS [Agg_1] FROM [__mj].[vwWidgets]",
         );
         expect(result.AggregateResults?.map((a) => [a.value, a.error])).toEqual([
             [100, undefined],

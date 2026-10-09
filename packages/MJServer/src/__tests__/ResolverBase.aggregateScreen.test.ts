@@ -98,6 +98,12 @@ describe('ResolverBase.screenClientViewClauses — aggregate expressions', () =>
         ).toThrow(/Invalid Aggregate: multiple statements/);
     });
 
+    it('leaves an aggregate the parser cannot read to the provider, which refuses it per aggregate', () => {
+        expect(() =>
+            new Probe().ScreenAll({ aggregates: [{ expression: 'COUNT_BIG(*)' }] }, fakeProvider({ params: null })),
+        ).not.toThrow();
+    });
+
     it('lets ordinary aggregate expressions through', () => {
         const ordinary = [
             'COUNT(*)',
@@ -147,5 +153,23 @@ describe('ResolverBase RunView entry points — aggregate expressions', () => {
         expect(results[0].Success).toBe(false);
         expect(results[0].ErrorMessage).toMatch(/Invalid Aggregate: multiple statements/);
         expect(captured.params).toBeNull();
+    });
+
+    it('RunViews does not fail the batch because one aggregate cannot be parsed', async () => {
+        const captured: Captured = { params: null };
+        const provider = fakeProvider(captured);
+        const input = [
+            { EntityName: ENTITY_NAME, Aggregates: [{ expression: 'COUNT_BIG(*)' }] },
+            { EntityName: ENTITY_NAME },
+        ] as Parameters<RunViewResolver['RunViews']>[0];
+
+        const results = await new RunViewResolver().RunViews(
+            input,
+            { providers: [{ type: 'Read-Only', provider }] as unknown as AppContext['providers'], userPayload: fakePayload() } as AppContext,
+            undefined as unknown as PubSubEngine,
+        );
+
+        expect(results.map((r) => r.Success)).toEqual([true, true]);
+        expect(captured.params?.Aggregates).toEqual([{ expression: 'COUNT_BIG(*)' }]);
     });
 });
