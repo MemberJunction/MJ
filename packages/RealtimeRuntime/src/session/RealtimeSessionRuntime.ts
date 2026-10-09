@@ -1732,7 +1732,8 @@ export class RealtimeSessionRuntime {
    * a model that takes no video, a closed picker, a host that cannot share) is a state with a message. The share
    * also stops when the user ends it from the browser's own bar.
    *
-   * @param options What the picker offers first, or the panel to share.
+   * @param options What the picker offers first, or the panel to share and its name (`PanelLabel`), which the share's
+   *   state carries and the agent sees as "<name> (shared panel)".
    */
   public async StartScreenShare(options?: DisplayCaptureOptions): Promise<RealtimeCaptureState> {
     if (!this.captures) {

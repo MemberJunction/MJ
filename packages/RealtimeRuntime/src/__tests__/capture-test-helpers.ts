@@ -142,14 +142,17 @@ export class FakeController implements ILocalMediaController {
     }
 }
 
-/** A share the test can end as the browser's own bar would. */
+/** A share the test can end as the browser's own bar would; a panel share when it is given the panel's name. */
 export class FakeShare implements DisplayCapture {
     public readonly Stream = stream('screen');
     public readonly Track = {} as MediaStreamTrack;
     public readonly Label = 'Quarterly report';
     public Stopped = false;
     private readonly handlers = new Set<() => void>();
-    constructor(public readonly Surface: DisplayCapture['Surface']) {}
+    constructor(
+        public readonly Surface: DisplayCapture['Surface'],
+        public readonly PanelLabel?: string
+    ) {}
     public OnEnded(handler: () => void): () => void {
         this.handlers.add(handler);
         return () => this.handlers.delete(handler);

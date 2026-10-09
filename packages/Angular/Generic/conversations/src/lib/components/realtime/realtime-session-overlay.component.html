@@ -155,6 +155,7 @@
           [ShowShare]="CaptureOffers.Screen"
           [CameraOn]="CameraOn"
           [Sharing]="Sharing"
+          [SharePanels]="SharePanels"
           (CameraToggled)="OnCameraToggled($event)"
           (ShareRequested)="OnShareRequested($event)"
           (StopShareRequested)="OnStopShareRequested()"
@@ -210,7 +211,9 @@
          active, fills the overlay while its channel holds focus (or, for the agent's video,
          lies in the agent's place in the call), and otherwise waits out of sight — so
          collapsing the panel, switching tabs or entering focus never reloads it.
-         The pane tells each channel when its surface goes out of sight, so it can pause. -->
+         The pane tells each channel when its surface goes out of sight, so it can pause.
+         A channel that opts in (SurfaceShareable, such as the whiteboard) marks its frame as a panel the Share menu
+         offers under "This panel" while it is on screen. -->
     <mj-media-stage class="call-stage"
                     [Surfaces]="SurfaceStage.Surfaces"
                     [TabSlot]="StageSlot?.Element ?? null"
@@ -220,7 +223,8 @@
                     (PipRectChange)="OnPipRectChange($event)">
       <ng-template mjMediaStageSurface let-key let-visible="Visible" let-placement="Placement">
         @if (SurfaceStage.PluginFor(key); as plugin) {
-          <div class="stage-frame" role="region" [attr.aria-label]="plugin.TabTitle">
+          <div class="stage-frame" role="region" [attr.aria-label]="plugin.TabTitle"
+               [mjSharePanel]="plugin.SurfaceShareable ? plugin.TabTitle : null" [mjSharePanelIcon]="plugin.TabIcon">
             <mj-realtime-channel-pane [Plugin]="plugin" [Visible]="visible" [Placement]="placement"></mj-realtime-channel-pane>
             <!-- A surface presenting the agent has no focus pill, so its "Move to…" menu rides on it. -->
             @if (placement === 'stage' && plugin.ShowsAgentVideo) {

@@ -91,9 +91,33 @@ export class FakeCanvasElement {
     }
 }
 
-/** Stands in for a page panel (a `<div>`); `Isolation` is what `getComputedStyle(...).isolation` reports. */
+/** A panel's inline style, as far as the `isolation` property goes: its value and its priority. */
+export class FakeInlineStyle {
+    private readonly values = new Map<string, { Value: string; Priority: string }>();
+
+    public getPropertyValue(name: string): string {
+        return this.values.get(name)?.Value ?? '';
+    }
+    public getPropertyPriority(name: string): string {
+        return this.values.get(name)?.Priority ?? '';
+    }
+    public setProperty(name: string, value: string, priority = ''): void {
+        this.values.set(name, { Value: value, Priority: priority });
+    }
+    public removeProperty(name: string): string {
+        const value = this.getPropertyValue(name);
+        this.values.delete(name);
+        return value;
+    }
+}
+
+/**
+ * Stands in for a page panel (a `<div>`). `Isolation` is what the page's style sheets give it;
+ * `getComputedStyle(...).isolation` reports the inline value over it, as a browser does.
+ */
 export class FakePanelElement {
     public Isolation = 'auto';
+    public readonly style = new FakeInlineStyle();
 }
 
 /** The base64 payload every fake canvas encodes to ("FRAME"). */
@@ -108,11 +132,14 @@ export interface FakeDom {
 
 /**
  * Installs a fake `document` whose `createElement` makes {@link FakeVideoElement}s, {@link FakeCanvasElement}s
- * and (for `'div'`) {@link FakePanelElement}s, and a `getComputedStyle` that reads a panel's `Isolation`.
+ * and (for `'div'`) {@link FakePanelElement}s, and a `getComputedStyle` that reads a panel's isolation: its inline
+ * value, else its `Isolation`.
  */
 export function InstallFakeDom(): FakeDom {
     const dom: FakeDom = { Videos: [], Canvases: [], Panels: [] };
-    vi.stubGlobal('getComputedStyle', (element: FakePanelElement): { isolation: string } => ({ isolation: element.Isolation }));
+    vi.stubGlobal('getComputedStyle', (element: FakePanelElement): { isolation: string } => ({
+        isolation: element.style.getPropertyValue('isolation') || element.Isolation,
+    }));
     vi.stubGlobal('document', {
         createElement: (tag: string): FakeVideoElement | FakeCanvasElement | FakePanelElement => {
             if (tag === 'div') {

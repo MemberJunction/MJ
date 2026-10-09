@@ -76,6 +76,11 @@ export interface RealtimeCaptureState {
     Stream?: MediaStream;
     /** What a screen share shows, while on. */
     Surface?: CapturedDisplaySurface;
+    /**
+     * The shared panel's name, while a share of one panel of the page is on and the host named it
+     * (`DisplayCaptureOptions.PanelLabel`). The agent sees the share as "<name> (shared panel)".
+     */
+    PanelLabel?: string;
     /** The camera in use, while the camera is open (being checked or on). */
     DeviceID?: string;
     /**
@@ -154,8 +159,13 @@ export const REALTIME_CAPTURES_OFF: RealtimeCaptureStates = Object.freeze({ Came
 /** The arbiter source ids, prefixed so they never meet a channel's (`Key#instance`). */
 const SOURCE_IDS: Record<RealtimeCaptureKind, string> = { camera: 'capture:camera', screen: 'capture:screen' };
 
-/** The names the model is told it is looking at, and the "agent can see" list shows. */
+/** The names the model is told it is looking at, and the "agent can see" list shows. A shared panel goes by its own. */
 const LABELS: Record<RealtimeCaptureKind, string> = { camera: 'Camera', screen: 'Shared screen' };
+
+/** What the model and the "agent can see" list call a capture: a named shared panel by its name, as "Whiteboard (shared panel)". */
+function sourceLabel(kind: RealtimeCaptureKind, panelLabel: string | undefined): string {
+    return panelLabel ? `${panelLabel} (shared panel)` : LABELS[kind];
+}
 
 /**
  * The inbound video track a capture needs. No rate: the model's own ceiling applies. The user's click is the
@@ -171,7 +181,7 @@ const CAPTURE_VIDEO_TRACK: RealtimeTrackDescriptor = {
 
 /** A device or surface that was opened, or why it was not. */
 type Acquired =
-    | { Status: 'started'; Stream: MediaStream; Surface?: CapturedDisplaySurface; Release: () => void }
+    | { Status: 'started'; Stream: MediaStream; Surface?: CapturedDisplaySurface; PanelLabel?: string; Release: () => void }
     | { Status: 'failed'; Failure: RealtimeCaptureFailure; Message: string };
 
 /** A capture whose device or surface is open: what has to be undone to stop it. */
@@ -255,11 +265,13 @@ export class RealtimeCaptures {
             this.live.camera = { Stream: acquired.Stream, Sampler: null, Release: acquired.Release };
             return this.setState('camera', { Status: 'starting', Checking: true, Stream: acquired.Stream, ...this.cameraDevices() });
         }
-        this.live[kind] = { Stream: acquired.Stream, Sampler: this.showToAgent(kind, acquired.Stream), Release: acquired.Release };
+        const sampler = this.showToAgent(kind, acquired.Stream, sourceLabel(kind, acquired.PanelLabel));
+        this.live[kind] = { Stream: acquired.Stream, Sampler: sampler, Release: acquired.Release };
         return this.setState(kind, {
             Status: 'on',
             Stream: acquired.Stream,
             ...(acquired.Surface ? { Surface: acquired.Surface } : {}),
+            ...(acquired.PanelLabel ? { PanelLabel: acquired.PanelLabel } : {}),
             ...(kind === 'camera' ? this.cameraDevices() : {}),
         });
     }
@@ -274,7 +286,7 @@ export class RealtimeCaptures {
             return this.States.Camera;
         }
         this.cameraChecked = true;
-        live.Sampler = this.showToAgent('camera', live.Stream);
+        live.Sampler = this.showToAgent('camera', live.Stream, LABELS.camera);
         return this.setState('camera', { Status: 'on', Stream: live.Stream, ...this.cameraDevices() });
     }
 
@@ -390,12 +402,15 @@ export class RealtimeCaptures {
         this.options.Client.RemoveTrack(CAPTURE_VIDEO_TRACK);
     }
 
-    /** Registers the capture with the arbiter, as its channel's and as visible as the policy allows, and samples it at the negotiated rate. */
-    private showToAgent(kind: RealtimeCaptureKind, stream: MediaStream): { Stop(): void } {
+    /**
+     * Registers the capture with the arbiter under `label`, as its channel's and as visible as the policy allows, and
+     * samples it at the negotiated rate.
+     */
+    private showToAgent(kind: RealtimeCaptureKind, stream: MediaStream, label: string): { Stop(): void } {
         const arbiter = VideoSourceArbiter.ForSink(this.options.Client);
         const sourceId = SOURCE_IDS[kind];
         const { ChannelKey, VisibleToAgent } = this.showing[kind];
-        arbiter.RegisterSource({ SourceID: sourceId, Label: LABELS[kind], Kind: kind, Enabled: VisibleToAgent, ...(ChannelKey ? { ChannelKey } : {}) });
+        arbiter.RegisterSource({ SourceID: sourceId, Label: label, Kind: kind, Enabled: VisibleToAgent, ...(ChannelKey ? { ChannelKey } : {}) });
         const create = this.options.CreateSampler ?? createDomSampler;
         const sampler = create(stream, this.options.Client.InboundVideoRate ?? 1, (frame) => arbiter.PushFrame(sourceId, frame.Data, frame.MimeType));
         sampler.Start();
@@ -429,7 +444,7 @@ export class RealtimeCaptures {
         };
     }
 
-    /** Asks the host for a screen, window or tab, and stops the capture when the share ends. */
+    /** Asks the host for a screen, window, tab or panel, and stops the capture when the share ends. */
     private async openScreen(options: DisplayCaptureOptions | undefined): Promise<Acquired> {
         const host = this.options.Host;
         if (!host.RequestDisplayCapture) {
@@ -448,6 +463,7 @@ export class RealtimeCaptures {
             Status: 'started',
             Stream: capture.Stream,
             Surface: capture.Surface,
+            ...(capture.PanelLabel ? { PanelLabel: capture.PanelLabel } : {}),
             Release: () => {
                 stopWatching();
                 capture.Stop();

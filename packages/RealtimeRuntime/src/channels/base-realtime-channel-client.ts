@@ -531,6 +531,16 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
   }
 
   /**
+   * Whether the user may share this channel's surface on its own: a host that offers it lists the surface, named by
+   * {@link TabTitle} with {@link TabIcon}, under "This panel" in its Share menu while the surface is on screen, and the
+   * share then shows only that surface. Default `false`, so a channel opts in with this getter. A surface that shows the
+   * agent its own call (the camera, the screen share, the agent's video) never should.
+   */
+  public get SurfaceShareable(): boolean {
+    return false;
+  }
+
+  /**
    * The runtime capture this channel fronts (`'camera'` or `'screen'`), or `null`. Such a channel is the capture's policy:
    * the runtime starts the capture only while the channel is in the session and the session's policy lets the agent see
    * pixels through it, and the user's "agent can see" choice for the channel decides whether the capture's frames reach

@@ -5262,6 +5262,9 @@ importers:
       '@memberjunction/ng-react':
         specifier: 6.2.0-edge.3
         version: link:../../Generic/react
+      '@memberjunction/ng-realtime-media':
+        specifier: 6.2.0-edge.3
+        version: link:../../Generic/realtime-media
       '@memberjunction/ng-record-changes':
         specifier: 6.2.0-edge.3
         version: link:../../Generic/record-changes

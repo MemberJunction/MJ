@@ -10,9 +10,11 @@
  * A PANEL capture shares one element of this page. The user picks this tab in the picker, and the stream is
  * then narrowed to the element with Element Capture (`restrictTo`, Chromium 132+: the element alone, without
  * anything drawn over it) or, failing that, Region Capture (`cropTo`, Chromium 104+: the element's rectangle,
- * including anything over it). Firefox and Safari have neither; {@link GetDisplayCaptureSupport} says so, and
- * the caller shows the panel to the agent another way (its channel frames). If the user shares something other
- * than this tab, the capture is stopped rather than sharing more than the panel.
+ * including anything over it). Element Capture emits frames only while the element is its own stacking
+ * context, so the element gets `isolation: isolate` for the share and its own value back when the share ends.
+ * Firefox and Safari have neither; {@link GetDisplayCaptureSupport} says so, and the caller shows the panel to
+ * the agent another way (its channel frames). If the user shares something other than this tab, the capture is
+ * stopped rather than sharing more than the panel.
  *
  * The browser's picker is the user's consent: it opens on every request, with no remembered grant. Like the
  * picker itself, {@link RequestDisplayCapture} must be called from a user gesture (a click handler).
@@ -49,11 +51,18 @@ export interface DisplayCaptureOptions {
     PreferredSurface?: DisplayCaptureSurface;
     /**
      * Share only this element of the page. Needs Element or Region Capture (see
-     * {@link GetDisplayCaptureSupport}). Element Capture is used only when the element is its own stacking
-     * context, which the panel declares with `isolation: isolate`; otherwise Element Capture would emit no
-     * frames, so Region Capture is used instead.
+     * {@link GetDisplayCaptureSupport}); Element Capture is used where the browser has it. Element Capture emits
+     * frames only while the element is its own stacking context, so unless it already is one, the element's
+     * inline style gets `isolation: isolate` while it is shared and its own inline value back when the share
+     * ends. Meanwhile its descendants stack inside it: one with a high `z-index` no longer paints over content
+     * outside the panel.
      */
     Panel?: Element;
+    /**
+     * The panel's name, such as "Whiteboard", carried on the capture ({@link DisplayCapture.PanelLabel}) so the
+     * UI and the agent can name what is shared. Read only with {@link Panel}.
+     */
+    PanelLabel?: string;
     /**
      * Also capture the shared surface's audio, where the browser offers it (Chromium: tab or system audio).
      * Defaults to `false`: the agent already hears the microphone.
@@ -72,6 +81,8 @@ export interface DisplayCapture {
     readonly Label: string;
     /** How the stream was narrowed, for a panel capture. */
     readonly PanelMethod?: PanelCaptureMethod;
+    /** The shared panel's name, for a panel capture that was given one ({@link DisplayCaptureOptions.PanelLabel}). */
+    readonly PanelLabel?: string;
     /**
      * Calls `handler` once when the share ends: the user pressed the browser's "Stop sharing", the shared
      * surface closed, or {@link DisplayCapture.Stop} was called. If the share has already ended, `handler` is
@@ -126,8 +137,22 @@ interface NarrowableTrack extends MediaStreamTrack {
 /** The global scope, with the Chromium capture-target classes when the browser has them. */
 type CaptureScope = typeof globalThis & { RestrictionTarget?: CaptureTargetClass; CropTarget?: CaptureTargetClass };
 
+/** A panel capture's narrowing: how it was done, and what to undo when the share ends. */
+interface NarrowedPanel {
+    Method: PanelCaptureMethod;
+    Release: () => void;
+}
+
+/** What a panel capture carries besides its stream. */
+interface PanelShare extends NarrowedPanel {
+    Label?: string;
+}
+
 /** The picker's `displaySurface` value for each surface. */
 const PICKER_SURFACE: Record<DisplayCaptureSurface, string> = { screen: 'monitor', window: 'window', tab: 'browser' };
+
+/** What the user is told when a panel share got something other than this tab (without the closing period). */
+const WRONG_SURFACE_MESSAGE = "To share only the panel, choose this tab in the browser's picker";
 
 /** What this browser can capture. */
 export function GetDisplayCaptureSupport(): DisplayCaptureSupport {
@@ -168,11 +193,12 @@ export async function RequestDisplayCapture(options: DisplayCaptureOptions = {})
         return { Status: 'started', Capture: new ActiveDisplayCapture(stream, track) };
     }
     const narrowed = await narrowToPanel(track, options.Panel, support);
-    if (typeof narrowed !== 'string') {
+    if ('Status' in narrowed) {
         stopTracks(stream);
         return narrowed;
     }
-    return { Status: 'started', Capture: new ActiveDisplayCapture(stream, track, narrowed) };
+    const panel: PanelShare = options.PanelLabel ? { ...narrowed, Label: options.PanelLabel } : narrowed;
+    return { Status: 'started', Capture: new ActiveDisplayCapture(stream, track, panel) };
 }
 
 /** The picker request: this tab for a panel; otherwise any surface but this tab, with the preferred kind first. */
@@ -200,40 +226,68 @@ function pickerOptions(options: DisplayCaptureOptions): PickerOptions {
 }
 
 /**
- * Narrows a self-capture to the panel.
+ * Narrows a self-capture to the panel: with Element Capture where the browser has it, else with Region Capture.
  *
- * @returns The method used, or a failure when the user shared something other than this tab.
+ * @returns How it was narrowed, or a failure when the user shared something other than this tab.
  */
 async function narrowToPanel(
     track: MediaStreamTrack,
     panel: Element,
     support: DisplayCaptureSupport
-): Promise<PanelCaptureMethod | DisplayCaptureResult> {
+): Promise<NarrowedPanel | DisplayCaptureResult> {
     if (track.getSettings().displaySurface !== PICKER_SURFACE.tab) {
-        return failure('panel-wrong-surface', 'To share only the panel, choose this tab in the browser\'s picker.');
+        return failure('panel-wrong-surface', `${WRONG_SURFACE_MESSAGE}.`);
     }
     const scope = globalThis as CaptureScope;
     const narrowable = track as NarrowableTrack;
-    const method: PanelCaptureMethod = support.ElementCapture && isIsolated(panel) ? 'element' : 'region';
-    try {
-        if (method === 'element' && scope.RestrictionTarget && narrowable.restrictTo) {
+    if (support.ElementCapture && scope.RestrictionTarget && narrowable.restrictTo) {
+        // Isolated first, so the restricted track has frames to emit from the start.
+        const release = isolatePanel(panel);
+        try {
             await narrowable.restrictTo(await scope.RestrictionTarget.fromElement(panel));
-            return 'element';
+            return { Method: 'element', Release: release };
+        } catch (err) {
+            release();
+            return wrongSurface(err);
         }
-        if (scope.CropTarget && narrowable.cropTo) {
-            await narrowable.cropTo(await scope.CropTarget.fromElement(panel));
-            return 'region';
-        }
-        return failure('panel-unsupported', 'This browser cannot narrow a share to a single panel.');
-    } catch (err) {
-        // The browser refuses to narrow a capture of any tab but this one.
-        return failure('panel-wrong-surface', `To share only the panel, choose this tab in the browser's picker (${errorMessage(err)}).`);
     }
+    if (scope.CropTarget && narrowable.cropTo) {
+        try {
+            await narrowable.cropTo(await scope.CropTarget.fromElement(panel));
+            return { Method: 'region', Release: () => undefined };
+        } catch (err) {
+            return wrongSurface(err);
+        }
+    }
+    return failure('panel-unsupported', 'This browser cannot narrow a share to a single panel.');
 }
 
-/** Whether the panel is its own stacking context, which Element Capture needs to emit frames. */
-function isIsolated(panel: Element): boolean {
-    return typeof getComputedStyle === 'function' && getComputedStyle(panel).isolation === 'isolate';
+/** The browser refuses to narrow a capture of any tab but this one. */
+function wrongSurface(err: unknown): DisplayCaptureResult {
+    return failure('panel-wrong-surface', `${WRONG_SURFACE_MESSAGE} (${errorMessage(err)}).`);
+}
+
+/**
+ * Makes the panel its own stacking context, which Element Capture needs to emit frames, unless it already is
+ * one through `isolation`. Set inline and marked important, so no style sheet undoes it during the share.
+ *
+ * @returns A function that puts the panel's own inline `isolation` back; the share calls it once, as it ends.
+ */
+function isolatePanel(panel: Element): () => void {
+    const style = (panel as Element & { style?: CSSStyleDeclaration }).style;
+    if (!style || (typeof getComputedStyle === 'function' && getComputedStyle(panel).isolation === 'isolate')) {
+        return () => undefined;
+    }
+    const value = style.getPropertyValue('isolation');
+    const priority = style.getPropertyPriority('isolation');
+    style.setProperty('isolation', 'isolate', 'important');
+    return () => {
+        if (value) {
+            style.setProperty('isolation', value, priority);
+        } else {
+            style.removeProperty('isolation');
+        }
+    };
 }
 
 /**
@@ -286,7 +340,7 @@ class ActiveDisplayCapture implements DisplayCapture {
     constructor(
         public readonly Stream: MediaStream,
         public readonly Track: MediaStreamTrack,
-        public readonly PanelMethod?: PanelCaptureMethod
+        private readonly panel?: PanelShare
     ) {
         // `ended` fires when the user stops sharing from the browser's bar or the surface closes.
         Track.addEventListener('ended', () => this.end());
@@ -298,6 +352,14 @@ class ActiveDisplayCapture implements DisplayCapture {
 
     public get Label(): string {
         return this.Track.label;
+    }
+
+    public get PanelMethod(): PanelCaptureMethod | undefined {
+        return this.panel?.Method;
+    }
+
+    public get PanelLabel(): string | undefined {
+        return this.panel?.Label;
     }
 
     public OnEnded(handler: () => void): () => void {
@@ -320,6 +382,8 @@ class ActiveDisplayCapture implements DisplayCapture {
             return;
         }
         this.ended = true;
+        // The panel's own style comes back before anyone hears that the share ended.
+        this.panel?.Release();
         for (const handler of [...this.endedHandlers]) {
             handler();
         }

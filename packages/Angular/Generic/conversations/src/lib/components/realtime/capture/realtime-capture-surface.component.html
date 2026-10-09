@@ -21,6 +21,7 @@
           class="capture capture--live"
           [Source]="view.Source"
           [Surface]="view.Surface"
+          [PanelLabel]="view.PanelLabel"
           (StopRequested)="StopRequested.emit()"
           (ChangeRequested)="ChangeRequested.emit()">
         </mj-share-preview>

@@ -20,6 +20,8 @@ export interface RealtimeCaptureView {
   Source: MediaVideoSource | null;
   /** What a share shows. */
   Surface: CapturedDisplaySurface;
+  /** The shared panel's name, while the user shares one panel of the page; `null` otherwise. */
+  PanelLabel: string | null;
   /** Whether the agent sees the capture now: it is on and the channel lets the agent see pixels. */
   AgentCanSee: boolean;
 }
@@ -154,6 +156,7 @@ export class RealtimeCaptureModel {
       Participant: shown?.Participant ?? null,
       Source: shown?.Source ?? null,
       Surface: capture.Surface ?? 'unknown',
+      PanelLabel: capture.PanelLabel ?? null,
       AgentCanSee: capture.Status === 'on' && this.agentCanSee,
     };
   }

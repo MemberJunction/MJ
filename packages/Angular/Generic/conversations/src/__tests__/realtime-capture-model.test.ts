@@ -28,6 +28,7 @@ describe('RealtimeCaptureModel', () => {
       Participant: null,
       Source: null,
       Surface: 'unknown',
+      PanelLabel: null,
       AgentCanSee: false,
     });
     expect(m.ToState()).toEqual({ status: 'off', reason: '', problem: '' });
@@ -119,6 +120,16 @@ describe('RealtimeCaptureModel', () => {
     expect(m.View).toMatchObject({ Kind: 'screen', Status: 'on', Participant: null, Source: { Kind: 'stream', Stream: screen }, Surface: 'tab' });
     expect(changes.at(-1)?.Event).toEqual({ Name: 'started', Payload: { surface: 'tab' } });
     expect(m.ToState()).toEqual({ status: 'on', reason: '', problem: '', surface: 'tab' });
+  });
+
+  it('names a shared panel while it is shared, and tells the agent no more than that a tab is shared', () => {
+    const { m, changes } = model('screen');
+    m.FollowCapture({ Status: 'on', Stream: stream('screen'), Surface: 'tab', PanelLabel: 'Whiteboard' });
+    expect(m.View).toMatchObject({ Surface: 'tab', PanelLabel: 'Whiteboard' });
+    expect(changes.at(-1)?.Event).toEqual({ Name: 'started', Payload: { surface: 'tab' } });
+    expect(m.ToState()).toEqual({ status: 'on', reason: '', problem: '', surface: 'tab' });
+    m.FollowCapture({ Status: 'off' });
+    expect(m.View.PanelLabel).toBeNull();
   });
 
   it('says when it stops, and what went wrong when a start fails', () => {

@@ -99,6 +99,11 @@ describe('RealtimeCaptureSurfaceComponent (DOM)', () => {
     expect(changes).toHaveLength(1);
   });
 
+  it('names the shared panel in the preview while the user shares one panel', () => {
+    const { fixture } = render('screen', (m) => m.FollowCapture({ Status: 'on', Stream: stream('scr'), Surface: 'tab', PanelLabel: 'Whiteboard' }));
+    expect(text(fixture, '.share__label')).toBe('Sharing a panel: Whiteboard');
+  });
+
   it('has no accessibility violations while asking', async () => {
     const { fixture } = render('camera', (m) => m.Ask('please'));
     await ExpectNoAxeViolations(fixture);

@@ -2,7 +2,7 @@ import { Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewC
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { MediaControlsComponent, type MediaShareRequest } from '@memberjunction/ng-realtime-media';
+import { MediaControlsComponent, type MediaSharePanel, type MediaShareRequest } from '@memberjunction/ng-realtime-media';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 
 /**
@@ -91,10 +91,16 @@ export class RealtimeComposerComponent {
   /** Whether the user is sharing (or choosing what to share). */
   @Input() Sharing = false;
 
+  /**
+   * The panels of the page the Share menu offers under "This panel" (the overlay's on-screen panels). The typed-input
+   * dock, whose Share button has no menu, leaves them out.
+   */
+  @Input() SharePanels: readonly MediaSharePanel[] = [];
+
   /** The user asked to turn the camera on (`true`) or off (`false`). The overlay starts or stops it. */
   @Output() CameraToggled = new EventEmitter<boolean>();
 
-  /** The user asked to share a screen, window or tab. */
+  /** The user asked to share a screen, window or tab, or one of {@link SharePanels}. */
   @Output() ShareRequested = new EventEmitter<MediaShareRequest>();
 
   /** The user asked to stop sharing. */

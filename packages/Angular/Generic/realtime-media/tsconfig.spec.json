@@ -26,7 +26,11 @@
     "src/lib/components/share-preview.component.ts",
     "src/lib/components/share-preview.component.dom.test.ts",
     "src/lib/components/camera-check.component.ts",
-    "src/lib/components/camera-check.component.dom.test.ts"
+    "src/lib/components/camera-check.component.dom.test.ts",
+    "src/lib/share-panel-registry.ts",
+    "src/lib/share-panel-registry.dom.test.ts",
+    "src/lib/share-panel.directive.ts",
+    "src/lib/share-panel.directive.dom.test.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

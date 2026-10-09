@@ -11,9 +11,9 @@ const SURFACE_LABELS: Record<CapturedDisplaySurface, string> = {
 };
 
 /**
- * `mj-share-preview`: what the user is sharing, shown whole and not mirrored, labelled with the kind of surface, with
- * Stop sharing and Change. Presentational: the host stops the share, or asks the browser's picker again. Content marked
- * `mjMediaTileActions` sits in the top corner, shown on hover or focus, as on `mj-media-tile`.
+ * `mj-share-preview`: what the user is sharing, shown whole and not mirrored, labelled with the kind of surface (or the
+ * shared panel's name), with Stop sharing and Change. Presentational: the host stops the share, or asks the browser's
+ * picker again. Content marked `mjMediaTileActions` sits in the top corner, shown on hover or focus, as on `mj-media-tile`.
  */
 @Component({
   selector: 'mj-share-preview',
@@ -58,6 +58,8 @@ export class SharePreviewComponent implements AfterViewInit, OnDestroy {
 
   /** The kind of surface shared, for the label. */
   @Input() public Surface: CapturedDisplaySurface = 'unknown';
+  /** The shared panel's name, when the user shares one panel of the page: the label then names it instead of the surface. */
+  @Input() public PanelLabel: string | null = null;
   /** Show Change. */
   @Input() public ShowChange = true;
 
@@ -66,9 +68,9 @@ export class SharePreviewComponent implements AfterViewInit, OnDestroy {
   /** The user asked to share something else. */
   @Output() public ChangeRequested = new EventEmitter<void>();
 
-  /** What the label says for {@link Surface}. */
+  /** What the label says: the shared panel's name ({@link PanelLabel}), else the kind of {@link Surface}. */
   public get Label(): string {
-    return SURFACE_LABELS[this.Surface];
+    return this.PanelLabel ? `Sharing a panel: ${this.PanelLabel}` : SURFACE_LABELS[this.Surface];
   }
 
   public ngAfterViewInit(): void {

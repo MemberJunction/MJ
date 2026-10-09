@@ -214,6 +214,11 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     return 'fa-solid fa-chalkboard';
   }
 
+  /** The board can be shared on its own: the call's Share menu offers it under "This panel" while it is on screen. */
+  public override get SurfaceShareable(): boolean {
+    return true;
+  }
+
   public GetToolDefinitions(): RealtimeToolDefinition[] {
     return WHITEBOARD_TOOL_DEFINITIONS;
   }

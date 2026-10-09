@@ -100,6 +100,8 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(channel.TabIcon).toBe('fa-solid fa-chalkboard');
     expect(channel.GetToolDefinitions()).toBe(WHITEBOARD_TOOL_DEFINITIONS);
     expect(channel.GetSurfaceComponent()).toBe(RealtimeWhiteboardHostComponent);
+    // The board is the call's first panel the user can share on its own ("This panel").
+    expect(channel.SurfaceShareable).toBe(true);
   });
 
   it('supplies first-run onboarding details (heading, description, tips, icon)', () => {

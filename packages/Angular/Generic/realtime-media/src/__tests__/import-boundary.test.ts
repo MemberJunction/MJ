@@ -1,8 +1,9 @@
 /**
  * ng-realtime-media renders the `/media` models and nothing vendor-specific (plan #4761, hard rule 2). Its source
- * may import Angular, the shared UI components, the `/media` entry of the realtime client, and `@memberjunction/ai`
- * (vendor-neutral Core types, such as the avatar reasons its wording is keyed by). Anything else is refused:
- * `livekit-client`, the router, and the client's main entry, which carries the provider drivers.
+ * may import Angular, the shared UI components, the `/media` entry of the realtime client, `@memberjunction/ai`
+ * (vendor-neutral Core types, such as the avatar reasons its wording is keyed by) and `rxjs` (a peer dependency; the
+ * share-panel registry streams its panels). Anything else is refused: `livekit-client`, the router, and the client's
+ * main entry, which carries the provider drivers.
  * Allowing a new import is a deliberate one-line change to {@link ALLOWED_IMPORTS}.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -19,6 +20,7 @@ const ALLOWED_IMPORTS: ReadonlySet<string> = new Set([
   '@memberjunction/ai',
   '@memberjunction/ai-realtime-client/media',
   '@memberjunction/ng-ui-components',
+  'rxjs',
 ]);
 
 /** Every non-test source file under `dir`. */

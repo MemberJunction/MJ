@@ -1,7 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { renderComponentFixture, query, queryAll, capture, click, typeInto, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
+import { By } from '@angular/platform-browser';
+import {
+  renderComponentFixture,
+  query,
+  queryAll,
+  capture,
+  click,
+  typeInto,
+  overlayQueryAll,
+  clearOverlayContainers,
+  ExpectNoAxeViolations,
+} from '@memberjunction/ng-test-utils';
+import { MediaControlsComponent, type MediaSharePanel } from '@memberjunction/ng-realtime-media';
 import { RealtimeComposerComponent } from './realtime-composer.component';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 
@@ -179,6 +191,30 @@ describe('RealtimeComposerComponent (DOM)', () => {
     const shares = capture(f.componentInstance.ShareRequested);
     click(f, '.strip button[title="Share screen"]');
     expect(shares).toEqual([{ Kind: 'display' }]);
+  });
+
+  it("offers the overlay's panels under This panel in the strip and the lean dock, but not the fused dock, and asks for the picked one", () => {
+    const panels: MediaSharePanel[] = [{ Key: 'share-panel-1', Label: 'Whiteboard', Icon: 'fa-solid fa-chalkboard' }];
+    const f = render({ ShowShare: true, SharePanels: panels });
+    const controls = () => f.debugElement.query(By.directive(MediaControlsComponent)).componentInstance as MediaControlsComponent;
+    const shares = capture(f.componentInstance.ShareRequested);
+    expect(controls().SharePanels).toBe(panels);
+
+    click(f, '.strip button[title="Choose what to share"]');
+    (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((item) => item.textContent?.trim() === 'This panel')?.click();
+    f.detectChanges();
+    (overlayQueryAll('mj-menu[aria-label="This panel"] mj-menu-item') as HTMLElement[]).find((item) => item.textContent?.trim() === 'Whiteboard')?.click();
+    expect(shares).toEqual([{ Kind: 'panel', PanelKey: 'share-panel-1' }]);
+    clearOverlayContainers();
+
+    f.componentRef.setInput('Compact', true);
+    f.detectChanges();
+    expect(query(f, '.dock-lean')).not.toBeNull();
+    expect(controls().SharePanels).toBe(panels);
+    f.componentRef.setInput('Open', true);
+    f.detectChanges();
+    expect(query(f, '.dock')).not.toBeNull();
+    expect(controls().SharePanels).toEqual([]);
   });
 
   it('has no axe violations on the strip', async () => {

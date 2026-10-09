@@ -47,6 +47,14 @@ describe('SharePreviewComponent (DOM)', () => {
     }
   });
 
+  it('names a shared panel instead of the browser tab it comes from', () => {
+    const f = render({ Surface: 'tab', PanelLabel: 'Whiteboard' });
+    expect(label(f)).toBe('Sharing a panel: Whiteboard');
+    f.componentRef.setInput('PanelLabel', null);
+    f.detectChanges();
+    expect(label(f)).toBe('Sharing a browser tab');
+  });
+
   it('shows the share on its video, and swaps it when the source changes', () => {
     const first = elementSource();
     const f = render({ Source: first });

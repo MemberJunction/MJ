@@ -20,3 +20,5 @@ export * from './lib/components/camera-check.component';
 export * from './lib/pip-geometry';
 export * from './lib/local-media-controller.token';
 export * from './lib/avatar-notice-text';
+export * from './lib/share-panel-registry';
+export * from './lib/share-panel.directive';

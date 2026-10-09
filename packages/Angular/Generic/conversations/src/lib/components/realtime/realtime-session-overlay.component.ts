@@ -50,7 +50,8 @@ import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
 import {
   AvatarNoticeText, MediaMoveMenuComponent, MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
-  type AvatarNoticeOverrides, type MediaMoveRequest, type MediaShareRequest, type MediaStagePipRectChange
+  SharePanelDirective, SharePanelRegistry,
+  type AvatarNoticeOverrides, type MediaMoveRequest, type MediaSharePanel, type MediaShareRequest, type MediaStagePipRectChange
 } from '@memberjunction/ng-realtime-media';
 import { MediaLayoutPrefs, RecordPipRect, type MediaPipRect } from '@memberjunction/ai-realtime-client/media';
 
@@ -165,6 +166,7 @@ export interface RealtimeAvatarCaption {
     MediaStageComponent,
     MediaStageSurfaceDirective,
     MediaStagePipActionsDirective,
+    SharePanelDirective,
     RealtimeWhiteboardBoardComponent,
     MJStorageMediaPlayerComponent,
     MJAlertComponent
@@ -754,8 +756,15 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // "agent can see" chip. Not gated by disclosure level — it is a privacy indicator, never earned.
       this.realtime.VideoSources$.subscribe(sources => { this.VideoSources = sources; this.cdr.markForCheck(); }),
       // The camera and screen share, and which of them the call offers: the composer's Camera and Share follow both.
-      this.realtime.Captures$.subscribe(states => { this.CaptureStates = states; this.cdr.markForCheck(); }),
+      this.realtime.Captures$.subscribe(states => this.onCapturesChanged(states)),
       this.realtime.CaptureOffers$.subscribe(offers => { this.CaptureOffers = offers; this.cdr.markForCheck(); }),
+      // The panels of the page on screen, which the Share menu offers under "This panel"; a shared one that goes away
+      // ends its share.
+      this.sharePanelRegistry.PanelsFor$(this.hostRef.nativeElement).subscribe(panels => {
+        this.SharePanels = panels;
+        this.cdr.markForCheck();
+      }),
+      this.sharePanelRegistry.Removed$.subscribe(key => this.onSharePanelRemoved(key)),
       // Live/idle flips: reset/ratchet disclosure + re-evaluate the review-vs-live branch.
       this.realtime.Active$.subscribe(active => this.onActiveChanged(active)),
       // Connection lifecycle drives chrome (the `connecting` loader) + the public output.
@@ -871,10 +880,27 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.ControlInvoked.emit('camera');
   }
 
-  /** The composer's Share button or menu: the session asks the browser's picker, offering the kind of surface picked first. */
+  /** The app's shareable panels: what the Share menu offers under "This panel", and the panel a pick names. */
+  private readonly sharePanelRegistry = inject(SharePanelRegistry);
+
+  /**
+   * The panels of the page the Share menu offers under "This panel": those on screen, in page order, leaving out any that
+   * holds this call. Empty where the browser cannot share a single panel.
+   */
+  public SharePanels: readonly MediaSharePanel[] = [];
+
+  /** The key of the panel being shared, while a share of one panel starts or runs; `null` otherwise. */
+  private sharedPanelKey: string | null = null;
+
+  /**
+   * The composer's Share button or menu: the session asks the browser's picker, offering the kind of surface picked first,
+   * or this tab, to share the picked panel alone.
+   */
   public OnShareRequested(request: MediaShareRequest): void {
     if (request.Kind === 'display') {
       void this.realtime.StartScreenShare(request.PreferredSurface ? { PreferredSurface: request.PreferredSurface } : undefined);
+    } else {
+      this.startPanelShare(request.PanelKey);
     }
     this.ControlInvoked.emit('share');
   }
@@ -883,6 +909,36 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public OnStopShareRequested(): void {
     this.realtime.StopScreenShare();
     this.ControlInvoked.emit('share');
+  }
+
+  /** Shares one panel of the page, named by its label. A panel that went away since the menu listed it shares nothing. */
+  private startPanelShare(key: string): void {
+    const panel = this.sharePanelRegistry.Get(key);
+    if (!panel) {
+      return;
+    }
+    this.sharedPanelKey = key;
+    void this.realtime.StartScreenShare({ Panel: panel.Element, PanelLabel: panel.Label });
+  }
+
+  /**
+   * A panel went away, such as the whiteboard when its channel leaves the call. When it is the one shared, the share ends:
+   * no frame comes from an element that is gone. A panel that is only out of sight keeps its share.
+   */
+  private onSharePanelRemoved(key: string): void {
+    if (key === this.sharedPanelKey) {
+      this.sharedPanelKey = null;
+      this.realtime.StopScreenShare();
+    }
+  }
+
+  /** The captures changed: the composer follows them, and a share that is over no longer holds its panel. */
+  private onCapturesChanged(states: RealtimeCaptureStates): void {
+    this.CaptureStates = states;
+    if (!isCapturing(states.Screen)) {
+      this.sharedPanelKey = null;
+    }
+    this.cdr.markForCheck();
   }
 
   /**

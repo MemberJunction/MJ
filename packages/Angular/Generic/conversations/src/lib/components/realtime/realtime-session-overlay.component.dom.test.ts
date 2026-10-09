@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Component, ErrorHandler, OnDestroy, OnInit, type Type } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { BehaviorSubject, EMPTY, Subject } from 'rxjs';
 import type { DisplayCaptureOptions, VideoSourceState } from '@memberjunction/ai-realtime-client';
 import type { RealtimeToolDefinition } from '@memberjunction/ai';
@@ -20,6 +21,7 @@ import {
 import { renderComponentFixture, query, queryAll, click, overlayQueryAll, clearOverlayContainers, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import type { MediaPlacement, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
+import { SharePanelRegistry } from '@memberjunction/ng-realtime-media';
 import { RealtimeSessionOverlayComponent } from './realtime-session-overlay.component';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeAvatarChannel } from './avatar/realtime-avatar-channel';
@@ -86,6 +88,8 @@ function fakeSession() {
   const state$ = new BehaviorSubject<RealtimeConnectionState>('listening');
   /** The capture calls the overlay made, in order. */
   const calls: string[] = [];
+  /** The element each screen share asked to show alone (`null` for a whole screen, window or tab). */
+  const sharedPanels: Array<Element | null> = [];
   const service = {
     Captions$: captions$.asObservable(),
     DelegationProgress$: EMPTY,
@@ -119,7 +123,8 @@ function fakeSession() {
       return { Status: 'starting', Checking: true };
     },
     StartScreenShare: async (options?: DisplayCaptureOptions): Promise<RealtimeCaptureState> => {
-      calls.push(`StartScreenShare:${options?.PreferredSurface ?? 'any'}`);
+      calls.push(options?.Panel ? `StartScreenShare:panel:${options.PanelLabel}` : `StartScreenShare:${options?.PreferredSurface ?? 'any'}`);
+      sharedPanels.push(options?.Panel ?? null);
       return { Status: 'starting' };
     },
     StopScreenShare: (): void => {
@@ -141,7 +146,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, activity$, captures$, offers$, captions$, sources$, notice$, state$, calls };
+  return { service, channels$, focus$, activity$, captures$, offers$, captions$, sources$, notice$, state$, calls, sharedPanels };
 }
 
 /**
@@ -205,9 +210,8 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
   };
 
   /** A live call in console chrome with the whiteboard's tab open in the panel, placed as its registry row says. */
-  const renderWithBoard = async (placement?: ChannelSurfacePlacement) => {
+  const renderWithBoard = async (placement?: ChannelSurfacePlacement, board: TestWhiteboardChannel = new TestWhiteboardChannel()) => {
     const session = fakeSession();
-    const board = new TestWhiteboardChannel();
     if (placement) {
       board.ApplySurfacePlacement(placement);
     }
@@ -441,6 +445,131 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       await settle();
       composerButton(f, 'Stop sharing')?.click();
       expect(calls).toEqual(['StartScreenShare:any', 'StartScreenShare:tab', 'StopScreenShare']);
+    });
+  });
+
+  describe('the Share menu\'s "This panel"', () => {
+    /** A whiteboard whose surface the user may share on its own, as the real one's. */
+    class ShareableWhiteboardChannel extends TestWhiteboardChannel {
+      public override get SurfaceShareable(): boolean {
+        return true;
+      }
+    }
+
+    /** Desktop Chrome as the share-panel registry sees it. No IntersectionObserver, so every panel counts as on screen. */
+    const stubPanelShareSupport = (): void => {
+      const getDisplayMedia = async (): Promise<MediaStream> => {
+        throw new Error('No picker in these tests.');
+      };
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getDisplayMedia } });
+      vi.stubGlobal('CropTarget', { fromElement: async () => ({}) });
+      vi.stubGlobal('IntersectionObserver', undefined);
+    };
+
+    /** A panel of the page outside the call, such as an app's dashboard. */
+    const outsidePanel = (): HTMLElement => {
+      const element = document.createElement('section');
+      element.className = 'sample-panel';
+      return document.body.appendChild(element);
+    };
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      Reflect.deleteProperty(navigator, 'mediaDevices');
+      document.querySelectorAll('.sample-panel').forEach((element) => element.remove());
+    });
+
+    const menuLabels = (menu: string): string[] =>
+      (overlayQueryAll(`${menu} mj-menu-item`) as HTMLElement[]).map((item) => item.textContent?.trim() ?? '');
+    const menuItem = (menu: string, label: string): HTMLElement | undefined =>
+      (overlayQueryAll(`${menu} mj-menu-item`) as HTMLElement[]).find((item) => item.textContent?.trim() === label);
+
+    /** Opens the composer's Share menu, offering a share as the call does. */
+    const openShareMenu = async (f: Awaited<ReturnType<typeof renderWithBoard>>['f'], offers$: Awaited<ReturnType<typeof renderWithBoard>>['offers$']) => {
+      offers$.next({ Camera: false, Screen: true });
+      await settle();
+      (query(f, 'mj-realtime-composer mj-media-controls button[title="Choose what to share"]') as HTMLButtonElement).click();
+      await settle();
+    };
+
+    /** Opens "This panel" in the open Share menu and picks a panel. */
+    const pickPanel = async (label: string): Promise<void> => {
+      menuItem('mj-menu', 'This panel')?.click();
+      await settle();
+      menuItem('mj-menu[aria-label="This panel"]', label)?.click();
+      await settle();
+    };
+
+    it('lists the panels on screen in page order, leaving out one that holds the call, and shares the picked one by its name', async () => {
+      stubPanelShareSupport();
+      const dashboard = outsidePanel();
+      const { f, offers$, calls, sharedPanels } = await renderWithBoard(undefined, new ShareableWhiteboardChannel());
+      const registry = TestBed.inject(SharePanelRegistry);
+      registry.Register(dashboard, 'Sample dashboard', 'fa-solid fa-chart-line');
+      registry.Register(document.body, 'Main content');
+      await openShareMenu(f, offers$);
+
+      menuItem('mj-menu', 'This panel')?.click();
+      await settle();
+      expect(menuLabels('mj-menu[aria-label="This panel"]')).toEqual(['Sample dashboard', 'Whiteboard']);
+      menuItem('mj-menu[aria-label="This panel"]', 'Whiteboard')?.click();
+      expect(calls).toEqual(['StartScreenShare:panel:Whiteboard']);
+      expect(sharedPanels).toEqual([query(f, '.stage-frame[aria-label="Whiteboard"]')]);
+    });
+
+    it('stops the share when the shared panel goes away, and not when another one does', async () => {
+      stubPanelShareSupport();
+      const dashboard = outsidePanel();
+      const { f, offers$, captures$, channels$, calls } = await renderWithBoard(undefined, new ShareableWhiteboardChannel());
+      const other = TestBed.inject(SharePanelRegistry).Register(dashboard, 'Sample dashboard');
+      await openShareMenu(f, offers$);
+      await pickPanel('Whiteboard');
+      captures$.next({ ...REALTIME_CAPTURES_OFF, Screen: { Status: 'on', PanelLabel: 'Whiteboard' } });
+      await settle();
+
+      other.Unregister();
+      expect(calls).toEqual(['StartScreenShare:panel:Whiteboard']);
+      channels$.next([]);
+      await settle();
+      expect(calls).toEqual(['StartScreenShare:panel:Whiteboard', 'StopScreenShare']);
+    });
+
+    it('leaves alone a share that is already over when its panel goes away', async () => {
+      stubPanelShareSupport();
+      const { f, offers$, captures$, channels$, calls } = await renderWithBoard(undefined, new ShareableWhiteboardChannel());
+      await openShareMenu(f, offers$);
+      await pickPanel('Whiteboard');
+      captures$.next({ ...REALTIME_CAPTURES_OFF, Screen: { Status: 'on', PanelLabel: 'Whiteboard' } });
+      await settle();
+      captures$.next(REALTIME_CAPTURES_OFF);
+      await settle();
+
+      channels$.next([]);
+      await settle();
+      expect(calls).toEqual(['StartScreenShare:panel:Whiteboard']);
+    });
+
+    it('shares nothing when the picked panel went away since the menu listed it', async () => {
+      stubPanelShareSupport();
+      const { f, calls } = await renderWithBoard(undefined, new ShareableWhiteboardChannel());
+      const gone = TestBed.inject(SharePanelRegistry).Register(outsidePanel(), 'Sample dashboard');
+      gone.Unregister();
+      f.componentInstance.OnShareRequested({ Kind: 'panel', PanelKey: gone.Key });
+      await settle();
+      expect(calls).toEqual([]);
+    });
+
+    it("does not offer a channel's surface unless its channel opts in", async () => {
+      stubPanelShareSupport();
+      const { f, offers$ } = await renderWithBoard();
+      await openShareMenu(f, offers$);
+      expect(menuLabels('mj-menu')).toEqual(['Entire screen', 'Window', 'Browser tab']);
+    });
+
+    it('offers no This panel where the browser cannot share a single panel', async () => {
+      const { f, offers$ } = await renderWithBoard(undefined, new ShareableWhiteboardChannel());
+      await openShareMenu(f, offers$);
+      expect(menuLabels('mj-menu')).toEqual(['Entire screen', 'Window', 'Browser tab']);
     });
   });
 

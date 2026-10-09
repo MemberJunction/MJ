@@ -160,6 +160,22 @@ describe('RealtimeCaptures', () => {
         expect(share.Stopped).toBe(true);
     });
 
+    it('names a shared panel: its state carries the name, and the agent sees "<name> (shared panel)" until it stops', async () => {
+        const { host, captures, sources } = harness();
+        const share = new FakeShare('tab', 'Whiteboard');
+        host.Next = { Status: 'started', Capture: share };
+        const state = await captures.Start('screen', { PanelLabel: 'Whiteboard' });
+        expect(host.Requests).toEqual([{ PanelLabel: 'Whiteboard' }]);
+        expect(state).toEqual({ Status: 'on', Stream: share.Stream, Surface: 'tab', PanelLabel: 'Whiteboard' });
+        expect(sources()).toEqual([{ SourceID: 'capture:screen', Label: 'Whiteboard (shared panel)', Kind: 'screen' }]);
+
+        captures.Stop('screen');
+        expect(captures.States.Screen).toEqual({ Status: 'off' });
+        host.Next = { Status: 'started', Capture: new FakeShare('screen') };
+        expect(await captures.Start('screen')).not.toHaveProperty('PanelLabel');
+        expect(sources()).toEqual([{ SourceID: 'capture:screen', Label: 'Shared screen', Kind: 'screen' }]);
+    });
+
     it('reports a closed picker as cancelled, and a refused one with its reason', async () => {
         const { host, captures } = harness();
         host.Next = { Status: 'cancelled' };
