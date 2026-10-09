@@ -105,11 +105,6 @@
   .bulk-action-buttons .btn-text {
     display: none;
   }
-
-  .bulk-action-buttons .mj-btn-sm {
-    padding: 0.5rem;
-    min-width: 36px;
-  }
 }
 
 /* -----------------------------------------------------------------------------

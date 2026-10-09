@@ -322,7 +322,6 @@ export class FilesGridComponent extends BaseAngularComponent implements OnInit, 
         filter: false,
         cellRenderer: (params: ICellRendererParams) => {
           const container = document.createElement('div');
-          container.className = 'action-buttons';
 
           const downloadBtn = this.createActionButton('fa-download', params.data?.Status !== 'Uploaded');
           downloadBtn.addEventListener('click', () => this.DownloadFile(params.data));
@@ -345,10 +344,12 @@ export class FilesGridComponent extends BaseAngularComponent implements OnInit, 
 
   /**
    * Creates a small action button element for the AG Grid cell renderer.
+   * Built imperatively, so this component's emulated-encapsulation stylesheet
+   * cannot reach it; the canonical mjButton classes are its only styling.
    */
   private createActionButton(iconClass: string, disabled: boolean): HTMLButtonElement {
     const btn = document.createElement('button');
-    btn.className = 'mj-btn mj-btn-flat mj-btn-sm grid-action-btn';
+    btn.className = 'mj-btn mj-btn--flat mj-btn--sm';
     btn.disabled = disabled;
     const icon = document.createElement('span');
     icon.className = `fa-solid ${iconClass}`;
