@@ -31,6 +31,8 @@ import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { SQLParser } from '@memberjunction/sql-parser';
+import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
@@ -252,13 +254,16 @@ export class ResolverBase {
    * @param dataObject - The data object containing field values
    * @param encryptionEngine - Optional encryption engine for re-encryption (lazy loaded if needed)
    * @param contextUser - User context for encryption operations
+   * @param fieldKey - What the object's keys are: field CodeNames (GraphQL transport rows, the
+   *   default) or field Names (raw provider rows, such as dataset item results)
    * @returns The filtered data object
    */
   protected async FilterEncryptedFieldsForAPI(
     entityName: string,
     dataObject: Record<string, unknown>,
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>> {
     if (!dataObject) return dataObject;
 
@@ -272,7 +277,7 @@ export class ResolverBase {
 
     // Process each encrypted field
     for (const field of encryptedFields) {
-      const fieldName = field.CodeName;
+      const fieldName = fieldKey === 'Name' ? field.Name : field.CodeName;
       const value = dataObject[fieldName];
 
       // Skip null/undefined values
@@ -313,13 +318,15 @@ export class ResolverBase {
   }
 
   /**
-   * Filters encrypted fields for an array of data objects
+   * Filters encrypted fields for an array of data objects. `fieldKey` is as for
+   * {@link FilterEncryptedFieldsForAPI}.
    */
   protected async ArrayFilterEncryptedFieldsForAPI(
     entityName: string,
     dataObjectArray: Record<string, unknown>[],
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>[]> {
     if (!dataObjectArray || dataObjectArray.length === 0) return dataObjectArray;
 
@@ -333,7 +340,7 @@ export class ResolverBase {
 
     // Process each element
     for (const element of dataObjectArray) {
-      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider);
+      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider, fieldKey);
     }
 
     return dataObjectArray;
@@ -732,6 +739,143 @@ export class ResolverBase {
       );
     }
   }
+
+  /**
+   * SECURITY — GraphQL-boundary screen for one client-supplied SQL clause fragment.
+   *
+   * lts/5 hand-port (#5265): only the dataset resolvers call this screen on this line. RunView's
+   * ExtraFilter/OrderBy still rely on the provider denylist alone here, as before.
+   *
+   * `ValidateUserProvidedSQLClause` still blocks stacked statements, DML, comments, UNION
+   * and WAITFOR, and still permits SELECT (server-internal engines pass richer filters).
+   * A keyword ban on SELECT/EXISTS at this boundary (#4253) broke first-party clients that
+   * use `IN (SELECT … FROM <entity base view>)` — that is a legitimate ExtraFilter.
+   *
+   * This screen uses `@memberjunction/sql-parser` (same wrap as EDS `assertReadOnlyClause`):
+   * wrap the fragment as a single SELECT, fail closed if it does not parse as a read, then
+   * allow a FROM only when it is an entity **BaseView**. Base tables (`Meeting`, `__mj.User`)
+   * and catalogs are rejected. Server-internal RunView callers never hit this.
+   *
+   * RLS is applied by RunView as an outer WHERE around the entity being queried, not compiled
+   * into the view. Subqueries against another entity's BaseView therefore do not inherit that
+   * entity's RLS; they are still restricted to the view (not the table).
+   */
+  protected assertClientClauseUsesEntityBaseViews(
+    clause: string | undefined | null,
+    label: string,
+    provider?: IMetadataProvider,
+    user?: UserInfo,
+  ): void {
+    if (!clause?.trim()) return;
+
+    const dialect = this.dialectForProvider(provider);
+    if (SQLParser.HasStackedStatements(clause, dialect)) {
+      throw new Error(`Invalid ${label}: multiple statements are not permitted in client-supplied filters`);
+    }
+
+    const wrapped =
+      label === 'OrderBy'
+        ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`
+        : `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`;
+    const parser = new SQLParser(wrapped, dialect);
+    if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
+      throw new Error(
+        `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`,
+      );
+    }
+    if (this.astContainsWriteNode(parser.AST)) {
+      throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+    }
+
+    const allowed = this.entityBaseViewAllowList(provider);
+    const tables = SQLParser.ExtractTableRefs(wrapped, dialect);
+    for (const t of tables) {
+      const table = this.stripSqlIdent(t.TableName);
+      const schema = this.stripSqlIdent(t.SchemaName);
+      if (table.toLowerCase() === '__mj_clause_screen') continue;
+      const qualified = `${schema}.${table}`.toLowerCase();
+      const bare = table.toLowerCase();
+      if (!allowed.qualified.has(qualified) && !allowed.bare.has(bare)) {
+        throw new Error(
+          `Invalid ${label}: subquery must use an entity base view, not '${schema}.${table}'`,
+        );
+      }
+      if (user) this.assertBaseViewReadable(provider, schema, table, label, user);
+    }
+  }
+
+  /**
+   * With a user, a subquery's base view must belong to an entity that user can read. A schema-qualified
+   * name resolves in that schema; an unqualified (or `dbo`) name that matches none falls back to the
+   * bare view name, and if several schemas share it, every one must be readable (fail closed).
+   * Hand-ported subset of next's assertTableRefReadable for the dataset ItemFilter screen (#5265).
+   */
+  private assertBaseViewReadable(
+    provider: IMetadataProvider | undefined,
+    schema: string,
+    table: string,
+    label: string,
+    user: UserInfo,
+  ): void {
+    const sameView = (provider?.Entities ?? []).filter(
+      (e) => this.stripSqlIdent(e.BaseView).toLowerCase() === table.toLowerCase(),
+    );
+    const inSchema = sameView.filter((e) => this.stripSqlIdent(e.SchemaName).toLowerCase() === schema.toLowerCase());
+    const unqualified = !schema || schema.toLowerCase() === 'dbo';
+    const matches = inSchema.length > 0 || !unqualified ? inSchema : sameView;
+    const unreadable = matches.find((e) => !e.GetUserPermisions(user)?.CanRead);
+    if (matches.length === 0 || unreadable) {
+      throw new Error(
+        `Invalid ${label}: you do not have read permission on entity '${unreadable?.Name ?? table}' referenced by '${schema ? schema + '.' : ''}${table}'`,
+      );
+    }
+  }
+
+  /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
+  private astContainsWriteNode(node: unknown): boolean {
+    if (!node || typeof node !== 'object') return false;
+    if (Array.isArray(node)) return node.some((n) => this.astContainsWriteNode(n));
+    const obj = node as Record<string, unknown>;
+    const type = obj.type;
+    if (typeof type === 'string' && ResolverBase.WRITE_NODE_TYPES.has(type.toLowerCase())) {
+      return true;
+    }
+    return Object.values(obj).some((v) => this.astContainsWriteNode(v));
+  }
+
+  private static readonly WRITE_NODE_TYPES = new Set<string>([
+    'insert', 'update', 'delete', 'merge', 'replace', 'drop', 'create', 'alter', 'truncate',
+    'rename', 'call', 'exec', 'execute', 'grant', 'revoke', 'use', 'load', 'copy', 'do',
+  ]);
+
+  private dialectForProvider(provider?: IMetadataProvider): SQLParserDialect {
+    const name = provider?.constructor?.name ?? '';
+    if (/postgres/i.test(name)) return new PostgreSQLDialect();
+    return new SQLServerDialect();
+  }
+
+  private stripSqlIdent(name: string | null | undefined): string {
+    if (!name) return '';
+    return name.replace(/^\[|\]$/g, '').replace(/^"|"$/g, '').replace(/^`|`$/g, '');
+  }
+
+  private entityBaseViewAllowList(provider?: IMetadataProvider): {
+    qualified: Set<string>;
+    bare: Set<string>;
+  } {
+    const qualified = new Set<string>();
+    const bare = new Set<string>();
+    const entities = provider?.Entities ?? [];
+    for (const e of entities) {
+      const view = this.stripSqlIdent(e.BaseView);
+      if (!view) continue;
+      const schema = this.stripSqlIdent(e.SchemaName);
+      bare.add(view.toLowerCase());
+      if (schema) qualified.add(`${schema}.${view}`.toLowerCase());
+    }
+    return { qualified, bare };
+  }
+
 
   /**
    * Optimized RunViewGenericInternal implementation with:
