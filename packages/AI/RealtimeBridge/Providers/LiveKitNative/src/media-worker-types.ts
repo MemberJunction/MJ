@@ -13,6 +13,8 @@
  */
 
 import type {
+    NativeAvatarMediaChunk,
+    NativeAvatarStatus,
     NativeConnectArgs,
     NativeConnectResult,
     NativeRoomAudioFrame,
@@ -46,6 +48,12 @@ export interface MediaWorkerClientOptions {
      * `VideoEncodeWorker` option; absent means the media worker's thread encodes.
      */
     videoEncodeWorker?: boolean;  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
+    /**
+     * Where the agent's avatar stands at this join. A worker restarted after the avatar was taken down joins with
+     * `audio-only`, so the in-worker client re-applies the bot's attribute (the token still says `on`) and publishes no
+     * avatar. Absent on a first join.
+     */
+    avatarStatus?: NativeAvatarStatus;  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
 }
 
 /**
@@ -57,6 +65,8 @@ export type MediaWorkerCommand =
     | { type: 'flushOutbound' }
     | { type: 'publishVideo'; frame: ArrayBuffer }
     | { type: 'publishScreen'; frame: ArrayBuffer }
+    /** One piece of the agent's live avatar; its `data` buffer is in the transfer list (not copied). */
+    | { type: 'publishAvatarMedia'; chunk: NativeAvatarMediaChunk }  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
     | { type: 'publishData'; id: string; text: string }
     | { type: 'disconnect'; id: string }
     | { type: 'getTelemetry'; id: string };
@@ -83,7 +93,9 @@ export type MediaWorkerEvent =
     /** A sampled JPEG frame of a person's camera or screen; its `data` buffer is in the transfer list (not copied). */
     | { type: 'videoFrame'; frame: NativeRoomVideoFrame }  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
     /** A camera or screen the in-worker client stopped reading after sending frames. */
-    | { type: 'videoSourceEnded'; source: NativeRoomVideoSourceEnd };  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
+    | { type: 'videoSourceEnded'; source: NativeRoomVideoSourceEnd }  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
+    /** A change in what the room is shown of the agent's avatar (published, or taken down). */
+    | { type: 'avatarStatus'; status: NativeAvatarStatus };  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
 
 /**
  * Interface representing the media worker communication channel (e.g. `worker_threads.Worker`

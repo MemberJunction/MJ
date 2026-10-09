@@ -1,8 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { ParseRealtimeAvatarStatus } from '../generic/realtimeAvatarStatus';
+import { ParseRealtimeAvatarStatus, REALTIME_AVATAR_UNAVAILABLE_REASONS } from '../generic/realtimeAvatarStatus';
 import type { RealtimeAvatarUnavailableReason } from '../generic/baseRealtime';
 
-const EVERY_REASON: RealtimeAvatarUnavailableReason[] = ['endpoint', 'bridged', 'custom-disabled', 'unknown-avatar', 'no-binding', 'host', 'browser'];
+const EVERY_REASON: RealtimeAvatarUnavailableReason[] = [
+    'endpoint',
+    'bridged',
+    'custom-disabled',
+    'unknown-avatar',
+    'no-binding',
+    'host',
+    'browser',
+    'decoder-missing',
+    'decoder-failed',
+    'publish-failed',
+];
 
 describe('ParseRealtimeAvatarStatus', () => {
     it('reads a granted status, and an audio-only one with its reason', () => {
@@ -21,9 +32,13 @@ describe('ParseRealtimeAvatarStatus', () => {
         expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":null}')).toEqual({ Requested: true, Granted: false });
     });
 
+    it('lists every reason it reads, from the same table (a meeting bot reads its attribute back with the list)', () => {
+        expect([...REALTIME_AVATAR_UNAVAILABLE_REASONS].sort()).toEqual([...EVERY_REASON].sort());
+    });
+
     it('reads no status from a reason it does not know, including the retired "downgraded"', () => {
         expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":"downgraded"}')).toBeNull();
-        expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":"decoder-missing"}')).toBeNull();
+        expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":"a-future-reason"}')).toBeNull();
         expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":7}')).toBeNull();
         expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":"toString"}')).toBeNull();
     });

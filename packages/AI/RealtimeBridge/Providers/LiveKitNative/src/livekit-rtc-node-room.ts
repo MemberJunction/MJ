@@ -40,6 +40,9 @@
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { performance } from 'node:perf_hooks';
 import type {
+    NativeAvatarMediaChunk,
+    NativeAvatarStatus,
+    NativeAvatarVideoSupport,
     NativeRoomModule,
     NativeRoomClient,
     NativeRoomClientOptions,
@@ -51,6 +54,10 @@ import type {
     NativeRoomVideoOptions,
     NativeRoomVideoSourceEnd,
 } from '@memberjunction/ai-bridge-livekit';
+import { AgentAvatarAudioOnlyAttributes } from '@memberjunction/ai';
+import { AvatarPublisher, type AvatarPublisherOptions, type AvatarVoiceQueue } from './avatar-publisher';
+import { RtcNodeAvatarOutlet } from './avatar-room-outlet';
+import { FfmpegLocator, type FfmpegProbeResult } from './ffmpeg-locator';
 import { LiveKitWorkerRoomClient } from './livekit-worker-room-client';
 import type { IMediaWorker } from './media-worker-types';
 import { DropVideoSubscription, RoomVideoWatcher } from './room-video-watcher';
@@ -195,12 +202,34 @@ export type RtcAudioStream = AsyncIterable<RtcAudioFrame> & {
     close?(): void;
 };
 
+/** The source the bot shows its avatar's frames through. VERIFY: `captureFrame(frame)` is synchronous. */
+export interface RtcVideoSource {
+    /** Shows one frame (timestamp 0: the native side stamps the capture time). */
+    captureFrame(frame: RtcVideoFrame): void;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+}
+
+/** The bot's published local video track (its avatar camera). */
+export interface RtcLocalVideoTrack {
+    /** Releases the track (and its source). VERIFY: `LocalVideoTrack.close(closeSource = true)`. */
+    close?(closeSource?: boolean): Promise<void>;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+}
+
+/** A track the bot published. VERIFY: `LocalTrackPublication.sid`. */
+export interface RtcLocalTrackPublication {
+    /** The track's sid, which unpublishing names. */
+    readonly sid?: string;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+}
+
 /** The bot's local participant — its publish surface. */
 export interface RtcLocalParticipant {
     /** The bot's own identity. */
     identity: string;
-    /** Publishes a track (the bot's audio). VERIFY: returns a publication / Promise. */
-    publishTrack(track: RtcLocalAudioTrack, options?: RtcTrackPublishOptions): Promise<unknownRecord>;
+    /** Publishes a track (the bot's voice, or its avatar camera). VERIFY: returns a publication / Promise. */
+    publishTrack(track: RtcLocalAudioTrack | RtcLocalVideoTrack, options?: RtcTrackPublishOptions): Promise<RtcLocalTrackPublication>;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+    /** Takes a published track down. VERIFY: `unpublishTrack(trackSid, stopOnUnpublish?)`. */
+    unpublishTrack?(trackSid: string, stopOnUnpublish?: boolean): Promise<void>;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
+    /** Sets the bot's own attributes (its token must allow `canUpdateOwnMetadata`). VERIFY: `setAttributes(record)`. */
+    setAttributes?(attributes: Record<string, string>): Promise<void>;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
     /** Publishes a reliable data message. VERIFY: `(payload: Uint8Array, options)`. */
     publishData(payload: Uint8Array, options?: unknownRecord): Promise<void>;
 }
@@ -244,6 +273,12 @@ export interface RtcNodeModule {
     VideoStream: new (track: RtcTrack) => RtcVideoStream;
     /** Video buffer-type constants. VERIFY: `VideoBufferType.I420`. */
     VideoBufferType: { I420: number };
+    /** `new VideoSource(width, height)`: where the bot's avatar frames go. Optional: without it the bot publishes no video. */
+    VideoSource?: new (width: number, height: number) => RtcVideoSource;
+    /** `new VideoFrame(data, width, height, type)`: one frame to capture. Optional, like {@link VideoSource}. */
+    VideoFrame?: new (data: Uint8Array, width: number, height: number, type: number) => RtcVideoFrame;
+    /** `LocalVideoTrack.createVideoTrack(name, source)`. Optional, like {@link VideoSource}. */
+    LocalVideoTrack?: { createVideoTrack(name: string, source: RtcVideoSource): RtcLocalVideoTrack };
     /** Video rotation constants. VERIFY: `VideoRotation.VIDEO_ROTATION_*` (WebRTC's clockwise convention). */
     VideoRotation: { VIDEO_ROTATION_0: number; VIDEO_ROTATION_90: number; VIDEO_ROTATION_180: number; VIDEO_ROTATION_270: number };
     /** Event-name constants. VERIFY exact member names. */
@@ -266,7 +301,7 @@ export interface RtcNodeModule {
      * `publishTrack`: passing a plain object leaves `source` unset and the track improperly bound, so the
      * native `AudioSource.captureFrame` rejects every frame with `InvalidState`. Construct the real proto.
      */
-    TrackPublishOptions: new (data?: { source?: number; dtx?: boolean; red?: boolean; stream?: string }) => RtcTrackPublishOptions;
+    TrackPublishOptions: new (data?: { source?: number; dtx?: boolean; red?: boolean; stream?: string; simulcast?: boolean }) => RtcTrackPublishOptions;
     /**
      * Track-source constants — `SOURCE_MICROPHONE` tags the bot's published voice track; `SOURCE_CAMERA` and
      * `SOURCE_SCREENSHARE` tell a participant's camera from a screen they share.
@@ -300,6 +335,13 @@ export interface LiveKitRtcNodeRoomClientOptions {
      * inject one). Default `performance.now()`.
      */
     Now?: () => number;
+    /**
+     * Where the agent's avatar stands when the client joins: a media worker rejoining after the avatar was taken down
+     * passes `audio-only`, so the bot re-applies its attribute and publishes no avatar. Absent: a fresh join.
+     */
+    AvatarStatus?: NativeAvatarStatus;
+    /** How the avatar finds ffmpeg and creates its decoders (tests pass fakes). Default: the real ones. */
+    Avatar?: Pick<AvatarPublisherOptions, 'Probe' | 'Decoders' | 'Now' | 'LeadMs'>;
 }
 
 /** Options for {@link CreateLiveKitRtcNodeModule}. */
@@ -466,6 +508,19 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     /** Reads participant video while connected; null when the agent does not watch (or after disconnect). */
     private videoWatcher: RoomVideoWatcher | null = null;
 
+    /** The agent's live avatar, created at its first piece; null when none came. */
+    private avatarPublisher: AvatarPublisher | null = null;
+    private avatarStatusHandler?: (status: NativeAvatarStatus) => void;
+    /** Where the avatar stood when this client joined (a media worker rejoining after it was taken down). */
+    private readonly initialAvatarStatus?: NativeAvatarStatus;
+    /** Set when the client joined with its avatar already taken down: avatar pieces are dropped. */
+    private avatarTakenDown = false;
+    private readonly avatarOptions?: LiveKitRtcNodeRoomClientOptions['Avatar'];
+    /** Audio (ms) the voice queue has taken in all, flushed audio excluded: positions on the avatar's clock. */
+    private enqueuedMs = 0;
+    /** Audio (ms) handed to the audio source in all. */
+    private capturedMs = 0;
+
     private warnedVideo = false;
     private warnedScreen = false;
 
@@ -484,6 +539,8 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         this.videoOptions = options.Video;
         this.videoEncoder = options.VideoEncoder;
         this.now = options.Now;
+        this.initialAvatarStatus = options.AvatarStatus;
+        this.avatarOptions = options.Avatar;
     }
 
     /** Connects to the room, publishes the bot's audio track, and wires inbound audio, video + roster events. */
@@ -511,6 +568,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         this.room = room;
         this.audioSource = source;
         this.audioTrack = track; // retain — see field doc: losing this to GC orphans the source (InvalidState)
+        await this.applyInitialAvatarStatus(room);
 
         return { localIdentity: room.localParticipant.identity, roomName: room.name ?? '' };
     }
@@ -533,6 +591,8 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 
         this.videoWatcher?.Stop(); // cancels every video reader; the bot leaving is not a source ending
         this.videoWatcher = null;
+        this.avatarPublisher?.Dispose(); // ends the decoders; the room's teardown takes the camera track down
+        this.avatarPublisher = null;
         this.closeInboundStreams();
         this.inboundGaps.clear();
         this.lastCaptureFinishMs = undefined;
@@ -559,7 +619,17 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         if (!this.rtc || !this.audioSource) {
             return; // not connected yet — drop (matches the seam's pre-connect no-op contract)
         }
-        this.outboundQueue.push(PcmToInt16(pcm));
+        if (this.avatarPublisher?.IsAudioOnly) {
+            // The audio-only session that replaced a failed avatar is speaking: the avatar's decoders are done.
+            this.avatarPublisher.Retire();
+        }
+        this.enqueueOutbound(PcmToInt16(pcm));
+    }
+
+    /** Queues PCM for the voice track (the model's PCM, or the avatar's decoded voice) and keeps the drain running. */
+    private enqueueOutbound(samples: Int16Array): void {
+        this.outboundQueue.push(samples);
+        this.enqueuedMs += (samples.length / (this.channels * this.outboundRate)) * 1000;
         void this.drainOutbound();
     }
 
@@ -591,6 +661,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
                     this.outboundTelemetry.underrunCount++;
                 }
 
+                this.capturedMs += frameDurationMs; // before the capture, as the source counts its queue
                 await source.captureFrame(frame);
                 this.lastCaptureFinishMs = performance.now();
                 this.outboundTelemetry.captureCount++;
@@ -635,12 +706,37 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
      */
     public flushOutbound(): void {
         this.outboundQueue.length = 0;
+        this.enqueuedMs = this.capturedMs; // the dropped audio never plays
         this.lastCaptureFinishMs = undefined;
         try {
             this.audioSource?.clearQueue();
         } catch (err: unknown) {
             LogError(`[LiveKitRtcNodeRoomClient] flushOutbound clearQueue failed: ${err instanceof Error ? err.message : String(err)}`);
         }
+        // The avatar's queued frames and in-flight decodes go too; its last frame stays on screen.
+        this.avatarPublisher?.Flush();
+    }
+
+    /**
+     * Decodes and publishes one piece of the agent's live avatar ({@link AvatarPublisher}, created at the first piece):
+     * the face on a camera track published at its first frame, the voice through this client's voice queue, paced by
+     * the voice. Dropped before connect, and after the avatar was taken down before this client joined.
+     */
+    public publishAvatarMedia(chunk: NativeAvatarMediaChunk): void {
+        const rtc = this.rtc;
+        const room = this.room;
+        if (!rtc || !room || this.avatarTakenDown) {
+            return;
+        }
+        if (!this.avatarPublisher) {
+            this.avatarPublisher = this.createAvatarPublisher(rtc, room);
+        }
+        this.avatarPublisher.Accept(chunk);
+    }
+
+    /** Registers the handler for a change in what the room is shown of the avatar. "Latest handler wins." */
+    public onAvatarStatus(cb: (status: NativeAvatarStatus) => void): void {
+        this.avatarStatusHandler = cb;
     }
 
     /**
@@ -715,6 +811,46 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     }
 
     // ── internals ──────────────────────────────────────────────────────────────
+
+    /** The avatar's publisher over this room: its camera track, this client's voice queue, the voice track's rate. */
+    private createAvatarPublisher(rtc: RtcNodeModule, room: RtcRoom): AvatarPublisher {
+        const voice: AvatarVoiceQueue = {
+            EnqueuedMs: () => this.enqueuedMs,
+            PlayedMs: () => this.capturedMs - this.sourceQueuedMs(),
+            Enqueue: (samples) => this.enqueueOutbound(samples),
+        };
+        return new AvatarPublisher({
+            ...this.avatarOptions,
+            Voice: voice,
+            Video: new RtcNodeAvatarOutlet(rtc, room.localParticipant),
+            SampleRate: this.outboundRate,
+            OnStatus: (status) => this.avatarStatusHandler?.(status),
+        });
+    }
+
+    /**
+     * A client joining with its avatar already taken down (a media worker rejoining with the original token, whose
+     * attribute still says `on`) re-applies the audio-only attribute and publishes no avatar.
+     */
+    private async applyInitialAvatarStatus(room: RtcRoom): Promise<void> {
+        const status = this.initialAvatarStatus;
+        if (status?.state !== 'audio-only' || !status.reason) {
+            return;
+        }
+        this.avatarTakenDown = true;
+        try {
+            await room.localParticipant.setAttributes?.(AgentAvatarAudioOnlyAttributes(status.reason));
+        } catch (err) {
+            LogError(`[LiveKitRtcNodeRoomClient] re-applying the avatar attribute after a rejoin failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /** What the audio source still holds (ms), by its own estimate. */
+    private sourceQueuedMs(): number {
+        const source = this.audioSource;
+        const queued = typeof source?.queuedDuration === 'function' ? source.queuedDuration() : source?.queuedDuration;
+        return typeof queued === 'number' && queued > 0 ? queued : 0;
+    }
 
     /** The video watcher for this session, or null when the agent does not watch the meeting. */
     private createVideoWatcher(rtc: RtcNodeModule, room: RtcRoom): RoomVideoWatcher | null {
@@ -903,6 +1039,27 @@ export function IsVideoEncodeWorkerEnabled(envValue: string | undefined): boolea
 }
 
 /**
+ * Whether this host's room clients can publish an agent's avatar: `@livekit/rtc-node` loads with its video classes, and
+ * ffmpeg is usable ({@link FfmpegLocator}). The room coordinator asks before it opens a meeting session.
+ *
+ * @param loader Loads `@livekit/rtc-node`.
+ * @param probe Finds ffmpeg. Default: this thread's {@link FfmpegLocator}.
+ */
+export async function DescribeAvatarVideo(loader: RtcNodeLoader, probe: () => Promise<FfmpegProbeResult> = () => FfmpegLocator.Instance.Probe()): Promise<NativeAvatarVideoSupport> {
+    let rtc: RtcNodeModule;
+    try {
+        rtc = await loader();
+    } catch (err) {
+        return { Supported: false, Reason: 'bridged', Detail: `@livekit/rtc-node could not be loaded: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    if (!RtcNodeAvatarOutlet.CanPublishVideo(rtc)) {
+        return { Supported: false, Reason: 'bridged', Detail: '@livekit/rtc-node has no video publishing (VideoSource, VideoFrame, LocalVideoTrack)' };
+    }
+    const ffmpeg = await probe();
+    return ffmpeg.Available === true ? { Supported: true } : { Supported: false, Reason: 'decoder-missing', Detail: ffmpeg.Reason };
+}
+
+/**
  * Builds a {@link NativeRoomModule} backed by `@livekit/rtc-node`. The bridge's
  * `LiveKitNativeMeetingSdk` calls `createRoomClient(options)` and then `client.connect(...)`.
  *
@@ -920,6 +1077,7 @@ export function CreateLiveKitRtcNodeModule(opts: CreateLiveKitRtcNodeModuleOptio
     const useEncodeWorker = opts.VideoEncodeWorker ?? IsVideoEncodeWorkerEnabled(process.env.MJ_LIVEKIT_VIDEO_ENCODE_WORKER);
 
     return {
+        describeAvatarVideo: () => DescribeAvatarVideo(loader),
         createRoomClient(options: NativeRoomClientOptions): NativeRoomClient {
             // Credentials (Url/ApiKey/ApiSecret) are not needed here — the bridge hands a pre-signed access
             // token to client.connect(args). The PER-SESSION sample rates ARE used: the agent's realtime

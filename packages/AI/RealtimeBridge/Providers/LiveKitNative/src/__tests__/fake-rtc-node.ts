@@ -11,6 +11,7 @@ import { vi } from 'vitest';
 import type {
     RtcAudioFrame,
     RtcAudioSource,
+    RtcLocalVideoTrack,
     RtcNodeModule,
     RtcParticipant,
     RtcRoom,
@@ -19,6 +20,7 @@ import type {
     RtcVideoFrame,
     RtcVideoFrameEvent,
     RtcVideoReadResult,
+    RtcVideoSource,
     RtcVideoStream,
     RtcVideoStreamReader,
 } from '../livekit-rtc-node-room';
@@ -194,8 +196,38 @@ export function twoColorFrame(width: number, height: number, left: YuvColor, rig
     return frame;
 }
 
+/** A video source the bot created for its avatar, with the frames captured on it. */
+export interface FakeVideoSourceRecord {
+    width: number;
+    height: number;
+    frames: RtcVideoFrame[];
+}
+
+/** One publishTrack call: the track's kind, name, and the publish options' source and simulcast. */
+export interface FakePublishRecord {
+    kind: 'audio' | 'video';
+    name?: string;
+    source: number;
+    simulcast?: boolean;
+    sid: string;
+}
+
 /** Records every captured outbound frame, every AudioStream rate request and every VideoStream opened. */
 export class Capture {
+    /** The avatar's video sources and their captured frames. */
+    public videoSources: FakeVideoSourceRecord[] = [];
+    /** Every publishTrack call, in order. */
+    public publishes: FakePublishRecord[] = [];
+    /** Every setAttributes call on the local participant. */
+    public attributeSets: Array<Record<string, string>> = [];
+    /** Every unpublishTrack sid. */
+    public unpublished: string[] = [];
+    /** The names of the local video tracks closed (released with their source). */
+    public closedVideoTracks: string[] = [];
+    /** Set to make the next video publishTrack reject (the room refusing the camera). */
+    public failVideoPublish = false;
+    /** The audio source's queued duration (ms) as `queuedDuration` reports it. */
+    public queuedDurationMs = 50;
     public captured: RtcAudioFrame[] = [];
     public audioSourceRates: Array<[number, number]> = [];
     public audioStreamRates: Array<[number, number]> = [];
@@ -235,14 +267,31 @@ export interface FakeRtc {
     inboundFramesFor: (frames: RtcAudioFrame[]) => void;
 }
 
+/** A local video track the fake hands out: it remembers its name and source. */
+interface FakeLocalVideoTrack extends RtcLocalVideoTrack {
+    __videoTrackName: string;
+}
+
 function makeFakeRoom(cap: Capture, remote: RtcParticipant[], listeners: Map<string, ((...args: never[]) => void)[]>): RtcRoom {
     const localParticipant = {
         identity: 'agent-bot',
-        publishTrack: vi.fn(async (_t: unknown, opts?: { source?: number }) => {
+        publishTrack: vi.fn(async (t: unknown, opts?: { source?: number; simulcast?: boolean }) => {
             // Capture the publish-options `source` — it MUST be set (SOURCE_MICROPHONE) for the native
             // AudioSource to accept captured frames; a missing source is the `InvalidState` bug.
             cap.publishedSources.push(Number(opts?.source ?? -1));
-            return {};
+            const video = typeof t === 'object' && t !== null && '__videoTrackName' in t;
+            if (video && cap.failVideoPublish) {
+                throw new Error('publish refused');
+            }
+            const sid = `TR_${cap.publishes.length + 1}`;
+            cap.publishes.push({ kind: video ? 'video' : 'audio', name: video ? (t as FakeLocalVideoTrack).__videoTrackName : undefined, source: Number(opts?.source ?? -1), simulcast: opts?.simulcast, sid });
+            return { sid };
+        }),
+        unpublishTrack: vi.fn(async (sid: string) => {
+            cap.unpublished.push(sid);
+        }),
+        setAttributes: vi.fn(async (attributes: Record<string, string>) => {
+            cap.attributeSets.push({ ...attributes });
         }),
         publishData: vi.fn(async (payload: Uint8Array) => {
             cap.publishedData.push(payload);
@@ -290,8 +339,22 @@ export function makeFakeRtc(remote: RtcParticipant[] = []): FakeRtc {
             clearQueue: () => {
                 cap.clearQueueCalls++;
             },
-            queuedDuration: 50,
+            get queuedDuration(): number {
+                return cap.queuedDurationMs;
+            },
         };
+    }
+    function FakeVideoSource(this: unknown, width: number, height: number): RtcVideoSource {
+        const record: FakeVideoSourceRecord = { width, height, frames: [] };
+        cap.videoSources.push(record);
+        return {
+            captureFrame: (frame: RtcVideoFrame) => {
+                record.frames.push(frame);
+            },
+        };
+    }
+    function FakeVideoFrame(this: unknown, data: Uint8Array, width: number, height: number, type: number): RtcVideoFrame {
+        return { data, width, height, type, convert: () => { throw new Error('unexpected convert'); } };
     }
     function FakeAudioFrame(this: unknown, data: Int16Array, sampleRate: number, channels: number, samplesPerChannel: number): RtcAudioFrame {
         return { data, sampleRate, channels, samplesPerChannel };
@@ -315,12 +378,24 @@ export function makeFakeRtc(remote: RtcParticipant[] = []): FakeRtc {
         VideoBufferType: VIDEO_BUFFER_TYPE,
         VideoRotation: VIDEO_ROTATION,
         LocalAudioTrack: { createAudioTrack: () => ({ __isLocalAudioTrack: true as const }) },
+        VideoSource: FakeVideoSource as unknown as RtcNodeModule['VideoSource'],
+        VideoFrame: FakeVideoFrame as unknown as RtcNodeModule['VideoFrame'],
+        LocalVideoTrack: {
+            createVideoTrack: (name: string): FakeLocalVideoTrack => ({
+                __videoTrackName: name,
+                close: vi.fn(async () => {
+                    cap.closedVideoTracks.push(name);
+                }),
+            }),
+        },
         RoomEvent: ROOM_EVENT,
         TrackKind: TRACK_KIND,
         TrackPublishOptions: class {
             source?: number;
-            constructor(data?: { source?: number }) {
+            simulcast?: boolean;
+            constructor(data?: { source?: number; simulcast?: boolean }) {
                 this.source = data?.source;
+                this.simulcast = data?.simulcast;
             }
         } as unknown as RtcNodeModule['TrackPublishOptions'],
         TrackSource: TRACK_SOURCE,

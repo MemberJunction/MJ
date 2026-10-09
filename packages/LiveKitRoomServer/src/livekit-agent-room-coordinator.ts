@@ -16,12 +16,15 @@
 import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
+  AgentAvatarAttributes,
   AgentWatchesAttributes,
   InboundVideoStreamsOf,
   ResolveIsModelFullDuplex,
   type IRealtimeSession,
+  type RealtimeAvatarStatus,
   type RealtimeToolDefinition,
 } from '@memberjunction/ai';
+import { DefaultNativeLoader, type NativeAvatarVideoSupport } from '@memberjunction/ai-bridge-livekit';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
   AlwaysAddressedMatcher,
@@ -107,6 +110,11 @@ export interface RealtimeSessionStartContext {
   PriorTranscript?: string;
   /** The `MJ: Conversations` row the session writes to — stamped on the co-agent observability run. */
   ConversationID?: string;
+  /**
+   * `'room'` when this host's bot can publish the agent's avatar into the room (the native module answered
+   * `describeAvatarVideo` with support): the session may then ask the model to render it. Absent: audio only, as before.
+   */
+  AvatarDelivery?: 'room';
 }
 
 /**
@@ -381,10 +389,16 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
         : undefined;
     };
 
+    // Whether this host's bot can publish the agent's avatar is asked BEFORE the model session opens, so a host that
+    // can't never asks the model for it (and is never billed for video nobody sees). Cleared if the avatar is taken down.
+    const avatarVideo = await this.DescribeAvatarVideo();
+    let avatarDelivery: 'room' | undefined = avatarVideo.Supported === true ? 'room' : undefined;
+
     let activeTurnHandler: BridgeTurnTakingToolHandler | undefined = undefined;
     const openModelSession = async (priorTranscript?: string): Promise<IRealtimeSession> => {
       const initialTools = buildToolsForFullDuplex(resolvedFullDuplex ?? false);
       const opened = await this.sessionFactory({
+        AvatarDelivery: avatarDelivery,
         AgentID: params.AgentID,
         AgentName: params.AgentName,
         TargetAgentID: params.TargetAgentID,
@@ -463,7 +477,9 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     const session = await openModelSession();
     const finalFullDuplex = resolvedFullDuplex ?? false;
     const watches = this.agentWatches(session);
-    const botToken = await this.mintBotTokenFor(session, params.RoomName, botIdentity, botName, watches);
+    const avatar = this.avatarStatusFor(session, avatarVideo, botName);
+    const botAttributes = { ...(watches ? AgentWatchesAttributes(true) : {}), ...AgentAvatarAttributes(avatar) };
+    const botToken = await this.mintBotTokenFor(session, params.RoomName, botIdentity, botName, botAttributes);
 
     // The bridge id is known only after the engine starts the session, but the end-of-session hook is registered at start,
     // so it reaches the id through this holder.
@@ -510,6 +526,14 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       TranscriptSink: host?.TranscriptSink,
       OnBargeIn: host?.OnBargeIn,
       RecoverRealtimeSession: host?.RecoverModelSession ? (request) => openModelSession(request.PriorTranscript) : undefined,
+      // The bot took the avatar down mid-meeting: the model session is replaced by one that renders none (and re-opened
+      // without it from then on), so the model stops generating video nobody sees.
+      RecoverRealtimeSessionWithoutAvatar: avatar?.Granted
+        ? (request) => {
+            avatarDelivery = undefined;
+            return openModelSession(request.PriorTranscript);
+          }
+        : undefined,
       OnSessionEnded: async (reason) => {
         // An agent that leaves on its own (every human gone, the model lost, a handoff) must drop off the room's roster too.
         if (started.SessionBridgeID) {
@@ -556,19 +580,53 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
   }
 
   /**
-   * Mints the bot's join token, carrying `mj.agentWatches` when the agent watches so the room offers people the choice
-   * from the moment the bot joins. The model session is already open; if minting fails it is closed before the error
-   * propagates, so no model session is left behind.
+   * Whether this host's bots can publish an agent's avatar, from the native room module the bots join with (`ffmpeg`
+   * with the H.264 and AAC decoders, and a room SDK that publishes video). Asked before every agent's model session
+   * opens; the module probes once and remembers. A module that cannot be loaded, or that predates avatars, means no.
+   */
+  public async DescribeAvatarVideo(): Promise<NativeAvatarVideoSupport> {
+    try {
+      const nativeModule = await DefaultNativeLoader(this.resolveNativeModuleSpecifier());
+      if (!nativeModule.describeAvatarVideo) {
+        return { Supported: false, Reason: 'bridged', Detail: 'the native room module publishes no avatars' };
+      }
+      return await nativeModule.describeAvatarVideo();
+    } catch (err) {
+      return { Supported: false, Reason: 'bridged', Detail: `the native room module could not be asked: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  /**
+   * What became of the agent's avatar request: the session's own status, except that a session which asked for an
+   * avatar and stayed audio only because this host could not publish it carries the host's reason (`decoder-missing`
+   * when there is no usable ffmpeg). Logged once per join when an avatar was asked for.
+   */
+  private avatarStatusFor(session: IRealtimeSession, avatarVideo: NativeAvatarVideoSupport, botName: string): RealtimeAvatarStatus | undefined {
+    const status = session.AvatarStatus;
+    if (!status?.Requested) {
+      return status;
+    }
+    const resolved: RealtimeAvatarStatus =
+      !status.Granted && status.Reason === 'bridged' && avatarVideo.Supported === false ? { ...status, Reason: avatarVideo.Reason } : status;
+    const detail = avatarVideo.Supported === false && avatarVideo.Detail ? ` (${avatarVideo.Detail})` : '';
+    LogStatus(`[LiveKitAgentRoomCoordinator] ${botName}'s avatar: ${resolved.Granted ? 'on' : `audio only, ${resolved.Reason ?? 'bridged'}${detail}`}`);
+    return resolved;
+  }
+
+  /**
+   * Mints the bot's join token with its attributes: `mj.agentWatches` when the agent watches, so the room offers people
+   * the choice from the moment the bot joins, and `mj.agentAvatar` when the agent asked for an avatar. The model session
+   * is already open; if minting fails it is closed before the error propagates, so no model session is left behind.
    */
   private async mintBotTokenFor(
     session: IRealtimeSession,
     roomName: string,
     botIdentity: string,
     botName: string,
-    watches: boolean,
+    attributes: Record<string, string>,
   ): Promise<MintedToken> {
     try {
-      return await this.tokenService.MintBotToken(roomName, botIdentity, botName, watches ? AgentWatchesAttributes(true) : undefined);
+      return await this.tokenService.MintBotToken(roomName, botIdentity, botName, Object.keys(attributes).length > 0 ? attributes : undefined);
     } catch (err) {
       await session.Close().catch((closeErr: unknown) =>
         LogError(`[LiveKitAgentRoomCoordinator] closing the model session after a failed token mint failed: ${closeErr instanceof Error ? closeErr.message : String(closeErr)}`),

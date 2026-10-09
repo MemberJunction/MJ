@@ -11,6 +11,9 @@ const DECIDED: Readonly<Record<RealtimeAvatarUnavailableReason, string>> = {
   host: "Audio only: this app can't show the avatar",
   browser: "Audio only: this browser can't play the avatar",
   bridged: "Audio only for Sage: the avatar can't be shown in this meeting",
+  'decoder-missing': "Audio only for Sage: the avatar couldn't be shown in this meeting",
+  'decoder-failed': "Audio only for Sage: the avatar couldn't be shown in this meeting",
+  'publish-failed': "Audio only for Sage: the avatar couldn't be shown in this meeting",
 };
 
 describe('AvatarNoticeText', () => {

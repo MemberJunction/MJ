@@ -27,8 +27,11 @@ import {
     NativeRoomVideoFrame,
     NativeRoomVideoSourceEnd,
     NativeVideoOptionsFor,
+    NativeAvatarMediaChunk,
+    NativeAvatarStatus,
+    MapNativeAvatarStatus,
 } from '../livekit-native-sdk';
-import { LiveKitAudioFrame, LiveKitConnectArgs, LiveKitParticipant, LiveKitVideoFrame, LiveKitVideoSourceEnd } from '../livekit-sdk';
+import { LiveKitAudioFrame, LiveKitAvatarStatus, LiveKitConnectArgs, LiveKitParticipant, LiveKitVideoFrame, LiveKitVideoSourceEnd } from '../livekit-sdk';
 
 /** An in-memory {@link NativeRoomClient} with drive helpers + capture sinks (no SDK, no network). */
 class FakeNativeClient implements NativeRoomClient {
@@ -37,7 +40,9 @@ class FakeNativeClient implements NativeRoomClient {
     public publishedAudio: ArrayBuffer[] = [];
     public publishedVideo: ArrayBuffer[] = [];
     public publishedScreen: ArrayBuffer[] = [];
+    public publishedAvatar: NativeAvatarMediaChunk[] = [];
     public data: string[] = [];
+    private avatarStatusCb?: (status: NativeAvatarStatus) => void;
     public roster: NativeRoomParticipant[] = [];
 
     private audioCb?: (frame: NativeRoomAudioFrame) => void;
@@ -65,6 +70,15 @@ class FakeNativeClient implements NativeRoomClient {
     }
     publishScreen(frame: ArrayBuffer) {
         this.publishedScreen.push(frame);
+    }
+    publishAvatarMedia(chunk: NativeAvatarMediaChunk) {
+        this.publishedAvatar.push(chunk);
+    }
+    onAvatarStatus(cb: (status: NativeAvatarStatus) => void) {
+        this.avatarStatusCb = cb;
+    }
+    driveAvatarStatus(status: NativeAvatarStatus) {
+        this.avatarStatusCb?.(status);
     }
     onAudioFrame(cb: (frame: NativeRoomAudioFrame) => void) {
         this.audioCb = cb;
@@ -400,5 +414,43 @@ describe('LiveKitNativeMeetingSdk — config + errors', () => {
         const sdk = factory(cfg);
         const result = await sdk.connect(baseArgs);
         expect(result.BotIdentity).toBe('bot-1');
+    });
+});
+
+describe('LiveKitNativeMeetingSdk — the agent\'s avatar', () => {
+    it('hands an avatar piece to the native client in its own vocabulary', async () => {
+        const client = new FakeNativeClient();
+        const sdk = new LiveKitNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
+        await sdk.connect(baseArgs);
+        const piece = new Uint8Array([0, 0, 0, 8]).buffer;
+        sdk.publishAvatarMedia({ Bytes: piece, MimeType: 'video/mp4' });
+        expect(client.publishedAvatar).toEqual([{ data: piece, mimeType: 'video/mp4' }]);
+        expect(client.publishedAvatar[0].data).toBe(piece);
+    });
+
+    it('drops an avatar piece before connect, and with a wrapper that publishes no avatars', async () => {
+        const sdk = new LiveKitNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
+        expect(() => sdk.publishAvatarMedia({ Bytes: new ArrayBuffer(1), MimeType: 'video/mp4' })).not.toThrow();
+        const plain = new FakeNativeClient() as Partial<FakeNativeClient>;
+        delete plain.publishAvatarMedia;
+        const withoutAvatars = new LiveKitNativeMeetingSdk(ReadNativeConfig(cfg), async () => ({ createRoomClient: () => plain as NativeRoomClient }));
+        await withoutAvatars.connect(baseArgs);
+        expect(() => withoutAvatars.publishAvatarMedia({ Bytes: new ArrayBuffer(1), MimeType: 'video/mp4' })).not.toThrow();
+    });
+
+    it('maps the native client\'s avatar status to the seam', async () => {
+        const client = new FakeNativeClient();
+        const sdk = new LiveKitNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
+        const seen: LiveKitAvatarStatus[] = [];
+        sdk.onAvatarStatus((s) => seen.push(s));
+        await sdk.connect(baseArgs);
+        client.driveAvatarStatus({ state: 'on' });
+        client.driveAvatarStatus({ state: 'audio-only', reason: 'decoder-failed' });
+        expect(seen).toEqual([{ State: 'on' }, { State: 'audio-only', Reason: 'decoder-failed' }]);
+    });
+
+    it('MapNativeAvatarStatus keeps the reason only when there is one', () => {
+        expect(MapNativeAvatarStatus({ state: 'on' })).toEqual({ State: 'on' });
+        expect(MapNativeAvatarStatus({ state: 'audio-only', reason: 'publish-failed' })).toEqual({ State: 'audio-only', Reason: 'publish-failed' });
     });
 });

@@ -112,6 +112,28 @@ export interface LiveKitVideoSourceEnd {
     Source: LiveKitVideoSourceKind;
 }
 
+/**
+ * One piece of the agent's live avatar for the room client to publish: fragmented MP4 (an init segment, or `moof` +
+ * `mdat` fragments) whose video becomes the bot's camera track and whose audio is the agent's voice.
+ */
+export interface LiveKitAvatarMediaChunk {
+    /** The piece's bytes. The room client may take ownership of the buffer (transfer it to another thread). */
+    Bytes: ArrayBuffer;
+    /** Its MIME type, for example `'video/mp4'`. */
+    MimeType: string;
+}
+
+/** Why the room client can no longer show the agent's avatar: its decoders kept failing, or the room refused the track. */
+export type LiveKitAvatarFailure = 'decoder-failed' | 'publish-failed';
+
+/** A change in what the room client shows of the agent's avatar. */
+export interface LiveKitAvatarStatus {
+    /** `'on'`: the avatar's video track is published. `'audio-only'`: the avatar was taken down; the voice goes on. */
+    State: 'on' | 'audio-only';
+    /** Why, when {@link State} is `'audio-only'`. */
+    Reason?: LiveKitAvatarFailure;
+}
+
 /** Arguments to {@link ILiveKitRoomSdk.connect} — what the bot needs to join an MJ-native room. */
 export interface LiveKitConnectArgs {
     /** The LiveKit room server URL (e.g. `wss://livekit.myorg.com`). MJ-owned, self-hosted. */
@@ -205,6 +227,23 @@ export interface ILiveKitRoomSdk {
      * @param frame The encoded/raw screen frame bytes to publish.
      */
     publishScreenFrame(frame: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+    /**
+     * Publishes one piece of the agent's live avatar: the room client decodes it, publishes the face on the bot's camera
+     * track (at its first frame) and the voice on its audio track, lip-synced. Optional: an SDK without avatar publishing
+     * omits it, and the avatar's pieces are dropped.
+     *
+     * @param chunk The avatar piece.
+     */
+    publishAvatarMedia?(chunk: LiveKitAvatarMediaChunk): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
+
+    /**
+     * Subscribes changes in what the room client shows of the avatar (published, or taken down with a reason). Optional,
+     * like {@link publishAvatarMedia}. "Latest handler wins."
+     *
+     * @param cb Invoked with each change.
+     */
+    onAvatarStatus?(cb: (status: LiveKitAvatarStatus) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant connects. "Latest handler wins."

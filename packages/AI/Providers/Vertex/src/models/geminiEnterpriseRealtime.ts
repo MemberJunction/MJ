@@ -88,7 +88,9 @@ export interface GeminiEnterpriseLiveClient {
  * - **Client-direct** ({@link CreateClientSession}): MJ writes the Live setup from the connect config, MJAPI's relay
  *   sends it upstream with a bearer token and filters what the browser sends after it, and the browser gets the relay
  *   URL (the ticket is in the path) and a pact with a minimal config: no system prompt and no tools.
- * - **Bridged** ({@link StartSession}): `@google/genai` in Vertex mode, audio only.
+ * - **Bridged** ({@link StartSession}): `@google/genai` in Vertex mode; audio only, unless the host publishes the avatar
+ *   into a meeting room (`RealtimeAvatarSettings.Delivery` `'room'`): then the model renders it and the session sends its
+ *   pieces to the host through `OnAvatarOutput`.
  */
 @RegisterClass(BaseRealtimeModel, 'GeminiEnterpriseRealtime')
 export class GeminiEnterpriseRealtime extends GeminiRealtime {
@@ -154,7 +156,8 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
     }
 
     /**
-     * Opens a server-side (bridged) session: audio only, through `@google/genai` in Vertex mode.
+     * Opens a server-side (bridged) session through `@google/genai` in Vertex mode: audio only, or with the avatar when
+     * its host publishes it into a meeting room (`RealtimeAvatarSettings.Delivery` `'room'`; see `GeminiRealtime`).
      *
      * @throws When the key cannot be read or names a location that is not a Google Cloud location.
      */

@@ -144,6 +144,11 @@ describe('CreateBridgeRealtimeSession', () => {
         expect(lastStartParams?.conversationMessages).toEqual([{ role: 'user', content: 'earlier' }]);
     });
 
+    it("threads the room delivery of the agent's avatar into the session start, and nothing when absent", async () => {
+        await CreateBridgeRealtimeSession({ AgentID: 'AAAA0000-0000-0000-0000-000000000001', AvatarDelivery: 'room' });
+        expect(lastStartParams?.data).toEqual({ realtimeAvatarDelivery: 'room' });
+    });
+
     it('starts a fresh call with no history and omits unset realtime extras', async () => {
         await CreateBridgeRealtimeSession({ AgentID: 'AAAA0000-0000-0000-0000-000000000001' });
         expect(lastStartParams?.conversationMessages).toEqual([]);

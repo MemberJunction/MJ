@@ -1,0 +1,307 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { LiveServerMessage, Blob as GeminiBlob, Content, FunctionResponse, LiveServerContent, Part } from '@google/genai';
+import type { IRealtimeSession, RealtimeAvatarMediaChunk, RealtimeSessionParams, RealtimeUsage } from '@memberjunction/ai';
+import { GeminiRealtime, type GeminiLiveSession, type GeminiConnectArgs } from '../geminiRealtime';
+
+// ── Fakes ──────────────────────────────────────────────────────────────────────
+
+class FakeConnection implements GeminiLiveSession {
+    public sendRealtimeInput(_params: { audio?: GeminiBlob }): void {}
+    public sendClientContent(_params: { turns?: Content[]; turnComplete?: boolean }): void {}
+    public sendToolResponse(_params: { functionResponses: FunctionResponse[] | FunctionResponse }): void {}
+    public close(): void {}
+}
+
+/** The driver on Gemini Enterprise (or the Developer API), opening sessions on a fake connection. */
+class BridgedGemini extends GeminiRealtime {
+    public Args: GeminiConnectArgs | null = null;
+
+    constructor(private readonly endpoint: 'developer' | 'enterprise' = 'enterprise') {
+        super('k');
+    }
+
+    protected override get Endpoint(): 'developer' | 'enterprise' {
+        return this.endpoint;
+    }
+
+    protected override async connectLiveSession(args: GeminiConnectArgs): Promise<GeminiLiveSession> {
+        this.Args = args;
+        return new FakeConnection();
+    }
+
+    public Content(content: LiveServerContent): void {
+        this.Args?.OnMessage({ serverContent: content } as LiveServerMessage);
+    }
+
+    public Parts(parts: Part[]): void {
+        this.Content({ modelTurn: { role: 'model', parts } });
+    }
+
+    public Config(): Record<string, unknown> {
+        return this.Args!.Config as Record<string, unknown>;
+    }
+}
+
+// ── Media builders (a minimal avatar stream: video track 1 at 90 kHz, audio track 2 at 24 kHz) ──
+
+function concat(...parts: Uint8Array[]): Uint8Array {
+    const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    let offset = 0;
+    for (const p of parts) {
+        out.set(p, offset);
+        offset += p.length;
+    }
+    return out;
+}
+
+function u32(value: number): Uint8Array {
+    const out = new Uint8Array(4);
+    new DataView(out.buffer).setUint32(0, value);
+    return out;
+}
+
+const ascii = (text: string): Uint8Array => Uint8Array.from(text, (c) => c.charCodeAt(0));
+const box = (type: string, ...payload: Uint8Array[]): Uint8Array => {
+    const body = concat(...payload);
+    return concat(u32(8 + body.length), ascii(type), body);
+};
+const fullBox = (type: string, flags: number, ...payload: Uint8Array[]): Uint8Array => box(type, u32(flags), ...payload);
+
+function trak(id: number, handler: string, timescale: number): Uint8Array {
+    const mdhd = fullBox('mdhd', 0, u32(0), u32(0), u32(timescale), u32(0), u32(0));
+    const hdlr = fullBox('hdlr', 0, u32(0), ascii(handler), new Uint8Array(13));
+    const stbl = box('stbl', fullBox('stsd', 0, u32(0)));
+    return box('trak', fullBox('tkhd', 0, new Uint8Array(8), u32(id), new Uint8Array(68)), box('mdia', mdhd, hdlr, box('minf', stbl)));
+}
+
+const INIT = concat(box('ftyp', ascii('iso5'), u32(512)), box('moov', trak(1, 'vide', 90000), trak(2, 'soun', 24000)));
+
+/** One fragment with one sample on `track`, of `duration` ticks (tfhd defaults, default base is the moof). */
+function fragment(track: number, decodeTime: number, duration: number): Uint8Array {
+    const payload = new Uint8Array([1, 2, 3]);
+    const traf = (dataOffset: number): Uint8Array =>
+        box('traf', fullBox('tfhd', 0x2_0018, u32(track), u32(duration), u32(payload.length)), fullBox('tfdt', 0x0100_0000, u32(0), u32(decodeTime)), fullBox('trun', 0x1, u32(1), u32(dataOffset)));
+    const moofLength = box('moof', traf(0)).length;
+    return concat(box('moof', traf(moofLength + 8)), box('mdat', payload));
+}
+
+const b64 = (bytes: Uint8Array | number[]): string => Buffer.from(Uint8Array.from(bytes)).toString('base64');
+const mp4Part = (bytes: Uint8Array, mimeType: string | undefined = 'video/mp4'): Part => ({ inlineData: { data: b64(bytes), ...(mimeType ? { mimeType } : {}) } });
+const pcmPart = (bytes: number[]): Part => ({ inlineData: { data: b64(bytes), mimeType: 'audio/pcm;rate=24000' } });
+
+const BEN: NonNullable<RealtimeSessionParams['Avatar']> = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' };
+const params = (avatar?: RealtimeSessionParams['Avatar'], model = 'gemini-3.8-live'): RealtimeSessionParams => ({ Model: model, SystemPrompt: 'hi', Avatar: avatar });
+
+// ── Tests ──────────────────────────────────────────────────────────────────────
+
+describe('a bridged Gemini session whose host publishes the avatar into a room', () => {
+    let warn: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+        warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    });
+    afterEach(() => warn.mockRestore());
+
+    const warnings = (): string[] => warn.mock.calls.map((c) => String(c[0]));
+
+    describe('the grant', () => {
+        it("asks for video and the avatar at 2 Mbps on Enterprise when the delivery is 'room'", async () => {
+            const driver = new BridgedGemini('enterprise');
+            const session = await driver.StartSession(params({ ...BEN, Delivery: 'room' }));
+            expect(driver.Config()['responseModalities']).toEqual(['VIDEO']);
+            expect(driver.Config()['avatarConfig']).toEqual({ avatarName: 'Ben', videoBitrateBps: 2_000_000 });
+            expect(session.AvatarStatus).toEqual({ Requested: true, Granted: true });
+            expect(warnings().filter((w) => w.includes('Avatar "Ben"'))).toEqual([]);
+        });
+
+        it('declares the avatar on an outbound video track with its encoding', async () => {
+            const session = await new BridgedGemini('enterprise').StartSession(params({ ...BEN, Delivery: 'room' }));
+            expect(session.Capabilities?.SupportedOutboundTracks).toEqual([
+                { Modality: 'audio', Direction: 'outbound' },
+                { Modality: 'video', Direction: 'outbound', Encoding: 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"' },
+            ]);
+        });
+
+        it("stays audio only without a 'room' delivery, reporting 'bridged'", async () => {
+            for (const avatar of [BEN, { ...BEN, Delivery: 'client' as const }]) {
+                const driver = new BridgedGemini('enterprise');
+                const session = await driver.StartSession(params(avatar));
+                expect(driver.Config()['responseModalities']).toEqual(['AUDIO']);
+                expect(session.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'bridged' });
+                expect(session.Capabilities?.SupportedOutboundTracks).toEqual([{ Modality: 'audio', Direction: 'outbound' }]);
+            }
+            expect(warnings().filter((w) => w.includes('Reason: bridged'))).toHaveLength(2);
+        });
+
+        it("reports why the model won't render it where the endpoint or the request rules it out", async () => {
+            const developer = await new BridgedGemini('developer').StartSession(params({ ...BEN, Delivery: 'room' }));
+            expect(developer.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+            const custom = await new BridgedGemini('enterprise').StartSession(params({ ...BEN, Kind: 'custom', Delivery: 'room' }));
+            expect(custom.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'custom-disabled' });
+            const extended = await new BridgedGemini('enterprise').StartSession(params({ ...BEN, Delivery: 'room' }, 'gemini-3.8-live-extended-thinking'));
+            expect(extended.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+        });
+
+        it('reports no status for a session that asked for no avatar', async () => {
+            const session = await new BridgedGemini('enterprise').StartSession(params());
+            expect(session.AvatarStatus).toBeUndefined();
+        });
+    });
+
+    describe('parts', () => {
+        let driver: BridgedGemini;
+        let session: IRealtimeSession;
+        let avatar: RealtimeAvatarMediaChunk[];
+        let pcm: ArrayBuffer[];
+
+        beforeEach(async () => {
+            driver = new BridgedGemini('enterprise');
+            session = await driver.StartSession(params({ ...BEN, Delivery: 'room' }));
+            avatar = [];
+            pcm = [];
+            session.OnAvatarOutput?.((chunk) => avatar.push(chunk));
+            session.OnOutput((chunk) => pcm.push(chunk));
+        });
+
+        it('sends video/mp4 pieces to the avatar output, byte for byte, never to the audio output', () => {
+            driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 0, 3750))]);
+            expect(avatar.map((c) => c.MimeType)).toEqual(['video/mp4', 'video/mp4']);
+            expect(new Uint8Array(avatar[0].Data)).toEqual(INIT);
+            expect(pcm).toHaveLength(0);
+        });
+
+        it('takes a part with no MIME type as a piece when it opens with an MP4 box, and as PCM otherwise', () => {
+            driver.Parts([{ inlineData: { data: b64(INIT) } }]);
+            expect(avatar.map((c) => c.MimeType)).toEqual(['video/mp4']);
+            expect(pcm).toHaveLength(0);
+            driver.Content({ turnComplete: true });
+            driver.Parts([{ inlineData: { data: b64([1, 2, 3, 4]) } }]);
+            expect(pcm.map((b) => Array.from(new Uint8Array(b)))).toEqual([[1, 2, 3, 4]]);
+        });
+
+        it("plays PCM before the turn's first video, drops it after (reported once), and plays it again in the next turn", () => {
+            driver.Parts([pcmPart([1, 1]), mp4Part(INIT), pcmPart([2, 2]), pcmPart([3, 3])]);
+            expect(pcm.map((b) => Array.from(new Uint8Array(b)))).toEqual([[1, 1]]);
+            expect(warnings().filter((w) => w.includes('Dropped PCM audio'))).toHaveLength(1);
+            driver.Content({ turnComplete: true });
+            driver.Parts([pcmPart([4, 4])]);
+            expect(pcm.map((b) => Array.from(new Uint8Array(b)))).toEqual([[1, 1], [4, 4]]);
+        });
+
+        it('drops media from interrupted until that turn completes, and still reports the interruption', () => {
+            const interrupted = vi.fn();
+            session.OnInterruption(interrupted);
+            driver.Parts([mp4Part(INIT)]);
+            driver.Content({ interrupted: true });
+            driver.Parts([mp4Part(fragment(1, 3750, 3750)), pcmPart([5, 5])]);
+            expect(interrupted).toHaveBeenCalledTimes(1);
+            expect(avatar).toHaveLength(1);
+            expect(pcm).toHaveLength(0);
+            driver.Content({ turnComplete: true });
+            driver.Parts([mp4Part(fragment(1, 7500, 3750))]);
+            expect(avatar).toHaveLength(2);
+        });
+
+        it('drops other types once per session', () => {
+            driver.Parts([{ inlineData: { data: b64([1]), mimeType: 'text/plain' } }, { inlineData: { data: b64([2]), mimeType: 'text/plain' } }]);
+            expect(avatar).toHaveLength(0);
+            expect(warnings().filter((w) => w.includes('text/plain'))).toHaveLength(1);
+        });
+
+        it("ends a barge-in's drop window when the session resumes on a new connection, and starts a new turn", async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            try {
+                driver.Parts([mp4Part(INIT), pcmPart([1, 1])]);
+                driver.Content({ interrupted: true });
+                driver.Args?.OnMessage({ sessionResumptionUpdate: { newHandle: 'h1', resumable: true } } as LiveServerMessage);
+                driver.Args?.OnMessage({ goAway: { timeLeft: '60s' } } as LiveServerMessage);
+                await vi.advanceTimersByTimeAsync(0);
+                driver.Parts([pcmPart([2, 2]), mp4Part(fragment(1, 0, 3750))]);
+                expect(avatar).toHaveLength(2);
+                expect(pcm.map((b) => Array.from(new Uint8Array(b)))).toEqual([[2, 2]]);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('stops sending to the avatar handler after Close', async () => {
+            await session.Close();
+            driver.Parts([mp4Part(INIT)]);
+            expect(avatar).toHaveLength(0);
+        });
+    });
+
+    describe('avatar seconds in usage', () => {
+        let driver: BridgedGemini;
+        let session: IRealtimeSession;
+        let usage: RealtimeUsage[];
+
+        beforeEach(async () => {
+            driver = new BridgedGemini('enterprise');
+            session = await driver.StartSession(params({ ...BEN, Delivery: 'room' }));
+            usage = [];
+            session.OnUsage((u) => usage.push(u));
+        });
+
+        const videoSeconds = (): number[] => usage.map((u) => u.OutputTokenDetails?.VideoSeconds ?? 0);
+
+        it("reports the turn's video seconds at generationComplete, as a delta with no tokens", () => {
+            driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 0, 45000)), mp4Part(fragment(2, 0, 24000)), mp4Part(fragment(1, 45000, 45000))]);
+            expect(usage).toHaveLength(0);
+            driver.Content({ generationComplete: true });
+            expect(usage).toEqual([{ InputTokens: 0, OutputTokens: 0, OutputTokenDetails: { VideoSeconds: 1 } }]);
+        });
+
+        it('does not count video after generationComplete, nor report the turn twice', () => {
+            driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 0, 45000))]);
+            driver.Content({ generationComplete: true });
+            driver.Parts([mp4Part(fragment(1, 45000, 45000))]);
+            driver.Content({ turnComplete: true });
+            expect(videoSeconds()).toEqual([0.5]);
+        });
+
+        it('counts what arrived before an interruption, and nothing dropped after it', () => {
+            driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 0, 22500))]);
+            driver.Content({ interrupted: true });
+            driver.Parts([mp4Part(fragment(1, 22500, 22500))]);
+            driver.Content({ turnComplete: true });
+            expect(videoSeconds()).toEqual([0.25]);
+        });
+
+        it('reports at turnComplete when no generationComplete came, and each turn separately', () => {
+            driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 0, 90000))]);
+            driver.Content({ turnComplete: true });
+            driver.Parts([mp4Part(fragment(1, 90000, 45000))]);
+            driver.Content({ turnComplete: true });
+            expect(videoSeconds()).toEqual([1, 0.5]);
+        });
+
+        it('reports what is pending when the session closes', async () => {
+            driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 0, 45000))]);
+            await session.Close();
+            expect(videoSeconds()).toEqual([0.5]);
+        });
+
+        it('counts no audio, and nothing before an init gave the timescales', () => {
+            driver.Parts([mp4Part(fragment(1, 0, 45000)), mp4Part(INIT), mp4Part(fragment(2, 0, 24000))]);
+            driver.Content({ generationComplete: true });
+            expect(usage).toHaveLength(0);
+        });
+    });
+
+    it('leaves a session without an avatar as it was: no usage of its own, nothing to the avatar output, video/mp4 dropped', async () => {
+        const driver = new BridgedGemini('enterprise');
+        const session = await driver.StartSession(params());
+        const usage: RealtimeUsage[] = [];
+        const pcm: ArrayBuffer[] = [];
+        const avatar: RealtimeAvatarMediaChunk[] = [];
+        session.OnUsage((u) => usage.push(u));
+        session.OnOutput((chunk) => pcm.push(chunk));
+        session.OnAvatarOutput?.((chunk) => avatar.push(chunk));
+        driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 0, 45000)), pcmPart([1, 2])]);
+        driver.Content({ generationComplete: true, turnComplete: true });
+        expect(pcm).toHaveLength(1);
+        expect(avatar).toHaveLength(0);
+        expect(usage).toHaveLength(0);
+        expect(warnings().some((w) => w.includes('Dropped model output of type video/mp4: only PCM audio is played'))).toBe(true);
+    });
+});

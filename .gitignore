@@ -79,6 +79,8 @@ Thumbs.db
 *.mp4
 # ...except the two small generated stand-in avatars the fragmented MP4 reader tests read (made by the script beside them)
 !packages/AI/Core/src/__tests__/fixtures/avatar-standin-*.mp4
+# ...and the meeting bot's small generated lip-sync fixture (made by the script beside it)
+!packages/AI/RealtimeBridge/Providers/LiveKitNative/src/__tests__/fixtures/avatar-sync-flash-beep.mp4
 *.tiff
 *.avi
 *.flv

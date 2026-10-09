@@ -50,6 +50,7 @@ import {
     type RealtimeAvatarSettings,
     type RealtimeAvatarStatus,
     type RealtimeAvatarUnavailableReason,
+    type RealtimeAvatarMediaChunk,
 } from '@memberjunction/ai';
 import {
     ResolveGeminiLiveProfile,
@@ -61,6 +62,7 @@ import {
     type GeminiLiveEndpoint,
     type GeminiLiveResolvedProfile,
 } from './geminiLiveProfiles';
+import { GeminiBridgedAvatarOutput } from './geminiBridgedAvatar';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
@@ -247,6 +249,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
         const session = new GeminiRealtimeSession(profile);
         session.SetConnectTimeTools(params.Tools ?? []);
         const config = this.BuildConnectConfig(this.withoutAvatarOnServer(params));
+        session.SetAvatar(this.serverAvatarStatus(params, config), profile.AvatarOutputEncoding);
         // Meeting mode (auto activity detection disabled) → the session must drive turns manually.
         session.SetMeetingMode(config.realtimeInputConfig?.automaticActivityDetection?.disabled === true);
         // The session opens its own connections through this seam, so it can resume on a new one
@@ -742,12 +745,15 @@ export class GeminiRealtime extends BaseRealtimeModel {
         const endpointName = this.Endpoint === 'enterprise' ? 'Gemini Enterprise' : 'the Gemini Developer API';
         const why: Record<RealtimeAvatarUnavailableReason, string> = {
             endpoint: `${model} on ${endpointName} renders no avatar`,
-            bridged: 'a session on the server (a meeting or a phone call) shows no video yet',
+            bridged: "a session on the server (a meeting or a phone call) whose host can't publish video",
             'custom-disabled': 'custom avatars are not enabled',
             'unknown-avatar': 'the request names no avatar',
             'no-binding': 'the persona has no avatar on this vendor',
             host: 'the app showing the call asks for no agent video',
             browser: 'the browser cannot play the avatar',
+            'decoder-missing': 'the meeting host has no usable video decoder',
+            'decoder-failed': "the meeting bot's decoders kept failing",
+            'publish-failed': 'the meeting room refused the video track',
         };
         const persona = request.PersonaName ? ` (persona ${request.PersonaName})` : '';
         return `[GeminiRealtime] Avatar "${request.AvatarID}"${persona} not used: ${why[reason]}. The call is audio only. Reason: ${reason}.`;
@@ -768,11 +774,12 @@ export class GeminiRealtime extends BaseRealtimeModel {
     }
 
     /**
-     * A server-side session (a bridged meeting or phone call) never asks for an avatar: nothing on the server can show
-     * its video yet. Returns the params without the request, logging the reason once when there was one.
+     * A server-side session (a bridged meeting or phone call) asks for an avatar only when its host publishes the video
+     * into a room (`Delivery: 'room'`, a meeting bot that decodes it). Anywhere else nothing on the server can show it:
+     * returns the params without the request, logging the reason once.
      */
     private withoutAvatarOnServer(params: RealtimeSessionParams): RealtimeSessionParams {
-        if (!params.Avatar) {
+        if (!params.Avatar || params.Avatar.Delivery === 'room') {
             return params;
         }
         console.warn(this.avatarUnavailableMessage(params.Avatar, params.Model, 'bridged'));
@@ -797,6 +804,21 @@ export class GeminiRealtime extends BaseRealtimeModel {
         }
         const reason = this.avatarUnavailableReason(request, params.Model);
         return reason ? { Requested: true, Granted: false, Reason: reason } : { Requested: true, Granted: false };
+    }
+
+    /**
+     * What became of a server-side session's avatar request: {@link AvatarStatusFor}, except that a session whose host
+     * can't publish the avatar (no `Delivery: 'room'`) is audio only as `bridged`. `undefined` without a request.
+     *
+     * @param params The session parameters as the host passed them (the avatar request included).
+     * @param config The connect config the session was built with.
+     */
+    private serverAvatarStatus(params: RealtimeSessionParams, config: LiveConnectConfig): RealtimeAvatarStatus | undefined {
+        const status = this.AvatarStatusFor(params, config);
+        if (!status || status.Granted || params.Avatar?.Delivery === 'room') {
+            return status;
+        }
+        return { ...status, Reason: 'bridged' };
     }
 
     /**
@@ -1102,6 +1124,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;
+    private avatarHandler: ((chunk: RealtimeAvatarMediaChunk) => void) | null = null;
     private transcriptHandler: ((t: RealtimeTranscript) => void) | null = null;
     private toolCallHandler: ((call: RealtimeToolCall) => void) | null = null;
     private interruptionHandler: (() => void) | null = null;
@@ -1170,6 +1193,18 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private connector: GeminiSessionConnector | null = null;
 
     /**
+     * Routes model parts, turn boundaries and avatar usage when the driver granted an avatar to a host that publishes it
+     * into a room; null on every other session, whose output is PCM only.
+     */
+    private avatarOutput: GeminiBridgedAvatarOutput | null = null;
+
+    /** The MSE type of a granted avatar's pieces, from the model's profile; declared on the outbound video track. */
+    private avatarEncoding?: string;
+
+    /** What became of the session's avatar request (see {@link IRealtimeSession.AvatarStatus}); set by the driver. */
+    public AvatarStatus?: RealtimeAvatarStatus;
+
+    /**
      * Moves the session to a new connection with Google's resumption handle: when Google announces
      * the connection is ending (`goAway`, about 60 s before the ~10-minute connection limit) and
      * after an unexpected drop. Created by {@link Open}.
@@ -1189,6 +1224,27 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** Sets how this session opens its Live connections. Called by the driver before {@link Open}. */
     public SetConnector(connector: GeminiSessionConnector): void {
         this.connector = connector;
+    }
+
+    /**
+     * Records what became of the session's avatar request. A granted one (a server-side session whose host publishes the
+     * avatar into a room) routes the model's MP4 pieces to {@link OnAvatarOutput}, keeps PCM to turns without video, and
+     * reports the avatar's video seconds through {@link OnUsage}. Called by the driver before {@link Open}.
+     *
+     * @param status The avatar status, or `undefined` when the session asked for no avatar.
+     * @param encoding The avatar's MSE type from the model's profile.
+     */
+    public SetAvatar(status: RealtimeAvatarStatus | undefined, encoding: string | undefined): void {
+        this.AvatarStatus = status;
+        this.avatarEncoding = encoding;
+        this.avatarOutput = status?.Granted
+            ? new GeminiBridgedAvatarOutput({
+                  OnAvatar: (chunk) => this.avatarHandler?.(chunk),
+                  OnPcm: (pcm) => this.outputHandler?.(pcm),
+                  OnVideoSeconds: (seconds) => this.usageHandler?.({ InputTokens: 0, OutputTokens: 0, OutputTokenDetails: { VideoSeconds: seconds } }),
+                  Report: (message) => console.warn(message),
+              })
+            : null;
     }
 
     /** Opens the first connection. Called by the driver once the session is configured. */
@@ -1227,6 +1283,11 @@ class GeminiRealtimeSession implements IRealtimeSession {
                 RequiresConsent: true,
             });
         }
+        const outbound: RealtimeTrackDescriptor[] = [{ Modality: 'audio', Direction: 'outbound' }];
+        if (this.avatarOutput) {
+            // A granted avatar: its MP4 pieces reach the host through OnAvatarOutput.
+            outbound.push({ Modality: 'video', Direction: 'outbound', ...(this.avatarEncoding ? { Encoding: this.avatarEncoding } : {}) });
+        }
         return {
             CanReconfigureTurnMode: false,
             // Proactive audio is permanently on for the 3.8 line: the model listens while speaking and decides
@@ -1235,7 +1296,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
             SupportsDynamicToolSet: GeminiRealtime.SupportsDynamicToolSet,
             SupportedInboundTracks: inbound,
             MaxInboundVideoStreams: ResolveGeminiMaxInboundVideoStreams(this.profile),
-            SupportedOutboundTracks: [{ Modality: 'audio', Direction: 'outbound' }],
+            SupportedOutboundTracks: outbound,
             ProvidesThoughtSummaries: this.profile.SupportsThoughtSummaries,
             SupportsAsynchronousReasoning: !this.profile.Tooling.SupportsBlockingExecution,
             UsageBases: this.profile.SupportsInboundVideo ? ['tokens', 'seconds', 'frames'] : ['tokens', 'seconds'],
@@ -1347,6 +1408,11 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** @inheritdoc */
     public OnOutput(handler: (chunk: ArrayBuffer) => void): void {
         this.outputHandler = handler;
+    }
+
+    /** @inheritdoc */
+    public OnAvatarOutput(handler: (chunk: RealtimeAvatarMediaChunk) => void): void {
+        this.avatarHandler = handler;
     }
 
     /** @inheritdoc */
@@ -1467,6 +1533,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
      */
     private handleResumed(): void {
         this.manualActivityOpen = false;
+        this.avatarOutput?.Resumed();
         this.completeTurn();
     }
 
@@ -1686,6 +1753,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.currentConnection = 0;
         this.live?.close();
         this.live = null;
+        this.avatarOutput?.Close(); // reports the avatar seconds generated and not yet reported, while the handler is set
         this.clearHandlers();
     }
 
@@ -1720,6 +1788,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
      */
     private handleServerContent(content: LiveServerContent): void {
         if (content.interrupted) {
+            this.avatarOutput?.Interrupted(); // before the parts of this message: the turn's late media is dropped
             this.interruptionHandler?.();
             this.completeTurn();
         }
@@ -1730,10 +1799,14 @@ class GeminiRealtimeSession implements IRealtimeSession {
                 RealtimeDiagLog('[GeminiRealtime][diag] modelTurn — model is GENERATING output (the activityEnd worked)');
             }
             this.responseActive = true;
-            this.emitAudioOutput(content.modelTurn);
+            this.emitModelMedia(content.modelTurn);
             this.emitThoughtOutput(content.modelTurn);
         }
+        if (content.generationComplete) {
+            this.avatarOutput?.GenerationComplete();
+        }
         if (content.turnComplete) {
+            this.avatarOutput?.TurnComplete();
             this.completeTurn();
         }
         if (content.inputTranscription) {
@@ -1745,30 +1818,37 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     /**
-     * Extracts inline audio parts from the model turn and forwards each as a raw `ArrayBuffer`.
-     * Thought parts (`part.thought === true`) are skipped — thoughts are reasoning summaries,
-     * not synthesized audio.
+     * Forwards the model turn's inline media parts. Thought parts (`part.thought === true`) are skipped — thoughts are
+     * reasoning summaries, not synthesized media. A session with a granted avatar routes each part through its avatar
+     * output (MP4 pieces to the host, PCM only before the turn's video); every other session plays PCM only.
      */
-    private emitAudioOutput(modelTurn: Content): void {
-        if (!this.outputHandler || !modelTurn.parts) {
+    private emitModelMedia(modelTurn: Content): void {
+        for (const part of modelTurn.parts ?? []) {
+            const inline = part.inlineData;
+            if (part.thought || !inline?.data) {
+                continue;
+            }
+            if (this.avatarOutput) {
+                this.avatarOutput.Accept(inline.mimeType, GeminiRealtimeSession.base64ToArrayBuffer(inline.data));
+            } else {
+                this.emitAudioOutput(inline.mimeType, inline.data);
+            }
+        }
+    }
+
+    /**
+     * Forwards one inline part as raw PCM. A part that names a non-PCM type (e.g. video/mp4 avatar frames) must never
+     * reach the audio output, where it would play as noise. A part with no type plays, as it always has.
+     */
+    private emitAudioOutput(mimeType: string | undefined, data: string): void {
+        if (!this.outputHandler) {
             return;
         }
-        for (const part of modelTurn.parts) {
-            if (part.thought) {
-                continue;
-            }
-            const inline = part.inlineData;
-            if (!inline?.data) {
-                continue;
-            }
-            // A part that names a non-PCM type (e.g. video/mp4 avatar frames) must never reach the
-            // audio output, where it would play as noise. A part with no type plays, as it always has.
-            if (inline.mimeType && !IsPcmAudioMimeType(inline.mimeType)) {
-                this.reportDroppedOutput(inline.mimeType);
-                continue;
-            }
-            this.outputHandler(GeminiRealtimeSession.base64ToArrayBuffer(inline.data));
+        if (mimeType && !IsPcmAudioMimeType(mimeType)) {
+            this.reportDroppedOutput(mimeType);
+            return;
         }
+        this.outputHandler(GeminiRealtimeSession.base64ToArrayBuffer(data));
     }
 
     /** Reports each MIME type of dropped model output once per session, not once per part. */
@@ -1890,6 +1970,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** Drops all registered handlers so a closed session can't fire stale callbacks. */
     private clearHandlers(): void {
         this.outputHandler = null;
+        this.avatarHandler = null;
         this.transcriptHandler = null;
         this.toolCallHandler = null;
         this.interruptionHandler = null;

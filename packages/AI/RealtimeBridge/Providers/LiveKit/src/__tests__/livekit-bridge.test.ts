@@ -9,11 +9,13 @@ import {
     BridgeMeetingParticipant,
 } from '@memberjunction/ai-bridge-base';
 import { BridgeVideoSourceEnd } from '@memberjunction/ai-bridge-base';
-import { IsAgentParticipantIdentity, LiveKitBridge, VideoSourceIdOf, VideoSourceLabelOf, VideoTrackOf } from '../livekit-bridge';
+import { IsAgentParticipantIdentity, IsAvatarMediaFrame, LiveKitBridge, VideoSourceIdOf, VideoSourceLabelOf, VideoTrackOf } from '../livekit-bridge';
 import {
     ILiveKitRoomSdk,
     LiveKitParticipant,
     LiveKitAudioFrame,
+    LiveKitAvatarMediaChunk,
+    LiveKitAvatarStatus,
     LiveKitConnectArgs,
     LiveKitConnectResult,
     LiveKitVideoFrame,
@@ -32,7 +34,9 @@ class FakeLiveKitRoomSdk implements ILiveKitRoomSdk {
     public readonly PublishedAudio: ArrayBuffer[] = [];
     public readonly PublishedVideo: ArrayBuffer[] = [];
     public readonly PublishedScreen: ArrayBuffer[] = [];
+    public readonly PublishedAvatar: LiveKitAvatarMediaChunk[] = [];
     public readonly DataMessages: string[] = [];
+    private avatarStatusCb?: (status: LiveKitAvatarStatus) => void;
 
     private participants: LiveKitParticipant[] = [];
 
@@ -68,6 +72,15 @@ class FakeLiveKitRoomSdk implements ILiveKitRoomSdk {
     }
     public publishScreenFrame(frame: ArrayBuffer): void {
         this.PublishedScreen.push(frame);
+    }
+    public publishAvatarMedia(chunk: LiveKitAvatarMediaChunk): void {
+        this.PublishedAvatar.push(chunk);
+    }
+    public onAvatarStatus(cb: (status: LiveKitAvatarStatus) => void): void {
+        this.avatarStatusCb = cb;
+    }
+    public DriveAvatarStatus(status: LiveKitAvatarStatus): void {
+        this.avatarStatusCb?.(status);
     }
     public onAudioTrack(cb: (frame: LiveKitAudioFrame) => void): void {
         this.audioCb = cb;
@@ -526,5 +539,67 @@ describe('LiveKitBridge — capability gating', () => {
         const bridge = makeBridge(sdk);
         await bridge.Connect(ctx({ AudioIn: true, AudioOut: true })); // no SpeakerDiarization
         await expect(bridge.GetParticipants()).rejects.toBeInstanceOf(BridgeCapabilityNotSupportedError);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// The agent's live avatar (video out as fragmented MP4).
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('LiveKitBridge — the agent\'s avatar', () => {
+    it('sends a video/mp4 frame to the room client as an avatar piece, with its type, and nothing as a raw frame', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        const piece = bytes(0, 0, 0, 8, 0x66, 0x74, 0x79, 0x70);
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: piece, MimeType: 'video/mp4' });
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(1), MimeType: 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"' });
+        expect(sdk.PublishedAvatar.map((c) => c.MimeType)).toEqual(['video/mp4', 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"']);
+        expect(sdk.PublishedAvatar[0].Bytes).toBe(piece);
+        expect(sdk.PublishedVideo).toHaveLength(0);
+    });
+
+    it('still sends a raw video frame (no MP4 type) to the camera path', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(1), MimeType: 'image/jpeg' });
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(2) });
+        expect(sdk.PublishedVideo).toHaveLength(2);
+        expect(sdk.PublishedAvatar).toHaveLength(0);
+    });
+
+    it('publishes no avatar when the provider does not allow video out', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx({ AudioIn: true, AudioOut: true, SpeakerDiarization: true }));
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(1), MimeType: 'video/mp4' });
+        expect(sdk.PublishedAvatar).toHaveLength(0);
+    });
+
+    it('tells the engine when the room client takes the avatar down, with the reason, and not when it publishes it', async () => {
+        const bridge = makeBridge(sdk);
+        const lost: string[] = [];
+        bridge.OnAvatarUnavailable((reason) => lost.push(reason));
+        await bridge.Connect(ctx());
+        sdk.DriveAvatarStatus({ State: 'on' });
+        sdk.DriveAvatarStatus({ State: 'audio-only', Reason: 'decoder-failed' });
+        expect(lost).toEqual(['decoder-failed']);
+    });
+
+    it('stops telling the engine after Disconnect', async () => {
+        const bridge = makeBridge(sdk);
+        const lost: string[] = [];
+        bridge.OnAvatarUnavailable((reason) => lost.push(reason));
+        await bridge.Connect(ctx());
+        await bridge.Disconnect('Explicit');
+        sdk.DriveAvatarStatus({ State: 'audio-only', Reason: 'publish-failed' });
+        expect(lost).toEqual([]);
+    });
+
+    it('IsAvatarMediaFrame: video/mp4 with or without parameters, any case; nothing else', () => {
+        for (const type of ['video/mp4', 'VIDEO/MP4', ' video/mp4; codecs="avc1"']) {
+            expect(IsAvatarMediaFrame({ Track: 'video-out', MimeType: type })).toBe(true);
+        }
+        for (const type of [undefined, '', 'image/jpeg', 'video/mp4v', 'video/webm', 'audio/mp4']) {
+            expect(IsAvatarMediaFrame({ Track: 'video-out', MimeType: type })).toBe(false);
+        }
     });
 });

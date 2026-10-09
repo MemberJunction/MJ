@@ -40,6 +40,8 @@ import { GetGlobalObjectStore } from '@memberjunction/global';
 import {
     ILiveKitRoomSdk,
     LiveKitAudioFrame,
+    LiveKitAvatarMediaChunk,
+    LiveKitAvatarStatus,
     LiveKitConnectArgs,
     LiveKitConnectResult,
     LiveKitParticipant,
@@ -101,6 +103,40 @@ export interface NativeRoomVideoSourceEnd {
     /** Which of their sources ended. */
     source: NativeRoomVideoSourceKind;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
 }
+
+/** One piece of the agent's live avatar (fragmented MP4) for the native room client to decode and publish. */
+export interface NativeAvatarMediaChunk {
+    /** The piece's bytes. The client may transfer the buffer to another thread. */
+    data: ArrayBuffer;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+    /** Its MIME type, for example `'video/mp4'`. */
+    mimeType: string;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+}
+
+/** Why the native room client can no longer show the agent's avatar. */
+export type NativeAvatarFailure = 'decoder-failed' | 'publish-failed';
+
+/** A change in what the native room client shows of the avatar. Mapped onto {@link LiveKitAvatarStatus}. */
+export interface NativeAvatarStatus {
+    /** `'on'`: the avatar's camera track is published. `'audio-only'`: it was taken down; the voice goes on. */
+    state: 'on' | 'audio-only';  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+    /** Why, when {@link state} is `'audio-only'`. */
+    reason?: NativeAvatarFailure;  // case-violation-ok-legacy-back-compat: native lower-case vocabulary, like NativeRoomAudioFrame
+}
+
+/**
+ * Whether a native module's room clients can publish an agent's avatar on this host: they can publish video (the room
+ * SDK loads with its video classes) and a decoder is there (ffmpeg with H.264 and AAC decoders). When not, the reason a
+ * meeting session asks for audio instead.
+ */
+export type NativeAvatarVideoSupport =
+    | { Supported: true }
+    | {
+          Supported: false;
+          /** `'decoder-missing'`: no usable decoder. `'bridged'`: the room client cannot publish video at all. */
+          Reason: 'decoder-missing' | 'bridged';
+          /** What the probe found, for the log. */
+          Detail?: string;
+      };
 
 /**
  * What the native room client may read for the agent: present in {@link NativeRoomClientOptions.Video} only when the
@@ -191,6 +227,13 @@ export interface NativeRoomClient {
     onVideoFrame?(cb: (frame: NativeRoomVideoFrame) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
     /** Registers the callback for a camera or screen the client stopped reading. Optional. "Latest handler wins." */
     onVideoSourceEnded?(cb: (source: NativeRoomVideoSourceEnd) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
+    /**
+     * Decodes and publishes one piece of the agent's live avatar: the face on a camera track published at its first
+     * frame, the voice on the bot's audio track, paced together. Optional: a wrapper without avatars omits it.
+     */
+    publishAvatarMedia?(chunk: NativeAvatarMediaChunk): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
+    /** Registers the callback for a change in what the client shows of the avatar. Optional. "Latest handler wins." */
+    onAvatarStatus?(cb: (status: NativeAvatarStatus) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
 }
 
 /** The native room module surface — a factory that constructs a {@link NativeRoomClient}. */
@@ -200,6 +243,12 @@ export interface NativeRoomModule {
      * VERIFY against the native LiveKit Node SDK wrapper (`createRoomClient` vs a `Room` constructor).
      */
     createRoomClient(options: NativeRoomClientOptions): NativeRoomClient;
+    /**
+     * Says whether this module's room clients can publish an agent's avatar on this host. The room coordinator asks
+     * before it opens a meeting session, so a host that cannot show the avatar never asks the model for it. Optional: a
+     * module without it publishes no avatars.
+     */
+    describeAvatarVideo?(): Promise<NativeAvatarVideoSupport>;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
 }
 
 /** Options passed to {@link NativeRoomModule.createRoomClient}. Credentials are resolved upstream. */
@@ -381,6 +430,11 @@ export function MapNativeVideoFrame(frame: NativeRoomVideoFrame): LiveKitVideoFr
     };
 }
 
+/** **Pure mapping** of a native avatar status change onto the seam's {@link LiveKitAvatarStatus}. */
+export function MapNativeAvatarStatus(status: NativeAvatarStatus): LiveKitAvatarStatus {
+    return status.reason ? { State: status.state, Reason: status.reason } : { State: status.state };
+}
+
 /** **Pure mapping** of a native ended video source onto the seam's {@link LiveKitVideoSourceEnd}. */
 export function MapNativeVideoSourceEnd(source: NativeRoomVideoSourceEnd): LiveKitVideoSourceEnd {
     return {
@@ -532,6 +586,9 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
     /** The handler for a camera or screen the room client stopped reading. */
     private videoSourceEndedHandler?: (source: LiveKitVideoSourceEnd) => void;
 
+    /** The handler for a change in what the room client shows of the avatar. */
+    private avatarStatusHandler?: (status: LiveKitAvatarStatus) => void;
+
     /**
      * @param config Resolved credentials + the native module specifier.
      * @param loadModule The native-module loader (defaults to the lazy specifier loader).
@@ -639,6 +696,21 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
         this.client?.publishScreen(frame);
     }
 
+    /**
+     * Hands one piece of the agent's live avatar to the native room client, which decodes and publishes it. Dropped
+     * before {@link connect} or when the wrapper publishes no avatars.
+     *
+     * @param chunk The avatar piece.
+     */
+    public publishAvatarMedia(chunk: LiveKitAvatarMediaChunk): void {
+        this.client?.publishAvatarMedia?.({ data: chunk.Bytes, mimeType: chunk.MimeType });
+    }
+
+    /** Registers the handler for a change in what the room client shows of the avatar. */
+    public onAvatarStatus(cb: (status: LiveKitAvatarStatus) => void): void {
+        this.avatarStatusHandler = cb;
+    }
+
     /** Registers the inbound per-participant audio handler (the diarized hearing path). */
     public onAudioTrack(cb: (frame: LiveKitAudioFrame) => void): void {
         this.audioHandler = cb;
@@ -703,6 +775,7 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
         // Optional on the native seam: a wrapper without inbound video simply never reports any.
         client.onVideoFrame?.((frame) => this.videoHandler?.(MapNativeVideoFrame(frame)));
         client.onVideoSourceEnded?.((source) => this.videoSourceEndedHandler?.(MapNativeVideoSourceEnd(source)));
+        client.onAvatarStatus?.((status) => this.avatarStatusHandler?.(MapNativeAvatarStatus(status)));
     }
 }
 

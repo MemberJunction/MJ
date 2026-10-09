@@ -297,7 +297,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'predictive-studio': 5,
         'prompt-runner': 1,
         'queue': 7,
-        'realtime-deterministic': 16,
+        'realtime-deterministic': 17,
         'realtime-session-guard': 2,
         'realtime-session-verification': 6,
         'record-cloning': 13,

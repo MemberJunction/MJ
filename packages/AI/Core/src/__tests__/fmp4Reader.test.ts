@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, it, expect } from 'vitest';
-import { Fmp4VideoSeconds, ReadFmp4Init, SniffFmp4Piece, type Fmp4Init } from '../generic/fmp4Reader';
+import { Fmp4AudioSeconds, Fmp4VideoSeconds, ReadFmp4Init, SniffFmp4Piece, type Fmp4Init } from '../generic/fmp4Reader';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -61,9 +61,12 @@ function hdlr(handler: string): Uint8Array {
     return fullBox('hdlr', 0, u32(0), ascii(handler), zeros(12), bytes(0));
 }
 
-/** A visual sample entry (78 bytes of fields) with an `avcC` record for the given profile, constraint flags and level. */
-function avcEntry(type = 'avc1', profile = 0x42, constraints = 0xc0, level = 0x1f): Uint8Array {
-    const avcC = box('avcC', bytes(1, profile, constraints, level, 0xff, 0xe1, 0, 4, 0x67, profile, constraints, level, 1, 0, 2, 0x68, 0xce));
+/**
+ * A visual sample entry (78 bytes of fields) with an `avcC` record for the given profile, constraint flags and level;
+ * `lengthSizeByte` carries the NAL length size minus one in its low two bits.
+ */
+function avcEntry(type = 'avc1', profile = 0x42, constraints = 0xc0, level = 0x1f, lengthSizeByte = 0xff): Uint8Array {
+    const avcC = box('avcC', bytes(1, profile, constraints, level, lengthSizeByte, 0xe1, 0, 4, 0x67, profile, constraints, level, 1, 0, 2, 0x68, 0xce));
     return box(type, zeros(6), bytes(0, 1), zeros(70), avcC);
 }
 
@@ -241,7 +244,7 @@ describe('SniffFmp4Piece', () => {
 describe('ReadFmp4Init', () => {
     describe('tracks and codecs', () => {
         it('reads each track: id, handler and codec, in moov order', () => {
-            expect(ReadFmp4Init(MUXED_INIT)).toEqual({
+            expect(ReadFmp4Init(MUXED_INIT)).toMatchObject({
                 Tracks: [
                     { TrackID: 1, Handler: 'vide', Codec: 'avc1.42c01f' },
                     { TrackID: 2, Handler: 'soun', Codec: 'mp4a.40.2' },
@@ -250,7 +253,7 @@ describe('ReadFmp4Init', () => {
         });
 
         it('reads a video-only init as one video track', () => {
-            expect(ReadFmp4Init(concat(FTYP, moov(VIDEO_TRAK)))?.Tracks).toEqual([{ TrackID: 1, Handler: 'vide', Codec: 'avc1.42c01f' }]);
+            expect(ReadFmp4Init(concat(FTYP, moov(VIDEO_TRAK)))?.Tracks).toMatchObject([{ TrackID: 1, Handler: 'vide', Codec: 'avc1.42c01f' }]);
         });
 
         it('writes the H.264 profile, constraint flags and level as hex, with the entry type', () => {
@@ -266,7 +269,7 @@ describe('ReadFmp4Init', () => {
         it('lists a track whose sample entry it does not know, without a codec', () => {
             const hevc = box('hvc1', zeros(6), bytes(0, 1), zeros(70), box('hvcC', zeros(23)));
             const init = concat(FTYP, moov(trak({ ID: 1, Handler: 'vide', Entry: hevc }), AUDIO_TRAK));
-            expect(ReadFmp4Init(init)?.Tracks).toEqual([
+            expect(ReadFmp4Init(init)?.Tracks).toMatchObject([
                 { TrackID: 1, Handler: 'vide', Codec: undefined },
                 { TrackID: 2, Handler: 'soun', Codec: 'mp4a.40.2' },
             ]);
@@ -276,6 +279,21 @@ describe('ReadFmp4Init', () => {
             // 11111 010101 ...: escape, then 21 → 32 + 21 = 53.
             const entry = mp4aEntry(esds({ AudioSpecificConfig: bytes(0b11111_010, 0b101_00000) }));
             expect(ReadFmp4Init(concat(FTYP, moov(trak({ ID: 2, Handler: 'soun', Entry: entry }))))?.Tracks[0].Codec).toBe('mp4a.40.53');
+        });
+
+        it("reads an AAC track's AudioSpecificConfig for a decoder, with its frame length (1024, or 960 when flagged)", () => {
+            const aac = (asc: Uint8Array) => ReadFmp4Init(concat(FTYP, moov(trak({ ID: 2, Handler: 'soun', Entry: mp4aEntry(esds({ AudioSpecificConfig: asc })) }))))?.Tracks[0].Aac;
+            expect(aac(bytes(0x13, 0x08))).toEqual({ ObjectType: 2, SampleRateIndex: 6, SampleRate: 24000, Channels: 1, FrameLength: 1024 });
+            expect(aac(bytes(0x13, 0x0c))?.FrameLength).toBe(960);
+            expect(aac(bytes(0x11, 0x90))).toMatchObject({ SampleRate: 48000, Channels: 2 });
+            expect(aac(bytes(0x13))).toBeUndefined(); // ends before the channel configuration
+        });
+
+        it('reads a sample rate the AudioSpecificConfig writes out (frequency index 15) in 24 bits', () => {
+            // AAC-LC, index 15, 22000 Hz, mono, 1024-sample frames.
+            const asc = bytes(0x17, 0x80, 0x2a, 0xf8, 0x08);
+            const init = concat(FTYP, moov(trak({ ID: 2, Handler: 'soun', Entry: mp4aEntry(esds({ AudioSpecificConfig: asc })) })));
+            expect(ReadFmp4Init(init)?.Tracks[0].Aac).toEqual({ ObjectType: 2, SampleRateIndex: 15, SampleRate: 22000, Channels: 1, FrameLength: 1024 });
         });
 
         it('reads past the fields the ES descriptor flags announce, and four-byte descriptor sizes', () => {
@@ -476,11 +494,46 @@ describe('Fmp4VideoSeconds', () => {
     });
 });
 
+describe('ReadFmp4Init: what a decoder needs, from hand-built boxes', () => {
+    it("reads the avcC's NAL length size (1, 2 or 4 bytes), and refuses 3", () => {
+        const avc = (lengthSizeByte: number) =>
+            ReadFmp4Init(concat(FTYP, moov(trak({ ID: 1, Handler: 'vide', Entry: avcEntry('avc1', 0x42, 0xc0, 0x1f, lengthSizeByte) }))))?.Tracks[0].Avc;
+        expect([avc(0xfc)?.NalLengthSize, avc(0xfd)?.NalLengthSize, avc(0xff)?.NalLengthSize]).toEqual([1, 2, 4]);
+        expect(avc(0xfe)).toBeUndefined();
+    });
+
+    it("reads a track's trex defaults: duration, size and flags, in that order", () => {
+        const trexBox = fullBox('trex', 0, u32(1), u32(1), u32(3750), u32(333), u32(0x1_0000));
+        const init = concat(FTYP, moovWith([trexBox], VIDEO_TRAK));
+        expect(ReadFmp4Init(init)?.Tracks[0]).toMatchObject({ DefaultSampleDuration: 3750, DefaultSampleSize: 333, DefaultSampleFlags: 0x1_0000 });
+    });
+});
+
+describe('Fmp4AudioSeconds', () => {
+    const VIDEO_90K = trak({ ID: 1, Handler: 'vide', Entry: avcEntry(), Timescale: 90000 });
+    const AUDIO_24K = trak({ ID: 2, Handler: 'soun', Entry: mp4aEntry(), Timescale: 24000 });
+    const MUXED = initOf(concat(FTYP, moov(VIDEO_90K, AUDIO_24K)));
+
+    it("counts the audio track's samples in its timescale: how long an avatar piece speaks", () => {
+        expect(Fmp4AudioSeconds(fragment(traf({ TrackID: 2, DefaultDuration: 1024, SampleCount: 3 })), MUXED)).toBe(3072 / 24000);
+    });
+
+    it('reads 0 from a video-only fragment, and from a fragment of both tracks counts only the audio', () => {
+        expect(Fmp4AudioSeconds(fragment(traf({ TrackID: 1, DefaultDuration: 3750 })), MUXED)).toBe(0);
+        const both = fragment(traf({ TrackID: 1, DefaultDuration: 3750 }), traf({ TrackID: 2, DefaultDuration: 1024 }));
+        expect(Fmp4AudioSeconds(both, MUXED)).toBe(1024 / 24000);
+    });
+
+    it('is null when the init declares no audio track with a timescale', () => {
+        expect(Fmp4AudioSeconds(fragment(traf({ TrackID: 2, DefaultDuration: 1024 })), initOf(concat(FTYP, moov(VIDEO_90K))))).toBeNull();
+    });
+});
+
 describe('the committed stand-in avatars (fixtures/make-avatar-standin.sh)', () => {
     it('muxed: an H.264 video track and an AAC-LC audio track, then 48 one-frame fragments', () => {
         const [init, ...fragments] = fixturePieces('avatar-standin-muxed.mp4');
         expect(SniffFmp4Piece(init)).toBe('init');
-        expect(ReadFmp4Init(init)).toEqual({
+        expect(ReadFmp4Init(init)).toMatchObject({
             Tracks: [
                 { TrackID: 1, Handler: 'vide', Codec: 'avc1.42c01f', Timescale: 12288 },
                 { TrackID: 2, Handler: 'soun', Codec: 'mp4a.40.2', Timescale: 24000 },
@@ -492,7 +545,7 @@ describe('the committed stand-in avatars (fixtures/make-avatar-standin.sh)', () 
 
     it('video only: one H.264 track, no audio track', () => {
         const [init, ...fragments] = fixturePieces('avatar-standin-video-only.mp4');
-        expect(ReadFmp4Init(init)?.Tracks).toEqual([{ TrackID: 1, Handler: 'vide', Codec: 'avc1.42c01f', Timescale: 12288 }]);
+        expect(ReadFmp4Init(init)?.Tracks).toMatchObject([{ TrackID: 1, Handler: 'vide', Codec: 'avc1.42c01f', Timescale: 12288 }]);
         expect(fragments).toHaveLength(48);
     });
 

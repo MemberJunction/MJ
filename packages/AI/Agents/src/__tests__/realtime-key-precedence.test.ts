@@ -193,7 +193,7 @@ describe.each(branches)('RealtimeClientSessionService key precedence — $name',
 describe('probe: BaseAgent.StartBridgeRealtimeSession mints on the run\'s key', () => {
     type ServiceInternals = {
         configureEngine: () => Promise<void>;
-        buildSessionParams: () => Promise<RealtimeSessionParams>;
+        buildSessionParams: (input: PrepareClientSessionInput) => Promise<RealtimeSessionParams>;
         getAPIKeyForDriver: (driverClass: string) => string | undefined;
     };
     const proto = RealtimeClientSessionService.prototype as unknown as ServiceInternals;
@@ -237,6 +237,13 @@ describe('probe: BaseAgent.StartBridgeRealtimeSession mints on the run\'s key', 
     it('no run keys, AI_VENDOR_API_KEY__<driver> set → the session mints on the platform key', async () => {
         await start(undefined);
         expect(minted).toEqual([{ DriverClass: 'VoiceDriver', APIKey: 'sk-platform' }]);
+    });
+
+    it("passes the room delivery of the agent's avatar to the session prep only when the bridge set it", async () => {
+        const build = vi.spyOn(proto, 'buildSessionParams');
+        await start(RUN_KEYS, { realtimeAvatarDelivery: 'room' });
+        await start(RUN_KEYS, { realtimeAvatarDelivery: 'browser' });
+        expect(build.mock.calls.map(([input]) => input.AvatarDelivery)).toEqual(['room', undefined]);
     });
 
     it('RuntimeOnly with no run keys → no session, even though the platform holds a key', async () => {

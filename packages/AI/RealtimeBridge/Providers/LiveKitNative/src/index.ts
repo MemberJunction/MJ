@@ -8,6 +8,13 @@ export * from './video-frame-encoder';
 export * from './video-encode-protocol';
 export * from './video-encode-worker-host';
 export * from './room-video-watcher';
+export * from './ffmpeg-locator';
+export * from './avatar-decoder-process';
+export * from './avatar-h264-decoder';
+export * from './avatar-aac-decoder';
+export * from './avatar-media-clock';
+export * from './avatar-publisher';
+export * from './avatar-room-outlet';
 // Not exported: the two worker entries, which run on import.
 
 import { CreateLiveKitRtcNodeModule } from './livekit-rtc-node-room';

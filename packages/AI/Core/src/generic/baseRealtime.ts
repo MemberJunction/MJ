@@ -594,6 +594,24 @@ export interface IRealtimeSession {
     OnVideoOutput?(handler: (chunk: ArrayBuffer) => void): void;
 
     /**
+     * Registers a handler for a live avatar's media: encoded pieces (for Gemini Live, fragmented MP4 whose audio track
+     * carries the avatar's voice) on a server-side session whose avatar was granted for a host that publishes it
+     * ({@link RealtimeAvatarSettings.Delivery} `'room'`). While the avatar speaks, its voice comes in these pieces, not
+     * through {@link OnOutput}.
+     *
+     * Optional: drivers without avatars don't implement it; call it null-safely (`session.OnAvatarOutput?.(...)`).
+     *
+     * @param handler Invoked with each piece, in the order the model sent them.
+     */
+    OnAvatarOutput?(handler: (chunk: RealtimeAvatarMediaChunk) => void): void;
+
+    /**
+     * What became of the session's avatar request, as the driver decided when it opened the session. Absent when the
+     * session asked for no avatar, or the driver does not report it.
+     */
+    AvatarStatus?: RealtimeAvatarStatus;
+
+    /**
      * Registers a handler for transcript events (the text stream).
      *
      * Consumers typically forward these to the control plane and persist them as
@@ -874,23 +892,45 @@ export interface RealtimeAvatarSettings {
     PersonaName?: string;
     /** Where the request came from: the voiced agent's persona, or an explicit override. */
     Source?: 'persona' | 'override';
+    /**
+     * Who shows the avatar's video. `'room'`: a server-side session whose host publishes it into a meeting room (the
+     * meeting bot decodes it and publishes a camera track), so the driver may render it there. `'client'` or absent: the
+     * browser that opened the session shows it; a server-side session without `'room'` stays audio only (reason
+     * `'bridged'`).
+     */
+    Delivery?: 'client' | 'room';
 }
 
 /**
  * Why a session that asked for an avatar runs audio-only:
  * - `'endpoint'`: the model, on the endpoint serving it, renders no avatar;
- * - `'bridged'`: the session runs on the server (a meeting or a phone call), where nothing shows video yet;
+ * - `'bridged'`: the session runs on the server (a meeting or a phone call) whose host can't publish video;
  * - `'custom-disabled'`: custom avatars are not enabled;
  * - `'unknown-avatar'`: the request names no avatar the vendor knows;
  * - `'no-binding'`: the persona has no avatar on this vendor;
  * - `'host'`: the avatar was granted, but the app showing the call asked for no agent video;
- * - `'browser'`: the avatar was granted and the app asked for it, but the browser could not play it.
+ * - `'browser'`: the avatar was granted and the app asked for it, but the browser could not play it;
+ * - `'decoder-missing'`: the meeting host has no usable decoder (no ffmpeg, one too old, or one without the H.264 and
+ *   AAC decoders), so the meeting session asked for audio;
+ * - `'decoder-failed'`: the meeting bot's decoders kept failing, so the avatar was taken down mid-meeting;
+ * - `'publish-failed'`: the meeting room refused the bot's video track.
  */
-export type RealtimeAvatarUnavailableReason = 'endpoint' | 'bridged' | 'custom-disabled' | 'unknown-avatar' | 'no-binding' | 'host' | 'browser';
+export type RealtimeAvatarUnavailableReason =
+    | 'endpoint'
+    | 'bridged'
+    | 'custom-disabled'
+    | 'unknown-avatar'
+    | 'no-binding'
+    | 'host'
+    | 'browser'
+    | 'decoder-missing'
+    | 'decoder-failed'
+    | 'publish-failed';
 
 /**
  * Whether a session asked for a live avatar and got one, and why not when it didn't. The mint returns it
- * ({@link ClientRealtimeSessionConfig.AvatarStatus}), so a call that shows no avatar can say why.
+ * ({@link ClientRealtimeSessionConfig.AvatarStatus}) and a server-side session reports it
+ * ({@link IRealtimeSession.AvatarStatus}), so a call or a meeting that shows no avatar can say why.
  */
 export interface RealtimeAvatarStatus {
     /** Whether the session asked for an avatar: the voiced agent's video setting is on. */
@@ -899,6 +939,17 @@ export interface RealtimeAvatarStatus {
     Granted: boolean;
     /** Why the session runs audio-only, when it asked for an avatar and was not granted one. */
     Reason?: RealtimeAvatarUnavailableReason;
+}
+
+/**
+ * One piece of a live avatar's media as a model emits it. For Gemini Live it is a fragmented MP4 piece: an init segment,
+ * or `moof` + `mdat` fragments whose video track is the avatar's face and whose audio track is its voice.
+ */
+export interface RealtimeAvatarMediaChunk {
+    /** The piece's bytes. */
+    Data: ArrayBuffer;
+    /** Its MIME type, for example `'video/mp4'`. */
+    MimeType: string;
 }
 
 /**

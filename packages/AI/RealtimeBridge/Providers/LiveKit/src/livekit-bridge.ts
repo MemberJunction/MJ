@@ -29,6 +29,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
 import {
     BaseRealtimeBridge,
+    BridgeAvatarFailure,
     BridgeConnectResult,
     BridgeDisconnectReason,
     BridgeMediaFrame,
@@ -45,6 +46,7 @@ import {
     LiveKitParticipant,
     LiveKitParticipantRole,
     LiveKitAudioFrame,
+    LiveKitAvatarStatus,
     LiveKitConnectArgs,
     LiveKitVideoFrame,
     LiveKitVideoSourceEnd,
@@ -112,6 +114,14 @@ export function VideoSourceIdOf(participantIdentity: string, source: LiveKitVide
     return `participant:${participantIdentity}:${source}`;
 }
 
+/**
+ * Whether an outbound `video-out` frame is a piece of an agent's live avatar (fragmented MP4, published by the room
+ * client as a camera track with the voice) rather than a raw video frame.
+ */
+export function IsAvatarMediaFrame(frame: BridgeMediaFrame): boolean {
+    return /^video\/mp4\b/i.test(frame.MimeType?.trim() ?? '');
+}
+
 /** The name the model is given for a video source: "Ada's camera", "Ada's screen", or "a participant's camera". */
 export function VideoSourceLabelOf(displayName: string | undefined, source: LiveKitVideoSourceKind): string {
     const owner = displayName && displayName.trim().length > 0 ? `${displayName.trim()}'s` : "a participant's";
@@ -144,6 +154,9 @@ export class LiveKitBridge extends BaseRealtimeBridge {
 
     /** The handler registered via {@link OnVideoSourceEnded}. */
     private videoSourceEndedHandler?: (source: BridgeVideoSourceEnd) => void;
+
+    /** The handler registered via {@link OnAvatarUnavailable}. */
+    private avatarUnavailableHandler?: (reason: BridgeAvatarFailure) => void;
 
     /** The Meeting Controls event source for this session (only when diarization is supported). */
     private meetingControls: LiveKitMeetingControlsEventSource | null = null;
@@ -197,6 +210,7 @@ export class LiveKitBridge extends BaseRealtimeBridge {
         });
         this.wireInboundAudio(this.sdk);
         this.wireInboundVideo(this.sdk);
+        this.sdk.onAvatarStatus?.((status) => this.handleAvatarStatus(status));
         this.sdk.onDisconnected((reason) => this.handleRoomDisconnected(reason));
 
         // Roster diarization is native to LiveKit (per-participant tracks); only stand up the Meeting
@@ -230,6 +244,7 @@ export class LiveKitBridge extends BaseRealtimeBridge {
         this.mediaHandler = undefined;
         this.participantHandler = undefined;
         this.videoSourceEndedHandler = undefined;
+        this.avatarUnavailableHandler = undefined;
         if (sdk) {
             try {
                 await sdk.disconnect();
@@ -265,7 +280,13 @@ export class LiveKitBridge extends BaseRealtimeBridge {
                 this.sdk.publishAudioFrame(bytes);
                 break;
             case 'video-out':
-                if (this.features.VideoOut === true) {
+                if (this.features.VideoOut !== true) {
+                    break;
+                }
+                if (IsAvatarMediaFrame(frame)) {
+                    // An agent's live avatar: the room client decodes it and publishes the face and the voice together.
+                    this.sdk.publishAvatarMedia?.({ Bytes: bytes, MimeType: frame.MimeType ?? 'video/mp4' });
+                } else {
                     this.sdk.publishVideoFrame(bytes);
                 }
                 break;
@@ -298,6 +319,16 @@ export class LiveKitBridge extends BaseRealtimeBridge {
      */
     public override OnVideoSourceEnded(handler: (source: BridgeVideoSourceEnd) => void): void {
         this.videoSourceEndedHandler = handler;
+    }
+
+    /**
+     * Registers the handler for an avatar the room client took down (its decoders kept failing, or the room refused the
+     * camera track), so the engine can replace the model session with an audio-only one.
+     *
+     * @param handler Invoked with why the avatar can no longer be shown.
+     */
+    public override OnAvatarUnavailable(handler: (reason: BridgeAvatarFailure) => void): void {
+        this.avatarUnavailableHandler = handler;
     }
 
     // ── Capability-gated virtuals LiveKit supports (gated by SupportedFeatures) ───────
@@ -438,6 +469,18 @@ export class LiveKitBridge extends BaseRealtimeBridge {
             this.meetingControls?.IngestRoster(participants);
         } catch (err) {
             LogError(`[LiveKitBridge] roster refresh failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /** Handles a change in what the room client shows of the avatar: a take-down goes to the engine; publishing is logged. */
+    private handleAvatarStatus(status: LiveKitAvatarStatus): void {
+        if (status.State === 'on') {
+            LogStatus("[LiveKitBridge] the agent's avatar is published in the room");
+            return;
+        }
+        LogStatus(`[LiveKitBridge] the agent's avatar was taken down (${status.Reason ?? 'unknown'}); the agent goes on audio only`);
+        if (status.Reason) {
+            this.avatarUnavailableHandler?.(status.Reason);
         }
     }
 

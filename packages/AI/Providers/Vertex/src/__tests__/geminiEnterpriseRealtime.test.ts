@@ -452,6 +452,18 @@ describe('GeminiEnterpriseRealtime', () => {
             expect(driver.Session.Closed).toBe(true);
         });
 
+        it("renders the avatar for a meeting host that publishes it (Delivery 'room'): VIDEO and the avatar at 2 Mbps, granted on the session", async () => {
+            const driver = new TestEnterprise(serviceAccountKey());
+            const session = await driver.StartSession(makeParams({ Avatar: { AvatarID: 'Ben', Delivery: 'room' } }));
+            const config = driver.Connects[0].config;
+            expect(config?.responseModalities).toEqual(['VIDEO']);
+            expect(config?.avatarConfig).toEqual({ avatarName: 'Ben', videoBitrateBps: 2_000_000 });
+            expect(session.AvatarStatus).toEqual({ Requested: true, Granted: true });
+            expect(typeof session.OnAvatarOutput).toBe('function');
+            const elsewhere = await driver.StartSession(makeParams({ Avatar: { AvatarID: 'Ben' } }));
+            expect(elsewhere.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'bridged' });
+        });
+
         it('builds the bridged client again after a build that failed, and keeps one that worked', async () => {
             const driver = new TestEnterprise(serviceAccountKey());
             driver.FailNextClient = true;

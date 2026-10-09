@@ -26,8 +26,11 @@
 
 import { Worker } from 'node:worker_threads';
 import { LogError, LogStatus } from '@memberjunction/core';
+import { SniffFmp4Piece } from '@memberjunction/ai';
 import {
     VideoSourceIdOf,
+    type NativeAvatarMediaChunk,
+    type NativeAvatarStatus,
     type NativeConnectArgs,
     type NativeConnectResult,
     type NativeRoomAudioFrame,
@@ -128,6 +131,12 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
     private participantConnectedCallback?: (participant: NativeRoomParticipant) => void;
     private participantDisconnectedCallback?: (participantIdentity: string) => void;
     private disconnectedCallback?: (reason?: string) => void;
+    private avatarStatusCallback?: (status: NativeAvatarStatus) => void;
+    /**
+     * The avatar stream's last init segment, copied before its buffer was transferred: a restarted worker's room client
+     * gets it before the next fragment, which it could not decode without it.
+     */
+    private lastAvatarInit: NativeAvatarMediaChunk | null = null;
 
     // Request/response correlation
     private nextCommandId = 1;
@@ -250,6 +259,9 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
                 this.videoSourcesInFlight.delete(VideoSourceIdOf(msg.source.participantIdentity, msg.source.source));
                 this.videoSourceEndedCallback?.(msg.source);
                 break;
+            case 'avatarStatus':
+                this.noteAvatarStatus(msg.status);
+                break;
             case 'participantConnected':
                 this.participants.set(msg.participant.identity, msg.participant);
                 this.participantConnectedCallback?.(msg.participant);
@@ -338,6 +350,27 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
         this.scheduleRestart(`worker exited with code ${code}`);
     }
 
+    /**
+     * Remembers a taken-down avatar so a restarted worker joins audio only (its token still says `on`) and gets no init,
+     * then tells the handler.
+     */
+    private noteAvatarStatus(status: NativeAvatarStatus): void {
+        if (status.state === 'audio-only') {
+            this.options.avatarStatus = status;
+        }
+        this.avatarStatusCallback?.(status);
+    }
+
+    /** A restarted worker has a new room client: unless the avatar was taken down, it gets the stream's init first. */
+    private replayAvatarInit(): void {
+        const init = this.lastAvatarInit;
+        if (!init || !this.worker || this.options.avatarStatus?.state === 'audio-only') {
+            return;
+        }
+        const copy = init.data.slice(0);
+        this.worker.postMessage({ type: 'publishAvatarMedia', chunk: { data: copy, mimeType: init.mimeType } }, [copy]);
+    }
+
     /** Remembers a source the worker is sending frames of, until it reports the source ended. */
     private trackVideoSource(frame: NativeRoomVideoFrame): void {
         this.videoSourcesInFlight.set(VideoSourceIdOf(frame.participantIdentity, frame.source), {
@@ -397,6 +430,7 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
         try {
             await this.joinViaWorker(args);
             LogStatus(`[LiveKitWorkerRoomClient] Worker restarted and rejoined room '${args.name}'.`);
+            this.replayAvatarInit();
             this.startTelemetryPolling();
             // The counter is NOT reset here: a worker that connects and then crashes again must keep burning
             // attempts. It only resets after a sustained healthy period.
@@ -501,6 +535,7 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
         if (this.audioFrameCallback) fallback.onAudioFrame(this.audioFrameCallback);
         if (this.videoFrameCallback) fallback.onVideoFrame?.(this.videoFrameCallback);
         if (this.videoSourceEndedCallback) fallback.onVideoSourceEnded?.(this.videoSourceEndedCallback);
+        if (this.avatarStatusCallback) fallback.onAvatarStatus?.(this.avatarStatusCallback);
         if (this.participantConnectedCallback) fallback.onParticipantConnected(this.participantConnectedCallback);
         if (this.participantDisconnectedCallback) fallback.onParticipantDisconnected(this.participantDisconnectedCallback);
         if (this.disconnectedCallback) {
@@ -580,6 +615,31 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
             return;
         }
         this.worker?.postMessage({ type: 'publishScreen', frame }, [frame]);
+    }
+
+    /**
+     * Hands one avatar piece to the worker, which decodes and publishes it, transferring its buffer (zero-copy). An init
+     * segment is copied first, for a restarted worker; one that comes while the worker restarts is kept for it too.
+     * Other pieces are dropped until the worker has joined.
+     */
+    public publishAvatarMedia(chunk: NativeAvatarMediaChunk): void {
+        if (this.fallback) {
+            this.fallback.publishAvatarMedia?.(chunk);
+            return;
+        }
+        if (SniffFmp4Piece(chunk.data) === 'init') {
+            this.lastAvatarInit = { data: chunk.data.slice(0), mimeType: chunk.mimeType };
+        }
+        if (!this.worker || !this.isConnected) {
+            return;
+        }
+        this.worker.postMessage({ type: 'publishAvatarMedia', chunk }, [chunk.data]);
+    }
+
+    /** Registers the handler for a change in what the room is shown of the avatar (the worker's, or the fallback client's). */
+    public onAvatarStatus(cb: (status: NativeAvatarStatus) => void): void {
+        this.avatarStatusCallback = cb;
+        this.fallback?.onAvatarStatus?.(cb);
     }
 
     public onAudioFrame(cb: (frame: NativeRoomAudioFrame) => void): void {

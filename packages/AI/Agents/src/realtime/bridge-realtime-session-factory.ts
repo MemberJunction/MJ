@@ -96,6 +96,11 @@ export interface BridgeRealtimeSessionContext {
     ConversationMessages?: ChatMessage[];
     /** The `MJ: Conversations` row the session writes to — stamped on the co-agent observability run. */
     ConversationID?: string;
+    /**
+     * `'room'` when the bridge's bot can publish the agent's avatar into the room (the LiveKit coordinator asks its native
+     * module first). Flows to the session's avatar request, so the driver may render it. Absent: audio only.
+     */
+    AvatarDelivery?: 'room';
 }
 
 /**
@@ -227,6 +232,9 @@ function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, un
     }
     if (ctx.SelfNames && ctx.SelfNames.length > 0) {
         data.realtimeSelfNames = ctx.SelfNames;
+    }
+    if (ctx.AvatarDelivery === 'room') {
+        data.realtimeAvatarDelivery = 'room';
     }
     return Object.keys(data).length > 0 ? data : undefined;
 }

@@ -69,6 +69,7 @@ export function CreateMediaWorkerRoomClient(options: MediaWorkerClientOptions, l
     return new LiveKitRtcNodeRoomClient(options.sampleRate, options.inboundSampleRate, options.channels, loader, {
         Video: options.video,
         VideoEncoder: options.video && options.videoEncodeWorker ? VideoEncodeWorkerHost.Instance : undefined,
+        AvatarStatus: options.avatarStatus,
     });
 }
 
@@ -134,6 +135,10 @@ export class MediaWorkerSession {
                     break;
                 case 'publishScreen':
                     this.client?.publishScreen(command.frame);
+                    break;
+                case 'publishAvatarMedia':
+                    // Decoded and published in this worker: the avatar's decoders are its child processes.
+                    this.client?.publishAvatarMedia?.(command.chunk);
                     break;
                 case 'publishData':
                     await this.handlePublishData(command.id, command.text);
@@ -205,6 +210,9 @@ export class MediaWorkerSession {
         });
         client.onVideoSourceEnded?.((source) => {
             this.port.postMessage({ type: 'videoSourceEnded', source });
+        });
+        client.onAvatarStatus?.((status) => {
+            this.port.postMessage({ type: 'avatarStatus', status });
         });
     }
 

@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeBridge,
+    BridgeAvatarFailure,
     BridgeConnectResult,
     BridgeDisconnectReason,
     BridgeMediaFrame,
@@ -105,6 +106,9 @@ export class LoopbackBridge extends BaseRealtimeBridge {
     /** The ended-video-source handler registered via {@link OnVideoSourceEnded}. */
     private videoSourceEndedHandler?: (source: BridgeVideoSourceEnd) => void;
 
+    /** The lost-avatar handler registered via {@link OnAvatarUnavailable}. */
+    private avatarUnavailableHandler?: (reason: BridgeAvatarFailure) => void;
+
     /** The context the engine passed to the last {@link Connect}, for assertions in tests (`null` before). */
     public ConnectContext: RealtimeBridgeContext | null = null;
 
@@ -187,6 +191,7 @@ export class LoopbackBridge extends BaseRealtimeBridge {
         this.mediaHandler = undefined;
         this.participantHandler = undefined;
         this.videoSourceEndedHandler = undefined;
+        this.avatarUnavailableHandler = undefined;
     }
 
     /**
@@ -226,6 +231,15 @@ export class LoopbackBridge extends BaseRealtimeBridge {
      */
     public override OnVideoSourceEnded(handler: (source: BridgeVideoSourceEnd) => void): void {
         this.videoSourceEndedHandler = handler;
+    }
+
+    /**
+     * Registers the lost-avatar handler. {@link EmitAvatarUnavailable} lets a test drive it.
+     *
+     * @param handler Invoked when the endpoint can no longer show the agent's avatar.
+     */
+    public override OnAvatarUnavailable(handler: (reason: BridgeAvatarFailure) => void): void {
+        this.avatarUnavailableHandler = handler;
     }
 
     /**
@@ -284,6 +298,16 @@ export class LoopbackBridge extends BaseRealtimeBridge {
      */
     public EmitVideoSourceEnded(source: BridgeVideoSourceEnd): void {
         this.videoSourceEndedHandler?.(source);
+    }
+
+    /**
+     * Reports that the endpoint can no longer show the agent's avatar, delivering it to the registered
+     * {@link OnAvatarUnavailable} handler. Lets a test exercise the engine's audio-only replacement.
+     *
+     * @param reason Why the avatar can no longer be shown.
+     */
+    public EmitAvatarUnavailable(reason: BridgeAvatarFailure): void {
+        this.avatarUnavailableHandler?.(reason);
     }
 
     /** Whether the loopback is currently "connected" (after {@link Connect}, before {@link Disconnect}). */

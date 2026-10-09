@@ -2208,6 +2208,25 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
         }
     });
 
+    it("marks the avatar request for a room when the bridged host can publish it, and only then", async () => {
+        class AvatarService extends TestableService {
+            protected override ResolveSessionAvatar(): RealtimeAvatarResolution {
+                return { Avatar: { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' }, Voice: 'Puck' };
+            }
+        }
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        try {
+            const service = new AvatarService();
+            const coAgent = makeCoAgent();
+            const inRoom = await service.ExposeBuildSessionParams(makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-1', AvatarDelivery: 'room' }), coAgent, 'gemini-3.8-live', contextUser, provider, {}, 'GeminiEnterpriseRealtime');
+            expect(inRoom.Avatar).toEqual({ AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona', Delivery: 'room' });
+            const plain = await service.ExposeBuildSessionParams(makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-1' }), coAgent, 'gemini-3.8-live', contextUser, provider, {}, 'GeminiEnterpriseRealtime');
+            expect(plain.Avatar?.Delivery).toBeUndefined();
+        } finally {
+            log.mockRestore();
+        }
+    });
+
     it('asks for no avatar when none resolves, and logs why', async () => {
         class NoFaceService extends TestableService {
             protected override ResolveSessionAvatar(): RealtimeAvatarResolution {

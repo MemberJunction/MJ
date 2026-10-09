@@ -274,6 +274,12 @@ export interface PrepareClientSessionInput {
      */
     SelfNames?: string[];
     /**
+     * `'room'` for a server-side (bridged) session whose host publishes the agent's avatar into a meeting room: the
+     * avatar request resolved for the voiced agent carries it (`RealtimeAvatarSettings.Delivery`), so a driver may
+     * render it there. Absent: a server-side session asks for no video (the driver logs `bridged`).
+     */
+    AvatarDelivery?: 'room';
+    /**
      * Optional server-authoritative hard ceiling on the session's wall-clock duration, in seconds.
      * Threaded into {@link RealtimeSessionParams.MaxSessionSeconds} so a driver can bound the
      * provider session/token, and surfaced so the transport layer (the MJServer resolver) can stamp
@@ -2532,7 +2538,7 @@ export class RealtimeClientSessionService {
             MaxSessionSeconds: input.MaxSessionSeconds,
             UserID: contextUser?.ID,
             HasToolFraming: true,
-            ...(avatar.Avatar ? { Avatar: avatar.Avatar } : {}),
+            ...(avatar.Avatar ? { Avatar: input.AvatarDelivery ? { ...avatar.Avatar, Delivery: input.AvatarDelivery } : avatar.Avatar } : {}),
         };
     }
 

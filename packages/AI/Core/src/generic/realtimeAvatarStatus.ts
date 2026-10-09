@@ -21,12 +21,22 @@ const KNOWN_REASONS: Readonly<Record<RealtimeAvatarUnavailableReason, true>> = {
     'no-binding': true,
     host: true,
     browser: true,
+    'decoder-missing': true,
+    'decoder-failed': true,
+    'publish-failed': true,
 };
 
 /** Whether a JSON value is a reason this version knows. */
 function isKnownReason(value: JSONValue): value is RealtimeAvatarUnavailableReason {
     return typeof value === 'string' && Object.prototype.hasOwnProperty.call(KNOWN_REASONS, value);
 }
+
+/**
+ * Every {@link RealtimeAvatarUnavailableReason} this version knows, for code that reads a reason back from text (a meeting
+ * bot's `mj.agentAvatar` attribute). Drawn from the same table {@link ParseRealtimeAvatarStatus} reads with, so the two
+ * never disagree.
+ */
+export const REALTIME_AVATAR_UNAVAILABLE_REASONS: readonly RealtimeAvatarUnavailableReason[] = Object.keys(KNOWN_REASONS).filter(isKnownReason);
 
 /** The status a parsed JSON value describes, or `null` when it is not one. */
 function readStatus(value: JSONValue): RealtimeAvatarStatus | null {

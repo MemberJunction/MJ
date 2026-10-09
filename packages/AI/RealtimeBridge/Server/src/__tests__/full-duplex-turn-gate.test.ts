@@ -113,6 +113,13 @@ describe('FullDuplexTurnGate — another agent holds the floor', () => {
         expect(coord.IsFloorHolder(ROOM, SAGE)).toBe(true);
     });
 
+    it('counts a chunk given by its duration (an avatar piece) the same way: overlay, then cut past the bound', () => {
+        expect(demo.OnOutputDuration(500)).toEqual({ Verdict: 'Forward', TookFloor: false });
+        expect(demo.OnOutputDuration(0).Verdict).toBe('Forward'); // a video-only piece follows its burst
+        expect(demo.OnOutputDuration(BACKCHANNEL_MAX_DURATION_MS).Verdict).toBe('Cut');
+        expect(demo.OnOutputDuration(0)).toEqual({ Verdict: 'Drop', TookFloor: false });
+    });
+
     it('cuts a burst whose very first chunk already exceeds the backchannel bound', () => {
         expect(demo.OnOutputAudio(pcm(BACKCHANNEL_MAX_DURATION_MS + 500))).toEqual({ Verdict: 'Cut', TookFloor: false });
         expect(demo.Phase).toBe('Muted');

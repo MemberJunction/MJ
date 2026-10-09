@@ -15,6 +15,38 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg tar 
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 RUN apt-get install -y nodejs
 
+# ffmpeg for meeting avatars: an agent's bot decodes its live avatar (H.264 video, AAC voice) with it, found on the PATH
+# (or at MJ_FFMPEG_PATH). A static LGPL build from BtbN/FFmpeg-Builds (glibc >= 2.28; focal has 2.31), pinned by
+# release and asset and checked against its sha256; only the ffmpeg binary and its licence are kept. Pin the three
+# values per architecture from the release's page and its checksums.sha256. Build with --build-arg INSTALL_FFMPEG=false
+# to leave it out: meetings then stay audio only, and the room says why.
+ARG INSTALL_FFMPEG=true
+ARG FFMPEG_BTBN_RELEASE=PIN-BTBN-RELEASE-TAG
+ARG FFMPEG_BTBN_ASSET_AMD64=PIN-ffmpeg-n7.1-linux64-lgpl-7.1.tar.xz
+ARG FFMPEG_BTBN_SHA256_AMD64=PIN-SHA256
+ARG FFMPEG_BTBN_ASSET_ARM64=PIN-ffmpeg-n7.1-linuxarm64-lgpl-7.1.tar.xz
+ARG FFMPEG_BTBN_SHA256_ARM64=PIN-SHA256
+RUN if [ "$INSTALL_FFMPEG" = "true" ]; then \
+      set -e; \
+      case "${TARGETARCH:-amd64}" in \
+        amd64) asset="$FFMPEG_BTBN_ASSET_AMD64"; sha="$FFMPEG_BTBN_SHA256_AMD64" ;; \
+        arm64) asset="$FFMPEG_BTBN_ASSET_ARM64"; sha="$FFMPEG_BTBN_SHA256_ARM64" ;; \
+        *) echo "No pinned ffmpeg build for ${TARGETARCH}; build with --build-arg INSTALL_FFMPEG=false" >&2; exit 1 ;; \
+      esac; \
+      case "$FFMPEG_BTBN_RELEASE $asset $sha" in \
+        *PIN-*) echo "Pin FFMPEG_BTBN_RELEASE, the asset and its sha256 (see the comment above), or build with --build-arg INSTALL_FFMPEG=false" >&2; exit 1 ;; \
+      esac; \
+      apt-get install -y --no-install-recommends xz-utils; \
+      curl -fsSL "https://github.com/BtbN/FFmpeg-Builds/releases/download/${FFMPEG_BTBN_RELEASE}/${asset}" -o /tmp/ffmpeg.tar.xz; \
+      echo "${sha}  /tmp/ffmpeg.tar.xz" | sha256sum -c -; \
+      mkdir -p /opt/ffmpeg; \
+      tar -xJf /tmp/ffmpeg.tar.xz -C /opt/ffmpeg --strip-components=1 --wildcards '*/bin/ffmpeg' '*/LICENSE.txt'; \
+      rm -f /tmp/ffmpeg.tar.xz; \
+      ln -s /opt/ffmpeg/bin/ffmpeg /usr/local/bin/ffmpeg; \
+      ffmpeg -hide_banner -decoders | grep -q ' h264 '; \
+      ffmpeg -hide_banner -decoders | grep -q ' aac '; \
+    fi
+
 # Install Microsoft SQL Server tools
 RUN locale-gen "en_US.UTF-8" \
   && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \

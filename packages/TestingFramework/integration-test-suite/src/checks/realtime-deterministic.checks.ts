@@ -1,5 +1,5 @@
 /**
- * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD16).
+ * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD17).
  *
  * Domain 10 deterministic legs — NO live sessions, NO sidecar, NO model calls:
  *  - realtime metadata integrity: agent channels (RD1), Realtime model → vendor DriverClass
@@ -26,6 +26,9 @@
  *  - avatar video pricing (RD16): a tagged co-agent-shaped prompt run on Gemini 3.8 Live × Vertex AI stores a minute of
  *    avatar usage through the real usage write and is finalized; its cost is the token row's line plus the video line
  *    priced from the model vendor's configuration, and both lines are written into its details; the run is deleted.
+ *  - meeting avatars (RD17): the active LiveKit bridge provider lets an agent's bot publish video (its avatar rides
+ *    `video-out`), and the native room module the bots join with answers the avatar probe (ffmpeg found or not, both
+ *    reported) without opening anything.
  *
  * Every fixture row is tagged '(mj-integration-test — safe to delete)' and deleted in the same
  * check's finally block, so the bundle needs no shared lifecycle.
@@ -64,7 +67,7 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseRealtimeBridge } from '@memberjunction/ai-bridge-base';
 import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '@memberjunction/ai-bridge-server';
-import { HandoffOfferRegistry, RoomAuthorizationService, OFFER_UNAVAILABLE } from '@memberjunction/livekit-room-server';
+import { HandoffOfferRegistry, LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, RoomAuthorizationService, OFFER_UNAVAILABLE } from '@memberjunction/livekit-room-server';
 import { InteractionLifecycleService } from '@memberjunction/telephony-adapters';
 import { ProductionModelPromotionGate, detectSingleFeatureDominance } from '@memberjunction/predictive-studio';
 import type { PromoteModelRequest } from '@memberjunction/predictive-studio';
@@ -1433,6 +1436,34 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                     }
                 }
             }
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD17',
+        Name: "RD17: the LiveKit bridge provider lets an agent's bot publish video, and its native room module answers the meeting-avatar probe",
+        Fn: async (ctx): Promise<void> => {
+            const entityName = 'MJ: AI Bridge Providers';
+            if (!new Metadata().EntityByName(entityName)) { // global-provider-ok: integration test script — single-provider process by design
+                console.warn(`  ⚠ realtime-deterministic.RD17 SKIPPED — entity '${entityName}' not in metadata (bridge stack not installed)`);
+                return;
+            }
+            const result = await new RunView().RunView<MJAIBridgeProviderEntity>(
+                { EntityName: entityName, ExtraFilter: `DriverClass='${LIVEKIT_BRIDGE_DRIVER_CLASS}' AND Status='Active'`, ResultType: 'entity_object' },
+                ctx.User,
+            );
+            Assert(result.Success, `RD17: loading the LiveKit bridge provider failed: ${result.ErrorMessage}`);
+            const provider = result.Results?.[0];
+            if (!provider) {
+                console.warn(`  ⚠ realtime-deterministic.RD17 SKIPPED — no Active '${LIVEKIT_BRIDGE_DRIVER_CLASS}' provider seeded`);
+                return;
+            }
+            AssertEqual(provider.SupportedFeaturesObject?.VideoOut, true,
+                "RD17: the LiveKit provider must allow VideoOut: an agent's avatar is published on video-out, and the bridge drops it otherwise");
+
+            const support = await LiveKitAgentRoomCoordinator.Instance.DescribeAvatarVideo();
+            const known = support.Supported === true || support.Reason === 'decoder-missing' || support.Reason === 'bridged';
+            Assert(known, `RD17: the avatar probe answered with an unknown shape: ${JSON.stringify(support)}`);
+            console.log(`      → video out allowed; meeting avatars on this host: ${support.Supported === true ? 'can be published' : `audio only (${support.Reason}${support.Detail ? `: ${support.Detail}` : ''})`}`);
         }
     }
 ];

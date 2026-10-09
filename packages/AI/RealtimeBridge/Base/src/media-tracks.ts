@@ -95,6 +95,12 @@ export interface BridgeMediaFrame {
 }
 
 /**
+ * Why a driver can no longer show the agent's avatar mid-session: its decoders kept failing (`'decoder-failed'`), or the
+ * endpoint refused the video track it publishes the avatar on (`'publish-failed'`). The agent goes on audio only.
+ */
+export type BridgeAvatarFailure = 'decoder-failed' | 'publish-failed';
+
+/**
  * An inbound video source that stopped: the person stopped letting agents see them, left, stopped sharing or turned
  * their camera off. A driver that sends camera or screen frames reports it so the host can tell the model, which would
  * otherwise go on describing the last frame it saw.

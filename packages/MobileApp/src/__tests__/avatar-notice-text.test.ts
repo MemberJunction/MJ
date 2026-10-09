@@ -25,7 +25,7 @@ describe('AvatarNoticeText', () => {
 
     it('covers exactly the reasons the runtime reports, each opening "Audio only"', () => {
         expect(Object.keys(AVATAR_NOTICE_TEXT).sort()).toEqual(
-            ['bridged', 'browser', 'custom-disabled', 'endpoint', 'host', 'no-binding', 'unknown-avatar'],
+            ['bridged', 'browser', 'custom-disabled', 'decoder-failed', 'decoder-missing', 'endpoint', 'host', 'no-binding', 'publish-failed', 'unknown-avatar'],
         );
         for (const sentence of Object.values(AVATAR_NOTICE_TEXT)) {
             expect(sentence.startsWith('Audio only')).toBe(true);
@@ -39,6 +39,10 @@ describe('AvatarNoticeText', () => {
     it('says "the agent" when a meeting sentence has no name to use', () => {
         expect(AvatarNoticeText('bridged')).toBe("Audio only for the agent: the avatar can't be shown in this meeting");
         expect(AvatarNoticeText('bridged', '   ')).toBe("Audio only for the agent: the avatar can't be shown in this meeting");
+    });
+
+    it.each(['decoder-missing', 'decoder-failed', 'publish-failed'] as const)("says a meeting bot's avatar for %s couldn't be shown, naming the agent", (reason) => {
+        expect(AvatarNoticeText(reason, 'Sage')).toBe("Audio only for Sage: the avatar couldn't be shown in this meeting");
     });
 
     it('leaves the agent out of a call sentence', () => {

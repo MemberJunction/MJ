@@ -11,11 +11,16 @@ import {
 import { performance } from 'node:perf_hooks';
 import { BaseSingleton, MJGlobal, EscapeSQLString } from '@memberjunction/global';
 import {
+    Fmp4AudioSeconds,
     InboundVideoRateOf,
     InboundVideoStreamsOf,
     IRealtimeSession,
+    ReadFmp4Init,
     RealtimeMediaKind,
     RealtimeTranscript,
+    SniffFmp4Piece,
+    type Fmp4Init,
+    type RealtimeAvatarMediaChunk,
 } from '@memberjunction/ai';
 import {
     MJAIBridgeProviderEntity,
@@ -29,6 +34,7 @@ import {
     AIBridgeEngineBase,
     BaseRealtimeBridge,
     BaseTelephonyBridge,
+    BridgeAvatarFailure,
     BridgeMediaFrame,
     BridgeMediaTrackKind,
     BridgeParticipantInfo,
@@ -56,7 +62,7 @@ import {
     TurnAddressingMode,
 } from '@memberjunction/ai-bridge-base';
 import { MultiAgentRoomCoordinator, RoomCoordinatorLimits, RoomFloorState } from './multi-agent-room-coordinator';
-import { FullDuplexTurnGate, HumanSpeechDetector, OutputVerdict } from './full-duplex-turn-gate';
+import { FullDuplexTurnGate, HumanSpeechDetector, OutputGateResult, OutputVerdict } from './full-duplex-turn-gate';
 import { DtmfCoalescer } from './dtmf-coalescer';
 import { AppendTranscriptTurn, BridgeTranscriptTurn, BuildPriorTranscript } from './bridge-prior-transcript';
 
@@ -456,6 +462,15 @@ export interface StartBridgeSessionParams {
     RecoverRealtimeSession?: BridgeRealtimeSessionRecovery;
 
     /**
+     * Re-opens the model session WITHOUT its avatar, seeded with the conversation so far, when the bridge reports it can
+     * no longer show the avatar ({@link BaseRealtimeBridge.OnAvatarUnavailable}: its decoders kept failing, or the room
+     * refused the video track). The replacement renders audio only, so the model stops generating video nobody sees.
+     * Called at most once per session, apart from {@link RecoverRealtimeSession}'s attempts. When absent, the session goes
+     * on as it is (audio still plays; the avatar's video is generated and not shown).
+     */
+    RecoverRealtimeSessionWithoutAvatar?: BridgeRealtimeSessionRecovery;
+
+    /**
      * Called once at the end of {@link AIBridgeEngine.StopBridgeSession} for this session, after the bridge row is
      * terminal — the place for the host to close the rest of the session's bookkeeping (the agent session row, a
      * capacity lease). Must not throw; a throw is logged and swallowed.
@@ -686,6 +701,18 @@ export interface ActiveBridgeSession {
 
     /** Model-session recovery factory (see {@link StartBridgeSessionParams.RecoverRealtimeSession}). */
     RecoverRealtimeSession?: BridgeRealtimeSessionRecovery;
+
+    /** The audio-only replacement factory (see {@link StartBridgeSessionParams.RecoverRealtimeSessionWithoutAvatar}). */
+    RecoverRealtimeSessionWithoutAvatar?: BridgeRealtimeSessionRecovery;
+
+    /** Whether the model session was already replaced because its avatar could not be shown (once per session). */
+    AvatarReplaced?: boolean;
+
+    /**
+     * The avatar stream's latest init segment, read: its audio track's timescale lets the floor gate count an avatar
+     * piece's speaking time. Every stream (a turn, a resumed or replaced model session) opens with its own init.
+     */
+    AvatarInit?: Fmp4Init | null;
 
     /** End-of-session hook (see {@link StartBridgeSessionParams.OnSessionEnded}). */
     OnSessionEnded?: (reason: BridgeDisconnectReason) => void | Promise<void>;
@@ -1109,6 +1136,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 TranscriptSink: params.TranscriptSink,
                 OnBargeIn: params.OnBargeIn,
                 RecoverRealtimeSession: params.RecoverRealtimeSession,
+                RecoverRealtimeSessionWithoutAvatar: params.RecoverRealtimeSessionWithoutAvatar,
                 OnSessionEnded: params.OnSessionEnded,
                 TranscriptTail: [],
                 ModelRecoveryAttempts: 0,
@@ -1263,6 +1291,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             }
         });
         Bridge.OnVideoSourceEnded((source: BridgeVideoSourceEnd) => this.tellModelVideoSourceEnded(active, source));
+        Bridge.OnAvatarUnavailable((reason: BridgeAvatarFailure) => void this.replaceModelSessionWithoutAvatar(active, reason));
     }
 
     /**
@@ -1345,6 +1374,41 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             const track: BridgeMediaTrackKind = 'video-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
+
+        // Outbound AVATAR: a live avatar's encoded media (fragmented MP4 whose audio track is the voice) for a host that
+        // publishes it into the room. Optional, like video output.
+        session.OnAvatarOutput?.((chunk: RealtimeAvatarMediaChunk) => this.forwardAvatarOutput(active, session, chunk));
+    }
+
+    /**
+     * Sends one piece of the agent's avatar to the bridge on `video-out`, with its MIME type so the driver publishes it as
+     * an avatar. In a full-duplex multi-agent room the piece passes the floor gate first, counted by its audio's duration:
+     * that is how long the agent speaks. An init segment carries no speech and always passes.
+     */
+    private forwardAvatarOutput(active: ActiveBridgeSession, session: IRealtimeSession, chunk: RealtimeAvatarMediaChunk): void {
+        if (active.RealtimeSession !== session) {
+            return; // a stale (replaced) session
+        }
+        active.LastActivityMs = Date.now();
+        const verdict = this.gateAvatarOutput(active, chunk);
+        if (verdict !== 'Forward') {
+            if (verdict === 'Cut') {
+                active.Bridge.FlushOutboundMedia(); // the burst was just refused — drop what is queued for it, voice and face
+            }
+            return;
+        }
+        active.Bridge.SendMedia('video-out', { Track: 'video-out', Bytes: chunk.Data, MimeType: chunk.MimeType, TimestampMs: Date.now() });
+    }
+
+    /** The floor gate's verdict on one avatar piece: an init segment is remembered and passes; a fragment counts its audio. */
+    private gateAvatarOutput(active: ActiveBridgeSession, chunk: RealtimeAvatarMediaChunk): OutputVerdict {
+        const kind = SniffFmp4Piece(chunk.Data);
+        if (kind === 'init') {
+            active.AvatarInit = ReadFmp4Init(chunk.Data) ?? active.AvatarInit;
+            return 'Forward';
+        }
+        const speechSeconds = kind === 'fragment' && active.AvatarInit ? (Fmp4AudioSeconds(chunk.Data, active.AvatarInit) ?? 0) : 0;
+        return this.gateOutputDuration(active, speechSeconds * 1000);
     }
 
     /** A true barge-in: flush queued audio, drop stale room moderator state, free the floor, tell the host. */
@@ -1539,7 +1603,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     /** Swaps a recovered model session in for the lost one, or refuses it when it cannot carry the call's audio. */
-    private async adoptRecoveredSession(active: ActiveBridgeSession, lost: IRealtimeSession, fresh: IRealtimeSession): Promise<void> {
+    private async adoptRecoveredSession(active: ActiveBridgeSession, lost: IRealtimeSession, fresh: IRealtimeSession, note = `attempt ${active.ModelRecoveryAttempts}`): Promise<void> {
         const sameRates = (fresh.InputSampleRate ?? 24000) === (lost.InputSampleRate ?? 24000) && (fresh.OutputSampleRate ?? 24000) === (lost.OutputSampleRate ?? 24000);
         if (active.Ending || !sameRates) {
             await this.closeQuietly(fresh);
@@ -1549,8 +1613,34 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         this.wireModelSession(active);
         this.wireTurnTaking(active);
         active.ModelRecovering = false;
-        LogStatus(`[AIBridgeEngine] model session re-opened for bridge ${active.SessionBridgeID} (attempt ${active.ModelRecoveryAttempts}).`);
+        LogStatus(`[AIBridgeEngine] model session re-opened for bridge ${active.SessionBridgeID} (${note}).`);
         await this.closeQuietly(lost); // releases the dead socket and finalizes its observability run
+    }
+
+    /**
+     * The bridge can no longer show the agent's avatar: replace the model session, once, with one that renders no avatar
+     * (through the host's {@link StartBridgeSessionParams.RecoverRealtimeSessionWithoutAvatar}), seeded with what was said,
+     * so the model stops generating video nobody sees and, if the voice decoder was the one that failed, the voice comes
+     * back as PCM. Inbound audio is held back while the replacement opens, as in a recovery. If it fails, the session goes
+     * on as it was.
+     */
+    private async replaceModelSessionWithoutAvatar(active: ActiveBridgeSession, reason: BridgeAvatarFailure): Promise<void> {
+        const replace = active.RecoverRealtimeSessionWithoutAvatar;
+        if (active.Ending || active.ModelRecovering || active.AvatarReplaced || !replace) {
+            LogStatus(`[AIBridgeEngine] bridge ${active.SessionBridgeID} lost its avatar (${reason}); its model session is not replaced${replace ? ' (busy, ending or already replaced)' : ' (the host gave no audio-only replacement)'}.`);
+            return;
+        }
+        active.AvatarReplaced = true;
+        active.ModelRecovering = true;
+        const lost = active.RealtimeSession;
+        LogStatus(`[AIBridgeEngine] bridge ${active.SessionBridgeID} lost its avatar (${reason}); replacing its model session with an audio-only one.`);
+        try {
+            const fresh = await replace({ PriorTranscript: BuildPriorTranscript(active.TranscriptTail), Attempt: 1, Reason: `the avatar could not be shown (${reason})` });
+            await this.adoptRecoveredSession(active, lost, fresh, `audio only, after the avatar's ${reason}`);
+        } catch (err) {
+            LogError(`[AIBridgeEngine] the audio-only replacement for bridge ${active.SessionBridgeID} failed; the session goes on as it was: ${err instanceof Error ? err.message : String(err)}`);
+            active.ModelRecovering = false;
+        }
     }
 
     /** Ends a call whose model session cannot be recovered: a spoken goodbye at the carrier (telephony), then a clean stop. */
@@ -2157,11 +2247,27 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @returns Whether to forward the chunk, drop it, or cut the burst (drop + flush queued audio).
      */
     private gateOutput(active: ActiveBridgeSession, byteLength: number): OutputVerdict {
+        return this.applyTurnGate(active, (gate) => gate.OnOutputAudio(byteLength));
+    }
+
+    /**
+     * Runs one chunk of a full-duplex model's outbound speech through its floor gate by how long it plays (an avatar
+     * piece). Sessions without a gate, and rooms with a single agent, are never gated.
+     *
+     * @param active The speaking session.
+     * @param durationMs How long the chunk's speech plays.
+     */
+    private gateOutputDuration(active: ActiveBridgeSession, durationMs: number): OutputVerdict {
+        return this.applyTurnGate(active, (gate) => gate.OnOutputDuration(durationMs));
+    }
+
+    /** Asks the session's floor gate about one chunk (when it is gated at all) and acts on the floor it took or lost. */
+    private applyTurnGate(active: ActiveBridgeSession, decide: (gate: FullDuplexTurnGate) => OutputGateResult): OutputVerdict {
         const gate = active.TurnGate;
         if (!gate || !active.RoomKey || !this.roomCoordinator.IsMultiAgentRoom(active.RoomKey)) {
             return 'Forward';
         }
-        const result = gate.OnOutputAudio(byteLength);
+        const result = decide(gate);
         if (result.TookFloor) {
             this.armFloorHold(active);
         }
