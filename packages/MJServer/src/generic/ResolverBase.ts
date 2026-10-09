@@ -38,7 +38,7 @@ import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
-import { SQLParser, IsBalancedSQLFragment } from '@memberjunction/sql-parser';
+import { SQLParser, IsBalancedSQLFragment, LexSQL } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
@@ -928,6 +928,9 @@ export class ResolverBase {
    * it, so a fragment that closes those parentheses (`1=1) OR (1=1`) would leave row-level
    * security, API-key row filters and tenant scope on one side of an OR the caller controls.
    * The parse wraps the fragment in parentheses too, which is why it cannot catch this alone.
+   * A backslash inside a quoted string or identifier is refused as well: the parser reads `\'`
+   * inside a plain literal as an escaped quote, but SQL Server and PostgreSQL end the literal
+   * there, so the text after it could be code that the parse-based checks never saw.
    *
    * RLS is applied by RunView as an outer WHERE around the entity being queried, not compiled
    * into the view. Subqueries against another entity's BaseView therefore do not inherit that
@@ -948,6 +951,9 @@ export class ResolverBase {
     const balance = IsBalancedSQLFragment(clause, dialect);
     if (!balance.IsBalanced) {
       throw new Error(`Invalid ${label}: ${balance.Reason}`);
+    }
+    if (this.hasBackslashInQuotes(clause, dialect)) {
+      throw new Error(`Invalid ${label}: a backslash inside a quoted string or identifier is not permitted in client-supplied filters`);
     }
 
     const wrapped =
@@ -1086,6 +1092,14 @@ export class ResolverBase {
     this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider, user);
     this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider, user);
     this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
+  }
+
+  /**
+   * True when a string literal or quoted identifier in `clause`, read the way the database reads
+   * it, contains a backslash (see {@link assertClientClauseUsesEntityBaseViews}).
+   */
+  private hasBackslashInQuotes(clause: string, dialect: SQLParserDialect): boolean {
+    return LexSQL(clause, dialect).some((t) => (t.Kind === 'string' || t.Kind === 'identifier') && t.Text.includes('\\'));
   }
 
   /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */

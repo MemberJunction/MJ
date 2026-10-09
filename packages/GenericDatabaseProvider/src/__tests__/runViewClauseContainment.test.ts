@@ -240,4 +240,94 @@ describe('GenericDatabaseProvider — a caller-supplied WHERE piece cannot close
         expect(statuses[0].Success).toBe(true);
         expect(provider.ExecutedSQL[0]).toContain(`WHERE (Name = 'a' OR Name = 'b') AND (${RLS_CLAUSE})`);
     });
+
+    it('refuses a comment in an ExtraFilter, and runs no SQL', async () => {
+        const provider = new ContainmentTestProvider([rlsProtectedEntity()]);
+
+        const result = await provider.RunViewAs({ EntityName: 'Conversations', ExtraFilter: "Name = 'a' -- note\n" }, user());
+
+        expect(provider.ExecutedSQL).toEqual([]);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/ExtraFilter.*comment/);
+    });
+
+    it('accepts a comment ended by a CR in a custom view WhereClause, and keeps row-level security after it', async () => {
+        const entity = rlsProtectedEntity();
+        const provider = new ContainmentTestProvider([entity]);
+
+        const result = await provider.RunViewAs({ ViewEntity: savedView(entity, "Name = 'a' -- note\r", true) }, user());
+
+        expect(result.Success).toBe(true);
+        expect(provider.ExecutedSQL).toEqual([`SELECT [ID] FROM [__mj].[vwConversations] WHERE (Name = 'a' -- note\r) AND (${RLS_CLAUSE})`]);
+    });
+
+    it.each([
+        ['Name = $$x$$', /dollar/],
+        ['Café = 1', /outside ASCII/],
+    ])('a PostgreSQL provider refuses what its lexer cannot read with certainty (%#), and runs no SQL', async (extraFilter, reason) => {
+        const provider = new ContainmentTestProvider([rlsProtectedEntity()], 'postgresql');
+
+        const result = await provider.RunViewAs({ EntityName: 'Conversations', ExtraFilter: extraFilter }, user());
+
+        expect(provider.ExecutedSQL).toEqual([]);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(reason);
+    });
+});
+
+/** A provider whose platform rewrite changes the filter, as PostgreSQL's TransformExternalSQLClause does. */
+class RewritingTestProvider extends ContainmentTestProvider {
+    protected override TransformExternalSQLClause(clause: string): string {
+        return clause.replace(/\btrue\b/g, 'TRUE');
+    }
+}
+
+describe('GenericDatabaseProvider — a platform rewrite of the ExtraFilter stays inside each AND term', () => {
+    // A PreRunView hook (the tenant hook, for one) ANDs a server predicate onto the caller's filter
+    // before the provider rewrites it. Each top-level AND term is rewritten, checked and wrapped on
+    // its own, so a rewrite that changes the caller's term cannot reach the hook's term.
+    const tenantShaped = "(Flag = true) AND (OrganizationID = 't1')";
+
+    beforeEach(() => ClearAllDataHooks());
+    afterEach(() => ClearAllDataHooks());
+
+    it('rewrites, checks and wraps each top-level AND term on its own', async () => {
+        const provider = new RewritingTestProvider([rlsProtectedEntity()]);
+
+        const result = await provider.RunViewAs({ EntityName: 'Conversations', ExtraFilter: tenantShaped }, user());
+
+        expect(result.Success).toBe(true);
+        expect(provider.ExecutedSQL).toEqual([
+            `SELECT * FROM [__mj].[vwConversations] WHERE (((Flag = TRUE)) AND ((OrganizationID = 't1'))) AND (${RLS_CLAUSE})`,
+        ]);
+    });
+
+    it('does the same in the cache-check WHERE builder', async () => {
+        const provider = new RewritingTestProvider([rlsProtectedEntity()]);
+
+        const statuses = await provider.GetRunViewsDatabaseStatus([{ EntityName: 'Conversations', ExtraFilter: tenantShaped }], user());
+
+        expect(statuses[0].Success).toBe(true);
+        expect(provider.ExecutedSQL[0]).toContain(`WHERE (((Flag = TRUE)) AND ((OrganizationID = 't1'))) AND (${RLS_CLAUSE})`);
+    });
+
+    it('rewrites a filter with a top-level OR as one piece, since splitting it would change its meaning', async () => {
+        const provider = new RewritingTestProvider([rlsProtectedEntity()]);
+
+        await provider.RunViewAs({ EntityName: 'Conversations', ExtraFilter: "Flag = true OR Name = 'a' AND Name <> 'b'" }, user());
+
+        expect(provider.ExecutedSQL).toEqual([
+            `SELECT * FROM [__mj].[vwConversations] WHERE (Flag = TRUE OR Name = 'a' AND Name <> 'b') AND (${RLS_CLAUSE})`,
+        ]);
+    });
+
+    it('leaves the filter as written when the rewrite does not change it', async () => {
+        const provider = new RewritingTestProvider([rlsProtectedEntity()]);
+
+        await provider.RunViewAs({ EntityName: 'Conversations', ExtraFilter: "Name = 'a' AND Name <> 'b'" }, user());
+
+        expect(provider.ExecutedSQL).toEqual([
+            `SELECT * FROM [__mj].[vwConversations] WHERE (Name = 'a' AND Name <> 'b') AND (${RLS_CLAUSE})`,
+        ]);
+    });
 });
