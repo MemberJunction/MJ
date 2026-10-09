@@ -25,17 +25,23 @@ import {
   RoomEvent,
   Track,
   type LocalAudioTrack,
+  type LocalParticipant,
   type LocalVideoTrack,
   type RoomOptions,
-  type ScreenShareCaptureOptions,
 } from 'livekit-client';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { AllowsAgentVision, IsAgentWatching } from '@memberjunction/ai';
-import { CapturedSurfaceOf, type DisplayCaptureSurface } from '@memberjunction/ai-realtime-client/media';
+import {
+  CapturedSurfaceOf,
+  RequestDisplayCapture,
+  type DisplayCaptureOptions,
+  type DisplayCaptureResult,
+  type DisplayCaptureSurface,
+} from '@memberjunction/ai-realtime-client/media';
 import { ReadAvatarAudioOnly } from './agent-avatar';
 import { LiveKitRoomEventBus } from './events';
 import { ApplyBackgroundEffect, ApplyNoiseFilter } from './livekit-effects';
-import { ToScreenShareCaptureOptions } from './media-adapters';
+import { LiveKitScreenShare } from './livekit-screen-share';
 import {
   LiveKitBackgroundEffect,
   LiveKitConnectionStatus,
@@ -96,6 +102,11 @@ export interface LiveKitRoomControllerOptions {
   RoleResolver?: LiveKitRoleResolver;
   /** Supply a shared event bus (e.g. so a host can subscribe before the controller connects). */
   EventBus?: LiveKitRoomEventBus;
+  /**
+   * Opens the browser's share picker for a screen share. Defaults to `/media`'s `RequestDisplayCapture`, as in the
+   * preview room; a test passes its own.
+   */
+  RequestScreenShare?: (options: DisplayCaptureOptions) => Promise<DisplayCaptureResult>;
 }
 
 /**
@@ -122,16 +133,20 @@ export interface ILiveKitRoomController {
   SetMicrophoneEnabled(enabled: boolean): Promise<void>;
   /** Turns the local camera on or off. */
   SetCameraEnabled(enabled: boolean): Promise<void>;
-  /** Starts or stops sharing the screen; `preferredSurface` is what the browser's picker offers first. */
-  SetScreenShareEnabled(enabled: boolean, preferredSurface?: DisplayCaptureSurface): Promise<void>;
+  /**
+   * Starts or stops sharing. `request` is the kind of surface the browser's picker offers first, or the share's
+   * `/media` options: a surface preference, or one panel of the page to share alone (`Panel`) with its name
+   * (`PanelLabel`).
+   */
+  SetScreenShareEnabled(enabled: boolean, request?: DisplayCaptureSurface | DisplayCaptureOptions): Promise<void>;
   /** Toggles the microphone and resolves the new state. */
   ToggleMicrophone(): Promise<boolean>;
   /** Toggles the camera and resolves the new state. */
   ToggleCamera(): Promise<boolean>;
   /** Toggles screen sharing and resolves the new state. */
   ToggleScreenShare(): Promise<boolean>;
-  /** Shares something else: stops the current share, then asks the browser's picker again. */
-  ChangeScreenShare(preferredSurface?: DisplayCaptureSurface): Promise<void>;
+  /** Shares something else: stops the current share, then asks the browser's picker again, with `request` as above. */
+  ChangeScreenShare(request?: DisplayCaptureSurface | DisplayCaptureOptions): Promise<void>;
   /** Sends a text message to the room on the data channel. */
   SendData(text: string, topic?: string): Promise<void>;
   /** Resumes audio playback after a browser autoplay block (call from a user gesture). */
@@ -178,6 +193,8 @@ export class LiveKitRoomController implements ILiveKitRoomController {
   private backgroundEffect: LiveKitBackgroundEffect = { Kind: 'none' };
   private e2eeEnabled = false;
   private e2eeKeyProvider: ExternalE2EEKeyProvider | null = null;
+  /** The local screen share, through `/media` display capture. */
+  private readonly screenShare: LiveKitScreenShare;
 
   private readonly stateSubject: BehaviorSubject<LiveKitRoomState>;
   private readonly textDecoder = new TextDecoder();
@@ -207,6 +224,7 @@ export class LiveKitRoomController implements ILiveKitRoomController {
     this.roomFactory = options.RoomFactory ?? DefaultRoomFactory;
     this.roleResolver = options.RoleResolver ?? DefaultRoleResolver;
     this.Events = options.EventBus ?? new LiveKitRoomEventBus();
+    this.screenShare = new LiveKitScreenShare(options.RequestScreenShare ?? RequestDisplayCapture, () => this.onScreenShareEnded());
     this.stateSubject = new BehaviorSubject<LiveKitRoomState>(this.initialState());
   }
 
@@ -284,6 +302,8 @@ export class LiveKitRoomController implements ILiveKitRoomController {
     const room = this.room;
     this.room = null;
     this.resetEffectState();
+    // Leaving drops every publication; the share's capture is ours to release (and a picker still open, to cancel).
+    await this.screenShare.Stop(null);
     if (room) {
       try {
         await room.disconnect();
@@ -327,11 +347,14 @@ export class LiveKitRoomController implements ILiveKitRoomController {
   }
 
   /**
-   * Starts or stops local screen sharing. `preferredSurface` is the kind of surface the browser's picker offers first
-   * when sharing starts (Chromium reads it; the user can still pick another kind).
+   * Starts or stops local screen sharing, through `/media` display capture published as this participant's screen
+   * share (capped at 1080p and 30 fps, as LiveKit's own capture is). `request` is the kind of surface the browser's
+   * picker offers first (Chromium reads it; the user can still pick another kind), or the share's options: one panel
+   * of the page to share alone (`Panel`, Chrome and Edge), with its name (`PanelLabel`). A picker the user closes
+   * shares nothing and is no error; a share the browser refuses is a `device` error.
    */
-  public async SetScreenShareEnabled(enabled: boolean, preferredSurface?: DisplayCaptureSurface): Promise<void> {
-    await this.toggleLocalMedia('screen', enabled, ToScreenShareCaptureOptions(preferredSurface));
+  public async SetScreenShareEnabled(enabled: boolean, request?: DisplayCaptureSurface | DisplayCaptureOptions): Promise<void> {
+    await this.toggleLocalMedia('screen', enabled, request);
   }
 
   /** Toggles the microphone and returns the new state. */
@@ -356,15 +379,15 @@ export class LiveKitRoomController implements ILiveKitRoomController {
   }
 
   /**
-   * Shares something else: stops the current share, then asks the browser's picker again, offering
-   * `preferredSurface` first. Others see the share end and start again; a user who cancels the picker is left not
+   * Shares something else: stops the current share, then asks the browser's picker again, with `request` as for
+   * {@link SetScreenShareEnabled}. Others see the share end and start again; a user who cancels the picker is left not
    * sharing. With no share running, it just starts one.
    */
-  public async ChangeScreenShare(preferredSurface?: DisplayCaptureSurface): Promise<void> {
+  public async ChangeScreenShare(request?: DisplayCaptureSurface | DisplayCaptureOptions): Promise<void> {
     if (this.stateSubject.value.LocalMedia.ScreenShareEnabled) {
       await this.SetScreenShareEnabled(false);
     }
-    await this.SetScreenShareEnabled(true, preferredSurface);
+    await this.SetScreenShareEnabled(true, request);
   }
 
   // ── Data channel ────────────────────────────────────────────────────────────────
@@ -700,27 +723,33 @@ export class LiveKitRoomController implements ILiveKitRoomController {
     return pub != null && !pub.isMuted;
   }
 
-  /** Reads the local-media toggle state from the room's local participant, with what is shared while sharing. */
+  /**
+   * Reads the local-media toggle state from the room's local participant, with what is shared while sharing: the kind
+   * of surface, and a shared panel's name while the published screen track is that panel's.
+   */
   private readLocalMedia(room: Room): LiveKitLocalMediaState {
     const lp = room.localParticipant;
     const screen = lp?.getTrackPublication(Track.Source.ScreenShare)?.track?.mediaStreamTrack;
+    const capture = this.screenShare.Capture;
+    const panelLabel = capture && capture.Track === screen ? capture.PanelLabel : undefined;
     return {
       MicrophoneEnabled: lp ? lp.isMicrophoneEnabled : false,
       CameraEnabled: lp ? lp.isCameraEnabled : false,
       ScreenShareEnabled: lp ? lp.isScreenShareEnabled : false,
       ...(screen ? { ScreenShareSurface: CapturedSurfaceOf(screen) } : {}),
+      ...(panelLabel ? { ScreenSharePanelLabel: panelLabel } : {}),
       AgentVisionOn: lp ? AllowsAgentVision(lp.attributes) : false,
     };
   }
 
   /**
-   * Toggles a local-media kind via the local participant, surfacing failures as device errors. `screenOptions` go to
-   * LiveKit when a screen share starts.
+   * Toggles a local-media kind via the local participant, surfacing failures as device errors. `screenRequest` is what
+   * a screen share that starts asks the browser's picker for.
    */
   private async toggleLocalMedia(
     kind: 'microphone' | 'camera' | 'screen',
     enabled: boolean,
-    screenOptions?: ScreenShareCaptureOptions,
+    screenRequest?: DisplayCaptureSurface | DisplayCaptureOptions,
   ): Promise<void> {
     if (!this.room) {
       return;
@@ -736,13 +765,38 @@ export class LiveKitRoomController implements ILiveKitRoomController {
       } else if (kind === 'camera') {
         await lp.setCameraEnabled(enabled);
       } else {
-        await lp.setScreenShareEnabled(enabled, screenOptions);
+        await this.setScreenShare(lp, enabled, screenRequest);
       }
       this.rebuildState();
       this.Events.Emit('localMediaChanged', this.stateSubject.value.LocalMedia);
     } catch (err) {
       this.emitError('device', `Failed to ${enabled ? 'enable' : 'disable'} ${kind}.`, err);
     }
+  }
+
+  /** Starts sharing through `/media` display capture, or stops. A share the browser refuses throws, with its reason. */
+  private async setScreenShare(
+    lp: LocalParticipant,
+    enabled: boolean,
+    request?: DisplayCaptureSurface | DisplayCaptureOptions,
+  ): Promise<void> {
+    if (!enabled) {
+      await this.screenShare.Stop(lp);
+      return;
+    }
+    const outcome = await this.screenShare.Start(lp, request);
+    if (outcome.Status === 'failed') {
+      throw new Error(outcome.Message);
+    }
+  }
+
+  /** The browser ended the local share ("Stop sharing", or the shared surface closed): the room stops showing it. */
+  private onScreenShareEnded(): void {
+    if (!this.room) {
+      return;
+    }
+    this.rebuildState();
+    this.Events.Emit('localMediaChanged', this.stateSubject.value.LocalMedia);
   }
 
   /** Applies the requested initial media (mic on by default, camera off — voice-first), honoring device ids. */

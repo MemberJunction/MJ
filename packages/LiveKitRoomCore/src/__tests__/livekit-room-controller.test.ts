@@ -1,12 +1,96 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ConnectionQuality, ConnectionState, DisconnectReason, RoomEvent, Track, type Room, type RoomOptions, type ScreenShareCaptureOptions } from 'livekit-client';
+import { ConnectionQuality, ConnectionState, DisconnectReason, RoomEvent, Track, type Room, type RoomOptions, type TrackPublishOptions } from 'livekit-client';
+import type { CapturedDisplaySurface, DisplayCapture, DisplayCaptureOptions, DisplayCaptureResult } from '@memberjunction/ai-realtime-client/media';
 import { DEFAULT_SPEECH_ROOM_OPTIONS, LiveKitRoomController } from '../livekit-room-controller';
+import type { LiveKitRoomError } from '../types';
 import { REALTIME_AGENT_AVATAR_ATTRIBUTE, REALTIME_AGENT_CAN_SEE_ATTRIBUTE, REALTIME_AGENT_WATCHES_ATTRIBUTE } from '@memberjunction/ai';
 
 /** A publication reduced to what the controller reads: whether it is muted, and a screen share's track settings. */
 interface FakePublication {
   isMuted: boolean;
   track?: { mediaStreamTrack: { getSettings(): MediaTrackSettings } };
+}
+
+/** A shared video track: what it shows, the constraints applied to it, and whether it has ended. */
+class FakeShareTrack {
+  public readonly kind = 'video';
+  public readyState: MediaStreamTrackState = 'live';
+  /** Every constraint set applied with `applyConstraints`. */
+  public readonly Constraints: MediaTrackConstraints[] = [];
+  /** When set, `applyConstraints` rejects, as a browser that cannot honour them does. */
+  public RefuseConstraints = false;
+  constructor(public DisplaySurface: string) {}
+  public getSettings(): MediaTrackSettings {
+    return { displaySurface: this.DisplaySurface };
+  }
+  public async applyConstraints(constraints: MediaTrackConstraints): Promise<void> {
+    if (this.RefuseConstraints) {
+      throw new Error('Overconstrained');
+    }
+    this.Constraints.push(constraints);
+  }
+}
+
+/**
+ * A share the picker started. Like `/media`'s capture, it ends once, whether the browser ends it ("Stop sharing", the
+ * test's {@link EndInBrowser}) or the page stops it, and then tells each handler; a handler added later hears at once.
+ */
+class FakeCapture implements DisplayCapture {
+  public readonly Stream = { id: 'screen-stream' } as unknown as MediaStream;
+  public readonly Shared: FakeShareTrack;
+  public readonly Label = 'Shared surface';
+  public Stopped = false;
+  private readonly handlers = new Set<() => void>();
+
+  constructor(displaySurface = 'window', public readonly PanelLabel?: string) {
+    this.Shared = new FakeShareTrack(displaySurface);
+  }
+  public get Track(): MediaStreamTrack {
+    return this.Shared as unknown as MediaStreamTrack;
+  }
+  public get Surface(): CapturedDisplaySurface {
+    const surfaces: Record<string, CapturedDisplaySurface> = { monitor: 'screen', window: 'window', browser: 'tab' };
+    return surfaces[this.Shared.DisplaySurface] ?? 'unknown';
+  }
+  public OnEnded(handler: () => void): () => void {
+    if (this.Shared.readyState === 'ended') {
+      handler();
+      return () => undefined;
+    }
+    this.handlers.add(handler);
+    return () => this.handlers.delete(handler);
+  }
+  public Stop(): void {
+    this.Stopped = true;
+    this.end();
+  }
+  /** The browser's "Stop sharing". */
+  public EndInBrowser(): void {
+    this.end();
+  }
+  private end(): void {
+    if (this.Shared.readyState === 'ended') {
+      return;
+    }
+    this.Shared.readyState = 'ended';
+    [...this.handlers].forEach((h) => h());
+  }
+}
+
+/** The browser's share picker: what it was asked, and what it answers (in turn; closed when nothing is queued). */
+class FakePicker {
+  public readonly Asked: DisplayCaptureOptions[] = [];
+  public readonly Answers: Array<DisplayCaptureResult | Promise<DisplayCaptureResult>> = [];
+  public readonly Request = async (options: DisplayCaptureOptions): Promise<DisplayCaptureResult> => {
+    this.Asked.push(options);
+    return (await this.Answers.shift()) ?? { Status: 'cancelled' };
+  };
+  /** Queues a share that starts, and returns its capture. */
+  public Starts(displaySurface = 'window', panelLabel?: string): FakeCapture {
+    const capture = new FakeCapture(displaySurface, panelLabel);
+    this.Answers.push({ Status: 'started', Capture: capture });
+    return capture;
+  }
 }
 
 /**
@@ -24,8 +108,14 @@ class FakeParticipant {
   public isScreenShareEnabled = false;
   /** The participant's LiveKit attributes, as the server set them. */
   public attributes: Record<string, string> = {};
-  /** What a screen share started now reports as its `displaySurface`. */
-  public screenSurface: string | undefined = 'window';
+  /** Every track published with `publishTrack`, with its options, in order. */
+  public readonly Published: Array<{ Track: MediaStreamTrack; Options?: TrackPublishOptions }> = [];
+  /** Every track unpublished, in order. */
+  public readonly Unpublished: MediaStreamTrack[] = [];
+  /** When set, `publishTrack` rejects with it. */
+  public PublishError: Error | null = null;
+  /** When set, `publishTrack` waits for it, as a publish does for the server. */
+  public PublishWait: Promise<void> | null = null;
   private readonly pubs = new Map<Track.Source, FakePublication>();
 
   constructor(
@@ -51,20 +141,31 @@ class FakeParticipant {
     this.isCameraEnabled = enabled;
     this.setPub(Track.Source.Camera, enabled);
   }
-  /** The options each `setScreenShareEnabled` call received. */
-  public readonly screenShareOptions: Array<ScreenShareCaptureOptions | undefined> = [];
-  public async setScreenShareEnabled(enabled: boolean, options?: ScreenShareCaptureOptions): Promise<void> {
-    this.screenShareOptions.push(options);
-    this.isScreenShareEnabled = enabled;
-    this.setPub(Track.Source.ScreenShare, enabled);
+  /** Publishes a track; one with the screen-share source is the participant's screen share, as in LiveKit. */
+  public async publishTrack(track: MediaStreamTrack, options?: TrackPublishOptions): Promise<void> {
+    if (this.PublishError) {
+      throw this.PublishError;
+    }
+    await this.PublishWait;
+    this.Published.push({ Track: track, Options: options });
+    if (options?.source === Track.Source.ScreenShare) {
+      this.isScreenShareEnabled = true;
+      this.pubs.set(Track.Source.ScreenShare, { isMuted: false, track: { mediaStreamTrack: track } });
+    }
+  }
+  /** Unpublishes a track; LiveKit also does this itself when a screen-share track ends in the browser. */
+  public async unpublishTrack(track: MediaStreamTrack): Promise<void> {
+    this.Unpublished.push(track);
+    if (this.pubs.get(Track.Source.ScreenShare)?.track?.mediaStreamTrack === track) {
+      this.isScreenShareEnabled = false;
+      this.pubs.delete(Track.Source.ScreenShare);
+    }
   }
   public publishData = vi.fn(async (_payload: Uint8Array, _opts?: unknown): Promise<void> => undefined);
 
   private setPub(source: Track.Source, enabled: boolean): void {
     if (enabled) {
-      const displaySurface = this.screenSurface;
-      const track = source === Track.Source.ScreenShare ? { mediaStreamTrack: { getSettings: () => (displaySurface ? { displaySurface } : {}) } } : undefined;
-      this.pubs.set(source, { isMuted: false, track });
+      this.pubs.set(source, { isMuted: false });
     } else {
       this.pubs.delete(source);
     }
@@ -106,23 +207,26 @@ class FakeRoom {
 
 let capturedRoomOptions: RoomOptions | undefined;
 
-function makeController(room: FakeRoom): LiveKitRoomController {
+function makeController(room: FakeRoom, picker: FakePicker = new FakePicker()): LiveKitRoomController {
   return new LiveKitRoomController({
     RoomFactory: (options) => {
       capturedRoomOptions = options;
       return room as unknown as Room;
     },
+    RequestScreenShare: picker.Request,
   });
 }
 
 describe('LiveKitRoomController', () => {
   let room: FakeRoom;
   let controller: LiveKitRoomController;
+  let picker: FakePicker;
 
   beforeEach(() => {
     capturedRoomOptions = undefined;
     room = new FakeRoom();
-    controller = makeController(room);
+    picker = new FakePicker();
+    controller = makeController(room, picker);
   });
 
   describe('Connect', () => {
@@ -190,39 +294,6 @@ describe('LiveKitRoomController', () => {
       expect(changed).toHaveBeenCalled();
     });
 
-    it('starts a screen share with the picked kind of surface offered first', async () => {
-      await controller.SetScreenShareEnabled(true, 'window');
-      expect(room.localParticipant.screenShareOptions).toEqual([{ video: { displaySurface: 'window' } }]);
-      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
-    });
-
-    it('toggles a screen share with no preference', async () => {
-      await controller.ToggleScreenShare();
-      expect(room.localParticipant.screenShareOptions).toEqual([undefined]);
-      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
-    });
-
-    it('reports what is shared while sharing, and nothing after', async () => {
-      room.localParticipant.screenSurface = 'browser';
-      await controller.SetScreenShareEnabled(true);
-      expect(controller.State.LocalMedia.ScreenShareSurface).toBe('tab');
-      await controller.SetScreenShareEnabled(false);
-      expect(controller.State.LocalMedia.ScreenShareSurface).toBeUndefined();
-    });
-
-    it('changes a running share by stopping it and asking again, with the picked kind first', async () => {
-      await controller.SetScreenShareEnabled(true);
-      await controller.ChangeScreenShare('tab');
-      expect(room.localParticipant.screenShareOptions).toEqual([undefined, undefined, { video: { displaySurface: 'browser' } }]);
-      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
-    });
-
-    it('starts a share when asked to change one that is not running', async () => {
-      await controller.ChangeScreenShare();
-      expect(room.localParticipant.screenShareOptions).toEqual([undefined]);
-      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
-    });
-
     it('cancels a media toggle when beforeMediaToggle is canceled', async () => {
       controller.Events.On('beforeMediaToggle', (e) => {
         if (e.Kind === 'screen') {
@@ -230,7 +301,219 @@ describe('LiveKitRoomController', () => {
         }
       });
       await controller.SetScreenShareEnabled(true);
+      expect(picker.Asked).toEqual([]);
       expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(false);
+    });
+  });
+
+  describe('the screen share, through /media display capture', () => {
+    /** The errors the room reports. */
+    let errors: LiveKitRoomError[];
+
+    beforeEach(async () => {
+      await controller.Connect('wss://x', 'token');
+      errors = [];
+      controller.Events.On('error', (e) => errors.push(e));
+    });
+
+    it("asks the browser's picker for the picked kind of surface first, and publishes the share as this participant's screen share", async () => {
+      const capture = picker.Starts('window');
+      await controller.SetScreenShareEnabled(true, 'window');
+      expect(picker.Asked).toEqual([{ PreferredSurface: 'window' }]);
+      expect(room.localParticipant.Published).toEqual([{ Track: capture.Track, Options: { source: Track.Source.ScreenShare } }]);
+      expect(controller.State.LocalMedia).toMatchObject({ ScreenShareEnabled: true, ScreenShareSurface: 'window' });
+      expect(controller.State.Local?.IsScreenSharing).toBe(true);
+    });
+
+    it('toggles a share with no preference', async () => {
+      picker.Starts();
+      expect(await controller.ToggleScreenShare()).toBe(true);
+      expect(picker.Asked).toEqual([{}]);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
+    });
+
+    it("caps the shared track at 1080p and 30 fps, as LiveKit's own capture does, and shares at full size when the browser refuses", async () => {
+      const capture = picker.Starts();
+      await controller.SetScreenShareEnabled(true);
+      expect(capture.Shared.Constraints).toEqual([{ width: { max: 1920 }, height: { max: 1080 }, frameRate: { max: 30 } }]);
+
+      await controller.SetScreenShareEnabled(false);
+      const refused = picker.Starts();
+      refused.Shared.RefuseConstraints = true;
+      await controller.SetScreenShareEnabled(true);
+      expect(room.localParticipant.Published.map((p) => p.Track)).toEqual([capture.Track, refused.Track]);
+      expect(errors).toEqual([]);
+    });
+
+    it('shares one panel of the page alone, and names it while it is shared', async () => {
+      const panel = { tagName: 'SECTION' } as unknown as Element;
+      picker.Starts('browser', 'Whiteboard');
+      await controller.SetScreenShareEnabled(true, { Panel: panel, PanelLabel: 'Whiteboard' });
+      expect(picker.Asked).toEqual([{ Panel: panel, PanelLabel: 'Whiteboard' }]);
+      expect(controller.State.LocalMedia).toMatchObject({ ScreenShareEnabled: true, ScreenShareSurface: 'tab', ScreenSharePanelLabel: 'Whiteboard' });
+
+      await controller.SetScreenShareEnabled(false);
+      expect(controller.State.LocalMedia).toEqual({ MicrophoneEnabled: true, CameraEnabled: false, ScreenShareEnabled: false, AgentVisionOn: false });
+    });
+
+    it('stops a share by unpublishing it and releasing the capture', async () => {
+      const capture = picker.Starts('browser');
+      const changed = vi.fn();
+      await controller.SetScreenShareEnabled(true);
+      controller.Events.On('localMediaChanged', changed);
+      expect(await controller.ToggleScreenShare()).toBe(false);
+      expect(room.localParticipant.Unpublished).toEqual([capture.Track]);
+      expect(capture.Stopped).toBe(true);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(false);
+      expect(controller.State.LocalMedia.ScreenShareSurface).toBeUndefined();
+      expect(changed).toHaveBeenCalledOnce();
+    });
+
+    it("follows the browser's Stop sharing: LiveKit unpublishes the ended track, and the room stops showing the share", async () => {
+      const capture = picker.Starts('window', 'Whiteboard');
+      await controller.SetScreenShareEnabled(true, { PanelLabel: 'Whiteboard' });
+      const changed = vi.fn();
+      controller.Events.On('localMediaChanged', changed);
+
+      capture.EndInBrowser();
+      expect(controller.State.LocalMedia.ScreenSharePanelLabel).toBeUndefined();
+      expect(changed).toHaveBeenCalledOnce();
+      await room.localParticipant.unpublishTrack(capture.Track);
+      room.emit(RoomEvent.LocalTrackUnpublished);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(false);
+      expect(room.localParticipant.Unpublished).toEqual([capture.Track]);
+    });
+
+    it('drops the panel\'s name with the published share, whether LiveKit or the capture hears the browser first', async () => {
+      const capture = picker.Starts('browser', 'Whiteboard');
+      await controller.SetScreenShareEnabled(true, { PanelLabel: 'Whiteboard' });
+      await room.localParticipant.unpublishTrack(capture.Track);
+      room.emit(RoomEvent.LocalTrackUnpublished);
+      expect(controller.State.LocalMedia).toEqual({ MicrophoneEnabled: true, CameraEnabled: false, ScreenShareEnabled: false, AgentVisionOn: false });
+      capture.EndInBrowser();
+      expect(controller.State.LocalMedia.ScreenSharePanelLabel).toBeUndefined();
+    });
+
+    it('changes a running share by stopping it and asking again, with the picked kind first', async () => {
+      const first = picker.Starts();
+      const second = picker.Starts('browser');
+      await controller.SetScreenShareEnabled(true);
+      await controller.ChangeScreenShare('tab');
+      expect(picker.Asked).toEqual([{}, { PreferredSurface: 'tab' }]);
+      expect(first.Stopped).toBe(true);
+      expect(room.localParticipant.Unpublished).toEqual([first.Track]);
+      expect(room.localParticipant.Published.map((p) => p.Track)).toEqual([first.Track, second.Track]);
+      expect(controller.State.LocalMedia.ScreenShareSurface).toBe('tab');
+    });
+
+    it('starts a share when asked to change one that is not running', async () => {
+      picker.Starts();
+      await controller.ChangeScreenShare();
+      expect(picker.Asked).toEqual([{}]);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
+    });
+
+    it('shares nothing, and reports nothing, when the user closes the picker', async () => {
+      await controller.SetScreenShareEnabled(true);
+      expect(room.localParticipant.Published).toEqual([]);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(false);
+      expect(errors).toEqual([]);
+    });
+
+    it("reports a share the browser refuses as a device error with the picker's reason", async () => {
+      picker.Answers.push({ Status: 'failed', Reason: 'panel-wrong-surface', Message: "To share only the panel, choose this tab in the browser's picker." });
+      await controller.SetScreenShareEnabled(true, { PanelLabel: 'Whiteboard' });
+      expect(errors).toEqual([
+        { Kind: 'device', Message: 'Failed to enable screen.', Cause: new Error("To share only the panel, choose this tab in the browser's picker.") },
+      ]);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(false);
+    });
+
+    it('releases a capture LiveKit could not publish, and reports it', async () => {
+      const capture = picker.Starts();
+      room.localParticipant.PublishError = new Error('Not connected');
+      await controller.SetScreenShareEnabled(true);
+      expect(capture.Stopped).toBe(true);
+      expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to enable screen.', Cause: new Error('Not connected') }]);
+      room.localParticipant.PublishError = null;
+      picker.Starts();
+      await controller.SetScreenShareEnabled(true);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
+    });
+
+    it('asks the picker once while a share starts or runs', async () => {
+      picker.Starts();
+      await Promise.all([controller.SetScreenShareEnabled(true), controller.SetScreenShareEnabled(true)]);
+      await controller.SetScreenShareEnabled(true);
+      expect(picker.Asked).toHaveLength(1);
+      expect(room.localParticipant.Published).toHaveLength(1);
+    });
+
+    it('never publishes a share stopped while the picker was open', async () => {
+      let answer: (result: DisplayCaptureResult) => void = () => undefined;
+      picker.Answers.push(new Promise<DisplayCaptureResult>((resolve) => (answer = resolve)));
+      const starting = controller.SetScreenShareEnabled(true);
+      await controller.SetScreenShareEnabled(false);
+      const capture = new FakeCapture();
+      answer({ Status: 'started', Capture: capture });
+      await starting;
+      expect(capture.Stopped).toBe(true);
+      expect(room.localParticipant.Published).toEqual([]);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(false);
+    });
+
+    /** Makes the next publish wait until the returned function is called. */
+    const holdPublish = (): (() => void) => {
+      let release: () => void = () => undefined;
+      room.localParticipant.PublishWait = new Promise<void>((resolve) => (release = resolve));
+      return release;
+    };
+
+    it('withdraws a share stopped while its track was publishing', async () => {
+      const capture = picker.Starts();
+      const release = holdPublish();
+      const starting = controller.SetScreenShareEnabled(true);
+      await vi.waitFor(() => expect(capture.Shared.Constraints).toHaveLength(1));
+      await controller.SetScreenShareEnabled(false);
+      release();
+      await starting;
+      expect(room.localParticipant.Published.map((p) => p.Track)).toEqual([capture.Track]);
+      expect(room.localParticipant.Unpublished).toEqual([capture.Track]);
+      expect(capture.Stopped).toBe(true);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(false);
+    });
+
+    it('withdraws a share the browser ended while its track was publishing, which LiveKit never saw end', async () => {
+      const capture = picker.Starts('browser', 'Whiteboard');
+      const release = holdPublish();
+      const starting = controller.SetScreenShareEnabled(true, { PanelLabel: 'Whiteboard' });
+      await vi.waitFor(() => expect(capture.Shared.Constraints).toHaveLength(1));
+      capture.EndInBrowser();
+      release();
+      await starting;
+      expect(room.localParticipant.Unpublished).toEqual([capture.Track]);
+      expect(controller.State.LocalMedia).toEqual({ MicrophoneEnabled: true, CameraEnabled: false, ScreenShareEnabled: false, AgentVisionOn: false });
+      picker.Starts();
+      await controller.SetScreenShareEnabled(true);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
+    });
+
+    it('releases the share when the user leaves, and a share whose picker was still open', async () => {
+      const capture = picker.Starts();
+      await controller.SetScreenShareEnabled(true);
+      await controller.Disconnect();
+      expect(capture.Stopped).toBe(true);
+
+      await controller.Connect('wss://x', 'token');
+      let answer: (result: DisplayCaptureResult) => void = () => undefined;
+      picker.Answers.push(new Promise<DisplayCaptureResult>((resolve) => (answer = resolve)));
+      const starting = controller.SetScreenShareEnabled(true);
+      await controller.Disconnect();
+      const late = new FakeCapture();
+      answer({ Status: 'started', Capture: late });
+      await starting;
+      expect(late.Stopped).toBe(true);
+      expect(room.localParticipant.Published.map((p) => p.Track)).toEqual([capture.Track]);
     });
   });
 

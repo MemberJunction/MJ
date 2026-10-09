@@ -142,4 +142,30 @@ describe('LiveKitControlBarComponent (DOM)', () => {
     expect(requested).toHaveBeenCalledWith('window');
     expect(toggle).not.toHaveBeenCalled();
   });
+
+  it("offers the host's panels under This panel, and emits the picked panel's key", () => {
+    const f = render({ EnableShareMenu: true, SharePanels: [{ Key: 'share-panel-1', Label: 'Whiteboard', Icon: 'fa-solid fa-chalkboard' }] });
+    const panels = vi.fn();
+    const requested = vi.fn();
+    const toggle = vi.fn();
+    f.componentInstance.PanelShareRequested.subscribe(panels);
+    f.componentInstance.ScreenShareRequested.subscribe(requested);
+    f.componentInstance.ToggleScreenShare.subscribe(toggle);
+    (query(f, 'button[title="Choose what to share"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((item) => item.textContent?.trim() === 'This panel')?.click();
+    f.detectChanges();
+    (overlayQueryAll('mj-menu[aria-label="This panel"] mj-menu-item') as HTMLElement[]).find((item) => item.textContent?.trim() === 'Whiteboard')?.click();
+    f.detectChanges();
+    expect(panels).toHaveBeenCalledWith('share-panel-1');
+    expect(requested).not.toHaveBeenCalled();
+    expect(toggle).not.toHaveBeenCalled();
+  });
+
+  it('offers no This panel without panels', () => {
+    const f = render({ EnableShareMenu: true });
+    (query(f, 'button[title="Choose what to share"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect((overlayQueryAll('mj-menu-item') as HTMLElement[]).map((item) => item.textContent?.trim())).toEqual(['Entire screen', 'Window', 'Browser tab']);
+  });
 });

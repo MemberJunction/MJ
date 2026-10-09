@@ -5,8 +5,8 @@
  * Both are memoized: the controller rebuilds its views on every state change, and a tile must see the same
  * participant and the same video source until something actually changes, or it would reattach its video.
  *
- * `ToScreenShareCaptureOptions` goes the other way: the kind of surface a user picked from the Share menu, as
- * LiveKit's screen-share options.
+ * `ToScreenShareCaptureOptions` (deprecated) goes the other way: the kind of surface a user picked from the Share
+ * menu, as LiveKit's screen-share options. The room now shares through `/media` display capture instead.
  *
  * @module @memberjunction/livekit-room-core
  */
@@ -86,6 +86,10 @@ export function ToLiveKitDeviceKind(kind: MediaDeviceKind): LiveKitDevice['Kind'
  * LiveKit's screen-share options for a `/media` surface preference: the kind of surface the browser's picker offers
  * first. A hint: only Chromium browsers read it, and the user can still pick another kind. No preference gives no
  * options, so LiveKit asks as it always has.
+ *
+ * @deprecated The room shares through `/media` display capture now (`LiveKitRoomController.SetScreenShareEnabled` takes
+ * the surface or the capture's options), so nothing in MJ calls this; kept for code that drives LiveKit's own
+ * `setScreenShareEnabled`.
  */
 export function ToScreenShareCaptureOptions(surface?: DisplayCaptureSurface): ScreenShareCaptureOptions | undefined {
     return surface ? { video: { displaySurface: DISPLAY_SURFACES[surface] } } : undefined;

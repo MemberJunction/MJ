@@ -86,7 +86,7 @@ class FakeMedia implements ILocalMediaController {
   }
 }
 
-/** A share the browser started; the test ends it as the browser's "Stop sharing" would. */
+/** A share the browser started (of one named panel when given its name); the test ends it as "Stop sharing" would. */
 class FakeShare implements DisplayCapture {
   public readonly Stream = stream('screen');
   public readonly Track = { id: 'screen-track' } as unknown as MediaStreamTrack;
@@ -94,7 +94,10 @@ class FakeShare implements DisplayCapture {
   public Stopped = false;
   private readonly handlers: (() => void)[] = [];
 
-  constructor(public readonly Surface: CapturedDisplaySurface = 'window') {}
+  constructor(
+    public readonly Surface: CapturedDisplaySurface = 'window',
+    public readonly PanelLabel?: string
+  ) {}
 
   public OnEnded(handler: () => void): () => void {
     this.handlers.push(handler);
@@ -397,6 +400,19 @@ describe('LiveKitPreviewRoomController: your screen share', () => {
     expect(first.Stopped).toBe(true);
     expect(asked).toEqual([{}, { PreferredSurface: 'window' }]);
     expect(room.State.LocalMedia.ScreenShareSurface).toBe('window');
+  });
+
+  it('shares one panel of the page alone, as a meeting room does, and names it while it is shared', async () => {
+    const { room, picks, asked } = await joined();
+    const panel = { tagName: 'SECTION' } as unknown as Element;
+    picks.push({ Status: 'started', Capture: new FakeShare('tab', 'Whiteboard') });
+    await room.SetScreenShareEnabled(true, { Panel: panel, PanelLabel: 'Whiteboard' });
+    expect(asked).toEqual([{ Panel: panel, PanelLabel: 'Whiteboard' }]);
+    expect(room.State.LocalMedia).toMatchObject({ ScreenShareEnabled: true, ScreenShareSurface: 'tab', ScreenSharePanelLabel: 'Whiteboard' });
+
+    await room.ChangeScreenShare();
+    expect(asked).toEqual([{ Panel: panel, PanelLabel: 'Whiteboard' }, {}]);
+    expect(room.State.LocalMedia.ScreenSharePanelLabel).toBeUndefined();
   });
 });
 

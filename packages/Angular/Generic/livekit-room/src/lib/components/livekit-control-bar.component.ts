@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
 import type { LiveKitLocalMediaState } from '@memberjunction/livekit-room-core';
 import type { DisplayCaptureSurface } from '@memberjunction/ai-realtime-client/media';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { MediaControlsComponent, type MediaShareRequest } from '@memberjunction/ng-realtime-media';
+import { MediaControlsComponent, type MediaSharePanel, type MediaShareRequest } from '@memberjunction/ng-realtime-media';
 
 /**
  * The room control bar: the microphone, camera and Share buttons (`mj-media-controls`), then layout, device settings,
@@ -25,6 +25,7 @@ import { MediaControlsComponent, type MediaShareRequest } from '@memberjunction/
           [ShowCamera]="EnableCameraControl"
           [ShowShare]="EnableScreenShareControl"
           [ShowShareMenu]="EnableShareMenu"
+          [SharePanels]="SharePanels"
           [ShowAgentVision]="ShowAgentVision"
           [AgentVisionOn]="AgentVisionOn"
           (MicrophoneToggled)="ToggleMicrophone.emit()"
@@ -255,6 +256,11 @@ export class LiveKitControlBarComponent {
    * tab first. Off by default: a host that turns it on handles {@link ScreenShareRequested}.
    */
   @Input() public EnableShareMenu = false;
+  /**
+   * Panels of the page the user can share on their own, offered in the Share menu under "This panel" (with the menu
+   * on). With none, "This panel" is left out. A host that lists some handles {@link PanelShareRequested}.
+   */
+  @Input() public SharePanels: readonly MediaSharePanel[] = [];
   /** Show the device-settings button. */
   @Input() public EnableDeviceSettings = true;
   /** Show the chat toggle. */
@@ -294,6 +300,8 @@ export class LiveKitControlBarComponent {
   @Output() public ToggleScreenShare = new EventEmitter<void>();
   /** The user picked, from the Share menu, the kind of surface the browser's picker should offer first. */
   @Output() public ScreenShareRequested = new EventEmitter<DisplayCaptureSurface>();
+  /** The user picked one of {@link SharePanels} under "This panel": the panel's key. */
+  @Output() public PanelShareRequested = new EventEmitter<string>();
   /** The user clicked the device-settings button. */
   @Output() public OpenDeviceSettings = new EventEmitter<void>();
   /** The user clicked the chat toggle. */
@@ -327,14 +335,14 @@ export class LiveKitControlBarComponent {
   }
 
   /**
-   * Hands a Share request on: a kind of surface picked from the menu as {@link ScreenShareRequested}, the main
-   * button's request (no preference) as {@link ToggleScreenShare}.
+   * Hands a Share request on: a panel picked under "This panel" as {@link PanelShareRequested}, a kind of surface
+   * picked from the menu as {@link ScreenShareRequested}, the main button's request (no preference) as
+   * {@link ToggleScreenShare}.
    */
   public OnShareRequested(request: MediaShareRequest): void {
-    if (request.Kind !== 'display') {
-      return; // The bar lists no panels, so a panel request cannot come from it.
-    }
-    if (request.PreferredSurface) {
+    if (request.Kind === 'panel') {
+      this.PanelShareRequested.emit(request.PanelKey);
+    } else if (request.PreferredSurface) {
       this.ScreenShareRequested.emit(request.PreferredSurface);
     } else {
       this.ToggleScreenShare.emit();

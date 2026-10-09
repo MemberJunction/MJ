@@ -152,6 +152,11 @@ export interface LiveKitLocalMediaState {
   /** What the local participant is sharing (an entire screen, a window or a tab), while they share. */
   ScreenShareSurface?: CapturedDisplaySurface;
   /**
+   * The shared panel's name, while the local participant shares one panel of the page that was given a name
+   * (`DisplayCaptureOptions.PanelLabel`). The share preview names it.
+   */
+  ScreenSharePanelLabel?: string;
+  /**
    * Whether the local participant lets agents see their camera and shared screen: their own choice, whether or not an
    * agent watches now. Absent means no.
    */

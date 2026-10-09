@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { ChangeDetectorRef } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { BehaviorSubject } from 'rxjs';
-import { CameraCheckComponent, LOCAL_MEDIA_CONTROLLER_FACTORY, MediaStageComponent } from '@memberjunction/ng-realtime-media';
+import { CameraCheckComponent, LOCAL_MEDIA_CONTROLLER_FACTORY, MediaStageComponent, SharePanelRegistry } from '@memberjunction/ng-realtime-media';
 import type {
   ILocalMediaController,
   LocalMediaKind,
@@ -248,6 +249,136 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     tab?.click();
     f.detectChanges();
     expect(fc.setScreenShareEnabled).toHaveBeenCalledWith(true, 'tab');
+  });
+
+  describe('the Share menu\'s "This panel"', () => {
+    beforeEach(() => {
+      // Desktop Chrome, as far as the share-panel registry can tell: getDisplayMedia and Region Capture. With no
+      // IntersectionObserver (the test setup's never reports), every registered panel counts as on screen.
+      const getDisplayMedia = async (): Promise<MediaStream> => {
+        throw new Error('No picker in these tests.');
+      };
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getDisplayMedia } });
+      vi.stubGlobal('CropTarget', { fromElement: async () => ({}) });
+      vi.stubGlobal('IntersectionObserver', undefined);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      Reflect.deleteProperty(navigator, 'mediaDevices');
+      document.querySelectorAll('.sample-panel').forEach((element) => element.remove());
+    });
+
+    /** Lets the registry's queued changes land and render. */
+    const settle = async (f: ReturnType<typeof render>): Promise<void> => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      f.detectChanges();
+    };
+
+    /** Opens or closes the whiteboard from the control bar, as the user does. */
+    const toggleWhiteboard = async (f: ReturnType<typeof render>): Promise<void> => {
+      (query(f, 'mj-livekit-control-bar button[title="Whiteboard"]') as HTMLButtonElement).click();
+      f.detectChanges();
+      await settle(f);
+    };
+
+    /** A connected room with the whiteboard open, inside a page panel that holds it (as Explorer's main content). */
+    const withWhiteboard = async () => {
+      const fc = room([view('ada')]);
+      const f = render(fc.controller, { ShowWhiteboard: true });
+      const main = document.createElement('main');
+      main.className = 'sample-panel';
+      document.body.appendChild(main).appendChild(f.nativeElement as HTMLElement);
+      TestBed.inject(SharePanelRegistry).Register(main, 'Main content');
+      await toggleWhiteboard(f);
+      return { fc, f };
+    };
+
+    /** The user's media while they share the whiteboard, as the controller reports it. */
+    const sharingWhiteboard = () =>
+      makeState({
+        Status: 'connected',
+        Local: person('you', { Local: true }),
+        LocalMedia: { MicrophoneEnabled: true, CameraEnabled: false, ScreenShareEnabled: true, ScreenShareSurface: 'tab', ScreenSharePanelLabel: 'Whiteboard' },
+      });
+    /** The user's media once nothing is shared. */
+    const notSharing = () => makeState({ Status: 'connected', Local: person('you', { Local: true }) });
+
+    /** Opens the Share menu and lists "This panel" items, or `null` when the menu has no "This panel". */
+    const panelItems = (f: ReturnType<typeof render>): HTMLElement[] | null => {
+      (query(f, 'mj-livekit-control-bar button[title="Choose what to share"]') as HTMLButtonElement).click();
+      f.detectChanges();
+      const item = (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((i) => i.textContent?.trim() === 'This panel');
+      if (!item) {
+        return null;
+      }
+      item.click();
+      f.detectChanges();
+      return overlayQueryAll('mj-menu[aria-label="This panel"] mj-menu-item') as HTMLElement[];
+    };
+
+    it('lists the whiteboard while it shows, not a panel that holds the room, and shares the picked one alone, named', async () => {
+      const { fc, f } = await withWhiteboard();
+      const items = panelItems(f) ?? [];
+      expect(items.map((i) => i.textContent?.trim())).toEqual(['Whiteboard']);
+      items[0].click();
+      expect(fc.setScreenShareEnabled).toHaveBeenCalledWith(true, { Panel: query(f, 'mj-livekit-whiteboard-surface'), PanelLabel: 'Whiteboard' });
+    });
+
+    it('offers no This panel while the whiteboard is closed', async () => {
+      const fc = room([view('ada')]);
+      const f = render(fc.controller, { ShowWhiteboard: true });
+      await settle(f);
+      expect(panelItems(f)).toBeNull();
+    });
+
+    it('stops the share when the shared whiteboard goes away', async () => {
+      const { fc, f } = await withWhiteboard();
+      panelItems(f)?.[0].click();
+      fc.emitState(sharingWhiteboard());
+      await settle(f);
+      await toggleWhiteboard(f);
+      expect(fc.setScreenShareEnabled.mock.calls).toEqual([[true, { Panel: expect.anything(), PanelLabel: 'Whiteboard' }], [false]]);
+    });
+
+    it('stops nothing when the whiteboard goes away after its share ended', async () => {
+      const { fc, f } = await withWhiteboard();
+      panelItems(f)?.[0].click();
+      fc.emitState(sharingWhiteboard());
+      await settle(f);
+      fc.emitState(notSharing());
+      await toggleWhiteboard(f);
+      expect(fc.setScreenShareEnabled).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops nothing when the whiteboard goes away after its share did not start (the picker closed)', async () => {
+      const { fc, f } = await withWhiteboard();
+      panelItems(f)?.[0].click();
+      await settle(f);
+      await toggleWhiteboard(f);
+      expect(fc.setScreenShareEnabled).toHaveBeenCalledTimes(1);
+    });
+
+    it('shares nothing when the picked panel went away since the menu listed it', async () => {
+      const { fc, f } = await withWhiteboard();
+      const gone = TestBed.inject(SharePanelRegistry).Register(document.createElement('section'), 'Sample panel');
+      gone.Unregister();
+      f.componentInstance.OnPanelShareRequested(gone.Key);
+      expect(fc.setScreenShareEnabled).not.toHaveBeenCalled();
+    });
+
+    it('names the shared panel in the share preview', () => {
+      const fc = makeFakeController(
+        makeState({
+          Status: 'connected',
+          Local: view('me', { Local: true, Sharing: true }),
+          Remote: [view('ada')],
+          LocalMedia: { MicrophoneEnabled: true, CameraEnabled: false, ScreenShareEnabled: true, ScreenShareSurface: 'tab', ScreenSharePanelLabel: 'Whiteboard' },
+        })
+      );
+      const f = render(fc.controller);
+      expect(text(f, 'mj-share-preview .share__label')).toContain('Sharing a panel: Whiteboard');
+    });
   });
 
   describe("the user's own tile", () => {

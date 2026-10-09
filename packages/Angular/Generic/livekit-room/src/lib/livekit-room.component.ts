@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  ElementRef,
   EventEmitter,
   Input,
   NgZone,
@@ -51,8 +52,11 @@ import {
   MediaStageSurfaceDirective,
   MediaTileComponent,
   SelfViewComponent,
+  SharePanelDirective,
+  SharePanelRegistry,
   SharePreviewComponent,
   type MediaCameraCheckChoices,
+  type MediaSharePanel,
   type MediaStagePipRectChange,
   type MediaStageSurface,
 } from '@memberjunction/ng-realtime-media';
@@ -158,6 +162,7 @@ export interface LiveKitLayoutOption {
     MediaStagePipActionsDirective,
     SelfViewComponent,
     SharePreviewComponent,
+    SharePanelDirective,
     LiveKitRoomTileDirective,
     MJButtonDirective,
     MediaAgentStateComponent,
@@ -179,6 +184,12 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly controller: ILiveKitRoomController = inject(LIVEKIT_ROOM_CONTROLLER_FACTORY)();
   private readonly mediaControllerFactory = inject(LOCAL_MEDIA_CONTROLLER_FACTORY);
+  /** The app's shareable panels: what the Share menu offers under "This panel", and the panel a pick names. */
+  private readonly sharePanelRegistry = inject(SharePanelRegistry);
+  /** The room's own element: a panel that holds it is not offered (sharing it would show the room its own controls). */
+  private readonly hostElement: Element = inject<ElementRef<Element>>(ElementRef).nativeElement;
+  /** The key of the panel being shared, from the user's pick until the share ends; `null` otherwise. */
+  private sharedPanelKey: string | null = null;
   private unsubscribers: Array<() => void> = [];
   private serverUrl: string | null = null;
   private token: string | null = null;
@@ -388,6 +399,11 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   // ── View state (template-bound) ─────────────────────────────────────────────────
   /** The current normalized room state snapshot. */
   public State: LiveKitRoomState = this.controller.State;
+  /**
+   * The panels of the page the Share menu offers under "This panel", such as the room's whiteboard: those on screen, in
+   * page order, leaving out any that holds this room. Empty where the browser cannot share a single panel.
+   */
+  public SharePanels: readonly MediaSharePanel[] = [];
   /** The accumulated chat messages. */
   public ChatMessages: LiveKitChatMessage[] = [];
   /** The unread chat count (since the chat panel was last open). */
@@ -648,6 +664,24 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   /** Starts screen sharing with the kind of surface the user picked from the Share menu offered first. */
   public OnScreenShareRequested(surface: DisplayCaptureSurface): void {
     void this.controller.SetScreenShareEnabled(true, surface);
+  }
+  /**
+   * Shares one panel of the page alone, picked under "This panel" in the Share menu: the browser's picker offers this
+   * tab, and the share shows only the panel (Chrome and Edge). A panel that went away since the menu listed it shares
+   * nothing.
+   */
+  public OnPanelShareRequested(key: string): void {
+    const panel = this.sharePanelRegistry.Get(key);
+    if (!panel) {
+      return;
+    }
+    this.sharedPanelKey = key;
+    void this.controller.SetScreenShareEnabled(true, { Panel: panel.Element, PanelLabel: panel.Label }).then(() => {
+      // A closed picker or a refused share leaves nothing shared, so nothing for the panel's removal to stop.
+      if (this.sharedPanelKey === key && !this.controller.State.LocalMedia.ScreenShareEnabled) {
+        this.sharedPanelKey = null;
+      }
+    });
   }
   /** Stops the user's screen share, from its preview. */
   public OnStopShare(): void {
@@ -1105,11 +1139,35 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     this.unsubscribers.push(e.On('localMediaChanged', (m) => this.runInZone(() => this.LocalMediaChanged.emit(m))));
     this.unsubscribers.push(e.On('dataReceived', (msg) => this.handleData(msg)));
     this.unsubscribers.push(e.On('error', (err) => this.handleError(err)));
+    this.wireSharePanels();
   }
 
-  /** Applies a new state snapshot and triggers change detection in the Angular zone. */
+  /**
+   * Follows the panels of the page the Share menu offers under "This panel", and ends a share of a panel that goes away
+   * (no frame comes from an element that is gone). A panel only out of sight keeps its share.
+   */
+  private wireSharePanels(): void {
+    const panels = this.sharePanelRegistry
+      .PanelsFor$(this.hostElement)
+      .subscribe((list) => this.runInZone(() => (this.SharePanels = list)));
+    const removed = this.sharePanelRegistry.Removed$.subscribe((key) => {
+      if (key === this.sharedPanelKey) {
+        this.sharedPanelKey = null;
+        void this.controller.SetScreenShareEnabled(false);
+      }
+    });
+    this.unsubscribers.push(
+      () => panels.unsubscribe(),
+      () => removed.unsubscribe()
+    );
+  }
+
+  /** Applies a new state snapshot and triggers change detection in the Angular zone. A share that ended frees its panel. */
   private applyState(state: LiveKitRoomState): void {
     this.runInZone(() => {
+      if (this.State.LocalMedia.ScreenShareEnabled && !state.LocalMedia.ScreenShareEnabled) {
+        this.sharedPanelKey = null;
+      }
       this.State = state;
       this.StateChanged.emit(state);
     });

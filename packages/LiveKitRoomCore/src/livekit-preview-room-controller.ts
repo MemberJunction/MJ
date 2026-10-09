@@ -37,6 +37,7 @@ import {
 } from '@memberjunction/ai-realtime-client/media';
 import { LiveKitRoomEventBus } from './events';
 import type { ILiveKitRoomController } from './livekit-room-controller';
+import { ToDisplayCaptureOptions } from './livekit-screen-share';
 import { ToMediaDeviceKind } from './media-adapters';
 import type {
   LiveKitBackgroundEffect,
@@ -228,9 +229,12 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
     await this.toggleLocalMedia('camera', enabled);
   }
 
-  /** Starts or stops sharing your screen; `preferredSurface` is what the browser's picker offers first. */
-  public async SetScreenShareEnabled(enabled: boolean, preferredSurface?: DisplayCaptureSurface): Promise<void> {
-    await this.toggleLocalMedia('screen', enabled, preferredSurface);
+  /**
+   * Starts or stops sharing. `request` is the kind of surface the browser's picker offers first, or the share's
+   * options: one panel of the page to share alone (`Panel`), with its name (`PanelLabel`).
+   */
+  public async SetScreenShareEnabled(enabled: boolean, request?: DisplayCaptureSurface | DisplayCaptureOptions): Promise<void> {
+    await this.toggleLocalMedia('screen', enabled, request);
   }
 
   /** Toggles your microphone and resolves the new state. */
@@ -254,12 +258,12 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
     return next;
   }
 
-  /** Shares something else: stops the current share, then opens the browser's picker again. */
-  public async ChangeScreenShare(preferredSurface?: DisplayCaptureSurface): Promise<void> {
+  /** Shares something else: stops the current share, then opens the browser's picker again, with `request` as above. */
+  public async ChangeScreenShare(request?: DisplayCaptureSurface | DisplayCaptureOptions): Promise<void> {
     if (this.State.LocalMedia.ScreenShareEnabled) {
       await this.SetScreenShareEnabled(false);
     }
-    await this.SetScreenShareEnabled(true, preferredSurface);
+    await this.SetScreenShareEnabled(true, request);
   }
 
   /**
@@ -389,7 +393,11 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
   }
 
   /** Turns a kind on or off, raising the cancelable `beforeMediaToggle` first and `localMediaChanged` after. */
-  private async toggleLocalMedia(kind: 'microphone' | 'camera' | 'screen', enabled: boolean, surface?: DisplayCaptureSurface): Promise<void> {
+  private async toggleLocalMedia(
+    kind: 'microphone' | 'camera' | 'screen',
+    enabled: boolean,
+    screenRequest?: DisplayCaptureSurface | DisplayCaptureOptions
+  ): Promise<void> {
     const session = this.session;
     if (!session) {
       return;
@@ -398,7 +406,7 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
       return;
     }
     if (kind === 'screen') {
-      await this.setSharing(session, enabled, surface);
+      await this.setSharing(session, enabled, screenRequest);
     } else {
       await this.setCapturing(session, kind, enabled);
     }
@@ -421,7 +429,7 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
   }
 
   /** Starts sharing through the browser's picker, or stops. Cancelling the picker leaves you not sharing. */
-  private async setSharing(session: PreviewSession, on: boolean, surface?: DisplayCaptureSurface): Promise<void> {
+  private async setSharing(session: PreviewSession, on: boolean, request?: DisplayCaptureSurface | DisplayCaptureOptions): Promise<void> {
     if (!on) {
       stopSharing(session);
       return;
@@ -429,7 +437,7 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
     if (session.Share) {
       return;
     }
-    const result = await this.requestShare(surface ? { PreferredSurface: surface } : {});
+    const result = await this.requestShare(ToDisplayCaptureOptions(request));
     if (result.Status === 'failed') {
       this.emitError('device', 'Failed to enable screen.', result.Message);
     } else if (result.Status === 'started') {
@@ -547,14 +555,16 @@ function personView(session: PreviewSession, person: LiveKitPreviewPerson, index
   };
 }
 
-/** What you are publishing, as the room's controls show it. */
+/** What you are publishing, as the room's controls show it: while you share, what it is, and a shared panel's name. */
 function localMediaState(session: PreviewSession, media: MediaPreviewState): LiveKitLocalMediaState {
   const share = session.Share;
+  const panelLabel = share?.Capture.PanelLabel;
   return {
     MicrophoneEnabled: media.Microphone.Status === 'on',
     CameraEnabled: media.Camera.Status === 'on',
     ScreenShareEnabled: share !== null,
     ...(share ? { ScreenShareSurface: share.Capture.Surface } : {}),
+    ...(panelLabel ? { ScreenSharePanelLabel: panelLabel } : {}),
     AgentVisionOn: session.AgentVisionOn,
   };
 }
