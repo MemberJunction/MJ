@@ -1423,14 +1423,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Builds the SQL to retrieve the "name" field value for a specific entity record.
-     * Uses QuoteIdentifier/QuoteSchemaAndView for dialect-neutral SQL generation.
+     * Builds the query that reads a record's name fields by its primary key.
+     *
+     * Key columns are written from the entity's metadata and key values are bound as parameters,
+     * so nothing the caller supplies reaches the SQL text. When a user is given, their effective
+     * read row filter (role RLS and API-key row filters) is ANDed in. A caller that gives no user
+     * is trusted server code, as for a single-record Load.
      *
      * @param entityName The entity name
      * @param compositeKey The record's primary key
-     * @returns The SQL query string, or null if the entity has no name field
+     * @param contextUser The acting user, whose read row filter applies
+     * @returns The SQL and its parameter values, or null if the entity has no name field or the
+     * key does not name the entity's primary key fields
      */
-    protected BuildEntityRecordNameSQL(entityName: string, compositeKey: CompositeKey): string | null {
+    protected BuildEntityRecordNameSQL(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): { SQL: string; Parameters: unknown[] } | null {
         const e = this.EntityByName(entityName);
         if (!e) throw new Error('Entity ' + entityName + ' not found');
 
@@ -1450,22 +1456,53 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             nameFields.push(f);
         }
 
-        let where = '';
-        for (const pkv of compositeKey.KeyValuePairs) {
-            const pk = e.PrimaryKeys.find((pk) => pk.Name === pkv.FieldName);
-            const quotes = pk && pk.NeedsQuotes ? "'" : '';
-            if (where.length > 0) where += ' AND ';
-            where += this.QuoteIdentifier(pkv.FieldName) + '=' + quotes + pkv.Value + quotes;
+        const keyFields = this.RecordNameKeyFieldsOf(e, compositeKey);
+        if (!keyFields) {
+            return null;
+        }
+
+        const conditions = keyFields.map((f, i) => this.QuoteIdentifier(f.Name) + '=' + this.BuildParameterPlaceholder(i));
+        const rowFilter = contextUser ? e.GetEffectiveRowFilterWhereClause(contextUser, EntityPermissionType.Read, '') : '';
+        if (rowFilter) {
+            conditions.push('(' + rowFilter + ')');
         }
 
         // SELECT all name fields so InternalGetEntityRecordName can concatenate them
         const selectFields = nameFields.map(f => this.QuoteIdentifier(f.Name)).join(', ');
-        return 'SELECT ' + selectFields + ' FROM ' + this.QuoteSchemaAndView(e.SchemaName, e.BaseView) + ' WHERE ' + where;
+        return {
+            SQL: 'SELECT ' + selectFields + ' FROM ' + this.QuoteSchemaAndView(e.SchemaName, e.BaseView) + ' WHERE ' + conditions.join(' AND '),
+            Parameters: compositeKey.KeyValuePairs.map(kv => kv.Value),
+        };
+    }
+
+    /**
+     * The primary key field each pair of a record-name key names, in key order. Names match
+     * case-insensitively. Null, after logging, when the key is empty or names a field that is not
+     * one of the entity's primary keys.
+     */
+    protected RecordNameKeyFieldsOf(entity: EntityInfo, compositeKey: CompositeKey): EntityFieldInfo[] | null {
+        const pairs = compositeKey?.KeyValuePairs ?? [];
+        if (pairs.length === 0) {
+            LogError(`Record name lookup on ${entity.Name}: the key names no fields`);
+            return null;
+        }
+        const keyFields: EntityFieldInfo[] = [];
+        for (const pair of pairs) {
+            const name = String(pair.FieldName ?? '').trim().toLowerCase();
+            const field = entity.PrimaryKeys.find(pk => pk.Name.trim().toLowerCase() === name);
+            if (!field) {
+                LogError(`Record name lookup on ${entity.Name}: ${JSON.stringify(pair.FieldName)} is not a primary key field`);
+                return null;
+            }
+            keyFields.push(field);
+        }
+        return keyFields;
     }
 
     /**
      * Retrieves the display name for a single entity record.
-     * Uses BuildEntityRecordNameSQL for dialect-neutral SQL generation.
+     * Uses BuildEntityRecordNameSQL for dialect-neutral SQL generation, which limits the lookup to
+     * rows the acting user's read row filter allows.
      */
     protected async InternalGetEntityRecordName(
         entityName: string,
@@ -1473,9 +1510,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         contextUser?: UserInfo,
     ): Promise<string> {
         try {
-            const sql = this.BuildEntityRecordNameSQL(entityName, compositeKey);
-            if (sql) {
-                const data = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
+            const query = this.BuildEntityRecordNameSQL(entityName, compositeKey, contextUser);
+            if (query) {
+                const data = await this.ExecuteSQL<Record<string, unknown>>(query.SQL, query.Parameters, undefined, contextUser);
                 if (data && data.length === 1) {
                     // Concatenate all returned fields with spaces (supports multi-name entities)
                     const values = Object.values(data[0])

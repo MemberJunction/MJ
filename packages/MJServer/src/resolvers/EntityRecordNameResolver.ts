@@ -43,6 +43,11 @@ export class EntityRecordNameResult {
  * form-field FK control falls through to this query precisely WHEN the joined display column is
  * denied, so the one case the fallback exists for was the case that leaked.
  *
+ * Row-level security and key binding are applied by the provider's lookup, for the acting user
+ * passed to it: it reads only rows the user's read row filter allows, binds the key values as
+ * parameters, and refuses a key that does not name the entity's primary key fields. Without an
+ * acting user there is no lookup.
+ *
  * Two gates now apply, matching what the generated single-record resolvers do:
  *   1. entity-level read permission ({@link ResolverBase.CheckUserReadPermissions});
  *   2. field-level read permission on the entity's own name field.
@@ -103,10 +108,9 @@ export class EntityRecordNameResolver extends ResolverBase {
           EntityName,
         };
       }
-      // Pass the acting user through: the provider signature accepts it, and omitting it ran the
-      // underlying lookup with no identity at all — so row-level security had nothing to filter on
-      // either. The field-level gate above is the column half; this is the row half.
-      const recordName = await md.GetEntityRecordName(e.Name, pk, contextUser);
+      // The acting user is what row-level security is applied for. The field-level gate above is
+      // the column half; this is the row half. Without an acting user there is no lookup.
+      const recordName = contextUser ? await md.GetEntityRecordName(e.Name, pk, contextUser) : '';
       if (recordName) return { Success: true, Status: 'OK', CompositeKey: pk, RecordName: recordName, EntityName };
       else
         return {
