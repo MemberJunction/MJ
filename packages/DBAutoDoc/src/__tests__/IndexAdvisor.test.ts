@@ -4,7 +4,7 @@ import { ProposeIndexes, FindRedundantIndexes, IsCovered } from '../plugins/inde
 import { IndexMigrationGenerator } from '../plugins/index-advisor/IndexMigrationGenerator';
 import { ResolveIndexAdvisorOptions, DEFAULT_INDEX_ADVISOR_OPTIONS } from '../plugins/index-advisor/IndexAdvisorPlugin';
 import type { IndexAdvisorData, IndexProposal } from '../plugins/index-advisor/IndexAdvisorTypes';
-import type { AutoDocIndex } from '../types/driver';
+import { AUTODOC_EXPRESSION_KEY_PART, type AutoDocIndex } from '../types/driver';
 import type { DatabaseDocumentation, TableDefinition, ColumnDefinition } from '../types/state';
 import type { FKCandidate, PKCandidate, RelationshipDiscoveryPhase } from '../types/discovery';
 
@@ -82,7 +82,7 @@ describe('IndexCatalog row mapping', () => {
     const byName = Object.fromEntries(indexes.map((i) => [i.IndexName, i]));
     expect(byName['ix_ab'].Columns).toEqual(['a', 'b']);
     expect(byName['PRIMARY']).toMatchObject({ IsPrimaryKey: true, IsUnique: true });
-    expect(byName['ix_fn'].HasExpressions).toBe(true);
+    expect(byName['ix_fn']).toMatchObject({ HasExpressions: true, Columns: [AUTODOC_EXPRESSION_KEY_PART] });
   });
 });
 
@@ -161,6 +161,51 @@ describe('IndexRules.FindRedundantIndexes', () => {
       index('T', 'gin_a', ['a'], { Method: 'gin' }),
       index('T', 'ix_ab', ['a', 'b'])
     ])).toEqual([]);
+  });
+});
+
+// ─── expression key parts (review: an expression in front must not count as coverage) ────
+
+describe('Expression key parts and FK coverage', () => {
+  const ORDERS_FK = table('Orders', 50_000, [col('OrderID'), col('Code', 'varchar(20)', 900), col('CustomerID', 'int', 4000)], [
+    { schema: 'dbo', table: 'Customers', column: 'CustomerID', referencedColumn: 'CustomerID' }
+  ]);
+  const mysqlRows = (first: string | null, second: string | null) => MapMySQLIndexRows([
+    { SchemaName: 'dbo', TableName: 'Orders', IndexName: 'ix_mixed', NonUnique: 1, Method: 'BTREE', ColumnName: second, Seq: 2 },
+    { SchemaName: 'dbo', TableName: 'Orders', IndexName: 'ix_mixed', NonUnique: 1, Method: 'BTREE', ColumnName: first, Seq: 1 }
+  ]);
+  const pgRows = (keyColumns: (string | null)[]) => MapPostgreSQLIndexRows([{
+    SchemaName: 'dbo', TableName: 'Orders', IndexName: 'ix_mixed', IsUnique: false, IsPrimary: false, Method: 'btree',
+    FilterDef: null, HasExpr: true, KeyColumns: keyColumns, IncludeColumns: []
+  }]);
+  const proposedColumns = (existing: AutoDocIndex[]) =>
+    ProposeIndexes(stateWith([ORDERS_FK]), existing, DEFAULT_INDEX_ADVISOR_OPTIONS).map((p) => p.Columns);
+
+  it('MySQL: INDEX ((LOWER(Code)), CustomerID) keeps the expression first and does not cover CustomerID', () => {
+    const indexes = mysqlRows(null, 'CustomerID');
+    expect(indexes[0].Columns).toEqual([AUTODOC_EXPRESSION_KEY_PART, 'CustomerID']);
+    expect(proposedColumns(indexes)).toEqual([['CustomerID']]);
+  });
+
+  it('MySQL control: INDEX (CustomerID, (LOWER(Code))) does cover CustomerID', () => {
+    const indexes = mysqlRows('CustomerID', null);
+    expect(indexes[0].Columns).toEqual(['CustomerID', AUTODOC_EXPRESSION_KEY_PART]);
+    expect(proposedColumns(indexes)).toEqual([]);
+  });
+
+  it('PostgreSQL: (lower(code), customer_id) keeps the expression first and does not cover CustomerID', () => {
+    const indexes = pgRows([null, 'CustomerID']);
+    expect(indexes[0].Columns).toEqual([AUTODOC_EXPRESSION_KEY_PART, 'CustomerID']);
+    expect(proposedColumns(indexes)).toEqual([['CustomerID']]);
+  });
+
+  it('PostgreSQL control: (customer_id, lower(code)) does cover CustomerID', () => {
+    expect(proposedColumns(pgRows(['CustomerID', null]))).toEqual([]);
+  });
+
+  it('does not flag an expression index as redundant', () => {
+    const exprFirst = mysqlRows(null, 'CustomerID')[0];
+    expect(FindRedundantIndexes([exprFirst, index('Orders', 'ix_cust', ['CustomerID'])])).toEqual([]);
   });
 });
 

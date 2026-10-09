@@ -504,7 +504,7 @@ export class MyCustomCheck extends BaseAutoDocPlugin {
 
 The Index Advisor runs at the end of every analysis (`OnPostRun`) unless turned off. It never changes the database: it records proposals in the state file, and `export --format index-migration` writes them as a migration for someone to review and apply.
 
-1. **Reads existing indexes** on every analyzed schema: SQL Server `sys.indexes`, PostgreSQL `pg_index`, MySQL `information_schema.STATISTICS`. Primary-key, unique, partial (filtered), expression and INCLUDE columns are all captured. A schema whose indexes cannot be read is recorded in `SkippedSchemas`, and no proposals are made for it.
+1. **Reads existing indexes** on every analyzed schema: SQL Server `sys.indexes`, PostgreSQL `pg_index`, MySQL `information_schema.STATISTICS`. Primary-key, unique, partial (filtered), expression and INCLUDE columns are all captured; an expression key part keeps its position (as `(expression)`), so an index *led* by an expression never counts as covering the column after it. A schema whose indexes cannot be read is recorded in `SkippedSchemas`, and no proposals are made for it.
 2. **Proposes indexes with deterministic rules:**
    - a foreign key (declared, or discovered and `confirmed` at `KeyMinConfidence` or higher) whose column has no index starting with it. A partial index does not count as covering;
    - a confirmed discovered primary key on a table with no index on it.

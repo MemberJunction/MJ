@@ -128,6 +128,12 @@ export interface AutoDocConnectionConfig {
  * Query result wrapper
  */
 /**
+ * Placeholder for an expression key part in {@link AutoDocIndex.Columns}. It can never equal a
+ * real column name in a prefix comparison, so an index led by an expression covers no column.
+ */
+export const AUTODOC_EXPRESSION_KEY_PART = '(expression)';
+
+/**
  * An existing index on a table, as read from the database catalog.
  * Primary-key indexes are included (IsPrimaryKey = true).
  */
@@ -135,7 +141,11 @@ export interface AutoDocIndex {
   SchemaName: string;
   TableName: string;
   IndexName: string;
-  /** Key columns, in index order. Expression parts of an expression index are omitted. */
+  /**
+   * Key parts, in index order. An expression key part (PostgreSQL `lower(code)`, MySQL
+   * functional key part) appears as {@link AUTODOC_EXPRESSION_KEY_PART} at its position, so the
+   * order of the named columns, and therefore which column leads the index, is preserved.
+   */
   Columns: string[];
   /** Non-key columns carried by the index (SQL Server INCLUDE / PostgreSQL INCLUDE). */
   IncludeColumns: string[];

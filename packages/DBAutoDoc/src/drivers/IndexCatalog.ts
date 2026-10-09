@@ -4,7 +4,7 @@
  */
 
 import { EscapeSQLString } from '@memberjunction/global';
-import type { AutoDocIndex } from '../types/driver.js';
+import { AUTODOC_EXPRESSION_KEY_PART, type AutoDocIndex } from '../types/driver.js';
 
 // ─── PostgreSQL ─────────────────────────────────────────────────────────────────
 
@@ -18,7 +18,8 @@ export interface PostgreSQLIndexRow {
   Method: string;
   FilterDef: string | null;
   HasExpr: boolean;
-  KeyColumns: string[] | null;
+  /** Key parts in order; NULL at the position of an expression key part. */
+  KeyColumns: (string | null)[] | null;
   IncludeColumns: string[] | null;
 }
 
@@ -34,9 +35,10 @@ export const POSTGRESQL_INDEX_QUERY = `
     pg_get_expr(ix.indpred, ix.indrelid) AS "FilterDef",
     (ix.indexprs IS NOT NULL) AS "HasExpr",
     ARRAY(
-      SELECT a.attname::text
+      -- attnum 0 marks an expression key part: keep its position as NULL so the order survives
+      SELECT CASE WHEN k.attnum = 0 THEN NULL ELSE a.attname::text END
       FROM unnest(ix.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord)
-      JOIN pg_attribute a ON a.attrelid = ix.indrelid AND a.attnum = k.attnum
+      LEFT JOIN pg_attribute a ON a.attrelid = ix.indrelid AND a.attnum = k.attnum
       WHERE k.ord <= ix.indnkeyatts
       ORDER BY k.ord
     ) AS "KeyColumns",
@@ -61,7 +63,7 @@ export function MapPostgreSQLIndexRows(rows: PostgreSQLIndexRow[]): AutoDocIndex
     SchemaName: r.SchemaName,
     TableName: r.TableName,
     IndexName: r.IndexName,
-    Columns: r.KeyColumns ?? [],
+    Columns: (r.KeyColumns ?? []).map((c) => c ?? AUTODOC_EXPRESSION_KEY_PART),
     IncludeColumns: r.IncludeColumns ?? [],
     IsUnique: r.IsUnique,
     IsPrimaryKey: r.IsPrimary,
@@ -184,11 +186,11 @@ export function MapMySQLIndexRows(rows: MySQLIndexRow[]): AutoDocIndex[] {
       };
       byIndex.set(key, index);
     }
+    // A functional key part has no column name; keep its position so the leading column stays correct.
     if (r.ColumnName === null) {
       index.HasExpressions = true;
-    } else {
-      index.Columns.push(r.ColumnName);
     }
+    index.Columns.push(r.ColumnName ?? AUTODOC_EXPRESSION_KEY_PART);
   }
   return [...byIndex.values()];
 }
