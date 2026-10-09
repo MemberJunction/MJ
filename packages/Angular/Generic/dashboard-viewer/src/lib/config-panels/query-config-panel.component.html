@@ -36,21 +36,23 @@
   </div>
 
   <!-- Title (Optional) -->
-  <div class="form-group">
-    <label for="partTitle">
-      <i class="fa-solid fa-heading"></i>
-      Part Title
-      <span class="optional-tag">(optional)</span>
-    </label>
-    <input
-      type="text"
-      id="partTitle"
-      [(ngModel)]="title"
-      (input)="onTitleChange()"
-      [placeholder]="queryName ? 'Default: ' + queryName : 'Enter a custom title'"
-      class="form-input">
-    <span class="form-hint">Leave empty to use query name as title</span>
-  </div>
+  @if (ShowCommonFields) {
+    <div class="form-group">
+      <label for="partTitle">
+        <i class="fa-solid fa-heading"></i>
+        Part Title
+        <span class="optional-tag">(optional)</span>
+      </label>
+      <input
+        type="text"
+        id="partTitle"
+        [(ngModel)]="title"
+        (input)="onTitleChange()"
+        [placeholder]="queryName ? 'Default: ' + queryName : 'Enter a custom title'"
+        class="form-input">
+      <span class="form-hint">Leave empty to use query name as title</span>
+    </div>
+  }
 
   <!-- Display Options -->
   <mj-accordion-panel [(Expanded)]="showAdvancedOptions" Size="sm">
@@ -106,33 +108,37 @@
           <span class="form-hint">{{ getParameterLayoutDescription() }}</span>
         </div>
         <!-- Auto Refresh -->
-        <div class="form-group">
-          <label for="autoRefresh">
-            <i class="fa-solid fa-rotate"></i>
-            Auto Refresh
-          </label>
-          <select
-            class="form-select"
-            [(ngModel)]="autoRefreshSeconds"
-            (change)="onAutoRefreshChange()">
-            <option [ngValue]="0">Disabled</option>
-            <option [ngValue]="30">Every 30 seconds</option>
-            <option [ngValue]="60">Every minute</option>
-            <option [ngValue]="300">Every 5 minutes</option>
-            <option [ngValue]="600">Every 10 minutes</option>
-          </select>
-        </div>
+        @if (ShowCommonFields) {
+          <div class="form-group">
+            <label for="autoRefresh">
+              <i class="fa-solid fa-rotate"></i>
+              Auto Refresh
+            </label>
+            <select
+              class="form-select"
+              [(ngModel)]="autoRefreshSeconds"
+              (change)="onAutoRefreshChange()">
+              <option [ngValue]="0">Disabled</option>
+              <option [ngValue]="30">Every 30 seconds</option>
+              <option [ngValue]="60">Every minute</option>
+              <option [ngValue]="300">Every 5 minutes</option>
+              <option [ngValue]="600">Every 10 minutes</option>
+            </select>
+          </div>
+        }
         <!-- Options -->
         <div class="form-group">
           <div class="checkbox-group checkbox-group--compact">
-            <label class="checkbox-option checkbox-option--compact">
-              <input
-                type="checkbox"
-                [(ngModel)]="showParameterControls"
-                (change)="onOptionChange()">
-              <span class="checkbox-mark"></span>
-              <span class="checkbox-label">Show Parameter Controls</span>
-            </label>
+            @if (ShowCommonFields) {
+              <label class="checkbox-option checkbox-option--compact">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="showParameterControls"
+                  (change)="onOptionChange()">
+                <span class="checkbox-mark"></span>
+                <span class="checkbox-label">Show Parameter Controls</span>
+              </label>
+            }
             <label class="checkbox-option checkbox-option--compact">
               <input
                 type="checkbox"

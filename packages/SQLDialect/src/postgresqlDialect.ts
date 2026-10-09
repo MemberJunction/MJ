@@ -146,6 +146,23 @@ function formatTypeString(mapped: MappedType, length?: number, precision?: numbe
 }
 
 /**
+ * PostgreSQL functions caller-supplied SQL may not call: the XML exporters that run SQL given as a
+ * string (`query_to_xml`, `cursor_to_xml`, `table_to_xml`, `schema_to_xml`, `database_to_xml` and
+ * their schema variants), the text-search functions that do the same (`ts_stat`, `ts_rewrite`),
+ * `dblink`, the server-file readers, large objects, and the administrative
+ * functions a read-only transaction does not stop.
+ */
+const POSTGRESQL_CALLER_SQL_FORBIDDEN_FUNCTIONS: readonly string[] = [
+    'query_to_xml*', 'cursor_to_xml*', 'table_to_xml*', 'schema_to_xml*', 'database_to_xml*',
+    'ts_stat', 'ts_rewrite',
+    'dblink*',
+    'pg_read_file', 'pg_read_binary_file', 'pg_ls_*', 'pg_stat_file', 'pg_file_*',
+    'lo_*',
+    'pg_terminate_backend', 'pg_cancel_backend', 'pg_reload_conf', 'pg_rotate_logfile', 'pg_promote',
+    'pg_switch_wal', 'pg_create_restore_point', 'pg_log_backend_memory_contexts'
+];
+
+/**
  * PostgreSQL dialect implementation.
  * Uses "double-quote" identifiers, LIMIT/OFFSET pagination, native BOOLEAN, PL/pgSQL functions.
  */
@@ -282,7 +299,9 @@ export class PostgreSQLDialect extends SQLDialect {
     // the metadata source.
 
     private static readonly _booleanTypeNames = ['bool', 'boolean'] as const;
-    private static readonly _stringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name'] as const;
+    // `tsvector` / `tsquery` (full-text search, e.g. CodeGen's `__mj_fts_vector`) serialize as
+    // text. Without them here they fall through to Int and break GraphQL serialization.
+    private static readonly _stringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name', 'tsvector', 'tsquery'] as const;
     /**
      * PG fixed-width / space-padded char types. `character` (without `varying`)
      * and `bpchar` are the formal/internal names; `char` is the short alias.
@@ -513,6 +532,42 @@ export class PostgreSQLDialect extends SQLDialect {
 
     get DefaultPagingOrderBy(): string {
         return '1';
+    }
+
+    get SelectListPagingOrderBy(): string | null {
+        return null;
+    }
+
+    get PagingRequiresOrderBy(): boolean {
+        return false;
+    }
+
+    get SupportsEscapeStringLiterals(): boolean {
+        return true;
+    }
+
+    get SupportsDollarQuotedStrings(): boolean {
+        return true;
+    }
+
+    get QueryHintKeyword(): string | null {
+        return null;
+    }
+
+    get CallerSQLForbiddenFunctions(): readonly string[] {
+        return POSTGRESQL_CALLER_SQL_FORBIDDEN_FUNCTIONS;
+    }
+
+    StringLiteralPrefix(_text: string): string {
+        return '';
+    }
+
+    EscapeLikePattern(text: string): string {
+        return text.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    }
+
+    BooleanParameterValue(value: boolean): boolean | number {
+        return value;
     }
 
     // ─── Data Types ──────────────────────────────────────────────────

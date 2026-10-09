@@ -1,5 +1,7 @@
 # Conversations UX Stack Guide
 
+> **Part of the UI guide set.** The conversations stack is a worked example of the same layering: a framework-neutral runtime with an Angular widget on top. For the big picture (the layers, choosing where UI lives, and why), start with [Building UI on MemberJunction](BUILDING_UI_ON_MJ.md) ([illustrated edition](https://docs.memberjunction.org/v6/building-ui/)).
+
 How MemberJunction's conversational AI surfaces are layered — orchestration
 logic in a pure-TS runtime, Angular widget on top, your app on top of that —
 so the same conversation engine drives a corner overlay, a full-page Chat

@@ -1,13 +1,16 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
-import { NavigationOptions } from './navigation.interfaces';
+import type { WorkspaceTab } from '@memberjunction/ng-base-application';
+import { DashboardNavigationOptions, NavigationOptions } from './navigation.interfaces';
 import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext, GetRecordSourceContext, TruncateRecordOriginChain } from './record-open-style';
-import { CompositeKey, Metadata, IsNewEntityRecordUrlId } from '@memberjunction/core';
-import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
+import { CompositeKey, Metadata, IsNewEntityRecordUrlId, LogError } from '@memberjunction/core';
+import { fromEvent, BehaviorSubject, Subject, Subscription, Observable, combineLatest } from 'rxjs';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
-import { map, distinctUntilChanged } from 'rxjs/operators';
-import { UUIDsEqual } from '@memberjunction/global';
+import { map, distinctUntilChanged, filter } from 'rxjs/operators';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import type { ResourceData } from '@memberjunction/core-entities';
 import { BaseResourceComponent } from './base-resource-component';
+import { ResolveMovedNavItem } from './moved-nav-items';
 
 /**
  * Event emitted when query params change on a tab (e.g., from browser back/forward).
@@ -43,6 +46,26 @@ export interface AgentContextUpdate {
         ParameterSchema: Record<string, unknown>;
         Handler: (params: Record<string, unknown>) => Promise<unknown>;
     }>;
+    /**
+     * Set when the update comes from the caller's tab lifecycle, not from the caller:
+     * 'Detached' from {@link NavigationService.NotifyResourceDetached} (the user left the tab) and
+     * 'Reattached' from {@link NavigationService.NotifyResourceReattached} (the user came back to it).
+     * Undefined for an update the component reports.
+     */
+    Lifecycle?: 'Detached' | 'Reattached';
+}
+
+/** The client tools a resource component registers, as {@link AgentContextUpdate.AgentClientTools} carries them. */
+type AgentClientTools = NonNullable<AgentContextUpdate['AgentClientTools']>;
+
+/**
+ * True when `a` and `b` show in the same tab: they are the same component, or both have the same tab id,
+ * as the child dashboard of a resource wrapper does.
+ */
+function shareTab(a: BaseResourceComponent, b: BaseResourceComponent): boolean {
+  if (a === b) return true;
+  const tabId = a.getTabId();
+  return tabId !== '' && tabId === b.getTabId();
 }
 
 export interface TabQueryParamUpdateGuard {
@@ -66,6 +89,11 @@ export const SYSTEM_APP_ID = '__explorer';
 const NEUTRAL_APP_COLOR = '#9E9E9E'; // Material Design Gray 500
 
 /**
+ * Dashboard tab configuration key that holds an open-in-edit-mode request until the tab takes it
+ */
+const DASHBOARD_EDIT_MODE_REQUEST_KEY = 'openInEditMode';
+
+/**
  * Centralized navigation service that handles all navigation operations
  * with automatic shift-key detection for power user workflows
  */
@@ -79,6 +107,8 @@ export class NavigationService implements OnDestroy {
   private queryParamChanged$ = new Subject<QueryParamChangeEvent>();
   /** Observable that emits when query params change on a tab (back/forward navigation). */
   public QueryParamChanged$ = this.queryParamChanged$.asObservable();
+
+  private dashboardEditModeRequests = new Subject<string>();
 
   /** Cached Home app ID (null means not found, undefined means not checked) */
   private _homeAppId: string | null | undefined = undefined;
@@ -191,19 +221,29 @@ export class NavigationService implements OnDestroy {
    */
   public readonly AgentContextUpdated$ = new Subject<AgentContextUpdate>();
 
-  /** The client tools currently surfaced to the agent (the most recent SetAgentClientTools set). */
-  private currentAgentTools: NonNullable<AgentContextUpdate['AgentClientTools']> = [];
+  /** The surface whose client tools the agent has, with those tools. Null while no attached surface registered any. */
+  private agentTools: { Owner: BaseResourceComponent; Tools: AgentClientTools } | null = null;
 
   /**
-   * Tools captured for each cached resource component at the moment it was DETACHED, keyed by that
-   * component (the one the cache manager tracks). Replayed on reattach. Captured at detach time (vs.
-   * keyed by the registering component) so it works even when a resource WRAPPER component is what's
-   * cached/reattached while an INNER child component is what actually called SetAgentClientTools
-   * (e.g. Data Explorer's resource wrapper hosting its dashboard) — keying by the registerer would
-   * miss on reattach. This keeps the agent's live tool set a function of the CURRENTLY attached
-   * surface, fixing the staleness where a previous app's tools lingered after navigation.
+   * The tools kept for each cached resource component whose tab is detached, keyed by the component the
+   * cache manager tracks. {@link NotifyResourceReattached} replays them. A resource WRAPPER can be the
+   * component cached and reattached while an inner child registered the tools (Data Explorer's wrapper
+   * hosting its dashboard), so the key is the detaching component and the match is by tab.
    */
-  private readonly agentToolsByDetachedResource = new Map<BaseResourceComponent, NonNullable<AgentContextUpdate['AgentClientTools']>>();
+  private readonly agentToolsByDetachedResource = new Map<BaseResourceComponent, AgentClientTools>();
+
+  /**
+   * Cached resource components the shell has detached and not reattached since. Weak, so a
+   * component the cache destroys without calling {@link ForgetResource} is not kept alive here.
+   */
+  private readonly detachedResources = new WeakSet<BaseResourceComponent>();
+
+  /**
+   * Emits each cached resource component as the shell reattaches it to a tab. A cached component
+   * keeps its instance and runs no init on reattach, so one that publishes agent context listens
+   * here to publish it again.
+   */
+  public readonly ResourceReattached$ = new Subject<BaseResourceComponent>();
 
   /**
    * Latest `AppContextSnapshot` published by the Explorer app shell.
@@ -269,7 +309,14 @@ export class NavigationService implements OnDestroy {
     ParameterSchema: Record<string, unknown>;
     Handler: (params: Record<string, unknown>) => Promise<unknown>;
   }>): void {
-    this.currentAgentTools = tools;
+    // A registration from a component whose tab the user left waits for that tab's reattach, so it does
+    // not replace the tools of the surface the user is looking at. The match is by identity only: a new
+    // component in the tab of a detached one is the surface the user now sees, so its tools go through.
+    if (this.agentToolsByDetachedResource.has(caller)) {
+      this.agentToolsByDetachedResource.set(caller, tools);
+      return;
+    }
+    this.agentTools = { Owner: caller, Tools: tools };
     this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
   }
 
@@ -277,37 +324,62 @@ export class NavigationService implements OnDestroy {
    * Re-publish a cached resource component's tools when its tab is re-focused. Cached components keep
    * their Angular instance but do NOT re-run `ngAfterViewInit`, so they never re-register on reattach
    * — the shell calls this so the just-reactivated surface's tools become the agent's active set
-   * again. Replays the set captured for this component at its last detach; no-op (lets a fresh
-   * component register itself) when none was captured (e.g. a component's very first attach).
+   * again. Replays the set captured for this component at its last detach; replays nothing (lets a
+   * fresh component register itself) when none was captured (e.g. a component's very first attach).
+   * The reattach of a detached component sends an update with `Lifecycle: 'Reattached'` (with the
+   * replayed tools, when there are any), so the shell can restore the context the surface reported
+   * before its detach. Either way the component stops counting as detached and
+   * {@link ResourceReattached$} emits it.
    */
   public NotifyResourceReattached(caller: BaseResourceComponent): void {
+    const wasDetached = this.detachedResources.delete(caller);
     const tools = this.agentToolsByDetachedResource.get(caller);
-    if (tools === undefined) {
-      return;
+    if (tools !== undefined) {
+      this.agentToolsByDetachedResource.delete(caller);
+      this.agentTools = { Owner: caller, Tools: tools };
+      this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools, Lifecycle: 'Reattached' });
+    } else if (wasDetached) {
+      this.AgentContextUpdated$.next({ Caller: caller, Lifecycle: 'Reattached' });
     }
-    this.currentAgentTools = tools;
-    this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
+    this.ResourceReattached$.next(caller);
   }
 
   /**
-   * Capture + clear the active client tools when a resource component's tab is detached (navigated
-   * away from), so the previous surface's tools aren't offered to the agent on the next surface. We
-   * snapshot whatever tools are CURRENTLY active and key them by the detaching component, so
-   * {@link NotifyResourceReattached} can replay them — robust to a wrapper component being the one
-   * cached/reattached while an inner child actually registered the tools (e.g. Data Explorer).
+   * True between {@link NotifyResourceDetached} and {@link NotifyResourceReattached} for this
+   * component: its tab is not on screen, so it must not replace the agent context of the one that is.
+   */
+  public IsResourceDetached(caller: BaseResourceComponent): boolean {
+    return this.detachedResources.has(caller);
+  }
+
+  /**
+   * Clears the agent's client tools when the tab of the surface that registered them is detached (the user
+   * navigated away), and keeps them for that tab's reattach, so the previous surface's tools are not offered
+   * on the next surface. The detach of any other tab leaves the attached surface its tools. Every detach
+   * carries `Lifecycle: 'Detached'`, so the shell can also clear the context the detached surface reported.
+   * The match is by tab, so a wrapper component being the one cached and detached while an inner child
+   * registered the tools (e.g. Data Explorer) still clears and later replays them.
+   * The component counts as detached ({@link IsResourceDetached}) until it is reattached.
    */
   public NotifyResourceDetached(caller: BaseResourceComponent): void {
-    this.agentToolsByDetachedResource.set(caller, this.currentAgentTools);
-    this.currentAgentTools = [];
-    this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: [] });
+    this.detachedResources.add(caller);
+    const current = this.agentTools;
+    if (current && shareTab(current.Owner, caller)) {
+      this.agentToolsByDetachedResource.set(caller, current.Tools);
+      this.agentTools = null;
+      this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: [], Lifecycle: 'Detached' });
+      return;
+    }
+    this.AgentContextUpdated$.next({ Caller: caller, Lifecycle: 'Detached' });
   }
 
   /**
-   * Drop a destroyed component's captured tools (e.g. on LRU eviction), so the map doesn't retain
-   * references to dead component instances.
+   * Drop a destroyed component's captured tools and detached mark (e.g. on LRU eviction), so
+   * nothing here retains references to dead component instances.
    */
   public ForgetResource(caller: BaseResourceComponent): void {
     this.agentToolsByDetachedResource.delete(caller);
+    this.detachedResources.delete(caller);
   }
 
   ngOnDestroy(): void {
@@ -896,16 +968,24 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
-   * Open a dashboard
-   * Uses Home app if available, otherwise falls back to active app or system app
+   * Open a dashboard in a tab of an application: `options.applicationId` when that application is
+   * loaded, otherwise the default application (Home app if available, otherwise the active app or
+   * system app). The workspace matches open tabs per application, so a tab that shows the same
+   * dashboard in another application is not reused. A tab already open for the dashboard is
+   * focused. Otherwise a plain open replaces the preview tab, so Back returns to the page it
+   * showed, and a Shift-click or `options.forceNewTab` opens a separate tab.
+   * `options.openInEditMode` asks the tab to enter edit mode (see
+   * {@link TakeDashboardEditModeRequest}). The tab holds the request in its configuration, and
+   * {@link DashboardEditModeRequested$} tells the component bound to the tab.
    */
   public OpenDashboard(
     dashboardId: string,
     dashboardName: string,
-    options?: NavigationOptions
+    options?: DashboardNavigationOptions
   ): string {
-    const appId = this.getDefaultApplicationId();
-    const appColor = this.getDefaultAppColor();
+    const app = options?.applicationId ? this.appManager.GetAppById(options.applicationId) : undefined;
+    const appId = app ? app.ID : this.getDefaultApplicationId();
+    const appColor = app ? app.GetColor() : this.getDefaultAppColor();
     let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
@@ -914,7 +994,8 @@ export class NavigationService implements OnDestroy {
       Configuration: {
         resourceType: 'Dashboards',
         dashboardId,
-        recordId: dashboardId  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
+        recordId: dashboardId, // Also needed in Configuration for tab-container.component to populate ResourceRecordID
+        ...(options?.openInEditMode ? { [DASHBOARD_EDIT_MODE_REQUEST_KEY]: true } : {}),
       },
       ResourceRecordId: dashboardId,
       IsPinned: options?.pinTab || false
@@ -923,11 +1004,69 @@ export class NavigationService implements OnDestroy {
     // Handle transition from single-resource mode
     forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
-    if (forceNew) {
-      return this.workspaceManager.OpenTabForced(request, appColor);
-    } else {
-      return this.workspaceManager.OpenTab(request, appColor);
+    const tabId = forceNew ? this.workspaceManager.OpenTabForced(request, appColor) : this.workspaceManager.OpenTab(request, appColor);
+    if (options?.openInEditMode) {
+      this.requestEditModeInOpenTab(tabId);
     }
+    return tabId;
+  }
+
+  /**
+   * Emits the ID of the tab an {@link OpenDashboard} call with `openInEditMode` opened. The component
+   * bound to the tab takes the request with {@link TakeDashboardEditModeRequest}.
+   */
+  public get DashboardEditModeRequested$(): Observable<string> {
+    return this.dashboardEditModeRequests.asObservable();
+  }
+
+  /**
+   * Returns true when the tab shows the dashboard in the application and has an `openInEditMode`
+   * request (see {@link OpenDashboard}), and removes that request from the tab, so only the first
+   * call returns true. The dashboard tab calls this when its dashboard has loaded, when
+   * {@link DashboardEditModeRequested$} names its tab, and when the tab container reattaches it to a
+   * new tab. A restored or reloaded tab then opens for viewing. OpenTab can replace a preview tab in
+   * place, so a cached component can still be bound to a tab that now shows another dashboard, or
+   * the same dashboard in another application. That tab keeps its request for its own component.
+   * @param dashboardId The dashboard the caller shows.
+   * @param applicationId The application of the caller's tab.
+   */
+  public TakeDashboardEditModeRequest(tabId: string, dashboardId: string, applicationId: string): boolean {
+    const tab = tabId ? this.workspaceManager.GetTab(tabId) : undefined;
+    if (!tab || !this.holdsDashboardEditModeRequest(tab, dashboardId) || !UUIDsEqual(tab.applicationId, applicationId)) {
+      return false;
+    }
+    this.workspaceManager.UpdateTabConfiguration(tabId, { [DASHBOARD_EDIT_MODE_REQUEST_KEY]: undefined });
+    return true;
+  }
+
+  /** The dashboard a dashboard tab shows: its record, else the dashboard ID in its configuration. */
+  private tabDashboardId(tab: WorkspaceTab): string {
+    const configured = tab.configuration?.['dashboardId'];
+    return tab.resourceRecordId || (typeof configured === 'string' ? configured : '');
+  }
+
+  /** True when the tab shows the dashboard and holds an edit-mode request. */
+  private holdsDashboardEditModeRequest(tab: WorkspaceTab, dashboardId: string): boolean {
+    return tab.configuration?.[DASHBOARD_EDIT_MODE_REQUEST_KEY] === true && UUIDsEqual(this.tabDashboardId(tab), dashboardId);
+  }
+
+  /**
+   * Makes sure the tab holds the edit-mode request, and tells the component bound to the tab. A new
+   * tab and a tab that OpenTab replaced or merged into already hold it; OpenTabForced leaves an open
+   * tab's configuration alone. The event reaches a component that is already loaded (the
+   * dashboard's open tab, or a cached component reattached to the replaced tab), which no load
+   * would reach. A component that is still loading ignores it and takes the request when its
+   * dashboard loads, and TakeDashboardEditModeRequest stops a stale component from taking it.
+   */
+  private requestEditModeInOpenTab(tabId: string): void {
+    const tab = this.workspaceManager.GetTab(tabId);
+    if (!tab) {
+      return;
+    }
+    if (tab.configuration?.[DASHBOARD_EDIT_MODE_REQUEST_KEY] !== true) {
+      this.workspaceManager.UpdateTabConfiguration(tabId, { [DASHBOARD_EDIT_MODE_REQUEST_KEY]: true });
+    }
+    this.dashboardEditModeRequests.next(tabId);
   }
 
   /**
@@ -1208,6 +1347,8 @@ export class NavigationService implements OnDestroy {
    * Switch to an application by ID.
    * This sets the app as active and either opens a specific nav item or creates a default tab.
    * If the requested nav item already has an open tab, switches to that tab instead of creating a new one.
+   * A nav item the app no longer has, which moved to another app ({@link ResolveMovedNavItem}), opens in that
+   * app with the same query params when the user has that app.
    * @param appId The application ID to switch to
    * @param navItemName Optional name of a nav item to open within the app. If provided, opens that nav item.
    * @param queryParams Optional query params to apply to the target tab. Applied SYNCHRONOUSLY once the
@@ -1217,6 +1358,11 @@ export class NavigationService implements OnDestroy {
    *                    restores its own (stale) saved params and the navigation intent is lost.
    */
   async SwitchToApp(appId: string, navItemName?: string, queryParams?: Record<string, string | null>): Promise<void> {
+    // Resolved before SetActiveApp, so the app the nav item moved from never activates.
+    const moved = navItemName ? await this.resolveMovedNavItem(appId, navItemName) : null;
+    if (moved) {
+      return this.SwitchToApp(moved.AppId, moved.NavItemName, queryParams);
+    }
     await this.appManager.SetActiveApp(appId);
 
     const app = this.appManager.GetAllApps().find(a => UUIDsEqual(a.ID, appId));
@@ -1304,6 +1450,142 @@ export class NavigationService implements OnDestroy {
         this.applyQueryParamsToTab(targetTabId, queryParams);
       }
     }
+  }
+
+  /**
+   * The new app and nav item for a nav item the app no longer has ({@link ResolveMovedNavItem}); null when the nav
+   * item did not move, the app still has it, or the user lacks the new app.
+   */
+  private async resolveMovedNavItem(appId: string, navItemName: string): Promise<MovedNavItemTarget | null> {
+    const apps = this.appManager.GetAllApps();
+    const app = apps.find(a => UUIDsEqual(a.ID, appId));
+    const resolved = app ? await ResolveMovedNavItem(app.Name, navItemName, apps) : null;
+    return resolved ? { AppId: resolved.App.ID, AppName: resolved.App.Name, NavItemName: resolved.Move.ToNavItem } : null;
+  }
+
+  /** The retarget run in progress, if any. */
+  private movedNavItemTabsRun: Promise<number> | null = null;
+
+  /** The retarget run queued after the one in progress, shared by the calls made meanwhile. */
+  private movedNavItemTabsQueuedRun: Promise<number> | null = null;
+
+  /** The user's app list that the last retarget run read, as a key of its app IDs. */
+  private movedNavItemTabsAppsKey: string | null = null;
+
+  /**
+   * Moves each saved tab of a moved nav item ({@link ResolveMovedNavItem}) to the new app's nav item, when the tab's
+   * app no longer has the nav item and the user has the new app. The tab keeps its id, driver class and query params.
+   * When the new app already has a tab for that nav item, the saved tab is closed instead, and the existing tab
+   * becomes active if the saved tab was. Waits for the user's app list. Runs never overlap: a call made during a run
+   * gets the one run after it, which every call made meanwhile shares.
+   * @returns The number of saved tabs it moved or closed. A failure is logged and changes nothing.
+   */
+  public RetargetMovedNavItemTabs(): Promise<number> {
+    if (this.movedNavItemTabsRun) {
+      if (!this.movedNavItemTabsQueuedRun) {
+        this.movedNavItemTabsQueuedRun = this.movedNavItemTabsRun.then(() => {
+          this.movedNavItemTabsQueuedRun = null;
+          return this.RetargetMovedNavItemTabs();
+        });
+      }
+      return this.movedNavItemTabsQueuedRun;
+    }
+    const run = this.retargetMovedNavItemTabsOnce().finally(() => {
+      this.movedNavItemTabsRun = null;
+    });
+    this.movedNavItemTabsRun = run;
+    return run;
+  }
+
+  /**
+   * Runs {@link RetargetMovedNavItemTabs} now, and again each time the user's app list changes while no app load is
+   * in progress, for example when an app is installed during the session. Resolves after the first run.
+   * @returns The subscription for the later runs. Unsubscribe it to stop them.
+   */
+  public async WatchMovedNavItemTabs(): Promise<Subscription> {
+    await this.RetargetMovedNavItemTabs();
+    return combineLatest([this.appManager.Applications, this.appManager.Loading])
+      .pipe(filter(([, loading]) => !loading))
+      .subscribe(([apps]) => {
+        if (appListKey(apps) !== this.movedNavItemTabsAppsKey) {
+          void this.RetargetMovedNavItemTabs();
+        }
+      });
+  }
+
+  /** One retarget run, after the user's app list is ready. Logs a failure and returns 0. */
+  private async retargetMovedNavItemTabsOnce(): Promise<number> {
+    try {
+      await this.appManager.WhenReady();
+      this.movedNavItemTabsAppsKey = appListKey(this.appManager.GetAllApps());
+      return this.applyMovedNavItemTabs(await this.findMovedNavItemTabs());
+    } catch (error) {
+      LogError(`NavigationService.RetargetMovedNavItemTabs: ${error instanceof Error ? error.message : String(error)}`);
+      return 0;
+    }
+  }
+
+  /** The saved tabs of a nav item that moved, keyed by tab id. */
+  private async findMovedNavItemTabs(): Promise<Map<string, MovedNavItemTab>> {
+    const movedTabs = new Map<string, MovedNavItemTab>();
+    for (const tab of this.workspaceManager.GetConfiguration()?.tabs ?? []) {
+      const navItemName = tab.configuration?.['navItemName'];
+      if (typeof navItemName !== 'string' || navItemName.length === 0) {
+        continue;
+      }
+      const target = await this.resolveMovedNavItem(tab.applicationId, navItemName);
+      if (target) {
+        movedTabs.set(tab.id, { ApplicationId: tab.applicationId, NavItemName: navItemName, Target: target });
+      }
+    }
+    return movedTabs;
+  }
+
+  /**
+   * Writes the moved tabs into the current workspace and returns how many it moved or closed. A saved tab whose new
+   * place already has a tab is closed, and that tab becomes active if the saved tab was. A tab whose app or nav item
+   * changed after it was read stays as it is now.
+   */
+  private applyMovedNavItemTabs(movedTabs: Map<string, MovedNavItemTab>): number {
+    const config = this.workspaceManager.GetConfiguration();
+    if (!config || movedTabs.size === 0) {
+      return 0;
+    }
+    let { tabs, activeTabId } = config;
+    let changed = 0;
+    for (const [tabId, moved] of movedTabs) {
+      const tab = tabs.find(t => t.id === tabId);
+      if (!tab || !this.isTabOfNavItem(tab, moved.ApplicationId, moved.NavItemName)) {
+        continue;
+      }
+      const existing = tabs.find(t => t.id !== tabId && this.isTabOfNavItem(t, moved.Target.AppId, moved.Target.NavItemName));
+      if (existing) {
+        tabs = tabs.filter(t => t.id !== tabId);
+        activeTabId = activeTabId === tabId ? existing.id : activeTabId;
+      } else {
+        tabs = tabs.map(t => (t.id === tabId ? this.retargetTab(t, moved.Target) : t));
+      }
+      changed++;
+    }
+    if (changed > 0) {
+      this.workspaceManager.UpdateConfiguration({ ...config, tabs, activeTabId });
+    }
+    return changed;
+  }
+
+  /** True when the tab belongs to the app and carries the nav item name. */
+  private isTabOfNavItem(tab: WorkspaceTab, appId: string, navItemName: string): boolean {
+    return UUIDsEqual(tab.applicationId, appId) && tab.configuration?.['navItemName'] === navItemName;
+  }
+
+  /** The tab as a tab of the target's app and nav item. Its id, driver class, query params and other fields stay. */
+  private retargetTab(tab: WorkspaceTab, target: MovedNavItemTarget): WorkspaceTab {
+    return {
+      ...tab,
+      applicationId: target.AppId,
+      title: target.NavItemName,
+      configuration: { ...tab.configuration, appId: target.AppId, appName: target.AppName, navItemName: target.NavItemName },
+    };
   }
 
   /**
@@ -1403,15 +1685,53 @@ export class NavigationService implements OnDestroy {
    * component that mounts from workspace restoration can subscribe here and still
    * pick up its initial deep-link state regardless of whether the params landed in
    * the tab config before or after it mounted.
+   *
+   * With `owner`, the params arrive only while the tab shows that resource (see
+   * {@link IsTabShowingResource}). A tab can be reused for another resource while the
+   * owner stays alive in the component cache, still bound to the tab's ID.
    */
-  public ObserveTabQueryParams(tabId: string): Observable<Record<string, string>> {
+  public ObserveTabQueryParams(tabId: string, owner?: ResourceData): Observable<Record<string, string>> {
     return this.workspaceManager.Configuration.pipe(
       map(config => {
         const tab = config?.tabs?.find(t => t.id === tabId);
-        return (tab?.configuration?.['queryParams'] || {}) as Record<string, string>;
+        return { tab, params: (tab?.configuration?.['queryParams'] || {}) as Record<string, string> };
       }),
-      distinctUntilChanged((a, b) => this.shallowParamsEqual(a, b))
+      distinctUntilChanged((a, b) => this.shallowParamsEqual(a.params, b.params)),
+      filter(({ tab }) => !owner || (!!tab && this.tabShowsResource(tab, owner))),
+      map(({ params }) => params)
     );
+  }
+
+  /**
+   * True while the tab shows `owner`: the same app, resource type, driver class, entity and record as the
+   * resource data the tab container gave the owner. The app, resource type, driver class and entity are
+   * compared only when the owner has them; the record is always compared.
+   */
+  public IsTabShowingResource(tabId: string, owner: ResourceData): boolean {
+    const tab = this.workspaceManager.GetTab(tabId);
+    return !!tab && this.tabShowsResource(tab, owner);
+  }
+
+  /** The fields the tab container compares to decide that a tab's content changed. */
+  private tabShowsResource(tab: WorkspaceTab, owner: ResourceData): boolean {
+    const ownerConfig = (owner.Configuration ?? {}) as Record<string, unknown>;
+    const tabConfig = tab.configuration ?? {};
+    const sameText = (expected: unknown, actual: unknown, ignoreCase: boolean): boolean => {
+      if (expected === undefined || expected === null || expected === '') {
+        return true;
+      }
+      const expectedText = String(expected).trim();
+      const actualText = actual == null ? '' : String(actual).trim();
+      return ignoreCase ? expectedText.toLowerCase() === actualText.toLowerCase() : expectedText === actualText;
+    };
+    const ownerAppId = ownerConfig['applicationId'] as string | undefined;
+    // Same precedence as the tab container uses for the owner's ResourceRecordID
+    const tabRecordId = (tabConfig['recordId'] as string | undefined) || tab.resourceRecordId || '';
+    return (!ownerAppId || UUIDsEqual(ownerAppId, tab.applicationId)) &&
+      sameText(ownerConfig['resourceType'], tabConfig['resourceType'], true) &&
+      sameText(ownerConfig['driverClass'], tabConfig['driverClass'], false) &&
+      sameText(ownerConfig['Entity'], tabConfig['Entity'], true) &&
+      String(owner.ResourceRecordID ?? '') === String(tabRecordId);
   }
 
   private shallowParamsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
@@ -1487,4 +1807,23 @@ export class NavigationService implements OnDestroy {
       queryParams: Object.keys(mergedQueryParams).length > 0 ? mergedQueryParams : undefined
     });
   }
+}
+
+/** The app and nav item that a moved nav item opens in. */
+interface MovedNavItemTarget {
+  AppId: string;
+  AppName: string;
+  NavItemName: string;
+}
+
+/** A saved tab of a nav item that moved: the app and nav item it was read with, and where the nav item moved. */
+interface MovedNavItemTab {
+  ApplicationId: string;
+  NavItemName: string;
+  Target: MovedNavItemTarget;
+}
+
+/** A key for a list of apps that does not depend on the order of the list. */
+function appListKey(apps: readonly { ID: string }[]): string {
+  return apps.map(app => NormalizeUUID(app.ID)).sort().join(',');
 }

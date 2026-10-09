@@ -55,6 +55,11 @@ vi.mock('@memberjunction/core', () => {
   return {
     BaseEntity: vi.fn(),
     ProviderBase: MockProviderBase,
+    EntityRecordNameCache: class {
+      Get() { return undefined; }
+      Has() { return false; }
+      Set() {}
+    },
     ProviderConfigDataBase: class {
       Data: Record<string, unknown> = {};
       constructor(data: Record<string, unknown>) { this.Data = data; }

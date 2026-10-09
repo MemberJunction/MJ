@@ -43,7 +43,7 @@ mj rubric list
 mj rubric show <rubric>[@version]
 mj rubric diff <rubric> <version> <version>
 mj rubric validate <file>
-mj rubric evaluate --rubric <rubric> --entity <name> --record <id> [--evaluator LLM|Deterministic]
+mj rubric evaluate --rubric <rubric> --entity <name> --record <id> [--evaluator <name>]
 mj test run --rubric <rubric>[@version]
 mj test suite --rubric <rubric>[@version]
 mj test promote-criteria <test>
