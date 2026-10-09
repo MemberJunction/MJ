@@ -275,6 +275,34 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       expect(query(f, '.lk-room__self-hidden')).toBeNull();
     });
 
+    it('starts hidden when the host says the user hid it: no self-view, and the chip', () => {
+      const fc = makeFakeController(makeState({ Status: 'connected', Local: view('me', { Local: true, Camera: true }), Remote: [view('ada')] }));
+      const f = render(fc.controller, { SelfViewHidden: true });
+      expect(query(f, 'mj-self-view')).toBeNull();
+      expect(text(f, '.lk-room__self-hidden')).toContain('Self-view hidden');
+      expect(names(f, '.lk-room__grid')).toEqual(['ada']);
+    });
+
+    it("tells the host when the user hides it and shows it again, and not the host's own changes", () => {
+      const fc = makeFakeController(makeState({ Status: 'connected', Local: view('me', { Local: true, Camera: true }), Remote: [view('ada')] }));
+      const f = render(fc.controller);
+      const told: boolean[] = [];
+      f.componentInstance.SelfViewHiddenChange.subscribe((hidden: boolean) => told.push(hidden));
+      (query(f, 'mj-self-view button.self__hide') as HTMLButtonElement).click();
+      f.detectChanges();
+      (query(f, '.lk-room__self-hidden button') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(told).toEqual([true, false]);
+
+      f.componentRef.setInput('SelfViewHidden', true);
+      f.detectChanges();
+      expect(query(f, 'mj-self-view')).toBeNull();
+      f.componentRef.setInput('SelfViewHidden', false);
+      f.detectChanges();
+      expect(query(f, 'mj-self-view')).not.toBeNull();
+      expect(told).toEqual([true, false]);
+    });
+
     it('shows neither the self-view nor the chip when the host turns the self-view off', () => {
       const fc = makeFakeController(makeState({ Status: 'connected', Local: view('me', { Local: true, Camera: true }), Remote: [view('ada')] }));
       const f = render(fc.controller, { ShowSelfView: false });
@@ -545,6 +573,21 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       expect(f.componentInstance.PinnedIdentity).toBeNull();
     });
 
+    it("Reset layout shows a hidden self-view again, as the call's reset brings back a hidden camera box", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      const told: boolean[] = [];
+      f.componentInstance.SelfViewHiddenChange.subscribe((hidden: boolean) => told.push(hidden));
+      (tileOf(f, 'you')?.querySelector('button.self__hide') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(tileOf(f, 'you')).toBeUndefined();
+      expect(query(f, '.lk-room__self-hidden')).not.toBeNull();
+
+      pick(f, 'ada', 'Reset layout');
+      expect(tileOf(f, 'you')?.tagName.toLowerCase()).toBe('mj-self-view');
+      expect(query(f, '.lk-room__self-hidden')).toBeNull();
+      expect(told).toEqual([true, false]);
+    });
+
     it("puts the user's own menu before their Hide button", () => {
       const f = render(twoAndAgent(), { Layout: 'spotlight' });
       const corner = Array.from(tileOf(f, 'you')?.querySelectorAll('.tile__actions-slot > *') ?? []);
@@ -754,6 +797,16 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       f.componentInstance.OnResetLayout();
       expect(moves).toEqual([[]]);
       expect(rects.map((r) => r.size)).toEqual([0]);
+    });
+
+    it('tells the host the self-view is shown on every Reset layout, hidden or not, so a hide saved elsewhere is cleared too', () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight', SelfViewHidden: true });
+      const told: boolean[] = [];
+      f.componentInstance.SelfViewHiddenChange.subscribe((hidden: boolean) => told.push(hidden));
+      f.componentInstance.OnResetLayout();
+      expect(f.componentInstance.SelfViewHidden).toBe(false);
+      f.componentInstance.OnResetLayout();
+      expect(told).toEqual([false, false]);
     });
   });
 

@@ -36,18 +36,20 @@ import type { RoomOptions } from 'livekit-client';
 
 /**
  * The `MJ: User Settings` keys under which the meeting room's layout is saved, per user and for every room: where the
- * user moved participants' tiles, and where they put picture-in-picture boxes. The realtime call saves its own layout
- * under `mj.realtime.*`.
+ * user moved participants' tiles, where they put picture-in-picture boxes, and whether they hid their self-view. The
+ * realtime call saves its own layout under `mj.realtime.*`.
  */
 export const LIVEKIT_PLACEMENT_PREF_KEY = 'mj.livekit.placement.v1';
 export const LIVEKIT_PIP_PREF_KEY = 'mj.livekit.pip.v1';
+export const LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY = 'mj.livekit.selfView.hidden.v1';
 
 /**
  * The keys the preview room saves its layout under: it remembers its layout as a meeting does, but apart, so moving the
- * simulated people (or resetting the layout) there never changes the layout saved for meetings.
+ * simulated people, hiding the self-view (or resetting the layout) there never changes what is saved for meetings.
  */
 export const LIVEKIT_PREVIEW_PLACEMENT_PREF_KEY = 'mj.livekit.preview.placement.v1';
 export const LIVEKIT_PREVIEW_PIP_PREF_KEY = 'mj.livekit.preview.pip.v1';
+export const LIVEKIT_PREVIEW_SELF_VIEW_HIDDEN_PREF_KEY = 'mj.livekit.preview.selfView.hidden.v1';
 
 /**
  * How the MJ binding obtains its room: start an agent in a room (`'agent'`), join an existing room (`'join'`), or open
@@ -156,8 +158,10 @@ export interface AgentInRoom {
         [CanEndForAll]="EnableEndForAll && !!resolvedRoomName"
         [TileMoves]="TileMoves"
         [PipRects]="PipRects"
+        [SelfViewHidden]="SelfViewHidden"
         (TileMovesChange)="OnTileMovesChange($event)"
         (PipRectsChange)="OnPipRectsChange($event)"
+        (SelfViewHiddenChange)="OnSelfViewHiddenChange($event)"
         (AgentVisionChange)="OnAgentVisionChange($event)"
         (Connected)="Connected.emit($event)"
         (Disconnected)="OnRoomDisconnected($event)"
@@ -999,16 +1003,20 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public TileMoves: readonly MediaPlacementMove[] = [];
   /** Where the user put picture-in-picture boxes, by participant identity, as saved for them. */
   public PipRects: ReadonlyMap<string, MediaPipRect> = new Map();
+  /** Whether the user hid their self-view, as saved for them; given to the room, and saved again as they change it. */
+  public SelfViewHidden = false;
 
   /** The user's meeting layout, saved per user under the room's keys in the provider's settings. */
   private readonly meetingLayoutPrefs = new MediaLayoutPrefs(() => this.userInfoEngine(), {
     Moves: LIVEKIT_PLACEMENT_PREF_KEY,
     PipRects: LIVEKIT_PIP_PREF_KEY,
+    SelfViewHidden: LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY,
   });
   /** The preview room's layout, saved the same way under its own keys. */
   private readonly previewLayoutPrefs = new MediaLayoutPrefs(() => this.userInfoEngine(), {
     Moves: LIVEKIT_PREVIEW_PLACEMENT_PREF_KEY,
     PipRects: LIVEKIT_PREVIEW_PIP_PREF_KEY,
+    SelfViewHidden: LIVEKIT_PREVIEW_SELF_VIEW_HIDDEN_PREF_KEY,
   });
 
   /** Where this room's layout is saved: the preview room's own keys in preview mode, the meeting room's otherwise. */
@@ -1026,6 +1034,15 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public OnPipRectsChange(rects: ReadonlyMap<string, MediaPipRect>): void {
     this.PipRects = rects;
     this.layoutPrefs.SavePipRects(rects);
+  }
+
+  /**
+   * The user hid their self-view, showed it again, or reset the layout: keep it and save it. When saving fails, it still
+   * holds for this session.
+   */
+  public OnSelfViewHiddenChange(hidden: boolean): void {
+    this.SelfViewHidden = hidden;
+    this.layoutPrefs.SaveSelfViewHidden(hidden);
   }
 
   /**
@@ -1086,6 +1103,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public ngOnInit(): void {
     this.TileMoves = this.layoutPrefs.LoadMoves();
     this.PipRects = this.layoutPrefs.LoadPipRects();
+    this.SelfViewHidden = this.layoutPrefs.LoadSelfViewHidden();
     this.destroyRef.onDestroy(() => this.turnPoller?.Dispose());
     this.destroyRef.onDestroy(() => this.avatarNotices.Dispose());
     if (this.AutoStart) {

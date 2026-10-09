@@ -3,10 +3,11 @@
  * - **Moves.** One move per surface, oldest first: the list `LayoutMediaStage` and `ResolveSurfacePlacements` read.
  *   {@link RecordPlacementMove} keeps it that way, and {@link WithoutStageMoves} hands the stage back to its default.
  * - **Boxes.** Where the user put each picture-in-picture box, by surface key, as fractions of the stage.
+ * - **Self-view.** Whether the user hid their own tile, for a host that lets them (the meeting room).
  *
  * The realtime call keeps its channels' layout this way and the meeting room its participants' tiles, so both save the
- * same form ({@link SerializePlacementMoves}, {@link SerializePipRects}) and read it back tolerantly, through
- * {@link MediaLayoutPrefs} under each host's own keys.
+ * same form ({@link SerializePlacementMoves}, {@link SerializePipRects}, {@link SerializeSelfViewHidden}) and read it
+ * back tolerantly, through {@link MediaLayoutPrefs} under each host's own keys.
  *
  * @module @memberjunction/ai-realtime-client/media
  */
@@ -86,6 +87,19 @@ export function SerializePipRects(rects: ReadonlyMap<string, MediaPipRect>): str
     return JSON.stringify(Object.fromEntries([...rects].map(([key, rect]) => [key, { X: rect.X, Y: rect.Y, W: rect.W, H: rect.H }])));
 }
 
+/**
+ * Reads whether the user hid their self-view. Tolerant: only a saved `true` hides it; nothing saved, `false` or anything
+ * else shows it.
+ */
+export function ParseSelfViewHidden(raw: string | null | undefined): boolean {
+    return raw === SerializeSelfViewHidden(true);
+}
+
+/** The saved form of whether the user hid their self-view: JSON `true` or `false`. */
+export function SerializeSelfViewHidden(hidden: boolean): string {
+    return JSON.stringify(hidden);
+}
+
 /** A per-user settings store: MJ's `UserInfoEngine` is one, or anything with the same two methods. */
 export interface MediaLayoutSettings {
     /** The text saved under a key, or `undefined` when there is none. */
@@ -100,15 +114,18 @@ export interface MediaLayoutKeys {
     Moves: string;
     /** Where the picture-in-picture boxes go. */
     PipRects: string;
+    /** Where whether the user hid their self-view goes. A host with no Hide on the user's own tile leaves it out. */
+    SelfViewHidden?: string;
 }
 
 /** How many moves, and how many boxes, a saved layout keeps: the newest. The oldest go first. */
 export const MEDIA_LAYOUT_SAVED_LIMIT = 50;
 
 /**
- * A host's saved layout: its moves and its picture-in-picture boxes, in a per-user settings store under the host's own
- * keys. Reading treats a store that is not ready (it throws) as nothing saved; writing skips one, so the layout then
- * lasts for this session only. Writing keeps the newest {@link MEDIA_LAYOUT_SAVED_LIMIT} moves and boxes.
+ * A host's saved layout: its moves, its picture-in-picture boxes and whether the user hid their self-view, in a per-user
+ * settings store under the host's own keys. Reading treats a store that is not ready (it throws) as nothing saved;
+ * writing skips one, or one that fails to save, so the layout then lasts for this session only. Writing keeps the newest
+ * {@link MEDIA_LAYOUT_SAVED_LIMIT} moves and boxes.
  */
 export class MediaLayoutPrefs {
     /**
@@ -140,6 +157,23 @@ export class MediaLayoutPrefs {
         this.write(this.keys.PipRects, SerializePipRects(new Map([...rects].slice(-MEDIA_LAYOUT_SAVED_LIMIT))));
     }
 
+    /**
+     * Whether the user hid their self-view: shown when nothing usable is saved, the store is not ready, or the host keeps
+     * no self-view setting (it named no key for it).
+     */
+    public LoadSelfViewHidden(): boolean {
+        const key = this.keys.SelfViewHidden;
+        return key !== undefined && ParseSelfViewHidden(this.read(key));
+    }
+
+    /** Saves whether the user hid their self-view; nothing, for a host that keeps no self-view setting. */
+    public SaveSelfViewHidden(hidden: boolean): void {
+        const key = this.keys.SelfViewHidden;
+        if (key !== undefined) {
+            this.write(key, SerializeSelfViewHidden(hidden));
+        }
+    }
+
     private read(key: string): string | undefined {
         try {
             return this.store().GetSetting(key);
@@ -152,7 +186,7 @@ export class MediaLayoutPrefs {
         try {
             this.store().SetSettingDebounced(key, value);
         } catch {
-            // The store is not ready: the layout lasts for this session only.
+            // The store is not ready, or failed to save: the layout lasts for this session only.
         }
     }
 }

@@ -1,13 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
     MEDIA_LAYOUT_SAVED_LIMIT,
     MediaLayoutPrefs,
     ParsePipRects,
     ParsePlacementMoves,
+    ParseSelfViewHidden,
     RecordPipRect,
     RecordPlacementMove,
     SerializePipRects,
     SerializePlacementMoves,
+    SerializeSelfViewHidden,
     WithoutStageMoves,
     type MediaLayoutSettings,
 } from '../media/mediaLayout';
@@ -127,6 +129,23 @@ describe('recording a box', () => {
     });
 });
 
+describe('the saved self-view Hide', () => {
+    it('reads back what it saves', () => {
+        expect(ParseSelfViewHidden(SerializeSelfViewHidden(true))).toBe(true);
+        expect(ParseSelfViewHidden(SerializeSelfViewHidden(false))).toBe(false);
+    });
+
+    it('saves a JSON boolean', () => {
+        expect(SerializeSelfViewHidden(true)).toBe('true');
+        expect(SerializeSelfViewHidden(false)).toBe('false');
+    });
+
+    it('reads nothing saved, and anything but a saved true, as shown', () => {
+        const shown = [undefined, null, '', 'false', 'TRUE', ' true', 'true ', '1', 'yes', '"true"', '[true]', '{"Hidden":true}', '{nope'];
+        expect(shown.filter((raw) => ParseSelfViewHidden(raw))).toEqual([]);
+    });
+});
+
 describe('a saved layout (MediaLayoutPrefs)', () => {
     const KEYS = { Moves: 'host.moves', PipRects: 'host.pips' };
     /** A store that keeps settings in memory, as UserInfoEngine keeps them for the user. */
@@ -181,11 +200,47 @@ describe('a saved layout (MediaLayoutPrefs)', () => {
     });
 
     it('reads nothing and saves nothing while the store is not ready', () => {
-        const prefs = new MediaLayoutPrefs(notReady, KEYS);
+        const prefs = new MediaLayoutPrefs(notReady, { ...KEYS, SelfViewHidden: 'host.self' });
         expect(prefs.LoadMoves()).toEqual([]);
         expect(prefs.LoadPipRects().size).toBe(0);
+        expect(prefs.LoadSelfViewHidden()).toBe(false);
         expect(() => prefs.SaveMoves([{ SurfaceKey: 'x', Placement: 'pip' }])).not.toThrow();
         expect(() => prefs.SavePipRects(new Map())).not.toThrow();
+        expect(() => prefs.SaveSelfViewHidden(true)).not.toThrow();
+    });
+
+    it("reads and saves whether the self-view is hidden under the host's own key", () => {
+        const { store, settings } = memoryStore({ 'host.self': 'true', 'other.self': 'false' });
+        const prefs = new MediaLayoutPrefs(() => store, { ...KEYS, SelfViewHidden: 'host.self' });
+        expect(prefs.LoadSelfViewHidden()).toBe(true);
+        prefs.SaveSelfViewHidden(false);
+        expect(settings.get('host.self')).toBe('false');
+        expect(prefs.LoadSelfViewHidden()).toBe(false);
+        prefs.SaveSelfViewHidden(true);
+        expect(settings.get('host.self')).toBe('true');
+        expect(settings.get('other.self')).toBe('false');
+    });
+
+    it('reads the self-view as shown, and saves nothing for it, when the host names no key for it', () => {
+        const { store, settings } = memoryStore({ 'host.self': 'true' });
+        const read = vi.spyOn(store, 'GetSetting');
+        const write = vi.spyOn(store, 'SetSettingDebounced');
+        const prefs = new MediaLayoutPrefs(() => store, KEYS);
+        expect(prefs.LoadSelfViewHidden()).toBe(false);
+        prefs.SaveSelfViewHidden(true);
+        expect(read).not.toHaveBeenCalled();
+        expect(write).not.toHaveBeenCalled();
+        expect([...settings]).toEqual([['host.self', 'true']]);
+    });
+
+    it('does not throw when the store fails to save, and still reads what it holds', () => {
+        const { store } = memoryStore({ 'host.self': 'true' });
+        vi.spyOn(store, 'SetSettingDebounced').mockImplementation(() => {
+            throw new Error('offline');
+        });
+        const prefs = new MediaLayoutPrefs(() => store, { ...KEYS, SelfViewHidden: 'host.self' });
+        expect(() => prefs.SaveSelfViewHidden(false)).not.toThrow();
+        expect(prefs.LoadSelfViewHidden()).toBe(true);
     });
 
     it('looks the store up each time, so a store that becomes ready later is used', () => {

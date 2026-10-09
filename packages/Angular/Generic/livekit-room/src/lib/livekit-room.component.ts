@@ -357,6 +357,11 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
    * identity, for the host to save and give back through {@link PipRects}.
    */
   @Output() public PipRectsChange = new EventEmitter<ReadonlyMap<string, MediaPipRect>>();
+  /**
+   * Fired when the user hides their self-view (`true`), or shows it again from the "Self-view hidden" chip or resets the
+   * layout (`false`), for the host to save and give back through {@link SelfViewHidden}.
+   */
+  @Output() public SelfViewHiddenChange = new EventEmitter<boolean>();
 
   /**
    * Where the user moved participants' tiles, as {@link TileMovesChange} gave them to the host: oldest first, one per
@@ -374,6 +379,12 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   /** Where the user put picture-in-picture boxes, by participant identity, as {@link PipRectsChange} gave them to the host. */
   @Input() public PipRects: ReadonlyMap<string, MediaPipRect> = new Map();
 
+  /**
+   * Whether the user hid their self-view (Hide on their tile); the camera stays on, so others still see them. A host that
+   * saves it gives it back here, as {@link SelfViewHiddenChange} gave it; otherwise it lasts for the session.
+   */
+  @Input() public SelfViewHidden = false;
+
   // ── View state (template-bound) ─────────────────────────────────────────────────
   /** The current normalized room state snapshot. */
   public State: LiveKitRoomState = this.controller.State;
@@ -383,8 +394,6 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   public UnreadChatCount = 0;
   /** Which side panel is currently open. */
   public SidePanel: LiveKitSidePanel = 'none';
-  /** The user hid their self-view (Hide on their tile) for this session. The camera stays on. */
-  public SelfViewHidden = false;
   /** Whether the device menu popover is open. */
   public DeviceMenuOpen = false;
   /** Whether the layout switcher popover is open. */
@@ -648,13 +657,15 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   public OnChangeShare(): void {
     void this.controller.ChangeScreenShare();
   }
-  /** Hides the user's self-view for this session; the camera stays on. */
+  /** Hides the user's self-view, and tells the host ({@link SelfViewHiddenChange}); the camera stays on. */
   public OnHideSelfView(): void {
     this.SelfViewHidden = true;
+    this.SelfViewHiddenChange.emit(true);
   }
-  /** Shows the user's self-view again, from the "Self-view hidden" chip. */
+  /** Shows the user's self-view again, from the "Self-view hidden" chip or Reset layout, and tells the host. */
   public OnShowSelfView(): void {
     this.SelfViewHidden = false;
+    this.SelfViewHiddenChange.emit(false);
   }
   /** Toggles the chat panel and clears the unread count when opening. */
   public OnToggleChat(): void {
@@ -817,14 +828,16 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   }
 
   /**
-   * "Reset layout": every tile goes back where the call places it, so the pin and the boxes are cleared, and every box's
-   * position is forgotten, as the realtime call's reset does. The host hears both.
+   * "Reset layout": every tile goes back where the call places it, so the pin and the boxes are cleared, every box's
+   * position is forgotten, and a hidden self-view shows again, as the realtime call's reset brings back a hidden camera
+   * box. The host hears all three, the self-view's on every reset, hidden or not.
    */
   public OnResetLayout(): void {
     this.tileMoves = [];
     this.PipRects = new Map();
     this.TileMovesChange.emit(this.tileMoves);
     this.PipRectsChange.emit(this.PipRects);
+    this.OnShowSelfView();
   }
 
   /**

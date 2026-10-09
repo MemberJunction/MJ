@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, of, type Observable } from 'rxjs';
-import { ChangeDetectorRef } from '@angular/core';
+import { ChangeDetectorRef, ErrorHandler, type Provider } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { renderComponentFixture, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import type { IMetadataProvider } from '@memberjunction/core';
@@ -35,6 +35,8 @@ import {
   LIVEKIT_PIP_PREF_KEY,
   LIVEKIT_PLACEMENT_PREF_KEY,
   LIVEKIT_PREVIEW_PLACEMENT_PREF_KEY,
+  LIVEKIT_PREVIEW_SELF_VIEW_HIDDEN_PREF_KEY,
+  LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY,
 } from './mj-livekit-room.component';
 
 /** A participant without media: the room lays them out, and nothing is attached. */
@@ -123,9 +125,9 @@ describe('MJLiveKitRoomComponent: the saved layout (DOM)', () => {
   });
 
   /** The binding with its room shown, as once its token is resolved. */
-  const render = (inputs: Record<string, unknown> = {}) => {
+  const render = (inputs: Record<string, unknown> = {}, providers: Provider[] = []) => {
     const f = renderComponentFixture(MJLiveKitRoomComponent, {
-      providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => fakeController() }],
+      providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => fakeController() }, ...providers],
       inputs: { AutoStart: false, Mode: 'join', Layout: 'spotlight', ShowPreJoin: false, ...inputs },
     });
     f.componentInstance.ServerUrl = 'wss://example.test';
@@ -164,6 +166,95 @@ describe('MJLiveKitRoomComponent: the saved layout (DOM)', () => {
     roomOf(render()).OnResetLayout();
     expect(ParsePlacementMoves(lastWrite(LIVEKIT_PLACEMENT_PREF_KEY))).toEqual([]);
     expect(ParsePipRects(lastWrite(LIVEKIT_PIP_PREF_KEY)).size).toBe(0);
+  });
+
+  describe("the self-view's Hide", () => {
+    let reported: unknown[];
+    beforeEach(() => {
+      reported = [];
+    });
+    // Cleans up first, so a failure here leaves no stub behind for the next test.
+    afterEach(() => {
+      vi.restoreAllMocks();
+      clearOverlayContainers();
+      expect(reported).toEqual([]);
+    });
+
+    /** The binding, with any error Angular handles while it runs kept for the check after each test. */
+    const renderReporting = () => render({}, [{ provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } }]);
+    const selfView = (f: ReturnType<typeof render>) => f.nativeElement.querySelector('mj-self-view');
+    const chip = (f: ReturnType<typeof render>) => f.nativeElement.querySelector('.lk-room__self-hidden') as HTMLElement | null;
+    const click = (f: ReturnType<typeof render>, selector: string) => {
+      (f.nativeElement.querySelector(selector) as HTMLButtonElement).click();
+      f.detectChanges();
+    };
+
+    it('keeps it under fixed keys, so a saved hide is found again after an upgrade', () => {
+      expect(LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY).toBe('mj.livekit.selfView.hidden.v1');
+      expect(LIVEKIT_PREVIEW_SELF_VIEW_HIDDEN_PREF_KEY).toBe('mj.livekit.preview.selfView.hidden.v1');
+    });
+
+    it('starts with the self-view hidden when the user hid it before', () => {
+      saved.set(LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY, 'true');
+      const f = renderReporting();
+      expect(roomOf(f).SelfViewHidden).toBe(true);
+      expect(selfView(f)).toBeNull();
+      expect(chip(f)?.textContent).toContain('Self-view hidden');
+    });
+
+    it("saves the hide under the meeting room's key, and Show clears it", () => {
+      const f = renderReporting();
+      click(f, 'mj-self-view button.self__hide');
+      expect(lastWrite(LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY)).toBe('true');
+      expect(f.componentInstance.SelfViewHidden).toBe(true);
+      expect(selfView(f)).toBeNull();
+
+      click(f, '.lk-room__self-hidden button');
+      expect(lastWrite(LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY)).toBe('false');
+      expect(f.componentInstance.SelfViewHidden).toBe(false);
+      expect(selfView(f)).not.toBeNull();
+      expect(chip(f)).toBeNull();
+    });
+
+    it('shows a saved hide again on Reset layout, and saves that with the empty layout', () => {
+      saved.set(LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY, 'true');
+      const f = renderReporting();
+      expect(selfView(f)).toBeNull();
+      roomOf(f).OnResetLayout();
+      f.detectChanges();
+      expect(writes.map(([key]) => key)).toEqual([LIVEKIT_PLACEMENT_PREF_KEY, LIVEKIT_PIP_PREF_KEY, LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY]);
+      expect(lastWrite(LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY)).toBe('false');
+      expect(f.componentInstance.SelfViewHidden).toBe(false);
+      expect(selfView(f)).not.toBeNull();
+      expect(chip(f)).toBeNull();
+    });
+
+    it.each([
+      ['nothing is saved', undefined],
+      ['false is saved', 'false'],
+      ['something other than a boolean is saved', 'yes'],
+      ['the saved value is malformed', '{"Hidden":true'],
+    ])('shows the self-view when %s', (_case, raw) => {
+      if (raw !== undefined) {
+        saved.set(LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY, raw);
+      }
+      const f = renderReporting();
+      expect(roomOf(f).SelfViewHidden).toBe(false);
+      expect(selfView(f)).not.toBeNull();
+      expect(chip(f)).toBeNull();
+    });
+
+    it('keeps the self-view hidden for this session when saving fails', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => {
+        throw new Error('offline');
+      });
+      const f = renderReporting();
+      click(f, 'mj-self-view button.self__hide');
+      expect(f.componentInstance.SelfViewHidden).toBe(true);
+      expect(roomOf(f).SelfViewHidden).toBe(true);
+      expect(selfView(f)).toBeNull();
+      expect(chip(f)).not.toBeNull();
+    });
   });
 
   /**
@@ -320,6 +411,21 @@ describe('MJLiveKitRoomComponent: the preview room (DOM)', () => {
     expect(f.componentInstance.TileMoves).toEqual([{ SurfaceKey: 'participant:preview-bo', Placement: 'pip' }]);
     roomOf(f).MoveTile('preview-ada', 'pip');
     expect(writes).toEqual([LIVEKIT_PREVIEW_PLACEMENT_PREF_KEY]);
+  });
+
+  it("keeps the preview's self-view Hide under its own key, apart from meetings'", async () => {
+    saved.set(LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY, 'true');
+    const f = await render();
+    expect(roomOf(f).SelfViewHidden).toBe(false);
+    roomOf(f).OnHideSelfView();
+    expect(writes).toEqual([LIVEKIT_PREVIEW_SELF_VIEW_HIDDEN_PREF_KEY]);
+  });
+
+  it('starts the preview with the self-view hidden when the user hid it there before', async () => {
+    saved.set(LIVEKIT_PREVIEW_SELF_VIEW_HIDDEN_PREF_KEY, 'true');
+    const f = await render();
+    expect(roomOf(f).SelfViewHidden).toBe(true);
+    expect(f.nativeElement.querySelector('mj-self-view')).toBeNull();
   });
 
   it('frees your devices when it goes away', async () => {
