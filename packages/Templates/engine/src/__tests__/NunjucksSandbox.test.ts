@@ -6,7 +6,8 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import nunjucks from 'nunjucks';
-import { HardenNunjucksRuntime, TemplateSandboxError } from '../NunjucksSandbox';
+import { HardenNunjucksRuntime } from '../NunjucksSandbox';
+import { TemplateSandboxError } from '../TemplateSandboxError';
 
 declare global {
     // Set only by template code that managed to run JavaScript.
@@ -23,6 +24,13 @@ interface RuntimeHooks {
     callWrap: (obj: object, name: string, context: object, args: object[]) => object;
 }
 const runtime = (nunjucks as unknown as { runtime: RuntimeHooks }).runtime;
+
+/** The nunjucks parser module and lexer, as the compiler uses them. */
+interface ParserModule {
+    parse: (src: string) => object;
+    Parser: new (tokens: object) => { parseAsRoot(): object };
+}
+const { parser, lexer } = nunjucks as unknown as { parser: ParserModule; lexer: { lex(src: string): object } };
 
 function renderPlain(templateText: string, data: object = {}): string {
     return new nunjucks.Environment(null, { autoescape: false }).renderString(templateText, data);
@@ -49,12 +57,26 @@ describe('HardenNunjucksRuntime', () => {
 
     it('is idempotent: hardening again keeps the installed guards', () => {
         const installed = { ...runtime };
+        const installedParse = parser.parse;
 
         HardenNunjucksRuntime();
 
         expect(runtime.memberLookup).toBe(installed.memberLookup);
         expect(runtime.contextOrFrameLookup).toBe(installed.contextOrFrameLookup);
         expect(runtime.callWrap).toBe(installed.callWrap);
+        expect(parser.parse).toBe(installedParse);
+    });
+
+    it('guards the parser again after something replaces it with an unguarded one', () => {
+        const guarded = parser.parse;
+        parser.parse = (src: string) => new parser.Parser(lexer.lex(src)).parseAsRoot();
+        try {
+            HardenNunjucksRuntime();
+            expect(parser.parse).not.toBe(guarded);
+            expect(() => renderPlain('{{ a"b }}')).toThrow(TemplateSandboxError.name);
+        } finally {
+            parser.parse = guarded;
+        }
     });
 
     it('guards a hook again after something replaces it with an unguarded one', () => {
@@ -71,12 +93,23 @@ describe('HardenNunjucksRuntime', () => {
 });
 
 describe('member access', () => {
-    it.each(['constructor', 'prototype', '__proto__', '__defineGetter__', '__lookupGetter__'])(
-        'reads the restricted name %s as empty, even when the data defines it',
+    it.each(['constructor', 'prototype', '__defineGetter__', '__lookupGetter__'])(
+        'reads own data stored under the restricted name %s',
         (name) => {
-            expect(renderPlain(`[{{ data["${name}"] }}]`, { data: JSON.parse(`{"${name}": "own value"}`) })).toBe('[]');
+            expect(renderPlain(`[{{ data["${name}"] }}]`, { data: JSON.parse(`{"${name}": "own value"}`) })).toBe('[own value]');
         },
     );
+
+    it('never reads __proto__, even when the data defines it', () => {
+        expect(renderPlain('[{{ data["__proto__"] }}]', { data: JSON.parse('{"__proto__": "own value"}') })).toBe('[]');
+    });
+
+    it('does not read a restricted name that holds a function, that the value inherits, or that a function owns', () => {
+        expect(renderPlain('[{{ data.constructor }}][{{ plain.constructor }}][{{ range.prototype }}]', {
+            data: { constructor: () => 'own function' },
+            plain: {},
+        })).toBe('[][][]');
+    });
 
     it('still reads ordinary members, including MJ system fields', () => {
         expect(renderPlain('{{ r.Name }}|{{ r.__mj_UpdatedAt }}|{{ r.tags[0] }}', {
@@ -97,6 +130,11 @@ describe('bare names', () => {
 
     it('resolve to render data keys that shadow inherited names', () => {
         expect(renderPlain('{{ valueOf }}', { valueOf: 'own' })).toBe('own');
+    });
+
+    it('resolve a restricted name only to render data that is not a function', () => {
+        expect(renderPlain('[{{ constructor }}]', { constructor: 'Acme Builders' })).toBe('[Acme Builders]');
+        expect(renderPlain('[{{ constructor }}]', { constructor: () => 'own function' })).toBe('[]');
     });
 });
 
