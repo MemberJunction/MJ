@@ -1692,6 +1692,47 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     subAgentChanges?: SubAgentChange[];
 
     /**
+     * Optional values the caller fixes for actions' input parameters, keyed by Action ID and then by
+     * parameter name (IDs compare as UUIDs, names case-insensitively).
+     *
+     * A bound parameter is **hidden from the model**: it is left out of the action's description in the
+     * prompt catalog and out of its native tool schema. At dispatch the bound value is used whatever the
+     * model (or a Flow step's input mapping) sent under that name; a value the model wrote is discarded
+     * and the override is logged with the run and step IDs. A required parameter bound to `null` or
+     * `undefined` refuses the action; an optional one bound to nothing is hidden and the action gets no
+     * value for it. A name that is not one of the action's input parameters refuses the action too, so a
+     * misspelled binding fails loudly instead of leaving the parameter open to the model, and a key that
+     * is not a known Action ID fails the run at its start. A refused action is locked out for the rest of
+     * the run and the model is told only that it is unavailable. Bindings reach every sub-agent run
+     * unchanged, the way {@link actionChanges} do; the action's execution log marks each bound parameter
+     * (`ActionParam.Bound`); and the action `Context` carries them as `BoundActionParams`, so the actions
+     * that describe other actions hide the same names.
+     *
+     * This is how a host fixes *which record* an action acts on (a space's chapter, a tenant, a folder)
+     * so the model can neither see nor choose it, within these **limits**. Server-side only: no GraphQL
+     * input reaches this field. A run with bindings has task graphs withheld (`enableTaskGraphs` is
+     * ignored), because a graph's action nodes are dispatched outside the agent's binding gate. Bindings
+     * are not persisted: a run resumed from a stored request (`MJ: AI Agent Requests`) starts without
+     * them, so the hidden parameter is open to the model again until bindings are persisted on the run;
+     * the same holds for {@link actionChanges}. The realtime client-direct action path and the workflow
+     * meta-actions (Loop, Conditional, Retry, Parallel Execute, Execute Agent) dispatch actions themselves
+     * and do not apply bindings, so do not grant them to a bound agent. An action's own message text may
+     * mention a bound value.
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent,
+     *   conversationMessages,
+     *   boundActionParams: { [listMembersActionID]: { ChapterID: space.ChapterID } }
+     * };
+     * ```
+     *
+     * @since 6.2.0
+     */
+    boundActionParams?: BoundActionParams;  // case-violation-ok-legacy-back-compat: named to match its siblings actionChanges and subAgentChanges, which predate the rule, and the plan (#4789 § 2) that names it
+
+    /**
      * Optional agent-type-specific execution parameters.
      *
      * Different agent types can define their own parameter interfaces for
@@ -1980,6 +2021,14 @@ export interface ExpandMessageRequest {
     /** Optional reason for expanding the message */
     reason?: string;
 }
+
+/**
+ * Values fixed by the caller for actions' input parameters: Action ID → parameter name → value.
+ * {@link ExecuteAgentParams.boundActionParams} states the rules the agent applies to them.
+ *
+ * @since 6.2.0
+ */
+export type BoundActionParams = Record<string, Record<string, unknown>>;
 
 /**
  * Scope options for runtime action changes.

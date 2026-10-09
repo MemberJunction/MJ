@@ -13,6 +13,7 @@
 
 import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
 import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
+import { ApplyBoundActionParams, BindingsForAction, BoundParamsApplication, IsBoundParamName, UnboundParams } from './bound-action-params';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
@@ -89,6 +90,7 @@ import {
     ActionChange,
     ActionChangeScope,
     SubAgentChange,
+    BoundActionParams,
     MediaOutput,
     FileOutputRef,
     ParseFileOutputRef,
@@ -428,6 +430,12 @@ export interface ExecuteSingleActionOptions {
      * call too.
      */
     skipCircuitBreaker?: boolean;
+    /**
+     * The run step (`MJ: AI Agent Run Steps`) this call is recorded under, named in the audit lines
+     * written when a bound parameter (`ExecuteAgentParams.boundActionParams`) overrides a value the
+     * model sent or refuses the call. Set by the actions step; a direct caller may leave it out.
+     */
+    StepID?: string;
 }
 
 /**
@@ -874,6 +882,125 @@ export class BaseAgent {
         blocked.RunParams = new RunActionParams();
         blocked.RunParams.Action = actionEntity;
         return blocked;
+    }
+
+    /**
+     * Applies the run's bound parameters to one call (`ExecuteAgentParams.boundActionParams`): a bound
+     * value replaces whatever the model sent under its name, and the override is logged with the run and
+     * step IDs. The rules are {@link ApplyBoundActionParams}'s; this adds only the log line.
+     */
+    private applyActionBindings(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        options?: ExecuteSingleActionOptions
+    ): BoundParamsApplication {
+        const bindings = BindingsForAction(params.boundActionParams, actionEntity.ID);
+        const application = ApplyBoundActionParams(action.params, bindings, actionEntity.Params?.Items ?? [], actionEntity.Name);
+        if (application.Overridden.length > 0) {
+            const names = application.Overridden.map((n) => `'${n}'`).join(', ');
+            this.logStatus(`   🔒 Action '${action.name}': the model supplied ${names}, which this run binds; the model's value is discarded (${this.whereInRun(options)})`, false, params);
+        }
+        return application;
+    }
+
+    /** "run <id>, step <id>" for an audit line. */
+    private whereInRun(options?: ExecuteSingleActionOptions): string {
+        return `run ${this._agentRun?.ID ?? 'n/a'}, step ${options?.StepID ?? 'n/a'}`;
+    }
+
+    /** The `ActionParam` array for one dispatch. A bound parameter carries the `Bound` marker into the execution log. */
+    private toActionParams(application: BoundParamsApplication): ActionParam[] {
+        return Object.entries(application.Params).map(([key, value]) => {
+            const param: ActionParam = { Name: key, Value: value, Type: 'Input' };
+            if (application.Bound.includes(key)) {
+                param.Bound = true;
+            }
+            return param;
+        });
+    }
+
+    /**
+     * A call its bindings refuse. The reason (a required parameter bound to nothing, or a binding that
+     * names no input of the action) is logged for the operator with the run and step IDs. The model is
+     * told only that the action is unavailable, because naming the parameter would reveal what is being
+     * hidden; and the action is locked out for the rest of the run the way a fatal configuration failure
+     * is, so the circuit breaker short-circuits every later call instead of the model being told to
+     * "adjust its parameters" for a refusal it cannot fix.
+     */
+    private refuseBoundAction(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        reason: string,
+        options?: ExecuteSingleActionOptions
+    ): ActionResult {
+        this.logError(`Bound action parameters refused '${actionEntity.Name}' (${this.whereInRun(options)}): ${reason}`, {
+            category: 'ActionExecution',
+            agent: params.agent,
+            metadata: { actionName: action.name, runId: this._agentRun?.ID, stepId: options?.StepID }
+        });
+        this._fatalActionFailures.add(action.name);
+        if (actionEntity.Name) {
+            this._fatalActionFailures.add(actionEntity.Name);
+        }
+        return this.buildBlockedActionResult(actionEntity, 'fatal',
+            `Action '${action.name}' is not available in this run's configuration. Do not call it again; use another tool or proceed with the data you have.`);
+    }
+
+    /** True when the run binds a parameter on at least one of these actions. */
+    private bindsAnyAction(actions: readonly MJActionEntityExtended[], bound: BoundActionParams | undefined): boolean {
+        return bound !== undefined && actions.some((a) => BindingsForAction(bound, a.ID) !== undefined);
+    }
+
+    /** True when the run has any bound action parameters at all. */
+    private hasBoundActionParams(bound: BoundActionParams | undefined): boolean {
+        return bound !== undefined && Object.keys(bound).length > 0;
+    }
+
+    /**
+     * A copy of the agent-type prompt params with task graphs withheld (`enableTaskGraphs` off and the
+     * `tasks` response section hidden). A copy, never a write: the input may be the process-wide cached base.
+     */
+    private withoutTaskGraphs(promptParams: Record<string, unknown>): Record<string, unknown> {
+        const responseType = IsPlainObject(promptParams.includeResponseTypeDefinition)
+            ? (promptParams.includeResponseTypeDefinition as Record<string, unknown>)
+            : {};
+        return { ...promptParams, enableTaskGraphs: false, includeResponseTypeDefinition: { ...responseType, tasks: false } };
+    }
+
+    /**
+     * The error that fails a run at its start when `boundActionParams` names an action that does not
+     * exist, so a host that keyed by name or mistyped an ID finds out at once rather than having the
+     * parameter it meant to hide shown to the model. Root run only: a sub-agent inherits bindings that
+     * were already checked. Needs the action engine configured (Phase 1 of {@link Execute}).
+     */
+    private boundActionParamsError(params: ExecuteAgentParams): string | null {
+        const bound = params.boundActionParams;
+        if (this._depth !== 0 || !bound || Object.keys(bound).length === 0) {
+            return null;
+        }
+        const known = ActionEngineServer.Instance.Actions;
+        const unknown = Object.keys(bound).filter((id) => !known.some((a) => UUIDsEqual(a.ID, id)));
+        if (unknown.length === 0) {
+            return null;
+        }
+        return `boundActionParams names no known action: ${unknown.map((id) => `'${id}'`).join(', ')}. Keys are Action IDs.`;
+    }
+
+    /**
+     * The model's parameters for one action as the progress line and the model-facing invocation record
+     * show them: minus any name the run binds, since a value the model wrote for a bound parameter was
+     * discarded and must not be shown as if it had been used. With no bindings, `Object.entries(aa.params)`.
+     */
+    private shownActionParamEntries(params: ExecuteAgentParams, aa: AgentAction): [string, unknown][] {
+        const entries = Object.entries(aa.params ?? {});
+        if (!params.boundActionParams) {
+            return entries;
+        }
+        const actionEntity = this.getEffectiveActionsForValidation(params.agent.ID).find((a) => a.Name === aa.name);
+        const bindings = BindingsForAction(params.boundActionParams, actionEntity?.ID ?? '');
+        return bindings ? entries.filter(([key]) => !IsBoundParamName(key, bindings)) : entries;
     }
 
     /**
@@ -2182,6 +2309,19 @@ export class BaseAgent {
                 throw new Error(errorMessage);
             }
 
+            // A binding keyed by something other than a known Action ID fails the run here, before any
+            // prompt is built: silently ignoring it would show the model the parameter the host meant to hide.
+            const bindingError = this.boundActionParamsError(params);
+            if (bindingError) {
+                this.logStatus(`🚫 ${bindingError}`, false, params);
+                if (this._agentRun) {
+                    this._agentRun.Status = 'Failed';
+                    this._agentRun.ErrorMessage = bindingError;
+                    await this._agentRun.Save();
+                }
+                throw new Error(bindingError);
+            }
+
             // Reset per-run state (sync, instant — no parallelization needed)
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
@@ -3057,6 +3197,7 @@ export class BaseAgent {
                 CredentialScope: params.CredentialScope,
                 data: params.data,
                 verbose: params.verbose,
+                boundActionParams: params.boundActionParams, // the target keeps the run's bindings, as every sub-agent run does
                 // Progress streams BOTH to the runner's narration consumer (request.OnProgress —
                 // it paces SendContextNote/RequestSpokenUpdate over the live socket) AND to any
                 // host-level onProgress the parent execution carries.
@@ -4819,7 +4960,10 @@ export class BaseAgent {
             return;
         }
         try {
-            const actionSet = BuildActionToolSet(actions, new Map(actions.map((a) => [a.ID, a.Params.Items])));
+            // A bound parameter (ExecuteAgentParams.boundActionParams) is left out of the tool's schema, so
+            // the model is never asked for it. With no bindings each action's full list is used, as before.
+            const paramsByAction = new Map(actions.map((a) => [a.ID, UnboundParams(a.Params.Items, BindingsForAction(params.boundActionParams, a.ID))]));
+            const actionSet = BuildActionToolSet(actions, paramsByAction);
             // Under implicit control flow the agent cannot know which model will answer, so it declares the full
             // set — Actions plus the control-flow tools (one per sub-agent, payload_change_request,
             // ask_user) — and NAMES the control ones. The runner keeps them only when the selected
@@ -4918,7 +5062,8 @@ export class BaseAgent {
             params.contextUser,
             params.data,
             params.actionChanges,
-            params.subAgentChanges
+            params.subAgentChanges,
+            params.boundActionParams
         );
 
         // Set up the hierarchical prompt execution
@@ -9067,7 +9212,8 @@ The context is now within limits. Please retry your request with the recovered c
         _contextUser?: UserInfo,
         extraData?: any,
         actionChanges?: ActionChange[],
-        subAgentChanges?: SubAgentChange[]
+        subAgentChanges?: SubAgentChange[],
+        boundActionParams?: BoundActionParams
     ): Promise<AgentContextData> {
         try {
             const engine = AIEngine.Instance;
@@ -9109,7 +9255,7 @@ The context is now within limits. Please retry your request with the recovered c
                 const result = this.applyActionChanges([...catalog.baseActionsRaw], actionChanges, agent.ID, isRoot);
                 activeActions = result.actions.filter(a => a.Status === 'Active');
                 this._dynamicActionLimits = result.dynamicLimits;
-                actionDetails = this.formatActionDetails(activeActions);
+                actionDetails = this.formatActionDetails(activeActions, boundActionParams);
             } else {
                 // No actionChanges this step → no dynamically-added actions, hence no dynamic limits.
                 // gatherPromptTemplateData runs once per step, and _dynamicActionLimits is keyed to the
@@ -9117,6 +9263,12 @@ The context is now within limits. Please retry your request with the recovered c
                 // Resetting to {} is correct and required: it prevents a prior step's actionChanges limits
                 // from leaking into a step that has none. It is NOT relied upon to persist across steps.
                 this._dynamicActionLimits = {};
+                // A bound parameter (ExecuteAgentParams.boundActionParams) is left out of the catalog the model
+                // reads. The cached markdown describes every parameter, so a run that binds one on an active
+                // action renders the catalog for itself; a run with no bindings keeps the cached text untouched.
+                if (this.bindsAnyAction(activeActions, boundActionParams)) {
+                    actionDetails = this.formatActionDetails(activeActions, boundActionParams);
+                }
             }
             // Store for later validation in executeActionsStep
             this._effectiveActions = activeActions;
@@ -9135,6 +9287,11 @@ The context is now within limits. Please retry your request with the recovered c
                 // this agent; the audit shows it is read-only downstream today, but the clone is cheap
                 // and removes any cache-poisoning foot-gun should a future consumer write to it.
                 agentTypePromptParams = { ...catalog.baseAgentTypePromptParams };
+            }
+            // A bound run (ExecuteAgentParams.boundActionParams) is not offered task graphs: a graph's action
+            // nodes are dispatched outside the binding gate (see executeTasksStep, which refuses one anyway).
+            if (this.hasBoundActionParams(boundActionParams)) {
+                agentTypePromptParams = this.withoutTaskGraphs(agentTypePromptParams);
             }
             // Store for the finishIf gate, which runs after this prompt in executeActionsStep / executeNextStep
             this._agentTypePromptParams = agentTypePromptParams;
@@ -9157,7 +9314,7 @@ The context is now within limits. Please retry your request with the recovered c
             // decision judges only skills the policy offers, and an override that skips `super` keeps it.
             // The counts stay whole: they are what the model can call, and a narrowed list says what it hides.
             await this.ensureCatalogNarrowing(agent, _contextUser, agentTypePromptParams, activeActions, uniqueActiveSubAgents, availableSkills);
-            actionDetails = this.narrowedCatalogSection('action', activeActions, actionDetails, shown => this.formatActionDetails(shown));
+            actionDetails = this.narrowedCatalogSection('action', activeActions, actionDetails, shown => this.formatActionDetails(shown, boundActionParams));
             subAgentDetails = this.narrowedCatalogSection('agent', uniqueActiveSubAgents, subAgentDetails, shown => this.formatSubAgentDetails(shown));
             const skillsCatalog = this.narrowedCatalogSection('skill', availableSkills, this.formatSkillsCatalog(availableSkills), shown => this.formatSkillsCatalog(shown));
 
@@ -10285,12 +10442,18 @@ The context is now within limits. Please retry your request with the recovered c
      * This method executes one action using the MemberJunction Actions framework.
      * The full ActionResult objects are returned, allowing the caller to access result codes, output parameters,
      * and other execution details.
+     *
+     * The run's bound parameters (`ExecuteAgentParams.boundActionParams`) are applied first: a bound value
+     * replaces whatever the model sent under its name, and a call the bindings refuse (a required parameter
+     * bound to nothing, a binding naming no input of the action) returns a blocked `'fatal'` result without
+     * dispatching and locks the action out for the rest of the run.
      * 
      * @param {ExecuteAgentParams} params - Parameters from agent execution for context passing
      * @param {AgentAction} action - Action to execute
      * @param {UserInfo} [contextUser] - Optional user context for permissions
      * @param {ExecuteSingleActionOptions} [options] - `skipCircuitBreaker` bypasses the run-scoped
-     *   circuit breaker for callers that do their own failure accounting (the pipeline executor)
+     *   circuit breaker for callers that do their own failure accounting (the pipeline executor);
+     *   `StepID` names the run step in the audit lines a bound parameter writes
      * 
      * @returns {Promise<ActionResult>} ActionResult object from the action execution
      * 
@@ -10300,7 +10463,13 @@ The context is now within limits. Please retry your request with the recovered c
         contextUser?: UserInfo, options?: ExecuteSingleActionOptions): Promise<ActionResult> {
         
         const skipBreaker = options?.skipCircuitBreaker === true;
-        const normalizedParams = this.normalizeActionParams(action.params);
+        // Bound parameters first: what the model sent under a bound name is discarded here, and a call
+        // the bindings refuse never reaches the engine; it is locked out for the run instead.
+        const binding = this.applyActionBindings(params, action, actionEntity, options);
+        if (binding.Refusal) {
+            return this.refuseBoundAction(params, action, actionEntity, binding.Refusal, options);
+        }
+        const normalizedParams = this.normalizeActionParams(binding.HasBindings ? binding.Params : action.params);
 
         // Run-scoped circuit breaker: each rule short-circuits in 0ms with a result that carries the
         // rule that fired, so the failure directive can name it without consulting the history.
@@ -10314,12 +10483,8 @@ The context is now within limits. Please retry your request with the recovered c
         try {
             const actionEngine = ActionEngineServer.Instance;
 
-            // Convert params object to ActionParam array
-            const actionParams = Object.entries(action.params || {}).map(([key, value]) => ({
-                Name: key,
-                Value: value,
-                Type: 'Input' as const
-            }));
+            // The dispatched parameters: the model's, with every bound value in place of what it sent.
+            const actionParams = this.toActionParams(binding);
 
             // Build action context: preserve the agent's context by reference
             // (do NOT spread — spreading destroys class instances, losing
@@ -10334,6 +10499,12 @@ The context is now within limits. Please retry your request with the recovered c
             // named skill the run never activated. Always stamped — an empty array means "inside an
             // agent run, with no skill active", which is a different fact from "no agent at all".
             (actionContext as Record<string, unknown>).ActiveSkillIDs = this.activeSkillIDsForRun(params);
+            // The run's bound parameters, for actions that describe other actions (Find Candidate Actions,
+            // Find Best Action) so they hide the same names the catalog hides. Stamped only when the run
+            // has bindings, so an unbound run's context is unchanged.
+            if (params.boundActionParams) {
+                (actionContext as Record<string, unknown>).BoundActionParams = params.boundActionParams;
+            }
             if (this._resolvedStorageAccountId) {
                 (actionContext as Record<string, unknown>).__resolvedStorageAccountId = this._resolvedStorageAccountId;
             }
@@ -10655,6 +10826,7 @@ The context is now within limits. Please retry your request with the recovered c
                 verbose: params.verbose, // pass verbose flag to sub-agent
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
                 subAgentChanges: subAgentSubAgentChanges, // propagate filtered sub-agent changes to sub-agent
+                boundActionParams: params.boundActionParams, // every sub-agent run keeps the caller's bindings, as it keeps actionChanges
                 PrimaryScopeEntityName: params.PrimaryScopeEntityName, // propagate scope to sub-agent
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
                 companyId: params.companyId,
@@ -10756,22 +10928,27 @@ The context is now within limits. Please retry your request with the recovered c
      * Produces ~75% fewer tokens than the previous JSON format while preserving
      * all information the LLM needs to invoke actions correctly.
      *
+     * A parameter the run binds (`ExecuteAgentParams.boundActionParams`) is left out, so the model is
+     * never told it exists. With no bindings the output is the cached catalog's, unchanged.
+     *
      * @param {MJActionEntityExtended[]} actions - Array of action entities
+     * @param {BoundActionParams} [boundActionParams] - The run's bindings, when it has any
      * @returns {string} Markdown formatted string with action details
      * @private
      */
-    private formatActionDetails(actions: MJActionEntityExtended[]): string {
+    private formatActionDetails(actions: MJActionEntityExtended[], boundActionParams?: BoundActionParams): string {
         return actions.map(action => {
             const lines: string[] = [];
             lines.push(`### ${action.Name}`);
             lines.push(action.Description);
 
-            const inputParams = action.Params.Items
+            const visibleParams = UnboundParams(action.Params.Items, BindingsForAction(boundActionParams, action.ID));
+            const inputParams = visibleParams
                 .filter(p => {
                     const t = p.Type.trim().toLowerCase();
                     return t === 'input' || t === 'both';
                 });
-            const outputParams = action.Params.Items
+            const outputParams = visibleParams
                 .filter(p => {
                     const t = p.Type.trim().toLowerCase();
                     return t === 'output' || t === 'both';
@@ -14608,8 +14785,9 @@ The context is now within limits. Please retry your request with the recovered c
                 progressMessage = `Executing **${aa.name}** action`;
 
                 // Add parameters if they exist
-                if (aa.params && Object.keys(aa.params).length > 0) {
-                    const paramsList = Object.entries(aa.params)
+                const shownParams = this.shownActionParamEntries(params, aa);
+                if (shownParams.length > 0) {
+                    const paramsList = shownParams
                         .map(([key, value]) => {
                             const displayValue = this.formatParamValueForMessage(value);
                             return `• **${key}**: ${displayValue}`;
@@ -14624,8 +14802,9 @@ The context is now within limits. Please retry your request with the recovered c
                     let actionText = `${index + 1}. **${aa.name}**`;
 
                     // Add parameters if they exist
-                    if (aa.params && Object.keys(aa.params).length > 0) {
-                        const paramsList = Object.entries(aa.params)
+                    const shownParams = this.shownActionParamEntries(params, aa);
+                    if (shownParams.length > 0) {
+                        const paramsList = shownParams
                             .map(([key, value]) => {
                                 const displayValue = this.formatParamValueForMessage(value);
                                 return `   • **${key}**: ${displayValue}`;
@@ -14669,8 +14848,9 @@ The context is now within limits. Please retry your request with the recovered c
                 actionMessage = `[You invoked the **${aa.name}** action`;
 
                 // Add parameters if they exist
-                if (aa.params && Object.keys(aa.params).length > 0) {
-                    const paramsList = Object.entries(aa.params)
+                const shownParams = this.shownActionParamEntries(params, aa);
+                if (shownParams.length > 0) {
+                    const paramsList = shownParams
                         .map(([key, value]) => {
                             const displayValue = this.formatParamValueForMessage(value);
                             return `• **${key}**: ${displayValue}`;
@@ -14685,8 +14865,9 @@ The context is now within limits. Please retry your request with the recovered c
                     let actionText = `${index + 1}. **${aa.name}**`;
 
                     // Add parameters if they exist
-                    if (aa.params && Object.keys(aa.params).length > 0) {
-                        const paramsList = Object.entries(aa.params)
+                    const shownParams = this.shownActionParamEntries(params, aa);
+                    if (shownParams.length > 0) {
+                        const paramsList = shownParams
                             .map(([key, value]) => {
                                 const displayValue = this.formatParamValueForMessage(value);
                                 return `   • **${key}**: ${displayValue}`;
@@ -14757,11 +14938,12 @@ The context is now within limits. Please retry your request with the recovered c
                     throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}". Available actions: ${effectiveActions.map(a => a.Name).join(', ')}`);
                 }
 
-                // Prepare input data for the action step
-                const actionInputData = {
-                    actionName: aa.name,
-                    actionParams: aa.params
-                };
+                // Prepare input data for the action step. The names this run binds on the action are
+                // recorded with it, so a step audit tells a bound value from a chosen one on its own.
+                const boundNames = Object.keys(BindingsForAction(params.boundActionParams, actionEntity.ID) ?? {});
+                const actionInputData = boundNames.length > 0
+                    ? { actionName: aa.name, actionParams: aa.params, boundParams: boundNames }
+                    : { actionName: aa.name, actionParams: aa.params };
                 
                 const stepEntity = await this.createStepEntity({ stepType: 'Actions', stepName: `Execute Action: ${aa.name}`, contextUser: params.contextUser, targetId: actionEntity.ID, inputData: actionInputData, payloadAtStart: currentPayload, payloadAtEnd: currentPayload, parentId: parentStepId, skills: this.getSkillAttributionForAction(actionEntity.ID, params.agent) });
                 lastStep = stepEntity;
@@ -14774,7 +14956,7 @@ The context is now within limits. Please retry your request with the recovered c
                 let actionResult: ActionResult;
                 try {
                     // Execute the action
-                    actionResult = await this.ExecuteSingleAction(params, aa, actionEntity, params.contextUser, actionOptions);
+                    actionResult = await this.ExecuteSingleAction(params, aa, actionEntity, params.contextUser, { ...actionOptions, StepID: stepEntity.ID });
                     
                     // Update step entity with ActionExecutionLog ID if available
                     if (actionResult.LogEntry?.ID) {
@@ -14822,8 +15004,10 @@ The context is now within limits. Please retry your request with the recovered c
                 const actionResult = result.result;
                 const isActionSuccess = Boolean(result.success && (actionResult ? actionResult.Success : true));
 
-                // Filter to output params only
-                const outputParams = actionResult?.Params?.filter(p => p.Type === 'Both' || p.Type === 'Output') || [];
+                // Filter to output params only. A bound parameter (ExecuteAgentParams.boundActionParams) is
+                // left out as well: the model was not shown it on the way in, so it is not shown it on the way out.
+                const bindings = BindingsForAction(params.boundActionParams, result.actionEntity?.ID ?? '');
+                const outputParams = actionResult?.Params?.filter(p => (p.Type === 'Both' || p.Type === 'Output') && !IsBoundParamName(p.Name, bindings)) || [];
 
                 // Intercept large media content (images, audio, video) and replace with placeholders
                 // This prevents context overflow from base64 data (~700K tokens per 1024x1024 image)
@@ -15792,6 +15976,19 @@ The context is now within limits. Please retry your request with the recovered c
                 step: 'Failed',
                 terminate: true,
                 errorMessage: 'A Tasks step reached execution with no task graph attached.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+        // Fail closed under bound parameters (ExecuteAgentParams.boundActionParams): a graph's action nodes
+        // are dispatched by the task-graph runner with the inputs the model authored, outside
+        // ExecuteSingleAction, so nothing would hide or apply a binding. The response type already withholds
+        // `tasks` from a bound run; this is the gate for a model that emits one anyway.
+        if (this.hasBoundActionParams(params.boundActionParams)) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'Task graphs are not available in a run with bound action parameters: a graph dispatches actions outside the binding gate.',
                 previousPayload: previousDecision.previousPayload,
                 newPayload: previousDecision.newPayload || previousDecision.previousPayload
             };

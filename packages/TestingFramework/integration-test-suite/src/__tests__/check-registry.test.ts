@@ -241,7 +241,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-decisions-switch': 9,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
-        'agent-loop-standin': 11,
+        'agent-loop-standin': 13,
         'prompt-eval-harness': 7,
         'agent-memory-guards': 5,
         'agent-note-cache-types': 5,

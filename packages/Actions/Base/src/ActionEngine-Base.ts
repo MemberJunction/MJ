@@ -170,6 +170,12 @@ export class ActionParam {
     * The type of the Action parameter. Input parameters are used to pass data into the action while output parameters are used to return data from the action.
     */
    public Type: 'Input' | 'Output' | 'Both';
+   /**
+    * True when the value was fixed by the caller of an agent run rather than chosen by the model
+    * (`ExecuteAgentParams.boundActionParams`). The marker is written into the execution log's `Params`
+    * so an audit can tell a bound value from a chosen one. Absent on every other parameter.
+    */
+   public Bound?: boolean;
 }
 
 /**

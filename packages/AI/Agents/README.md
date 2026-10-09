@@ -384,6 +384,24 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
+### With Bound Action Parameters
+
+A host can fix some of an action's input parameters for the run, so the model can neither see nor change them. A bound parameter is left out of the action's description in the prompt, out of its native tool schema, out of the result echoed to the model and out of what Find Candidate Actions / Find Best Action report; at dispatch the bound value replaces whatever the model sent under that name, the override is logged with the run and step IDs, and the action's execution log marks the parameter `Bound`. Bindings reach every sub-agent run. A required parameter bound to nothing, or a binding that names a parameter the action does not have, refuses the action before it runs: the model is told only that the action is unavailable, and the action is locked out for the rest of the run. A binding keyed by anything other than a known Action ID fails the run at its start.
+
+```typescript
+const result = await runner.RunAgent({
+    agent: spaceAgent,
+    conversationMessages: messages,
+    contextUser: currentUser,
+    // Action ID → parameter name → value. The model is never told ChapterID exists.
+    boundActionParams: {
+        [listMembersActionId]: { ChapterID: space.ChapterID }
+    }
+});
+```
+
+**Limits.** Bindings are server-side only (no GraphQL input reaches them). A run with bindings has task graphs withheld, because a graph's action nodes are dispatched outside the agent's binding gate. Bindings are not persisted: a run resumed from a stored request (`MJ: AI Agent Requests`) starts without them, so the hidden parameter is open to the model again until bindings are persisted on the run; `actionChanges` have the same limit. The realtime client-direct action path and the workflow meta-actions (Loop, Conditional, Retry, Parallel Execute, Execute Agent) dispatch actions themselves and do not apply bindings, so do not grant them to a bound agent. An action's own message text may mention a bound value. The rules are exported for hosts that dispatch actions themselves: `BindingsForAction`, `UnboundParams`, `IsBoundParamName`, `ApplyBoundActionParams`.
+
 ### With Memory Scope (Multi-Tenant)
 
 Multi-tenant deployments can isolate the agent's memory cohort (notes and examples) per request by passing scope fields on `ExecuteAgentParams`. The fields are top-level — there is no `userScope` wrapper:
