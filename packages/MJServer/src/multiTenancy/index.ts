@@ -9,7 +9,9 @@
 
 import type { RequestHandler } from 'express';
 import type { PreRunViewHook, PreSaveHook } from '@memberjunction/core';
-import { Metadata, type UserInfo, type TenantContext } from '@memberjunction/core';
+import { DatabaseProviderBase, Metadata, type UserInfo, type TenantContext } from '@memberjunction/core';
+import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
+import { IsBalancedSQLFragment } from '@memberjunction/sql-parser';
 import type { MultiTenancyConfig } from '../config.js';
 import type { UserPayload } from '../types.js';
 import { CloneUserForSessionContext } from '../auth/sessionUserClone.js';
@@ -161,6 +163,25 @@ function isAdminUser(user: UserInfo, adminRoles: string[]): boolean {
   );
 }
 
+/** Dialects to read an ExtraFilter with when the active provider's dialect cannot be resolved. */
+const ALL_FILTER_DIALECTS: SQLParserDialect[] = [new SQLServerDialect(), new PostgreSQLDialect()];
+
+/**
+ * Throws unless the caller's ExtraFilter stays inside the parentheses the tenant predicate is
+ * ANDed after. A filter such as `1=1) OR (1=1` would close them early and leave the tenant
+ * predicate on one side of an OR the caller controls.
+ */
+function assertExtraFilterBalanced(extraFilter: string): void {
+  const provider = Metadata.Provider; // global-provider-ok: same rationale as isEntityScoped above — hooks carry no per-request provider
+  const dialects = provider instanceof DatabaseProviderBase ? [provider.Dialect] : ALL_FILTER_DIALECTS;
+  for (const dialect of dialects) {
+    const check = IsBalancedSQLFragment(extraFilter, dialect);
+    if (!check.IsBalanced) {
+      throw new Error(`[MultiTenancy] Invalid ExtraFilter: ${check.Reason}`);
+    }
+  }
+}
+
 /**
  * Creates a PreRunViewHook that auto-injects tenant WHERE clauses
  * into RunView queries for scoped entities.
@@ -206,7 +227,8 @@ export function CreateTenantPreRunViewHook(config: MultiTenancyConfig): PreRunVi
 
     // Inject the tenant filter
     if (params.ExtraFilter && typeof params.ExtraFilter === 'string' && params.ExtraFilter.trim().length > 0) {
-      params.ExtraFilter = `(${params.ExtraFilter}) AND ${tenantFilter}`;
+      assertExtraFilterBalanced(params.ExtraFilter);
+      params.ExtraFilter = `(${params.ExtraFilter}) AND (${tenantFilter})`;
     } else {
       params.ExtraFilter = tenantFilter;
     }

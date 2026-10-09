@@ -38,7 +38,7 @@ import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
-import { SQLParser } from '@memberjunction/sql-parser';
+import { SQLParser, IsBalancedSQLFragment } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
@@ -923,6 +923,12 @@ export class ResolverBase {
    * allow a FROM only when it is an entity **BaseView**. Base tables (`Meeting`, `__mj.User`)
    * and catalogs are rejected. Server-internal RunView callers never hit this.
    *
+   * Before that parse, the fragment must be balanced on its own (`IsBalancedSQLFragment`). The
+   * provider and the tenant hook splice it inside parentheses and AND their own filters after
+   * it, so a fragment that closes those parentheses (`1=1) OR (1=1`) would leave row-level
+   * security, API-key row filters and tenant scope on one side of an OR the caller controls.
+   * The parse wraps the fragment in parentheses too, which is why it cannot catch this alone.
+   *
    * RLS is applied by RunView as an outer WHERE around the entity being queried, not compiled
    * into the view. Subqueries against another entity's BaseView therefore do not inherit that
    * entity's RLS; they are still restricted to the view (not the table).
@@ -938,6 +944,10 @@ export class ResolverBase {
     const dialect = this.dialectForProvider(provider);
     if (SQLParser.HasStackedStatements(clause, dialect)) {
       throw new Error(`Invalid ${label}: multiple statements are not permitted in client-supplied filters`);
+    }
+    const balance = IsBalancedSQLFragment(clause, dialect);
+    if (!balance.IsBalanced) {
+      throw new Error(`Invalid ${label}: ${balance.Reason}`);
     }
 
     const wrapped =

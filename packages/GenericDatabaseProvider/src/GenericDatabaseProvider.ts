@@ -86,7 +86,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser, IsReadOnlyQuery } from '@memberjunction/sql-parser';
+import { SQLParser, IsReadOnlyQuery, IsBalancedSQLFragment } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
@@ -1847,6 +1847,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Throws unless a caller-supplied WHERE piece (ExtraFilter, OverrideExcludeFilter, a stored view
+     * WhereClause) stays inside the parentheses this provider puts around it, read with this
+     * provider's SQL dialect. The pieces are ANDed with row-level security, which also carries API-key
+     * row filters and guest scope; a piece that closes its parentheses early, such as `1=1) OR (1=1`,
+     * would leave those filters on one side of an OR the caller controls.
+     */
+    protected AssertClauseBalanced(clause: string, label: string): void {
+        const check = IsBalancedSQLFragment(clause, this.Dialect);
+        if (!check.IsBalanced) {
+            throw new Error(`Invalid ${label}: ${check.Reason}`);
+        }
+    }
+
+    /**
      * Optionally wraps a view query with user view run logging.
      * SQL Server overrides to use spCreateUserViewRunWithDetail.
      * Default: returns null (no view run logging).
@@ -2021,6 +2035,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
                     throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
                 }
+                // CustomWhereClause views too: an unbalanced clause would take row-level security
+                // out of force for everyone who runs the view.
+                this.AssertClauseBalanced(renderedWhere, `view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}'`);
                 whereSQL = `(${renderedWhere})`;
                 bHasWhere = true;
             }
@@ -2029,6 +2046,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (extraFilter.length > 0) {
                 if (!this.ValidateUserProvidedSQLClause(extraFilter))
                     throw new Error(`Invalid Extra Filter: ${extraFilter}, contains one more for forbidden keywords`);
+                this.AssertClauseBalanced(extraFilter, 'ExtraFilter');
                 whereSQL = bHasWhere ? `${whereSQL} AND (${extraFilter})` : `(${extraFilter})`;
                 bHasWhere = true;
             }
@@ -2086,6 +2104,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (overrideExcludeFilter.length > 0) {
                     if (!this.ValidateUserProvidedSQLClause(overrideExcludeFilter))
                         throw new Error(`Invalid OverrideExcludeFilter: ${overrideExcludeFilter}, contains one more for forbidden keywords`);
+                    this.AssertClauseBalanced(overrideExcludeFilter, 'OverrideExcludeFilter');
                     sExcludeSQL += ' OR (' + overrideExcludeFilter + ')';
                 }
                 whereSQL = bHasWhere ? `${whereSQL} AND (${sExcludeSQL})` : `(${sExcludeSQL})`;
@@ -3202,6 +3221,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (extraFilter.length > 0) {
             if (!this.ValidateUserProvidedSQLClause(extraFilter))
                 throw new Error(`Invalid Extra Filter: ${extraFilter}`);
+            this.AssertClauseBalanced(extraFilter, 'ExtraFilter');
             whereSQL = `(${extraFilter})`;
             bHasWhere = true;
         }
