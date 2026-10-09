@@ -22,6 +22,7 @@ import { DOMINANCE_THRESHOLD_DEFAULT, type FeatureImportance, type LeakageGuard 
 
 import { DetectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
 import { ModelScoringActionGenerator } from './model-scoring-action-generator';
+import { ModelHasTrainedArtifact, ModelNeedsTrainingMessage } from '../scoring/model-readiness';
 import type {
   IModelPromotionGate,
   PromoteModelRequest,
@@ -45,6 +46,13 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     const model = await this.loadModel(request.modelId, request.contextUser, request.provider);
     if (!model) {
       return { kind: 'not-found' };
+    }
+
+    // A model with no trained artifact can't score anything, so it must never reach
+    // Published — refuse with the plain "needs training" message instead of letting it
+    // look deployable and then fail every record at run time.
+    if (request.targetStatus === 'Published' && !ModelHasTrainedArtifact(model)) {
+      return { kind: 'needs-training', message: ModelNeedsTrainingMessage(model.ID) };
     }
 
     // Always evaluate leakage so a sign-off override of a FLAGGED model can be
