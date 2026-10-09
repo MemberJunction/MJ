@@ -1,6 +1,6 @@
 import { 
     LogError, Metadata, RunView, RunViewParams, 
-    RunViewResult, UserInfo 
+    RunViewResult, UserInfo, type IRunViewProvider 
 } from '@memberjunction/core';
 import { ClientClauseScreen } from '@memberjunction/generic-database-provider';
 
@@ -33,11 +33,11 @@ export class ViewOperationsHandler {
                 };
             }
             
-            // Sanitize and validate parameters
-            this.sanitizeRunViewParams(params, md, user);
+            // Sanitize and validate parameters against the provider that runs the view
+            const runView = new RunView();
+            this.sanitizeRunViewParams(params, md, runView.ProviderToUse, user);
             
             // Execute the view
-            const runView = new RunView();
             const result = await runView.RunView(params, user);
             
             return { success: true, result };
@@ -57,8 +57,9 @@ export class ViewOperationsHandler {
      */
     static async RunViews(paramsArray: RunViewParams[], user: UserInfo): Promise<{ success: boolean, results?: RunViewResult[], error?: string }> {
         try {
-            // Validate and sanitize each set of parameters
+            // Validate and sanitize each set of parameters against the provider that runs the views
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
+            const runView = new RunView();
             for (const params of paramsArray) {
                 // Validate entity exists
                 const entity = md.Entities.find(e => e.Name === params.EntityName);
@@ -79,11 +80,10 @@ export class ViewOperationsHandler {
                 }
                 
                 // Sanitize parameters
-                this.sanitizeRunViewParams(params, md, user);
+                this.sanitizeRunViewParams(params, md, runView.ProviderToUse, user);
             }
             
             // Execute the views
-            const runView = new RunView();
             const results = await runView.RunViews(paramsArray, user);
             
             return { success: true, results };
@@ -115,11 +115,11 @@ export class ViewOperationsHandler {
                 throw new Error(`User ${user.Name} does not have permission to read ${params.EntityName} records`);
             }
             
-            // Sanitize and validate parameters
-            this.sanitizeRunViewParams(params, md, user);
+            // Sanitize and validate parameters against the provider that runs the view
+            const runView = new RunView();
+            this.sanitizeRunViewParams(params, md, runView.ProviderToUse, user);
             
             // Execute the view
-            const runView = new RunView();
             return await runView.RunView(params, user);
         } catch (error) {
             LogError(error);
@@ -195,9 +195,10 @@ export class ViewOperationsHandler {
     
     /**
      * Sanitize and validate RunViewParams. Client filter and sort text passes the same clause
-     * screen as the GraphQL RunView resolvers.
+     * screen as the GraphQL RunView resolvers, parsed in the dialect of `provider`, the provider
+     * that runs the view.
      */
-    private static sanitizeRunViewParams(params: RunViewParams, md: Metadata, user: UserInfo): void {
+    private static sanitizeRunViewParams(params: RunViewParams, md: Metadata, provider: IRunViewProvider, user: UserInfo): void {
         // Ensure EntityName is provided
         if (!params.EntityName) {
             throw new Error('EntityName is required');
@@ -232,7 +233,7 @@ export class ViewOperationsHandler {
         ClientClauseScreen.ScreenViewClauses(
             { ExtraFilter: params.ExtraFilter, OrderBy: params.OrderBy, OverrideExcludeFilter: params.OverrideExcludeFilter },
             md.Entities,
-            ClientClauseScreen.DialectFor(Metadata.Provider),
+            ClientClauseScreen.DialectFor(provider),
             user,
         );
     }
