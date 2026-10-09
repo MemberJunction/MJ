@@ -1,6 +1,7 @@
 import { BaseModel } from "./baseModel";
 import type { RealtimeReasoningPlane } from "./modelConfiguration";
 import type { RealtimeTrackDescriptor, RealtimeTrackUsageBasis } from "./realtimeTracks";
+import type { RealtimeVideoFrame } from "./realtimeVideoOutput";
 
 /**
  * A JSON-serializable value. Used to type open configuration bags and JSON-schema
@@ -181,7 +182,7 @@ export abstract class BaseRealtimeModel extends BaseModel {
      * Defaults to `false` (audio-only — today's realtime models). Video-capable drivers (a native
      * multimodal realtime model, or an avatar provider) override this to `true`. The session's media
      * plane is media-tagged ({@link IRealtimeSession.SendInput} takes a {@link RealtimeInputFrame} with a {@link RealtimeMediaKind};
-     * {@link IRealtimeSession.OnVideoOutput} delivers video-out), so a video session reuses the entire
+     * {@link IRealtimeSession.OnVideoFrame} delivers video-out as typed frames), so a video session reuses the entire
      * realtime contract — only the media frames gain a `video` kind. Resolution prefers a video-capable
      * model when an agent requests video, and degrades to audio-only otherwise.
      *
@@ -532,8 +533,9 @@ export interface RealtimeSessionCapabilities {
     /**
      * Media tracks this model can EMIT (model -> user). Absent or empty is read as "outbound audio
      * only". Non-audio outbound tracks (avatar video, haptics) are admitted by the contract because
-     * direction is a property of a track rather than part of its type; no provider in play emits one
-     * yet.
+     * direction is a property of a track rather than part of its type. A session that emits video
+     * through {@link IRealtimeSession.OnVideoFrame} declares an outbound video track whose `Encoding`
+     * names its frames' type, such as `'video/mp4; codecs="avc1.42c01f, mp4a.40.2"'` for a Gemini avatar.
      */
     SupportedOutboundTracks?: readonly RealtimeTrackDescriptor[];
 }
@@ -619,29 +621,33 @@ export interface IRealtimeSession {
     OnOutput(handler: (chunk: ArrayBuffer) => void): void;
 
     /**
-     * Registers a handler for model **video** output frames — the talking-head avatar / generated
-     * video a video-capable model emits, in sync with {@link IRealtimeSession.OnOutput}'s audio.
+     * Registers a handler for the model's **video** output as typed frames ({@link RealtimeVideoFrame}): pieces of
+     * fragmented MP4, encoded chunks or images, in the order the model sent them. A driver that emits them declares an
+     * outbound video track in {@link RealtimeSessionCapabilities.SupportedOutboundTracks} whose `Encoding` names the
+     * frames' type. A Gemini Live session whose avatar was granted for a host that publishes it
+     * ({@link RealtimeAvatarSettings.Delivery} `'room'`) sends the avatar's MP4 pieces here.
      *
-     * Optional: audio-only drivers (the default) don't implement it, and consumers must call it
-     * null-safely (`session.OnVideoOutput?.(...)`). A video-capable driver
-     * ({@link BaseRealtimeModel.SupportsVideo}) implements it; the consumer (bridge / client) maps these
-     * frames onto its `video-out` track exactly as it maps audio.
+     * An fMP4 piece may carry the voice on its audio track; while it does, the voice does not also come through
+     * {@link OnOutput}. After {@link OnInterruption} the host drops video not yet shown, and the driver drops the
+     * interrupted turn's late frames. The seconds of video the model generated reach {@link OnUsage}
+     * (`OutputTokenDetails.VideoSeconds`).
      *
-     * @param handler Invoked with each output video frame as an `ArrayBuffer`.
+     * Optional: audio-only drivers don't implement it; call it null-safely (`session.OnVideoFrame?.(...)`).
+     *
+     * @param handler Invoked with each frame, in the order the model sent them.
      */
-    OnVideoOutput?(handler: (chunk: ArrayBuffer) => void): void;
+    OnVideoFrame?(handler: (frame: RealtimeVideoFrame) => void): void;
 
     /**
-     * Registers a handler for a live avatar's media: encoded pieces (for Gemini Live, fragmented MP4 whose audio track
-     * carries the avatar's voice) on a server-side session whose avatar was granted for a host that publishes it
-     * ({@link RealtimeAvatarSettings.Delivery} `'room'`). While the avatar speaks, its voice comes in these pieces, not
-     * through {@link OnOutput}.
+     * Registers a handler for the model's video output as untyped bytes. A driver implements this or
+     * {@link OnVideoFrame}, not both.
      *
-     * Optional: drivers without avatars don't implement it; call it null-safely (`session.OnAvatarOutput?.(...)`).
+     * @deprecated Use {@link OnVideoFrame}, whose frames say what they are: a host can't tell an MP4 piece from an encoded
+     * chunk or an image by its bytes. Hosts still forward it. Removed in the next major version.
      *
-     * @param handler Invoked with each piece, in the order the model sent them.
+     * @param handler Invoked with each output video chunk as an `ArrayBuffer`.
      */
-    OnAvatarOutput?(handler: (chunk: RealtimeAvatarMediaChunk) => void): void;
+    OnVideoOutput?(handler: (chunk: ArrayBuffer) => void): void;
 
     /**
      * What became of the session's avatar request, as the driver decided when it opened the session. Absent when the
@@ -977,17 +983,6 @@ export interface RealtimeAvatarStatus {
     Granted: boolean;
     /** Why the session runs audio-only, when it asked for an avatar and was not granted one. */
     Reason?: RealtimeAvatarUnavailableReason;
-}
-
-/**
- * One piece of a live avatar's media as a model emits it. For Gemini Live it is a fragmented MP4 piece: an init segment,
- * or `moof` + `mdat` fragments whose video track is the avatar's face and whose audio track is its voice.
- */
-export interface RealtimeAvatarMediaChunk {
-    /** The piece's bytes. */
-    Data: ArrayBuffer;
-    /** Its MIME type, for example `'video/mp4'`. */
-    MimeType: string;
 }
 
 /**

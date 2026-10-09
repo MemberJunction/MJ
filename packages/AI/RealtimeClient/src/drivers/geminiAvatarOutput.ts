@@ -3,8 +3,10 @@
  * an avatar and the host shows it, and what each turn boundary does to the avatar's video and voice.
  *
  * - **Parts.** A part that opens with an MP4 box (`ftyp`, `moov`, `moof`, `styp`) goes to the video player whatever MIME
- *   type it names, and so does a `video/*` part. A PCM part follows the voice rule below; a part with no MIME type that
- *   is not MP4 is PCM. Any other part is dropped and reported once per type: unknown data never plays.
+ *   type it names, and so does a `video/*` part, each as a `RealtimeVideoFrame` (Core's `Fmp4PieceToVideoFrame`: an init
+ *   segment or a fragment, with its time and key-frame flag). A `video/*` part that is neither labelled `video/mp4` nor
+ *   opens with an MP4 box is dropped and reported once per type. A PCM part follows the voice rule below; a part with no
+ *   MIME type that is not MP4 is PCM. Any other part is dropped and reported once per type: unknown data never plays.
  * - **Who carries the voice.** The grant says whether the avatar's MP4 carries the voice (`audioMuxed`); the session's
  *   first readable init segment decides: an audio track means it does, none means the video plays muted and the voice
  *   comes as PCM. A disagreement with the grant is logged once.
@@ -22,7 +24,7 @@
  *
  * @module @memberjunction/ai-realtime-client
  */
-import { Fmp4VideoSeconds, IsPcmAudioMimeType, ReadFmp4Init, SniffFmp4Piece, type Fmp4Init } from '@memberjunction/ai';
+import { Fmp4PieceToVideoFrame, Fmp4VideoSeconds, IsPcmAudioMimeType, ReadFmp4Init, SniffFmp4Piece, type Fmp4Init } from '@memberjunction/ai';
 import type { IRealtimePcmPlayback } from '../audio/pcmPlayback';
 import type { MediaVideoSource } from '../media/model';
 import type { IAvatarVideoPlayout } from '../media/videoPlayout';
@@ -112,8 +114,7 @@ export class GeminiAvatarOutput {
         }
         const kind = GeminiAvatarOutput.kindOf(mimeType, data);
         if (kind === 'video') {
-            this.acceptVideo(data);
-            return true;
+            return this.acceptVideo(mimeType, data);
         }
         if (kind === 'voice') {
             return this.acceptVoice(data);
@@ -179,8 +180,8 @@ export class GeminiAvatarOutput {
     /**
      * How a part plays. Its bytes decide first: a part that opens with an MP4 box is the avatar's whatever type it names,
      * since Google does not document the type of avatar parts. Then its type: none means PCM; a `video/*` type is the
-     * avatar's (a piece may start inside a box, which Media Source still plays); a PCM type is the voice; anything else
-     * never plays, as video or as voice.
+     * avatar's (a `video/mp4` piece may start inside a box, which Media Source still plays; any other video type that
+     * isn't MP4 is then dropped); a PCM type is the voice; anything else never plays, as video or as voice.
      */
     private static kindOf(mimeType: string | undefined, data: ArrayBuffer): AvatarPartKind {
         if (SniffFmp4Piece(data)) {
@@ -196,8 +197,15 @@ export class GeminiAvatarOutput {
         return IsPcmAudioMimeType(type) ? 'voice' : 'other';
     }
 
-    private acceptVideo(piece: ArrayBuffer): void {
-        if (SniffFmp4Piece(piece) === 'init') {
+    /** Hands a video part to the player as a frame; a part that isn't MP4 is dropped, reported once per type. */
+    private acceptVideo(mimeType: string | undefined, piece: ArrayBuffer): boolean {
+        const frame = Fmp4PieceToVideoFrame(piece, mimeType, this.init);
+        if (!frame) {
+            const message = `[GeminiRealtimeClient] Dropped model output of type ${mimeType}: it is not fragmented MP4, the only video an avatar plays.`;
+            this.reportOnce(`type:${mimeType}`, message);
+            return false;
+        }
+        if (frame.Piece === 'init') {
             this.takeInit(piece);
         }
         if (!this.turn.HasVideo) {
@@ -205,8 +213,9 @@ export class GeminiAvatarOutput {
         }
         // More media came, so the turn's video is not over even if generationComplete said so.
         this.turn.VideoEnded = false;
-        this.playout.Append(piece);
+        this.playout.Append(frame);
         this.countGeneratedVideo(piece);
+        return true;
     }
 
     /** Keeps an init segment's tracks to time the fragments by; the session's first readable one also decides the voice. */

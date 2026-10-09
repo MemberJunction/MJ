@@ -118,7 +118,7 @@ export interface GeminiEnterpriseLiveClient {
  *   pact with a minimal config: no system prompt and no tools.
  * - **Bridged** ({@link StartSession}): `@google/genai` in Vertex mode; audio only, unless the host publishes the avatar
  *   into a meeting room (`RealtimeAvatarSettings.Delivery` `'room'`): then the model renders it and the session sends its
- *   pieces to the host through `OnAvatarOutput`.
+ *   pieces to the host as frames through `OnVideoFrame`.
  */
 @RegisterClass(BaseRealtimeModel, 'GeminiEnterpriseRealtime')
 export class GeminiEnterpriseRealtime extends GeminiRealtime {

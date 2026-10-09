@@ -4,7 +4,7 @@
  * These mirror (and extend) the fakes embedded in the original per-driver test files so the
  * extended / contract suites can reuse one implementation. No network, no WebRTC, no Web Audio.
  */
-import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, type RealtimeVideoFrame } from '@memberjunction/ai';
 import type { Blob as GeminiBlob, Content, FunctionResponse, LiveServerMessage } from '@google/genai';
 import {
     BaseRealtimeClient,
@@ -347,7 +347,8 @@ export class FakeGeminiPlayback implements IGeminiAudioPlayback {
 
 /** Fake avatar video player: records what the driver hands it and does with it. */
 export class FakeAvatarPlayout implements IAvatarVideoPlayout {
-    public readonly Appended: ArrayBuffer[] = [];
+    /** Every frame the driver appended, in order. */
+    public readonly Appended: RealtimeVideoFrame[] = [];
     public EndOfTurnCount = 0;
     public FlushCount = 0;
     public Disposed = false;
@@ -360,8 +361,8 @@ export class FakeAvatarPlayout implements IAvatarVideoPlayout {
         this.CarriesVoice = Options.CarriesVoice ?? true;
     }
 
-    public Append(piece: ArrayBuffer): void {
-        this.Appended.push(piece);
+    public Append(frame: RealtimeVideoFrame): void {
+        this.Appended.push(frame);
     }
     public EndOfTurn(): void {
         this.EndOfTurnCount++;

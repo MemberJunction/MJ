@@ -50,7 +50,7 @@ import {
     type RealtimeAvatarSettings,
     type RealtimeAvatarStatus,
     type RealtimeAvatarUnavailableReason,
-    type RealtimeAvatarMediaChunk,
+    type RealtimeVideoFrame,
 } from '@memberjunction/ai';
 import {
     ResolveGeminiLiveProfile,
@@ -1120,7 +1120,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;
-    private avatarHandler: ((chunk: RealtimeAvatarMediaChunk) => void) | null = null;
+    private videoFrameHandler: ((frame: RealtimeVideoFrame) => void) | null = null;
     private transcriptHandler: ((t: RealtimeTranscript) => void) | null = null;
     private toolCallHandler: ((call: RealtimeToolCall) => void) | null = null;
     private interruptionHandler: (() => void) | null = null;
@@ -1224,8 +1224,8 @@ class GeminiRealtimeSession implements IRealtimeSession {
 
     /**
      * Records what became of the session's avatar request. A granted one (a server-side session whose host publishes the
-     * avatar into a room) routes the model's MP4 pieces to {@link OnAvatarOutput}, keeps PCM to turns without video, and
-     * reports the avatar's video seconds through {@link OnUsage}. Called by the driver before {@link Open}.
+     * avatar into a room) sends the model's MP4 pieces as frames to {@link OnVideoFrame}, keeps PCM to turns without
+     * video, and reports the avatar's video seconds through {@link OnUsage}. Called by the driver before {@link Open}.
      *
      * @param status The avatar status, or `undefined` when the session asked for no avatar.
      * @param encoding The avatar's MSE type from the model's profile.
@@ -1235,7 +1235,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.avatarEncoding = encoding;
         this.avatarOutput = status?.Granted
             ? new GeminiBridgedAvatarOutput({
-                  OnAvatar: (chunk) => this.avatarHandler?.(chunk),
+                  OnVideoFrame: (frame) => this.videoFrameHandler?.(frame),
                   OnPcm: (pcm) => this.outputHandler?.(pcm),
                   OnVideoSeconds: (seconds) => this.usageHandler?.({ InputTokens: 0, OutputTokens: 0, OutputTokenDetails: { VideoSeconds: seconds } }),
                   Report: (message) => console.warn(message),
@@ -1281,7 +1281,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         }
         const outbound: RealtimeTrackDescriptor[] = [{ Modality: 'audio', Direction: 'outbound' }];
         if (this.avatarOutput) {
-            // A granted avatar: its MP4 pieces reach the host through OnAvatarOutput.
+            // A granted avatar: its MP4 pieces reach the host as frames through OnVideoFrame.
             outbound.push({ Modality: 'video', Direction: 'outbound', ...(this.avatarEncoding ? { Encoding: this.avatarEncoding } : {}) });
         }
         return {
@@ -1407,8 +1407,8 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     /** @inheritdoc */
-    public OnAvatarOutput(handler: (chunk: RealtimeAvatarMediaChunk) => void): void {
-        this.avatarHandler = handler;
+    public OnVideoFrame(handler: (frame: RealtimeVideoFrame) => void): void {
+        this.videoFrameHandler = handler;
     }
 
     /** @inheritdoc */
@@ -1966,7 +1966,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** Drops all registered handlers so a closed session can't fire stale callbacks. */
     private clearHandlers(): void {
         this.outputHandler = null;
-        this.avatarHandler = null;
+        this.videoFrameHandler = null;
         this.transcriptHandler = null;
         this.toolCallHandler = null;
         this.interruptionHandler = null;

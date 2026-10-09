@@ -6,7 +6,7 @@ import { AttachVideoSource } from '../media/attachVideoSource';
 import type { GeminiClientConnectArgs, GeminiLiveClientSession } from '../drivers/geminiRealtimeClient';
 import { InstallFakeDom, type FakeDom, type FakeVideoElement } from './helpers/fake-dom';
 import { FakeInitSegment, FakeMediaSource, FakeTimeRanges, InstallFakeMse, type FakeSourceBuffer } from './helpers/fake-mse';
-import { AvatarFragment, AvatarInitSegment, PieceToBase64, VIDEO_ONLY_MP4_TYPE } from './helpers/fmp4-pieces';
+import { AvatarFragment, AvatarInitSegment, AvatarTimedVideoFragment, PieceToBase64, VIDEO_ONLY_MP4_TYPE } from './helpers/fmp4-pieces';
 import {
     FakeGeminiSession,
     FakeMediaStream,
@@ -223,6 +223,33 @@ describe('GeminiRealtimeClient avatar playout', () => {
             const second = client.Playout;
             await client.Disconnect();
             expect(second.Disposed).toBe(true);
+        });
+    });
+
+    describe('frames', () => {
+        it("hands the player fMP4 frames: the init, then fragments timed by the latest init's video track, with each part's type", async () => {
+            const { Client: client } = await connectAvatar();
+            const codecs = 'video/mp4; codecs="avc1.42c01f"';
+            emitParts(client, videoPart(AvatarInitSegment()), videoPart(AvatarTimedVideoFragment(3750, false), codecs), videoPart(AvatarTimedVideoFragment(90000)));
+            const [init, second, third] = client.Playout.Appended;
+            expect(init).toMatchObject({ Kind: 'fmp4', Piece: 'init', MimeType: 'video/mp4' });
+            expect(second).toMatchObject({ Kind: 'fmp4', Piece: 'fragment', MimeType: codecs, KeyFrame: false });
+            expect(second.PresentationTimeMs).toBeCloseTo(41.667, 3);
+            expect(third).toMatchObject({ PresentationTimeMs: 1000, KeyFrame: true });
+        });
+
+        it("drops a video part that isn't MP4, reported once per type: no video starts, the turn's PCM plays on", async () => {
+            const { Client: client } = await connectAvatar();
+            const states: string[] = [];
+            client.OnStateChange((state) => states.push(state));
+            const webm = (seed: number): Part => videoPart(Uint8Array.of(seed, 2, 3, 4).buffer, 'video/webm');
+            emitParts(client, webm(1));
+            expect(states).toEqual([]);
+            emitParts(client, pcmPart(1), webm(2), pcmPart(2));
+            expect(client.Playout.Appended).toHaveLength(0);
+            expect(client.Playback.Enqueued).toHaveLength(2);
+            expect(client.Playback.FlushCount).toBe(0);
+            expect(warnings(warn, 'video/webm: it is not fragmented MP4')).toBe(1);
         });
     });
 

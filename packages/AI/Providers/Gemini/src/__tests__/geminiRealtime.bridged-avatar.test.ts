@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { LiveServerMessage, Blob as GeminiBlob, Content, FunctionResponse, LiveServerContent, Part } from '@google/genai';
-import type { IRealtimeSession, RealtimeAvatarMediaChunk, RealtimeSessionParams, RealtimeUsage } from '@memberjunction/ai';
+import type { IRealtimeSession, RealtimeSessionParams, RealtimeUsage, RealtimeVideoFrame } from '@memberjunction/ai';
 import { GeminiRealtime, type GeminiLiveSession, type GeminiConnectArgs } from '../geminiRealtime';
 
 // ── Fakes ──────────────────────────────────────────────────────────────────────
@@ -169,7 +169,7 @@ describe('a bridged Gemini session whose host publishes the avatar into a room',
     describe('parts', () => {
         let driver: BridgedGemini;
         let session: IRealtimeSession;
-        let avatar: RealtimeAvatarMediaChunk[];
+        let avatar: RealtimeVideoFrame[];
         let pcm: ArrayBuffer[];
 
         beforeEach(async () => {
@@ -177,15 +177,37 @@ describe('a bridged Gemini session whose host publishes the avatar into a room',
             session = await driver.StartSession(params({ ...BEN, Delivery: 'room' }));
             avatar = [];
             pcm = [];
-            session.OnAvatarOutput?.((chunk) => avatar.push(chunk));
+            session.OnVideoFrame?.((frame) => avatar.push(frame));
             session.OnOutput((chunk) => pcm.push(chunk));
         });
 
-        it('sends video/mp4 pieces to the avatar output, byte for byte, never to the audio output', () => {
+        it('sends video/mp4 pieces to the video output, byte for byte, never to the audio output', () => {
             driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 0, 3750))]);
             expect(avatar.map((c) => c.MimeType)).toEqual(['video/mp4', 'video/mp4']);
             expect(new Uint8Array(avatar[0].Data)).toEqual(INIT);
             expect(pcm).toHaveLength(0);
+        });
+
+        it("hands each piece on as an fMP4 frame: the init, then fragments timed by the init's video track", () => {
+            driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 3750, 3750), 'video/mp4; codecs="avc1.42c01f"'), mp4Part(fragment(2, 0, 1024))]);
+            expect(avatar.map((frame) => [frame.Kind, frame.Kind === 'fmp4' ? frame.Piece : null])).toEqual([
+                ['fmp4', 'init'],
+                ['fmp4', 'fragment'],
+                ['fmp4', 'fragment'],
+            ]);
+            expect(avatar[1].MimeType).toBe('video/mp4; codecs="avc1.42c01f"');
+            expect(avatar[1].PresentationTimeMs).toBeCloseTo(41.667, 3);
+            expect(avatar[1].KeyFrame).toBe(true);
+            // An audio-only fragment has no video sample to time.
+            expect(avatar[2].PresentationTimeMs).toBeUndefined();
+        });
+
+        it("drops a video part that isn't MP4, reported once per type, and the turn's PCM still plays", () => {
+            const webm = (bytes: number[]): Part => ({ inlineData: { data: b64(bytes), mimeType: 'video/webm' } });
+            driver.Parts([webm([1, 2, 3, 4]), pcmPart([1, 1]), webm([5, 6, 7, 8])]);
+            expect(avatar).toHaveLength(0);
+            expect(pcm.map((b) => Array.from(new Uint8Array(b)))).toEqual([[1, 1]]);
+            expect(warnings().filter((w) => w.includes('video/webm: it is not fragmented MP4'))).toHaveLength(1);
         });
 
         it('takes a part with no MIME type as a piece when it opens with an MP4 box, and as PCM otherwise', () => {
@@ -235,10 +257,17 @@ describe('a bridged Gemini session whose host publishes the avatar into a room',
             expect(warnings().filter((w) => w.includes('Dropped model output'))).toEqual([]);
         });
 
-        it('keeps the codecs of a video/mp4 type, and labels any other video type video/mp4', () => {
+        it('keeps the codecs of a video/mp4 type, and labels an MP4 piece of any other video type video/mp4', () => {
             const codecs = 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"';
-            driver.Parts([mp4Part(INIT, codecs), mp4Part(new Uint8Array([0, 0, 0, 9, 1, 2, 3, 4, 5]), 'video/iso.segment')]);
+            driver.Parts([mp4Part(INIT, codecs), mp4Part(fragment(1, 0, 3750), 'video/iso.segment')]);
             expect(avatar.map((c) => c.MimeType)).toEqual([codecs, 'video/mp4']);
+        });
+
+        it("drops a part of another video type that doesn't open with an MP4 box, reported once", () => {
+            const notMp4 = (seed: number): Part => mp4Part(new Uint8Array([0, 0, 0, 9, seed, 2, 3, 4, 5]), 'video/iso.segment');
+            driver.Parts([notMp4(1), notMp4(6)]);
+            expect(avatar).toEqual([]);
+            expect(warnings().filter((w) => w.includes('video/iso.segment: it is not fragmented MP4'))).toHaveLength(1);
         });
 
         it('never plays a part of another type that is not MP4: not to the avatar, not as PCM', () => {
@@ -337,10 +366,10 @@ describe('a bridged Gemini session whose host publishes the avatar into a room',
         const session = await driver.StartSession(params());
         const usage: RealtimeUsage[] = [];
         const pcm: ArrayBuffer[] = [];
-        const avatar: RealtimeAvatarMediaChunk[] = [];
+        const avatar: RealtimeVideoFrame[] = [];
         session.OnUsage((u) => usage.push(u));
         session.OnOutput((chunk) => pcm.push(chunk));
-        session.OnAvatarOutput?.((chunk) => avatar.push(chunk));
+        session.OnVideoFrame?.((frame) => avatar.push(frame));
         driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 0, 45000)), pcmPart([1, 2])]);
         driver.Content({ generationComplete: true, turnComplete: true });
         expect(pcm).toHaveLength(1);

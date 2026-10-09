@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { RealtimeVideoFrame } from '@memberjunction/ai';
 import { GEMINI_AVATAR_MP4_TYPE, IsMp4InitSegment, VideoPlayout, type VideoPlayoutProblem } from '../media/videoPlayout';
 import { AttachVideoSource } from '../media/attachVideoSource';
 import { InstallFakeDom, type FakeDom } from './helpers/fake-dom';
 import { FakeFragment, FakeInitSegment, FakeMediaSource, FakeTimeRanges, InstallFakeMse, type FakeSourceBuffer } from './helpers/fake-mse';
-import { AvatarFragment, AvatarInitSegment, VIDEO_ONLY_MP4_TYPE } from './helpers/fmp4-pieces';
+import { AvatarFragment, AvatarInitSegment, PieceFrame, VIDEO_ONLY_MP4_TYPE } from './helpers/fmp4-pieces';
 
 /** Lets the fake source buffer finish its pending operations. */
 async function settle(): Promise<void> {
@@ -91,9 +92,9 @@ describe('VideoPlayout', () => {
             const init = FakeInitSegment();
             const first = FakeFragment();
             const second = FakeFragment();
-            playout.Append(init);
-            playout.Append(first);
-            playout.Append(second);
+            playout.Append(PieceFrame(init));
+            playout.Append(PieceFrame(first));
+            playout.Append(PieceFrame(second));
             const buffer = attachAndOpen();
             expect(buffer.Appended).toEqual([init]);
 
@@ -103,8 +104,8 @@ describe('VideoPlayout', () => {
 
         it('drops a fragment that arrives before any init segment, and reports it once', async () => {
             const buffer = attachAndOpen();
-            playout.Append(FakeFragment());
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeFragment()));
+            playout.Append(PieceFrame(FakeFragment()));
             await settle();
             expect(buffer.Appended).toHaveLength(0);
             expect(problems).toEqual(['fragment-before-init']);
@@ -113,23 +114,55 @@ describe('VideoPlayout', () => {
         it("appends a new turn's init segment and keeps going", async () => {
             const buffer = attachAndOpen();
             const pieces = [FakeInitSegment(), FakeFragment(), FakeInitSegment(), FakeFragment()];
-            pieces.forEach((piece) => playout.Append(piece));
+            pieces.forEach((piece) => playout.Append(PieceFrame(piece)));
             await settle();
             expect(buffer.Appended).toEqual(pieces);
         });
 
         it('replays the latest init segment first when the player moves to another element', async () => {
             const init = FakeInitSegment();
-            playout.Append(init);
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(init));
+            playout.Append(PieceFrame(FakeFragment()));
             attachAndOpen();
             await settle();
 
             const later = FakeFragment();
             const next = attachAndOpen();
-            playout.Append(later);
+            playout.Append(PieceFrame(later));
             await settle();
             expect(next.Appended).toEqual([init, later]);
+        });
+    });
+
+    describe('frames it has no decoder for', () => {
+        const chunk: RealtimeVideoFrame = { Kind: 'chunk', Data: new ArrayBuffer(8), MimeType: 'video/vp8', PresentationTimeMs: 0, KeyFrame: true };
+        const image: RealtimeVideoFrame = { Kind: 'image', Data: new ArrayBuffer(8), MimeType: 'image/jpeg' };
+
+        it('drops an encoded chunk and an image, appends neither, and reports no-decoder once', async () => {
+            const buffer = attachAndOpen();
+            const init = FakeInitSegment();
+            playout.Append(PieceFrame(init));
+            playout.Append(chunk);
+            playout.Append(image);
+            await settle();
+            expect(buffer.Appended).toEqual([init]);
+            expect(problems).toEqual(['no-decoder']);
+        });
+
+        it('holds none while no element is attached, and never reads one as a fragment before its init', () => {
+            playout.Append(chunk);
+            const buffer = attachAndOpen();
+            expect(buffer.Appended).toHaveLength(0);
+            expect(problems).toEqual(['no-decoder']);
+        });
+
+        it('lets a turn that was about to end still end: a dropped frame adds no media', async () => {
+            attachAndOpen();
+            playout.Append(PieceFrame(FakeInitSegment()));
+            playout.EndOfTurn();
+            playout.Append(chunk);
+            await settle();
+            expect(FakeMediaSource.Instances[0].EndOfStreamCalls).toBe(1);
         });
     });
 
@@ -188,21 +221,21 @@ describe('VideoPlayout', () => {
 
     describe('codecs from the init segment', () => {
         it('opens the source buffer with the codecs of an init that arrived first', () => {
-            playout.Append(AvatarInitSegment(false));
+            playout.Append(PieceFrame(AvatarInitSegment(false)));
             expect(attachAndOpen().Type).toBe(VIDEO_ONLY_MP4_TYPE);
         });
 
         it("opens with MimeType when the init's codecs are not playable here", () => {
             FakeMediaSource.UnsupportedTypes.add(VIDEO_ONLY_MP4_TYPE);
-            playout.Append(AvatarInitSegment(false));
+            playout.Append(PieceFrame(AvatarInitSegment(false)));
             expect(attachAndOpen().Type).toBe(GEMINI_AVATAR_MP4_TYPE);
         });
 
         it("switches the buffer to an init's codecs before appending it, when they differ, once", async () => {
             const buffer = attachAndOpen();
-            playout.Append(AvatarInitSegment(false));
-            playout.Append(AvatarFragment());
-            playout.Append(AvatarInitSegment(false));
+            playout.Append(PieceFrame(AvatarInitSegment(false)));
+            playout.Append(PieceFrame(AvatarFragment()));
+            playout.Append(PieceFrame(AvatarInitSegment(false)));
             await settle();
             expect(buffer.TypeChanges).toEqual([{ Type: VIDEO_ONLY_MP4_TYPE, AfterAppends: 0 }]);
             expect(buffer.Appended).toHaveLength(3);
@@ -210,8 +243,8 @@ describe('VideoPlayout', () => {
 
         it('keeps the type for an init with the same codecs, or one it cannot read', async () => {
             const buffer = attachAndOpen();
-            playout.Append(AvatarInitSegment(true));
-            playout.Append(FakeInitSegment());
+            playout.Append(PieceFrame(AvatarInitSegment(true)));
+            playout.Append(PieceFrame(FakeInitSegment()));
             await settle();
             expect(buffer.TypeChanges).toEqual([]);
         });
@@ -219,7 +252,7 @@ describe('VideoPlayout', () => {
         it("keeps the type when the browser can't play the init's codecs", async () => {
             FakeMediaSource.UnsupportedTypes.add(VIDEO_ONLY_MP4_TYPE);
             const buffer = attachAndOpen();
-            playout.Append(AvatarInitSegment(false));
+            playout.Append(PieceFrame(AvatarInitSegment(false)));
             await settle();
             expect(buffer.TypeChanges).toEqual([]);
             expect(buffer.Appended).toHaveLength(1);
@@ -228,7 +261,7 @@ describe('VideoPlayout', () => {
         it("appends the init as it is in a browser that can't switch types", async () => {
             const buffer = attachAndOpen();
             Object.defineProperty(buffer, 'changeType', { value: undefined });
-            playout.Append(AvatarInitSegment(false));
+            playout.Append(PieceFrame(AvatarInitSegment(false)));
             await settle();
             expect(buffer.TypeChanges).toEqual([]);
             expect(buffer.Appended).toHaveLength(1);
@@ -261,8 +294,8 @@ describe('VideoPlayout', () => {
     describe('EndOfTurn', () => {
         it('ends the stream once every pending piece is in, so playback runs to the true end', async () => {
             attachAndOpen();
-            playout.Append(FakeInitSegment());
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeInitSegment()));
+            playout.Append(PieceFrame(FakeFragment()));
             playout.EndOfTurn();
             const source = FakeMediaSource.Instances[0];
             expect(source.EndOfStreamCalls).toBe(0);
@@ -273,16 +306,16 @@ describe('VideoPlayout', () => {
 
         it('a piece of the next turn arriving first cancels the end', async () => {
             attachAndOpen();
-            playout.Append(FakeInitSegment());
+            playout.Append(PieceFrame(FakeInitSegment()));
             playout.EndOfTurn();
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeFragment()));
             await settle();
             expect(FakeMediaSource.Instances[0].EndOfStreamCalls).toBe(0);
         });
 
         it('the next turn plays on from where the ended one stopped, never from the start', async () => {
             const buffer = attachAndOpen();
-            playout.Append(FakeInitSegment());
+            playout.Append(PieceFrame(FakeInitSegment()));
             await settle();
             const video = dom.Videos[0];
             video.currentTime = 5.9;
@@ -291,7 +324,7 @@ describe('VideoPlayout', () => {
             const seeksBefore = video.Seeks;
 
             buffer.buffered = new FakeTimeRanges([[0, 7]]);
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeFragment()));
             await settle();
             expect(video.Seeks).toBe(seeksBefore + 1);
             expect(video.currentTime).toBe(5.9);
@@ -303,15 +336,15 @@ describe('VideoPlayout', () => {
             const source = FakeMediaSource.Instances[0];
             const video = dom.Videos[0];
             const url = video.src;
-            playout.Append(FakeInitSegment());
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeInitSegment()));
+            playout.Append(PieceFrame(FakeFragment()));
             playout.EndOfTurn();
             await settle();
             expect(source.readyState).toBe('ended');
 
             // The next turn, such as the first on a resumed connection, starts with a fresh init segment.
-            playout.Append(FakeInitSegment());
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeInitSegment()));
+            playout.Append(PieceFrame(FakeFragment()));
             await settle();
             expect(source.Reopens).toBe(1);
             expect(source.readyState).toBe('open');
@@ -328,11 +361,11 @@ describe('VideoPlayout', () => {
     describe('Flush (barge-in)', () => {
         it('pauses at once, and stays paused until media appended after the flush arrives', async () => {
             const buffer = attachAndOpen();
-            playout.Append(FakeInitSegment());
+            playout.Append(PieceFrame(FakeInitSegment()));
             await settle();
             buffer.buffered = new FakeTimeRanges([[0, 8]]);
             dom.Videos[0].currentTime = 3;
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeFragment()));
 
             playout.Flush();
             expect(dom.Videos[0].Paused).toBe(true);
@@ -341,32 +374,32 @@ describe('VideoPlayout', () => {
             expect(dom.Videos[0].Paused).toBe(true);
 
             buffer.buffered = new FakeTimeRanges([[0, 4]]);
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeFragment()));
             await settle();
             expect(dom.Videos[0].Paused).toBe(false);
         });
 
         it('drops what has not played, and the next turn starts at the playhead', async () => {
             const buffer = attachAndOpen();
-            playout.Append(FakeInitSegment());
+            playout.Append(PieceFrame(FakeInitSegment()));
             await settle();
             buffer.buffered = new FakeTimeRanges([[0, 8]]);
             dom.Videos[0].currentTime = 3;
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeFragment()));
 
             playout.Flush();
             expect(buffer.Aborts).toBe(1);
             expect(buffer.Removed).toEqual([[3, Infinity]]);
 
             await settle();
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeFragment()));
             await settle();
             expect(buffer.OffsetAtAppend.at(-1)).toBe(3);
         });
 
         it('drops pieces still waiting for an element', () => {
-            playout.Append(FakeInitSegment());
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeInitSegment()));
+            playout.Append(PieceFrame(FakeFragment()));
             playout.Flush();
             const buffer = attachAndOpen();
             // Only the remembered init segment is replayed; the fragment was flushed.
@@ -379,7 +412,7 @@ describe('VideoPlayout', () => {
             const buffer = attachAndOpen();
             buffer.buffered = new FakeTimeRanges([[0, 35]]);
             dom.Videos[0].currentTime = 30;
-            playout.Append(FakeInitSegment());
+            playout.Append(PieceFrame(FakeInitSegment()));
             await settle();
             expect(buffer.Removed).toEqual([[0, 20]]);
         });
@@ -393,7 +426,7 @@ describe('VideoPlayout', () => {
             buffer.AppendErrors.push(quota);
 
             const init = FakeInitSegment();
-            playout.Append(init);
+            playout.Append(PieceFrame(init));
             expect(buffer.Removed).toEqual([[0, 28]]);
             await settle();
             expect(buffer.Appended).toEqual([init]);
@@ -404,17 +437,17 @@ describe('VideoPlayout', () => {
             const buffer = attachAndOpen();
             buffer.buffered = new FakeTimeRanges([[0, 40]]);
             dom.Videos[0].currentTime = 30;
-            playout.Append(FakeInitSegment());
+            playout.Append(PieceFrame(FakeInitSegment()));
             await settle();
             expect(buffer.Removed).toEqual([[0, 20]]);
 
             dom.Videos[0].currentTime = 32;
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeFragment()));
             await settle();
             expect(buffer.Removed).toHaveLength(1);
 
             dom.Videos[0].currentTime = 36;
-            playout.Append(FakeFragment());
+            playout.Append(PieceFrame(FakeFragment()));
             await settle();
             expect(buffer.Removed).toEqual([[0, 20], [0, 26]]);
         });
@@ -432,7 +465,7 @@ describe('VideoPlayout', () => {
                     buffer.dispatchEvent(new Event('updateend'));
                 });
             };
-            playout.Append(FakeInitSegment());
+            playout.Append(PieceFrame(FakeInitSegment()));
             await settle();
             expect(buffer.Removed).toEqual([[0, 20]]);
         });
@@ -441,17 +474,17 @@ describe('VideoPlayout', () => {
             const buffer = attachAndOpen();
             buffer.AppendErrors.push(new Error('decode error'));
             const next = FakeFragment();
-            playout.Append(FakeInitSegment());
-            playout.Append(next);
+            playout.Append(PieceFrame(FakeInitSegment()));
+            playout.Append(PieceFrame(next));
             await settle();
             expect(problems).toEqual(['append-failed']);
             expect(buffer.Appended).toEqual([next]);
         });
 
         it('keeps the newest pieces when too many arrive with no element attached', () => {
-            playout.Append(FakeInitSegment());
+            playout.Append(PieceFrame(FakeInitSegment()));
             for (let i = 0; i < 650; i++) {
-                playout.Append(FakeFragment());
+                playout.Append(PieceFrame(FakeFragment()));
             }
             expect(problems).toEqual(['pending-overflow']);
         });
@@ -468,7 +501,7 @@ describe('VideoPlayout', () => {
         it('Dispose releases the element and ignores later pieces', async () => {
             const buffer = attachAndOpen();
             playout.Dispose();
-            playout.Append(FakeInitSegment());
+            playout.Append(PieceFrame(FakeInitSegment()));
             await settle();
             expect(dom.Videos[0].src).toBe('');
             expect(buffer.Appended).toHaveLength(0);

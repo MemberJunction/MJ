@@ -3,6 +3,7 @@
  * tracks the reader in `@memberjunction/ai` reads (H.264 `avc1.42c01f`, with or without an AAC-LC `mp4a.40.2` track),
  * and media fragments. Nothing here decodes; the pieces only need to be read and routed.
  */
+import { Fmp4PieceToVideoFrame, type RealtimeFmp4VideoFrame } from '@memberjunction/ai';
 
 /** The MSE type of an init segment with video alone. */
 export const VIDEO_ONLY_MP4_TYPE = 'video/mp4; codecs="avc1.42c01f"';
@@ -89,6 +90,20 @@ export function AvatarVideoFragment(frames = 1, sequence = 1): ArrayBuffer {
     return concat(box('moof', fullBox('mfhd', u32(sequence)), traf(1, VIDEO_FRAME_UNITS, frames)), box('mdat', u32(sequence))).slice().buffer;
 }
 
+/**
+ * A one-frame video fragment that Core's reader can time: its `tfdt` puts the frame at `decodeUnits` of the 90 kHz video
+ * track, and its `tfhd` default flags mark it a key frame or not.
+ */
+export function AvatarTimedVideoFragment(decodeUnits: number, keyFrame = true): ArrayBuffer {
+    const payload = new Uint8Array(4);
+    const tfhd = box('tfhd', Uint8Array.of(0, 0x02, 0x00, 0x38), u32(1), u32(VIDEO_FRAME_UNITS), u32(payload.length), u32(keyFrame ? 0 : 0x1_0000));
+    const tfdt = fullBox('tfdt', u32(decodeUnits));
+    const moofOf = (dataOffset: number): Uint8Array =>
+        box('moof', fullBox('mfhd', u32(1)), box('traf', tfhd, tfdt, box('trun', Uint8Array.of(0, 0, 0, 0x01), u32(1), u32(dataOffset))));
+    const moofLength = moofOf(0).length;
+    return concat(moofOf(moofLength + 8), box('mdat', payload)).slice().buffer;
+}
+
 /** An audio-only fragment of a muxed avatar (Gemini alternates video and audio fragments): one AAC frame, no video. */
 export function AvatarAudioFragment(sequence = 1): ArrayBuffer {
     return concat(box('moof', fullBox('mfhd', u32(sequence)), traf(2, AUDIO_FRAME_UNITS, 1)), box('mdat', u32(sequence))).slice().buffer;
@@ -102,4 +117,13 @@ export function AvatarStypFragment(): ArrayBuffer {
 /** A piece as a Gemini part carries it: base64. */
 export function PieceToBase64(piece: ArrayBuffer): string {
     return btoa(String.fromCharCode(...new Uint8Array(piece)));
+}
+
+/** A piece as a driver hands it to the player: an fMP4 frame, built by Core's `Fmp4PieceToVideoFrame`. */
+export function PieceFrame(piece: ArrayBuffer, mimeType = 'video/mp4'): RealtimeFmp4VideoFrame {
+    const frame = Fmp4PieceToVideoFrame(piece, mimeType, null);
+    if (!frame) {
+        throw new Error('The piece is not fragmented MP4.');
+    }
+    return frame;
 }

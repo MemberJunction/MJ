@@ -4,11 +4,13 @@
  * session generated.
  *
  * - **Parts.** A part that opens with an MP4 box (`ftyp`, `moov`, `moof`, `styp`) is a piece of the avatar's fragmented
- *   MP4 whatever MIME type it names, and so is a `video/*` part; each goes to the host typed `video/mp4` (keeping a
- *   `video/mp4` type's codecs), which is what the room's bridge publishes. A part with no MIME type that is not MP4 is
- *   PCM. A PCM part plays as the voice only while the turn has no video yet: the MP4's audio track carries the voice, so
- *   later PCM in the turn would play it twice and is dropped (reported once). Any other part is dropped and reported
- *   once per type: unknown data never plays.
+ *   MP4 whatever MIME type it names, and so is a `video/*` part. Each goes to the host as a `RealtimeVideoFrame` (Core's
+ *   `Fmp4PieceToVideoFrame`: init or fragment, with its time and key-frame flag) typed `video/mp4`, keeping a `video/mp4`
+ *   type's codecs, which is what the room's bridge publishes. A `video/*` part that is neither labelled `video/mp4` nor
+ *   opens with an MP4 box is dropped and reported once per type. A part with no MIME type that is not MP4 is PCM. A PCM
+ *   part plays as the voice only while the turn has no video yet: the MP4's audio track carries the voice, so later PCM
+ *   in the turn would play it twice and is dropped (reported once). Any other part is dropped and reported once per
+ *   type: unknown data never plays.
  * - **Turns.** From `interrupted` until that turn's `turnComplete`, media parts are dropped (Google sends
  *   `interrupted` before `turn_complete`; anything in between is stale after the barge-in).
  * - **Usage.** The seconds of avatar video generated in a turn (its video samples' durations, read from the fragments)
@@ -20,15 +22,20 @@
  * @author MemberJunction.com
  */
 
-import { Fmp4VideoSeconds, IsPcmAudioMimeType, ReadFmp4Init, SniffFmp4Piece, type Fmp4Init, type RealtimeAvatarMediaChunk } from '@memberjunction/ai';
-
-/** The MIME type the avatar's pieces are handed on with, unless a part names `video/mp4` with its codecs. */
-const AVATAR_PIECE_MIME_TYPE = 'video/mp4';
+import {
+    Fmp4PieceToVideoFrame,
+    Fmp4VideoSeconds,
+    IsPcmAudioMimeType,
+    ReadFmp4Init,
+    SniffFmp4Piece,
+    type Fmp4Init,
+    type RealtimeVideoFrame,
+} from '@memberjunction/ai';
 
 /** Where a bridged avatar session's media and usage go. */
 export interface GeminiBridgedAvatarSinks {
-    /** A piece of the avatar's fragmented MP4, in the order the model sent it. */
-    OnAvatar(chunk: RealtimeAvatarMediaChunk): void;
+    /** A piece of the avatar's fragmented MP4 as a frame, in the order the model sent it. */
+    OnVideoFrame(frame: RealtimeVideoFrame): void;
     /** PCM voice: a turn's audio before any of its video arrived. */
     OnPcm(pcm: ArrayBuffer): void;
     /** Seconds of avatar video generated since the last report (a delta, never a total). */
@@ -82,7 +89,7 @@ export class GeminiBridgedAvatarOutput {
         }
         const kind = GeminiBridgedAvatarOutput.kindOf(mimeType, data);
         if (kind === 'avatar') {
-            this.acceptAvatar(GeminiBridgedAvatarOutput.pieceMimeType(mimeType), data);
+            this.acceptAvatar(mimeType, data);
         } else if (kind === 'voice') {
             this.acceptVoice(data);
         } else {
@@ -122,7 +129,8 @@ export class GeminiBridgedAvatarOutput {
     /**
      * How a part plays. Its bytes decide first: a part that opens with an MP4 box is the avatar's whatever type it names,
      * since Google does not document the type of avatar parts. Then its type: none means PCM; a `video/*` type is the
-     * avatar's; a PCM type is the voice; anything else never plays.
+     * avatar's (a `video/mp4` piece may start inside a box; any other video type that isn't MP4 is then dropped); a PCM
+     * type is the voice; anything else never plays.
      */
     private static kindOf(mimeType: string | undefined, data: ArrayBuffer): BridgedPartKind {
         if (SniffFmp4Piece(data)) {
@@ -139,24 +147,25 @@ export class GeminiBridgedAvatarOutput {
     }
 
     /**
-     * The type a piece is handed on with: the part's own when it is `video/mp4` (with any codecs), else `video/mp4`. The
-     * room's bridge publishes a piece as the avatar only when its type is `video/mp4`, and every piece of the stream is.
+     * Makes the piece a frame, counts its video seconds (before the host may take the buffer), then hands it on. The frame
+     * is typed `video/mp4`, keeping the part's own type when it names `video/mp4` with its codecs: the room's bridge
+     * publishes a piece as the avatar only when its type is `video/mp4`, and every piece of the stream is. A piece that
+     * isn't MP4 is dropped, reported once per type.
      */
-    private static pieceMimeType(mimeType: string | undefined): string {
-        const type = mimeType?.trim() ?? '';
-        return /^video\/mp4\b/i.test(type) ? type : AVATAR_PIECE_MIME_TYPE;
-    }
-
-    /** Counts the piece's video seconds (before the host may take the buffer), then hands it on. */
-    private acceptAvatar(mimeType: string, data: ArrayBuffer): void {
-        const kind = SniffFmp4Piece(data);
-        if (kind === 'init') {
+    private acceptAvatar(mimeType: string | undefined, data: ArrayBuffer): void {
+        const frame = Fmp4PieceToVideoFrame(data, mimeType, this.init);
+        if (!frame) {
+            const message = `[GeminiRealtime] Dropped model output of type ${mimeType}: it is not fragmented MP4, the only video an avatar plays.`;
+            this.reportOnce(`type:${mimeType}`, message);
+            return;
+        }
+        if (frame.Piece === 'init') {
             this.init = ReadFmp4Init(data) ?? this.init;
-        } else if (kind === 'fragment' && !this.turn.GenerationEnded && this.init) {
+        } else if (!this.turn.GenerationEnded && this.init) {
             this.pendingVideoSeconds += Fmp4VideoSeconds(data, this.init) ?? 0;
         }
         this.turn.HasVideo = true;
-        this.sinks.OnAvatar({ Data: data, MimeType: mimeType });
+        this.sinks.OnVideoFrame(frame);
     }
 
     private acceptVoice(pcm: ArrayBuffer): void {

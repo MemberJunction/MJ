@@ -23,7 +23,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { IRealtimeSession, RealtimeAvatarMediaChunk, RealtimeSessionCapabilities } from '@memberjunction/ai';
+import { Fmp4PieceToVideoFrame, ReadFmp4Init, type Fmp4Init, type IRealtimeSession, type RealtimeSessionCapabilities, type RealtimeVideoFrame } from '@memberjunction/ai';
 import type { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
 import { RegisterNativeRoomModule } from '@memberjunction/ai-bridge-livekit';
 import { AIBridgeEngine, type ActiveBridgeSession, type BridgeRealtimeSessionRecoveryRequest } from '@memberjunction/ai-bridge-server';
@@ -138,7 +138,7 @@ class AvatarFixtureSession implements IRealtimeSession {
     public readonly InputSampleRate = 16000;
     public readonly OutputSampleRate = 24000;
     public Closed = false;
-    private avatarHandler?: (chunk: RealtimeAvatarMediaChunk) => void;
+    private videoFrameHandler?: (frame: RealtimeVideoFrame) => void;
     private interruptionHandler?: () => void;
     public get Capabilities(): RealtimeSessionCapabilities {
         return { CanReconfigureTurnMode: false };
@@ -146,8 +146,8 @@ class AvatarFixtureSession implements IRealtimeSession {
     public SendInput(): void {}
     public async RegisterTools(): Promise<void> {}
     public OnOutput(): void {}
-    public OnAvatarOutput(handler: (chunk: RealtimeAvatarMediaChunk) => void): void {
-        this.avatarHandler = handler;
+    public OnVideoFrame(handler: (frame: RealtimeVideoFrame) => void): void {
+        this.videoFrameHandler = handler;
     }
     public OnTranscript(): void {}
     public OnToolCall(): void {}
@@ -160,7 +160,7 @@ class AvatarFixtureSession implements IRealtimeSession {
     public async Close(): Promise<void> {
         this.Closed = true;
     }
-    /** Sends the fixture: its init segment, then each moof + mdat, each in its own part. */
+    /** Sends the fixture as a driver hands it on: its init segment, then each moof + mdat, each in its own fMP4 frame. */
     public PlayFixture(): void {
         const file = new Uint8Array(readFileSync(FIXTURE));
         const view = new DataView(file.buffer, file.byteOffset, file.byteLength);
@@ -175,8 +175,14 @@ class AvatarFixtureSession implements IRealtimeSession {
             }
             return out.buffer;
         };
-        this.avatarHandler?.({ Data: piece(boxes[0], boxes[1]), MimeType: 'video/mp4' });
-        for (let i = 2; i + 1 < boxes.length; i += 2) this.avatarHandler?.({ Data: piece(boxes[i], boxes[i + 1]), MimeType: 'video/mp4' });
+        let init: Fmp4Init | null = null;
+        const send = (data: ArrayBuffer): void => {
+            const frame = Fmp4PieceToVideoFrame(data, 'video/mp4', init);
+            init = frame?.Piece === 'init' ? ReadFmp4Init(data) : init;
+            if (frame) this.videoFrameHandler?.(frame);
+        };
+        send(piece(boxes[0], boxes[1]));
+        for (let i = 2; i + 1 < boxes.length; i += 2) send(piece(boxes[i], boxes[i + 1]));
     }
     public Interrupt(): void {
         this.interruptionHandler?.();

@@ -1,11 +1,13 @@
 /**
  * @fileoverview VIDEO PLAYOUT: plays encoded video that arrives in pieces, such as a Gemini Live avatar,
- * through Media Source Extensions. A provider hands each piece to {@link VideoPlayout.Append}; a renderer
- * shows {@link VideoPlayout.Source} with `AttachVideoSource`.
+ * through Media Source Extensions. A provider hands each piece to {@link VideoPlayout.Append} as a
+ * `RealtimeVideoFrame` from `@memberjunction/ai`; a renderer shows {@link VideoPlayout.Source} with
+ * `AttachVideoSource`.
  *
- * - **Format: fragmented MP4.** The first piece of a turn is an init segment (`ftyp` + `moov`); each later
- *   piece is a media fragment (`moof` + `mdat`). A turn may send a fresh init segment and restart its
- *   timestamps; the source buffer runs in `sequence` mode, so playback stays continuous either way.
+ * - **Format: fragmented MP4.** The player plays frames of kind `'fmp4'`. The first piece of a turn is an init
+ *   segment (`Piece: 'init'`, `ftyp` + `moov`); each later piece is a media fragment (`moof` + `mdat`). A turn may
+ *   send a fresh init segment and restart its timestamps; the source buffer runs in `sequence` mode, so playback
+ *   stays continuous either way. An encoded chunk or an image is dropped and reported once (`'no-decoder'`).
  * - **Codecs come from the init segment.** The source buffer takes the codecs the init segment's tracks name
  *   (`avc1.42c01f` alone for video-only MP4), read by `ReadFmp4Init` from `@memberjunction/ai`; until an init
  *   arrives, or when it names a codec the reader doesn't know, it takes {@link VideoPlayoutOptions.MimeType}.
@@ -25,7 +27,7 @@
  * @module @memberjunction/ai-realtime-client/media
  */
 
-import { ReadFmp4Init, SniffFmp4Piece } from '@memberjunction/ai';
+import { ReadFmp4Init, SniffFmp4Piece, type RealtimeFmp4VideoFrame, type RealtimeVideoFrame } from '@memberjunction/ai';
 import type { MediaVideoSource } from './model';
 
 /** The type of a Gemini Live avatar: H.264 Constrained Baseline 3.1 video, AAC-LC audio. */
@@ -40,7 +42,7 @@ const TRIM_STEP_SECONDS = 5;
 /** Seconds of played media kept when the browser's buffer is full. */
 const QUOTA_BACK_BUFFER_SECONDS = 2;
 
-/** Pieces held while no element is attached; older ones are dropped beyond this. */
+/** Frames held while no element is attached; older ones are dropped beyond this. */
 const MAX_PENDING_PIECES = 600;
 
 /** How far ahead of the playhead counts as "still playing", in seconds. */
@@ -74,6 +76,8 @@ export interface VideoPlayoutOptions {
 export type VideoPlayoutProblem =
     /** The browser cannot play this type through MSE. */
     | 'unsupported'
+    /** No decoder in this player plays the frame's kind and type (an encoded chunk or an image); it was dropped. */
+    | 'no-decoder'
     /** A media fragment arrived before any init segment and was dropped. */
     | 'fragment-before-init'
     /** The browser rejected a piece (decode error, or out of buffer space after trimming). */
@@ -122,8 +126,11 @@ export interface IAvatarVideoPlayout {
     readonly IsPlaying: boolean;
     /** Whether the element plays the media's audio; `false` mutes it. */
     CarriesVoice: boolean;
-    /** Hands over one piece: an init segment or a media fragment, in the order they arrived. */
-    Append(piece: ArrayBuffer): void;
+    /**
+     * Hands over one frame, in the order they arrived: a piece of fragmented MP4 (an init segment or a media fragment),
+     * an encoded chunk or an image. A frame the player has no decoder for is dropped and reported once (`'no-decoder'`).
+     */
+    Append(frame: RealtimeVideoFrame): void;
     /** The turn's last piece has arrived: playback runs to its true end and holds the last frame. */
     EndOfTurn(): void;
     /** Barge-in: drops everything not yet played and stops at once, holding the last frame. */
@@ -134,12 +141,12 @@ export interface IAvatarVideoPlayout {
     Dispose(): void;
 }
 
-/** Plays fragmented MP4 pieces through MSE into one `<video>` element at a time. */
+/** Plays fragmented MP4 frames through MSE into one `<video>` element at a time. */
 export class VideoPlayout implements IAvatarVideoPlayout {
     private readonly mimeType: string;
     private readonly backBufferSeconds: number;
     private readonly onElementAttached: ((element: HTMLVideoElement) => void) | undefined;
-    private readonly pending: ArrayBuffer[] = [];
+    private readonly pending: RealtimeFmp4VideoFrame[] = [];
     private readonly problemHandlers = new Set<(problem: VideoPlayoutProblem, message: string) => void>();
     private readonly reported = new Set<VideoPlayoutProblem>();
     private carriesVoice: boolean;
@@ -150,7 +157,7 @@ export class VideoPlayout implements IAvatarVideoPlayout {
     /** The type the source buffer was opened with, or last changed to. */
     private bufferType: string | null = null;
     /** The latest init segment, replayed into a new source buffer when the player moves to another element. */
-    private lastInit: ArrayBuffer | null = null;
+    private lastInit: RealtimeFmp4VideoFrame | null = null;
     /** Set by Flush: the next append starts at the playhead instead of after what was dropped. */
     private restartAtPlayhead = false;
     private retriedAfterQuota = false;
@@ -205,20 +212,28 @@ export class VideoPlayout implements IAvatarVideoPlayout {
         return buffered.end(buffered.length - 1) - element.currentTime > PLAYING_EPSILON_SECONDS;
     }
 
-    /** Hands over one piece: an init segment or a media fragment, in the order they arrived. */
-    public Append(piece: ArrayBuffer): void {
+    /**
+     * Hands over one frame, in the order they arrived: an init segment or a media fragment. This player plays fragmented
+     * MP4 only; an encoded chunk or an image is dropped and reported once (`'no-decoder'`).
+     */
+    public Append(frame: RealtimeVideoFrame): void {
         if (this.disposed) {
+            return;
+        }
+        if (frame.Kind !== 'fmp4') {
+            // A frame it can't play adds no media: a turn that was about to end still ends.
+            this.report('no-decoder', `This player plays fragmented MP4 only; a ${frame.Kind} frame of type ${frame.MimeType} was dropped.`);
             return;
         }
         // More media is coming, so a turn that was about to end continues instead.
         this.endPending = false;
-        if (IsMp4InitSegment(piece)) {
-            this.lastInit = piece;
+        if (frame.Piece === 'init') {
+            this.lastInit = frame;
         } else if (!this.lastInit) {
             this.report('fragment-before-init', 'A video fragment arrived before its init segment and was dropped.');
             return;
         }
-        this.pending.push(piece);
+        this.pending.push(frame);
         if (this.pending.length > MAX_PENDING_PIECES) {
             this.pending.splice(0, this.pending.length - MAX_PENDING_PIECES);
             this.report('pending-overflow', 'Video arrived with no element attached; the oldest pieces were dropped.');
@@ -318,7 +333,7 @@ export class VideoPlayout implements IAvatarVideoPlayout {
         if (this.mediaSource !== mediaSource) {
             return;
         }
-        const type = this.typeFor(this.lastInit);
+        const type = this.typeFor(this.lastInit?.Data ?? null);
         const buffer = mediaSource.addSourceBuffer(type);
         this.bufferType = type;
         // Sequence mode lays pieces end to end, so a turn that restarts its timestamps still plays on.
@@ -327,13 +342,13 @@ export class VideoPlayout implements IAvatarVideoPlayout {
         buffer.addEventListener('error', () => this.report('append-failed', 'The browser could not decode a video piece.'));
         this.sourceBuffer = buffer;
         // A new source buffer knows no tracks yet: lead with the latest init segment unless one is already next.
-        if (this.lastInit && !(this.pending.length > 0 && IsMp4InitSegment(this.pending[0]))) {
+        if (this.lastInit && !(this.pending.length > 0 && this.pending[0].Piece === 'init')) {
             this.pending.unshift(this.lastInit);
         }
         this.pump();
     }
 
-    /** Appends the next pending piece when the buffer is free. */
+    /** Appends the next pending frame when the buffer is free. */
     private pump(): void {
         const buffer = this.sourceBuffer;
         if (!buffer || buffer.updating || this.pending.length === 0) {
@@ -343,12 +358,12 @@ export class VideoPlayout implements IAvatarVideoPlayout {
             buffer.timestampOffset = this.element.currentTime;
             this.restartAtPlayhead = false;
         }
-        const piece = this.pending[0];
+        const frame = this.pending[0];
         try {
-            if (IsMp4InitSegment(piece)) {
-                this.matchBufferType(buffer, piece);
+            if (frame.Piece === 'init') {
+                this.matchBufferType(buffer, frame.Data);
             }
-            buffer.appendBuffer(piece);
+            buffer.appendBuffer(frame.Data);
             this.pending.shift();
             this.retriedAfterQuota = false;
         } catch (err) {

@@ -70,13 +70,21 @@ describe('GeminiRealtimeClient routes model output parts in a session that shows
     it('sends a video/mp4 part to the avatar player, never to PCM playback', () => {
         const init = AvatarInitSegment();
         emitParts(client, [{ inlineData: { data: PieceToBase64(init), mimeType: 'video/mp4' } }]);
-        expect(client.Playout.Appended.map((piece) => new Uint8Array(piece))).toEqual([new Uint8Array(init)]);
+        expect(client.Playout.Appended.map((frame) => new Uint8Array(frame.Data))).toEqual([new Uint8Array(init)]);
         expect(client.Playback.Enqueued).toHaveLength(0);
     });
 
-    it('sends any video type to the avatar player, whatever its case or parameters', () => {
+    it('sends any video/mp4 part to the avatar player as a frame with its MIME type as sent, whatever its case or parameters', () => {
         emitParts(client, [{ inlineData: { data: PieceToBase64(AvatarFragment()), mimeType: 'VIDEO/MP4; codecs="avc1.42c01f"' } }]);
-        expect(client.Playout.Appended).toHaveLength(1);
+        expect(client.Playout.Appended).toEqual([expect.objectContaining({ Kind: 'fmp4', Piece: 'fragment', MimeType: 'VIDEO/MP4; codecs="avc1.42c01f"' })]);
+    });
+
+    it("drops a video part that isn't MP4, reported once per type, never to PCM playback", () => {
+        emitParts(client, [{ inlineData: { data: b64([1, 2, 3, 4]), mimeType: 'video/webm' } }]);
+        emitParts(client, [{ inlineData: { data: b64([5, 6, 7, 8]), mimeType: 'video/webm' } }]);
+        expect(client.Playout.Appended).toHaveLength(0);
+        expect(client.Playback.Enqueued).toHaveLength(0);
+        expect(warn.mock.calls.filter((call) => String(call[0]).includes('video/webm: it is not fragmented MP4'))).toHaveLength(1);
     });
 
     it('sniffs a part with no MIME type: one that opens with ftyp, moof or styp goes to the avatar player', () => {
@@ -85,7 +93,11 @@ describe('GeminiRealtimeClient routes model output parts in a session that shows
             { inlineData: { data: PieceToBase64(AvatarFragment()) } },
             { inlineData: { data: PieceToBase64(AvatarStypFragment()) } },
         ]);
-        expect(client.Playout.Appended).toHaveLength(3);
+        expect(client.Playout.Appended.map((frame) => (frame.Kind === 'fmp4' ? `${frame.Piece} ${frame.MimeType}` : frame.Kind))).toEqual([
+            'init video/mp4',
+            'fragment video/mp4',
+            'fragment video/mp4',
+        ]);
         expect(client.Playback.Enqueued).toHaveLength(0);
     });
 
@@ -112,7 +124,15 @@ describe('GeminiRealtimeClient routes model output parts in a session that shows
             { inlineData: { data: PieceToBase64(AvatarFragment()), mimeType: 'audio/pcm;rate=24000' } },
             { inlineData: { data: PieceToBase64(AvatarStypFragment()), mimeType: 'video/iso.segment' } },
         ]);
-        expect(client.Playout.Appended.map((piece) => new Uint8Array(piece).length)).toEqual([init.byteLength, moovOnly.byteLength, AvatarFragment().byteLength, AvatarStypFragment().byteLength]);
+        const sizes = [init.byteLength, moovOnly.byteLength, AvatarFragment().byteLength, AvatarStypFragment().byteLength];
+        expect(client.Playout.Appended.map((frame) => frame.Data.byteLength)).toEqual(sizes);
+        // Each is an fMP4 frame labelled video/mp4, whatever the part named; a moov sent alone is an init segment.
+        expect(client.Playout.Appended.map((frame) => (frame.Kind === 'fmp4' ? `${frame.Piece} ${frame.MimeType}` : frame.Kind))).toEqual([
+            'init video/mp4',
+            'init video/mp4',
+            'fragment video/mp4',
+            'fragment video/mp4',
+        ]);
         expect(client.Playback.Enqueued).toHaveLength(0);
         expect(warn.mock.calls.filter((call) => String(call[0]).includes('Dropped model output'))).toEqual([]);
     });

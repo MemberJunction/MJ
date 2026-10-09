@@ -517,7 +517,7 @@ describe('GeminiEnterpriseRealtime', () => {
             expect(config?.responseModalities).toEqual(['VIDEO']);
             expect(config?.avatarConfig).toEqual({ avatarName: 'Ben', videoBitrateBps: 2_000_000 });
             expect(session.AvatarStatus).toEqual({ Requested: true, Granted: true });
-            expect(typeof session.OnAvatarOutput).toBe('function');
+            expect(typeof session.OnVideoFrame).toBe('function');
             const elsewhere = await driver.StartSession(makeParams({ Avatar: { AvatarID: 'Ben' } }));
             expect(elsewhere.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'bridged' });
         });

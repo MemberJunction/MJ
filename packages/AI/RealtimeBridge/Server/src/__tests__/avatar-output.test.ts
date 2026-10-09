@@ -13,7 +13,15 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { IRealtimeSession, RealtimeAvatarMediaChunk, RealtimeSessionCapabilities, RealtimeTranscript } from '@memberjunction/ai';
+import {
+    Fmp4PieceToVideoFrame,
+    ReadFmp4Init,
+    type Fmp4Init,
+    type IRealtimeSession,
+    type RealtimeSessionCapabilities,
+    type RealtimeTranscript,
+    type RealtimeVideoFrame,
+} from '@memberjunction/ai';
 import type { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
 import type { BridgeMediaFrame } from '@memberjunction/ai-bridge-base';
 import { AIBridgeEngine, IHostInstanceIdentity, StartBridgeSessionParams, ActiveBridgeSession, BridgeRealtimeSessionRecoveryRequest } from '../ai-bridge-engine';
@@ -22,14 +30,16 @@ import { AvatarFragmentPiece, AvatarInitPiece, AUDIO_TRACK, UnreadableAvatarInit
 
 const RATE = 24000;
 
-/** A realtime session double with an avatar output, whose speech a test drives. */
+/** A realtime session double with a video output, whose speech and frames a test drives. */
 class AvatarSession implements IRealtimeSession {
     public readonly InputSampleRate = 16000;
     public readonly OutputSampleRate = RATE;
     public readonly Heard: ArrayBuffer[] = [];
     public Closed = false;
     private outputHandler?: (chunk: ArrayBuffer) => void;
-    private avatarHandler?: (chunk: RealtimeAvatarMediaChunk) => void;
+    private videoFrameHandler?: (frame: RealtimeVideoFrame) => void;
+    /** The latest readable init segment the model sent, as a driver keeps it to time the fragments. */
+    private init: Fmp4Init | null = null;
     private transcriptHandler?: (t: RealtimeTranscript) => void;
     private interruptionHandler?: () => void;
 
@@ -43,7 +53,7 @@ class AvatarSession implements IRealtimeSession {
     }
     public async RegisterTools(): Promise<void> { /* no-op */ }
     public OnOutput(handler: (chunk: ArrayBuffer) => void): void { this.outputHandler = handler; }
-    public OnAvatarOutput(handler: (chunk: RealtimeAvatarMediaChunk) => void): void { this.avatarHandler = handler; }
+    public OnVideoFrame(handler: (frame: RealtimeVideoFrame) => void): void { this.videoFrameHandler = handler; }
     public OnTranscript(handler: (t: RealtimeTranscript) => void): void { this.transcriptHandler = handler; }
     public OnToolCall(): void { /* no-op */ }
     public async SendToolResult(): Promise<void> { /* no-op */ }
@@ -52,14 +62,32 @@ class AvatarSession implements IRealtimeSession {
     public OnUsage(): void { /* no-op */ }
     public async Close(): Promise<void> { this.Closed = true; }
 
-    /** The model sends one avatar piece. */
-    public Piece(data: ArrayBuffer, mimeType = 'video/mp4'): void { this.avatarHandler?.({ Data: data, MimeType: mimeType }); }
+    /** The model sends one avatar piece, which the driver hands on as an fMP4 frame, timed by the stream's latest init. */
+    public Piece(data: ArrayBuffer, mimeType = 'video/mp4'): void {
+        const frame = Fmp4PieceToVideoFrame(data, mimeType, this.init);
+        if (frame?.Piece === 'init') this.init = ReadFmp4Init(data) ?? this.init;
+        if (frame) this.videoFrameHandler?.(frame);
+    }
+    /** The model sends any video frame. */
+    public Frame(frame: RealtimeVideoFrame): void { this.videoFrameHandler?.(frame); }
     /** The model speaks `ms` of PCM. */
     public Say(ms: number): void { this.outputHandler?.(new ArrayBuffer(Math.round((ms / 1000) * RATE) * 2)); }
     public Final(role: 'user' | 'assistant', text: string): void { this.transcriptHandler?.({ Role: role, Text: text, IsFinal: true }); }
     /** The user barges in: the model reports a true interruption. */
     public Interrupt(): void { this.interruptionHandler?.(); }
 }
+
+/** A session on the deprecated untyped video output. */
+class UntypedVideoSession extends AvatarSession {
+    private untypedHandler?: (chunk: ArrayBuffer) => void;
+    public OnVideoOutput(handler: (chunk: ArrayBuffer) => void): void { this.untypedHandler = handler; }
+    /** The model sends video bytes that say nothing about what they are. */
+    public Bytes(chunk: ArrayBuffer): void { this.untypedHandler?.(chunk); }
+}
+
+/** One encoded VP8 chunk and one JPEG image: frames that carry no voice. */
+const CHUNK: RealtimeVideoFrame = { Kind: 'chunk', Data: new ArrayBuffer(12), MimeType: 'video/vp8', PresentationTimeMs: 0, KeyFrame: true };
+const IMAGE: RealtimeVideoFrame = { Kind: 'image', Data: new ArrayBuffer(16), MimeType: 'image/jpeg' };
 
 let rowSeq = 0;
 const provider = {
@@ -132,6 +160,25 @@ describe('AIBridgeEngine — the avatar output', () => {
         expect(sent[0].Bytes).toBe(init);
     });
 
+    it('sends encoded chunks and images on video-out with their MIME types and bytes', async () => {
+        const session = new AvatarSession();
+        const active = await seat('raw', session);
+        session.Frame(CHUNK);
+        session.Frame(IMAGE);
+        const sent = avatarSent(active);
+        expect(sent.map((f) => f.MimeType)).toEqual(['video/vp8', 'image/jpeg']);
+        expect(sent.map((f) => f.Bytes)).toEqual([CHUNK.Data, IMAGE.Data]);
+    });
+
+    it('still forwards the deprecated untyped video output, as bytes without a MIME type', async () => {
+        const session = new UntypedVideoSession();
+        const active = await seat('untyped', session);
+        const bytes = new ArrayBuffer(8);
+        session.Bytes(bytes);
+        expect(avatarSent(active)).toEqual([expect.objectContaining({ Track: 'video-out', Bytes: bytes })]);
+        expect(avatarSent(active)[0].MimeType).toBeUndefined();
+    });
+
     it('counts an avatar piece as activity for the idle sweep', async () => {
         const session = new AvatarSession();
         const active = await seat('activity', session);
@@ -185,6 +232,22 @@ describe('AIBridgeEngine — what an avatar piece says about its video', () => {
             [undefined, undefined, undefined],
             [undefined, undefined, undefined],
             [undefined, undefined, true],
+        ]);
+    });
+
+    it('copies what a chunk or an image says about itself: an image is always a key frame', async () => {
+        const session = new AvatarSession();
+        const active = await seat('raw-facts', session);
+        session.Frame({ Kind: 'chunk', Data: new ArrayBuffer(4), MimeType: 'video/vp8', PresentationTimeMs: 0, KeyFrame: false, Width: 320, Height: 240 });
+        session.Frame({ Kind: 'chunk', Data: new ArrayBuffer(4), MimeType: 'video/vp8', PresentationTimeMs: 40, KeyFrame: true });
+        session.Frame({ Kind: 'image', Data: new ArrayBuffer(4), MimeType: 'image/jpeg', Width: 640, Height: 360 });
+        session.Frame({ Kind: 'image', Data: new ArrayBuffer(4), MimeType: 'image/jpeg', Width: 640 });
+
+        expect(videoFactsSent(active)).toEqual([
+            [320, 240, false],
+            [undefined, undefined, true],
+            [640, 360, true],
+            [undefined, undefined, true], // half a size is no size
         ]);
     });
 
@@ -244,6 +307,20 @@ describe('AIBridgeEngine — the floor gate counts an avatar piece by its audio'
         avatar.Piece(AvatarFragmentPiece(VIDEO_TRACK, 41.7)); // and the rest of the burst, face included, is dropped
         avatar.Piece(AvatarFragmentPiece(AUDIO_TRACK, 100));
         expect(avatarSent(b)).toHaveLength(3);
+    });
+
+    it('passes encoded chunks and images even while the agent is cut: their voice comes as PCM, which the gate counts', async () => {
+        const holder = new AvatarSession(true);
+        const avatar = new AvatarSession(true);
+        await seat('raw-a', holder);
+        const b = await seat('raw-b', avatar);
+        holder.Say(300);
+        avatar.Piece(AvatarInitPiece());
+        avatar.Piece(AvatarFragmentPiece(AUDIO_TRACK, 2000)); // cut at once
+        avatar.Piece(AvatarFragmentPiece(VIDEO_TRACK, 41.7)); // the MP4's face follows the burst: dropped
+        avatar.Frame(CHUNK);
+        avatar.Frame(IMAGE);
+        expect(avatarSent(b).map((f) => f.MimeType)).toEqual(['video/mp4', 'video/vp8', 'image/jpeg']);
     });
 
     it('still passes a new init segment while the avatar is muted', async () => {
