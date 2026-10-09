@@ -373,7 +373,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param data the data to render the template with
      */
     protected async renderTemplateAsync(template: nunjucks.Template, data: any): Promise<string> {
-        HardenNunjucksRuntime(); // no-op unless something replaced the guarded runtime hooks
+        HardenNunjucksRuntime(); // no-op unless something replaced a guarded nunjucks hook
         return new Promise((resolve, reject) => {
             template.render(data, (err, result) => {
                 if (err) {

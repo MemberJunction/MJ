@@ -126,19 +126,34 @@ The engine provides built-in filters for JSON operations:
 
 ### Template Sandbox
 
-Users can edit stored templates, so the engine renders them on a guarded nunjucks runtime
-(`HardenNunjucksRuntime()`, applied when this package loads). The guard is process-wide: it also
-covers nunjucks environments that other packages create.
+Users can edit stored templates, so the engine guards nunjucks when this package loads
+(`HardenNunjucksRuntime()`). The guard is process-wide: it also covers nunjucks environments that
+other packages create, and templates loaded through `include` and `import`. It checks templates at
+two points.
 
-- The member names `constructor`, `prototype`, `__proto__`, `__defineGetter__`, `__defineSetter__`,
-  `__lookupGetter__` and `__lookupSetter__` read as empty, even when the data defines them.
+**Before a template compiles.** The nunjucks compiler copies names from the template into the code it
+generates, so `AssertTemplateTreeIsSafe()` checks every parsed template first:
+
+- Variable, filter, test, loop, `set`, macro, import and block names must be plain names: letters,
+  digits, `_` and `$`. A filter name can also contain dots.
+- The name of a called member, such as `obj["key"]()`, must not contain a backslash or a line break.
+- A loop variable must not reuse a name the generated code relies on, such as `context`, `frame`,
+  `runtime`, `env`, `cb` or `next`.
+
+**While a template renders.**
+
+- The member names `constructor`, `prototype` and the `__define/lookup Getter/Setter__` accessors read
+  as empty unless they hold an object's own data that is not a function. `__proto__` always reads as
+  empty.
 - A bare name such as `{{ user }}` resolves only to a template variable, a key of the render data, or
   an environment global. It never resolves to a property the data inherits, such as `valueOf`.
-- A template that reaches `Function` (or its async and generator variants), `eval`, `Object`,
-  `Reflect`, `globalThis`, `process` or the render context fails with a `TemplateSandboxError`.
+- A template must not reach `Function` (or its async and generator variants), `eval`, `Object`,
+  `Reflect`, `globalThis`, `process` or the render context.
 
-The guard blocks reflection, not ordinary methods. Pass templates plain data, not objects whose
-methods reach the database or the file system (for example `BaseEntity` instances).
+A template that breaks one of these rules fails with a `TemplateSandboxError`.
+
+The guard blocks reflection and code injection, not ordinary methods. Pass templates plain data, not
+objects whose methods reach the database or the file system (for example `BaseEntity` instances).
 
 The `RunTemplate` mutation and the `Template.Run` remote operation also apply
 `GetTemplateRunRefusal()` before they load anything: they refuse scope-limited sessions and callers
