@@ -2,6 +2,41 @@ import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, B
 import { RegisterClass } from "@memberjunction/global";
 import { OpenAI } from "openai";
 
+/** An OpenAI embedding model, as {@link OpenAIEmbedding.GetEmbeddingModels} lists it. */
+export interface OpenAIEmbeddingModelInfo {
+    Model: string;
+    Description: string;
+    /** The width of the vectors the model produces when no `dimensions` is requested. */
+    OutputDimension: number;
+    /**
+     * Whether the model accepts the `dimensions` request parameter. OpenAI's API reference: "Only
+     * supported in `text-embedding-3` and later models." text-embedding-ada-002 has a fixed width of
+     * 1536 and rejects the parameter, even when the requested width is its own.
+     */
+    AcceptsDimensions: boolean;
+}
+
+const OPENAI_EMBEDDING_MODELS: readonly OpenAIEmbeddingModelInfo[] = [
+    {
+        Model: 'text-embedding-3-large',
+        Description: "Most capable embedding model for both english and non-english tasks",
+        OutputDimension: 3072,
+        AcceptsDimensions: true,
+    },
+    {
+        Model: 'text-embedding-3-small',
+        Description: "Increased performance over 2nd generation ada embedding model",
+        OutputDimension: 1536,
+        AcceptsDimensions: true,
+    },
+    {
+        Model: 'text-embedding-ada-002',
+        Description: "Most capable 2nd generation embedding model, replacing 16 first generation models",
+        OutputDimension: 1536,
+        AcceptsDimensions: false,
+    },
+];
+
 @RegisterClass(BaseEmbeddings, 'OpenAIEmbedding')
 export class OpenAIEmbedding extends BaseEmbeddings {
     private _openAI: OpenAI;
@@ -30,7 +65,7 @@ export class OpenAIEmbedding extends BaseEmbeddings {
         let body: OpenAI.Embeddings.EmbeddingCreateParams = {
             input: params.text,
             model: params.model || "text-embedding-3-small",
-            ...(params.dimensions ? { dimensions: params.dimensions } : {}),
+            ...this.DimensionsParam(params.model || "text-embedding-3-small", params.dimensions),
         }
 
         try{
@@ -62,7 +97,7 @@ export class OpenAIEmbedding extends BaseEmbeddings {
         let body: OpenAI.Embeddings.EmbeddingCreateParams = {
             input: params.texts,
             model: params.model || "text-embedding-3-small",
-            ...(params.dimensions ? { dimensions: params.dimensions } : {}),
+            ...this.DimensionsParam(params.model || "text-embedding-3-small", params.dimensions),
         }
 
         try{
@@ -90,24 +125,28 @@ export class OpenAIEmbedding extends BaseEmbeddings {
         }
     }
 
+    /**
+     * The `dimensions` request parameter for a call, or none.
+     *
+     * Callers pass the vector index's `Dimensions` on every call, and MJ stamps one on every index it
+     * creates, so a model with a single width is asked for it too. A model that rejects the parameter
+     * is sent nothing when the requested width is its own, which is what it produces anyway. Any other
+     * width is still sent: the model can't produce it, and the API's rejection is better than vectors
+     * of the wrong width.
+     */
+    protected DimensionsParam(model: string, dimensions?: number): { dimensions?: number } {
+        if (!dimensions) {
+            return {};
+        }
+        const info = OPENAI_EMBEDDING_MODELS.find((m) => m.Model === model);
+        if (info && !info.AcceptsDimensions && info.OutputDimension === dimensions) {
+            return {};
+        }
+        return { dimensions };
+    }
+
     //openAI doesnt have an endpoint we can call
-    public async GetEmbeddingModels(): Promise<any> {
-        return [
-            {
-                Model: 'text-embedding-3-large',
-                Description: "Most capable embedding model for both english and non-english tasks",
-                OutputDimension: 3072,
-            },
-            {
-                Model: 'text-embedding-3-small',
-                Description: "Increased performance over 2nd generation ada embedding model",
-                OutputDimension: 1536,
-            },
-            {
-                Model: 'text-embedding-ada-002',
-                Description: "Most capable 2nd generation embedding model, replacing 16 first generation models",
-                OutputDimension: 1536,
-            }
-        ]
+    public async GetEmbeddingModels(): Promise<OpenAIEmbeddingModelInfo[]> {
+        return OPENAI_EMBEDDING_MODELS.map((m) => ({ ...m }));
     }
 }
