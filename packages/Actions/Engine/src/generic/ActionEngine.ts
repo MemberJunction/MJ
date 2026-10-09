@@ -1,4 +1,4 @@
-import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
+import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider, IRunQueryProvider } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { BaseSingleton, MJGlobal, MJLruCache, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
@@ -80,6 +80,12 @@ export interface ActionFilterContext {
 }
 
 /**
+ * Opens a provider on the host's read-only database login. Resolves null when the host has no
+ * read-only login configured.
+ */
+export type ReadOnlyProviderFactory = () => Promise<IRunQueryProvider | null>;
+
+/**
  * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
@@ -127,6 +133,25 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
 
    public get ContextUser(): UserInfo { return (this._contextUser ?? this.base.ContextUser) as UserInfo; }
    public set ContextUser(value: UserInfo) { this._contextUser = value; }
+
+   private _readOnlyProviderFactory: ReadOnlyProviderFactory | null = null;
+
+   /**
+    * Registers how the host opens a provider on its read-only database login. MJServer registers one
+    * at startup. Pass null to remove it.
+    */
+   public SetReadOnlyProviderFactory(factory: ReadOnlyProviderFactory | null): void {
+      this._readOnlyProviderFactory = factory;
+   }
+
+   /**
+    * A provider on the host's read-only database login, for actions that run caller-supplied SQL.
+    * Such actions run only here and never fall back to the read-write provider, so they refuse when
+    * this resolves null: no factory registered, or no read-only login configured.
+    */
+   public async GetReadOnlyProvider(): Promise<IRunQueryProvider | null> {
+      return this._readOnlyProviderFactory ? await this._readOnlyProviderFactory() : null;
+   }
 
    // ── Proxied cached collections (single source of truth: ActionEngineBase.Instance) ──
    public get Actions(): MJActionEntityExtended[] { return this.base.Actions; }

@@ -4002,6 +4002,9 @@ importers:
       marked:
         specifier: ^17.0.1
         version: 17.0.1
+      mathjs:
+        specifier: ^15.1.0
+        version: 15.1.0
       mermaid:
         specifier: ^11.12.2
         version: 11.12.2

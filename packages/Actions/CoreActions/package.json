@@ -94,6 +94,7 @@
     "jsonpath-plus": "^10.3.0",
     "mammoth": "^1.11.0",
     "marked": "^17.0.1",
+    "mathjs": "^15.1.0",
     "mermaid": "^11.12.2",
     "nunjucks": "^3.2.4",
     "nwsapi": "^2.2.23",

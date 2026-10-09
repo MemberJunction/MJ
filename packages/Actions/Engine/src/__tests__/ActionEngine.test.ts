@@ -962,6 +962,39 @@ describe('ActionEngineServer', () => {
     });
 
     // ========================================================================
+    // The host's read-only provider, for actions that run caller-supplied SQL
+    // ========================================================================
+    describe('GetReadOnlyProvider', () => {
+        const readOnlyProvider = { RunQuery: vi.fn(), RunQueries: vi.fn(), RunQueriesWithCacheCheck: vi.fn(), Config: vi.fn() };
+
+        it('resolves null until the host registers a factory', async () => {
+            expect(await engine.GetReadOnlyProvider()).toBeNull();
+        });
+
+        it('opens a provider through the registered factory on every call', async () => {
+            const factory = vi.fn().mockResolvedValue(readOnlyProvider);
+            engine.SetReadOnlyProviderFactory(factory);
+
+            expect(await engine.GetReadOnlyProvider()).toBe(readOnlyProvider);
+            expect(await engine.GetReadOnlyProvider()).toBe(readOnlyProvider);
+            expect(factory).toHaveBeenCalledTimes(2);
+        });
+
+        it('resolves null when the host has no read-only login', async () => {
+            engine.SetReadOnlyProviderFactory(vi.fn().mockResolvedValue(null));
+
+            expect(await engine.GetReadOnlyProvider()).toBeNull();
+        });
+
+        it('resolves null again once the factory is cleared', async () => {
+            engine.SetReadOnlyProviderFactory(vi.fn().mockResolvedValue(readOnlyProvider));
+            engine.SetReadOnlyProviderFactory(null);
+
+            expect(await engine.GetReadOnlyProvider()).toBeNull();
+        });
+    });
+
+    // ========================================================================
     // Universal MaxExecutionTimeMS + AbortSignal (Phase 1b)
     // ========================================================================
     describe('RunActionWithTimeout', () => {
