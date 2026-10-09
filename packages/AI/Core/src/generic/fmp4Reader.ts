@@ -3,8 +3,8 @@
  * Gemini Live avatar arrives as an init segment (`ftyp` + `moov`) followed by media fragments (`moof` + `mdat`), each
  * piece in its own part.
  *
- * - {@link SniffFmp4Piece} says what a piece opens with, from the type of its first box alone. A part that names no
- *   MIME type is video when this recognizes it.
+ * - {@link SniffFmp4Piece} says what a piece opens with, from the type of its first box alone. In an avatar session a
+ *   part this recognizes is a piece of the avatar, whatever MIME type the part names.
  * - {@link ReadFmp4Init} reads the tracks an init segment declares: each one's id, its handler (`vide` for video,
  *   `soun` for audio), its codec as RFC 6381 writes it (`avc1.42c01f`, `mp4a.40.2`), its timescale and its sample
  *   defaults (`trex`). The browser client follows the handlers (does the video carry the voice?) and opens its Media
@@ -27,7 +27,7 @@
  * @author MemberJunction.com
  */
 
-/** What a piece of fragmented MP4 opens with: an init segment (`ftyp`), or a media segment (`styp` or `moof`). */
+/** What a piece of fragmented MP4 opens with: an init segment (`ftyp` or `moov`), or a media segment (`styp` or `moof`). */
 export type Fmp4PieceKind = 'init' | 'fragment';
 
 /** An H.264 track's decoder configuration, from its `avcC` record. */
@@ -254,8 +254,9 @@ const TRUN = {
 const TRUN_SAMPLE_FIELDS: readonly number[] = [TRUN.Duration, TRUN.Size, TRUN.Flags, TRUN.CompositionOffset];
 
 /**
- * What a piece of fragmented MP4 opens with, read from the type of its first box (bytes 4 to 8): `'init'` for `ftyp`,
- * `'fragment'` for `moof` or `styp`, and `null` for anything else, such as raw PCM audio.
+ * What a piece of fragmented MP4 opens with, read from the type of its first box (bytes 4 to 8): `'init'` for `ftyp`, or
+ * for `moov` (an init segment sent without its `ftyp`), `'fragment'` for `moof` or `styp`, and `null` for anything else,
+ * such as raw PCM audio.
  *
  * @param bytes The piece, as an `ArrayBuffer` or a view of one (a `Uint8Array`, a Node `Buffer`).
  */
@@ -265,7 +266,7 @@ export function SniffFmp4Piece(bytes: ArrayBuffer | ArrayBufferView): Fmp4PieceK
         return null;
     }
     const type = fourCC(view, 4);
-    if (type === 'ftyp') {
+    if (type === 'ftyp' || type === 'moov') {
         return 'init';
     }
     return type === 'moof' || type === 'styp' ? 'fragment' : null;

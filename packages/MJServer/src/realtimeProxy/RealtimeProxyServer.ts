@@ -18,6 +18,12 @@ import {
     type RealtimeRelayTunnelHost,
 } from './RealtimeRelayTunnel.js';
 
+/** The optional Origin allowlist both paths apply: comma-separated origins. */
+const ALLOWED_ORIGINS_ENV = 'MJ_REALTIME_PROXY_ALLOWED_ORIGINS';
+
+/** The longest part of a refused Origin header a log line quotes. */
+const MAX_LOGGED_ORIGIN_CHARS = 200;
+
 /**
  * MJAPI's realtime websocket **proxy** — the transport half of the self-hosted realtime provider story.
  *
@@ -105,7 +111,7 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
         // Unset ⇒ prior behavior (the single-use short-TTL ticket remains the primary guard);
         // set ⇒ a browser page on a foreign origin cannot ride a leaked ticket id.
         if (!RealtimeProxyServer.originAllowed(request.headers?.origin)) {
-            RealtimeProxyServer.rejectUpgrade(socket, 403, 'Forbidden');
+            RealtimeProxyServer.refuseOrigin(socket, '[RealtimeProxy]', request.headers?.origin);
             return;
         }
         const ticketId = url.searchParams.get('ticket') ?? '';
@@ -118,14 +124,14 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
     }
 
     /**
-     * `/realtime/relay/<ticket>/…`: the same Origin allowlist, then 401 unless the relay session can still take a
-     * connection. Whether it opens fresh or resumes is decided on the connection's first frame. A query string is
-     * ignored: the ticket is read from the path only.
+     * `/realtime/relay/<ticket>/…`: the same Origin allowlist (403, logged with the origin), then 401 unless the relay
+     * session can still take a connection. Whether it opens fresh or resumes is decided on the connection's first frame.
+     * A query string is ignored: the ticket is read from the path only.
      */
     private handleRelayUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer, pathname: string): void {
         this.ensureRegistered();
         if (!RealtimeProxyServer.originAllowed(request.headers?.origin)) {
-            RealtimeProxyServer.rejectUpgrade(socket, 403, 'Forbidden');
+            RealtimeProxyServer.refuseOrigin(socket, '[RealtimeRelay]', request.headers?.origin);
             return;
         }
         const sessionId = RealtimeProxyServer.relayTicketFrom(pathname);
@@ -187,7 +193,7 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
      * @returns True when allowed (or no allowlist is configured).
      */
     private static originAllowed(origin: string | undefined): boolean {
-        const raw = process.env['MJ_REALTIME_PROXY_ALLOWED_ORIGINS'];
+        const raw = process.env[ALLOWED_ORIGINS_ENV];
         if (!raw || raw.trim().length === 0) {
             return true; // no allowlist configured — prior behavior
         }
@@ -244,6 +250,17 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Refuses an upgrade whose Origin is not on the allowlist: 403, and one log line naming the origin (printable
+     * characters only, shortened), so a browser page on an origin the allowlist lacks shows in MJAPI's log. The line
+     * never quotes the request's path or query: they carry the ticket.
+     */
+    private static refuseOrigin(socket: Duplex, logPrefix: string, origin: string | undefined): void {
+        const shown = (origin ?? '').replace(/[^\x20-\x7E]/g, '?').slice(0, MAX_LOGGED_ORIGIN_CHARS);
+        console.warn(`${logPrefix} upgrade refused (403): origin "${shown}" is not in ${ALLOWED_ORIGINS_ENV}`);
+        RealtimeProxyServer.rejectUpgrade(socket, 403, 'Forbidden');
     }
 
     /** Writes a minimal HTTP error response and destroys the socket (used for a rejected upgrade). */

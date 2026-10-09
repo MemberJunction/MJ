@@ -227,6 +227,12 @@ describe('SniffFmp4Piece', () => {
         expect(SniffFmp4Piece(box('styp', ascii('msdh')))).toBe('fragment');
     });
 
+    it('reads a moov first as an init segment (an init sent without its ftyp), whose tracks ReadFmp4Init reads', () => {
+        const moovOnly = moov(VIDEO_TRAK, AUDIO_TRAK);
+        expect(SniffFmp4Piece(moovOnly)).toBe('init');
+        expect(ReadFmp4Init(moovOnly)?.Tracks.map((track) => track.Handler)).toEqual(['vide', 'soun']);
+    });
+
     it('is null for anything else: PCM audio, an mdat first, too few bytes', () => {
         expect(SniffFmp4Piece(new Int16Array([1200, -800, 4000, -3000, 1, 2, 3, 4]).buffer)).toBeNull();
         expect(SniffFmp4Piece(box('mdat', zeros(4)))).toBeNull();

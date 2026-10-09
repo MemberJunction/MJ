@@ -113,6 +113,25 @@ describe('a bridged Gemini session whose host publishes the avatar into a room',
             expect(warnings().filter((w) => w.includes('Avatar "Ben"'))).toEqual([]);
         });
 
+        it("asks a meeting's avatar for the bitrate MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS names, and for none with 0", async () => {
+            const key = 'MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS';
+            const saved = process.env[key];
+            try {
+                process.env[key] = '3000000';
+                const custom = new BridgedGemini('enterprise');
+                await custom.StartSession(params({ ...BEN, Delivery: 'room' }));
+                expect(custom.Config()['avatarConfig']).toEqual({ avatarName: 'Ben', videoBitrateBps: 3_000_000 });
+                process.env[key] = '0';
+                const omitted = new BridgedGemini('enterprise');
+                await omitted.StartSession(params({ ...BEN, Delivery: 'room' }));
+                expect(omitted.Config()['avatarConfig']).toEqual({ avatarName: 'Ben' });
+                expect(omitted.Config()['responseModalities']).toEqual(['VIDEO']);
+            } finally {
+                if (saved === undefined) delete process.env[key];
+                else process.env[key] = saved;
+            }
+        });
+
         it('declares the avatar on an outbound video track with its encoding', async () => {
             const session = await new BridgedGemini('enterprise').StartSession(params({ ...BEN, Delivery: 'room' }));
             expect(session.Capabilities?.SupportedOutboundTracks).toEqual([
@@ -205,6 +224,31 @@ describe('a bridged Gemini session whose host publishes the avatar into a room',
             driver.Parts([{ inlineData: { data: b64([1]), mimeType: 'text/plain' } }, { inlineData: { data: b64([2]), mimeType: 'text/plain' } }]);
             expect(avatar).toHaveLength(0);
             expect(warnings().filter((w) => w.includes('text/plain'))).toHaveLength(1);
+        });
+
+        it("sends an MP4 piece to the avatar whatever type the part names, labelled video/mp4 for the room's publisher", () => {
+            const moovOnly = INIT.subarray(new DataView(INIT.buffer, INIT.byteOffset).getUint32(0));
+            driver.Parts([mp4Part(INIT, 'application/octet-stream'), mp4Part(moovOnly, 'application/mp4'), mp4Part(fragment(1, 0, 3750), 'audio/pcm;rate=24000')]);
+            expect(avatar.map((c) => c.MimeType)).toEqual(['video/mp4', 'video/mp4', 'video/mp4']);
+            expect(new Uint8Array(avatar[0].Data)).toEqual(INIT);
+            expect(pcm).toHaveLength(0);
+            expect(warnings().filter((w) => w.includes('Dropped model output'))).toEqual([]);
+        });
+
+        it('keeps the codecs of a video/mp4 type, and labels any other video type video/mp4', () => {
+            const codecs = 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"';
+            driver.Parts([mp4Part(INIT, codecs), mp4Part(new Uint8Array([0, 0, 0, 9, 1, 2, 3, 4, 5]), 'video/iso.segment')]);
+            expect(avatar.map((c) => c.MimeType)).toEqual([codecs, 'video/mp4']);
+        });
+
+        it('never plays a part of another type that is not MP4: not to the avatar, not as PCM', () => {
+            driver.Parts([
+                { inlineData: { data: b64([0, 0, 0, 16, 109, 100, 97, 116, 1, 2, 3, 4, 5, 6, 7, 8]), mimeType: 'application/octet-stream' } },
+                { inlineData: { data: b64([5, 6, 7, 8]), mimeType: 'audio/mp4' } },
+            ]);
+            expect(avatar).toHaveLength(0);
+            expect(pcm).toHaveLength(0);
+            expect(warnings().filter((w) => w.includes('Dropped model output'))).toHaveLength(2);
         });
 
         it("ends a barge-in's drop window when the session resumes on a new connection, and starts a new turn", async () => {

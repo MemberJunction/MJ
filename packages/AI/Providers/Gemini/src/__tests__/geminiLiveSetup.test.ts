@@ -10,7 +10,7 @@ import {
     type LiveClientSetup,
     type LiveConnectConfig,
 } from '@google/genai';
-import { BuildGeminiLiveAudioOnlySetup, BuildGeminiLiveSetup, type GeminiLiveSetupTarget } from '../geminiLiveSetup';
+import { BuildGeminiLiveAudioOnlySetup, BuildGeminiLiveModelPath, BuildGeminiLiveSetup, type GeminiLiveSetupTarget } from '../geminiLiveSetup';
 
 const DEVELOPER: GeminiLiveSetupTarget = { Endpoint: 'developer', Model: 'gemini-3.8-live' };
 const ENTERPRISE: GeminiLiveSetupTarget = { Endpoint: 'enterprise', Model: 'gemini-3.8-live', Project: 'mj-test', Location: 'us-central1' };
@@ -40,6 +40,29 @@ describe('BuildGeminiLiveSetup: the model path', () => {
     it('keeps a full Enterprise resource name as given, with or without a project', () => {
         const name = 'projects/other/locations/eu/publishers/google/models/gemini-3.8-live';
         expect(BuildGeminiLiveSetup({ Endpoint: 'enterprise', Model: name }, {}).model).toBe(name);
+    });
+
+    it('writes the model without a project or location for a Google Cloud API key, as @google/genai does', () => {
+        expect(BuildGeminiLiveSetup({ Endpoint: 'enterprise', Model: 'gemini-3.8-live', UsesApiKey: true }, {}).model).toBe('publishers/google/models/gemini-3.8-live');
+        expect(BuildGeminiLiveSetup({ Endpoint: 'enterprise', Model: 'acme/custom-live', UsesApiKey: true }, {}).model).toBe('publishers/acme/models/custom-live');
+        const name = 'projects/other/locations/eu/publishers/google/models/gemini-3.8-live';
+        expect(BuildGeminiLiveSetup({ Endpoint: 'enterprise', Model: name, UsesApiKey: true }, {}).model).toBe(name);
+        // A project and location next to an API key are ignored, as the SDK clears them in API-key mode.
+        expect(BuildGeminiLiveSetup({ ...ENTERPRISE, UsesApiKey: true }, {}).model).toBe('publishers/google/models/gemini-3.8-live');
+    });
+
+    it('BuildGeminiLiveModelPath gives the model the setup carries, for every target', () => {
+        const targets: GeminiLiveSetupTarget[] = [
+            { Endpoint: 'developer', Model: 'gemini-3.8-live' },
+            ENTERPRISE,
+            { Endpoint: 'enterprise', Model: 'gemini-3.8-live', UsesApiKey: true },
+            { ...ENTERPRISE, Model: 'acme/custom-live' },
+        ];
+        for (const target of targets) {
+            expect(BuildGeminiLiveModelPath(target)).toBe(BuildGeminiLiveSetup(target, {}).model);
+        }
+        expect(BuildGeminiLiveModelPath(ENTERPRISE)).toBe('projects/mj-test/locations/us-central1/publishers/google/models/gemini-3.8-live');
+        expect(() => BuildGeminiLiveModelPath({ Endpoint: 'enterprise', Model: 'gemini-3.8-live' })).toThrow(/project and location/);
     });
 
     it('refuses an Enterprise target without a project or location', () => {

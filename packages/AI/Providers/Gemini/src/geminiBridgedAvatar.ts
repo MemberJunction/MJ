@@ -3,10 +3,12 @@
  * meeting room: where each model part goes, what each turn boundary does, and how many seconds of avatar video the
  * session generated.
  *
- * - **Parts.** A `video/*` part is a piece of the avatar's fragmented MP4 and goes to the host. A part with no MIME type
- *   is the avatar's when it opens with an MP4 box (`ftyp`, `moof`, `styp`), PCM otherwise. A PCM part plays as the voice
- *   only while the turn has no video yet: the MP4's audio track carries the voice, so later PCM in the turn would play
- *   it twice and is dropped (reported once). Any other type is dropped and reported once.
+ * - **Parts.** A part that opens with an MP4 box (`ftyp`, `moov`, `moof`, `styp`) is a piece of the avatar's fragmented
+ *   MP4 whatever MIME type it names, and so is a `video/*` part; each goes to the host typed `video/mp4` (keeping a
+ *   `video/mp4` type's codecs), which is what the room's bridge publishes. A part with no MIME type that is not MP4 is
+ *   PCM. A PCM part plays as the voice only while the turn has no video yet: the MP4's audio track carries the voice, so
+ *   later PCM in the turn would play it twice and is dropped (reported once). Any other part is dropped and reported
+ *   once per type: unknown data never plays.
  * - **Turns.** From `interrupted` until that turn's `turnComplete`, media parts are dropped (Google sends
  *   `interrupted` before `turn_complete`; anything in between is stale after the barge-in).
  * - **Usage.** The seconds of avatar video generated in a turn (its video samples' durations, read from the fragments)
@@ -20,7 +22,7 @@
 
 import { Fmp4VideoSeconds, IsPcmAudioMimeType, ReadFmp4Init, SniffFmp4Piece, type Fmp4Init, type RealtimeAvatarMediaChunk } from '@memberjunction/ai';
 
-/** The MIME type of the avatar's pieces when a part names none. */
+/** The MIME type the avatar's pieces are handed on with, unless a part names `video/mp4` with its codecs. */
 const AVATAR_PIECE_MIME_TYPE = 'video/mp4';
 
 /** Where a bridged avatar session's media and usage go. */
@@ -80,7 +82,7 @@ export class GeminiBridgedAvatarOutput {
         }
         const kind = GeminiBridgedAvatarOutput.kindOf(mimeType, data);
         if (kind === 'avatar') {
-            this.acceptAvatar(mimeType?.trim() || AVATAR_PIECE_MIME_TYPE, data);
+            this.acceptAvatar(GeminiBridgedAvatarOutput.pieceMimeType(mimeType), data);
         } else if (kind === 'voice') {
             this.acceptVoice(data);
         } else {
@@ -117,14 +119,32 @@ export class GeminiBridgedAvatarOutput {
         this.reportVideoSeconds();
     }
 
+    /**
+     * How a part plays. Its bytes decide first: a part that opens with an MP4 box is the avatar's whatever type it names,
+     * since Google does not document the type of avatar parts. Then its type: none means PCM; a `video/*` type is the
+     * avatar's; a PCM type is the voice; anything else never plays.
+     */
     private static kindOf(mimeType: string | undefined, data: ArrayBuffer): BridgedPartKind {
-        if (!mimeType?.trim()) {
-            return SniffFmp4Piece(data) ? 'avatar' : 'voice';
-        }
-        if (/^video\//i.test(mimeType.trim())) {
+        if (SniffFmp4Piece(data)) {
             return 'avatar';
         }
-        return IsPcmAudioMimeType(mimeType) ? 'voice' : 'other';
+        const type = mimeType?.trim() ?? '';
+        if (type.length === 0) {
+            return 'voice';
+        }
+        if (/^video\//i.test(type)) {
+            return 'avatar';
+        }
+        return IsPcmAudioMimeType(type) ? 'voice' : 'other';
+    }
+
+    /**
+     * The type a piece is handed on with: the part's own when it is `video/mp4` (with any codecs), else `video/mp4`. The
+     * room's bridge publishes a piece as the avatar only when its type is `video/mp4`, and every piece of the stream is.
+     */
+    private static pieceMimeType(mimeType: string | undefined): string {
+        const type = mimeType?.trim() ?? '';
+        return /^video\/mp4\b/i.test(type) ? type : AVATAR_PIECE_MIME_TYPE;
     }
 
     /** Counts the piece's video seconds (before the host may take the buffer), then hands it on. */

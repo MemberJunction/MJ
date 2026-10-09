@@ -5,7 +5,7 @@
  * masked text frame, and a frame read wrongly fails the test when its JSON does not parse.
  */
 import { createHash } from 'node:crypto';
-import { createServer, type IncomingMessage } from 'node:http';
+import { createServer, type IncomingHttpHeaders, type IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 
 /** RFC 6455 §4.2.2: the GUID a server appends to the client's key to prove it speaks websocket. */
@@ -79,8 +79,12 @@ export class CaptureWebSocketServer {
         await new Promise<void>((resolve) => this.server.close(() => resolve()));
     }
 
+    /** The last upgrade request's path and headers (what the client sent to open the socket). */
+    public LastUpgrade: { Url: string; Headers: IncomingHttpHeaders } | null = null;
+
     /** Completes the handshake, then reads until the first frame is whole. */
     private accept(request: IncomingMessage, socket: Duplex, head: Buffer): void {
+        this.LastUpgrade = { Url: request.url ?? '', Headers: { ...request.headers } };
         const key = request.headers['sec-websocket-key'] ?? '';
         const accept = createHash('sha1').update(`${key}${HANDSHAKE_GUID}`).digest('base64');
         socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);

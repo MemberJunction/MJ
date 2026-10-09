@@ -63,6 +63,7 @@ import {
     type GeminiLiveResolvedProfile,
 } from './geminiLiveProfiles';
 import { GeminiBridgedAvatarOutput } from './geminiBridgedAvatar';
+import { ResolveGeminiAvatarVideoBitrateBps } from './geminiAvatarVideoBitrate';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
@@ -90,13 +91,6 @@ const GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS = 10 * 60 * 1000;
  * authenticated with the token are rejected after this point.
  */
 const GEMINI_CLIENT_TOKEN_EXPIRY_MS = 30 * 60 * 1000;
-
-/**
- * The video bitrate an avatar session asks for. Google's sample avatar streams run at about 8.5 Mbps; MJAPI relays
- * the avatar to the browser, so the session asks for 2 Mbps, about a quarter of the load. Whether Google honours
- * `videoBitrateBps` is checked against a live Enterprise session.
- */
-const GEMINI_AVATAR_VIDEO_BITRATE_BPS = 2_000_000;
 
 /**
  * The minimal subset of `@google/genai`'s `Session` that the realtime driver depends on. Declaring
@@ -711,16 +705,18 @@ export class GeminiRealtime extends BaseRealtimeModel {
 
     /**
      * Renders the requested avatar when the model can on this endpoint: video output and the avatar's name, at the
-     * bitrate MJ asks for. Otherwise the session stays audio-only and one line says why. Either way a VIDEO modality or
-     * an `avatarConfig` from the config bag is removed: an avatar comes only from the session's avatar request. Applied
-     * last, like the legality rules.
+     * bitrate the deployment asks for (`MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS`, 2 Mbps by default; `0` leaves the field out).
+     * Otherwise the session stays audio-only and one line says why. Either way a VIDEO modality or an `avatarConfig` from
+     * the config bag is removed: an avatar comes only from the session's avatar request. Applied last, like the legality
+     * rules. Every session's setup comes from here: the browser mint, the relay's setup and server-side sessions.
      */
     private applyAvatarOutput(config: LiveConnectConfig, params: RealtimeSessionParams): void {
         const request = params.Avatar;
         const reason = request ? this.avatarUnavailableReason(request, params.Model) : undefined;
         if (request && !reason) {
+            const videoBitrateBps = ResolveGeminiAvatarVideoBitrateBps();
             config.responseModalities = [Modality.VIDEO];
-            config.avatarConfig = { avatarName: request.AvatarID.trim(), videoBitrateBps: GEMINI_AVATAR_VIDEO_BITRATE_BPS };
+            config.avatarConfig = videoBitrateBps === null ? { avatarName: request.AvatarID.trim() } : { avatarName: request.AvatarID.trim(), videoBitrateBps };
             return;
         }
         GeminiRealtime.removeVideoOutput(config, params.Model);

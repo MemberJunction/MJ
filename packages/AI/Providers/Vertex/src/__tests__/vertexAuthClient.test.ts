@@ -11,6 +11,7 @@ import {
     UserRefreshClient,
     type AuthClient,
 } from 'google-auth-library';
+import { GoogleGenAI } from '@google/genai';
 import { CreateVertexAuthClient, VERTEX_AI_OAUTH_SCOPE, VertexGenAIOptions } from '../vertexAuthClient';
 import { ParseVertexAICredentials, VertexCredentialsError, type VertexAICredentials, type VertexKeySource } from '../vertexCredentials';
 
@@ -252,5 +253,17 @@ describe('VertexGenAIOptions', () => {
     it('another key\'s key file: refused', async () => {
         const error = await refusal(VertexGenAIOptions(creds({ project: 'p1', keyFilePath: paths.serviceAccount }), 'other'));
         expect(error.Problem).toBe('key-file-not-allowed');
+    });
+
+    it("a Google Cloud API key: the SDK's API-key mode, the key with no project, location or auth client, which the SDK accepts", async () => {
+        const apiKey = 'AIzaStandInKeyNotReal0123456789abcdefgh';
+        for (const source of SOURCES) {
+            // A key's project and location (Gemini Live's regional route) stay out too: the SDK refuses either beside a key.
+            for (const key of [{ apiKey }, { apiKey, project: 'p1', location: 'eu' }]) {
+                const options = await VertexGenAIOptions(creds(key), source);
+                expect(options).toEqual({ vertexai: true, apiKey });
+                expect(() => new GoogleGenAI(options)).not.toThrow();
+            }
+        }
     });
 });

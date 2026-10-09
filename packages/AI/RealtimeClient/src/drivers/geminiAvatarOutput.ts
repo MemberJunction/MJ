@@ -2,9 +2,9 @@
  * @fileoverview The avatar half of a Gemini Live browser session: where each model part goes once the server has granted
  * an avatar and the host shows it, and what each turn boundary does to the avatar's video and voice.
  *
- * - **Parts.** A `video/*` part goes to the video player. A PCM part follows the voice rule below. A part with no MIME
- *   type is video when it opens with an MP4 box (`ftyp`, `moof`, `styp`) and PCM otherwise. Any other type is dropped
- *   and reported once.
+ * - **Parts.** A part that opens with an MP4 box (`ftyp`, `moov`, `moof`, `styp`) goes to the video player whatever MIME
+ *   type it names, and so does a `video/*` part. A PCM part follows the voice rule below; a part with no MIME type that
+ *   is not MP4 is PCM. Any other part is dropped and reported once per type: unknown data never plays.
  * - **Who carries the voice.** The grant says whether the avatar's MP4 carries the voice (`audioMuxed`); the session's
  *   first readable init segment decides: an audio track means it does, none means the video plays muted and the voice
  *   comes as PCM. A disagreement with the grant is logged once.
@@ -176,14 +176,24 @@ export class GeminiAvatarOutput {
         this.playout.Dispose();
     }
 
+    /**
+     * How a part plays. Its bytes decide first: a part that opens with an MP4 box is the avatar's whatever type it names,
+     * since Google does not document the type of avatar parts. Then its type: none means PCM; a `video/*` type is the
+     * avatar's (a piece may start inside a box, which Media Source still plays); a PCM type is the voice; anything else
+     * never plays, as video or as voice.
+     */
     private static kindOf(mimeType: string | undefined, data: ArrayBuffer): AvatarPartKind {
-        if (!mimeType) {
-            return SniffFmp4Piece(data) ? 'video' : 'voice';
-        }
-        if (/^video\//i.test(mimeType.trim())) {
+        if (SniffFmp4Piece(data)) {
             return 'video';
         }
-        return IsPcmAudioMimeType(mimeType) ? 'voice' : 'other';
+        const type = mimeType?.trim() ?? '';
+        if (type.length === 0) {
+            return 'voice';
+        }
+        if (/^video\//i.test(type)) {
+            return 'video';
+        }
+        return IsPcmAudioMimeType(type) ? 'voice' : 'other';
     }
 
     private acceptVideo(piece: ArrayBuffer): void {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { RealtimeProxyRegistry, REALTIME_PROXY_PATH } from '@memberjunction/ai';
@@ -103,6 +103,21 @@ describe('C3: Origin allowlist (MJ_REALTIME_PROXY_ALLOWED_ORIGINS)', () => {
         expect(fake.Written.join('')).toContain('403');
         // The ticket SURVIVED the rejected foreign attempt — the legitimate page can still connect.
         expect(RealtimeProxyRegistry.Instance.Consume(ticket.ID)).not.toBeNull();
+    });
+
+    it('logs the refusal once with the origin, never the ticket or the query', () => {
+        process.env[ENV_KEY] = 'https://app.example.com';
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const ticket = RealtimeProxyRegistry.Instance.Issue({ UpstreamUrl: 'ws://internal:8000/v1/realtime', TTLSeconds: 60 });
+            proxy.TryHandleUpgrade(reqWithOrigin(`${REALTIME_PROXY_PATH}?ticket=${ticket.ID}`, 'https://evil.example'), sock(new FakeSocket()), HEAD);
+            const lines = warn.mock.calls.map((call) => call.map(String).join(' '));
+            expect(lines).toEqual(['[RealtimeProxy] upgrade refused (403): origin "https://evil.example" is not in MJ_REALTIME_PROXY_ALLOWED_ORIGINS']);
+            expect(lines[0]).not.toContain(ticket.ID);
+            expect(lines[0]).not.toContain('ticket=');
+        } finally {
+            warn.mockRestore();
+        }
     });
 
     it('accepts an allowlisted origin (normalization: case + trailing slash)', () => {

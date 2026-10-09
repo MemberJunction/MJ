@@ -383,6 +383,45 @@ describe('GeminiEnterpriseRealtime', () => {
             expect(downgraded.avatarConfig).toBeUndefined();
         });
 
+        it("writes the bitrate MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS names into the relay's setup, and leaves the field out for 0", async () => {
+            const key = 'MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS';
+            const saved = process.env[key];
+            try {
+                process.env[key] = '1500000';
+                const custom = await mint(serviceAccountKey(), makeParams({ Avatar: { AvatarID: 'Ben' } }));
+                expect(openingSetup(openFresh(custom.Minted)).avatarConfig).toEqual({ avatarName: 'Ben', videoBitrateBps: 1_500_000 });
+                process.env[key] = '0';
+                const omitted = await mint(serviceAccountKey(), makeParams({ Avatar: { AvatarID: 'Ben' } }));
+                const setup = openingSetup(openFresh(omitted.Minted));
+                expect(setup.avatarConfig).toEqual({ avatarName: 'Ben' });
+                expect(setup.generationConfig?.responseModalities).toEqual(['VIDEO']);
+            } finally {
+                if (saved === undefined) delete process.env[key];
+                else process.env[key] = saved;
+            }
+        });
+
+        it('renders the avatar for a model id MJ_GEMINI_LIVE_MODEL_ALIASES maps to gemini-3.8-live, and still sends Google that id', async () => {
+            const key = 'MJ_GEMINI_LIVE_MODEL_ALIASES';
+            const saved = process.env[key];
+            const model = 'gemini-live-3.8-stand-in';
+            try {
+                const plain = await mint(serviceAccountKey(), makeParams({ Model: model, Avatar: { AvatarID: 'Ben' } }));
+                expect(plain.Minted.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+                process.env[key] = `${model}=gemini-3.8-live`;
+                const { Driver, Minted } = await mint(serviceAccountKey(), makeParams({ Model: model, Avatar: { AvatarID: 'Ben' } }));
+                expect(Minted.AvatarStatus).toEqual({ Requested: true, Granted: true });
+                expect(Driver.SupportsAvatarOutput(model)).toBe(true);
+                expect(Minted.SessionConfig['avatar']).toEqual({ output: true, encoding: AVATAR_TYPE, audioMuxed: true });
+                const setup = openingSetup(openFresh(Minted));
+                expect(setup.model).toBe(`projects/${PROJECT}/locations/us-central1/publishers/google/models/${model}`);
+                expect(setup.avatarConfig?.avatarName).toBe('Ben');
+            } finally {
+                if (saved === undefined) delete process.env[key];
+                else process.env[key] = saved;
+            }
+        });
+
         it('says whether the avatar shows: granted on 3.8 Live, and why not for a custom avatar or a model without avatars', async () => {
             const granted = await mint(serviceAccountKey(), makeParams({ Avatar: { AvatarID: 'Ben', PersonaName: 'Ben' } }));
             expect(granted.Minted.AvatarStatus).toEqual({ Requested: true, Granted: true });

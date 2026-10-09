@@ -8,7 +8,7 @@
  *
  * | Config key | Developer API | Gemini Enterprise |
  * |---|---|---|
- * | model | `models/<id>` | `projects/<p>/locations/<l>/publishers/google/models/<id>` |
+ * | model | `models/<id>` | `projects/<p>/locations/<l>/publishers/google/models/<id>`; with an API key on Google's global route `publishers/google/models/<id>` |
  * | modalities, temperature, topP, topK, maxOutputTokens, mediaResolution, seed, speechConfig, thinkingConfig, enableAffectiveDialog | under `generationConfig` | the same; modalities default to AUDIO |
  * | `translationConfig` | under `generationConfig` | left out |
  * | `systemInstruction` | a Content (text parts) | the same |
@@ -52,6 +52,13 @@ export interface GeminiLiveSetupTarget {
     Project?: string;
     /** The Google Cloud location (`us-central1`, `us`, `eu`, `global`). Required with `Project`. */
     Location?: string;
+    /**
+     * Gemini Enterprise with a Google Cloud API key on Google's global route: the model is written
+     * `publishers/<publisher>/models/<id>`, with no project or location (any given are ignored), as `@google/genai` writes
+     * it in API-key mode, where the key names the project and the socket is Google's global endpoint. (An API key on the
+     * regional route gives `Project` and `Location` instead, and the full name.)
+     */
+    UsesApiKey?: boolean;
 }
 
 /** Config keys that go under `generationConfig` on both endpoints. */
@@ -151,7 +158,24 @@ export function BuildGeminiLiveAudioOnlySetup(setup: LiveClientSetup): LiveClien
 
 // ── Model path ──────────────────────────────────────────────────────────────────────────────────────
 
-/** The model's resource name on the target's endpoint (the SDK's `tModel`, plus the project prefix on Enterprise). */
+/**
+ * The model's resource name a Live setup carries on the target's endpoint, as {@link BuildGeminiLiveSetup} writes it:
+ * `models/<id>` on the Developer API; `projects/<p>/locations/<l>/publishers/<publisher>/models/<id>` on Gemini
+ * Enterprise, or `publishers/<publisher>/models/<id>` with `UsesApiKey`. A server-side session hands it to the SDK where
+ * the SDK would not write it the same way itself: a Google Cloud API key on the regional route, which the SDK has no
+ * mode for (it adds the project prefix only without a key).
+ *
+ * @param target The endpoint, the model and, on Gemini Enterprise, the project and location.
+ * @throws When the model id is empty or malformed, or a Gemini Enterprise target has no project or location.
+ */
+export function BuildGeminiLiveModelPath(target: GeminiLiveSetupTarget): string {
+    return liveModelPath(target);
+}
+
+/**
+ * The model's resource name on the target's endpoint (the SDK's `tModel`, plus the project prefix on Enterprise unless an
+ * API key serves the session: the SDK adds the prefix only with a project and location, which API-key mode clears).
+ */
 function liveModelPath(target: GeminiLiveSetupTarget): string {
     const model = target.Model;
     if (typeof model !== 'string' || model.length === 0 || model.includes('..') || model.includes('?') || model.includes('&')) {
@@ -161,8 +185,8 @@ function liveModelPath(target: GeminiLiveSetupTarget): string {
         return model.startsWith('models/') || model.startsWith('tunedModels/') ? model : `models/${model}`;
     }
     const path = publisherModelPath(model);
-    if (!path.startsWith('publishers/')) {
-        return path; // already a projects/… (or models/…) name
+    if (!path.startsWith('publishers/') || target.UsesApiKey) {
+        return path; // already a projects/… (or models/…) name, or an API key's short name
     }
     if (!target.Project || !target.Location) {
         throw new Error(`Gemini Live setup: ${model} on Gemini Enterprise needs a Google Cloud project and location.`);

@@ -66,13 +66,19 @@ export async function CreateVertexAuthClient(credentials: VertexAICredentials, s
 
 /**
  * The options for a `@google/genai` client in Vertex mode: the project, the location and the auth client from
- * {@link CreateVertexAuthClient}; none for Application Default Credentials, which the SDK then resolves.
+ * {@link CreateVertexAuthClient}; none for Application Default Credentials, which the SDK then resolves. A Google Cloud
+ * API key (`apiKey`) gets the SDK's API-key mode instead: the key and no project or location (the SDK refuses either
+ * beside a key), so the SDK uses Google's global endpoint and sends the key as `x-goog-api-key`. A key's project and
+ * location are left out here too: the regional route is Gemini Live's, which sets the host and the model path itself.
  *
  * @param credentials Credentials from `ParseVertexAICredentials`.
  * @param source Where the key came from (`VertexKeySourceOf`).
  * @throws {VertexCredentialsError} As {@link CreateVertexAuthClient}.
  */
 export async function VertexGenAIOptions(credentials: VertexAICredentials, source: VertexKeySource): Promise<GoogleGenAIOptions> {
+    if (credentials.apiKey) {
+        return { vertexai: true, apiKey: credentials.apiKey };
+    }
     const options: GoogleGenAIOptions = {
         vertexai: true,
         project: credentials.project,

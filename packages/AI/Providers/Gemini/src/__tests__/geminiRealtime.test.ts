@@ -1519,6 +1519,23 @@ describe('live avatars: the driver asks for one only where the endpoint renders 
         expect(warnings.filter((w) => w.includes('Avatar "Ben"'))).toEqual([]);
     });
 
+    it('asks for the bitrate MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS names, leaves the field out for 0, and uses 2 Mbps for a bad value', async () => {
+        const key = 'MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS';
+        const saved = process.env[key];
+        const avatarFor = async (value: string): Promise<unknown> => {
+            process.env[key] = value;
+            return (await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }))).config['avatarConfig'];
+        };
+        try {
+            expect(await avatarFor('750000')).toEqual({ avatarName: 'Ben', videoBitrateBps: 750_000 });
+            expect(await avatarFor('0')).toEqual({ avatarName: 'Ben' });
+            expect(await avatarFor('two million')).toEqual({ avatarName: 'Ben', videoBitrateBps: 2_000_000 });
+        } finally {
+            if (saved === undefined) delete process.env[key];
+            else process.env[key] = saved;
+        }
+    });
+
     it('never puts the avatar into the token lock', async () => {
         const driver = new EnterpriseClientDirect('k');
         await mintWithWarnings(driver, makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));

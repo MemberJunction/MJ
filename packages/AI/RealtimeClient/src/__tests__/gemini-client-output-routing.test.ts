@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
 import type { LiveServerMessage, Part } from '@google/genai';
 import { InstallFakeMse } from './helpers/fake-mse';
 import { AvatarFragment, AvatarInitSegment, AvatarStypFragment, PieceToBase64 } from './helpers/fmp4-pieces';
@@ -53,7 +53,7 @@ describe('GeminiRealtimeClient routes model output parts by MIME type', () => {
 
 describe('GeminiRealtimeClient routes model output parts in a session that shows an avatar', () => {
     let client: GeminiTestClient;
-    let warn: ReturnType<typeof vi.spyOn>;
+    let warn: MockInstance<typeof console.warn>;
 
     beforeEach(async () => {
         InstallFakeMse();
@@ -101,5 +101,30 @@ describe('GeminiRealtimeClient routes model output parts in a session that shows
         expect(client.Playback.Enqueued).toHaveLength(0);
         expect(client.Playout.Appended).toHaveLength(0);
         expect(warn.mock.calls.filter((call) => String(call[0]).includes('text/plain'))).toHaveLength(1);
+    });
+
+    it('plays an MP4 piece as the avatar whatever type the part names: one that opens with ftyp, moov, moof or styp', () => {
+        const init = AvatarInitSegment();
+        const moovOnly = init.slice(new DataView(init).getUint32(0));
+        emitParts(client, [
+            { inlineData: { data: PieceToBase64(init), mimeType: 'application/octet-stream' } },
+            { inlineData: { data: PieceToBase64(moovOnly), mimeType: 'application/mp4' } },
+            { inlineData: { data: PieceToBase64(AvatarFragment()), mimeType: 'audio/pcm;rate=24000' } },
+            { inlineData: { data: PieceToBase64(AvatarStypFragment()), mimeType: 'video/iso.segment' } },
+        ]);
+        expect(client.Playout.Appended.map((piece) => new Uint8Array(piece).length)).toEqual([init.byteLength, moovOnly.byteLength, AvatarFragment().byteLength, AvatarStypFragment().byteLength]);
+        expect(client.Playback.Enqueued).toHaveLength(0);
+        expect(warn.mock.calls.filter((call) => String(call[0]).includes('Dropped model output'))).toEqual([]);
+    });
+
+    it('never plays a part of another type that is not MP4, as video or as voice (an mdat first is not a piece start)', () => {
+        emitParts(client, [
+            { inlineData: { data: b64([0, 0, 0, 16, 109, 100, 97, 116, 1, 2, 3, 4, 5, 6, 7, 8]), mimeType: 'application/octet-stream' } },
+            { inlineData: { data: b64([5, 6, 7, 8, 9, 10, 11, 12]), mimeType: 'audio/mp4' } },
+        ]);
+        expect(client.Playout.Appended).toHaveLength(0);
+        expect(client.Playback.Enqueued).toHaveLength(0);
+        const dropped = warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('Dropped model output'));
+        expect(dropped).toHaveLength(2);
     });
 });

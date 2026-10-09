@@ -407,6 +407,38 @@ describe('RealtimeProxyServer: the realtime relay', () => {
             browser.Send({ open: {} });
             await upstream.Connection(offset); // the refused attempts did not use the fresh open
         });
+
+        it('logs each Origin refusal once with the origin, never the ticket or the path', async () => {
+            process.env[ORIGINS_KEY] = 'https://app.example.com';
+            const id = issue(new FakePolicy());
+            fakeUpgrade(proxy(), `${REALTIME_RELAY_PATH}/${id}${SDK_SUFFIX}`, 'https://evil.example');
+            expect(await Browser.Open(rig.RelayUrl(id), 'http://localhost:4300')).toBe(403);
+            const refusals = logs.filter((line) => line.includes('upgrade refused (403)'));
+            expect(refusals).toEqual([
+                '[RealtimeRelay] upgrade refused (403): origin "https://evil.example" is not in MJ_REALTIME_PROXY_ALLOWED_ORIGINS',
+                '[RealtimeRelay] upgrade refused (403): origin "http://localhost:4300" is not in MJ_REALTIME_PROXY_ALLOWED_ORIGINS',
+            ]);
+            for (const line of logs) {
+                expect(line).not.toContain(id.slice(0, 8));
+                expect(line).not.toContain(REALTIME_RELAY_PATH);
+            }
+        });
+
+        it('quotes a refused origin with printable characters only, shortened; an allowed origin or no allowlist logs nothing', async () => {
+            process.env[ORIGINS_KEY] = 'https://app.example.com';
+            const id = issue(new FakePolicy());
+            fakeUpgrade(proxy(), `${REALTIME_RELAY_PATH}/${id}${SDK_SUFFIX}`, `https://evil.example\r\n${'x'.repeat(500)}`);
+            const [line] = logs.filter((text) => text.includes('upgrade refused (403)'));
+            expect(line).toContain('origin "https://evil.example??xxx');
+            expect(line).not.toMatch(/[\r\n]/);
+            expect(line.length).toBeLessThan(320);
+            logs.length = 0;
+            // An unknown ticket, so the origin gate passes and the session lookup answers 401 without an upgrade.
+            expect(fakeUpgrade(proxy(), `${REALTIME_RELAY_PATH}/not-a-ticket${SDK_SUFFIX}`, 'https://app.example.com').Response).toContain('401');
+            delete process.env[ORIGINS_KEY];
+            expect(fakeUpgrade(proxy(), `${REALTIME_RELAY_PATH}/not-a-ticket${SDK_SUFFIX}`, 'https://evil.example').Response).toContain('401');
+            expect(logs.filter((text) => text.includes('upgrade refused (403)'))).toEqual([]);
+        });
     });
 
     describe('opening', () => {

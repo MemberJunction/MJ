@@ -25,7 +25,7 @@ import {
 import type { RealtimeSessionParams } from '@memberjunction/ai';
 import { GeminiRealtime } from '../geminiRealtime';
 import type { GeminiLiveEndpoint } from '../geminiLiveProfiles';
-import { BuildGeminiLiveSetup } from '../geminiLiveSetup';
+import { BuildGeminiLiveModelPath, BuildGeminiLiveSetup } from '../geminiLiveSetup';
 import { CaptureWebSocketServer } from './websocket-capture-test-helpers';
 
 const PROJECT = 'mj-parity';
@@ -233,6 +233,37 @@ describe('BuildGeminiLiveSetup matches the installed SDK on keys only one endpoi
             outputAudioTranscription: { languageCodes: ['en-US'] },
             safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH, method: HarmBlockMethod.SEVERITY }],
         });
+    });
+
+    it('Enterprise mode with a Google Cloud API key: the same setup with the short model name, the key sent as x-goog-api-key', async () => {
+        const config = new ConfigProbe('enterprise').Build({ ...MJ_SESSIONS[0][1], Avatar: { AvatarID: 'Ben' } });
+        const captured = server.NextMessage();
+        const client = new GoogleGenAI({ vertexai: true, apiKey: 'parity-api-key', httpOptions: { baseUrl, apiVersion: 'v1' } });
+        const session = await client.live.connect({ model: 'gemini-3.8-live', config: structuredClone(config), callbacks: { onmessage: () => undefined } });
+        const sdk = (JSON.parse(await captured) as { setup: LiveClientSetup }).setup;
+        session.close();
+        expect(BuildGeminiLiveSetup({ Endpoint: 'enterprise', Model: 'gemini-3.8-live', UsesApiKey: true }, config)).toStrictEqual(sdk);
+        expect(sdk.model).toBe('publishers/google/models/gemini-3.8-live');
+        // How the SDK authenticates a Vertex socket with an API key: a header, never the URL.
+        expect(server.LastUpgrade?.Headers['x-goog-api-key']).toBe('parity-api-key');
+        expect(server.LastUpgrade?.Headers['authorization']).toBeUndefined();
+        expect(server.LastUpgrade?.Url).toMatch(/\/ws\/google\.cloud\.aiplatform\.v1\.LlmBidiService\/BidiGenerateContent$/);
+        expect(server.LastUpgrade?.Url).not.toContain('parity-api-key');
+    });
+
+    it("Enterprise mode with an API key on the regional route: given the full model name, the SDK sends it as is, beside the relay's setup", async () => {
+        const config = new ConfigProbe('enterprise').Build({ ...MJ_SESSIONS[0][1], Avatar: { AvatarID: 'Ben' } });
+        const target = { Endpoint: 'enterprise' as const, Model: 'gemini-3.8-live', Project: PROJECT, Location: LOCATION };
+        const captured = server.NextMessage();
+        // What a bridged session hands the SDK for this route: the key, the location's host as the base URL, the full name.
+        const client = new GoogleGenAI({ vertexai: true, apiKey: 'parity-api-key', httpOptions: { baseUrl, apiVersion: 'v1' } });
+        const session = await client.live.connect({ model: BuildGeminiLiveModelPath(target), config: structuredClone(config), callbacks: { onmessage: () => undefined } });
+        const sdk = (JSON.parse(await captured) as { setup: LiveClientSetup }).setup;
+        session.close();
+        expect(BuildGeminiLiveSetup(target, config)).toStrictEqual(sdk);
+        expect(sdk.model).toBe(`projects/${PROJECT}/locations/${LOCATION}/publishers/google/models/gemini-3.8-live`);
+        expect(server.LastUpgrade?.Headers['x-goog-api-key']).toBe('parity-api-key');
+        expect(server.LastUpgrade?.Headers['authorization']).toBeUndefined();
     });
 
     it('Developer mode: translationConfig under generationConfig', async () => {

@@ -252,12 +252,31 @@ export const GEMINI_LIVE_ENDPOINT_OVERLAYS: readonly GeminiLiveEndpointOverlay[]
     },
 ];
 
+/**
+ * The environment variable that gives a model id this table doesn't know the profile of one it does:
+ * `<model id>=<known model id>`, comma-separated (`gemini-live-3.8-preview-1009=gemini-3.8-live`). For when Google names
+ * a model differently from the table: the catalog's `APIName` is still what Google is sent; only what the model accepts
+ * and renders (an avatar on Gemini Enterprise, for `gemini-3.8-live`) comes from the known model's row. An id matches
+ * whole, ignoring case and spaces, and an alias wins over the table. Read on each resolution: a restart applies a change.
+ */
+export const GEMINI_LIVE_MODEL_ALIASES_ENV = 'MJ_GEMINI_LIVE_MODEL_ALIASES';
+
+/** The longest part of a bad alias entry quoted in the log line. */
+const MAX_QUOTED_ALIAS_CHARS = 80;
+
+/** The parsed alias setting, kept while the variable's text stays the same. */
+let aliasCache: { Raw: string; Aliases: ReadonlyMap<string, GeminiLiveModelProfile> } | null = null;
+
+/** Aliases already reported as used (`alias=row`), so each is logged once per process. */
+const reportedAliases = new Set<string>();
+
 /** Resolved profiles by endpoint and model row, so every resolution of one model on one endpoint is the same object. */
 const resolvedProfiles = new Map<string, GeminiLiveResolvedProfile>();
 
 /**
- * Resolves the profile for a model id on an endpoint: the model's row (longest prefix first), plus what it renders on
- * that endpoint ({@link GEMINI_LIVE_ENDPOINT_OVERLAYS}).
+ * Resolves the profile for a model id on an endpoint: the model's row (an alias from
+ * {@link GEMINI_LIVE_MODEL_ALIASES_ENV}, else the longest prefix), plus what it renders on that endpoint
+ * ({@link GEMINI_LIVE_ENDPOINT_OVERLAYS}).
  *
  * Case- and whitespace-insensitive because model ids reach us from metadata that humans edit.
  * Never throws and never returns undefined — an unknown model gets
@@ -278,19 +297,84 @@ export function ResolveGeminiLiveProfile(model: string | null | undefined, endpo
     return resolved;
 }
 
-/** The model's row: the longest matching prefix, or the fallback. */
+/** The model's row: its alias's row, else the longest matching prefix, else the fallback. */
 function resolveModelRow(model: string | null | undefined): GeminiLiveModelProfile {
-    const id = String(model ?? '').trim().toLowerCase();
+    const id = normalizeModelId(model);
     if (id.length === 0) {
         return GEMINI_LIVE_FALLBACK_PROFILE;
     }
+    const aliased = liveModelAliases().get(id);
+    if (aliased) {
+        reportAliasUsed(id, aliased);
+        return aliased;
+    }
+    return longestPrefixRow(id) ?? GEMINI_LIVE_FALLBACK_PROFILE;
+}
+
+/** A model id as the table compares it: trimmed and lower case. */
+function normalizeModelId(model: string | null | undefined): string {
+    return String(model ?? '').trim().toLowerCase();
+}
+
+/** The row whose prefix is the longest one the id starts with, if any. */
+function longestPrefixRow(id: string): GeminiLiveModelProfile | undefined {
     let best: GeminiLiveModelProfile | undefined;
     for (const p of GEMINI_LIVE_MODEL_PROFILES) {
         if (id.startsWith(p.MatchPrefix) && (!best || p.MatchPrefix.length > best.MatchPrefix.length)) {
             best = p;
         }
     }
-    return best ?? GEMINI_LIVE_FALLBACK_PROFILE;
+    return best;
+}
+
+/** The deployment's aliases ({@link GEMINI_LIVE_MODEL_ALIASES_ENV}), parsed again only when the variable's text changes. */
+function liveModelAliases(): ReadonlyMap<string, GeminiLiveModelProfile> {
+    const raw = typeof process !== 'undefined' && process.env ? (process.env[GEMINI_LIVE_MODEL_ALIASES_ENV] ?? '') : '';
+    if (aliasCache?.Raw !== raw) {
+        aliasCache = { Raw: raw, Aliases: parseModelAliases(raw) };
+    }
+    return aliasCache.Aliases;
+}
+
+/** The aliases in a setting; entries that are not `<id>=<known id>` are left out and named in one log line. */
+function parseModelAliases(raw: string): ReadonlyMap<string, GeminiLiveModelProfile> {
+    const aliases = new Map<string, GeminiLiveModelProfile>();
+    const bad: string[] = [];
+    for (const entry of raw.split(',').map((text) => text.trim()).filter((text) => text.length > 0)) {
+        const alias = readAliasEntry(entry);
+        if (alias) {
+            aliases.set(alias.Id, alias.Row);
+        } else {
+            bad.push(entry);
+        }
+    }
+    if (bad.length > 0) {
+        const quoted = bad.map((entry) => `"${entry.replace(/[^\x20-\x7E]/g, '?').slice(0, MAX_QUOTED_ALIAS_CHARS)}"`).join(', ');
+        const known = GEMINI_LIVE_MODEL_PROFILES.map((p) => p.MatchPrefix).join(', ');
+        console.warn(`[GeminiLiveProfiles] Ignored ${GEMINI_LIVE_MODEL_ALIASES_ENV} entries ${quoted}: each must be <model id>=<a known model id> (${known}).`);
+    }
+    return aliases;
+}
+
+/** One `<id>=<known id>` entry: the id and the known model's row, or `null` when it is not one. */
+function readAliasEntry(entry: string): { Id: string; Row: GeminiLiveModelProfile } | null {
+    const separator = entry.indexOf('=');
+    if (separator <= 0) {
+        return null;
+    }
+    const id = normalizeModelId(entry.slice(0, separator));
+    const target = normalizeModelId(entry.slice(separator + 1));
+    const row = target.length > 0 ? longestPrefixRow(target) : undefined;
+    return id.length > 0 && row ? { Id: id, Row: row } : null;
+}
+
+/** Says once per process that a model id took an alias's profile, so the log shows the setting took effect. */
+function reportAliasUsed(id: string, row: GeminiLiveModelProfile): void {
+    const key = `${id}=${row.MatchPrefix}`;
+    if (!reportedAliases.has(key)) {
+        reportedAliases.add(key);
+        console.log(`[GeminiLiveProfiles] Model ${id} uses the ${row.MatchPrefix} profile (${GEMINI_LIVE_MODEL_ALIASES_ENV}).`);
+    }
 }
 
 /** The row's overlay on the endpoint, or no avatar. */
