@@ -36,6 +36,18 @@ import type {
  *  consumer outside this package needs to compose it. */
 export type DeltaTarget = ListSource | 'new';
 
+/** Screens an ad-hoc source's filter before it runs; throws to refuse it. */
+export type AdhocFilterScreen = (extraFilter: string, entityName: string) => void;
+
+/** Optional behavior for {@link ListOperations}. */
+export interface ListOperationsOptions {
+  /**
+   * Applied to every ad-hoc filter before it runs: one a client supplied, and one rebuilt from a
+   * list's stored `SourceFilterSnapshot`. Server entry points pass the RunView clause screen.
+   */
+  AdhocFilterScreen?: AdhocFilterScreen;
+}
+
 /**
  * Core list-operations engine. Pure-ish TypeScript: takes a `UserInfo` +
  * optional `IMetadataProvider` and talks to data exclusively through
@@ -48,10 +60,12 @@ export type DeltaTarget = ListSource | 'new';
 export class ListOperations {
   private readonly contextUser: UserInfo;
   private readonly provider: IMetadataProvider | undefined;
+  private readonly options: ListOperationsOptions;
 
-  constructor(contextUser: UserInfo, provider?: IMetadataProvider) {
+  constructor(contextUser: UserInfo, provider?: IMetadataProvider, options: ListOperationsOptions = {}) {
     this.contextUser = contextUser;
     this.provider = provider;
+    this.options = options;
   }
 
   /**
@@ -455,6 +469,7 @@ export class ListOperations {
       throw new Error(`Entity '${entityName}' not found in metadata`);
     }
     const pkFields = entityInfo.PrimaryKeys.map((pk) => pk.Name);
+    this.options.AdhocFilterScreen?.(extraFilter, entityName);
 
     const rv = this.runView();
     const result = await rv.RunView({

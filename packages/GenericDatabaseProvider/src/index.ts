@@ -18,6 +18,8 @@ export {
 } from './crudSprocFieldRules.js';
 export { ResolveDbPlatformFromEnv, resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
 export { UserCache } from './UserCache.js';
+export { ClientClauseScreen } from './clientClauseScreen.js';
+export type { ClientClauseText, ClientViewClauseSet, EntityBaseViewAllowList } from './clientClauseScreen.js';
 export {
     SystemUserFieldAccessLossReason,
     FindSystemUserFieldAccessViolations,

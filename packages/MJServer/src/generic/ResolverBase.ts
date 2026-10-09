@@ -26,7 +26,7 @@ import {
 } from '@memberjunction/core';
 import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { ClientClauseScreen, UserCache, type EntityBaseViewAllowList } from '@memberjunction/generic-database-provider';
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { RefusalExtensions } from './refusalExtensions.js';
@@ -39,7 +39,7 @@ import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './Run
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { SQLParser } from '@memberjunction/sql-parser';
-import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
+import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
@@ -921,7 +921,11 @@ export class ResolverBase {
    * This screen uses `@memberjunction/sql-parser` (same wrap as EDS `assertReadOnlyClause`):
    * wrap the fragment as a single SELECT, fail closed if it does not parse as a read, then
    * allow a FROM only when it is an entity **BaseView**. Base tables (`Meeting`, `__mj.User`)
-   * and catalogs are rejected. Server-internal RunView callers never hit this.
+   * and catalogs are rejected. Server-internal RunView callers get only the provider's
+   * statement-separator check, which cannot refuse a legitimate filter.
+   *
+   * The screen is `ClientClauseScreen` in `@memberjunction/generic-database-provider`, shared
+   * with the REST view routes, ad-hoc list sources, and the provider's saved-view checks.
    *
    * RLS is applied by RunView as an outer WHERE around the entity being queried, not compiled
    * into the view. Subqueries against another entity's BaseView therefore do not inherit that
@@ -933,35 +937,7 @@ export class ResolverBase {
     provider?: IMetadataProvider,
     user?: UserInfo,
   ): void {
-    if (!clause?.trim()) return;
-
-    const dialect = this.dialectForProvider(provider);
-    if (SQLParser.HasStackedStatements(clause, dialect)) {
-      throw new Error(`Invalid ${label}: multiple statements are not permitted in client-supplied filters`);
-    }
-
-    const wrapped =
-      label === 'OrderBy'
-        ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`
-        : `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`;
-    const parser = new SQLParser(wrapped, dialect);
-    if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
-      throw new Error(
-        `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`,
-      );
-    }
-    if (this.astContainsWriteNode(parser.AST)) {
-      throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
-    }
-
-    const allowed = this.entityBaseViewAllowList(provider);
-    const tables = SQLParser.ExtractTableRefs(wrapped, dialect);
-    for (const t of tables) {
-      const table = this.stripSqlIdent(t.TableName);
-      const schema = this.stripSqlIdent(t.SchemaName);
-      if (table.toLowerCase() === '__mj_clause_screen') continue;
-      this.assertTableRefReadable(allowed, schema, table, label, user);
-    }
+    ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, label, provider?.Entities ?? [], this.dialectForProvider(provider), user);
   }
 
   /**
@@ -1078,105 +1054,43 @@ export class ResolverBase {
     this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
   }
 
-  /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
+  /** Write/DDL node walk shared with the clause screen; see `ClientClauseScreen.AstContainsWriteNode`. */
   private astContainsWriteNode(node: unknown): boolean {
-    if (!node || typeof node !== 'object') return false;
-    if (Array.isArray(node)) return node.some((n) => this.astContainsWriteNode(n));
-    const obj = node as Record<string, unknown>;
-    const type = obj.type;
-    if (typeof type === 'string' && ResolverBase.WRITE_NODE_TYPES.has(type.toLowerCase())) {
-      return true;
-    }
-    return Object.values(obj).some((v) => this.astContainsWriteNode(v));
+    return ClientClauseScreen.AstContainsWriteNode(node);
   }
 
-  private static readonly WRITE_NODE_TYPES = new Set<string>([
-    'insert', 'update', 'delete', 'merge', 'replace', 'drop', 'create', 'alter', 'truncate',
-    'rename', 'call', 'exec', 'execute', 'grant', 'revoke', 'use', 'load', 'copy', 'do',
-  ]);
-
   private dialectForProvider(provider?: IMetadataProvider): SQLParserDialect {
-    const name = provider?.constructor?.name ?? '';
-    if (/postgres/i.test(name)) return new PostgreSQLDialect();
-    return new SQLServerDialect();
+    return ClientClauseScreen.DialectFor(provider);
   }
 
   /** True for a reference with no schema — which `SQLParser.ExtractTableRefs` reports as `dbo`. */
   private isUnqualifiedSchema(schema: string): boolean {
-    return !schema || schema.toLowerCase() === 'dbo';
+    return ClientClauseScreen.IsUnqualifiedSchema(schema);
   }
 
   private stripSqlIdent(name: string | null | undefined): string {
-    if (!name) return '';
-    return name.replace(/^\[|\]$/g, '').replace(/^"|"$/g, '').replace(/^`|`$/g, '');
+    return ClientClauseScreen.StripIdentifierQuotes(name);
   }
 
-  /**
-   * `bare` maps an unqualified view name to its entity, or to `null` when the name exists in
-   * more than one schema — the database, not this screen, would decide which one runs.
-   */
-  private entityBaseViewAllowList(provider?: IMetadataProvider): {
-    qualified: Map<string, EntityInfo>;
-    bare: Map<string, EntityInfo | null>;
-  } {
-    const qualified = new Map<string, EntityInfo>();
-    const bare = new Map<string, EntityInfo | null>();
-    const entities = provider?.Entities ?? [];
-    for (const e of entities) {
-      const view = this.stripSqlIdent(e.BaseView);
-      if (!view) continue;
-      const schema = this.stripSqlIdent(e.SchemaName);
-      const bareKey = view.toLowerCase();
-      bare.set(bareKey, bare.has(bareKey) ? null : e);
-      if (schema) qualified.set(`${schema}.${view}`.toLowerCase(), e);
-    }
-    return { qualified, bare };
+  /** The entity base-view allow-list for a provider's entities. */
+  private entityBaseViewAllowList(provider?: IMetadataProvider): EntityBaseViewAllowList {
+    return ClientClauseScreen.BuildEntityBaseViewAllowList(provider?.Entities ?? []);
   }
 
   /**
    * SECURITY — resolves a table reference against the entity BaseView allow-list and, when an
-   * acting user is supplied, additionally requires that user to hold CanRead on the referenced
-   * entity. Base views do not embed RLS and entity permissions are otherwise checked only on
-   * the TOP entity of a request, so without this check a subquery (or ad-hoc query) could read
-   * entities the caller has no read grant on.
-   *
-   * A schema-qualified reference must match that exact schema — `secret.vwFoo` never resolves
-   * through another schema's `vwFoo`. An unqualified reference resolves only when the view name
-   * is unique across schemas; an ambiguous one must be qualified, because the database's
-   * default-schema resolution, not this screen, would pick which view actually runs.
-   *
-   * `SQLParser.ExtractTableRefs` reports an unqualified reference as schema `dbo`, so `dbo` is
-   * indistinguishable from "no schema" here and both take the unqualified path (an exact
-   * `dbo.<view>` entity wins first).
+   * acting user is supplied, requires CanRead on the referenced entity. Base views do not embed
+   * RLS and entity permissions are otherwise checked only on the TOP entity of a request. See
+   * `ClientClauseScreen.AssertTableRefReadable` for the schema-resolution rules.
    */
   private assertTableRefReadable(
-    allowed: { qualified: Map<string, EntityInfo>; bare: Map<string, EntityInfo | null> },
+    allowed: EntityBaseViewAllowList,
     schema: string,
     table: string,
     label: string,
     user?: UserInfo,
   ): EntityInfo {
-    const qualified = allowed.qualified.get(`${schema}.${table}`.toLowerCase());
-    const entity = this.isUnqualifiedSchema(schema) ? qualified ?? allowed.bare.get(table.toLowerCase()) : qualified;
-    if (entity === null) {
-      throw new Error(
-        `Invalid ${label}: '${table}' is a base view in more than one schema — qualify it with its schema`,
-      );
-    }
-    if (!entity) {
-      throw new Error(
-        `Invalid ${label}: subquery must use an entity base view, not '${schema ? schema + '.' : ''}${table}'`,
-      );
-    }
-    if (user) {
-      const perms = entity.GetUserPermisions(user);
-      if (!perms.CanRead) {
-        throw new Error(
-          `Invalid ${label}: you do not have read permission on entity '${entity.Name}' referenced by '${schema ? schema + '.' : ''}${table}'`,
-        );
-      }
-    }
-    return entity;
+    return ClientClauseScreen.AssertTableRefReadable(allowed, schema, table, label, user);
   }
 
   /**

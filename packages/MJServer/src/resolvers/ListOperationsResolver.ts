@@ -631,10 +631,16 @@ export class ListOperationsResolver extends ResolverBase {
     return new ListSharing(user, provider);
   }
 
+  /**
+   * Every ad-hoc filter — a client `ListSourceInput{Kind:'adhoc'}` or one rebuilt from a list's
+   * stored snapshot — passes the same clause screen as the RunView resolvers before it runs.
+   */
   private buildOps(ctx: AppContext): ListOperations {
     const user = this.requireUser(ctx);
     const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: false });
-    return new ListOperations(user, provider);
+    return new ListOperations(user, provider, {
+      AdhocFilterScreen: (extraFilter) => this.screenClientViewClauses({ extraFilter }, provider, user),
+    });
   }
 
   private requireUser(ctx: AppContext): UserInfo {

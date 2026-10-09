@@ -1,9 +1,11 @@
 import { RegisterClass, CleanAndParseJSON } from "@memberjunction/global";
-import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
+import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
+import { ClientClauseScreen } from "@memberjunction/generic-database-provider";
+import type { SQLParserDialect } from "@memberjunction/sql-dialect";
 
 /**
  * Expected response format from the Smart Filter AI prompt
@@ -40,8 +42,73 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.validateCustomWhereClauseAuthorization(result);
+        this.validateStoredClauses(result);
         result.Success = result.Success && result.Errors.length === 0;
         return result;
+    }
+
+    /**
+     * SECURITY: screens the SQL this view stores with the clause screen the RunView API applies to
+     * client filters — its WhereClause (set directly, compiled from FilterState, or made by a Smart
+     * Filter) and the ORDER BY built from SortState / GridState. Any user who can save a view can
+     * write these, and the provider splices them into view SQL. A CustomWhereClause is left to the
+     * Owner gate above. Only a new view or a changed clause is screened here; the provider screens
+     * every stored clause again when the view runs.
+     */
+    private validateStoredClauses(result: ValidationResult): void {
+        const provider = this.ProviderToUse as unknown as IMetadataProvider | null;
+        const user = this.ContextCurrentUser ?? provider?.CurrentUser;
+        const entities = provider?.Entities ?? [];
+        const dialect = ClientClauseScreen.DialectFor(provider);
+        const changed = (...fields: string[]) => !this.IsSaved || fields.some(f => this.GetFieldByName(f)?.Dirty === true);
+
+        if (!this.CustomWhereClause && changed('WhereClause', 'CustomWhereClause')) {
+            const where = MJUserViewEntityServer.neutralizeViewTemplates(this.WhereClause ?? '');
+            this.screenStoredClause(result, 'WhereClause', where, 'view WhereClause', entities, dialect, user);
+        }
+        const orderBy = changed('SortState', 'GridState') ? this.storedOrderBy() : null;
+        if (orderBy) {
+            this.screenStoredClause(result, 'SortState', orderBy, 'OrderBy', entities, dialect, user);
+        }
+    }
+
+    /**
+     * The ORDER BY built from SortState / GridState, or null when SortState is not valid JSON. Such
+     * a view cannot build an ORDER BY when it runs either, so there is nothing to screen.
+     */
+    private storedOrderBy(): string | null {
+        try {
+            return this.OrderByClause;
+        } catch {
+            return null;
+        }
+    }
+
+    /** Adds a validation failure on `field` when the clause screen refuses `clause`. */
+    private screenStoredClause(
+        result: ValidationResult,
+        field: string,
+        clause: string,
+        label: string,
+        entities: EntityInfo[],
+        dialect: SQLParserDialect,
+        user: UserInfo | undefined,
+    ): void {
+        try {
+            ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, label, entities, dialect, user);
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            result.Errors.push(new ValidationErrorInfo(field, message, clause, ValidationErrorType.Failure));
+        }
+    }
+
+    /**
+     * A `{%UserView "id"%}` template becomes a subquery only when the view runs, and the provider
+     * screens that rendered clause. Here each template stands in as `SELECT NULL` so the rest of
+     * the clause can be parsed.
+     */
+    private static neutralizeViewTemplates(whereClause: string): string {
+        return whereClause.replace(/{%[^%]+%}/g, 'SELECT NULL');
     }
 
     /**
@@ -60,8 +127,9 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
         }
         const customDirty = this.GetFieldByName('CustomWhereClause')?.Dirty === true;
         const whereDirty = this.GetFieldByName('WhereClause')?.Dirty === true;
-        if (!customDirty && !whereDirty) {
-            // Neither sensitive field changed on this save — nothing new to authorize.
+        // A new record is always authorized: a field first written without NewRecord() seeding it
+        // does not read as dirty. On an existing record, only a change needs authorizing.
+        if (this.IsSaved && !customDirty && !whereDirty) {
             return;
         }
 

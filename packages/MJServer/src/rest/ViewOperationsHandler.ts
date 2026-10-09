@@ -2,6 +2,7 @@ import {
     LogError, Metadata, RunView, RunViewParams, 
     RunViewResult, UserInfo 
 } from '@memberjunction/core';
+import { ClientClauseScreen } from '@memberjunction/generic-database-provider';
 
 /**
  * View Operations Implementation for REST endpoints
@@ -33,7 +34,7 @@ export class ViewOperationsHandler {
             }
             
             // Sanitize and validate parameters
-            this.sanitizeRunViewParams(params);
+            this.sanitizeRunViewParams(params, md, user);
             
             // Execute the view
             const runView = new RunView();
@@ -78,7 +79,7 @@ export class ViewOperationsHandler {
                 }
                 
                 // Sanitize parameters
-                this.sanitizeRunViewParams(params);
+                this.sanitizeRunViewParams(params, md, user);
             }
             
             // Execute the views
@@ -115,7 +116,7 @@ export class ViewOperationsHandler {
             }
             
             // Sanitize and validate parameters
-            this.sanitizeRunViewParams(params);
+            this.sanitizeRunViewParams(params, md, user);
             
             // Execute the view
             const runView = new RunView();
@@ -193,9 +194,10 @@ export class ViewOperationsHandler {
     }
     
     /**
-     * Sanitize and validate RunViewParams
+     * Sanitize and validate RunViewParams. Client filter and sort text passes the same clause
+     * screen as the GraphQL RunView resolvers.
      */
-    private static sanitizeRunViewParams(params: RunViewParams): void {
+    private static sanitizeRunViewParams(params: RunViewParams, md: Metadata, user: UserInfo): void {
         // Ensure EntityName is provided
         if (!params.EntityName) {
             throw new Error('EntityName is required');
@@ -226,5 +228,12 @@ export class ViewOperationsHandler {
         if (!params.ResultType) {
             params.ResultType = 'simple';
         }
+
+        ClientClauseScreen.ScreenViewClauses(
+            { ExtraFilter: params.ExtraFilter, OrderBy: params.OrderBy, OverrideExcludeFilter: params.OverrideExcludeFilter },
+            md.Entities,
+            ClientClauseScreen.DialectFor(Metadata.Provider),
+            user,
+        );
     }
 }

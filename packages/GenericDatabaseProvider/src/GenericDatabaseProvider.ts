@@ -110,6 +110,7 @@ import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEn
 import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { TransactionFrameTracker } from './TransactionFrameTracker';
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
+import { ClientClauseScreen } from './clientClauseScreen.js';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -1947,6 +1948,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const excludeUserViewRunID: string = params.ExcludeUserViewRunID ?? '';
             const overrideExcludeFilter: string = params.OverrideExcludeFilter ?? '';
             const saveViewResults: boolean = params.SaveViewResults ?? false;
+            this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
+            this.AssertClauseFragmentIsSingleStatement(overrideExcludeFilter, 'OverrideExcludeFilter');
 
             // ── TOP / pagination mode ──
             // Keyset (AfterKey) takes precedence: validate now so failures are early, predictable,
@@ -2009,14 +2012,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // 1. View where clause
             if (viewEntity?.WhereClause && viewEntity.WhereClause.length > 0) {
                 const renderedWhere = await this.RenderViewWhereClause(viewEntity, user);
-                // SECURITY: a stored view WhereClause originates from a client save, so pass the
-                // rendered clause through the same screen ExtraFilter gets. The one exemption is
-                // CustomWhereClause views: those are admin-authored (MJUserViewEntityServer's save
-                // gate restricts setting/changing them to Owner-type users) and may legitimately
-                // contain constructs the screen blocks. Auto-generated clauses (FilterState /
-                // SmartFilter / nested {%UserView%} templates) always pass — the screen permits
-                // plain SELECT subqueries and blocks only stacked statements, DML, comments,
-                // UNION and WAITFOR.
+                // SECURITY: a stored view WhereClause originates from a client save, so the rendered
+                // clause passes the full client-clause screen (ScreenStoredViewWhereClause) and the
+                // keyword denylist ExtraFilter gets. The one exemption is CustomWhereClause views:
+                // those are admin-authored (MJUserViewEntityServer's save gate restricts setting/
+                // changing them to Owner-type users) and may legitimately contain constructs the
+                // screens block. Auto-generated clauses (FilterState / SmartFilter / nested
+                // {%UserView%} templates) are written against entity base views, which the screens permit.
+                this.ScreenStoredViewWhereClause(viewEntity, renderedWhere, user);
                 const isCustomWhereClause = !!viewEntity.CustomWhereClause; // truthy — the DB may hand back true or 1
                 if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
                     throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
@@ -2150,6 +2153,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const orderBy: string = rawOrderBy.length > 0
                 ? (usingKeyset || orderByIsPkFallback ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
                 : '';
+            if (orderBy.length > 0 && !usingKeyset && !orderByIsPkFallback) {
+                this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
+                // No caller OrderBy means the sort came from the saved view's stored sort state.
+                if (!params.OrderBy && viewEntity) this.ScreenStoredViewOrderBy(orderBy, user);
+            }
 
             // View run logging (SQL Server-specific, others return null)
             let userViewRunID = '';
@@ -2569,6 +2577,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 sUserSearchSQL = '(1=0)';
             }
         }
+        // A UserSearchParamFormatAPI format may splice the term outside quotes; the term must not end the statement there.
+        this.AssertClauseFragmentIsSingleStatement(sUserSearchSQL, 'UserSearchString');
         return sUserSearchSQL;
     }
 
@@ -2674,6 +2684,39 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (t !== 'nvarchar' && t !== 'varchar' && t !== 'char' && t !== 'nchar') return false;
         if (field.Length === -1) return false;
         return true;
+    }
+
+    /**************************************************************************/
+    // Client clause screening
+    /**************************************************************************/
+
+    /**
+     * SECURITY — refuses a statement separator or comment in a filter, sort or search fragment.
+     * Runs for every RunView caller, server-internal ones included, and cannot refuse a legitimate
+     * fragment. The full base-view screen runs at the client entry points; see {@link ClientClauseScreen}.
+     */
+    protected AssertClauseFragmentIsSingleStatement(clause: string, label: string): void {
+        ClientClauseScreen.AssertSingleStatementFragment(clause, label, this.Dialect);
+    }
+
+    /**
+     * SECURITY — screens a saved view's rendered WhereClause with the full client-clause screen.
+     * Any user who can save a view can write its WhereClause, directly or through FilterState or a
+     * Smart Filter. Exempt: a CustomWhereClause view loaded as an entity, whose clause only an Owner
+     * can set (MJUserViewEntityServer). The flag on any other object, such as one built from a
+     * request body, is not trusted.
+     */
+    protected ScreenStoredViewWhereClause(viewEntity: MJUserViewEntityExtended, renderedWhere: string, user: UserInfo): void {
+        if (viewEntity instanceof BaseEntity && !!viewEntity.CustomWhereClause) return; // truthy — the DB may hand back true or 1
+        ClientClauseScreen.AssertClauseUsesEntityBaseViews(renderedWhere, 'view WhereClause', this.Entities, this.Dialect, user);
+    }
+
+    /**
+     * SECURITY — screens the ORDER BY a saved view builds from its stored SortState / GridState with
+     * the full client-clause screen. Any user who can save a view can write those.
+     */
+    protected ScreenStoredViewOrderBy(orderBy: string, user: UserInfo): void {
+        ClientClauseScreen.AssertClauseUsesEntityBaseViews(orderBy, 'OrderBy', this.Entities, this.Dialect, user);
     }
 
     /**************************************************************************/
@@ -3199,6 +3242,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let bHasWhere = false;
 
         const extraFilter = this.TransformExternalSQLClause((params.ExtraFilter as string) || '', entityInfo);
+        this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
         if (extraFilter.length > 0) {
             if (!this.ValidateUserProvidedSQLClause(extraFilter))
                 throw new Error(`Invalid Extra Filter: ${extraFilter}`);
@@ -3679,6 +3723,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (orderBy.length > 0) {
                 if (!this.ValidateUserProvidedSQLClause(orderBy))
                     throw new Error(`Invalid OrderBy clause: ${orderBy}`);
+                this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
                 sql += ` ORDER BY ${orderBy}`;
             }
 
