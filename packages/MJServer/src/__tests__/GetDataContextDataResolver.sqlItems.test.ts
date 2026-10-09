@@ -62,6 +62,7 @@ const OWNER_ID = 'A0000000-0000-4000-8000-000000000001';
 const DATA_CONTEXT_ID = 'B0000000-0000-4000-8000-000000000001';
 const SQL_ITEM_ID = 'C0000000-0000-4000-8000-000000000001';
 const ENTITY_ITEM_ID = 'C0000000-0000-4000-8000-000000000002';
+const SECOND_SQL_ITEM_ID = 'C0000000-0000-4000-8000-000000000003';
 const NOTES_ENTITY_ID = 'E0000000-0000-4000-8000-000000000001';
 const READ_SQL = 'SELECT 1 AS One';
 
@@ -317,6 +318,7 @@ describe('GetDataContextData — sql items', () => {
         const result = await resolver.GetDataContextData(DATA_CONTEXT_ID, s.Context);
 
         expect(result.Success).toBe(true);
+        expect(result.ErrorMessages).toBeNull();
         expect((result.Results ?? []).map((r) => JSON.parse(r ?? 'null'))).toEqual([[{ One: 1 }]]);
         expect(s.ReadOnly?.QueryRuns).toEqual([{ SQL: READ_SQL, User: OWNER }]);
         expect(rawConnectionQueries).toEqual([]);
@@ -342,16 +344,59 @@ describe('GetDataContextData — sql items', () => {
         expect((result.ErrorMessages ?? []).join(' ')).toMatch(/owner/i);
     });
 
-    it('refuses a DataContextID that is not a UUID before it reaches the item filter', async () => {
+    it('refuses a DataContextID that is not a UUID before it reaches any query', async () => {
         const s = server(OWNER, [sqlItemRow(READ_SQL)], true);
-        const notAnID = `${DATA_CONTEXT_ID}' OR '1'='1`;
+        const notAnID = `${DATA_CONTEXT_ID}-1`;
 
         const result = await resolver.GetDataContextData(notAnID, s.Context);
 
         expect(result.Success).toBe(false);
         const filters = [...s.ReadWrite.ViewRuns, ...(s.ReadOnly?.ViewRuns ?? [])].map((run) => run.Params.ExtraFilter ?? '');
         const keys = [...s.ReadWrite.LoadedKeys, ...(s.ReadOnly?.LoadedKeys ?? [])];
-        expect([...filters, ...keys].filter((text) => text.includes("OR '1'='1"))).toEqual([]);
+        expect([...filters, ...keys].filter((text) => text.includes(notAnID))).toEqual([]);
         expectNoSQLRan(s);
+    });
+});
+
+describe('GetDataContextData — a SQL item that may not run does not stop the other items', () => {
+    it('loads the other items when no read-only database is configured', async () => {
+        const s = server(OWNER, [sqlItemRow(READ_SQL), entityItemRow()], false);
+
+        const result = await resolver.GetDataContextData(DATA_CONTEXT_ID, s.Context);
+
+        expectNoSQLRan(s);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessages?.[0]).toMatch(/read-only/i);
+        expect(result.ErrorMessages?.[1]).toBeNull();
+        expect(result.Results?.[0]).toBeNull();
+        expect(JSON.parse(result.Results?.[1] ?? 'null')).toEqual(NOTE_ROWS);
+    });
+
+    it('loads the other items when the caller does not own the data context', async () => {
+        const s = server(OTHER_USER, [sqlItemRow(READ_SQL), entityItemRow()], true);
+
+        const result = await resolver.GetDataContextData(DATA_CONTEXT_ID, s.Context);
+
+        expectNoSQLRan(s);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessages?.[0]).toMatch(/owner/i);
+        expect(result.ErrorMessages?.[1]).toBeNull();
+        expect(result.Results?.[0]).toBeNull();
+        expect(JSON.parse(result.Results?.[1] ?? 'null')).toEqual(NOTE_ROWS);
+    });
+
+    it('screens each SQL item on its own and runs the ones that pass', async () => {
+        const stacked = { ...sqlItemRow('SELECT 1 AS One; SELECT 2 AS Two'), ID: SECOND_SQL_ITEM_ID };
+        const s = server(OWNER, [sqlItemRow(READ_SQL), stacked], true);
+
+        const result = await resolver.GetDataContextData(DATA_CONTEXT_ID, s.Context);
+
+        expect(rawConnectionQueries).toEqual([]);
+        expect(s.ReadOnly?.QueryRuns).toEqual([{ SQL: READ_SQL, User: OWNER }]);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessages?.[0]).toBeNull();
+        expect(result.ErrorMessages?.[1]).toMatch(/single read query/i);
+        expect(JSON.parse(result.Results?.[0] ?? 'null')).toEqual([{ One: 1 }]);
+        expect(result.Results?.[1]).toBeNull();
     });
 });

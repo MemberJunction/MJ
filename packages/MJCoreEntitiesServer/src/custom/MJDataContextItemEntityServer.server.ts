@@ -1,23 +1,25 @@
-import { BaseEntity, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, EntitySaveOptions, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { MJDataContextItemEntity, MJDataContextItemEntityType } from '@memberjunction/core-entities';
+import { MJDataContextItemEntity } from '@memberjunction/core-entities';
 
 /**
  * Server-side `MJ: Data Context Items` entity. The SQL of a `sql` item runs when its data context is
- * loaded, so only an administrator (Owner-type user) may create a SQL item, change its SQL or type, or
- * move it to another data context. Other item types and other fields stay writable as before.
+ * loaded, so only an administrator (Owner-type user) may save an item that is a SQL item or holds SQL
+ * text: creating it, changing any of its fields, or moving it to another data context. Other items
+ * stay writable as before.
+ *
+ * The rule reads the record as it will be written, not which fields changed. This entity does not
+ * track record changes, so `UpdateMJDataContextItem` with `OldValues___` takes its starting state from
+ * the client, and dirty flags then compare against values the client chose.
  */
 @RegisterClass(BaseEntity, 'MJ: Data Context Items')
 export class MJDataContextItemEntityServer extends MJDataContextItemEntity {
     private static readonly SQL_WRITE_REFUSED =
-        'Only an administrator (Owner-type user) may create or change a SQL data context item, because its SQL runs against the database.';
-
-    /** Fields whose change alters which SQL runs, or for whom. */
-    private static readonly SQL_BEARING_FIELDS: ReadonlyArray<keyof MJDataContextItemEntityType> = ['Type', 'SQL', 'DataContextID'];
+        'Only an administrator (Owner-type user) may save a data context item that holds SQL, because that SQL runs against the database.';
 
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        if (this.writesSQL() && !this.callerIsOwner()) {
+        if (this.holdsSQL() && !this.callerIsOwner()) {
             result.Errors.push(new ValidationErrorInfo(
                 'SQL',
                 MJDataContextItemEntityServer.SQL_WRITE_REFUSED,
@@ -29,24 +31,34 @@ export class MJDataContextItemEntityServer extends MJDataContextItemEntity {
         return result;
     }
 
-    /**
-     * True when this save creates or changes SQL that a data context load would run. A value set on an
-     * unsaved record never reads as dirty, so a new record counts as writing every field.
-     */
-    private writesSQL(): boolean {
-        const carriesSQL = this.Type === 'sql' || !!this.SQL?.trim();
-        if (!carriesSQL) {
-            return false;
+    /** Refuses a non-Owner's `ReplayOnly` save of an item that holds SQL, because `ReplayOnly` skips `Validate()`. */
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        if (options?.ReplayOnly && this.holdsSQL() && !this.callerIsOwner()) {
+            return this.refuseSave();
         }
-        if (!this.IsSaved) {
-            return true;
-        }
-        return MJDataContextItemEntityServer.SQL_BEARING_FIELDS.some((name) => this.GetFieldByName(name)?.Dirty === true);
+        return super.Save(options);
+    }
+
+    /** True when the record, as it will be written, is a SQL item or holds SQL text. */
+    private holdsSQL(): boolean {
+        return this.Type === 'sql' || !!this.SQL?.trim();
     }
 
     /** True when the acting user is an Owner-type user. */
     private callerIsOwner(): boolean {
         const caller: UserInfo | null = this.ActiveUser;
         return caller?.Type?.trim().toLowerCase() === 'owner';
+    }
+
+    /** Records the refusal so `LatestResult.CompleteMessage` carries it, and returns false. */
+    private refuseSave(): boolean {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = this.IsSaved ? 'update' : 'create';
+        result.Message = MJDataContextItemEntityServer.SQL_WRITE_REFUSED;
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        this.RegisterResultHistoryEntry(result);
+        return false;
     }
 }
