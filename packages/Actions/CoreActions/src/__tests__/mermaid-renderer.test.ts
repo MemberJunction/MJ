@@ -135,6 +135,18 @@ describe('MermaidRenderer', () => {
         expect(secure).not.toContain('flowchart');
     });
 
+    it('blames the page when work fails with the browser still up, and the browser when it is gone', async () => {
+        const browser = makeBrowser(makePage({ ok: true, svg: '<svg/>' }));
+        launchMock.mockResolvedValue(browser);
+
+        const pageFault = await MermaidRenderer.Instance.WithIsolatedPage(async () => { throw new Error('Target crashed'); });
+        browser.isConnected.mockReturnValue(false);
+        const browserGone = await MermaidRenderer.Instance.WithIsolatedPage(async () => { throw new Error('Browser closed'); });
+
+        expect(pageFault).toMatchObject({ Success: false, ErrorCode: 'RENDER_FAILED' });
+        expect(browserGone).toMatchObject({ Success: false, ErrorCode: 'BROWSER_UNAVAILABLE' });
+    });
+
     it('locks every new page down: no network from its context, and a crashed page is dropped', async () => {
         const page = makePage({ ok: true, svg: '<svg/>' });
         launchMock.mockResolvedValue(makeBrowser(page));

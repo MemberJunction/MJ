@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "Skill Update Check - Daily",
+      "Description": "Checks skills imported from a URL or GitHub source for upstream changes and sets changed ones to Pending for admin review. Re-import to accept a change; to keep the current version, pin SourceRef to the imported commit (or clear SourceType) before setting the skill Active, or the next run flags it again. Does nothing on an instance with no sourced skills. Daily at 05:00 UTC.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=SkillUpdateCheckScheduledJobDriver",
+      "CronExpression": "0 0 5 * * *",
+      "Timezone": "UTC",
+      "Status": "Disabled",
+      "Configuration": {}
+    },
+    "primaryKey": {
+      "ID": "AEAFF6FD-A8FA-429C-BB64-9CE98A9F35AD"
+    }
+  }
+]

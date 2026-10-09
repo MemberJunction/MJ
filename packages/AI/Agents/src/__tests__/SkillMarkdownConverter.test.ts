@@ -52,6 +52,13 @@ Second line.
             expect(result.frontmatter.name).toBe('Skill: With Colon');
         });
 
+        it('reads tab-separated list items, and a long whitespace run in one, in linear time', () => {
+            const md = ['---', 'name: X', 'actions:', '-\tRun Query', '  - ' + '\t'.repeat(100_000) + 'Generate PDF\r', '---', 'Body'].join('\n');
+            const started = Date.now();
+            expect(SkillMarkdownConverter.Parse(md).frontmatter.actions).toEqual(['Run Query', 'Generate PDF']);
+            expect(Date.now() - started).toBeLessThan(1000);
+        });
+
         it('parses codeOnlyActions as a list, and leaves it undefined when the key is absent', () => {
             const withKey = SkillMarkdownConverter.Parse(['---', 'name: X', 'actions:', '  - Run Query', '  - Generate PDF', 'codeOnlyActions:', '  - Generate PDF', '---', 'Body'].join('\n'));
             expect(withKey.frontmatter.actions).toEqual(['Run Query', 'Generate PDF']);
@@ -126,9 +133,99 @@ Second line.
             expect(() => SkillMarkdownConverter.Parse(md)).toThrow(/Instructions body/);
         });
 
-        it('throws on a malformed frontmatter line', () => {
+        it('throws when the frontmatter is not a key/value mapping', () => {
             const md = `---\nthis is not valid yaml at all\n---\n\nBody.\n`;
-            expect(() => SkillMarkdownConverter.Parse(md)).toThrow(/Invalid SKILL\.md frontmatter line/);
+            expect(() => SkillMarkdownConverter.Parse(md)).toThrow(/Invalid SKILL\.md frontmatter: expected "key: value"/);
+        });
+
+        it('throws on YAML that does not parse and has no literal reading', () => {
+            const md = `---\nname: X\nmetadata:\n  version: [unclosed\n---\n\nBody.\n`;
+            expect(() => SkillMarkdownConverter.Parse(md)).toThrow(/Invalid SKILL\.md frontmatter/);
+        });
+
+        it('parses an Anthropic-style SKILL.md: license, metadata.version, and unknown keys kept in extra', () => {
+            const md = [
+                '---',
+                'name: pdf-processing',
+                'description: "Extract text and tables from PDFs: use when the user mentions PDFs"',
+                'license: Apache-2.0',
+                'allowed-tools: [Read, Grep]',
+                'metadata:',
+                '  version: 1.4.0',
+                '  author: someone',
+                '---',
+                '',
+                'Read references/forms.md before filling a form.',
+            ].join('\n');
+            const { frontmatter } = SkillMarkdownConverter.Parse(md);
+
+            expect(frontmatter.name).toBe('pdf-processing');
+            expect(frontmatter.description).toBe('Extract text and tables from PDFs: use when the user mentions PDFs');
+            expect(frontmatter.license).toBe('Apache-2.0');
+            expect(frontmatter.version).toBe('1.4.0');
+            expect(frontmatter.extra).toEqual({
+                license: 'Apache-2.0',
+                'allowed-tools': ['Read', 'Grep'],
+                metadata: { version: '1.4.0', author: 'someone' },
+            });
+        });
+
+        it('rejects a modelled scalar given as a block list', () => {
+            const md = `---\nname:\n  - a\n  - b\n---\n\nBody.\n`;
+            expect(() => SkillMarkdownConverter.Parse(md)).toThrow(/"name" must be a single value/);
+        });
+    });
+
+    describe('round trip with keys MJ does not model', () => {
+        it('Parse -> Serialize -> Parse keeps every unknown key, nested values included', () => {
+            const original = [
+                '---',
+                'name: Diagrams',
+                'actions:',
+                '  - Render Architecture Diagram',
+                'license: MIT',
+                'metadata:',
+                '  version: 3.0.1',
+                '  tags: [diagrams, svg]',
+                'futureKey: 42',
+                'futureFlag: true',
+                '---',
+                '',
+                'Body.',
+            ].join('\n');
+            const first = SkillMarkdownConverter.Parse(original);
+            const serialized = SkillMarkdownConverter.Serialize({
+                name: first.frontmatter.name,
+                actionNames: first.frontmatter.actions,
+                extraFrontmatter: first.frontmatter.extra,
+                instructions: first.instructions,
+            });
+            const second = SkillMarkdownConverter.Parse(serialized);
+
+            expect(second.frontmatter).toEqual(first.frontmatter);
+            expect(second.frontmatter.extra).toEqual({
+                license: 'MIT',
+                metadata: { version: '3.0.1', tags: ['diagrams', 'svg'] },
+                futureKey: 42,
+                futureFlag: true,
+            });
+            expect(second.instructions).toBe('Body.');
+        });
+
+        it('writes the modelled keys first and never lets an extra key override one', () => {
+            const md = SkillMarkdownConverter.Serialize({
+                name: 'Real Name',
+                extraFrontmatter: { license: 'MIT', name: 'Smuggled', actions: ['Smuggled Action'] },
+                instructions: 'Body.',
+            });
+            expect(md.startsWith('---\nname: Real Name\nlicense: MIT\n---')).toBe(true);
+            expect(md).not.toContain('Smuggled');
+        });
+
+        it('does not fold a long description across lines', () => {
+            const description = 'word '.repeat(40).trim();
+            const md = SkillMarkdownConverter.Serialize({ name: 'X', description, instructions: 'Body.' });
+            expect(md).toContain(`description: ${description}\n`);
         });
     });
 
@@ -173,13 +270,13 @@ Second line.
             expect(result).not.toContain('subAgents:');
         });
 
-        it('quotes scalars containing a colon', () => {
+        it('quotes scalars containing a colon, with single quotes', () => {
             const result = SkillMarkdownConverter.Serialize({
                 name: 'Skill: With Colon',
                 instructions: 'Body.'
             });
 
-            expect(result).toContain('name: "Skill: With Colon"');
+            expect(result).toContain("name: 'Skill: With Colon'");
         });
 
         it('round-trips through Parse after Serialize', () => {

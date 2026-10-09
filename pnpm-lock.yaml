@@ -534,6 +534,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.3
         version: link:../../MJGlobal
+      '@memberjunction/network-utils':
+        specifier: 6.2.0-edge.3
+        version: link:../../NetworkUtils
       '@memberjunction/rubrics':
         specifier: 6.2.0-edge.3
         version: link:../../Rubrics/Engine
@@ -570,6 +573,9 @@ importers:
       sql-formatter:
         specifier: ^15.7.0
         version: 15.7.0
+      yaml:
+        specifier: ^2.8.2
+        version: 2.8.2
     devDependencies:
       '@types/lodash':
         specifier: ^4.17.23
@@ -885,6 +891,25 @@ importers:
       tsc-alias:
         specifier: ^1.8.16
         version: 1.8.16
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/AI/Diagrams:
+    dependencies:
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.3
+        version: link:../../MJGlobal
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      ts-node-dev:
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -3816,6 +3841,9 @@ importers:
       '@memberjunction/ai-core-plus':
         specifier: 6.2.0-edge.3
         version: link:../../AI/CorePlus
+      '@memberjunction/ai-diagrams':
+        specifier: 6.2.0-edge.3
+        version: link:../../AI/Diagrams
       '@memberjunction/ai-engine-base':
         specifier: 6.2.0-edge.3
         version: link:../../AI/BaseAIEngine

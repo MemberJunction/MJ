@@ -43,7 +43,7 @@ const MAX_PAGES = 4; // ponytail: fixed cap; make it configurable if a host need
  * but nothing may connect, load or submit anywhere: no fetch, WebSocket, beacon, image or form. The route
  * block below covers HTTP; this covers what routes cannot, WebSockets above all.
  */
-const DIAGRAM_PAGE_CSP = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'";
+export const DIAGRAM_PAGE_CSP = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'";
 
 /**
  * The Mermaid options a caller may set: the layout knobs `MermaidConfig` declares, per section. Anything
@@ -176,6 +176,39 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
             ...allowed, theme, startOnLoad: false, securityLevel: 'strict', htmlLabels: false,
             flowchart: { ...flowchart, htmlLabels: false }, secure: [...SECURE_CONFIG_KEYS],
         };
+    }
+
+    /**
+     * Runs `work` on a fresh page of this renderer's browser, outside the Mermaid pool but inside its page
+     * cap, with every network request blocked and the same {@link RENDER_TIMEOUT_MS} cap. For other
+     * server-side checks that need a real browser, such as the archify diagram readability gate. Content
+     * `work` loads should carry {@link DIAGRAM_PAGE_CSP}. The page is always closed. Never throws.
+     * A failure says whose it was: `RENDER_FAILED` when the browser is still up afterwards (the page itself
+     * failed, so its content is to blame), `BROWSER_UNAVAILABLE` when the browser is not, `TIMEOUT` on the cap.
+     */
+    public async WithIsolatedPage<T>(work: (page: Page) => Promise<T>): Promise<{ Success: true; Value: T } | MermaidRenderFailure> {
+        await this.acquireSlot();
+        const browser = await this.getBrowser();
+        if (browser.Success === false) {
+            this.releaseSlot();
+            return browser;
+        }
+        const page = browser.Browser.newPage();
+        try {
+            const value = await this.withTimeout(page.then(async (p) => {
+                await this.lockDown(p);
+                return work(p);
+            }), RENDER_TIMEOUT_MS);
+            return { Success: true, Value: value };
+        } catch (error) {
+            const failure = this.classifyFailure(error);
+            return failure.ErrorCode === 'BROWSER_UNAVAILABLE' && browser.Browser.isConnected()
+                ? { Success: false, ErrorCode: 'RENDER_FAILED', Message: failure.Message }
+                : failure;
+        } finally {
+            this.releaseSlot();
+            void this.closeQuietly(page);
+        }
     }
 
     /** Closes the shared browser, if one was launched. Its pages, idle ones included, close with it. */

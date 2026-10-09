@@ -31,6 +31,7 @@
     "@memberjunction/core": "6.2.0-edge.3",
     "@memberjunction/core-entities": "6.2.0-edge.3",
     "@memberjunction/global": "6.2.0-edge.3",
+    "@memberjunction/network-utils": "6.2.0-edge.3",
     "@memberjunction/rubrics": "6.2.0-edge.3",
     "@memberjunction/search-engine": "6.2.0-edge.3",
     "@memberjunction/storage": "6.2.0-edge.3",
@@ -42,7 +43,8 @@
     "pdfjs-dist": "^4.10.38",
     "rxjs": "^7.8.2",
     "safe-regex": "^2.1.1",
-    "sql-formatter": "^15.7.0"
+    "sql-formatter": "^15.7.0",
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@types/lodash": "^4.17.23",

@@ -1,0 +1,37 @@
+{
+  "name": "@memberjunction/ai-diagrams",
+  "type": "module",
+  "version": "6.2.0-edge.3",
+  "description": "MemberJunction: architecture, workflow, sequence, data-flow and lifecycle diagrams from a typed JSON spec, rendered in-process by a vendored copy of archify (MIT)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist",
+    "/vendor",
+    "/assets",
+    "UPSTREAM.json",
+    "archify-shims.patch"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "build:lite-template": "node scripts/build-lite-template.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/global": "6.2.0-edge.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

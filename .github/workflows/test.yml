@@ -87,6 +87,9 @@ on:
       # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
       # remote-cache configuration"), and its own suite lives in __tests__ above.
       - '.github/scripts/check-turbo-cache-env.mjs'
+      # The monthly archify sync (archify-sync.yml) runs nowhere on a PR; its vitest suite lives in
+      # __tests__ above, so a PR editing only the script must still run it.
+      - '.github/scripts/archify-sync.mjs'
       # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
       # env wiring across EVERY workflow, plus the `secrets: inherit` at publish.yml's call site.
       # Its suite lives in __tests__ above, but without these entries a PR editing only one of

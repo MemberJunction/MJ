@@ -82,6 +82,7 @@ import { MJAIPromptTypeFormComponent } from "./Entities/MJAIPromptType/mjaipromp
 import { MJAIRemoteBrowserProviderFormComponent } from "./Entities/MJAIRemoteBrowserProvider/mjairemotebrowserprovider.form.component";
 import { MJAIResultCacheFormComponent } from "./Entities/MJAIResultCache/mjairesultcache.form.component";
 import { MJAISkillActionFormComponent } from "./Entities/MJAISkillAction/mjaiskillaction.form.component";
+import { MJAISkillFileFormComponent } from "./Entities/MJAISkillFile/mjaiskillfile.form.component";
 import { MJAISkillFormComponent } from "./Entities/MJAISkill/mjaiskill.form.component";
 import { MJAISkillPermissionFormComponent } from "./Entities/MJAISkillPermission/mjaiskillpermission.form.component";
 import { MJAISkillSearchScopeFormComponent } from "./Entities/MJAISkillSearchScope/mjaiskillsearchscope.form.component";
@@ -442,6 +443,7 @@ declarations: [
     MJAIAgentSessionFormComponent,
     MJAIConfigurationParamFormComponent,
     MJAIPromptModelFormComponent,
+    MJAISkillFileFormComponent,
     MJActionContextFormComponent,
     MJEncryptionKeySourceFormComponent,
     MJEntityActionFormComponent,

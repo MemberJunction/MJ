@@ -321,5 +321,43 @@
       "lastModified": "2026-07-07T15:18:39.663Z",
       "checksum": "0bdd5fe695be28ac9113b6efc750b53ac689a1d1c641dc8b67d4f9e6461a4eb4"
     }
+  },
+  {
+    "fields": {
+      "Name": "Architecture & Flow Diagrams",
+      "Description": "Design validated, presentation-quality diagrams of how something works (system architecture, workflows, request sequences, data lineage, and state machines) as embeddable SVG plus an interactive HTML diagram. Not for charts of numbers",
+      "Instructions": "@file:templates/architecture-flow-diagrams.skill.md",
+      "Status": "Active",
+      "ActivationMode": "Auto",
+      "Category": "Visualization",
+      "IconClass": "fa-solid fa-diagram-project",
+      "Color": "#DB2777",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Render Architecture Diagram"
+          },
+          "primaryKey": {
+            "ID": "8F3585AB-218A-43EE-9E32-A8517DA923D0"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Architecture Diagram Reference"
+          },
+          "primaryKey": {
+            "ID": "07C72F8C-9EF5-43C1-A759-C168D20805A3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "BFC35012-FA5C-4AA1-AC42-5E48D05702B9"
+    }
   }
 ]

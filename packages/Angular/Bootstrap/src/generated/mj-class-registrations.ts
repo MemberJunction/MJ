@@ -34,7 +34,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (447 classes)
+// @memberjunction/core-entities (448 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -113,6 +113,7 @@ import {
     MJAIResultCacheEntity,
     MJAISkillActionEntity,
     MJAISkillEntity,
+    MJAISkillFileEntity,
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
@@ -929,6 +930,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIResultCacheEntity,
     MJAISkillActionEntity,
     MJAISkillEntity,
+    MJAISkillFileEntity,
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
@@ -1040,11 +1042,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
     MJDashboardPermissionEntityExtended,
-    MJDashboardUserPreferenceEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
     MJDataContextEntity,
     MJDataContextItemEntity,
@@ -1244,11 +1246,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTagCoOccurrenceEntity,
     MJTagEntity,
     MJTagScopeEntity,
-    MJTagSuggestionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTagSuggestionEntity,
     MJTagSynonymEntity,
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
@@ -1448,11 +1450,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TemplateCategoryHierarchyPanel,
     TestSuiteHierarchyPanel,
     UserHeaderPanel,
-    UserOverviewPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    UserOverviewPanel,
     UserViewCategoryHierarchyPanel,
     TagEngineBase,
     AIAnalyticsResourceComponent,

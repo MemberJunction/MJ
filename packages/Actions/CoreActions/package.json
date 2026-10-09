@@ -32,6 +32,7 @@
     "@memberjunction/ai-agents": "6.2.0-edge.3",
     "@memberjunction/ai-betty-bot": "6.2.0-edge.3",
     "@memberjunction/ai-core-plus": "6.2.0-edge.3",
+    "@memberjunction/ai-diagrams": "6.2.0-edge.3",
     "@memberjunction/ai-engine-base": "6.2.0-edge.3",
     "@memberjunction/ai-mcp-client": "6.2.0-edge.3",
     "@memberjunction/ai-prompts": "6.2.0-edge.3",

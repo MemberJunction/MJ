@@ -419,7 +419,7 @@ To test the guard itself, mock `node:dns` so a hostname resolves wherever you ne
 | `AssertPublicUrl` | `(url: string) => Promise<URL>` | Validate without fetching; throws `SSRFError` |
 | `IsBlockedIPAddress` | `(address: string) => boolean` | Classify one IP literal; pure, no DNS |
 | `SSRFError` | `class extends Error` | Thrown when a URL is blocked |
-| `SafeFetchInit` | `RequestInit & { MaxRedirects?: number }` | `SafeFetch` options |
+| `SafeFetchInit` | `RequestInit & { MaxRedirects?: number; RequireHttps?: boolean }` | `SafeFetch` options; `RequireHttps` refuses any `http:` hop, redirects included |
 
 ### HTTP client
 

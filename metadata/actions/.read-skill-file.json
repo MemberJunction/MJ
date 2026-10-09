@@ -1,0 +1,48 @@
+[
+  {
+    "fields": {
+      "Name": "Read Skill File",
+      "Description": "Returns the content of one file that belongs to an active skill (a reference document or example stored in MJ: AI Skill Files). When a skill with files activates, its file paths are listed in the activation message and this action is added to the run; call it with the skill name and a listed path when the skill's instructions refer to that file. Inside an agent run, only files of skills active in that run are readable.",
+      "DriverClass": "__ReadSkillFile",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-lines",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Skill",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the active skill the file belongs to, as shown in the skill-files listing.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "6A0730E5-2D16-420F-A01E-AFDEF67CBB24"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Path",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The file's path relative to the skill folder, exactly as listed (for example references/api.md).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "23626ACF-0890-4BD5-85AF-D8DBA0926227"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A9164F7E-57A7-4C2E-BDB8-C502396639BF"
+    }
+  }
+]

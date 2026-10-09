@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "Skill Update Check",
+      "Description": "Re-fetches every Active skill that was imported from a URL or GitHub source (AISkill.SourceType set) and compares the content hash with AISkill.SourceContentHash. When upstream changed, the skill is set to Pending for admin review; its content is not overwritten, so nothing upstream reaches an agent's prompt unreviewed. An admin accepts the change by re-importing the skill from its source (SkillImportExportService.ImportSkillFromSource with updateSkillId), which makes it Active again. To keep the current version instead, pin AISkill.SourceRef to the commit SHA shown in SourceURL (or a tag at that commit), or clear SourceType to stop tracking, then set the skill Active. Setting it Active alone does not keep it: every run decides afresh, so a skill whose unpinned source still differs is flagged again. No Configuration.",
+      "DriverClass": "SkillUpdateCheckScheduledJobDriver",
+      "DomainRunEntity": null,
+      "DomainRunEntityFKey": null,
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "FBDC47F6-35D2-4621-A408-5AD8C8E71F33"
+    }
+  }
+]
