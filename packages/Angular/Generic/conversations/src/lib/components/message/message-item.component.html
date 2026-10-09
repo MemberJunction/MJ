@@ -36,9 +36,9 @@
         </span>
       }
 
-      <!-- Edit (owner's completed user messages) — opens the inline editor; the server
+      <!-- Edit (the owner's own completed user messages) — opens the inline editor; the server
            sets OriginalMessageChanged when the text actually changes on save -->
-      @if (allowMessageEdit && isUserMessage && isConversationOwner && !isEditing && messageStatus === 'Complete') {
+      @if (allowMessageEdit && isUserMessage && CanEditMessage && !isEditing && messageStatus === 'Complete') {
         <span class="message-edit-icon" (click)="onEditClick()" title="Edit message">
           <i class="fas fa-pen"></i>
         </span>

@@ -1,0 +1,41 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversations",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: Conversation Authorship",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "AB37A4C1-1183-4936-A17A-04E4257E9C81"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Details",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: Conversation Authorship",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "8F21EE85-DDDA-4C42-8A8B-C43E39E1344D"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Resource Permissions",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: Conversation Authorship",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "004116DC-7F6C-42C8-8D7A-C95CF9F9C8B3"
+    }
+  }
+]

@@ -46,6 +46,11 @@ describe('ResolverBase.MustLoadTruthFromDatabase', () => {
         expect(probe.MustLoad({ Name: 'MJ: Record Changes', TrackRecordChanges: false }, true)).toBe(true);
     });
 
+    it("always loads a conversation message, so client OldValues cannot claim a message's author or role", () => {
+        expect(probe.MustLoad({ Name: 'MJ: Conversation Details', TrackRecordChanges: false }, true)).toBe(true);
+        expect(probe.MustLoad({ Name: ' mj: conversation details ', TrackRecordChanges: false }, true)).toBe(true);
+    });
+
     it('still trusts OldValues on other untracked entities without field security', () => {
         expect(probe.MustLoad({ Name: 'MJ: Tags', TrackRecordChanges: false, EnableFieldLevelSecurity: false }, true)).toBe(false);
     });
