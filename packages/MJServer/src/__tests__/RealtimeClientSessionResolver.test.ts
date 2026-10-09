@@ -87,7 +87,7 @@ const cancelInFlightMock = vi.fn((_agentSessionID: string, _callID?: string): nu
 // class-property/getter references above).
 const { resolveStorageMock, storeRecordingMock, writeSegmentMock, deleteSegmentsMock } = vi.hoisted(() => ({
     resolveStorageMock: vi.fn(async (): Promise<string | null> => 'storage-acct-1'),
-    storeRecordingMock: vi.fn(async (): Promise<StoreRealtimeRecordingResult> => ({ FileID: 'file-1', ErrorMessage: null })),
+    storeRecordingMock: vi.fn(async (): Promise<StoreRealtimeRecordingResult> => ({ FileID: 'file-1', ErrorMessage: null, Superseded: false })),
     writeSegmentMock: vi.fn(async (): Promise<boolean> => true),
     deleteSegmentsMock: vi.fn(async (): Promise<number> => 0),
 }));
