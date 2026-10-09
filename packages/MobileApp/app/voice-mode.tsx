@@ -7,8 +7,11 @@ import { Type } from '@/theme/tokens';
 import { ResolveTargetAgent } from '@/data/services/agents';
 import { GetDefaultAgentId, SetDefaultAgent } from '@/data/preferences';
 import { AgentPicker } from '@/components/AgentPicker';
-import type { RealtimeCaption, RealtimeConnectionState } from '@memberjunction/realtime-runtime';
+import type { RealtimeAvatarNotice, RealtimeCaption, RealtimeConnectionState } from '@memberjunction/realtime-runtime';
 import { MobileVoiceSession } from '@/voice/MobileVoiceSession';
+import { AnnounceAvatarNotice, AvatarNotice } from '@/voice/AvatarNotice';
+import { AvatarNoticePresenter } from '@/voice/avatar-notice-presenter';
+import { AvatarNoticeText } from '@/voice/avatar-notice-text';
 
 /** Why voice could not start, when it could not. */
 type VoiceUnavailableReason = 'provider' | 'permission' | 'backend' | 'unknown';
@@ -25,6 +28,8 @@ const DARK_BG = '#0d0d12';
  *   a client-direct session. The runtime mints it server-side, resolves the provider's client
  *   driver, and connects over WebRTC; this screen only renders connection state, an
  *   audio-reactive orb, and live captions. Final captions persist to the conversation server-side.
+ *   When the runtime reports why a call has no avatar, the screen says so once per call, under the
+ *   top row ({@link AvatarNotice}); it hides on ✕ or after 10 s.
  * Graceful fallback: when the feature can't run — the resolved provider needs a PCM audio plane
  *   this build does not ship, mic permission was denied, or the deployment has no realtime model
  *   configured — the screen shows a clear "Voice isn't available" card rather than opening a
@@ -50,11 +55,16 @@ export default function VoiceModeScreen() {
     const [transcripts, setTranscripts] = useState<RealtimeCaption[]>([]);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [liveLevel, setLiveLevel] = useState<number | null>(null);
+    const noticeRef = useRef<AvatarNoticePresenter | null>(null);
+    const [avatarNotice, setAvatarNotice] = useState<RealtimeAvatarNotice | null>(null);
 
     // ── Session lifecycle ───────────────────────────────────────────────────────
     useEffect(() => {
         const service = new MobileVoiceSession();
         serviceRef.current = service;
+        // One presenter per call, so the avatar notice shows at most once per call.
+        const notice = new AvatarNoticePresenter(service.AvatarNotice$, setAvatarNotice);
+        noticeRef.current = notice;
 
         // The runtime publishes state as observables rather than a single event stream, so each
         // concern subscribes to the one it renders.
@@ -120,10 +130,19 @@ export default function VoiceModeScreen() {
         })();
 
         return () => {
+            notice.Dispose();
             subs.forEach((s) => s.unsubscribe());
             void service.EndRealtimeSession();
         };
     }, [conversationId, preferredAgentId, sessionEpoch]);
+
+    // ── Avatar notice: read aloud on iOS when it appears (Android uses the notice's live region) ──
+    const noticeText = avatarNotice ? AvatarNoticeText(avatarNotice.Reason, agentName) : null;
+    useEffect(() => {
+        if (noticeText) {
+            AnnounceAvatarNotice(noticeText);
+        }
+    }, [noticeText]);
 
     // ── Live audio-level poll (drives the waveform when the driver meters audio) ──
     useEffect(() => {
@@ -216,6 +235,8 @@ export default function VoiceModeScreen() {
                     <Icons.ChevronLeft size={18} color="#f6f6f8" strokeWidth={2.2} />
                 </Pressable>
             </View>
+
+            <AvatarNotice Message={noticeText} OnDismiss={() => noticeRef.current?.Dismiss()} />
 
             <AgentPicker
                 Visible={pickerOpen}

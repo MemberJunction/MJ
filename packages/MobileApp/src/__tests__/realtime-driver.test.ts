@@ -53,6 +53,8 @@ import {
     RNOpenAIRealtimeClient,
 } from '@/voice/rn-realtime-driver';
 import { RNRealtimeMediaHost } from '@/voice/rn-media-host';
+import { MobileVoiceSession } from '@/voice/MobileVoiceSession';
+import type { RealtimeAvatarNotice } from '@memberjunction/realtime-runtime';
 
 describe('IsRealtimeProviderSupported', () => {
     it('accepts the WebRTC providers this build ships a driver for', () => {
@@ -146,5 +148,18 @@ describe('RNRealtimeMediaHost', () => {
         // Returning nothing is a supported configuration, not a degraded one: recording is
         // consent-gated and the runtime's session clock does not depend on a recorder existing.
         expect((new RNRealtimeMediaHost() as { CreateRecorder?: unknown }).CreateRecorder).toBeUndefined();
+    });
+});
+
+describe('MobileVoiceSession', () => {
+    it('constructs, and its avatar notice stream starts empty', () => {
+        // The voice screen hands `AvatarNotice$` to its notice presenter. Constructing the session
+        // also proves nothing on this subclass collides with what the runtime defines.
+        const seen: Array<RealtimeAvatarNotice | null> = [];
+        const subscription = new MobileVoiceSession().AvatarNotice$.subscribe((notice) => {
+            seen.push(notice);
+        });
+        subscription.unsubscribe();
+        expect(seen).toEqual([null]);
     });
 });
