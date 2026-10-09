@@ -177,6 +177,11 @@ export class ConversationAgentService {
     if (this._conversationManagerAgent) {
       return this._conversationManagerAgent;
     }
+    // A user who may not read the agents has no manager agent to resolve: say nothing, rather than an error for a state
+    // that is theirs by design (MJ#5240)
+    if (AIEngineBase.Instance.IsPermissionConstrained && AIEngineBase.Instance.ReadableAgents.length === 0) {
+      return null;
+    }
 
     try {
       const provider = this.Provider;
@@ -333,7 +338,7 @@ export class ConversationAgentService {
     if (!message) {
       return null;
     }
-    const parsed = this.mentionParser.parseMentions(message, AIEngineBase.Instance.Agents, []);
+    const parsed = this.mentionParser.parseMentions(message, AIEngineBase.Instance.ReadableAgents, []);
     const mention = parsed.agentMention;
     return mention?.id === agentId && mention.configurationId ? mention.configurationId : null;
   }
@@ -404,7 +409,7 @@ export class ConversationAgentService {
       await AIEngineBase.Instance.Config(false);
 
       // Find the agent by name
-      const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
+      const agent = AIEngineBase.Instance.ReadableAgents.find(a => a.Name === agentName);
 
       if (!agent || !agent.ID) {
         const errorMsg = `Sub-agent "${agentName}" not found`;
@@ -531,7 +536,7 @@ export class ConversationAgentService {
         return { decision: 'UNSURE', reasoning: 'Check Sage Intent prompt not found' };
       }
 
-      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
+      const agent = AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentId));
       if (!agent) {
         console.warn('⚠️ Previous agent not found, defaulting to UNSURE');
         return { decision: 'UNSURE', reasoning: 'Previous agent not found' };

@@ -1071,8 +1071,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const agentID = this.message.AgentID;
 
     // Look up agent from AIEngineBase cache
-    if (agentID && AIEngineBase.Instance?.Agents) {
-      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentID));
+    if (agentID) {
+      const agent = AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentID));
       if (agent) {
         return {
           name: agent.Name || 'AI Assistant',
