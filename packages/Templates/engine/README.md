@@ -124,6 +124,26 @@ The engine provides built-in filters for JSON operations:
 {% set parsed = jsonString | jsonparse %}
 ```
 
+### Template Sandbox
+
+Users can edit stored templates, so the engine renders them on a guarded nunjucks runtime
+(`HardenNunjucksRuntime()`, applied when this package loads). The guard is process-wide: it also
+covers nunjucks environments that other packages create.
+
+- The member names `constructor`, `prototype`, `__proto__`, `__defineGetter__`, `__defineSetter__`,
+  `__lookupGetter__` and `__lookupSetter__` read as empty, even when the data defines them.
+- A bare name such as `{{ user }}` resolves only to a template variable, a key of the render data, or
+  an environment global. It never resolves to a property the data inherits, such as `valueOf`.
+- A template that reaches `Function` (or its async and generator variants), `eval`, `Object`,
+  `Reflect`, `globalThis`, `process` or the render context fails with a `TemplateSandboxError`.
+
+The guard blocks reflection, not ordinary methods. Pass templates plain data, not objects whose
+methods reach the database or the file system (for example `BaseEntity` instances).
+
+The `RunTemplate` mutation and the `Template.Run` remote operation also apply
+`GetTemplateRunRefusal()` before they load anything: they refuse scope-limited sessions and callers
+without read permission on `MJ: Templates` and `MJ: Template Contents`.
+
 ### Template Extensions
 
 Extensions are registered via the MJ class factory:
