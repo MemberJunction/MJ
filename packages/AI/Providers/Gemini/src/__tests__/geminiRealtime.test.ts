@@ -1481,3 +1481,40 @@ describe('live avatars: the driver asks for one only where the endpoint renders 
         expect(warnings.filter((w) => /avatar|VIDEO/i.test(w))).toEqual([]);
     });
 });
+
+/** Exposes the protected pact builder on the Enterprise endpoint, as a relay-backed driver uses it. */
+class PactProbe extends EnterpriseClientDirect {
+    public Pact(model: string, config: LiveConnectConfig, browserConfig?: LiveConnectConfig): Record<string, unknown> {
+        return this.SessionPactFor(model, config, browserConfig) as Record<string, unknown>;
+    }
+    public Config(params: RealtimeSessionParams): LiveConnectConfig {
+        return this.BuildConnectConfig(params);
+    }
+}
+
+describe('SessionPactFor: the pact a client-direct mint returns', () => {
+    it('is what CreateClientSession mints: the full config by default, with the model facts', async () => {
+        const driver = new PactProbe('k');
+        const params = makeParams({ Model: 'gemini-3.8-live', Avatar: BEN });
+        const minted = (await driver.CreateClientSession(params)).SessionConfig;
+        expect(driver.Pact('gemini-3.8-live', driver.Config(params))).toEqual(minted);
+    });
+
+    it("carries a smaller browser config when given one; the avatar block and the model facts still follow the session's config", () => {
+        const driver = new PactProbe('k');
+        const config = driver.Config(makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        const pact = driver.Pact('gemini-3.8-live', config, { responseModalities: config.responseModalities });
+        expect(pact['config']).toEqual({ responseModalities: ['VIDEO'] });
+        expect(pact['avatar']).toEqual({ output: true, encoding: 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"', audioMuxed: true });
+        expect(pact).toMatchObject({ model: 'gemini-3.8-live', idleSignal: 'turnComplete', supportsInboundVideo: true });
+        expect(JSON.stringify(pact)).not.toContain('You are a helpful voice assistant.');
+    });
+
+    it('is plain JSON that shares nothing with the config', () => {
+        const driver = new PactProbe('k');
+        const config = driver.Config(makeParams({ Model: 'gemini-3.8-live' }));
+        const pact = driver.Pact('gemini-3.8-live', config);
+        (pact['config'] as Record<string, unknown>)['responseModalities'] = ['TEXT'];
+        expect(config.responseModalities).toEqual(['AUDIO']);
+    });
+});

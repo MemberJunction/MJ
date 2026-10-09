@@ -320,34 +320,48 @@ export class GeminiRealtime extends BaseRealtimeModel {
         if (!token.name) {
             throw new Error('Gemini auth-token mint returned no token name');
         }
-        const profile = ResolveGeminiLiveProfile(params.Model, this.Endpoint);
         return {
             Provider: 'gemini',
             Model: params.Model,
             EphemeralToken: token.name,
             ExpiresAt: expireTime,
-            // Plain-JSON copy of what the browser passes to live.connect (model + config). The
-            // token lock above makes these values authoritative even if a client tampers.
-            SessionConfig: JSON.parse(
-                JSON.stringify({
-                    model: params.Model,
-                    config,
-                    idleSignal: profile.IdleSignal,
-                    supportsScheduling: profile.Tooling.SupportsScheduling,
-                    supportsBlocking: profile.Tooling.SupportsBlockingExecution,
-                    // Per-model video legality travels with the mint so the browser driver never
-                    // has to infer it from the model id. The client cannot import this profile
-                    // table (@memberjunction/ai-realtime-client does not depend on the provider
-                    // package, by design), so the mint is the seam that carries it.
-                    supportsInboundVideo: profile.SupportsInboundVideo,
-                    maxInboundVideoRate: profile.MaxInboundVideoRate,
-                    // How many concurrent inbound video streams the model accepts (0 without video support).
-                    // The browser's source arbiter maps live sources onto this many streams.
-                    maxInboundVideoStreams: ResolveGeminiMaxInboundVideoStreams(profile),
-                    ...this.AvatarPactFor(config, profile),
-                })
-            ) as JSONObject,
+            // The browser passes the full config to live.connect; the token lock above makes its
+            // values authoritative even if a client tampers.
+            SessionConfig: this.SessionPactFor(params.Model, config),
         };
+    }
+
+    /**
+     * The minted session config, the private pact with the browser driver: a plain-JSON copy of the model and the config
+     * the browser passes to `live.connect`, plus the model's facts on this driver's endpoint (idle signal, tooling, inbound
+     * video limits, and the `avatar` block when the session renders one).
+     *
+     * @param model The model id.
+     * @param config The session's connect config, as {@link BuildConnectConfig} built it. It decides the avatar block.
+     * @param browserConfig The config the browser passes to `live.connect`: the full config here; a driver whose sessions
+     *   go through MJAPI's relay, which writes the setup, passes a smaller one.
+     */
+    protected SessionPactFor(model: string, config: LiveConnectConfig, browserConfig: LiveConnectConfig = config): JSONObject {
+        const profile = ResolveGeminiLiveProfile(model, this.Endpoint);
+        return JSON.parse(
+            JSON.stringify({
+                model,
+                config: browserConfig,
+                idleSignal: profile.IdleSignal,
+                supportsScheduling: profile.Tooling.SupportsScheduling,
+                supportsBlocking: profile.Tooling.SupportsBlockingExecution,
+                // Per-model video legality travels with the mint so the browser driver never
+                // has to infer it from the model id. The client cannot import this profile
+                // table (@memberjunction/ai-realtime-client does not depend on the provider
+                // package, by design), so the mint is the seam that carries it.
+                supportsInboundVideo: profile.SupportsInboundVideo,
+                maxInboundVideoRate: profile.MaxInboundVideoRate,
+                // How many concurrent inbound video streams the model accepts (0 without video support).
+                // The browser's source arbiter maps live sources onto this many streams.
+                maxInboundVideoStreams: ResolveGeminiMaxInboundVideoStreams(profile),
+                ...this.AvatarPactFor(config, profile),
+            })
+        ) as JSONObject;
     }
 
     /**

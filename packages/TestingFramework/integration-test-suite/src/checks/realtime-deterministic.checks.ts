@@ -1,5 +1,5 @@
 /**
- * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD9).
+ * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD14).
  *
  * Domain 10 deterministic legs — NO live sessions, NO sidecar, NO model calls:
  *  - realtime metadata integrity: agent channels (RD1), Realtime model → vendor DriverClass
@@ -14,21 +14,34 @@
  *  - the Predictive Studio deterministic legs NOT covered by predictive-studio.checks.ts (PS1–PS5):
  *    the ML Algorithms / Use Cases / Rankings guidance-matrix integrity (RD8) and the
  *    ProductionModelPromotionGate's deterministic refusal paths — non-UUID injection refusal,
- *    leakage refusal, sign-off-reason gate, and the lifecycle state machine (RD9).
+ *    leakage refusal, sign-off-reason gate, and the lifecycle state machine (RD9),
+ *  - live avatars (RD13): a tagged persona with a face on the session's vendor, bound to the voiced agent, becomes the
+ *    session's avatar request through the real session prep, on a run-scoped placeholder key (nothing is minted, no
+ *    network); its fixture rows are deleted afterwards,
+ *  - realtime driver wiring (RD14): every Active realtime vendor row's DriverClass resolves to a BaseRealtimeModel in the
+ *    ClassFactory, so a driver missing from the class-registration manifest is caught.
  *
  * Every fixture row is tagged '(mj-integration-test — safe to delete)' and deleted in the same
  * check's finally block, so the bundle needs no shared lifecycle.
  */
 import { BaseEntity, Metadata, ProviderType, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { BaseRealtimeModel, type AIAPIKey } from '@memberjunction/ai';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import type { MJAIAgentEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { RealtimeClientSessionService, type PrepareClientSessionInput, type RealtimeSessionParamsPrep } from '@memberjunction/ai-agents';
 import {
     MJAIAgentChannelSchema,
     MJAIAgentChannelEntity,
     MJAIAgentCoAgentEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentSessionEntity,
     MJAIAgentSessionBridgeEntity,
     MJAIBridgeProviderEntity,
+    MJAIModelPersonaEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJInteractionEntity,
     MJInteractionEventEntity,
     MJMeetingEntity,
@@ -102,6 +115,176 @@ async function buildProviderFixture(user: UserInfo): Promise<MJAIBridgeProviderE
     provider.Status = 'Disabled';
     provider.SupportedFeatures = JSON.stringify({ AudioIn: true, AudioOut: true });
     return provider;
+}
+
+// ── RD14: realtime drivers resolve ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Realtime drivers whose package this process does not load, with why. `mj test` loads the LITE server class
+ * manifest (`@memberjunction/server-bootstrap-lite`); MJAPI loads the full one. A driver listed here is checked by
+ * nothing in this tier, so the list stays as short as the lite manifest allows.
+ */
+const RD14_NOT_IN_THIS_PROCESS: ReadonlyMap<string, string> = new Map([
+    ['HuggingFaceRealtime', '@memberjunction/ai-huggingface is in the full server manifest (MJAPI), not the lite one'],
+]);
+
+// ── RD13: the avatar from the voiced agent's persona ───────────────────────────────────────────────
+
+/** The run-scoped key RD13 hands the session prep: a placeholder, since nothing is minted. */
+const RD13_PLACEHOLDER_KEY = 'mj-integration-test-placeholder-key';
+
+/** What RD13 needs from the deployment's metadata (nothing it creates). */
+interface AvatarFixtureAnchors {
+    CoAgent: MJAIAgentEntityExtended;
+    Target: MJAIAgentEntityExtended;
+    Model: MJAIModelEntityExtended;
+    VendorRow: MJAIModelVendorEntity;
+    VideoModalityID: string;
+    AudioModalityID: string;
+}
+
+/** The rows RD13 creates, in creation order; deleted in reverse. */
+interface AvatarFixture {
+    Rows: BaseEntity[];
+    AvatarID: string;
+    Voice: string;
+    PersonaName: string;
+}
+
+/** Whether a DriverClass resolves to a realtime driver in this process. */
+function resolvesRealtimeDriver(driverClass: string): boolean {
+    const sub: unknown = MJGlobal.Instance.ClassFactory.GetRegistration(BaseRealtimeModel, driverClass)?.SubClass;
+    return typeof sub === 'function' && (sub as { prototype: unknown }).prototype instanceof BaseRealtimeModel;
+}
+
+/** The Active realtime models, by name, each with its Active vendor rows that carry a DriverClass, highest priority first. */
+function realtimeVendorRows(engine: AIEngineBase): Array<{ Model: MJAIModelEntityExtended; Rows: MJAIModelVendorEntity[] }> {
+    return engine.Models
+        .filter((m) => m.IsActive && String(m.AIModelType ?? '').trim().toLowerCase() === 'realtime')
+        .sort((a, b) => a.Name.localeCompare(b.Name))
+        .map((model) => ({
+            Model: model,
+            Rows: engine.ModelVendors
+                .filter((mv) => UUIDsEqual(mv.ModelID, model.ID) && mv.Status === 'Active' && (mv.DriverClass ?? '').trim().length > 0)
+                .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0)),
+        }));
+}
+
+/** A realtime model and the vendor row the session will run on: the first with a driver this process can create. */
+function pickRealtimeVendor(engine: AIEngineBase): { Model: MJAIModelEntityExtended; VendorRow: MJAIModelVendorEntity } | undefined {
+    for (const { Model, Rows } of realtimeVendorRows(engine)) {
+        const row = Rows.find((r) => resolvesRealtimeDriver(r.DriverClass!));
+        if (row?.VendorID) {
+            return { Model, VendorRow: row };
+        }
+    }
+    return undefined;
+}
+
+/** The anchors RD13 needs, or why the deployment cannot supply them. */
+function findAvatarFixtureAnchors(engine: AIEngineBase): AvatarFixtureAnchors | string {
+    const realtimeType = engine.AgentTypes.find((t) => t.Name.trim().toLowerCase() === 'realtime');
+    const byName = (a: MJAIAgentEntityExtended, b: MJAIAgentEntityExtended): number => (a.Name ?? '').localeCompare(b.Name ?? '');
+    const active = engine.Agents.filter((a) => a.Status === 'Active').sort(byName);
+    const coAgent = realtimeType ? active.find((a) => UUIDsEqual(a.TypeID, realtimeType.ID)) : undefined;
+    const target = active.find((a) => !UUIDsEqual(a.TypeID, realtimeType?.ID ?? '') && !engine.AgentPersonas.some((ap) => UUIDsEqual(ap.AgentID, a.ID)));
+    const picked = pickRealtimeVendor(engine);
+    const video = engine.GetModalityByName('Video');
+    const audio = engine.GetModalityByName('Audio');
+    if (!coAgent || !target || !picked || !video || !audio) {
+        return !coAgent ? 'no Active agent of the Realtime type (the co-agent)'
+            : !target ? 'no Active non-realtime agent without personas to voice'
+            : !picked ? 'no Active realtime model with a vendor driver registered in this process'
+            : "no 'Video' or 'Audio' row in MJ: AI Modalities";
+    }
+    return { CoAgent: coAgent, Target: target, Model: picked.Model, VendorRow: picked.VendorRow, VideoModalityID: video.ID, AudioModalityID: audio.ID };
+}
+
+/** Saves one fixture row, recording it for cleanup first so a half-built fixture is still removed. */
+async function saveFixtureRow(fixture: AvatarFixture, row: BaseEntity, what: string): Promise<void> {
+    Assert(await row.Save(), `RD13: the fixture ${what} did not save: ${row.LatestResult?.CompleteMessage}`);
+    fixture.Rows.push(row);
+}
+
+/** A persona binding on the session's vendor: its voice (Audio) or its face (Video). */
+async function personaBinding(md: Metadata, ctx: { User: UserInfo }, personaID: string, anchors: AvatarFixtureAnchors, modalityID: string, apiName: string): Promise<MJAIPersonaVendorEntity> {
+    const binding = await md.GetEntityObject<MJAIPersonaVendorEntity>('MJ: AI Persona Vendors', ctx.User);
+    binding.NewRecord();
+    binding.PersonaID = personaID;
+    binding.VendorID = anchors.VendorRow.VendorID!;
+    binding.ModalityID = modalityID;
+    binding.APIName = apiName;
+    binding.Status = 'Active';
+    binding.Priority = 0;
+    if (modalityID === anchors.VideoModalityID) {
+        binding.VendorSettingsObject = { Avatar: { Kind: 'preset' } };
+    }
+    return binding;
+}
+
+/** Creates the tagged persona, its voice and face on the session's vendor, its model persona row, and the voiced agent's persona row. */
+async function createAvatarFixture(ctx: { User: UserInfo }, anchors: AvatarFixtureAnchors, fixture: AvatarFixture): Promise<void> {
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const persona = await md.GetEntityObject<MJAIPersonaEntity>('MJ: AI Personas', ctx.User);
+    persona.NewRecord();
+    persona.Name = fixture.PersonaName;
+    persona.Description = TAG;
+    persona.Source = 'Custom';
+    persona.IsActive = true;
+    await saveFixtureRow(fixture, persona, 'persona');
+    await saveFixtureRow(fixture, await personaBinding(md, ctx, persona.ID, anchors, anchors.AudioModalityID, fixture.Voice), 'voice binding');
+    await saveFixtureRow(fixture, await personaBinding(md, ctx, persona.ID, anchors, anchors.VideoModalityID, fixture.AvatarID), 'face binding');
+    const modelPersona = await md.GetEntityObject<MJAIModelPersonaEntity>('MJ: AI Model Personas', ctx.User);
+    modelPersona.NewRecord();
+    modelPersona.ModelID = anchors.Model.ID;
+    modelPersona.PersonaID = persona.ID;
+    modelPersona.Sequence = 9999;
+    modelPersona.IsSupported = true;
+    await saveFixtureRow(fixture, modelPersona, 'model persona row');
+    const agentPersona = await md.GetEntityObject<MJAIAgentPersonaEntity>('MJ: AI Agent Personas', ctx.User);
+    agentPersona.NewRecord();
+    agentPersona.AgentID = anchors.Target.ID;
+    agentPersona.PersonaID = persona.ID;
+    agentPersona.IsDefault = true;
+    agentPersona.IsAllowed = true;
+    agentPersona.Sequence = 1;
+    await saveFixtureRow(fixture, agentPersona, 'agent persona row');
+}
+
+/** Deletes the fixture rows, newest first (FK-safe); never throws. */
+async function deleteAvatarFixture(fixture: AvatarFixture): Promise<void> {
+    for (const row of [...fixture.Rows].reverse()) {
+        await row.Delete().catch(() => undefined);
+    }
+}
+
+/** The prep input: the voiced agent and its co-agent, the picked model, a run-scoped key for its driver only, and the video setting. */
+function avatarPrepInput(anchors: AvatarFixtureAnchors, videoEnabled: boolean): PrepareClientSessionInput {
+    const runKey: AIAPIKey = { driverClass: anchors.VendorRow.DriverClass!, apiKey: RD13_PLACEHOLDER_KEY };
+    return {
+        CoAgentID: anchors.CoAgent.ID,
+        TargetAgentID: anchors.Target.ID,
+        AgentSessionID: crypto.randomUUID(),
+        PreferredModelID: anchors.Model.ID,
+        APIKeys: [runKey],
+        CredentialScope: 'RuntimeOnly',
+        ConfigOverridesJson: JSON.stringify({ realtime: { video: { enabled: videoEnabled } } }),
+    };
+}
+
+/** Asserts the prep chose the picked model and vendor row on the run's key, and asked for the fixture's avatar and voice. */
+function assertAvatarResolved(prep: RealtimeSessionParamsPrep, anchors: AvatarFixtureAnchors, fixture: AvatarFixture): void {
+    Assert(prep.Success, `RD13: the session prep failed: ${prep.ErrorMessage}`);
+    Assert(UUIDsEqual(prep.Resolution?.ModelID ?? '', anchors.Model.ID), 'RD13: the prep must run the requested model');
+    Assert(UUIDsEqual(prep.Resolution?.ModelVendorID ?? '', anchors.VendorRow.ID), 'RD13: the prep must run on the vendor row the run key covers');
+    AssertEqual(prep.Resolution?.DriverClass, anchors.VendorRow.DriverClass, 'RD13: the driver is the run key\'s driver');
+    const avatar = prep.SessionParams?.Avatar;
+    Assert(!!avatar, 'RD13: the session must ask for an avatar: the voiced agent\'s persona has a face on this vendor');
+    AssertEqual(avatar!.AvatarID, fixture.AvatarID, 'RD13: the avatar is the face binding\'s APIName');
+    AssertEqual(avatar!.PersonaName, fixture.PersonaName, 'RD13: the avatar names its persona');
+    AssertEqual(avatar!.Source, 'persona', 'RD13: the avatar came from the voiced agent\'s persona');
+    AssertEqual(avatar!.Kind, 'preset', 'RD13: the binding\'s avatar settings reach the request');
+    AssertEqual(prep.SessionParams?.Config?.['voice'], fixture.Voice, 'RD13: the face\'s persona supplies the session\'s voice');
 }
 
 export const RealtimeDeterministicChecks: NamedCheck[] = [
@@ -863,6 +1046,50 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 }
             }
             console.log('      → room authorization rules (host, invited, declined, cancelled, ad-hoc) hold');
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD13',
+        Name: "RD13: a voiced agent's persona with a face on the session's vendor becomes the session's avatar request (run-scoped key, no network)",
+        Fn: async (ctx): Promise<void> => {
+            await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
+            const anchors = findAvatarFixtureAnchors(AIEngineBase.Instance);
+            if (typeof anchors === 'string') {
+                console.warn(`  ⚠ realtime-deterministic.RD13 SKIPPED — ${anchors}`);
+                return;
+            }
+            const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+            const fixture: AvatarFixture = { Rows: [], AvatarID: `mj-it-avatar-${stamp}`, Voice: `mj-it-voice-${stamp}`, PersonaName: `mj-it-rd13-persona-${stamp} ${TAG}` };
+            try {
+                await createAvatarFixture(ctx, anchors, fixture);
+                await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider); // the engine reads the fixture rows now, not after its debounce
+                const service = new RealtimeClientSessionService();
+                assertAvatarResolved(await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, true), ctx.User, ctx.Provider), anchors, fixture);
+                const off = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, false), ctx.User, ctx.Provider);
+                Assert(off.Success, `RD13: the prep with the video setting off failed: ${off.ErrorMessage}`);
+                AssertEqual(off.SessionParams?.Avatar, undefined, 'RD13: with the video setting off, the session asks for no avatar');
+            } finally {
+                await deleteAvatarFixture(fixture);
+                await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider).catch(() => undefined);
+            }
+            console.log(`      → '${anchors.Target.Name}' asks for its persona's face on ${anchors.VendorRow.DriverClass} (${anchors.Model.Name}); fixture removed`);
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD14',
+        Name: 'RD14: every Active realtime vendor DriverClass resolves to a BaseRealtimeModel in the ClassFactory (no missing registration)',
+        Fn: async (ctx): Promise<void> => {
+            await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
+            const rows = realtimeVendorRows(AIEngineBase.Instance).flatMap(({ Model, Rows }) => Rows.map((row) => ({ Model, Row: row })));
+            if (rows.length === 0) {
+                console.warn('  ⚠ realtime-deterministic.RD14 SKIPPED — no Active realtime model has an Active vendor row with a DriverClass');
+                return;
+            }
+            const checked = rows.filter(({ Row }) => !RD14_NOT_IN_THIS_PROCESS.has(Row.DriverClass!.trim()));
+            const unresolved = checked.filter(({ Row }) => !resolvesRealtimeDriver(Row.DriverClass!)).map(({ Model, Row }) => `${Model.Name} → ${Row.DriverClass}`);
+            AssertEqual(unresolved.length, 0, `RD14: ${unresolved.length} realtime vendor DriverClass(es) resolve to no BaseRealtimeModel registration: ${unresolved.join('; ')}`);
+            const skipped = rows.length - checked.length;
+            console.log(`      → ${checked.length} realtime vendor DriverClass(es) resolve${skipped > 0 ? `; ${skipped} not loaded in this process (see RD14_NOT_IN_THIS_PROCESS)` : ''}`);
         }
     }
 ];

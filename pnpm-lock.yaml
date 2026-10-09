@@ -2215,6 +2215,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.3
         version: link:../../../MJGlobal
+      google-auth-library:
+        specifier: ^10.9.1
+        version: 10.9.1
     devDependencies:
       ts-node-dev:
         specifier: ^2.0.0

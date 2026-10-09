@@ -1,0 +1,298 @@
+/**
+ * @fileoverview Gemini Live on Gemini Enterprise (Vertex AI): the server driver `GeminiEnterpriseRealtime`.
+ *
+ * Gemini Enterprise has no browser-safe credential for the Live API, so a client-direct session runs through MJAPI's
+ * realtime relay: the mint issues a relay session whose policy writes the setup and adds a fresh OAuth bearer to each
+ * upstream connection, and hands the browser the relay URL. A server-side (bridged) session opens the Live socket with
+ * `@google/genai` in Vertex mode. Everything else (the connect config, the legality rules, the avatar rule, the session
+ * translation) is `GeminiRealtime`'s, on the `'enterprise'` endpoint.
+ *
+ * @module @memberjunction/ai-vertex
+ * @author MemberJunction.com
+ */
+
+import { GoogleGenAI, Modality, type GoogleGenAIOptions, type LiveConnectConfig, type LiveConnectParameters } from '@google/genai';
+import { GoogleAuth, type GoogleAuthOptions } from 'google-auth-library';
+import {
+    BaseRealtimeModel,
+    BuildRealtimeRelayUrl,
+    RealtimeProxyRegistry,
+    ResolveRealtimeProxyBaseWsUrl,
+    type ClientRealtimeSessionConfig,
+    type IRealtimeSession,
+    type RealtimeSessionParams,
+} from '@memberjunction/ai';
+import {
+    BuildGeminiLiveSetup,
+    GeminiLiveRelayPolicy,
+    GeminiRealtime,
+    type GeminiConnectArgs,
+    type GeminiLiveEndpoint,
+    type GeminiLiveSession,
+} from '@memberjunction/ai-gemini';
+import { RegisterClass } from '@memberjunction/global';
+import {
+    AssertVertexKeyFileAllowed,
+    ParseVertexAICredentials,
+    VertexCredentialsError,
+    VertexKeySourceOf,
+    type VertexAICredentials,
+    type VertexKeySource,
+} from '../vertexCredentials';
+import { VertexGenAIOptions } from '../vertexAuthClient';
+import { VertexAccessTokenProvider, type VertexGoogleAuth } from '../vertexAccessToken';
+
+/** The ClassFactory key, which is also the `MJ: AI Model Vendors` DriverClass and the `AI_VENDOR_API_KEY__` suffix. */
+const DRIVER_CLASS = 'GeminiEnterpriseRealtime';
+
+/** The provider key on the minted session config; the browser driver registered under it opens the session. */
+const CLIENT_PROVIDER = 'gemini-enterprise';
+
+/** The Vertex AI API version of the Live socket, on the relay and on bridged sessions. */
+const VERTEX_LIVE_API_VERSION = 'v1';
+
+/** Where Google documents Gemini 3.8 Live: the `us` and `eu` multi-regions and `us-central1`. */
+const DOCUMENTED_LIVE_LOCATIONS: ReadonlySet<string> = new Set(['us', 'eu', 'us-central1']);
+
+/** Multi-region locations, served from `aiplatform.<location>.rep.googleapis.com` (as `@google/genai` maps them). */
+const MULTI_REGION_LOCATIONS: ReadonlySet<string> = new Set(['us', 'eu']);
+
+/** A Google Cloud location as it may appear in a host name. */
+const LOCATION_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** What is wrong with a key, in words that quote none of it. */
+const CREDENTIALS_PROBLEMS: Readonly<Record<VertexCredentialsError['Problem'], string>> = {
+    'invalid-json': 'is not valid JSON',
+    'invalid-service-account-json': 'has a serviceAccountJson that is not valid JSON',
+    'missing-project': 'names no "project" or "project_id"',
+    'key-file-not-allowed': `names a key file, which only the environment key (AI_VENDOR_API_KEY__${DRIVER_CLASS}) may do`,
+    'unreadable-key-file': 'names a key file that cannot be read',
+    'invalid-key-file': 'names a key file that is not a usable credential',
+};
+
+/** The part of a `@google/genai` client a bridged session uses. Tests pass a fake. */
+export interface GeminiEnterpriseLiveClient {
+    /** The SDK's Live module; only `connect` is used. */
+    live: { connect(params: LiveConnectParameters): Promise<GeminiLiveSession> }; // case-violation-ok-legacy-back-compat: mirrors @google/genai's client
+}
+
+/**
+ * Gemini Live on **Gemini Enterprise** (Vertex AI), with live avatars where the model renders them.
+ *
+ * Registered as `GeminiEnterpriseRealtime`. Its key (`AI_VENDOR_API_KEY__GeminiEnterpriseRealtime`, or the run's key) is
+ * a JSON string in one of the `VertexAICredentials` shapes: an inline service account (a `JWT` client), a key-file path
+ * (only in the environment key; any other key that names one is refused), or neither for Application Default
+ * Credentials. Tokens are minted with `google-auth-library` on each upstream open, never at the mint, and never leave
+ * MJAPI.
+ *
+ * - **Client-direct** ({@link CreateClientSession}): MJ writes the Live setup from the connect config, MJAPI's relay
+ *   sends it upstream with a bearer token and filters what the browser sends after it, and the browser gets the relay
+ *   URL (the ticket is in the path) and a pact with a minimal config: no system prompt and no tools.
+ * - **Bridged** ({@link StartSession}): `@google/genai` in Vertex mode, audio only.
+ */
+@RegisterClass(BaseRealtimeModel, 'GeminiEnterpriseRealtime')
+export class GeminiEnterpriseRealtime extends GeminiRealtime {
+    private readonly credentials: VertexAICredentials | null;
+    private readonly credentialsProblem: string | null;
+    /** Whether the key is the platform's environment key, the only key that may name a key file. */
+    private readonly keySource: VertexKeySource;
+    private tokenProvider: VertexAccessTokenProvider | null = null;
+    private vertexClient: Promise<GeminiEnterpriseLiveClient> | null = null;
+
+    /**
+     * @param credentialsJson The Vertex AI key. Never throws: a key that cannot be read fails the session it is used for,
+     *   so code that constructs a driver per key without opening a session (the voice list) keeps working.
+     */
+    constructor(credentialsJson: string) {
+        const read = GeminiEnterpriseRealtime.readCredentials(credentialsJson);
+        super(read.Credentials?.project ?? '');
+        this.credentials = read.Credentials;
+        this.credentialsProblem = read.Problem;
+        this.keySource = VertexKeySourceOf(DRIVER_CLASS, credentialsJson);
+    }
+
+    /** Gemini Enterprise: what a model renders (live avatars) is looked up on this endpoint. */
+    protected override get Endpoint(): GeminiLiveEndpoint {
+        return 'enterprise';
+    }
+
+    /**
+     * Mints a client-direct session through MJAPI's relay: a relay session whose policy opens every upstream connection
+     * with the setup written from the connect config and a fresh bearer token; the relay URL as `EphemeralToken`; and a
+     * pact whose config holds only what the browser needs to state (the response modalities, and the avatar's name when
+     * one is granted).
+     *
+     * @param params The session parameters (model, system prompt, tools, config bag, avatar request).
+     * @throws When the key cannot be read or names a location that is not a Google Cloud location.
+     */
+    public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+        const credentials = this.requireCredentials();
+        const location = GeminiEnterpriseRealtime.checkedLocation(credentials.location);
+        const config = this.BuildConnectConfig(params);
+        const upstreamUrl = GeminiEnterpriseRealtime.liveUrl(location);
+        const policy = new GeminiLiveRelayPolicy({
+            Setup: BuildGeminiLiveSetup({ Endpoint: 'enterprise', Model: params.Model, Project: credentials.project, Location: location }, config),
+            UpstreamHeaders: () => this.authorizationHeaders(upstreamUrl),
+        });
+        const ticket = RealtimeProxyRegistry.Instance.IssueRelaySession({
+            UpstreamUrl: upstreamUrl,
+            Policy: policy,
+            UserID: params.UserID,
+            DriverClass: DRIVER_CLASS,
+            MaxSessionSeconds: params.MaxSessionSeconds,
+        });
+        return {
+            Provider: CLIENT_PROVIDER,
+            Model: params.Model,
+            // The ticket is in the path: the web SDK appends its own path to this URL. A resume reuses it.
+            EphemeralToken: BuildRealtimeRelayUrl(ResolveRealtimeProxyBaseWsUrl(params), ticket.ID),
+            ExpiresAt: ticket.ExpiresAt,
+            SessionConfig: this.SessionPactFor(params.Model, config, GeminiEnterpriseRealtime.browserConnectConfig(config)),
+        };
+    }
+
+    /**
+     * Opens a server-side (bridged) session: audio only, through `@google/genai` in Vertex mode.
+     *
+     * @throws When the key cannot be read or names a location that is not a Google Cloud location.
+     */
+    public override async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
+        GeminiEnterpriseRealtime.checkedLocation(this.requireCredentials().location);
+        return super.StartSession(params);
+    }
+
+    /** Opens one Live connection of a bridged session on Gemini Enterprise. */
+    protected override async connectLiveSession(args: GeminiConnectArgs): Promise<GeminiLiveSession> {
+        const client = await this.ensureVertexClient();
+        return client.live.connect({
+            model: args.Model,
+            config: args.Config,
+            callbacks: {
+                onmessage: args.OnMessage,
+                onerror: args.OnError,
+                onclose: args.OnClose,
+            },
+        });
+    }
+
+    /** Gemini Enterprise has no ephemeral tokens; a client-direct session goes through the relay instead. */
+    protected override async mintAuthToken(): Promise<never> {
+        throw new Error(`${DRIVER_CLASS} mints no Gemini Developer API tokens; its client-direct sessions go through MJAPI's relay.`);
+    }
+
+    /**
+     * Creation seam for the `GoogleAuth` that mints this driver's tokens (tests return a fake).
+     *
+     * @param options The credentials' `google-auth-library` options, with the `cloud-platform` scope.
+     */
+    protected CreateGoogleAuth(options: GoogleAuthOptions): VertexGoogleAuth {
+        return new GoogleAuth(options);
+    }
+
+    /**
+     * Creation seam for the Vertex-mode `@google/genai` client of bridged sessions (tests return a fake).
+     *
+     * @param options The credentials' Vertex options, with API version `v1`.
+     */
+    protected CreateVertexClient(options: GoogleGenAIOptions): GeminiEnterpriseLiveClient {
+        return new GoogleGenAI(options);
+    }
+
+    /** The headers for one upstream open: a bearer token, minted (or taken from the library's cache) now. */
+    private async authorizationHeaders(url: string): Promise<Record<string, string>> {
+        if (!this.tokenProvider) {
+            this.tokenProvider = new VertexAccessTokenProvider(this.requireCredentials(), this.keySource, (options) => this.CreateGoogleAuth(options));
+        }
+        return this.tokenProvider.GetRequestHeaders(url);
+    }
+
+    /** The bridged sessions' client, built once; a build that fails (an unreadable key file) is retried next time. */
+    private ensureVertexClient(): Promise<GeminiEnterpriseLiveClient> {
+        if (!this.vertexClient) {
+            const building = this.buildVertexClient(this.requireCredentials());
+            this.vertexClient = building;
+            building.catch(() => {
+                if (this.vertexClient === building) {
+                    this.vertexClient = null;
+                }
+            });
+        }
+        return this.vertexClient;
+    }
+
+    private async buildVertexClient(credentials: VertexAICredentials): Promise<GeminiEnterpriseLiveClient> {
+        const options: GoogleGenAIOptions = { ...(await VertexGenAIOptions(credentials, this.keySource)), httpOptions: { apiVersion: VERTEX_LIVE_API_VERSION } };
+        return this.CreateVertexClient(options);
+    }
+
+    /**
+     * The credentials, or the reason they cannot be used: a key that cannot be read, or one that names a key file
+     * without being the environment key (refused here, at the mint or the start, never later in the relay).
+     */
+    private requireCredentials(): VertexAICredentials {
+        if (!this.credentials) {
+            throw new Error(`${DRIVER_CLASS} cannot open a session: its Vertex AI key ${this.credentialsProblem ?? 'is missing'}.`);
+        }
+        try {
+            AssertVertexKeyFileAllowed(this.credentials, this.keySource);
+        } catch (error: unknown) {
+            const problem = error instanceof VertexCredentialsError ? CREDENTIALS_PROBLEMS[error.Problem] : 'is not usable';
+            throw new Error(`${DRIVER_CLASS} cannot open a session: its Vertex AI key ${problem}. Use an inline service account or Application Default Credentials.`);
+        }
+        return this.credentials;
+    }
+
+    /** Reads the key without throwing; the problem is described without quoting the key. */
+    private static readCredentials(credentialsJson: string): { Credentials: VertexAICredentials | null; Problem: string | null } {
+        try {
+            return { Credentials: ParseVertexAICredentials(credentialsJson), Problem: null };
+        } catch (error: unknown) {
+            const problem = error instanceof VertexCredentialsError ? CREDENTIALS_PROBLEMS[error.Problem] : 'is not a JSON object';
+            return { Credentials: null, Problem: problem };
+        }
+    }
+
+    /**
+     * The location, checked: one that cannot be a host name part throws; one where Google does not document Gemini 3.8
+     * Live gets one warning, since Google refuses the session at setup if the model is not served there.
+     */
+    private static checkedLocation(location: string | undefined): string {
+        const value = location ?? '';
+        if (!LOCATION_PATTERN.test(value)) {
+            throw new Error(`${DRIVER_CLASS}: "${value}" is not a Google Cloud location (for example us-central1, us or eu).`);
+        }
+        if (!DOCUMENTED_LIVE_LOCATIONS.has(value)) {
+            console.warn(
+                `[${DRIVER_CLASS}] Location "${value}" is not one where Google documents Gemini 3.8 Live (us, eu, us-central1); ` +
+                    'Google refuses the session at setup if the model is not served there.'
+            );
+        }
+        return value;
+    }
+
+    /** The Vertex AI Live websocket for a location, on the host `@google/genai` picks for it. */
+    private static liveUrl(location: string): string {
+        const host =
+            location === 'global'
+                ? 'aiplatform.googleapis.com'
+                : MULTI_REGION_LOCATIONS.has(location)
+                  ? `aiplatform.${location}.rep.googleapis.com`
+                  : `${location}-aiplatform.googleapis.com`;
+        return `wss://${host}/ws/google.cloud.aiplatform.${VERTEX_LIVE_API_VERSION}.LlmBidiService/BidiGenerateContent`;
+    }
+
+    /**
+     * The config the browser passes to `live.connect`. The relay writes the setup and reads only two things from the
+     * browser's: a resumption handle and a request for audio only. So the browser states the response modalities (the
+     * web SDK would fill AUDIO, which the relay reads as a downgrade) and, for its log, the avatar's name; never the system
+     * prompt, the tools or anything else.
+     */
+    private static browserConnectConfig(config: LiveConnectConfig): LiveConnectConfig {
+        const browser: LiveConnectConfig = { responseModalities: config.responseModalities ?? [Modality.AUDIO] };
+        const avatarName = config.avatarConfig?.avatarName;
+        if (avatarName) {
+            browser.avatarConfig = { avatarName };
+        }
+        return browser;
+    }
+}

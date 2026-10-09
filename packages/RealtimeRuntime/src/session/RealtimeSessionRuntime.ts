@@ -28,6 +28,7 @@ import {
   type LocalMediaFailure,
   LoadAssemblyAIRealtimeClient,
   LoadElevenLabsRealtimeClient,
+  LoadGeminiEnterpriseRealtimeClient,
   LoadGeminiRealtimeClient,
   LoadHuggingFaceRealtimeClient,
   LoadOpenAIRealtimeClient,
@@ -96,6 +97,7 @@ export const REALTIME_RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent
 // and this service stays component-free (it must stay importable in plain-node tests).
 LoadOpenAIRealtimeClient();
 LoadGeminiRealtimeClient();
+LoadGeminiEnterpriseRealtimeClient();
 LoadElevenLabsRealtimeClient();
 LoadAssemblyAIRealtimeClient();
 LoadxAIRealtimeClient();

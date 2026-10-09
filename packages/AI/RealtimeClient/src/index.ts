@@ -7,6 +7,7 @@ export * from './audio/micCapture';
 export * from './media/index';
 export * from './drivers/openAIRealtimeClient';
 export * from './drivers/geminiRealtimeClient';
+export * from './drivers/geminiEnterpriseRealtimeClient';
 export * from './drivers/elevenLabsRealtimeClient';
 export * from './drivers/assemblyAIRealtimeClient';
 export * from './drivers/xaiRealtimeClient';
