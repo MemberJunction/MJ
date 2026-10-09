@@ -22,7 +22,7 @@
 -- spUpdateAIModelCost needs no change: it already merges with ISNULL(@PriceTypeID, [PriceTypeID]).
 -- =============================================================================
 
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateAIModelCost];
+DROP PROCEDURE [${flyway:defaultSchema}].[spCreateAIModelCost];
 GO
 
 
