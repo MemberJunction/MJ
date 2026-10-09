@@ -13,7 +13,7 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskGraphDispatcher } from '../TaskGraphDispatcher';
 import { BuildTaskGraphParentInputPayload } from '../TaskGraphService';
-import type { TaskActionRunner } from '../types';
+import type { TaskActionRunner, TaskUserResolver } from '../types';
 
 function mappedActionTask(inputMapping: Record<string, string>): MJTaskEntity {
     return {
@@ -43,11 +43,21 @@ type FakeDispatcher = {
     runTaskBody(task: MJTaskEntity, provider: IMetadataProvider, inputPayload: unknown, dependencyOutputs: Map<string, unknown>): Promise<{ Success: boolean }>;
 };
 
-/** Same minimal `this` as input-payload-shape.test.ts: only what the action path reads. */
+/**
+ * Same minimal `this` as input-payload-shape.test.ts: only what the action path reads — plus what
+ * resolving the step's user reads, since the graph records `user-1` as its submitter.
+ */
 function dispatcherWith(actionRunner: TaskActionRunner): FakeDispatcher {
-    const instance = Object.create(TaskGraphDispatcher.prototype) as unknown as { actionRunner: TaskActionRunner; contextUser: UserInfo };
+    const instance = Object.create(TaskGraphDispatcher.prototype) as unknown as {
+        actionRunner: TaskActionRunner;
+        contextUser: UserInfo;
+        stepUserIDByGraph: Map<string, string | null>;
+        userResolver: TaskUserResolver;
+    };
     instance.actionRunner = actionRunner;
     instance.contextUser = {} as UserInfo;
+    instance.stepUserIDByGraph = new Map();
+    instance.userResolver = { FindUserByID: async (id: string) => ({ ID: id, Name: 'Submitter', IsActive: true }) as UserInfo };
     return instance as unknown as FakeDispatcher;
 }
 

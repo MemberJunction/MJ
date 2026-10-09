@@ -14,7 +14,7 @@
  *  6. The type-prefix rewrite leaves tag bodies alone.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -72,6 +72,15 @@ beforeEach(() => {
     vi.clearAllMocks();
     (ManageMetadataBase as unknown as { GeneratedJSONValidators: unknown[] }).GeneratedJSONValidators = [];
 });
+
+/**
+ * Lets the worker's event loop turn between tests. Almost every test here is synchronous (the real
+ * TypeScript compiler, generated-code evaluation), and vitest chains synchronous tests in microtasks,
+ * so the worker never reads the replies to the progress updates it keeps sending. On a loaded CI
+ * runner the whole file passes 60s that way, and vitest reports "Timeout calling onTaskUpdate" as an
+ * unhandled error, failing the run although every test passed.
+ */
+afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
 
 /* ------------------------------------------------------------------------------------------------
  * helpers: run emitted TypeScript for real

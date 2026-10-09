@@ -23,6 +23,27 @@ export type ProviderFactory = {
 };
 
 /**
+ * Finds the person a graph's steps act for.
+ *
+ * A graph's prompt, action, agent and decision steps run with the permissions of whoever submitted
+ * it — the dispatcher itself runs as the platform's service account, and handing that account to
+ * every step let any graph do anything that account can. The submitter is recorded on the graph's
+ * parent row as an ID, so the dispatcher needs a way back to a `UserInfo` with its roles.
+ *
+ * Injected for the same reason the provider factory is: the process-wide user cache lives in a
+ * server-side package this one does not depend on. MJServer supplies one backed by `UserCache`.
+ */
+export type TaskUserResolver = {
+    /**
+     * The user with this ID, roles populated, or undefined when there is no such user.
+     *
+     * MUST NOT throw — a failed lookup is undefined. The dispatcher then fails the step rather than
+     * running it as anyone else.
+     */
+    FindUserByID(userID: string): Promise<UserInfo | undefined>;
+};
+
+/**
  * How a runner reports progress inside one task body.
  *
  * A plain callback rather than an observer object because a runner should not need to know frames
@@ -97,8 +118,13 @@ export type TaskPromptRunParams = {
     InputPayload: unknown;
     /** Outputs of this node's satisfied prerequisites, in the same shape agent nodes receive. */
     DependencyOutputs: Map<string, unknown>;
-    /** Template parameters declared on the node's configuration. */
-    TemplateParameters?: Record<string, string>;
+    /**
+     * Template parameters: those declared on the node's configuration, plus — for a loop body — the
+     * loop's item and index bindings. Values are passed as they are, objects included; the runner
+     * prepares structured values for the template rather than receiving them as JSON text, which a
+     * template cannot read a field of.
+     */
+    TemplateParameters?: Record<string, unknown>;
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */

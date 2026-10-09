@@ -1,6 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
 import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, ResolveLegacyFormat } from '../../../lib/format-compat.js';
+import { CloseAIProvider, EndAICommand, RouteConsoleToStderr } from '../../../lib/ai-command-lifecycle.js';
 
 export default class AgentsList extends Command {
   static description = 'List available AI agents';
@@ -24,7 +25,9 @@ export default class AgentsList extends Command {
   };
 
   async run(): Promise<void> {
-    const { AgentService, OutputFormatter } = await import('@memberjunction/ai-cli');
+    // stdout is this command's result; framework logging goes to stderr so --format json parses.
+    RouteConsoleToStderr();
+    const { AgentService, OutputFormatter, CloseMJProvider } = await import('@memberjunction/ai-cli');
 
     const { flags, metadata } = await this.parse(AgentsList);
     const spinner = ora();
@@ -43,12 +46,13 @@ export default class AgentsList extends Command {
         Map: AI_FORMAT_MAP,
       }));
       this.log(formatter.formatAgentList(agents));
-      
-      // Force exit after completion
-      process.exit(0);
     } catch (error) {
       spinner.fail('Failed to load agents');
+      await CloseAIProvider(CloseMJProvider);
       this.error(error as Error);
     }
+
+    // Close the pool instead of process.exit(): exiting at once could cut a piped list short.
+    await EndAICommand(CloseMJProvider, 0);
   }
 }

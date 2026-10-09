@@ -16,7 +16,7 @@
  */
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, ToPromptTemplateValue } from '@memberjunction/ai-core-plus';
 import { LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskPromptRunner, TaskPromptRunParams, TaskPromptRunResult } from '@memberjunction/task-graph';
@@ -71,6 +71,16 @@ export class TaskGraphPromptRunner implements TaskPromptRunner {
      * `flowContext` carries what the step knows about its own position: what its prerequisites
      * produced. Without it a prompt is reasoning about the payload alone and cannot refer to the step
      * immediately before it.
+     *
+     * **Every structured value goes through `ToPromptTemplateValue`**, which is what the in-run Flow
+     * executor hands its templates too. It is an object a template can read by field, but it prints
+     * as JSON when written whole. Both halves have failed silently here before:
+     * - Handed a plain object, `{{ _CURRENT_PAYLOAD }}` rendered "[object Object]". That kept the
+     *   Content Pipeline reviewer rejecting a draft it could not read, on every iteration, forever.
+     * - Handed JSON text, `{{ _CURRENT_PAYLOAD.assessment }}` rendered empty (a string has no
+     *   `.assessment`) and `| dump` double-encoded. A draft step was asked to write from an empty
+     *   assessment, and did.
+     * In both cases the prompt run succeeds and the response is well-formed: it is about nothing.
      */
     private buildData(params: TaskPromptRunParams): Record<string, unknown> {
         const payload = params.InputPayload && typeof params.InputPayload === 'object'
@@ -81,16 +91,23 @@ export class TaskGraphPromptRunner implements TaskPromptRunner {
         for (const [taskID, output] of params.DependencyOutputs) dependencyOutputs[taskID] = output;
 
         return {
-            ...(params.TemplateParameters ?? {}),
-            // JSON, not the object. A template writes `{{ _CURRENT_PAYLOAD }}` and expects to SEE
-            // the payload; handing the renderer an object yields "[object Object]", and the model
-            // then answers about a value it was never shown. That failure is invisible from the
-            // outside — the prompt run succeeds, the response is well-formed, and it is about
-            // nothing. It is what kept the Content Pipeline reviewer rejecting a draft it could not
-            // read, on every iteration, forever.
-            [CURRENT_PAYLOAD_PLACEHOLDER]: JSON.stringify(payload, null, 2),
-            flowContext: JSON.stringify({ dependencyOutputs }, null, 2),
+            ...this.templateParameters(params.TemplateParameters),
+            [CURRENT_PAYLOAD_PLACEHOLDER]: ToPromptTemplateValue(payload),
+            flowContext: ToPromptTemplateValue({ dependencyOutputs }),
         };
+    }
+
+    /**
+     * The node's template parameters, structured values prepared like the payload. A loop body's
+     * item binding is usually an object; this is what makes `{{ item.name }}` and `{{ item }}` both
+     * render.
+     */
+    private templateParameters(parameters: TaskPromptRunParams['TemplateParameters']): Record<string, unknown> {
+        const prepared: Record<string, unknown> = {};
+        for (const [name, value] of Object.entries(parameters ?? {})) {
+            prepared[name] = ToPromptTemplateValue(value);
+        }
+        return prepared;
     }
 
     /**

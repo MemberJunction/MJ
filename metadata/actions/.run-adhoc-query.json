@@ -75,7 +75,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Format for data output: 'csv' (comma-separated values - more token efficient) or 'json' (structured objects). Default: csv. CSV format significantly reduces token usage by avoiding field repetition in every row.",
+            "Description": "Format of the data shown in the message: 'csv' (comma-separated values - more token efficient) or 'json' (structured objects). Default: csv. CSV format significantly reduces token usage by avoiding field repetition in every row. The Results output parameter is always an array of row objects, whatever this is set to.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -131,7 +131,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Maximum length for column values in characters. Values longer than this will be trimmed with '...' suffix to save context. Use when querying tables with verbose text/JSON fields (e.g., PromptText, Description). Example: 50 = trim to 50 characters. Default: 50. Set to 0 if you want FULL column results. Applies to both CSV and JSON formats.",
+            "Description": "Maximum length for column values in characters. Values longer than this will be trimmed with '...' suffix to save context. Use when querying tables with verbose text/JSON fields (e.g., PromptText, Description). Example: 50 = trim to 50 characters. Default: 50. Set to 0 if you want FULL column results. Applies to both CSV and JSON formats. It trims only the data shown in the message; the Results output parameter always carries full values.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -149,7 +149,7 @@
             "Type": "Output",
             "ValueType": "Other",
             "IsArray": true,
-            "Description": "Array of result rows. Each row is an object with column names as keys and values as data.",
+            "Description": "The rows the query returned: an array of objects keyed by column name, with full, untrimmed values (DataFormat and ColumnMaxLength shape only the copy in the message). Set when ReturnType includes data. Map it into the payload to use the rows downstream, e.g. {\"Results\": \"rows\"}.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -221,7 +221,7 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Boolean indicating whether results were truncated due to MaxRows limit.",
+            "Description": "True when the number of rows returned reached MaxRows, so the query probably matched more rows than were returned. The query is not counted separately, so a result of exactly MaxRows rows also reports true.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -257,7 +257,7 @@
             "Type": "Output",
             "ValueType": "Other",
             "IsArray": false,
-            "Description": "LLM-generated analysis of the query results based on the AnalysisRequest parameter. Only present when AnalysisRequest is provided and ReturnType includes 'analysis'.",
+            "Description": "LLM-generated analysis of the query results based on the AnalysisRequest parameter. Only present when AnalysisRequest is provided, ReturnType includes 'analysis', and the analysis was produced.",
             "IsRequired": false
           },
           "primaryKey": {

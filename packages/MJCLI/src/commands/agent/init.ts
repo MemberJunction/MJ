@@ -1,12 +1,35 @@
 import { Args, Command, Flags } from '@oclif/core';
-import { existsSync, mkdirSync, cpSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, cpSync, copyFileSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 import chalk from 'chalk';
+import dotenv from 'dotenv';
 import ora from 'ora-classic';
+import {
+  ChooseFreePort,
+  ComposeProjectName,
+  DEFAULT_PORTS,
+  FormatGigabytes,
+  GenerateEncryptionKey,
+  IsValidEncryptionKey,
+  LEGACY_PLACEHOLDER_ENCRYPTION_KEY,
+  MIN_DOCKER_MEMORY_BYTES,
+  MIN_FREE_DISK_BYTES,
+  ReadDockerMemoryBytes,
+  ReadFreeDiskBytes,
+} from '../../lib/agent-init-preflight.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** AI provider keys the workspace's .env offers; one is enough. */
+const PROVIDER_KEY_NAMES = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GROQ_API_KEY', 'MISTRAL_API_KEY'];
+
+/** A setting the user still has to supply, and what happens without it. */
+interface MissingSetting {
+  Setting: string;
+  Consequence: string;
+}
 
 export default class AgentInit extends Command {
   static description =
@@ -18,7 +41,7 @@ export default class AgentInit extends Command {
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> ./my-agent-workspace',
     '<%= config.bin %> <%= command.id %> --no-start',
-    '<%= config.bin %> <%= command.id %> --app https://github.com/BlueCypress/bc-sampledata',
+    '<%= config.bin %> <%= command.id %> --app https://github.com/your-org/your-sample-data',
   ];
 
   static args = {
@@ -87,30 +110,14 @@ export default class AgentInit extends Command {
       return;
     }
 
-    // 5. Scaffold files
+    // 5. Scaffold files and settle .env
+    const envPath = path.join(targetDir, '.env');
     const spinner = ora('Scaffolding agent builder workspace...').start();
     try {
       cpSync(templateDir, targetDir, { recursive: true });
-
-      // Create .env from .env.example if missing
-      const envExamplePath = path.join(targetDir, '.env.example');
-      const envPath = path.join(targetDir, '.env');
-      if (existsSync(envExamplePath) && !existsSync(envPath)) {
-        copyFileSync(envExamplePath, envPath);
-      }
-
-      if (existsSync(envPath)) {
-        // Pin the workspace to this CLI's own release. docker-compose.yml requires MJ_VERSION: the
-        // container installs this exact CLI and passes it to `mj install --tag`, so the stack cannot
-        // drift onto whatever npm's `latest` or the newest GitHub release happens to be.
-        this.upsertEnvValue(envPath, 'MJ_VERSION', this.cliVersion());
-
-        // If a custom app URL was supplied, point the workspace at it
-        if (flags.app) {
-          this.upsertEnvValue(envPath, 'OPEN_APP_INSTALL_URL', flags.app);
-        }
-      }
-
+      this.makeScriptsExecutable(targetDir);
+      const envCreated = this.createEnvFromExample(targetDir);
+      await this.configureEnv(envPath, targetDir, envCreated, flags.app);
       spinner.succeed(chalk.green('Workspace scaffolded successfully!'));
     } catch (err: unknown) {
       spinner.fail(chalk.red('Failed to scaffold workspace.'));
@@ -118,8 +125,10 @@ export default class AgentInit extends Command {
       this.error(errorMsg);
     }
 
-    // 6. Start Docker and bootstrap if requested and available
-    if (flags.start && dockerAvailable) {
+    // 6. Check what the first start needs, then start it if it can succeed
+    const resourcesOk = flags['skip-docker-check'] || !dockerAvailable || this.reportResources(targetDir);
+    this.reportMissingSettings(envPath);
+    if (flags.start && dockerAvailable && resourcesOk) {
       this.startEnvironment(targetDir);
     } else {
       if (!dockerAvailable && !flags['skip-docker-check']) {
@@ -146,6 +155,88 @@ export default class AgentInit extends Command {
   }
 
   /**
+   * The helper scripts are run as `./scripts/<name>.sh`. A package tarball does not reliably keep
+   * the execute bit, and without it every one of them fails with "permission denied".
+   */
+  private makeScriptsExecutable(targetDir: string): void {
+    const scriptsDir = path.join(targetDir, 'scripts');
+    if (!existsSync(scriptsDir)) {
+      return;
+    }
+    for (const name of readdirSync(scriptsDir)) {
+      if (name.endsWith('.sh') || name.endsWith('.mjs')) {
+        chmodSync(path.join(scriptsDir, name), 0o755);
+      }
+    }
+  }
+
+  /** Create .env from .env.example when there is none yet. Returns whether it was created. */
+  private createEnvFromExample(targetDir: string): boolean {
+    const envExamplePath = path.join(targetDir, '.env.example');
+    const envPath = path.join(targetDir, '.env');
+    if (existsSync(envExamplePath) && !existsSync(envPath)) {
+      copyFileSync(envExamplePath, envPath);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Fill in what the workspace needs that the user should not have to: the release to install,
+   * a unique project name, a valid encryption key, and (for a new .env) free ports. Values the
+   * user already set are kept, except that MJ_VERSION always follows this CLI.
+   */
+  private async configureEnv(envPath: string, targetDir: string, envCreated: boolean, appUrl?: string): Promise<void> {
+    if (!existsSync(envPath)) {
+      return;
+    }
+    // Pin the workspace to this CLI's own release. docker-compose.yml requires MJ_VERSION: the
+    // container installs this exact CLI and passes it to `mj install --tag`, so the stack cannot
+    // drift onto whatever npm's `latest` or the newest GitHub release happens to be.
+    this.upsertEnvValue(envPath, 'MJ_VERSION', this.cliVersion());
+    if (appUrl) {
+      this.upsertEnvValue(envPath, 'OPEN_APP_INSTALL_URL', appUrl);
+    }
+    const current = dotenv.parse(readFileSync(envPath, 'utf8'));
+    if (!current.COMPOSE_PROJECT_NAME) {
+      this.upsertEnvValue(envPath, 'COMPOSE_PROJECT_NAME', ComposeProjectName(targetDir));
+    }
+    this.ensureEncryptionKey(envPath, current.MJ_BASE_ENCRYPTION_KEY ?? '');
+    if (envCreated) {
+      await this.chooseFreePorts(envPath);
+    }
+  }
+
+  /** Generate a key when there is none (or the old placeholder that never worked); warn about an invalid one the user set. */
+  private ensureEncryptionKey(envPath: string, key: string): void {
+    if (!key || key === LEGACY_PLACEHOLDER_ENCRYPTION_KEY) {
+      this.upsertEnvValue(envPath, 'MJ_BASE_ENCRYPTION_KEY', GenerateEncryptionKey());
+    } else if (!IsValidEncryptionKey(key)) {
+      this.warn(
+        'MJ_BASE_ENCRYPTION_KEY in .env is not a valid key (it must be 32 random bytes, base64-encoded), so setup will stop until it is fixed. ' +
+          'Delete the line to have one generated.'
+      );
+    }
+  }
+
+  /** Move any default port that is already in use (a local SQL Server on 1433 is common) to a free one. */
+  private async chooseFreePorts(envPath: string): Promise<void> {
+    const claimed = new Set<number>();
+    for (const { Key, Port } of DEFAULT_PORTS) {
+      const chosen = await ChooseFreePort(Port, claimed);
+      if (chosen === undefined) {
+        this.warn(`No free port found near ${Port} for ${Key}; set ${Key} in .env before starting.`);
+        continue;
+      }
+      claimed.add(chosen);
+      if (chosen !== Port) {
+        this.upsertEnvValue(envPath, Key, String(chosen));
+        this.log(chalk.yellow(`Port ${Port} is in use on this machine, so ${Key} is set to ${chosen}.`));
+      }
+    }
+  }
+
+  /**
    * Set `key=value` in a dotenv file: replace the active assignment if there is one, otherwise
    * append it. Commented-out example lines are left untouched.
    */
@@ -157,6 +248,62 @@ export default class AgentInit extends Command {
       ? content.replace(activeLine, () => assignment)
       : `${content}${content.endsWith('\n') ? '' : '\n'}${assignment}\n`;
     writeFileSync(envPath, updated, 'utf8');
+  }
+
+  /**
+   * Docker memory and free disk. Below the memory floor the first install is killed for lack of
+   * memory part way through, so the stack is not started; returns false in that case.
+   */
+  private reportResources(targetDir: string): boolean {
+    const freeDisk = ReadFreeDiskBytes(targetDir);
+    if (freeDisk !== undefined && freeDisk < MIN_FREE_DISK_BYTES) {
+      this.log(
+        chalk.yellow(
+          `⚠️  Only ${FormatGigabytes(freeDisk, 1000)} of disk is free here. One workspace needs about 20 GB ` +
+            '(images, database and build cache). Free up space before starting if you can.'
+        )
+      );
+    }
+    const memory = ReadDockerMemoryBytes();
+    if (memory === undefined || memory >= MIN_DOCKER_MEMORY_BYTES) {
+      return true;
+    }
+    this.log(chalk.yellow(`\n⚠️  Docker has ${FormatGigabytes(memory)} of memory. The first install needs about 12 GB and fails with less.`));
+    this.log('   Docker Desktop: Settings → Resources → Memory → 12 GB or more → Apply & restart.');
+    this.log('   Then start the workspace with: ' + chalk.cyan('docker compose up -d'));
+    return false;
+  }
+
+  /** One checklist of what the user still has to supply, asked for up front rather than mid-install. */
+  private reportMissingSettings(envPath: string): void {
+    if (!existsSync(envPath)) {
+      return;
+    }
+    const missing = this.findMissingSettings(dotenv.parse(readFileSync(envPath, 'utf8')));
+    if (missing.length === 0) {
+      return;
+    }
+    this.log(chalk.bold.white('\n📝 Still needed in .env (setup can start without them):'));
+    for (const item of missing) {
+      this.log(`   • ${chalk.cyan(item.Setting)}: ${item.Consequence}`);
+    }
+    this.log(chalk.gray('   .env is a hidden file. Open it with: open -e .env (macOS), notepad .env (Windows), or xdg-open .env (Linux).'));
+  }
+
+  private findMissingSettings(env: Record<string, string>): MissingSetting[] {
+    const missing: MissingSetting[] = [];
+    if (!PROVIDER_KEY_NAMES.some((name) => env[name])) {
+      missing.push({ Setting: 'an AI provider key (e.g. ANTHROPIC_API_KEY)', Consequence: 'agents cannot call a model until one is set.' });
+    }
+    if (!env.OWNER_EMAIL) {
+      missing.push({ Setting: 'OWNER_EMAIL', Consequence: 'the email you sign in with; without it you cannot run Flow agents from the web app.' });
+    }
+    const hasEntra = env.ENTRA_TENANT_ID && env.ENTRA_CLIENT_ID;
+    const hasAuth0 = env.AUTH0_DOMAIN && env.AUTH0_CLIENT_ID;
+    if (!hasEntra && !hasAuth0) {
+      missing.push({ Setting: 'ENTRA_* or AUTH0_* sign-in settings', Consequence: 'the Explorer web app cannot sign you in; your IT or platform team usually supplies them.' });
+    }
+    return missing;
   }
 
   private resolveTemplateDir(): string | null {
@@ -216,36 +363,23 @@ export default class AgentInit extends Command {
     return false;
   }
 
+  /** Start the stack with Docker's own progress visible: the first start downloads and builds several GB. */
   private startEnvironment(targetDir: string): void {
-    const spinner = ora('Starting MemberJunction container stack (docker compose up -d)...').start();
+    this.log(chalk.bold.white('\n🐳 Starting the workspace (docker compose up -d).'));
+    this.log('   The first start downloads about 8 GB and builds the MemberJunction image: usually 10 to 20 minutes.');
     try {
-      execSync('docker compose up -d', { cwd: targetDir, stdio: 'pipe' });
-      spinner.succeed(chalk.green('Containers started!'));
+      execSync('docker compose up -d', { cwd: targetDir, stdio: 'inherit' });
     } catch (err: unknown) {
-      spinner.fail(chalk.red('Failed to start containers.'));
       const errorMsg = err instanceof Error ? err.message : String(err);
-      this.error(errorMsg);
+      this.error(chalk.red('Failed to start containers: ') + errorMsg);
     }
 
-    let apiPort = '4000';
-    let dbPort = '1433';
-    let explorerPort = '4202';
-    const envPath = path.join(targetDir, '.env');
-    if (existsSync(envPath)) {
-      const content = readFileSync(envPath, 'utf8');
-      const apiMatch = content.match(/^API_PORT=(\d+)/m);
-      if (apiMatch) apiPort = apiMatch[1];
-      const dbMatch = content.match(/^DB_PORT=(\d+)/m);
-      if (dbMatch) dbPort = dbMatch[1];
-      const explorerMatch = content.match(/^EXPLORER_PORT=(\d+)/m);
-      if (explorerMatch) explorerPort = explorerMatch[1];
-    }
-
-    this.log(chalk.bold.cyan('\n🎉 Your MemberJunction local instance is running!'));
-    this.log(`   API Endpoint:    ${chalk.green(`http://localhost:${apiPort}`)}`);
-    this.log(`   Explorer UI:     ${chalk.green(`http://localhost:${explorerPort}`)}`);
-    this.log(`   Database:        ${chalk.green(`localhost:${dbPort}`)} (DB: MemberJunction)`);
-    this.log(`   Healthcheck:     ${chalk.gray(`http://localhost:${apiPort}/healthcheck`)}\n`);
+    const env = existsSync(path.join(targetDir, '.env')) ? dotenv.parse(readFileSync(path.join(targetDir, '.env'), 'utf8')) : {};
+    this.log(chalk.bold.cyan('\n🎉 Containers started. MemberJunction is now installing itself in the background.'));
+    this.log('   The first install takes 20 to 60 minutes (longer on Apple Silicon, where the image runs emulated).');
+    this.log(`   Progress, with the current step and how long it usually takes: ${chalk.yellow('.mj-status.json')} in this folder.`);
+    this.log(`   Live log: ${chalk.cyan('docker compose logs -f mj')}`);
+    this.log(`   When it says "ready": Explorer at ${chalk.green(`http://localhost:${env.EXPLORER_PORT || '4202'}`)}, API at ${chalk.green(`http://localhost:${env.API_PORT || '4000'}`)}`);
     this.printCodingAgentInstructions();
   }
 
@@ -266,7 +400,7 @@ export default class AgentInit extends Command {
   private printNextSteps(targetDir: string, dockerAvailable: boolean): void {
     this.log(chalk.bold.white('\n📋 Next Steps:'));
     this.log(`1. Navigate to your workspace:\n   ${chalk.cyan(`cd ${path.relative(process.cwd(), targetDir) || '.'}`)}`);
-    this.log(`2. Add your LLM API keys in ${chalk.yellow('.env')}`);
+    this.log(`2. Fill in the settings listed above in ${chalk.yellow('.env')}`);
     if (dockerAvailable) {
       this.log(`3. Start your local environment:\n   ${chalk.cyan('docker compose up -d')}`);
     } else {

@@ -213,6 +213,7 @@ import {
     TaskAgentRunner,
     TaskPromptRunner,
     TaskGraphDispatcherConfig,
+    type TaskUserResolver,
     type TaskDecisionRunner,
     type TaskDecisionRunResult,
     type TaskContinuationDeliverer,
@@ -277,20 +278,11 @@ type GraphContext = {
     Invocation: { data?: unknown; context?: unknown };
 };
 
-/**
- * Renders a loop's bindings as template values.
- *
- * Template parameters are strings; an item is usually an object. Objects are JSON-encoded rather
- * than dropped, because `{{ field }}` printing `[object Object]` — or nothing at all — is exactly
- * the silent failure this exists to prevent.
- */
-function stringifyBindings(bindings: Record<string, unknown>): Record<string, string> {
-    const out: Record<string, string> = {};
-    for (const [key, value] of Object.entries(bindings)) {
-        out[key] = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-    }
-    return out;
-}
+/** Whom one step acts for — or why it may not run, when that person cannot be established. */
+type StepUser = { User: UserInfo } | { ErrorMessage: string };
+
+/** The submitter a graph's parent row records: an ID, null when it records none, or unreadable. */
+type GraphRequester = { Readable: true; UserID: string | null } | { Readable: false };
 
 /**
  * How much of a loop's per-pass payloads may be kept, and what happens when that runs out.
@@ -498,6 +490,17 @@ export class TaskGraphDispatcher implements IShutdownable {
     /** Graph → owning user, from the parent's durable metadata. Ownership never changes, so this never goes stale. */
     private readonly ownerByParentID = new Map<string, string | null>();
 
+    /**
+     * Graph → the user ID its steps act for, or null when they act as this dispatcher (a graph the
+     * dispatcher's own identity submitted, or one persisted before submitters were recorded).
+     *
+     * Kept apart from {@link ownerByParentID}, which is filled only when someone is observing and is
+     * never purged. Only the ID is cached — the parent read is the expensive part. The `UserInfo` is
+     * looked up on every step, so deactivating the person or changing their roles takes effect at the
+     * graph's next step rather than when the process restarts. Dropped when the graph settles.
+     */
+    private readonly stepUserIDByGraph = new Map<string, string | null>();
+
     /** Monotonic pass counter for `PassCompleted` frames, so a viewer can order and gap-detect ticks. */
     private passCounter = 0;
 
@@ -565,6 +568,13 @@ export class TaskGraphDispatcher implements IShutdownable {
          * decide differently, or to test without a model.
          */
         private readonly decisionRunner: TaskDecisionRunner = new AIDecisionTaskRunner(),
+        /**
+         * Turns a graph's recorded submitter back into a user, so its steps run with that person's
+         * permissions. Absent means this host can run only graphs its own identity submitted (or that
+         * record no submitter): a step that must act for someone else fails rather than running as
+         * the dispatcher.
+         */
+        private readonly userResolver?: TaskUserResolver,
     ) {
         this.config = { ...DEFAULT_DISPATCHER_CONFIG, ...config };
         this.claims = new TaskClaimStore(this.config.InstanceID, this.config.ClaimTTLSeconds);
@@ -1832,6 +1842,91 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * The user one step runs as: the person who submitted its graph.
+     *
+     * The dispatcher runs as the platform's service account, and it used to hand that account to
+     * every runner — so a graph could do anything the service account can, whoever asked for it.
+     * Steps now act for the submitter recorded on the graph's parent row, with that person's
+     * permissions:
+     *
+     * - **No parent, or no submitter recorded** (a graph persisted before submitters were stamped):
+     *   the dispatcher's own identity, as before.
+     * - **Submitted by the dispatcher's own identity** (a schedule or other platform work running as
+     *   the service account): that same identity.
+     * - **Submitted by anyone else**: that user, looked up fresh. When they cannot be found, are
+     *   inactive, or the parent row cannot be read, the step FAILS. It never falls back to the
+     *   dispatcher's identity — running someone else's step as the service account is the
+     *   escalation this exists to remove. A failed step can be retried once the cause is fixed.
+     */
+    private async resolveStepUser(provider: IMetadataProvider, task: MJTaskEntity): Promise<StepUser> {
+        if (!task.ParentID) return { User: this.contextUser };
+
+        const requester = await this.graphRequesterID(provider, task.ParentID);
+        if (!requester.Readable) {
+            return {
+                ErrorMessage:
+                    `"${task.Name}" was not run: its workflow could not be read, so the person it runs for ` +
+                    `is unknown. Retry the step.`,
+            };
+        }
+        if (requester.UserID === null || UUIDsEqual(requester.UserID, this.contextUser?.ID)) {
+            return { User: this.contextUser };
+        }
+        return this.lookUpRequester(requester.UserID, task.Name);
+    }
+
+    /**
+     * The submitter recorded on a graph's parent row, cached per graph (see {@link stepUserIDByGraph}).
+     * A failed read is not cached — it is not an answer, and the graph's next step asks again.
+     */
+    private async graphRequesterID(provider: IMetadataProvider, parentTaskID: string): Promise<GraphRequester> {
+        const cached = this.stepUserIDByGraph.get(parentTaskID);
+        if (cached !== undefined) return { Readable: true, UserID: cached };
+
+        try {
+            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            if (!(await parent.Load(parentTaskID))) {
+                LogError(
+                    `[TaskGraphDispatcher] Could not load graph ${parentTaskID} to learn who submitted it: ` +
+                    `${parent.LatestResult?.CompleteMessage ?? 'not found'}`,
+                );
+                return { Readable: false };
+            }
+            const recorded = this.readParentMetadata(parent).submittedByUserID;
+            // Only an absent value means "no submitter". Anything else — a hand-edited number, an
+            // empty string — is kept as an ID nobody matches, so the step fails instead of running
+            // as the dispatcher.
+            const userID = recorded == null ? null : String(recorded);
+            this.stepUserIDByGraph.set(parentTaskID, userID);
+            return { Readable: true, UserID: userID };
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not read who submitted graph ${parentTaskID}: ${e instanceof Error ? e.message : String(e)}`);
+            return { Readable: false };
+        }
+    }
+
+    /** The submitter as a user who may act, or why the step cannot run for them. */
+    private async lookUpRequester(userID: string, taskName: string): Promise<StepUser> {
+        const notRun = `"${taskName}" was not run: its workflow was started by user ${userID}`;
+        const why = `Its steps act with that person's permissions, so it is not run as anyone else.`;
+        if (!this.userResolver) {
+            return { ErrorMessage: `${notRun}, and this server has no way to look users up. ${why}` };
+        }
+
+        let user: UserInfo | undefined;
+        try {
+            user = await this.userResolver.FindUserByID(userID);
+        } catch (e) {
+            // The contract says resolvers never throw; a throw is treated as "not found", never as
+            // permission to run as the dispatcher.
+            LogError(`[TaskGraphDispatcher] Looking up user ${userID} threw: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        if (!user) return { ErrorMessage: `${notRun}, who could not be found. ${why}` };
+        if (!user.IsActive) return { ErrorMessage: `${notRun} (${user.Name}), whose account is inactive. ${why}` };
+        return { User: user };
+    }
+
+    /**
      * Which failures the workflow drew a way out of.
      *
      * A Failed task with a **satisfied outgoing edge** is a handled failure: its author drew a
@@ -2490,12 +2585,16 @@ export class TaskGraphDispatcher implements IShutdownable {
      * `GraphSettled` frame emitted moments earlier and for any rescue-sweep pass that revisits the
      * graph, it is one small string per graph, and ownership never changes — the cost of keeping it
      * is bounded and the cost of losing it is a re-query on a path that is meant to be cheap.
+     *
+     * The step-identity cache goes too: a settled graph runs nothing more, and a retry that revives it
+     * re-reads the parent once.
      */
     private forgetGraphObservability(parentTaskID: string): void {
         this.emittedGateVerdicts.delete(parentTaskID);
         this.nodeProgressLastEmit.delete(parentTaskID);
         this.announcedPaused.delete(parentTaskID);
         this.debugStateByGraph.delete(parentTaskID);
+        this.stepUserIDByGraph.delete(parentTaskID);
     }
 
     /**
@@ -3408,6 +3507,10 @@ export class TaskGraphDispatcher implements IShutdownable {
      *
      * Every branch is normalized to one shape so the recording path above stays single: an action has
      * no agent run to point at, because its forensics live in `ActionExecutionLog` instead.
+     *
+     * **Every runner acts for the person who submitted the graph** ({@link resolveStepUser}), never
+     * for the dispatcher, which runs as the service account. This is the single entry point for every
+     * kind of step, so resolving here covers them all.
      */
     private async runTaskBody(
         task: MJTaskEntity,
@@ -3433,20 +3536,27 @@ export class TaskGraphDispatcher implements IShutdownable {
             return { Success: false, ErrorMessage: message };
         }
 
+        const stepUser = await this.resolveStepUser(provider, task);
+        if ('ErrorMessage' in stepUser) {
+            LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${stepUser.ErrorMessage}`);
+            return { Success: false, AgentRunID: null, ErrorMessage: stepUser.ErrorMessage };
+        }
+        const runAs = stepUser.User;
+
         const payload = this.mergedPayload(inputPayload, dependencyOutputs);
         const config = task.ConfigurationObject;
 
         // A loop's own step type decides how many times its body runs; the body itself is dispatched
         // through the very same runners as a one-shot step.
         if (task.StepType === 'ForEach' || task.StepType === 'While') {
-            return { ...await this.runLoopTask(task, provider, payload, dependencyOutputs), PayloadAtStart: payload };
+            return { ...await this.runLoopTask(task, provider, payload, dependencyOutputs, runAs), PayloadAtStart: payload };
         }
 
         // Routed on StepType before the mappings below: a Decision reads its state from the merged
         // payload by path and writes its answers back under `decisions`, so it has no mapping of its
         // own. And it carries a PromptID, so the Prompt branch would otherwise take it.
         if (task.StepType === 'Decision') {
-            return { ...await this.runDecisionNode(task, provider, payload, onProgress), PayloadAtStart: payload };
+            return { ...await this.runDecisionNode(task, provider, payload, runAs, onProgress), PayloadAtStart: payload };
         }
 
         // `data.*` / `context.*` resolve against the invocation that submitted the graph, exactly as
@@ -3482,7 +3592,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 DependencyOutputs: dependencyOutputs,
                 TemplateParameters: config?.prompt?.templateParameters,
                 Provider: provider,
-                ContextUser: this.contextUser,
+                ContextUser: runAs,
                 OnProgress: onProgress,
             });
 
@@ -3514,10 +3624,10 @@ export class TaskGraphDispatcher implements IShutdownable {
                 InputPayload: effectiveInput,
                 DependencyOutputs: dependencyOutputs,
                 Provider: provider,
-                ContextUser: this.contextUser,
+                ContextUser: runAs,
                 OnProgress: onProgress,
             }), AgentRunID: null }
-            : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs, onProgress);
+            : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs, runAs, onProgress);
 
         return {
             ...raw,
@@ -3533,12 +3643,15 @@ export class TaskGraphDispatcher implements IShutdownable {
      * supplies what to repeat. Per-iteration inputs are resolved fresh each pass — the bindings are
      * merged into the payload before the mapping is applied, which is how a body can reference the
      * current item at all.
+     *
+     * Every pass runs as `runAs`, the graph's submitter, exactly as a one-shot step does.
      */
     private async runLoopTask(
         task: MJTaskEntity,
         provider: IMetadataProvider,
         payload: Record<string, unknown>,
         dependencyOutputs: Map<string, unknown>,
+        runAs: UserInfo,
     ): Promise<TaskBodyOutcome> {
         const config = task.ConfigurationObject;
         const op = task.StepType === 'ForEach' ? config?.forEach : config?.while;
@@ -3662,9 +3775,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // through the payload placeholder instead works but is not discoverable, and
                     // getting it wrong is silent: the variable renders empty and the model answers
                     // confidently about nothing.
-                    TemplateParameters: { ...stringifyBindings(Bindings), ...op.prompt?.templateParameters },
+                    //
+                    // The bindings go over AS VALUES, not JSON text. An item is usually an object, and
+                    // pre-serializing it made `{{ item.name }}` render empty (a string has no `.name`)
+                    // and `{{ item | dump }}` double-encode. The prompt runner prepares every structured
+                    // value so it also prints as JSON when written whole (`{{ item }}`).
+                    TemplateParameters: { ...Bindings, ...op.prompt?.templateParameters },
                     Provider: provider,
-                    ContextUser: this.contextUser,
+                    ContextUser: runAs,
                 }), iterationPayload);
             }
 
@@ -3675,7 +3793,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     InputPayload: resolved,
                     DependencyOutputs: dependencyOutputs,
                     Provider: provider,
-                    ContextUser: this.contextUser,
+                    ContextUser: runAs,
                 }), resolved);
             }
 
@@ -3691,7 +3809,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ContinuationDepth: graphContext.Depth,
                 SubmittingAgentRunID: graphContext.SubmittingAgentRunID,
                 Provider: provider,
-                ContextUser: this.contextUser,
+                ContextUser: runAs,
             }), agentInput);
         };
 
@@ -3838,6 +3956,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         effectiveInput: unknown,
         dependencyOutputs: Map<string, unknown>,
+        runAs: UserInfo,
         onProgress?: TaskRunProgressCallback,
     ): Promise<TaskBodyOutcome> {
         const context = await this.graphContext(provider, task);
@@ -3849,7 +3968,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             ContinuationDepth: context.Depth,
             SubmittingAgentRunID: context.SubmittingAgentRunID,
             Provider: provider,
-            ContextUser: this.contextUser,
+            ContextUser: runAs,
             OnProgress: onProgress,
         });
     }
@@ -3872,6 +3991,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         task: MJTaskEntity,
         provider: IMetadataProvider,
         payload: Record<string, unknown>,
+        runAs: UserInfo,
         onProgress?: TaskRunProgressCallback,
     ): Promise<TaskBodyOutcome> {
         const config = ReadDecisionStepConfiguration(task.Configuration);
@@ -3894,7 +4014,9 @@ export class TaskGraphDispatcher implements IShutdownable {
             State: state.State,
             Questions: toAsk,
             Provider: provider,
-            ContextUser: this.contextUser,
+            // The model call acts for the submitter; the run-step log below is the platform's own
+            // record and stays the dispatcher's.
+            ContextUser: runAs,
             OnProgress: onProgress,
         });
         await this.logDecisionStep(provider, task, config, toAsk, state.State, result, startedAt);

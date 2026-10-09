@@ -6,7 +6,7 @@
  */
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
@@ -15,13 +15,13 @@ import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/versi
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTagNames, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
 import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
 import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, FindDuplicateMemberJunctionPackages, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, PruneDynamicPackagesNotInManifest, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
@@ -1684,14 +1684,21 @@ export async function ResolveDependencyVersion(
   if (!semver.validRange(range)) {
     return { ErrorMessage: `version '${versionRange}' is not a valid semver version or range` };
   }
-  // Gather candidate versions: non-draft releases + semver tags.
-  const [releases, tags] = await Promise.all([
-    ListGitHubReleases(repoUrl, options),
-    ListGitHubTags(repoUrl, options),
-  ]);
+  // Candidate versions are non-draft releases + semver tags. Tags first: whenever the releases cannot
+  // change the answer (see VersionDecidedByTags), listing them would only spend a request of the
+  // anonymous 60-per-hour GitHub allowance. ListGitHubTags reuses the walk ListGitHubTagNames just
+  // made, so this is one tag listing, not two.
+  const tagNames = await ListGitHubTagNames(repoUrl, options);
+  const tags = tagNames.length > 0 ? await ListGitHubTags(repoUrl, options) : [];
+  const tagVersions = tags.map((t) => t.replace(/^v/, '')).filter((v) => semver.valid(v) != null);
+  const decided = VersionDecidedByTags(tagNames, tagVersions, range);
+  if (decided) {
+    return { Version: decided };
+  }
+  const releases = await ListGitHubReleases(repoUrl, options);
   const candidates = [
     ...releases.filter((r) => !r.Draft).map((r) => r.TagName.replace(/^v/, '')),
-    ...tags.map((t) => t.replace(/^v/, '')),
+    ...tagVersions,
   ].filter((v) => semver.valid(v) != null);
   if (candidates.length === 0) {
     return { ErrorMessage: `no published versions found at ${repoUrl} to satisfy '${versionRange}'` };
@@ -1702,6 +1709,32 @@ export async function ResolveDependencyVersion(
     return { ErrorMessage: `no published version at ${repoUrl} satisfies '${versionRange}' (latest available: ${latest})` };
   }
   return { Version: best };
+}
+
+/**
+ * The version {@link ResolveDependencyVersion} would pick, when the tags alone decide it — or
+ * undefined when the releases list could still change the answer and must be fetched.
+ *
+ * Why skipping the releases request cannot change the result: a published release's tag is a tag in
+ * the repository (GitHub creates it on publish; drafts are excluded anyway), so every version a release
+ * contributes is the `v`-stripped name of some tag in `allTagNames`. `tagVersions` keeps only the names
+ * matching ListGitHubTags' strict pattern, so the releases can add only the OTHER semver-valid names —
+ * build metadata (`v1.2.3+build.7`) or hyphenated prerelease ids (`v1.0.0-rc-1`). When none of those
+ * satisfies the range at or above the tags' best, no release outranks that best, nor ties it with a
+ * different string (maxSatisfying keeps the first maximum, and releases come first) — so the answer
+ * with the releases is the answer without them. When nothing in the tags satisfies the range, releases
+ * are the only remaining source (and the error's "latest available"), so they are always fetched.
+ */
+function VersionDecidedByTags(allTagNames: string[], tagVersions: string[], range: string): string | undefined {
+  const best = semver.maxSatisfying(tagVersions, range);
+  if (!best) {
+    return undefined;
+  }
+  const strict = new Set(tagVersions);
+  const contender = allTagNames
+    .map((name) => name.replace(/^v/, ''))
+    .find((v) => !strict.has(v) && semver.valid(v) != null && semver.satisfies(v, range) && semver.gte(v, best));
+  return contender === undefined ? best : undefined;
 }
 
 /**
@@ -1872,8 +1905,7 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   }
 
   context.Callbacks?.OnProgress?.('Migration', 'Downloading migration files...');
-  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
+  const tempDir = CreatePrivateTempDir(`mj-app-${manifest.name}-`);
 
   try {
     // Live DB platform — selects the Skyway provider for RunAppMigrations below.
@@ -1908,6 +1940,16 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
 }
 
 /**
+ * Creates a new, empty directory under the OS temp dir for downloaded migration or teardown SQL.
+ * `mkdtemp` picks a random, unused name and creates it readable only by this user, so another
+ * account on the machine cannot pre-create or swap the files the engine is about to run. A name
+ * built from the app name and a timestamp could be guessed and claimed first.
+ */
+function CreatePrivateTempDir(prefix: string): string {
+  return mkdtempSync(join(tmpdir(), prefix));
+}
+
+/**
  * Removes a temp directory the engine created for a download. Best-effort by design: a cleanup
  * failure must never fail — or mask the result of — the operation that created the directory.
  */
@@ -1939,8 +1981,7 @@ async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorCont
 
   const platform = context.DatabaseProvider.Dialect.PlatformKey;
   const dir = platform === 'postgresql' ? `${teardownDir}-pg` : teardownDir;
-  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-teardown-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
+  const tempDir = CreatePrivateTempDir(`mj-app-${manifest.name}-teardown-`);
 
   try {
     context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
@@ -2074,7 +2115,43 @@ async function HandlePackageInstallation(
   if (!installResult.Success) {
     return { Success: false, PackageJsonUpdated: true, ErrorMessage: installResult.ErrorMessage };
   }
+  WarnOnDuplicateMemberJunctionPackages(installResult.InstallRoot ?? context.RepoRoot, manifest, context);
   return { Success: true };
+}
+
+/** How many duplicated packages a warning names before summarising the rest. */
+const DUPLICATE_PACKAGES_LISTED = 8;
+
+/**
+ * Warn when the install just run left more than one version of any `@memberjunction/*` package —
+ * see {@link FindDuplicateMemberJunctionPackages}. The install itself succeeded, and the duplicate
+ * fails silently at runtime (entities and resolvers stop registering), so this warning is the only
+ * place the operator can learn of it. Not fatal: the packages are already installed, and the fix
+ * is a workspace setting, not a re-run of this app's install.
+ */
+function WarnOnDuplicateMemberJunctionPackages(installRoot: string, manifest: MJAppManifest, context: OrchestratorContext): void {
+  let duplicates: ReturnType<typeof FindDuplicateMemberJunctionPackages>;
+  try {
+    duplicates = FindDuplicateMemberJunctionPackages(installRoot);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    context.Callbacks?.OnWarn?.('Packages', `Could not check pnpm-lock.yaml for duplicate @memberjunction packages: ${message}`);
+    return;
+  }
+  if (duplicates.length === 0) {
+    return;
+  }
+  const listed = duplicates.slice(0, DUPLICATE_PACKAGES_LISTED).map((d) => `${d.Name} (${d.Versions.join(', ')})`);
+  const more = duplicates.length > DUPLICATE_PACKAGES_LISTED ? `, and ${duplicates.length - DUPLICATE_PACKAGES_LISTED} more` : '';
+  context.Callbacks?.OnWarn?.(
+    'Packages',
+    `Installing ${manifest.name} left ${duplicates.length} @memberjunction package(s) at more than one version: ${listed.join(', ')}${more}. ` +
+      `This host runs MJ ${context.MJVersion}, and a second copy of @memberjunction/core or global splits MJ's class registry: ` +
+      'entities and resolvers stop registering without an error. An app package declares an MJ range this host does not satisfy. ' +
+      `Pin every @memberjunction/* package pnpm-lock.yaml lists at ${context.MJVersion} to that version in the "overrides:" block of ` +
+      `${installRoot}/pnpm-workspace.yaml, then run pnpm install there. (A distribution installed by mj install already carries ` +
+      "these pins, written as '<package>': '$@memberjunction/cli'.)"
+  );
 }
 
 /**
@@ -2507,8 +2584,7 @@ async function ExtractDeclaredApplicationIds(
   }
   let tempDir: string | undefined;
   try {
-    tempDir = join(tmpdir(), `mj-app-${manifest.name}-appids-${Date.now()}`);
-    mkdirSync(tempDir, { recursive: true });
+    tempDir = CreatePrivateTempDir(`mj-app-${manifest.name}-appids-`);
     const download = await DownloadAppMigrations(manifest, context, tempDir, subpath);
     if (!download.Success) {
       return [];

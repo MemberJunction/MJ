@@ -13,7 +13,9 @@
  * @module @memberjunction/server
  */
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { MJAIAgentRunEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity, MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
@@ -39,6 +41,10 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
      * @param providerFactory mints a fresh provider per delivery, for the same reason the dispatcher
      *        does: deliveries run outside any request and concurrently with task execution, so
      *        sharing one provider would share one transaction scope across unrelated work.
+     * @param contextUser the service user that READS the graph's records. Writes into a conversation
+     *        go out as the person who started the run instead (see `resolveRequester`): the
+     *        conversation's access check refuses anyone who is not its owner or an editor, so a post
+     *        as the service user never reached the chat that asked for it.
      */
     constructor(
         private readonly providerFactory: ProviderFactory,
@@ -71,7 +77,8 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 return;
             }
 
-            const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.contextUser);
+            const requester = await this.resolveRequester(params.SubmittedByAgentRunID, conversationID, provider);
+            const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', requester);
             detail.NewRecord();
             detail.ConversationID = conversationID;
             detail.Role = 'AI';
@@ -125,10 +132,13 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 return;
             }
 
+            // The continuation turn acts for the person who started the run, as the run itself did:
+            // it answers in their conversation and works with their permissions.
+            const requester = this.userOrServiceUser(priorRun.UserID, `run ${priorRun.ID}`);
             await new AgentRunner().RunAgent({
                 agent,
                 conversationMessages: [{ role: ChatMessageRole.user, content: this.renderMessage(params) }],
-                contextUser: this.contextUser,
+                contextUser: requester,
                 conversationDetailId: params.ConversationDetailID ?? undefined,
                 // The load-bearing value: without it the next graph this run submits restarts the
                 // chain at zero and the cap never fires.
@@ -147,6 +157,36 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 LogError(`[TaskGraphContinuationDeliverer] The fallback post for "${params.WorkflowName}" also failed`, undefined, fallbackError);
             }
         }
+    }
+
+    /**
+     * The user a post into the conversation goes out as: whoever started the submitting agent run,
+     * else the conversation's owner. Both pass the conversation's access check, which the service
+     * user does not. Falls back to the service user only when neither can be resolved.
+     */
+    private async resolveRequester(agentRunID: string | null, conversationID: string, provider: IMetadataProvider): Promise<UserInfo> {
+        if (agentRunID) {
+            const run = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+            if ((await run.Load(agentRunID)) && run.UserID) {
+                return this.userOrServiceUser(run.UserID, `run ${agentRunID}`);
+            }
+        }
+        const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', this.contextUser);
+        const ownerID = (await conversation.Load(conversationID)) ? conversation.UserID : null;
+        return this.userOrServiceUser(ownerID, `conversation ${conversationID}`);
+    }
+
+    /** The cached user for `userID`, or the service user (logged, so a refused post can be traced). */
+    private userOrServiceUser(userID: string | null, source: string): UserInfo {
+        const user = userID ? UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, userID)) : undefined;
+        if (user) {
+            return user;
+        }
+        LogStatus(
+            `[TaskGraphContinuationDeliverer] No user ${userID ?? '(none recorded)'} for ${source} in the user cache — ` +
+            `acting as the service user, whose posts the conversation may refuse.`
+        );
+        return this.contextUser;
     }
 
     /** The conversation a detail belongs to. */
