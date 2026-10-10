@@ -28,6 +28,7 @@ capabilities, not by prescribing specific business applications.
 | [2026-09-12](./2026-09-12/) | Execution Trace & Observability Layer · Tenant Isolation Guarantee Layer · Agent Behavioral Drift & Regression Detection Engine | (no follow-up PR filed) |
 | 2026-09-19 | Execution Blast-Radius Containment · Encryption Key Lifecycle & Envelope Governance · AI Confidence & Explainability Disclosure Layer | [#4612](https://github.com/MemberJunction/MJ/pull/4612) (open — all three ideas approved for implementation 2026-09-25) |
 | [2026-09-26](./2026-09-26/) | Search & Retrieval Relevance Confidence Standard · Backup & Restore Assurance Layer · Outbound AI Content Assurance Gate | [#4781](https://github.com/MemberJunction/MJ/pull/4781) |
+| [2026-10-10](./2026-10-10/) | Show Me How — Guided Walkthroughs · Cover & Handover (time-boxed access, delegation, departures) · The Essentials Lens (tiered experience for casual users) | [#5410](https://github.com/MemberJunction/MJ/pull/5410) |
 
 ## Before starting a new week
 
