@@ -9,7 +9,7 @@ import { AllBut, OutcomeOf } from './run-outcomes';
 
 describe('the video conformance kit on openai', () => {
     for (const check of ListRealtimeVideoConformanceChecks(() => new OpenAIHarness())) {
-        (check.SkipReason ? it.skip : it)(`${check.Id} ${check.Title}`, () => check.Run());
+        it.skipIf(check.SkipReason !== null)(`${check.Id} ${check.Title}`, () => check.Run());
     }
 
     it('passes the audio-only check and skips the rest: its parts name no type, and it hands over no video', async () => {

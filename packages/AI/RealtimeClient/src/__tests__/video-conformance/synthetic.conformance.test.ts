@@ -10,7 +10,7 @@ import { AllBut, OutcomeOf } from './run-outcomes';
 
 describe('the video conformance kit on the synthetic provider (fMP4)', () => {
     for (const check of ListRealtimeVideoConformanceChecks(() => new SyntheticHarness())) {
-        (check.SkipReason ? it.skip : it)(`${check.Id} ${check.Title}`, () => check.Run());
+        it.skipIf(check.SkipReason !== null)(`${check.Id} ${check.Title}`, () => check.Run());
     }
 
     it('passes every check but the clock: its voice, in the MP4 or as untimed PCM, has no media time', async () => {
@@ -20,7 +20,7 @@ describe('the video conformance kit on the synthetic provider (fMP4)', () => {
 
 describe.each(['chunk', 'image'] as const)('the video conformance kit on the synthetic provider (%s frames)', (kind) => {
     for (const check of ListRealtimeVideoConformanceChecks(() => new SyntheticHarness({}, kind))) {
-        (check.SkipReason ? it.skip : it)(`${check.Id} ${check.Title}`, () => check.Run());
+        it.skipIf(check.SkipReason !== null)(`${check.Id} ${check.Title}`, () => check.Run());
     }
 
     it('passes every check but the voice in the video: raw frames carry none, so the timed voice drives the clock', async () => {
@@ -33,7 +33,7 @@ describe.each(['chunk', 'image'] as const)('the video conformance kit on the syn
 
 describe('the video conformance kit on the synthetic provider (stream)', () => {
     for (const check of ListRealtimeVideoConformanceChecks(() => new SyntheticStreamHarness())) {
-        (check.SkipReason ? it.skip : it)(`${check.Id} ${check.Title}`, () => check.Run());
+        it.skipIf(check.SkipReason !== null)(`${check.Id} ${check.Title}`, () => check.Run());
     }
 
     it('passes the checks a live stream answers and skips the player checks', async () => {

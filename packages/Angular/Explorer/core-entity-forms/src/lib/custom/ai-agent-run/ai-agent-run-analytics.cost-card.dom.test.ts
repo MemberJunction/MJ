@@ -1,15 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { MJAccordionModule } from '@memberjunction/ng-ui-components';
+import { StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component';
 import { AIAgentRunCostService } from './ai-agent-run-cost.service';
 
 /**
  * DOM coverage for the Total Cost card's split on an avatar call: the output figure prices only the output tokens the
  * cost row's line priced, and the avatar video shows on a line of its own, from the run's cost lines. The prompt runs
- * and the token rates are set directly (placeholder data), so no data loads and no charts render; child components are
- * not declared (NO_ERRORS_SCHEMA), only the card's own markup is under test.
+ * and the token rates are set directly (placeholder data), so no data loads and no charts render. The panels are the
+ * real accordion, which the component's module imports, and `mj-empty-state` is the shared stub, so an unknown element
+ * or input in the rendered markup still fails the test; only the card's own markup is asserted.
  */
 
 /** The private members the test sets instead of loading data. */
@@ -43,9 +45,9 @@ function promptRun(withVideoLine: boolean): MJAIPromptRunEntity {
 
 function renderCard(run: MJAIPromptRunEntity): ComponentFixture<AIAgentRunAnalyticsComponent> {
     TestBed.configureTestingModule({
+        imports: [MJAccordionModule, StubEmptyStateComponent],
         declarations: [AIAgentRunAnalyticsComponent],
         providers: [{ provide: AIAgentRunCostService, useValue: {} }],
-        schemas: [NO_ERRORS_SCHEMA],
     });
     const fixture = TestBed.createComponent(AIAgentRunAnalyticsComponent);
     const component = fixture.componentInstance;

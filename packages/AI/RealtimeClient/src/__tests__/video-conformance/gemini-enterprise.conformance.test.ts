@@ -13,7 +13,7 @@ import { AllBut, OutcomeOf } from './run-outcomes';
 
 describe('the video conformance kit on gemini-enterprise', () => {
     for (const check of ListRealtimeVideoConformanceChecks(() => new GeminiEnterpriseHarness())) {
-        (check.SkipReason ? it.skip : it)(`${check.Id} ${check.Title}`, () => check.Run());
+        it.skipIf(check.SkipReason !== null)(`${check.Id} ${check.Title}`, () => check.Run());
     }
 
     it("passes every check but the clock: Gemini's PCM carries no media time", async () => {
