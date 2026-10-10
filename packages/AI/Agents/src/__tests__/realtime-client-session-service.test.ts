@@ -923,6 +923,36 @@ describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
         expect(runStep.Save).toHaveBeenCalledTimes(1);
     });
 
+    it("stamps a failure's own error on the run, its prompt run and its step (a bridge start that failed)", async () => {
+        const startError = 'Failed to create AIAgentSessionBridge: the user may not create MJ: AI Agent Session Bridges';
+        const agentRun = makeRun({ ID: 'co-run-1' });
+        const promptRun = makeRun({ ID: 'prompt-run-1' });
+        const runStep = makeRun({ ID: 'run-step-1' });
+        const prov = makeRunProvider(name => {
+            if (name === 'MJ: AI Agent Runs') return agentRun;
+            if (name === 'MJ: AI Agent Run Steps') return runStep;
+            return promptRun;
+        });
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, false, 'run-step-1', startError);
+
+        for (const record of [agentRun, promptRun, runStep]) {
+            expect(record).toMatchObject({ Status: 'Failed', Success: false, ErrorMessage: startError });
+        }
+    });
+
+    it('stamps no error on a run that completed, whatever message comes with it', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1' });
+        const promptRun = makeRun({ ID: 'prompt-run-1' });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true, null, 'not a failure');
+
+        expect(agentRun).toMatchObject({ Status: 'Completed', Success: true });
+        expect(agentRun.ErrorMessage).toBeUndefined();
+        expect(promptRun.ErrorMessage).toBeUndefined();
+    });
+
     it('is a no-op for an already-finalized (non-Running) run step', async () => {
         const runStep = makeRun({ ID: 'run-step-1', Status: 'Completed' });
         const prov = makeRunProvider(() => runStep);

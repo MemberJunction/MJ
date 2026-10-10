@@ -96,6 +96,8 @@ class WiringService extends RealtimeClientSessionService {
     public readonly UsageWrites: Array<{ PromptRunID: string; Input: number; Output: number; Details?: RealtimeUsageRecord }> = [];
     /** Holds `FinalizeCoAgentRun` until it settles, as slow run writes would; unset, the runs are finalized at once. */
     public FinalizeGate?: Promise<void>;
+    /** The outcome each finalize was given, in order. */
+    public readonly Outcomes: Array<{ Success: boolean; ErrorMessage?: string }> = [];
 
     protected override async createCoAgentObservabilityRun(): Promise<{ CoAgentRunID: string; PromptRunID?: string } | null> {
         return { ...this.ObservabilityIds };
@@ -112,11 +114,20 @@ class WiringService extends RealtimeClientSessionService {
         this.Events.push(`usage:${promptRunID}`);
         return true;
     }
-    public override async FinalizeCoAgentRun(_coAgentRunID: string | null, promptRunID: string | null): Promise<void> {
+    public override async FinalizeCoAgentRun(
+        _coAgentRunID: string | null,
+        promptRunID: string | null,
+        _user?: UserInfo,
+        _provider?: IMetadataProvider,
+        success: boolean = true,
+        _coAgentRunStepID: string | null = null,
+        errorMessage?: string,
+    ): Promise<void> {
         if (this.FinalizeGate) {
             await this.FinalizeGate;
         }
         this.Events.push(`finalize:${promptRunID}`);
+        this.Outcomes.push(errorMessage === undefined ? { Success: success } : { Success: success, ErrorMessage: errorMessage });
     }
     protected override resolveCoAgentSystemPrompt() {
         return { Text: '', PromptID: null };
@@ -238,6 +249,26 @@ describe('WireBridgeRealtimeSession — runtime handle', () => {
         const runtime = await wire();
         expect(GetBridgeRealtimeRuntime(session as unknown as IRealtimeSession)).toBe(runtime);
         expect(GetBridgeRealtimeRuntime(new FakeSession() as unknown as IRealtimeSession)).toBeUndefined();
+    });
+
+    it("finalizes the run as failed, with the start's error, when the host records a failed start before it closes the session", async () => {
+        const startError = 'Failed to create AIAgentSessionBridge: the user may not create MJ: AI Agent Session Bridges';
+        const runtime = await wire();
+
+        await runtime.Finalize(false, startError);
+        await (session as unknown as IRealtimeSession).Close();
+
+        // The close that follows finalizes nothing more: the first finalize decided the outcome.
+        expect(service.Outcomes).toEqual([{ Success: false, ErrorMessage: startError }]);
+        expect(session.Closed).toBe(true);
+    });
+
+    it('finalizes the run as completed when the session is closed with no failure recorded', async () => {
+        await wire();
+
+        await (session as unknown as IRealtimeSession).Close();
+
+        expect(service.Outcomes).toEqual([{ Success: true }]);
     });
 
     it("carries whether the agent watches meetings, read from the effective configuration", async () => {
