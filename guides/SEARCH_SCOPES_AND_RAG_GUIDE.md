@@ -258,7 +258,7 @@ When multiple scopes are queried (either via UI multi-select or multiple pre-exe
 1. Each scope runs independently with its own provider subset, query transform, and fusion weights → per-scope RRF produces one ranked list.
 2. The per-scope lists become inputs to **cross-scope RRF** (`SearchFusion.CrossScopeFusion()`), which uses the same `ComputeRRF` primitive from `@memberjunction/core`.
 3. Records appearing in multiple scopes get boosted scores (standard RRF behavior).
-4. The result is deduplicated by `EntityName::RecordID`, with the max score and merged ScoreBreakdown retained.
+4. The result is deduplicated by `EntityName::RecordID`, with the ScoreBreakdowns merged. `Score` is the RRF score divided by its maximum (0–1, 1.0 = every lane ranked it first): it is rank-based, not a confidence. `MinScore` is applied earlier, to the semantic lane's similarity before fusion.
 
 ### Per-agent weight override
 
@@ -681,8 +681,10 @@ to internal UUIDs without leaking those UUIDs to the prompt.
 ### Embedding regeneration contract (operations note)
 
 Several entities (`MJ: AI Agent Notes`, `MJ: AI Agent Examples`,
-`MJ: Queries`) maintain `EmbeddingVector` + `EmbeddingModelID` columns
-that the Vector search provider consumes. Embeddings are regenerated
+`MJ: Queries`) maintain `EmbeddingVector` + `EmbeddingVectorBinary` +
+`EmbeddingModelID` columns that the Vector search provider consumes (the
+binary column holds the same vector as float32 bytes; see the
+[Binary Fields Guide](BINARY_FIELDS_GUIDE.md)). Embeddings are regenerated
 inside the entity's server-side `Save()` override **only when the
 fields they're derived from are dirty**:
 
@@ -695,8 +697,9 @@ fields they're derived from are dirty**:
 **Implication for ops**: any code path that bypasses `BaseEntity.Save()`
 — direct `INSERT`/`UPDATE` SQL, raw `mj sync` of pre-computed metadata,
 restoration from a logical backup that doesn't replay through entity
-saves — will produce records whose `EmbeddingVector` is stale or
-missing. Vector search will then return outdated matches (or skip the
+saves — will produce records whose `EmbeddingVector` / `EmbeddingVectorBinary`
+are stale, missing, or out of step with each other (readers prefer the
+binary column). Vector search will then return outdated matches (or skip the
 record entirely if the column is `NULL`).
 
 **Operational guidance**:
@@ -717,7 +720,7 @@ records.
 
 ### How to enable vector search for an existing entity (in-process)
 
-Several core entities ship with `EmbeddingVector` + `EmbeddingModelID`
+Several core entities ship with `EmbeddingVector` + `EmbeddingVectorBinary` + `EmbeddingModelID`
 columns whose contents are auto-populated by their server-side
 `Save()` override (see "Embedding regeneration contract" above).
 Today: `MJ: Queries`, `MJ: AI Agent Notes`, `MJ: AI Agent Examples`.
@@ -763,6 +766,7 @@ INSERT INTO __mj.VectorIndex (
     '{
         "entityName": "MJ: Queries",
         "vectorField": "EmbeddingVector",
+        "binaryVectorField": "EmbeddingVectorBinary",
         "filter": "EmbeddingVector IS NOT NULL",
         "titleField": "Name",
         "snippetField": "Description"
@@ -774,7 +778,8 @@ INSERT INTO __mj.VectorIndex (
 | Key | Purpose |
 |---|---|
 | `entityName` | The entity whose rows hold the vectors. Used for `RunView`. |
-| `vectorField` | The column name. Stored as JSON-stringified `number[]`. |
+| `vectorField` | The JSON vector column (JSON-stringified `number[]`). |
+| `binaryVectorField` | Optional binary companion (float32 bytes). When set, the driver fetches it and prefers it over `vectorField` — a copy instead of a JSON parse — falling back to JSON for rows with no valid binary value. |
 | `filter` | Optional `ExtraFilter` for the load — typically `EmbeddingVector IS NOT NULL` so unembedded rows are skipped. |
 | `titleField` | Field used as the result's display Title. Falls back to entity NameField. |
 | `snippetField` | Field used as the result's display Snippet. |
@@ -834,5 +839,11 @@ deliberately rather than as part of the vector wiring.
 - **Single-process.** Two MJAPI replicas each maintain their own
   in-memory cache. For sticky-session deployments that's fine; for
   load-balanced multi-replica setups, prefer Pinecone/Qdrant.
+- **Metadata filters are evaluated in memory.** The scope's
+  `MetadataFilter` and the `Entity` push-down are applied to each row
+  (`Entity` / `EntityName`, `RecordID` and `SourceType` resolve as on
+  the remote drivers; anything else reads the row's column). A filter
+  using an operator outside `$eq $ne $gt $gte $lt $lte $in $nin $exists
+  $and $or` fails the query instead of running unfiltered.
 
 - Re-ranker catalog entity + visual configuration UI.

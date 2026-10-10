@@ -52,6 +52,9 @@ function harness(config: LiveKitSipSettings = CONFIG, overrides: Partial<LiveKit
         RemoveParticipant: vi.fn(async () => undefined),
         DialIntoRoom: vi.fn(async () => undefined),
         OutboundTrunkExists: vi.fn(async () => true),
+        ListOutboundTrunks: vi.fn(async () => [
+            { TrunkID: 'ST_out', Name: 'Outbound', Numbers: ['+18005550100', '+18005559999'] },
+        ]),
         EnsureInboundRouting: vi.fn(async () => ({ TrunkID: 'ST_in', DispatchRuleID: 'SDR', CreatedTrunk: true, CreatedDispatchRule: true })),
         IsParticipantPresent: vi.fn(async () => true),
     };
@@ -85,13 +88,43 @@ afterEach(() => vi.useRealTimers());
 
 describe('construction', () => {
     it('gives the handoff engine presence checks, a dialer for the outbound trunk, and a way to start another agent in a room', async () => {
-        const h = harness();
+        const h = harness({ ...CONFIG, numbers: ['+18005558888'] });
         expect(h.handoff.Configure).toHaveBeenCalledTimes(1);
         const wired = h.handoff.Configure.mock.calls[0][0];
         expect(wired.Presence).toBe(h.sip);
 
+        // Omitted FromNumber falls back to config.outboundFromNumber
         await wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-1', DisplayName: 'Dana', RingTimeoutSeconds: 30 });
         expect(h.sip.DialIntoRoom).toHaveBeenCalledWith(expect.objectContaining({ TrunkID: 'ST_out', FromNumber: '+18005550100', Number: '+14155550199', WaitUntilAnswered: true }));
+
+        // Empty / whitespace FromNumber treated as unset and falls back to config.outboundFromNumber
+        await wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-empty', DisplayName: 'Dana', FromNumber: '   ' });
+        expect(h.sip.DialIntoRoom).toHaveBeenCalledWith(expect.objectContaining({ TrunkID: 'ST_out', FromNumber: '+18005550100', Number: '+14155550199', WaitUntilAnswered: true }));
+
+        // Owned FromNumber on trunk passes validation
+        await wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-2', DisplayName: 'Dana', FromNumber: '+18005559999' });
+        expect(h.sip.DialIntoRoom).toHaveBeenCalledWith(expect.objectContaining({ TrunkID: 'ST_out', FromNumber: '+18005559999', Number: '+14155550199', WaitUntilAnswered: true }));
+
+        // Owned FromNumber in config.numbers passes validation
+        await wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-cfg', DisplayName: 'Dana', FromNumber: '+18005558888' });
+        expect(h.sip.DialIntoRoom).toHaveBeenCalledWith(expect.objectContaining({ TrunkID: 'ST_out', FromNumber: '+18005558888', Number: '+14155550199', WaitUntilAnswered: true }));
+
+        // Dynamic refresh on cache miss: newly added trunk number is picked up without restarting
+        h.sip.ListOutboundTrunks.mockResolvedValueOnce([
+            { TrunkID: 'ST_out', Name: 'Outbound', Numbers: ['+18005550100', '+18005559999', '+18005557777'] },
+        ]);
+        await wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-refresh', DisplayName: 'Dana', FromNumber: '+18005557777' });
+        expect(h.sip.DialIntoRoom).toHaveBeenCalledWith(expect.objectContaining({ TrunkID: 'ST_out', FromNumber: '+18005557777', Number: '+14155550199', WaitUntilAnswered: true }));
+
+        // Malformed FromNumber throws
+        await expect(
+            wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-err', DisplayName: 'Dana', FromNumber: 'not-e164' }),
+        ).rejects.toThrow(/not a valid E.164 phone number/);
+
+        // Not-owned FromNumber throws
+        await expect(
+            wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-err2', DisplayName: 'Dana', FromNumber: '+14155550000' }),
+        ).rejects.toThrow(/not owned by this organization/);
 
         await wired.AgentStarter({ RoomName: 'call-abc', AgentID: 'a2', AgentName: 'Rex' });
         expect(h.starter.StartRoomAgent).toHaveBeenCalled();
@@ -337,3 +370,107 @@ describe('Initialize', () => {
         expect(vi.mocked(LogError).mock.calls.map((c) => String(c[0])).join('\n')).toContain('ECONNREFUSED');
     });
 });
+
+describe('custom inbound handler', () => {
+    it('delegates to injected inboundHandler when it handles the call', async () => {
+        const h = harness();
+        const customHandler = {
+            HandleInboundCall: vi.fn().mockResolvedValue({
+                Handled: true,
+                Outcome: { accepted: true },
+            }),
+        };
+        h.service.SetInboundHandler(customHandler);
+
+        const result = await h.service.HandleWebhookEvent(inboundEvent(), USER, dbProvider());
+        expect(result).toEqual({ accepted: true });
+        expect(customHandler.HandleInboundCall).toHaveBeenCalledWith(
+            expect.objectContaining({
+                DialedNumber: '+18005550100',
+                CallerNumber: '+14155550123',
+                RoomName: 'call-abc',
+            })
+        );
+        // Default agent identity lookup was bypassed
+        expect(h.starter.Start).not.toHaveBeenCalled();
+    });
+
+    it('falls back to default agent lookup when custom handler returns Handled: false', async () => {
+        const h = harness();
+        const customHandler = {
+            HandleInboundCall: vi.fn().mockResolvedValue({
+                Handled: false,
+            }),
+        };
+        h.service.SetInboundHandler(customHandler);
+
+        const result = await h.service.HandleWebhookEvent(inboundEvent(), USER, dbProvider());
+        expect(result.accepted).toBe(true);
+        expect(customHandler.HandleInboundCall).toHaveBeenCalled();
+        expect(h.starter.Start).toHaveBeenCalled();
+    });
+
+    it('treats Handled: true without Outcome as terminal and returns default accepted: true without falling back', async () => {
+        const h = harness();
+        const customHandler = {
+            HandleInboundCall: vi.fn().mockResolvedValue({
+                Handled: true,
+            }),
+        };
+        h.service.SetInboundHandler(customHandler);
+
+        const result = await h.service.HandleWebhookEvent(inboundEvent(), USER, dbProvider());
+        expect(result).toEqual({ accepted: true });
+        expect(customHandler.HandleInboundCall).toHaveBeenCalled();
+        expect(h.starter.Start).not.toHaveBeenCalled();
+    });
+
+    it('fails closed and hangs up when custom handler throws an error', async () => {
+        const h = harness();
+        const customHandler = {
+            HandleInboundCall: vi.fn().mockRejectedValue(new Error('Ingress exploded')),
+        };
+        h.service.SetInboundHandler(customHandler);
+
+        const result = await h.service.HandleWebhookEvent(inboundEvent(), USER, dbProvider());
+        expect(result.accepted).toBe(false);
+        expect(result.reason).toContain('Ingress exploded');
+        expect(customHandler.HandleInboundCall).toHaveBeenCalled();
+        expect(h.sip.RemoveParticipant).toHaveBeenCalledWith('call-abc', 'sip_+14155550123');
+        expect(h.starter.Start).not.toHaveBeenCalled();
+    });
+
+    it('invokes HandleRoomFinished on room_finished webhook event', async () => {
+        const h = harness();
+        const customHandler = {
+            HandleInboundCall: vi.fn(),
+            HandleRoomFinished: vi.fn().mockResolvedValue(undefined),
+        };
+        h.service.SetInboundHandler(customHandler);
+
+        const finishedEvent: LiveKitRoomWebhookEvent = {
+            Event: 'room_finished',
+            RoomName: 'call-finish-1',
+            RoomSid: 'sid-1',
+            ParticipantIdentity: 'part-1',
+            IsSipParticipant: true,
+        };
+
+        const result = await h.service.HandleWebhookEvent(finishedEvent, USER, dbProvider());
+        expect(result).toEqual({ accepted: false, reason: 'room finished' });
+        expect(customHandler.HandleRoomFinished).toHaveBeenCalledWith('call-finish-1', USER, expect.anything());
+    });
+
+    it('exposes HangUpParticipant and HangUpRoom', async () => {
+        const h = harness();
+        h.sip.ListParticipants.mockResolvedValueOnce([{ Identity: 'p-1', IsSip: true }, { Identity: 'p-2', IsSip: false }]);
+        await h.service.HangUpParticipant('call-room', 'sip-part');
+        expect(h.sip.RemoveParticipant).toHaveBeenCalledWith('call-room', 'sip-part');
+
+        await h.service.HangUpRoom('call-room');
+        expect(h.sip.RemoveParticipant).toHaveBeenCalledWith('call-room', 'p-1');
+        expect(h.sip.RemoveParticipant).not.toHaveBeenCalledWith('call-room', 'p-2');
+    });
+});
+
+

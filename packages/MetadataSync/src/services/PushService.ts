@@ -27,7 +27,7 @@ import { CommittedWrite, PushAbortedError, DescribeCommitFailure, DescribeRollba
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
-import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
+import { DescribeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
 import { resolveCollectionRelationship } from '@memberjunction/record-graph';
@@ -1056,7 +1056,7 @@ export class PushService {
     
     // Issue #4199: a push against an entity whose subclass is not loaded in this process
     // "succeeds" with a generic BaseEntity and silently skips the entity's custom logic. Say so.
-    const subclassWarning = describeMissingEntitySubclass(String(entityConfig.entity ?? ''), { dryRun: options.dryRun });
+    const subclassWarning = DescribeMissingEntitySubclass(String(entityConfig.entity ?? ''), { DryRun: options.dryRun });
     if (subclassWarning) {
       this.warnings.push(subclassWarning);
       callbacks?.onWarn?.(`⚠️  ${subclassWarning}`);

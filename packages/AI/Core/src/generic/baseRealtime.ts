@@ -95,6 +95,12 @@ export type JSONObject = { [key: string]: JSONValue };
  * @param message The diagnostic message, already prefixed by the caller (e.g. `[GeminiRealtime][diag] …`).
  */
 export function RealtimeDiagLog(message: string): void {
+    // Browser client drivers (e.g. GeminiRealtimeClient's transport handlers) call this too, and a
+    // browser has no `process`: an unguarded read throws and aborts the caller before it can surface
+    // the provider's close/error. No `process` means no MJ_VERBOSE, so diagnostics stay dark.
+    if (typeof process === 'undefined' || !process.env) {
+        return;
+    }
     const v = (process.env.MJ_VERBOSE ?? '').toLowerCase();
     if (v === 'true' || v === '1' || v === 'yes') {
         // Strip all control characters (C0/C1, incl. CR/LF/VT/FF/ESC/NEL) plus Unicode

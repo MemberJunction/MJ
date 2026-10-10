@@ -1,7 +1,7 @@
 // Reflect.metadata polyfill at import time.
 import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
-import { EntityFieldTSType, type EntityFieldInfo, type EntityInfo } from '@memberjunction/core';
+import { EntityFieldTSType, EntityInfo, UserInfo, type EntityFieldInfo } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
 /**
@@ -13,8 +13,11 @@ class Probe extends ResolverBase {
     public Convert(field: Partial<EntityFieldInfo>, raw: unknown) {
         return this.ClientOldValueToFieldValue(field as EntityFieldInfo, raw);
     }
-    public MustLoad(entity: Partial<EntityInfo>, oldValues: boolean) {
-        return this.MustLoadTruthFromDatabase(entity as EntityInfo, { OldValues___: oldValues ? [{ Key: 'Comments', Value: null }] : undefined }, false, false);
+    public MustLoad(entity: Record<string, unknown>, oldValues: boolean) {
+        // A real entity with no permission rows and a user with no roles: no row filter applies.
+        // The Update RLS term itself is covered in resolverBase.fls.test.ts.
+        const user = new UserInfo(null, { ID: 'u-1', Name: 'Probe', Email: 'probe@example.test', IsActive: true, UserRoles: [] });
+        return this.MustLoadTruthFromDatabase(new EntityInfo({ Fields: [], ...entity }), { OldValues___: oldValues ? [{ Key: 'Comments', Value: null }] : undefined }, false, false, user);
     }
 }
 const probe = new Probe();

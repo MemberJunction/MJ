@@ -378,7 +378,8 @@ export class SyncPushPlugin extends BaseCLIPlugin {
 
   private cancelled(startTime: number, message: string): MJCLIResult {
     if (this.Host.Format === 'text') this.Host.Log(`\n⚠️  ${message}`, 'warn');
-    return { success: true, command: 'sync:push', durationSeconds: (Date.now() - startTime) / 1000, warnings: [message] };
+    // `cancelled` tells callers nothing was written, so there is nothing for them to invalidate.
+    return { success: true, command: 'sync:push', durationSeconds: (Date.now() - startTime) / 1000, data: { cancelled: true }, warnings: [message] };
   }
 
   /**

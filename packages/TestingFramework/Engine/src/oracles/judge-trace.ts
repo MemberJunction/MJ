@@ -8,6 +8,7 @@
  */
 
 import { OracleInput, OracleConfig } from '../types';
+import { RenderJudgeEvidence } from '../utils/judge-evidence';
 
 /**
  * The trace a judge evaluates, as pretty-printed JSON. Each part is `JSON.stringify`'s output, so it
@@ -18,7 +19,10 @@ export interface JudgeTrace {
     Input: string | undefined;
     /** The test's expected output. */
     Expected: string | undefined;
-    /** The output the test produced. */
+    /**
+     * The output the test produced: the labeled evidence block when the driver supplied
+     * `judgeEvidence`, otherwise the actual output as JSON.
+     */
     Actual: string | undefined;
 }
 
@@ -49,14 +53,15 @@ export const DEFAULT_JUDGE_TIMEOUT_MS = 120_000;
  * Builds the trace a judge evaluates from the oracle input.
  *
  * @param input - The oracle input
- * @returns The input definition, the expected output and the actual output, as JSON
+ * @returns The input definition and the expected output as JSON, and the actual output — the
+ *   driver's labeled `judgeEvidence` when it supplied one, otherwise `actualOutput` as JSON
  * @throws SyntaxError when the test's input definition is a string that is not valid JSON
  */
 export function BuildJudgeTrace(input: OracleInput): JudgeTrace {
     return {
         Input: JSON.stringify(readInputDefinition(input), null, 2),
         Expected: JSON.stringify(input.expectedOutput, null, 2),
-        Actual: JSON.stringify(input.actualOutput, null, 2),
+        Actual: input.judgeEvidence ? RenderJudgeEvidence(input.judgeEvidence) : JSON.stringify(input.actualOutput, null, 2),
     };
 }
 

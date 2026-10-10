@@ -1,5 +1,5 @@
 import { ClientRealtimeSessionConfig, JSONObject, ResolveResponseDoneUsage } from '@memberjunction/ai';
-import { BaseRealtimeClient, RealtimeClientState } from './baseRealtimeClient';
+import { BaseRealtimeClient, RealtimeClientState, ToProviderSessionConfig } from './baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
@@ -916,9 +916,12 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
     /** Opens the provider socket for this connection (drivers own URL/auth specifics). */
     protected abstract openProviderSocket(config: ClientRealtimeSessionConfig): IOpenAIProtocolClientSocket;
-    /** Extracts the wire-shaped `session` object from the server pact. Default: the pact itself. */
+    /**
+     * Extracts the wire-shaped `session` object from the server pact. Default: the pact minus the
+     * client-only hints ({@link ToProviderSessionConfig}).
+     */
     protected resolveSessionObject(config: ClientRealtimeSessionConfig): JSONObject {
-        return config.SessionConfig ?? {};
+        return ToProviderSessionConfig(config.SessionConfig ?? {});
     }
     /** Resolves the PCM sample rate for the audio plane (both directions). */
     protected abstract resolveSampleRate(config: ClientRealtimeSessionConfig): number;
@@ -1035,6 +1038,9 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
         const sampleRate = this.resolveSampleRate(config);
         this.playback = this.createPlayback(sampleRate);
+        // The agent voice plays through Web Audio only; publish it so a host recorder can mix
+        // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
+        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
         this.micCapture = await this.createMicCapture(micStream, sampleRate, (base64Pcm16) => this.sendMicChunk(base64Pcm16));
         // Audio-activity capability (base obligation #9): agent side taps the playout engine's
         // master gain; user side meters the mic stream. Null-safe — test fakes / no-WebAudio
@@ -1064,6 +1070,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
+        this.clearRemoteMediaStream();
         if (this.socket) {
             try {
                 this.socket.close();

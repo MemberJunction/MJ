@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_WORK_QUEUE_CONFIG, WorkQueueSchema } from './services/workQueueConfig.js';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
@@ -253,6 +254,38 @@ const cacheSettingsSchema = z.object({
    * every signed-in user may read every row of every entity.
    */
   recordDataBroadcastEntities: z.array(z.string()).optional().default([]),
+  /**
+   * Expiry, in seconds, of entries in the shared Redis cache (used when REDIS_URL is set). The
+   * REDIS_TTL_SECONDS environment variable overrides it. 0 stores entries without expiry. When
+   * neither is set, the Redis provider's default applies (one hour).
+   */
+  sharedCacheTTLSeconds: z.number().int().nonnegative().optional(),
+  /**
+   * How often, in seconds, loaded engines compare their rows with the database and reload what
+   * changed without an MJ event (direct SQL, other applications). With a shared cache one server
+   * does it per interval. 0 = disabled. Default: 300 (5 minutes).
+   */
+  engineSweepIntervalSeconds: z.number().int().nonnegative().optional().default(300),
+  /**
+   * How often, in seconds, the user cache compares two row counts and the newest update timestamp
+   * with the database and reloads only when they differ. The cache already refreshes on MJ writes
+   * (locally and, with a shared cache, on other servers); this covers changes made outside MJ.
+   * 0 = disabled. Default: 300 (5 minutes).
+   */
+  userCacheCheckIntervalSeconds: z.number().int().nonnegative().optional().default(300),
+  /**
+   * How often to compare this process's metadata with the database, in seconds (0 disables).
+   * Costs nothing unless an entity the metadata is built from declares
+   * `TrustServerCacheCompletely = false`; see `ProviderBase.SweepMetadataAgainstDatabase`.
+   */
+  metadataSweepIntervalSeconds: z.number().int().nonnegative().optional().default(300),
+  /**
+   * How long, in seconds, a server holds the shared warm-up turn while it loads its engines, so
+   * servers starting together load one at a time and the rest find the cache warm. The lease is
+   * renewed while the load runs; this value is both its expiry and how long another server waits
+   * for it. 0 disables the turn-taking. Default: 30.
+   */
+  startupWarmupLeaseSeconds: z.number().int().nonnegative().optional().default(30),
 });
 
 const loggingSettingsSchema = z.object({
@@ -702,6 +735,7 @@ const configInfoSchema = z.object({
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
   integrationSyncWorker: integrationSyncWorkerSchema.optional().default({}),
+  workQueue: WorkQueueSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
@@ -763,6 +797,7 @@ export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
 export type IntegrationSyncWorkerConfig = z.infer<typeof integrationSyncWorkerSchema>;
+export type { WorkQueueConfig } from './services/workQueueConfig.js';
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
@@ -896,6 +931,9 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     maxConcurrentRuns: 3
   },
 
+  // Work queue host defaults (off until an instance opts in)
+  workQueue: DEFAULT_WORK_QUEUE_CONFIG,
+
   // Realtime WebRTC SDP broker defaults (on by default; can be disabled via MJ_REALTIME_ENABLED=false)
   realtime: {
     enabled: RealtimeEnabledDefault(process.env.MJ_REALTIME_ENABLED),
@@ -920,6 +958,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     defaultTTLSeconds: 0,
     evictionSweepIntervalSeconds: 300,
     verboseLogging: false,
+    engineSweepIntervalSeconds: 300,
   },
 
   // Logging settings defaults — variables logging is always off unless the operator

@@ -85,6 +85,17 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         const startTime = new Date();
 
         try {
+            // Run-level readiness gate: a processor whose prerequisite is missing refuses the run up
+            // front with one clear message rather than failing every record into the circuit breaker.
+            if (processor.Preflight) {
+                await processor.Preflight({
+                    contextUser,
+                    provider,
+                    processRunID: handle.ProcessRunID,
+                    recordProcessID: options.recordProcessID,
+                    entityID: meta.EntityID,
+                });
+            }
             status = await this.runBatchLoop({
                 options, source, processor, tracker, handle, provider,
                 batchSize, maxConcurrency, errorThreshold, delayMs, rateLimiter,
