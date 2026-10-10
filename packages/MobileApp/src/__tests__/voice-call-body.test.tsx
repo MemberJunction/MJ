@@ -4,12 +4,13 @@ import { Animated, type ScrollView } from 'react-native';
 
 /**
  * Tests for the voice call screen's body as drawn: the orb's stage, the transcript card and the
- * controls (#5344).
+ * controls (#5344), and the controls' names for a screen reader (#5449).
  *
  * What matters is the column's shape, since that is what keeps the card off the controls on a
  * short phone: the controls in flow after the middle rather than positioned over it, the middle
  * taking what the controls leave, the stage sized from the measured middle, and the card shrinking
- * to the room under the stage with its caption scrolling, kept at the latest words.
+ * to the room under the stage with its caption scrolling, kept at the latest words. And each control
+ * is a button with a name, found the way a screen reader finds it: by role and name.
  */
 vi.mock('react-native', () => ({
     View: 'View',
@@ -123,6 +124,11 @@ function parts(tree: HostNode) {
     return { middle, controls, stage, card, scroll: scroll as HostNode, orb: orb as HostNode };
 }
 
+/** A button in the controls, found the way a screen reader finds it: by its role and name. */
+function buttonNamed(tree: HostNode, name: string): HostNode | undefined {
+    return hosts(parts(tree).controls).find((n) => n.props.accessibilityRole === 'button' && n.props.accessibilityLabel === name);
+}
+
 describe('VoiceCallBody', () => {
     it('lays the column out as the middle, then the controls, both in flow', () => {
         const tree = renderBody();
@@ -210,13 +216,35 @@ describe('VoiceCallBody', () => {
         expect(scrollToEnd).toHaveBeenCalledWith({ animated: true });
     });
 
-    it('stops the call from the stop button', () => {
+    it('stops the call from the button named "Stop", the only button that acts', () => {
         const onStop = vi.fn();
-        const { controls } = parts(renderBody({ OnStop: onStop }));
-        const buttons = hosts(controls).filter((n) => typeof n.props.onPress === 'function');
-        expect(buttons).toHaveLength(1);
-        (buttons[0].props.onPress as () => void)();
+        const tree = renderBody({ OnStop: onStop });
+        const stop = buttonNamed(tree, 'Stop');
+        expect(stop?.type).toBe('Pressable');
+        expect(stop?.props.disabled).toBeFalsy();
+        (stop?.props.onPress as () => void)();
         expect(onStop).toHaveBeenCalledTimes(1);
+        expect(hosts(parts(tree).controls).filter((n) => typeof n.props.onPress === 'function')).toEqual([stop]);
+    });
+
+    it('names the side buttons "Keyboard" and "Menu", disabled because nothing is wired to them yet', () => {
+        const tree = renderBody();
+        for (const name of ['Keyboard', 'Menu']) {
+            const button = buttonNamed(tree, name);
+            expect(button?.type, name).toBe('Pressable');
+            // Pressable reports `disabled` to screen readers as the button's state ("dimmed" in VoiceOver).
+            expect(button?.props.disabled, name).toBe(true);
+            expect(button?.props.onPress, name).toBeUndefined();
+        }
+    });
+
+    it('gives every button in the controls a role and a name, left to right', () => {
+        const buttons = hosts(parts(renderBody()).controls).filter((n) => n.type === 'Pressable');
+        expect(buttons.map((b) => [b.props.accessibilityRole, b.props.accessibilityLabel])).toEqual([
+            ['button', 'Keyboard'],
+            ['button', 'Stop'],
+            ['button', 'Menu'],
+        ]);
     });
 
     it("drives the orb and the ripples with the screen's motion", () => {
