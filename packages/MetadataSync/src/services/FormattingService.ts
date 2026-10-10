@@ -199,7 +199,7 @@ export class FormattingService {
         return lines.join('\n');
     }
 
-    /** @deprecated Use {@link FormatSyncSummary}. */
+    /** @deprecated Use {@link FormatSyncSummary}. This stub always renders non-dry-run labels; it does not take the `dryRun` parameter. */
     public formatSyncSummary(
         operation: 'push' | 'pull',
         stats: {
@@ -286,7 +286,7 @@ export class FormattingService {
         return lines.join('\n');
     }
 
-    /** @deprecated Use {@link FormatChangesRecap}. */
+    /** @deprecated Use {@link FormatChangesRecap}. This stub always renders non-dry-run labels; it does not take the `dryRun` parameter. */
     public formatChangesRecap(changes: RecordChangeDetail[]): string {
         return this.FormatChangesRecap(changes);
     }
@@ -318,7 +318,7 @@ export class FormattingService {
         return lines.join('\n') + '\n';
     }
 
-    /** @deprecated Use {@link FormatChangesReport}. */
+    /** @deprecated Use {@link FormatChangesReport}. This stub always renders non-dry-run labels; it does not take the `dryRun` parameter. */
     public formatChangesReport(changes: RecordChangeDetail[], generatedAt: string): string {
         return this.FormatChangesReport(changes, generatedAt);
     }
