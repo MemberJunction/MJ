@@ -616,6 +616,30 @@ describe('session lifecycle, driven end to end with fakes', () => {
             await runtime.EndRealtimeSession();
         });
 
+        it('releases the shard queue, and the audio it retained, when the recording ends', async () => {
+            const { runtime, flush } = await startRecorded(['refused', 'refused', 'refused']);
+            await flush();
+            await flush();
+            expect(runtime['shardQueue']?.RetainedCount).toBe(2);
+            await runtime.EndRealtimeSession();
+            expect(runtime['shardQueue']).toBeNull();
+        });
+
+        it('a flush in flight at hang-up sends nothing more once the recording has ended', async () => {
+            const { runtime, provider, flush } = await startRecorded(['refused']);
+            await flush(); // shard 0 refused and retained
+            let release!: (outcome: ShardOutcome) => void;
+            provider.HoldNextAttempt = new Promise<ShardOutcome>((resolve) => {
+                release = resolve;
+            });
+            const inFlight = flush(); // shard 0's resend is held on the wire
+            await runtime.EndRealtimeSession();
+            release('refused');
+            await inFlight;
+            // No new window (shard 1) after the end-of-call upload, and shard 0 is not retained again.
+            expect(provider.Attempts.map((a) => a.segmentIndex)).toEqual([0, 0]);
+        });
+
         // Regression guard for the per-recording queue (it passes on the pre-fix code too), not a repro.
         it("a flush still in flight when a new session starts does not touch the new session's shard indexes", async () => {
             const { runtime, provider, flush } = await startRecorded();

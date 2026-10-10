@@ -61,6 +61,8 @@ export class RecordingShardQueue {
   private inFlight = 0;
   /** True once a capacity stall has been logged; cleared when a flush actually runs. */
   private capacityWarned = false;
+  /** Set by {@link Close} when the recording ends; nothing is snapshotted, sent or retained after it. */
+  private closed = false;
   /**
    * Serializes "take a snapshot, then assign an index". The recorder advances its cursor
    * synchronously but encodes asynchronously, so two overlapping snapshots could resolve out of
@@ -93,16 +95,31 @@ export class RecordingShardQueue {
       // Retained shards go first, BEFORE the capture: a snapshot that never resolves must not strand
       // shards that already failed. Index order is unaffected — indexes are assigned in capture order
       // on the serialized chain, and every retained shard already has an older index.
+      // `closed` is re-checked before every send: a flush running when the recording ends must not
+      // keep uploading, or a resend could land after the end-of-call upload has deleted the shards.
       for (const shard of batch) {
+        if (this.closed) {
+          return;
+        }
         await this.send(shard, upload);
       }
-      const fresh = await this.captureShard(snapshot);
-      if (fresh) {
+      const fresh = this.closed ? null : await this.captureShard(snapshot);
+      if (fresh && !this.closed) {
         await this.send(fresh, upload);
       }
     } finally {
       this.inFlight--;
     }
+  }
+
+  /**
+   * Ends the queue with its recording: discards retained shards and stops any flush in flight from
+   * sending more. An upload already on the wire cannot be aborted (`ExecuteGQL` takes no
+   * AbortSignal), so at most that one request can still land.
+   */
+  public Close(): void {
+    this.closed = true;
+    this.retained = [];
   }
 
   /** Warns once per stall so a wedged uploader is visible without logging every 15 s tick. */
@@ -157,6 +174,13 @@ export class RecordingShardQueue {
       failure = error;
     }
     if (stored) {
+      return;
+    }
+    if (this.closed) {
+      console.warn(
+        `[RealtimeSession] Recording shard ${shard.Index} upload failed after the recording ended (${describeFailure(failure)}); not retried — the end-of-call upload supersedes it:`,
+        failure,
+      );
       return;
     }
     if (shard.Attempts >= MAX_SHARD_UPLOAD_ATTEMPTS) {

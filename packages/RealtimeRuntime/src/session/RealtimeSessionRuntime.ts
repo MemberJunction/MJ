@@ -1509,6 +1509,11 @@ export class RealtimeSessionRuntime {
    */
   private async stopRecording(): Promise<StoppedRecording | null> {
     this.stopSegmentFlushing();
+    // Close the queue with the recording: its retained shards (base64 audio) are released now, not at
+    // the next session start, and a flush still in flight stops sending, so no resend lands after the
+    // end-of-call upload below has deleted the shards.
+    this.shardQueue?.Close();
+    this.shardQueue = null;
     const recorder = this.recorder;
     this.recorder = null;
     this.currentTurnStartMs = null;

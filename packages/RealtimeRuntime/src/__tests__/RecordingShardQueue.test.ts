@@ -94,6 +94,58 @@ describe('RecordingShardQueue', () => {
     expect(queue.RetainedCount).toBe(0);
   });
 
+  describe('Close (the recording ended)', () => {
+    it('discards retained shards, and a later flush sends nothing and takes no snapshot', async () => {
+      const queue = new RecordingShardQueue();
+      const { Upload, Calls } = recordingUpload(() => false);
+      await queue.Flush(snapshotOf('a'), Upload);
+      expect(queue.RetainedCount).toBe(1);
+      queue.Close();
+      expect(queue.RetainedCount).toBe(0);
+      const snapshot = snapshotOf('b');
+      await queue.Flush(snapshot, Upload);
+      expect(Calls.map((c) => c.Index)).toEqual([0]);
+      expect(snapshot).not.toHaveBeenCalled();
+    });
+
+    it('stops a flush already in flight from sending the rest of its batch or its new window', async () => {
+      const queue = new RecordingShardQueue();
+      // Two refused windows leave shards 0 and 1 retained.
+      const refuse = recordingUpload(() => false);
+      await queue.Flush(snapshotOf('a'), refuse.Upload);
+      await queue.Flush(snapshotOf('b'), refuse.Upload);
+      expect(queue.RetainedCount).toBe(2);
+
+      const held = createDeferred<boolean>();
+      const calls: number[] = [];
+      const slowUpload: ShardUpload = async (index) => {
+        calls.push(index);
+        return index === 0 ? held.Promise : true;
+      };
+      const inFlight = queue.Flush(snapshotOf('c'), slowUpload);
+      await settle();
+      expect(calls).toEqual([0]); // shard 0's resend is on the wire
+      queue.Close(); // the user hangs up
+      held.Resolve(false);
+      await inFlight;
+      expect(calls).toEqual([0]); // shard 1 and the new window are never sent
+      expect(queue.RetainedCount).toBe(0);
+    });
+
+    it('does not retain a shard whose in-flight upload fails after Close, and says so', async () => {
+      const queue = new RecordingShardQueue();
+      await queue.Flush(snapshotOf('a'), recordingUpload(() => false).Upload); // shard 0, attempt 1 refused
+      const held = createDeferred<boolean>();
+      const inFlight = queue.Flush(snapshotOf(null), async () => held.Promise); // attempt 2 on the wire
+      await settle();
+      queue.Close();
+      held.Resolve(false);
+      await inFlight;
+      expect(queue.RetainedCount).toBe(0);
+      expect(warn.mock.calls.map((c) => String(c[0])).some((m) => m.includes('shard 0') && m.includes('after the recording ended'))).toBe(true);
+    });
+  });
+
   it('drops a shard after MAX_SHARD_UPLOAD_ATTEMPTS failures, warns with its index, and never reuses the index', async () => {
     const queue = new RecordingShardQueue();
     const { Upload, Calls } = recordingUpload((call) => call.Index !== 0);
