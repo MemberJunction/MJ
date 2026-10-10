@@ -9,6 +9,8 @@
  *
  * If this test fails, it means new code introduced a direct UUID comparison.
  * Fix by replacing `x.ID === y` with `UUIDsEqual(x.ID, y)`.
+ *
+ * A second test fails when a KNOWN_EXCEPTIONS entry no longer excepts anything.
  */
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
@@ -52,15 +54,15 @@ const EXCLUDE_PATTERNS = [
 
 /** Known exceptions — files where .ID === is comparing non-UUID values (e.g., numeric IDs, string enum values).
  *  Keys MUST use forward slashes; the test normalizes scanned paths to forward slashes before lookup so
- *  the same exception list works on Windows and Unix. */
+ *  the same exception list works on Windows and Unix.
+ *  An entry takes its whole file out of the scan, so a UUID comparison added there later would pass unnoticed.
+ *  Each entry must therefore still be needed: the second test fails when an entry's file is gone or no longer
+ *  holds a line the scan flags. Remove the entry when the comparison it was for goes. */
 const KNOWN_EXCEPTIONS: Record<string, string[]> = {
     'TestingFramework/integration-test-suite/src/checks/entity-writes.checks.ts': ['EW6 deliberately compares UUID CASE (flips it, then asserts the flip differs) to prove the case-insensitive FK round-trip — using UUIDsEqual there would defeat the check'],
     // Add file paths (relative to packages/) and the reason they're excepted
     // Example: 'SomePackage/src/file.ts': ['Uses numeric IDs, not UUIDs'],
     'Angular/Explorer/dashboards/src/Integration/components/mapping-workspace/mapping-workspace.component.ts': ['LocalID is a local string identifier (e.g. "pending-1"), not a UUID'],
-    'Angular/Explorer/explorer-core/src/lib/resource-wrappers/livekit-room-resource.component.ts': ['Voice .ID is a provider-native voice slug (e.g. "echo"), not a UUID — RealtimeVoiceOption.ID'],
-    'Angular/Generic/mj-livekit-room/src/lib/mj-livekit-room.component.ts': ['Voice .ID is a provider-native voice slug (e.g. "echo"), not a UUID — RealtimeVoiceOption.ID'],
-    'AI/Agents/src/realtime/bridge-realtime-session-factory.ts': ['Voice .ID is a provider voice API name slug (e.g. "alloy", "echo"), not a UUID — RealtimeVoiceOption.ID'],
 };
 
 /** Normalize a path to forward slashes so EXCLUDE_PATTERNS and KNOWN_EXCEPTIONS lookups
@@ -105,10 +107,6 @@ interface Violation {
 }
 
 function scanFileForViolations(filePath: string): Violation[] {
-    const violations: Violation[] = [];
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n');
-
     // Check if file is in known exceptions. Normalize to forward slashes —
     // path.relative produces backslash-separated paths on Windows, but
     // KNOWN_EXCEPTIONS keys are intentionally written with forward slashes
@@ -117,6 +115,15 @@ function scanFileForViolations(filePath: string): Violation[] {
     if (KNOWN_EXCEPTIONS[relativePath]) {
         return [];
     }
+    return findFlaggedLines(filePath, relativePath);
+}
+
+/** Every line in one file that the scan flags, without consulting KNOWN_EXCEPTIONS. The stale-exception
+ *  test uses it to confirm that each excepted file still holds a line its exception is for. */
+function findFlaggedLines(filePath: string, relativePath: string): Violation[] {
+    const violations: Violation[] = [];
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -176,6 +183,28 @@ describe('UUID Comparison Compliance', () => {
                 `  - 'arr.includes(x.ID)' with 'arr.some(id => UUIDsEqual(id, x.ID))'\n` +
                 `Import UUIDsEqual from '@memberjunction/global'.\n` +
                 `If a comparison is NOT a UUID (e.g., numeric ID), add it to KNOWN_EXCEPTIONS in this test file.`
+            );
+        }
+    });
+
+    it('should not keep KNOWN_EXCEPTIONS entries whose file no longer has a comparison the scan flags', () => {
+        const staleEntries: string[] = [];
+
+        for (const relativePath of Object.keys(KNOWN_EXCEPTIONS)) {
+            const filePath = path.join(SCAN_ROOT, relativePath);
+            if (!fs.existsSync(filePath) || !shouldScanFile(filePath)) {
+                staleEntries.push(`  ${relativePath}: the scan reads no file at this path`);
+            } else if (findFlaggedLines(filePath, relativePath).length === 0) {
+                staleEntries.push(`  ${relativePath}: the scan flags no line in it`);
+            }
+        }
+
+        if (staleEntries.length > 0) {
+            expect.fail(
+                `Found ${staleEntries.length} KNOWN_EXCEPTIONS entry(ies) that no longer except anything:\n` +
+                `${staleEntries.join('\n')}\n\n` +
+                `An entry takes its whole file out of the scan, so a UUID comparison added there later would pass unnoticed.\n` +
+                `Remove these entries from KNOWN_EXCEPTIONS in this test file.`
             );
         }
     });
