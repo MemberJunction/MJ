@@ -149,8 +149,12 @@ export interface ILiveKitRoomController {
   ToggleScreenShare(): Promise<boolean>;
   /** Shares something else: stops the current share, then asks the browser's picker again, with `request` as above. */
   ChangeScreenShare(request?: DisplayCaptureSurface | DisplayCaptureOptions): Promise<void>;
-  /** Sends a text message to the room on the data channel. */
-  SendData(text: string, topic?: string): Promise<void>;
+  /**
+   * Sends a text message to the room on the data channel. Resolves `true` when the message went out, and `false` when it
+   * did not: no room, a `beforeSendData` handler canceled it, or the send failed (also raised as an `error` of kind
+   * `data`).
+   */
+  SendData(text: string, topic?: string): Promise<boolean>;
   /** Resumes audio playback after a browser autoplay block (call from a user gesture). */
   StartAudio(): Promise<void>;
   /** Turns the noise filter on or off; resolves `false` when it cannot be applied. */
@@ -399,20 +403,25 @@ export class LiveKitRoomController implements ILiveKitRoomController {
    *
    * @param text The message text.
    * @param topic Optional topic to publish under (for routing on the receiving side).
+   * @returns `true` once LiveKit sent the message (while LiveKit reconnects, it holds the message and sends it when the
+   *   session resumes); `false` when it was not sent: no room, a `beforeSendData` handler canceled it, or the publish
+   *   failed, which is also raised as an `error` of kind `data`.
    */
-  public async SendData(text: string, topic?: string): Promise<void> {
+  public async SendData(text: string, topic?: string): Promise<boolean> {
     if (!this.room) {
-      return;
+      return false;
     }
     const before = this.Events.Emit('beforeSendData', { Text: text, Topic: topic, Cancel: false });
     if (before.Cancel) {
-      return;
+      return false;
     }
     try {
       const payload = this.textEncoder.encode(before.Text);
       await this.room.localParticipant.publishData(payload, { reliable: true, topic: before.Topic });
+      return true;
     } catch (err) {
       this.emitError('data', 'Failed to send data message.', err);
+      return false;
     }
   }
 

@@ -26,6 +26,8 @@ import {
   type LiveKitRoomState,
 } from '@memberjunction/livekit-room-core';
 import { LiveKitRoomComponent, LIVEKIT_ROOM_CONTROLLER_FACTORY } from './livekit-room.component';
+import { LiveKitChatPanelComponent } from './components/livekit-chat-panel.component';
+import { LIVEKIT_CHAT_TOPIC, type LiveKitChatMessage } from './models';
 
 /**
  * Container-level DOM spec for <mj-livekit-room> — the worked example of the
@@ -88,7 +90,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       SwitchDevice: vi.fn(() => Promise.resolve()),
       SetNoiseFilterEnabled: vi.fn(() => Promise.resolve(true)),
       SetBackgroundEffect: vi.fn(() => Promise.resolve(true)),
-      SendData: vi.fn(() => Promise.resolve()),
+      SendData: vi.fn(() => Promise.resolve(true)),
       ListDevices: vi.fn(() => Promise.resolve([])),
       GetActiveDeviceId: vi.fn(() => null),
     };
@@ -1197,6 +1199,101 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       f.detectChanges();
       expect(names(f, '.lk-room__pip-tile')).toEqual(['sage']);
       expect(query(f, '.lk-room__pip-tile .tile__video')?.classList.contains('tile__video--whole')).toBe(true);
+    });
+  });
+
+  describe('the chat', () => {
+    /** A connected room with the chat open, whose controller's `SendData` answers as given; and what `ChatMessage` reports. */
+    const openChat = (send: ILiveKitRoomController['SendData']) => {
+      const fc = room([person('ada')]);
+      const sendData = vi.fn(send);
+      fc.controller.SendData = sendData;
+      const f = render(fc.controller, { ChatOpenByDefault: true });
+      const reported: LiveKitChatMessage[] = [];
+      f.componentInstance.ChatMessage.subscribe((m: LiveKitChatMessage) => reported.push(m));
+      return { f, fc, sendData, reported };
+    };
+
+    /** Sends a message from the chat panel's composer, as the user does. */
+    const say = (f: ReturnType<typeof render>, words: string): void => {
+      const panel = f.debugElement.query(By.directive(LiveKitChatPanelComponent)).componentInstance as LiveKitChatPanelComponent;
+      panel.Draft = words;
+      panel.send(new Event('submit'));
+      f.detectChanges();
+    };
+
+    /** The chat's messages: each one's text, and whether it is marked "Not sent". */
+    const shown = (f: ReturnType<typeof render>) =>
+      queryAll(f, '.lk-chat__msg').map((row) => ({
+        Text: row.querySelector('.lk-chat__bubble')?.textContent?.trim(),
+        NotSent: row.querySelector('.lk-chat__not-sent') !== null,
+      }));
+
+    it('shows a message that goes out at once, unmarked, and reports it once it has gone out', async () => {
+      const { f, sendData, reported } = openChat(() => Promise.resolve(true));
+      say(f, 'Can everyone see my screen?');
+      expect(shown(f)).toEqual([{ Text: 'Can everyone see my screen?', NotSent: false }]);
+      await settle(f);
+      expect(shown(f)).toEqual([{ Text: 'Can everyone see my screen?', NotSent: false }]);
+      expect(sendData).toHaveBeenCalledExactlyOnceWith('Can everyone see my screen?', LIVEKIT_CHAT_TOPIC);
+      expect(reported.map((m) => [m.Text, m.IsLocal, m.NotSent])).toEqual([['Can everyone see my screen?', true, undefined]]);
+    });
+
+    it('marks a message that fails to send "Not sent", with a Retry, and does not report it', async () => {
+      const { f, reported } = openChat(() => Promise.resolve(false));
+      say(f, 'Can everyone see my screen?');
+      await settle(f);
+      expect(shown(f)).toEqual([{ Text: 'Can everyone see my screen?', NotSent: true }]);
+      expect(query(f, '.lk-chat__not-sent button')?.textContent?.trim()).toBe('Retry');
+      expect(reported).toEqual([]);
+    });
+
+    it('sends it again from Retry, as a new message at the end of the chat, where the others see it', async () => {
+      const { f, fc, sendData, reported } = openChat(() => Promise.resolve(false));
+      say(f, 'Can everyone see my screen?');
+      await settle(f);
+      fc.controller.Events.Emit('dataReceived', {
+        Text: 'Hi all',
+        Bytes: new Uint8Array(),
+        Topic: LIVEKIT_CHAT_TOPIC,
+        FromIdentity: 'ada',
+        FromDisplayName: 'Ada',
+        ReceivedAt: Date.now(),
+      });
+      f.detectChanges();
+
+      sendData.mockImplementation(() => Promise.resolve(true));
+      (query(f, '.lk-chat__not-sent button') as HTMLButtonElement).click();
+      f.detectChanges();
+      await settle(f);
+      expect(shown(f)).toEqual([
+        { Text: 'Hi all', NotSent: false },
+        { Text: 'Can everyone see my screen?', NotSent: false },
+      ]);
+      expect(sendData.mock.calls).toEqual([
+        ['Can everyone see my screen?', LIVEKIT_CHAT_TOPIC],
+        ['Can everyone see my screen?', LIVEKIT_CHAT_TOPIC],
+      ]);
+      expect(reported.map((m) => m.Text)).toEqual(['Hi all', 'Can everyone see my screen?']);
+    });
+
+    it("counts a failure on the chat button's badge when the chat panel was closed meanwhile", async () => {
+      const CHAT = 'mj-livekit-control-bar button[title="Chat"]';
+      let answer: (sent: boolean) => void = () => undefined;
+      const { f } = openChat(() => new Promise<boolean>((resolve) => (answer = resolve)));
+      say(f, 'Can everyone see my screen?');
+      (query(f, CHAT) as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(query(f, 'mj-livekit-chat-panel')).toBeNull();
+      expect(query(f, `${CHAT} .lk-bar__badge`)).toBeNull();
+
+      answer(false);
+      await settle(f);
+      expect(text(f, `${CHAT} .lk-bar__badge`)).toBe('1');
+      (query(f, CHAT) as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(shown(f)).toEqual([{ Text: 'Can everyone see my screen?', NotSent: true }]);
+      expect(query(f, `${CHAT} .lk-bar__badge`)).toBeNull();
     });
   });
 

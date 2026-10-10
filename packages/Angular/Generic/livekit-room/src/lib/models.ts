@@ -27,6 +27,11 @@ export interface LiveKitChatMessage {
   Timestamp: number;
   /** Whether the local user sent this message. */
   IsLocal: boolean;
+  /**
+   * The user's own message did not go out: the send failed, or a `BeforeSendData` handler canceled it. The chat marks it
+   * "Not sent", with a Retry that sends it again. Absent on a message that went out and on everyone else's.
+   */
+  NotSent?: boolean;
 }
 
 /** A selection emitted by the device menu. */

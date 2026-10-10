@@ -283,11 +283,15 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
 
   // ── What the preview does not simulate ──────────────────────────────────────────
 
-  /** Raises the cancelable `beforeSendData`; nobody else is in the room to receive the message. */
-  public async SendData(text: string, topic?: string): Promise<void> {
-    if (this.session) {
-      this.Events.Emit('beforeSendData', { Text: text, Topic: topic, Cancel: false });
+  /**
+   * Raises the cancelable `beforeSendData`; nobody else is in the room to receive the message. Resolves `true` unless a
+   * handler canceled it or you are not in the room.
+   */
+  public async SendData(text: string, topic?: string): Promise<boolean> {
+    if (!this.session) {
+      return false;
     }
+    return !this.Events.Emit('beforeSendData', { Text: text, Topic: topic, Cancel: false }).Cancel;
   }
 
   /** Nothing to do: the simulated people make no sound, so the browser never blocks it. */

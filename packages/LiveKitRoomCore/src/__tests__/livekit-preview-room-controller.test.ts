@@ -513,15 +513,26 @@ describe('LiveKitPreviewRoomController: what the agent sees', () => {
 });
 
 describe('LiveKitPreviewRoomController: what it does not simulate', () => {
-  it('raises beforeSendData for a message, and nothing comes back', async () => {
+  it('raises beforeSendData for a message, resolves true, and nothing comes back', async () => {
     const { room } = await joined();
     const before = vi.fn();
     const received = vi.fn();
     room.Events.On('beforeSendData', before);
     room.Events.On('dataReceived', received);
-    await room.SendData('hello', 'lk-chat');
+    expect(await room.SendData('hello', 'lk-chat')).toBe(true);
     expect(before).toHaveBeenCalledWith({ Text: 'hello', Topic: 'lk-chat', Cancel: false });
     expect(received).not.toHaveBeenCalled();
+  });
+
+  it('resolves false for a message a beforeSendData handler cancels, and outside the room', async () => {
+    const { room } = await joined();
+    const stopCanceling = room.Events.On('beforeSendData', (e) => {
+      e.Cancel = true;
+    });
+    expect(await room.SendData('hello', 'lk-chat')).toBe(false);
+    stopCanceling();
+    await room.Disconnect();
+    expect(await room.SendData('hello', 'lk-chat')).toBe(false);
   });
 
   it('has no noise filter or background effects', async () => {
