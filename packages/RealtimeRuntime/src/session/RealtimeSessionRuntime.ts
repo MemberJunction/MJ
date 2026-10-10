@@ -1015,7 +1015,7 @@ export class RealtimeSessionRuntime {
   private microphoneLease: MicrophoneLease | null = null;
 
   /**
-   * Why the last session start failed, or `null` when none has.
+   * Why the latest session start failed, or `null` when it has not. Each start clears it ({@link beginSessionStart}).
    *
    * The runtime reports failure as `'error'` on {@link ConnectionState$}, which is enough to show
    * *that* something went wrong but not *what* — and the difference matters at exactly one point:
@@ -1382,13 +1382,17 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Start prologue shared by both entry points: bind the app layer, publish the agent name, reset
-   * per-session state, and flip the session live (which is ALSO what makes the `IsActive` guard
-   * suppress duplicate starts while the mint is still in flight — hence it runs before minting, not
-   * after). Returns the resolved recording consent, which the mint half reports to the server and
-   * the run half uses to decide whether to record.
+   * Start prologue shared by both entry points: clear the last start's failure, bind the app layer,
+   * publish the agent name, reset per-session state, and flip the session live (which is ALSO what
+   * makes the `IsActive` guard suppress duplicate starts while the mint is still in flight — hence it
+   * runs before minting, not after). Returns the resolved recording consent, which the mint half
+   * reports to the server and the run half uses to decide whether to record.
    */
   private beginSessionStart(options: RealtimeSessionRunOptions): boolean {
+    // Before this start publishes anything: hosts read LastStartError as this start's states arrive,
+    // so from the first of them it must describe this start, not an earlier one.
+    this.lastStartError = null;
+
     // App awareness (Move 1/3/4): the application the session runs in (sources the app config
     // cascade + RelevantAgents → allowed-agent union) and the live app-context snapshot injected
     // into the companion prompt at mint. Stored so the ClientContextChannel can stream subsequent
@@ -1905,11 +1909,11 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Why the last session start failed, or `null` when the last start succeeded or none has run.
+   * Why the latest session start failed, or `null` when it has not failed or none has run.
    *
    * Read it when {@link ConnectionState$} reports `'error'`, to tell a denied microphone apart from
-   * a provider or backend failure and show copy the user can act on. Cleared at the start of every
-   * session.
+   * a provider or backend failure and show copy the user can act on. Each start clears it before it
+   * reports `'connecting'`, so it never describes an earlier start.
    */
   public get LastStartError(): Error | null {
     return this.lastStartError;
