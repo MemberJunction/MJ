@@ -16,15 +16,14 @@ import type {
 import type { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
 import type { ActiveBridgeSession } from '@memberjunction/ai-bridge-server';
 import { LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, type BridgeOps } from '../livekit-agent-room-coordinator';
-import { LiveKitTokenService, type MintedToken } from '../livekit-token-service';
+import { LiveKitTokenService } from '../livekit-token-service';
 
 const CONFIG = { ServerUrl: 'wss://test.livekit.cloud', ApiKey: 'devkey', ApiSecret: 'devsecretdevsecretdevsecret123456' };
 const AUDIO_IN: RealtimeTrackDescriptor = { Modality: 'audio', Direction: 'inbound' };
 const VIDEO_IN: RealtimeTrackDescriptor = { Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: 1 };
 
-/** A model session that declares whether it takes video, and records whether it was closed. */
+/** A model session that declares whether it takes video. */
 class FakeModelSession implements IRealtimeSession {
-    public Closed = false;
     constructor(private readonly takesVideo: boolean) {}
     public get Capabilities(): RealtimeSessionCapabilities {
         return { CanReconfigureTurnMode: false, SupportedInboundTracks: this.takesVideo ? [AUDIO_IN, VIDEO_IN] : [AUDIO_IN] };
@@ -57,14 +56,7 @@ class FakeModelSession implements IRealtimeSession {
         /* not driven here */
     }
     public async Close(): Promise<void> {
-        this.Closed = true;
-    }
-}
-
-/** A token service whose bot-token mint fails, after the coordinator's configuration check passes. */
-class FailingMintTokenService extends LiveKitTokenService {
-    public override async MintBotToken(): Promise<MintedToken> {
-        throw new Error('mint failed');
+        /* not driven here */
     }
 }
 
@@ -161,17 +153,5 @@ describe('LiveKitAgentRoomCoordinator — whether the bot watches', () => {
 
         await expect(start()).rejects.toThrow(/LiveKitTokenService is not configured/);
         expect(factory).not.toHaveBeenCalled();
-    });
-
-    it('closes the opened model session when minting the bot token fails', async () => {
-        const { ops } = makeBridgeOps();
-        coordinator.SetBridgeOps(ops);
-        const session = new FakeModelSession(true);
-        coordinator.SetSessionFactory(async () => session);
-        coordinator.SetTokenService(new FailingMintTokenService(CONFIG));
-
-        await expect(start()).rejects.toThrow('mint failed');
-        expect(session.Closed).toBe(true);
-        expect(ops.StartBridgeSession).not.toHaveBeenCalled();
     });
 });

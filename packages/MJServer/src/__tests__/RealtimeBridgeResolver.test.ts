@@ -388,7 +388,7 @@ describe('RealtimeBridgeResolver', () => {
     });
   });
 
-  describe('the agent session it created closes when the agent leaves the room (#5356)', () => {
+  describe('the agent session it created closes when the agent leaves the room (#5356) or fails to start (#5308)', () => {
     /** One `MJ: AI Agent Sessions` row in the fake database. */
     interface SessionRow {
       ID: string;
@@ -556,6 +556,42 @@ describe('RealtimeBridgeResolver', () => {
 
       expect(sessions.get('AS-supplied')?.Status).toBe('Active');
       expect(sessionManagerOf(resolver).CreateSession).not.toHaveBeenCalled();
+    });
+
+    // The coordinator's start throws once it has closed any model session it opened; the agent never joined, so no
+    // end-of-session hook runs for it.
+    it.each([
+      ["the bot's token can't be minted", 'mint failed'],
+      ["the bridge doesn't start", 'Failed to create AIAgentSessionBridge: the user may not create MJ: AI Agent Session Bridges'],
+    ])('closes it at once, as Error, when the agent fails to start because %s', async (_why, startError) => {
+      h.startAgentRoomSession.mockRejectedValueOnce(new Error(startError));
+      const close = vi.spyOn(sessionManagerOf(resolver), 'CloseSession');
+
+      const started = await start();
+
+      expect(started).toMatchObject({ Success: false, ErrorMessage: startError });
+      expect(sessions.get('AS-1')).toMatchObject({ Status: 'Closed', CloseReason: 'Error', ClosedAt: expect.any(Date) });
+      expect(close).toHaveBeenCalledWith('AS-1', resolver.user, db, 'Error');
+    });
+
+    it('leaves a session the caller supplied as it was when the agent fails to start', async () => {
+      addSession('AS-supplied');
+      h.startAgentRoomSession.mockRejectedValueOnce(new Error('mint failed'));
+
+      const started = await start({ AgentSessionID: 'AS-supplied' });
+
+      expect(started.Success).toBe(false);
+      expect(sessions.get('AS-supplied')?.Status).toBe('Active');
+    });
+
+    it("returns the start's own error when closing the session fails too, leaving the session to the janitor", async () => {
+      h.startAgentRoomSession.mockRejectedValueOnce(new Error('mint failed'));
+      vi.spyOn(sessionManagerOf(resolver), 'CloseSession').mockRejectedValue(new Error('database unreachable'));
+
+      const started = await start();
+
+      expect(started).toMatchObject({ Success: false, ErrorMessage: 'mint failed' });
+      expect(sessions.get('AS-1')?.Status).toBe('Active');
     });
   });
 
