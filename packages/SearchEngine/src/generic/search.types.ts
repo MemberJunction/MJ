@@ -7,6 +7,7 @@
  *
  * @module @memberjunction/search-engine
  */
+import type { UserInfo } from '@memberjunction/core';
 
 /**
  * Source types that can contribute to search results.
@@ -86,6 +87,10 @@ export interface SearchParams {
      * cross-scope RRF fusion. When omitted/empty, behaves as if the Global scope was used
      * (backward compatible). A single scope marked `IsGlobal=true` is also treated as no
      * filter.
+     *
+     * Every ID must name a scope that is active right now. If any is inactive, expired, or not
+     * found, the search is refused (`Success: false`, an error naming the scope) — it is never
+     * run without that scope, and never widened to a global search.
      */
     ScopeIDs?: string[];
     /**
@@ -104,7 +109,9 @@ export interface SearchParams {
     /**
      * Optional per-provider `topK` overfetch multiplier. Compensates for residual late
      * permission filtering by requesting more candidates from each provider than the caller
-     * strictly wants. The final result count is still bounded by `MaxResults`. Default: 2.
+     * strictly wants. The final result count is still bounded by `MaxResults`. When not set, the
+     * largest `permissionOverfetchFactor` declared by the resolved scopes' `ScopeConfig` applies, else
+     * the engine default (2). Whatever the source, the factor is clamped to 1–20.
      */
     PermissionOverfetchFactor?: number;
     /**
@@ -124,6 +131,50 @@ export interface SearchParams {
      * itself, the caller that selects scopes does.
      */
     AISkillID?: string | null;
+    /**
+     * Everyone besides `contextUser` who will see this search's results. When set, a result
+     * survives only if **every** reader may read it: the engine runs its permission safety net
+     * (entity read, row filters, ownership, and the origin-record gate for derived content)
+     * once for the caller and once per reader, and keeps the intersection. Use it for a shared
+     * conversation, where the asker's reach is the ceiling but not the floor — a document one participant
+     * can't open must not be quoted to the room because another participant could. Readers never widen
+     * a result set. The engine does not resolve IDs to users, and nothing in the GraphQL surface sets this today.
+     *
+     * Four rules for callers:
+     * 1. **Pass hydrated `UserInfo` objects** (e.g. from `UserCache`): every reader needs a non-empty `ID`
+     *    and a `UserRoles` array. A malformed audience — `Readers` not an array, a `null` reader, a reader
+     *    with no `ID` or with no `UserRoles` array — fails the search (`Success: false`, an error starting
+     *    "SearchEngine: invalid Audience"); it is never skipped. `UserRoles: []` is legitimate and reads
+     *    nothing, which empties the result.
+     * 2. **Expect no storage hits.** `storage-file` results are dropped under an audience: storage hits are
+     *    re-checked (account permission and the tracked-file rule) for the caller only; per-reader storage
+     *    checks are a follow-up.
+     * 3. **Show the room `fused`/`final` results.** `streamSearch`'s `provider` events never carry results
+     *    (only `providerName`, `durationMs` and `resultCount`, for progress): they arrive before any permission pass.
+     * 4. **Check each reader's scope entitlement yourself.** Scope entitlement (`SearchScopePermission`),
+     *    `ServerDerived` dimensions, scope `ExtraFilter`/`MetadataFilter` templates and vector push-down are
+     *    evaluated for the caller only. A host must check that every reader may use the scopes it passes, and
+     *    must not rely on dimension-only bounds to keep a room inside its reach.
+     *
+     * Two further limits:
+     * - **`SourceCounts`, and a streamed `provider` event's `resultCount`, are counted before the permission and
+     *   audience passes**, so they reveal the caller's unfiltered reach to anyone shown them. Don't show them to a room.
+     * - **The result cache keys on reader IDs.** Within its 30 s TTL, a reader object with the same `ID` but
+     *   different hydration (roles changed, say) gets the cached verdict.
+     */
+    Audience?: SearchAudience;
+}
+
+/**
+ * The people, other than the caller, who will see a search's results. See {@link SearchParams.Audience}.
+ */
+export interface SearchAudience {
+    /**
+     * Readers besides the caller, as hydrated `UserInfo` objects: a non-empty `ID` and a `UserRoles` array
+     * each (`[]` for a reader with no roles). The caller is always a reader; listing them again, or listing
+     * a reader twice, is harmless. A reader that is `null`, has no `ID` or has no `UserRoles` array fails the search.
+     */
+    Readers: UserInfo[];
 }
 
 /**
@@ -209,6 +260,16 @@ export interface ScopeSecondaryDimension {
     expansionQueryID?: string;
     /** Names a ServerDerived dimension this one may only narrow (never widen). */
     narrowingOf?: string;
+    /**
+     * The dimension must resolve to a **non-empty** value or the search is refused (`ScopeDimensionError`).
+     * Unresolved and resolved-to-nothing (an expansion query with no rows, `null`, an empty set, a blank
+     * string) are both refusals: a required dimension is the bound, and "nothing reachable" means nothing
+     * to search — never a lane left unbounded because its template clause rendered empty. The one
+     * exemption is an explicitly declared `inheritanceMode: 'cascading'`, where an empty value is
+     * meaningful (untagged content applies to everyone) and is allowed through; a cascading template must
+     * then carry an `{% else %}<column> IS NULL` branch, or an empty set widens the lane to every tagged
+     * row. An empty value on a dimension that is not required still reaches the template.
+     */
     required?: boolean;
     defaultValue?: SecondaryScopeValue | null;
     /**
@@ -360,11 +421,25 @@ export interface ScopeConstraints {
      * For vector and 3rd-party index providers (Elasticsearch, Typesense, AzureAISearch,
      * OpenSearch): only query these external indexes. Each entry carries its IndexType,
      * native identifier, rendered MetadataFilter, and any ExternalIndexConfig.
+     *
+     * **`[]` and `undefined` mean opposite things.** `undefined` means unscoped (no scope, or a global
+     * scope): search everything available, including a configured default index. `[]` means the scope
+     * gives this lane nothing: return no results without querying, and never fall back to a default
+     * index. Test `=== undefined`, never `?.length` — `[]?.length` is falsy, so the old
+     * `ExternalIndexes?.length ? scoped : defaultIndex` pattern widens an empty scope to the default
+     * index. `BaseSearchProvider.ScopedExternalIndexRows` applies the rule for one `IndexType`.
      */
     ExternalIndexes?: ScopeExternalIndexConstraint[];
-    /** For `EntitySearchProvider` / `FullTextSearchProvider`: only search these entities. */
+    /**
+     * For `EntitySearchProvider` / `FullTextSearchProvider` / `TagSearchProvider`: only search these
+     * entities. Same contract as {@link ExternalIndexes}: `undefined` is unscoped (every searchable
+     * entity), `[]` is no entity at all — never every entity.
+     */
     Entities?: ScopeEntityConstraint[];
-    /** For `StorageSearchProvider`: only search these accounts/folders. */
+    /**
+     * For `StorageSearchProvider`: only search these accounts/folders. Same contract as
+     * {@link ExternalIndexes}: `undefined` is unscoped (every searchable account), `[]` is no account.
+     */
     StorageAccounts?: ScopeStorageConstraint[];
     /** Multi-tenant runtime context — filters results to a specific tenant/dimension. */
     Context?: SearchContext;
@@ -469,6 +544,14 @@ export interface SearchResultItem {
     ResultType: SearchResultType;
     /** ID of the SearchProvider metadata record that produced this result */
     ProviderId?: string;
+    /**
+     * Set by the engine when it promoted a `MJ: Content Items` hit to the record the content was derived
+     * from: the content item's `RecordID`. `EntityName` / `RecordID` then name the origin record, which the
+     * provider in `ProviderId` never read — so none of that provider's guarantees carry over: the permission
+     * pass verifies the origin row (`PK IN (...)`), and the origin entity's lane `ExtraFilter` is re-checked.
+     * `ProviderId`, `ProviderLabel` and `ProviderIcon` still attribute the hit to the provider that found it.
+     */
+    PromotedFromContentItemID?: string;
     /** Display label from the SearchProvider metadata (e.g., "Database", "Semantic Search") */
     ProviderLabel?: string;
     /** Font Awesome icon class from the SearchProvider metadata (e.g., "fa-solid fa-brain") */
@@ -491,11 +574,23 @@ export interface SearchResultItem {
  */
 export type SearchStreamEvent =
     | {
+        /**
+         * Progress: one provider has returned. Carries no record content — the provider's hits have not been
+         * through the permission pass yet. Results arrive in `fused` and `final`.
+         */
         phase: 'provider';
         /** Friendly provider name that just returned (Vector / FullText / Entity / Storage / external). */
         providerName: string;
-        /** This provider's contribution before fusion. */
+        /**
+         * @deprecated Always empty: a provider's hits arrive before the permission pass, so the stream never
+         * carries them. Use {@link resultCount} for progress and the `final` event for results.
+         */
         results: SearchResultItem[];
+        /**
+         * How many hits this provider returned, capped at the caller's `MaxResults`. Counted before fusion, the
+         * permission pass and any audience pass, like `SearchResult.SourceCounts` — so don't show it to a room.
+         */
+        resultCount: number; // case-violation-ok-legacy-back-compat: matches the camelCase fields of the shipped SearchStreamEvent union
         /** Provider wall-clock duration in ms. */
         durationMs: number;
     }
@@ -540,7 +635,10 @@ export interface SearchResult {
     TotalCount: number;
     /** Total search execution time in milliseconds */
     ElapsedMs: number;
-    /** Count of results contributed by each source before fusion */
+    /**
+     * Count of results contributed by each source before fusion — and before the permission safety net and
+     * any audience pass, so it reflects the caller's unfiltered reach (see `SearchParams.Audience`).
+     */
     SourceCounts: {
         Vector: number;
         FullText: number;

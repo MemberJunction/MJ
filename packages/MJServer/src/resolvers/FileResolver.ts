@@ -1,7 +1,6 @@
-import { EntityPermissionType, FieldValueCollection, EntitySaveOptions, LogError, UserInfo } from '@memberjunction/core';
+import { EntityPermissionType, FieldValueCollection, EntitySaveOptions, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJFileEntity, MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
-import { readRealtimeRecordingFile } from '@memberjunction/ai-agents';
 import {
   AppContext,
   Arg,
@@ -35,6 +34,14 @@ import {
   UserContextOptions,
   ExtendedUserContextOptions,
   FileStorageEngine,
+  FileStorageBase,
+  MultiAccountSearchResult,
+  ResolvedFileObject,
+  StorageAccessEvaluator,
+  StorageAccountAccess,
+  StorageAccountAccessDeniedError,
+  StorageFileLocation,
+  StorageObjectMetadata as StoredObjectMetadata,
 } from '@memberjunction/storage';
 import { CreateMJFileInput, MJFileResolver as FileResolverBase, MJFile_, UpdateMJFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
@@ -434,6 +441,9 @@ export class MediaAccessTokenResult {
   ErrorMessage?: string;
 }
 
+/** The failure reported for an account `SearchAcrossAccounts` refuses — the same whether it is restricted or does not exist. */
+const SEARCH_ACCOUNT_REFUSED_MESSAGE = 'Access denied: you do not have access to this storage account or it does not exist.';
+
 @Resolver(MJFile_)
 export class FileResolver extends FileResolverBase {
   /**
@@ -469,6 +479,9 @@ export class FileResolver extends FileResolverBase {
       if (!loaded) {
         return { Success: false, ErrorMessage: 'You do not have access to this file or it does not exist.' };
       }
+      // Storage gate: the token is the capability the /media route honours, so it is minted only when the caller may read
+      // the account the row's provider resolves to and every row tracking the object (throws — caught below).
+      const resolved = await this.assertFileObjectAccess(fileEntity, 'Read', contextUser, provider);
 
       // Access authorized — mint the capability token.
       const { Token, ExpiresAt } = MediaAccessKeyManager.Instance.Sign(fileId, contextUser.ID);
@@ -478,7 +491,7 @@ export class FileResolver extends FileResolverBase {
       // Best-effort: surface precomputed waveform peaks from a peaks.json sidecar beside the file, so
       // the player renders the real waveform instantly without fetching/decoding the audio. Never
       // blocks token minting — any failure just omits Peaks.
-      const peaks = await this.tryReadPeaksSidecar(fileEntity, contextUser);
+      const peaks = await this.tryReadPeaksSidecar(fileEntity, resolved?.Driver);
 
       return { Success: true, Token, Url: url, ExpiresAt, MimeType: fileEntity.ContentType ?? undefined, Peaks: peaks };
     } catch (error) {
@@ -492,34 +505,22 @@ export class FileResolver extends FileResolverBase {
    * Best-effort read of a `peaks.json` waveform sidecar that sits in the SAME storage folder as the
    * given file (a JSON array of normalized `0..1` numbers, written at capture time). Derives the
    * folder from the file's `ProviderKey` (strips the final path segment), reads `<folder>/peaks.json`
-   * via the file's own storage driver, parses + validates it, and returns sanitized peaks. Returns
-   * `undefined` on ANY failure (no ProviderKey, no sidecar, parse error, garbage) — the caller treats
-   * peaks as a pure optimization and must never let a sidecar problem affect token minting.
+   * through the file's own storage driver — the one {@link assertFileObjectAccess} resolved, so the account is already
+   * gated — parses + validates it, and returns sanitized peaks. Returns `undefined` on ANY failure (no ProviderKey, no
+   * driver, no sidecar, parse error, garbage) — the caller treats peaks as a pure optimization and must never let a
+   * sidecar problem affect token minting.
    *
    * @param file The already-loaded (under the user's context) `MJ: Files` row.
-   * @param contextUser The calling user — used to resolve the storage driver.
+   * @param driver The gated driver for the file's account, or undefined when the provider has none.
    * @returns Sanitized `0..1` peaks (length-capped), or `undefined`.
    */
-  private async tryReadPeaksSidecar(file: MJFileEntity, contextUser: UserInfo): Promise<number[] | undefined> {
+  private async tryReadPeaksSidecar(file: MJFileEntity, driver: FileStorageBase | undefined): Promise<number[] | undefined> {
     try {
       // The sidecar lives next to the recording: replace the final path segment with peaks.json.
       const sidecarPath = DeriveSidecarPath(file.ProviderKey);
-      if (!sidecarPath) {
+      if (!sidecarPath || !driver) {
         return undefined;
       }
-
-      // Resolve the file's storage account → driver (mirror of readRealtimeRecordingFile's pattern).
-      await FileStorageEngine.Instance.Config(false, contextUser);
-      let accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
-      if (accounts.length === 0) {
-        await FileStorageEngine.Instance.Config(true, contextUser);
-        accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
-      }
-      const account = accounts[0];
-      if (!account) {
-        return undefined;
-      }
-      const driver = await FileStorageEngine.Instance.GetDriver(account.ID, contextUser);
       const bytes = await driver.GetObject({ fullPath: sidecarPath });
       if (!bytes || bytes.length === 0) {
         return undefined;
@@ -555,6 +556,75 @@ export class FileResolver extends FileResolverBase {
       contextUser: user,
       accountEntity,
     };
+  }
+
+  /**
+   * The storage-account gate. Every route keyed by a client-supplied account ID runs it FIRST — before the account is
+   * loaded and before any driver call. Throws `StorageAccountAccessDeniedError` ("You do not have access to this storage
+   * account or it does not exist.") unless the caller may use the account for `access`, evaluated per call against
+   * `MJ: File Storage Account Permissions` by `StorageAccessEvaluator` (`@memberjunction/storage`). An unknown account
+   * gets the same refusal, so the error never reveals whether an account ID is real.
+   */
+  private async assertAccountAccess(accountId: string, access: StorageAccountAccess, context: AppContext): Promise<void> {
+    const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+    const user = this.GetUserFromPayload(context.userPayload);
+    await StorageAccessEvaluator.Instance.AssertAccountAccess(accountId, user, access, md);
+  }
+
+  /**
+   * The tracked-file rule for an account-keyed route: when any of `objectNames` in the account backs an `MJ: Files` row,
+   * the caller must be able to read that row — the rule {@link GetFileContents} applies to a file ID — else this throws
+   * `TrackedFileAccessDeniedError` ("You do not have access to this file or it does not exist."). Keys are compared the
+   * way the account's driver addresses them (`FileStorageBase.NormalizeObjectKey`) and case-insensitively; a key whose
+   * meaning depends on the provider (`..`, `\`, `%2F`, ...) is refused outright. Applied to every object a route reads
+   * or signs, and to every object it overwrites, moves or deletes — the minimum for a write is that the caller may read
+   * what it replaces. An object no row tracks is governed by the account gate, which the caller has already passed.
+   */
+  private async assertTrackedObjectReadable(accountId: string, objectNames: string[], user: UserInfo, md: IMetadataProvider): Promise<void> {
+    const providerID = await this.accountProviderID(accountId, user, md);
+    const driver = await FileStorageEngine.Instance.GetDriver(accountId, user);
+    await StorageAccessEvaluator.Instance.AssertTrackedObjectsReadable(providerID, objectNames, user, md, driver);
+  }
+
+  /**
+   * The storage gate for a route that goes from an `MJ: Files` row (already loaded as the caller) to its object: the
+   * account the row's provider resolves to must allow `access`, and every row tracking the object must be readable by
+   * the caller (`FileStorageEngine.ResolveFileObject`) — so a row whose client-written `ProviderID`/`ProviderKey`/`Name`
+   * aliases someone else's object is refused. `extraKeys` (a rename target) get the tracked-file rule too. When the
+   * provider has no storage account the legacy env-configured driver serves the row; there is no account to gate, so the
+   * tracked-file rule alone applies. Returns the resolved object, or `null` in that legacy case.
+   */
+  private async assertFileObjectAccess(
+    file: StorageFileLocation,
+    access: StorageAccountAccess,
+    user: UserInfo,
+    md: IMetadataProvider,
+    extraKeys: string[] = [],
+  ): Promise<ResolvedFileObject | null> {
+    const location: StorageFileLocation = { ProviderID: file.ProviderID, ProviderKey: file.ProviderKey ?? null, Name: file.Name };
+    const resolved = await FileStorageEngine.Instance.ResolveFileObject(location, user, access, md);
+    const keys = resolved ? extraKeys : [location.ProviderKey ?? location.Name, ...extraKeys];
+    if (keys.length > 0) {
+      await StorageAccessEvaluator.Instance.AssertTrackedObjectsReadable(file.ProviderID, keys, user, md, resolved?.Driver);
+    }
+    return resolved;
+  }
+
+  /**
+   * The storage provider ID of an account the caller has already passed the gate for, from the engine's cache (refreshed
+   * once on a miss). Refuses like the gate when the account still cannot be found.
+   */
+  private async accountProviderID(accountId: string, user: UserInfo, md: IMetadataProvider): Promise<string> {
+    await FileStorageEngine.Instance.Config(false, user, md);
+    let account = FileStorageEngine.Instance.GetAccountById(accountId);
+    if (!account) {
+      await FileStorageEngine.Instance.Config(true, user, md);
+      account = FileStorageEngine.Instance.GetAccountById(accountId);
+    }
+    if (!account) {
+      throw new StorageAccountAccessDeniedError();
+    }
+    return account.ProviderID;
   }
 
   /**
@@ -606,6 +676,11 @@ export class FileResolver extends FileResolverBase {
     const providerEntity = await provider.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
+    // The upload URL signs an overwrite of `Name` (and the row will point at `ProviderKey`): Write on the account the
+    // provider resolves to, and the tracked-file rule on both keys, as for every other route that writes an object.
+    const location: StorageFileLocation = { ProviderID: input.ProviderID ?? '', ProviderKey: null, Name: input.Name ?? '' };
+    await this.assertFileObjectAccess(location, 'Write', user, provider, input.ProviderKey ? [input.ProviderKey] : []);
+
     const [sameName] = await this.findBy(provider, 'MJ: Files', { Name: input.Name, ProviderID: input.ProviderID }, context.userPayload.userRecord);
     const NameExists = Boolean(sameName);
 
@@ -650,6 +725,13 @@ export class FileResolver extends FileResolverBase {
       const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
       fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
+      // Write gate on the account the upload lands in — before the staged upload is consumed or any driver is touched.
+      // With no account at all there is nothing to gate; UploadFile then refuses with its documented error.
+      const targetAccountId = await this.resolveUploadAccountId(input.AccountID, user, provider);
+      if (targetAccountId) {
+        await this.assertAccountAccess(targetAccountId, 'Write', context);
+      }
+
       let buffer: Buffer;
       let fileName: string = input.FileName || 'file';
       let mimeType: string = input.MimeType || 'application/octet-stream';
@@ -674,18 +756,12 @@ export class FileResolver extends FileResolverBase {
         };
       }
 
-      // Ensure FileStorageEngine is configured under the user context
-      await FileStorageEngine.Instance.Config(false, user, provider);
-      if (input.AccountID && !FileStorageEngine.Instance.GetAccountById(input.AccountID)) {
-        await FileStorageEngine.Instance.Config(true, user, provider);
-      }
-
       const uploadResult = await FileStorageEngine.Instance.UploadFile({
         content: buffer,
         fileName,
         mimeType,
         contextUser: user,
-        storageAccountId: input.AccountID,
+        storageAccountId: targetAccountId,
         categoryID: input.CategoryID,
         description: input.Description,
         pathPrefix: input.PathPrefix,
@@ -711,6 +787,20 @@ export class FileResolver extends FileResolverBase {
     }
   }
 
+  /**
+   * The account an upload will land in: the requested one, else the engine's default (the first active account) —
+   * returned as an explicit ID so the account the gate checks is the account `UploadFile` uses. A requested ID is
+   * returned as-is: the gate refuses an unknown one without revealing that it does not exist, and `UploadFile` refreshes
+   * the engine's cache itself when a permitted account is missing from it.
+   */
+  private async resolveUploadAccountId(accountId: string | undefined, user: UserInfo, md: IMetadataProvider): Promise<string | undefined> {
+    if (accountId) {
+      return accountId;
+    }
+    await FileStorageEngine.Instance.Config(false, user, md);
+    return FileStorageEngine.Instance.ResolveStorageAccount()?.account.ID;
+  }
+
   @FieldResolver(() => String)
   async DownloadUrl(@Root() file: MJFile_, @Ctx() context: AppContext) {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
@@ -718,17 +808,11 @@ export class FileResolver extends FileResolverBase {
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
 
-    await FileStorageEngine.Instance.Config(false, user, md);
-    let accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
-    if (accounts.length === 0) {
-      await FileStorageEngine.Instance.Config(true, user, md);
-      accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
-    }
-
-    if (accounts.length > 0) {
-      const account = accounts[0];
-      const driver = await FileStorageEngine.Instance.GetDriver(account.ID, user);
-      return await driver.CreatePreAuthDownloadUrl(file.ProviderKey ?? file.Name);
+    // Storage gate: Read on the account the row's provider resolves to, and the tracked-file rule on its object
+    const location: StorageFileLocation = { ProviderID: file.ProviderID, ProviderKey: file.ProviderKey ?? null, Name: file.Name ?? '' };
+    const resolved = await this.assertFileObjectAccess(location, 'Read', user, md);
+    if (resolved) {
+      return await resolved.Driver.CreatePreAuthDownloadUrl(resolved.ObjectKey);
     }
 
     const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
@@ -743,7 +827,9 @@ export class FileResolver extends FileResolverBase {
   /**
    * Returns an `MJ: Files` record's bytes as base64, read server-side through authenticated MJStorage
    * (`GetObject`) — NOT a public pre-signed link. Permission-gated: the file is first loaded under the
-   * calling user's context, so MJ row-level security determines access. Never throws to the client.
+   * calling user's context, so MJ row-level security determines access; then the storage gate
+   * ({@link assertFileObjectAccess}) requires Read on the account the row's provider resolves to and refuses an object
+   * another row tracks when the caller cannot read that row. Never throws to the client.
    *
    * @param fileId The `MJ: Files` id whose bytes to return.
    * @returns `{ Success, Base64?, MimeType?, ErrorMessage? }`.
@@ -762,16 +848,18 @@ export class FileResolver extends FileResolverBase {
         return { Success: false, ErrorMessage: 'You do not have access to this file or it does not exist.' };
       }
 
-      // Read the bytes via authenticated MJStorage (server-side GetObject on the file's own account).
-      const result = await readRealtimeRecordingFile(fileId, contextUser, provider);
-      if (!result) {
+      // Storage gate, then read the bytes via authenticated MJStorage (server-side GetObject on the file's own account).
+      // A refusal throws and is reported below; a row with no ProviderKey or no account has no bytes to read.
+      const resolved = await this.assertFileObjectAccess(fileEntity, 'Read', contextUser, provider);
+      const bytes = resolved && fileEntity.ProviderKey ? await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey }) : null;
+      if (!bytes || bytes.length === 0) {
         return { Success: false, ErrorMessage: 'The file could not be read from storage.' };
       }
 
       return {
         Success: true,
-        Base64: result.Bytes.toString('base64'),
-        MimeType: result.MimeType ?? fileEntity.ContentType ?? undefined,
+        Base64: bytes.toString('base64'),
+        MimeType: fileEntity.ContentType ?? undefined,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -791,6 +879,8 @@ export class FileResolver extends FileResolverBase {
     await fileEntity.Load(input.ID);
 
     if (fileEntity.Name !== input.Name) {
+      // Renaming moves the object: Write on its account, and the tracked-file rule on the object and the new name
+      await this.assertFileObjectAccess(fileEntity, 'Write', user, md, [fileEntity.Name, input.Name]);
       const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
       await providerEntity.Load(fileEntity.ProviderID);
 
@@ -822,8 +912,10 @@ export class FileResolver extends FileResolverBase {
     }
     fileEntity.CheckPermissions(EntityPermissionType.Delete, true);
 
-    // Only delete the object from the provider if it's actually been uploaded
+    // Only delete the object from the provider if it's actually been uploaded — after the storage gate: Write on its
+    // account, and no other row the caller cannot read may track the object (a row can alias another row's object)
     if (fileEntity.Status === 'Uploaded') {
+      await this.assertFileObjectAccess(fileEntity, 'Write', userInfo, md);
       const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', userInfo);
       await providerEntity.Load(fileEntity.ProviderID);
       const userContext = this.buildUserContext(context);
@@ -844,13 +936,16 @@ export class FileResolver extends FileResolverBase {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
 
+    // Account gate first — before the account is loaded or any driver is touched
+    await this.assertAccountAccess(input.AccountID, 'Read', context);
+
     // Load the account and its provider
     const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
 
     console.log('[FileResolver] Provider loaded:', {
       Name: providerEntity.Name,
       ServerDriverKey: providerEntity.ServerDriverKey,
-      HasConfiguration: !!providerEntity.Get('Configuration'),
+      HasConfiguration: !!providerEntity.Configuration,
     });
 
     // Check permissions - user must have read access to Files entity
@@ -868,8 +963,10 @@ export class FileResolver extends FileResolverBase {
       prefixes: result.prefixes,
     });
 
-    // Convert Date objects to ISO strings for GraphQL
-    const objects = result.objects.map((obj) => ({
+    // Drop objects behind an MJ: Files row the caller cannot read — a listing never names a tracked object the caller
+    // is refused — then convert Date objects to ISO strings for GraphQL
+    const visible = await this.dropUnreadableListedObjects(input.AccountID, result.objects, user, md);
+    const objects = visible.map((obj) => ({
       ...obj,
       lastModified: obj.lastModified.toISOString(),
     }));
@@ -888,6 +985,10 @@ export class FileResolver extends FileResolverBase {
     // Check permissions
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
+
+    // Account gate, then — when the object backs an MJ: Files row — that row must be readable by the caller
+    await this.assertAccountAccess(input.AccountID, 'Read', context);
+    await this.assertTrackedObjectReadable(input.AccountID, [input.ObjectName], user, md);
 
     await FileStorageEngine.Instance.Config(false, user, md);
     const driver = await FileStorageEngine.Instance.GetDriver(input.AccountID, user);
@@ -920,6 +1021,9 @@ export class FileResolver extends FileResolverBase {
     // Check permissions
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
+    await this.assertAccountAccess(input.AccountID, 'Write', context);
+    // An upload URL can overwrite: the caller must be able to read any MJ: Files row that tracks the target
+    await this.assertTrackedObjectReadable(input.AccountID, [input.ObjectName], user, md);
 
     await FileStorageEngine.Instance.Config(false, user, md);
     const driver = await FileStorageEngine.Instance.GetDriver(input.AccountID, user);
@@ -972,12 +1076,16 @@ export class FileResolver extends FileResolverBase {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
 
+    // Account gate first — before the account is loaded or any driver is touched
+    await this.assertAccountAccess(input.AccountID, 'Write', context);
+
     // Load the account and its provider
     const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
 
     // Check permissions
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Delete, true);
+    await this.assertTrackedObjectReadable(input.AccountID, [input.ObjectName], user, md);
 
     // Delete the object with extended user context (includes account for credential lookup)
     const userContext = this.buildExtendedUserContext(context, account);
@@ -991,12 +1099,17 @@ export class FileResolver extends FileResolverBase {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
 
+    // Account gate first — before the account is loaded or any driver is touched
+    await this.assertAccountAccess(input.AccountID, 'Write', context);
+
     // Load the account and its provider
     const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
 
     // Check permissions
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Update, true);
+    // A move reads and removes the source and may overwrite the destination: both get the tracked-file rule
+    await this.assertTrackedObjectReadable(input.AccountID, [input.OldName, input.NewName], user, md);
 
     // Move the object with extended user context (includes account for credential lookup)
     const userContext = this.buildExtendedUserContext(context, account);
@@ -1009,6 +1122,9 @@ export class FileResolver extends FileResolverBase {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
 
+    // Account gate first — a copy within one account writes to it — before the account is loaded or any driver is touched
+    await this.assertAccountAccess(input.AccountID, 'Write', context);
+
     // Load the account and its provider
     const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
 
@@ -1016,6 +1132,9 @@ export class FileResolver extends FileResolverBase {
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
+    // A copy of a tracked object is an untracked one the caller could then download, and the destination may be
+    // overwritten: both get the tracked-file rule
+    await this.assertTrackedObjectReadable(input.AccountID, [input.SourceName, input.DestinationName], user, md);
 
     // Copy the object with extended user context (includes account for credential lookup)
     const userContext = this.buildExtendedUserContext(context, account);
@@ -1027,6 +1146,9 @@ export class FileResolver extends FileResolverBase {
   async CreateDirectory(@Arg('input', () => CreateDirectoryInput) input: CreateDirectoryInput, @Ctx() context: AppContext) {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
+
+    // Account gate first — before the account is loaded or any driver is touched
+    await this.assertAccountAccess(input.AccountID, 'Write', context);
 
     // Load the account and its provider
     const { account: accountEntity, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
@@ -1062,6 +1184,13 @@ export class FileResolver extends FileResolverBase {
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
+
+    // Account gates first: read the source, write the destination — before either account is loaded or touched
+    await this.assertAccountAccess(input.SourceAccountID, 'Read', context);
+    await this.assertAccountAccess(input.DestinationAccountID, 'Write', context);
+    // Tracked-file rule on both ends: the source (its copy would be untracked), the destination (it may be overwritten)
+    await this.assertTrackedObjectReadable(input.SourceAccountID, [input.SourcePath], user, md);
+    await this.assertTrackedObjectReadable(input.DestinationAccountID, [input.DestinationPath], user, md);
 
     // Load the source account and its provider
     const { account: sourceAccount, provider: sourceProviderEntity } = await this.loadAccountAndProvider(input.SourceAccountID, context);
@@ -1110,54 +1239,149 @@ export class FileResolver extends FileResolverBase {
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
 
-    // Use cached accounts from the engine — no RunView needed
-    await FileStorageEngine.Instance.Config(false, user);
-    const normalizedIDs = new Set(input.AccountIDs.map((id: string) => NormalizeUUID(id)));
-    const accountEntities = FileStorageEngine.Instance.Accounts
-      .filter(a => normalizedIDs.has(NormalizeUUID(a.ID)));
-
-    if (accountEntities.length === 0) {
-      throw new Error('No valid storage accounts found for the provided IDs');
-    }
-
-    // Log any accounts that weren't found
-    if (accountEntities.length < input.AccountIDs.length) {
-      const foundIDs = new Set(accountEntities.map((a) => NormalizeUUID(a.ID)));
-      const missingIDs = input.AccountIDs.filter((id) => !foundIDs.has(NormalizeUUID(id)));
-      console.warn(`[FileResolver] Accounts not found: ${missingIDs.join(', ')}`);
-    }
-
-    // Load providers from cached metadata
-    const providerMap = new Map<string, MJFileStorageProviderEntity>();
-    for (const provider of FileStorageEngine.Instance.Providers) {
-      providerMap.set(provider.ID, provider);
-    }
-
-    // Build account/provider pairs for the search
-    const accountInputs: AccountSearchInput[] = [];
-    for (const account of accountEntities) {
-      const provider = providerMap.get(account.ProviderID);
-      if (provider) {
-        accountInputs.push({ accountEntity: account, providerEntity: provider });
-      }
-    }
-
-    // Execute the search across all accounts with account-based credentials
-    const result = await searchAcrossAccounts(accountInputs, input.Query, {
-      maxResultsPerAccount: input.MaxResultsPerAccount,
-      fileTypes: input.FileTypes,
-      searchContent: input.SearchContent,
-      contextUser: user,
-    });
+    // Account gate BEFORE any driver call: refused accounts are reported as failed and never searched
+    const { searchable, refused } = await this.partitionSearchAccounts(input.AccountIDs, user, md);
+    const result: MultiAccountSearchResult = searchable.length > 0
+      ? await searchAcrossAccounts(searchable, input.Query, {
+          maxResultsPerAccount: input.MaxResultsPerAccount,
+          fileTypes: input.FileTypes,
+          searchContent: input.SearchContent,
+          contextUser: user,
+        })
+      : { accountResults: [], totalResultsReturned: 0, successfulAccounts: 0, failedAccounts: 0 };
 
     console.log('[FileResolver] SearchAcrossAccounts result:', {
       totalResultsReturned: result.totalResultsReturned,
       successfulAccounts: result.successfulAccounts,
       failedAccounts: result.failedAccounts,
+      refusedAccounts: refused.length,
     });
 
-    // Convert results to GraphQL payload format
-    const accountResults: AccountSearchResultPayload[] = result.accountResults.map((ar: AccountSearchResult) => ({
+    const kept = await this.dropUnreadableTrackedHits(result.accountResults, user, md);
+    return this.toSearchAcrossAccountsPayload(this.inRequestOrder(input.AccountIDs, [...kept, ...refused]));
+  }
+
+  /**
+   * Per-account results in the order the accounts were requested (each requested ID once), whether searched or refused —
+   * so a refused account sits where the caller put it rather than after every searched one.
+   */
+  private inRequestOrder(requestedIDs: string[], results: AccountSearchResult[]): AccountSearchResult[] {
+    const byID = new Map(results.map((r) => [NormalizeUUID(r.accountID), r]));
+    const ordered: AccountSearchResult[] = [];
+    for (const id of requestedIDs) {
+      const result = byID.get(NormalizeUUID(id));
+      if (result) {
+        ordered.push(result);
+        byID.delete(NormalizeUUID(id));
+      }
+    }
+    return [...ordered, ...byID.values()];
+  }
+
+  /**
+   * Splits the requested accounts into those to search and those refused, before any driver call. An account the
+   * caller may not read is refused with {@link SEARCH_ACCOUNT_REFUSED_MESSAGE} — and so is one that does not exist,
+   * identically, so the response never reveals which IDs are real. Readable accounts are paired with their provider
+   * from the engine's cache (refreshed once if a readable account is missing from it). Duplicate IDs are searched once.
+   */
+  private async partitionSearchAccounts(
+    accountIDs: string[],
+    user: UserInfo,
+    md: IMetadataProvider,
+  ): Promise<{ searchable: AccountSearchInput[]; refused: AccountSearchResult[] }> {
+    const readable = await StorageAccessEvaluator.Instance.AccessibleAccountIDs(accountIDs, user, 'Read', md);
+    await FileStorageEngine.Instance.Config(false, user, md);
+    if ([...readable].some((id) => !FileStorageEngine.Instance.GetAccountWithProvider(id))) {
+      await FileStorageEngine.Instance.Config(true, user, md);
+    }
+
+    const searchable: AccountSearchInput[] = [];
+    const refused: AccountSearchResult[] = [];
+    const seen = new Set<string>();
+    for (const requestedID of accountIDs) {
+      const key = NormalizeUUID(requestedID);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const pair = readable.has(key) ? FileStorageEngine.Instance.GetAccountWithProvider(requestedID) : null;
+      if (pair) {
+        searchable.push({ accountEntity: pair.account, providerEntity: pair.provider });
+      } else {
+        refused.push(this.refusedAccountResult(requestedID));
+      }
+    }
+    return { searchable, refused };
+  }
+
+  /** A failed per-account entry for an account the caller may not search; it names nothing beyond the requested ID. */
+  private refusedAccountResult(accountID: string): AccountSearchResult {
+    return {
+      accountID,
+      accountName: '',
+      providerID: '',
+      providerName: '',
+      success: false,
+      errorMessage: SEARCH_ACCOUNT_REFUSED_MESSAGE,
+      results: [],
+      hasMore: false,
+    };
+  }
+
+  /**
+   * Drops search hits that map to an `MJ: Files` row the caller may not read — one batched lookup per account, keyed on
+   * each hit's path and provider object ID (`StorageAccessEvaluator.UnreadableTrackedObjectKeys`, compared the way the
+   * account's driver addresses keys). Hits no row tracks stay; the account gate governs them.
+   *
+   * When any hit is dropped, the provider's `totalMatches` (which counted it) and `nextPageToken` (this route takes no
+   * page token back) are withheld; `hasMore` is kept. How reliable the mapping is depends on the provider: for
+   * object-key stores (S3, Azure Blob, GCS) a hit's path IS the row's `ProviderKey`; for hierarchical providers (Box,
+   * Google Drive, Dropbox, SharePoint) a search path may not match the key a row was written with, and such a miss falls
+   * back to the account gate. `MJ: Files` rows are keyed by provider, not account, so the lookup errs toward dropping.
+   */
+  private async dropUnreadableTrackedHits(
+    accountResults: AccountSearchResult[],
+    user: UserInfo,
+    md: IMetadataProvider,
+  ): Promise<AccountSearchResult[]> {
+    return Promise.all(accountResults.map((ar) => this.dropUnreadableAccountHits(ar, user, md)));
+  }
+
+  /** {@link dropUnreadableTrackedHits} for one account's results; if the check cannot run, the account's hits are dropped. */
+  private async dropUnreadableAccountHits(ar: AccountSearchResult, user: UserInfo, md: IMetadataProvider): Promise<AccountSearchResult> {
+    if (!ar.success || ar.results.length === 0) return ar;
+    try {
+      const driver = await FileStorageEngine.Instance.GetDriver(ar.accountID, user);
+      const keys = ar.results.flatMap((r) => [r.path, r.objectId].filter((k): k is string => !!k));
+      const unreadable = await StorageAccessEvaluator.Instance.UnreadableTrackedObjectKeys(ar.providerID, keys, user, md, driver);
+      const results = ar.results.filter((r) => !unreadable.has(r.path) && !(r.objectId && unreadable.has(r.objectId)));
+      return results.length === ar.results.length ? ar : { ...ar, results, totalMatches: undefined, nextPageToken: undefined };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      LogError(`SearchAcrossAccounts: tracked-file check failed for account ${ar.accountID} — its hits are withheld: ${reason}`);
+      return { ...ar, results: [], totalMatches: undefined, nextPageToken: undefined };
+    }
+  }
+
+  /**
+   * The listed objects minus those behind an `MJ: Files` row the caller may not read (directories are prefixes, never
+   * tracked objects, and are kept). Keys are compared the way the account's driver addresses them.
+   */
+  private async dropUnreadableListedObjects(
+    accountId: string,
+    objects: StoredObjectMetadata[],
+    user: UserInfo,
+    md: IMetadataProvider,
+  ): Promise<StoredObjectMetadata[]> {
+    const files = objects.filter((o) => !o.isDirectory);
+    if (files.length === 0) return objects;
+    const providerID = await this.accountProviderID(accountId, user, md);
+    const driver = await FileStorageEngine.Instance.GetDriver(accountId, user);
+    const unreadable = await StorageAccessEvaluator.Instance.UnreadableTrackedObjectKeys(providerID, files.map((o) => o.fullPath), user, md, driver);
+    return objects.filter((o) => o.isDirectory || !unreadable.has(o.fullPath));
+  }
+
+  /** Converts per-account results to the GraphQL payload, recomputing the totals from what is actually returned. */
+  private toSearchAcrossAccountsPayload(accountResults: AccountSearchResult[]): SearchAcrossAccountsPayload {
+    const payloadResults: AccountSearchResultPayload[] = accountResults.map((ar: AccountSearchResult) => ({
       accountID: ar.accountID,
       accountName: ar.accountName,
       success: ar.success,
@@ -1179,10 +1403,10 @@ export class FileResolver extends FileResolverBase {
     }));
 
     return {
-      accountResults,
-      totalResultsReturned: result.totalResultsReturned,
-      successfulAccounts: result.successfulAccounts,
-      failedAccounts: result.failedAccounts,
+      accountResults: payloadResults,
+      totalResultsReturned: accountResults.reduce((sum, ar) => sum + (ar.success ? ar.results.length : 0), 0),
+      successfulAccounts: accountResults.filter((ar) => ar.success).length,
+      failedAccounts: accountResults.filter((ar) => !ar.success).length,
     };
   }
 }

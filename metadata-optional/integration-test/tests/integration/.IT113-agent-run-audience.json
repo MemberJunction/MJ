@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT113 - Agent Run Audience",
+    "Description": "An agent run bounded by an audience (ExecuteAgentParams.Audience), deterministic, no LLM: pre-execution RAG runs directly and actions go through BaseAgent.ExecuteSingleAction for the seeded IT: Search Agent. Setup grants the seeded no-grant user Search on 'IT: Integration Test Scope' by UserID (deleted in Teardown); the bundle seeds no notes (a note save embeds), so the proof is the search and action logs. AU1: the caller alone searches the scope (a Success row). AU2: with an audience of the no-grant user nothing is injected and the search logs ResultCount 0. AU3: a reader with no grant on the scope (RLS user A) gets one Forbidden row naming them and no search. AU4: Scoped Search with an audience returns no results and no SourceCounts. AU5: an action without audience support is refused (AUDIENCE_UNSUPPORTED), writes no execution log row and is locked out. AU6: Execute with an unknown reader ID fails before any prompt. AU7: the run's scope binds the Scoped Search tenant: dispatched on a run whose PrimaryScopeRecordID is A, a model-supplied tenant B is refused (INVALID_PARAM, one Forbidden row, no search), and with no model tenant the search runs under A (a Success row recording A). AU8: Execute with an audience whose Mode is a name Object.prototype carries ('toString') fails before any prompt. AU9: the plain Search action is refused in a tenant-scoped run (RUN_SCOPE_UNSUPPORTED, no search); an unscoped run searches.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A run's audience bounds pre-execution retrieval (every reader passes the scope gate; results are what every reader may read), the search actions (no SourceCounts for a room), and every other action (refused, never run); an unknown reader fails the run before any prompt."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-run-audience"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "6B1AE374-0387-4DF5-BBF7-23F62E128CD5"
+  }
+}

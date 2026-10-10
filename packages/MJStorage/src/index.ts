@@ -6,6 +6,8 @@ export * from './drivers/SharePointFileStorage';
 export * from './drivers/DropboxFileStorage';
 export * from './drivers/BoxFileStorage';
 export * from './generic/FileStorageBase';
+export * from './generic/ObjectKeys';
 export * from './util';
 export * from './config';
 export * from './FileStorageEngine';
+export * from './StorageAccessEvaluator';

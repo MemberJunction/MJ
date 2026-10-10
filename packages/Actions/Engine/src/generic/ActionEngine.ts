@@ -1,4 +1,4 @@
-import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
+import { BaseEntitySaveQueue, LogError, LogErrorEx, LogStatus, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { BaseSingleton, MJGlobal, MJLruCache, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
@@ -15,7 +15,9 @@ import {
     RedactParamsToJSON,
     EntityChangeContext,
     DidFieldChange,
-    DidFieldChangeToValue
+    DidFieldChangeToValue,
+    ActionAudienceReaders,
+    AUDIENCE_UNSUPPORTED_RESULT_CODE
 } from "@memberjunction/actions-base";
 import { RuntimeActionExecutor } from "@memberjunction/action-runtime";
 import type { BridgeHandlerMap } from "@memberjunction/code-execution";
@@ -31,6 +33,9 @@ import type { BridgeHandlerMap } from "@memberjunction/code-execution";
  */
 export const ACTION_PREVENTED_BY_FILTER_MESSAGE =
    'Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.';
+
+/** Why `CheckAudience` refuses every action under a malformed audience (the refusal message's closing clause). */
+const MALFORMED_AUDIENCE_REASON = 'the audience naming them is malformed, so who they are cannot be checked';
 
 /**
  * Execution context handed to an Action Filter's `Code` when the engine evaluates it inline
@@ -171,6 +176,12 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    }
 
    public async RunAction(params: RunActionParams): Promise<ActionResult> {
+      // An audience the run cannot honour refuses it before anything else — no validation, no filters, no log
+      // row: the action never runs. Otherwise the audience is normalized for the action (see CheckAudience).
+      const audienceRefusal = this.CheckAudience(params);
+      if (audienceRefusal) {
+         return audienceRefusal;
+      }
       // Snapshot the inputs BEFORE anything can run — see SnapshotInputParams. Threaded down every
       // path (validation failure, filter refusal, timeout, normal run) so all four write the same
       // as-called values into ActionExecutionLog.Params.
@@ -476,6 +487,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          const result: ActionResult = {
             RunParams: params,
             Success: simpleResult.Success,
+            ResultCode: simpleResult.ResultCode,
             Message: simpleResult.Message,
             AIDirectives: simpleResult.AIDirectives,
             LogEntry: logEntry,
@@ -525,15 +537,75 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * the Type dispatch is readable.
     */
    protected async RunClassBasedAction(params: RunActionParams): Promise<ActionResultSimple> {
+      const action = this.CreateActionInstance(params);
+      if (!action) {
+         throw new Error(`Could not find a class for action ${params.Action.Name}.`);
+      }
+      return await action.Run(params);
+   }
+
+   /**
+    * The registered class for a Custom / Generated action — keyed by its `DriverClass`, else its `Name` — or
+    * null when nothing more specific than `BaseAction` is registered.
+    */
+   protected CreateActionInstance(params: RunActionParams): BaseAction | null {
       const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(
          BaseAction,
          params.Action.DriverClass || params.Action.Name,
          params.ContextUser
       );
-      if (!action || action.constructor === BaseAction) {
-         throw new Error(`Could not find a class for action ${params.Action.Name}.`);
+      return action && action.constructor !== BaseAction ? action : null;
+   }
+
+   /**
+    * The audience gate ({@link RunActionParams.Audience}): the refusal when the audience adds a reader beyond
+    * the caller and this run cannot honour it, else null — after normalizing the audience to the distinct
+    * readers beyond the caller, or clearing it when it adds nobody, so the action sees exactly the people to check.
+    *
+    * Refused, for EVERY action, under a malformed audience (`Readers` not an array, a reader that is not an object
+    * or has no `ID` — see {@link ActionAudienceReaders}): who the readers are cannot be checked, so no action may run
+    * as if there were none, nor pass it on to one that would take it as no audience. Refused under a well-formed
+    * audience that adds a reader: an action whose class does not declare `BaseAction.SupportsAudience`, or has no
+    * registered class; a runtime-defined action, whose code cannot declare support; and any deferred run, which
+    * hands the work to a path that executes it later, outside this gate. The refusal carries
+    * {@link AUDIENCE_UNSUPPORTED_RESULT_CODE} and writes no execution log row, since nothing ran. Protected so a
+    * host can change the rule.
+    */
+   protected CheckAudience(params: RunActionParams): ActionResult | null {
+      const readers = ActionAudienceReaders(params.Audience, params.ContextUser);
+      if (readers !== null && readers.length === 0) {
+         params.Audience = undefined;
+         return null;
       }
-      return await action.Run(params);
+      const reason = readers === null ? MALFORMED_AUDIENCE_REASON : this.audienceUnsupportedReason(params);
+      if (!reason && readers) {
+         params.Audience = { Readers: readers };
+         return null;
+      }
+      LogStatus(`ActionEngine: action '${params.Action.Name}' refused under an audience — ${reason}.`);
+      return {
+         RunParams: params,
+         Success: false,
+         ResultCode: AUDIENCE_UNSUPPORTED_RESULT_CODE,
+         Message: `Action '${params.Action.Name}' is not available here: its output would be shown to people besides the caller, and ${reason}.`,
+         LogEntry: undefined,
+         Params: params.Params,
+         Result: undefined
+      };
+   }
+
+   /** Why this run cannot honour an audience, or null when it can. */
+   private audienceUnsupportedReason(params: RunActionParams): string | null {
+      if (params.DeferExecution) {
+         return 'a deferred run executes later, outside this dispatch, where nothing holds it to the audience';
+      }
+      if (params.Action.Type === 'Runtime') {
+         return 'a runtime-defined action cannot declare that it honours an audience';
+      }
+      if (this.CreateActionInstance(params)?.SupportsAudience === true) {
+         return null;
+      }
+      return 'it has not declared that it can limit what it returns to what every one of them may see';
    }
 
    /**
@@ -599,7 +671,9 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
                config,
                contextUser: params.ContextUser,
                abortSignal: params.AbortSignal,
-               provider: params.Provider
+               provider: params.Provider,
+               runScope: params.RunScope,
+               audience: params.Audience
             });
             preamble = builder.GetPreamble();
          }

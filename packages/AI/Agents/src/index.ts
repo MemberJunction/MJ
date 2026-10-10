@@ -58,6 +58,7 @@ export * from './AgentDataPreloader';
 export * from './agent-context-injector';
 export * from './agent-memory-context-builder';
 export * from './agent-pre-execution-rag';
+export * from './agent-audience';
 export * from './memory-manager-agent';
 export * from './memory-note-gate';
 export * from './query-builder-agent';

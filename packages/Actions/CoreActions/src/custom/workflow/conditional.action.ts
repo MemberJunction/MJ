@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { ActionEngineServer } from "@memberjunction/actions";
+import { RefuseWorkflowInScopedRun } from "./workflow-run-scope";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
@@ -76,6 +77,10 @@ export class ConditionalAction extends BaseAction {
      * @returns Result from executed action or condition result
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        const scopedRunRefusal = RefuseWorkflowInScopedRun(params, "Conditional");
+        if (scopedRunRefusal) {
+            return scopedRunRefusal;
+        }
         try {
             const condition = this.getParamValue(params, 'condition');
             const context = JSONParamHelper.getJSONParam(params, 'context') || {};

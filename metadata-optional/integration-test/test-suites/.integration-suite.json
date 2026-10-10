@@ -1335,6 +1335,61 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT116 - Search Origin-Record Gate",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7482F42F-151A-4A5B-84D6-D8BE3B407057"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT111 - Agent Pre-Execution RAG Permission Gate",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FFC8D637-7E5C-4984-8001-7F0CA59B7541"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT112 - Search Provider Trust and Unresolvable Scopes",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4A7C2445-4C2A-4E58-ACC2-066293F00776"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT113 - Agent Run Audience",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F7DCC04D-1FDC-451E-A975-FF19E193A30C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT114 - Search Scope Bound",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4CF85E49-88E4-4441-A919-2A3FECD4906D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
             "Sequence": 72,
             "Status": "Active"

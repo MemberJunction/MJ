@@ -61,6 +61,14 @@ export interface GetNotesParams {
      * Optional observability context for tracing reranking operations.
      */
     observability?: NotesObservabilityOptions;
+    /**
+     * Inject only shared notes — those with no `UserID` — whatever `userId` says. Set for a run with an
+     * audience (`ExecuteAgentParams.Audience`): a note scoped to one user is that user's memory and must not be
+     * shown to a room. Agent, company and multi-tenant scope matching still apply. Enforced by an explicit
+     * `UserID == null` filter on both the cache and the semantic path; an undefined `userId` does NOT mean
+     * "shared only" on the semantic path (`AIEngine`'s base filter skips the user check when it is undefined).
+     */
+    SharedOnly?: boolean;
 }
 
 /**
@@ -96,7 +104,12 @@ export interface GetExamplesParams {
      */
     // case-violation-ok-legacy-back-compat: matches GetNotesParams.observability and this interface's other camelCase members
     observability?: NotesObservabilityOptions;
+    /** Inject only shared examples (no `UserID`). See {@link GetNotesParams.SharedOnly}. */
+    SharedOnly?: boolean;
 }
+
+/** The fields of a note or example the vector pre-filter reads: its user and its multi-tenant scope. */
+type ScopedMemoryFields = Pick<MJAIAgentNoteEntity, 'UserID' | 'PrimaryScopeEntityID' | 'PrimaryScopeRecordID' | 'SecondaryScopes'>;
 
 /**
  * Central service for retrieving and formatting notes/examples for injection into agent context.
@@ -153,7 +166,7 @@ export class AgentContextInjector {
             ? params.maxNotes * config.retrievalMultiplier
             : params.maxNotes;
 
-        // Build scope pre-filter so FindNearest only returns scope-valid candidates
+        // Build scope pre-filter so FindNearest only returns scope-valid (and, under SharedOnly, shared) candidates
         const scopePreFilter = this.buildScopePreFilter<NoteEmbeddingMetadata>(params, m => m.noteEntity);
         LogStatus(`AgentContextInjector: primaryScopeEntityId=${params.primaryScopeEntityId}, primaryScopeRecordId=${params.primaryScopeRecordId}, secondaryScopes=${JSON.stringify(params.secondaryScopes)}, secondaryScopeConfig=${JSON.stringify(params.secondaryScopeConfig)}, hasPreFilter=${!!scopePreFilter}`);
 
@@ -232,7 +245,7 @@ export class AgentContextInjector {
             ? params.maxExamples * config.retrievalMultiplier
             : params.maxExamples;
 
-        // Build scope pre-filter so FindNearest only returns scope-valid candidates
+        // Build scope pre-filter so FindNearest only returns scope-valid (and, under SharedOnly, shared) candidates
         const scopePreFilter = this.buildScopePreFilter<ExampleEmbeddingMetadata>(params, m => m.exampleEntity);
 
         const matches = await AIEngine.Instance.FindSimilarAgentExamples(
@@ -317,19 +330,29 @@ export class AgentContextInjector {
     }
 
     /**
-     * Build a pre-filter callback for vector search that enforces secondary scope rules.
-     * Returns undefined when no scope params are provided (no filtering needed).
+     * Build a pre-filter callback for vector search that enforces secondary scope rules and, under
+     * `SharedOnly`, keeps only entries with no `UserID`. Returns undefined when neither applies (no filtering
+     * needed).
+     *
+     * The `SharedOnly` check is explicit because the vector search's own base filter cannot express it:
+     * `AIEngine.composeNoteFilters` / `composeExampleFilters` skip the user check entirely when `userId` is
+     * undefined, so passing no user would let every user's entries through.
      *
      * @param params - Note or example params containing scope and secondaryScopeConfig
      * @param entityExtractor - Function to extract the scoped entity from the embedding metadata
      */
     private buildScopePreFilter<TMetadata>(
         params: GetNotesParams | GetExamplesParams,
-        entityExtractor: (metadata: TMetadata) => { PrimaryScopeEntityID: string | null; PrimaryScopeRecordID: string | null; SecondaryScopes: string | null }
+        entityExtractor: (metadata: TMetadata) => ScopedMemoryFields
     ): ((metadata: TMetadata) => boolean) | undefined {
-        if (!params.primaryScopeRecordId && !params.secondaryScopes) return undefined;
-        return (metadata: TMetadata): boolean =>
-            this.matchesSecondaryScope(entityExtractor(metadata), params.primaryScopeEntityId, params.primaryScopeRecordId, params.secondaryScopes, params.secondaryScopeConfig);
+        const scoped = !!(params.primaryScopeRecordId || params.secondaryScopes);
+        if (!scoped && !params.SharedOnly) return undefined;
+        return (metadata: TMetadata): boolean => {
+            const entity = entityExtractor(metadata);
+            if (params.SharedOnly && entity.UserID != null) return false;
+            return !scoped || this.matchesSecondaryScope(
+                entity, params.primaryScopeEntityId, params.primaryScopeRecordId, params.secondaryScopes, params.secondaryScopeConfig);
+        };
     }
 
     /**
@@ -363,7 +386,8 @@ export class AgentContextInjector {
                 return false;
             }
             const agentOk = params.agentId ? (note.AgentID == null || UUIDsEqual(note.AgentID, params.agentId)) : note.AgentID == null;
-            const userOk = params.userId ? (note.UserID == null || UUIDsEqual(note.UserID, params.userId)) : note.UserID == null;
+            // Under SharedOnly a user's own note is left out even for that user: the run's output is for a room.
+            const userOk = params.userId && !params.SharedOnly ? (note.UserID == null || UUIDsEqual(note.UserID, params.userId)) : note.UserID == null;
             const companyOk = params.companyId ? (note.CompanyID == null || UUIDsEqual(note.CompanyID, params.companyId)) : note.CompanyID == null;
             if (!(agentOk && userOk && companyOk)) {
                 return false;
@@ -583,6 +607,11 @@ export class AgentContextInjector {
 
             // Must match the agent
             if (!UUIDsEqual(example.AgentID, params.agentId)) {
+                return false;
+            }
+
+            // Under SharedOnly a user's own example is left out even for that user: the run's output is for a room.
+            if (params.SharedOnly && example.UserID != null) {
                 return false;
             }
 

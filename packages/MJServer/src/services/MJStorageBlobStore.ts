@@ -1,7 +1,7 @@
 import { LogError, UserInfo, IMetadataProvider, Metadata } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import type { MJFileEntity, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
-import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
+import { FileStorageBase, FileStorageEngine, StorageAccessEvaluator, StorageAccountAccess } from '@memberjunction/storage';
 import type {
     AttachmentBlobUploadInput,
     AttachmentBlobUploadResult,
@@ -113,7 +113,7 @@ export class MJStorageBlobStore implements IAttachmentBlobStore {
         provider?: IMetadataProvider
     ): Promise<string | null> {
         try {
-            const resolved = await this.resolveFileAndDriver(fileId, contextUser, provider);
+            const resolved = await this.resolveFileAndDriver(fileId, contextUser, 'Read', provider);
             if (!resolved) return null;
 
             const content = await resolved.driver.GetObject({ fullPath: resolved.objectKey });
@@ -132,7 +132,7 @@ export class MJStorageBlobStore implements IAttachmentBlobStore {
         provider?: IMetadataProvider
     ): Promise<string | null> {
         try {
-            const resolved = await this.resolveFileAndDriver(fileId, contextUser, provider);
+            const resolved = await this.resolveFileAndDriver(fileId, contextUser, 'Read', provider);
             if (!resolved) return null;
             return resolved.driver.CreatePreAuthDownloadUrl(resolved.objectKey);
         } catch (err) {
@@ -148,7 +148,7 @@ export class MJStorageBlobStore implements IAttachmentBlobStore {
         provider?: IMetadataProvider
     ): Promise<boolean> {
         try {
-            const resolved = await this.resolveFileAndDriver(fileId, contextUser, provider);
+            const resolved = await this.resolveFileAndDriver(fileId, contextUser, 'Write', provider);
             if (!resolved) return false;
 
             const deleted = await resolved.driver.DeleteObject(resolved.objectKey);
@@ -165,45 +165,46 @@ export class MJStorageBlobStore implements IAttachmentBlobStore {
     }
 
     /**
-     * Loads a file, its storage provider, and a driver able to act on it.
+     * Loads a file (as the caller), and a driver able to act on it — through the storage gate.
      *
      * Shared by download, URL and delete, which previously repeated this block three times with
      * subtly different fallbacks — the account-credential path existed in only one of them.
+     *
+     * When an account links to the file's provider, `FileStorageEngine.ResolveFileObject` resolves it and refuses unless
+     * the caller may use that account for `access` and may read every `MJ: Files` row tracking the object (a row can
+     * alias another row's object). Otherwise the environment-configured driver serves the file; there is no account to
+     * gate, so only the tracked-file rule applies. A refusal throws, and each caller logs it and reports failure.
      */
     private async resolveFileAndDriver(
         fileId: string,
         contextUser: UserInfo,
+        access: StorageAccountAccess,
         provider?: IMetadataProvider
     ): Promise<{ file: MJFileEntity; driver: FileStorageBase; objectKey: string } | null> {
         const md = provider ?? Metadata.Provider;
-
-        // Load the engine before asking it anything. `Accounts` returns an empty array when it has
-        // not been configured, so on a cold process the account-credential branch below would be
-        // skipped silently and the driver would fall back to environment-only credentials — which
-        // then fails to read a file that is perfectly readable. Every other MJServer call site
-        // configures immediately before use for the same reason.
-        await FileStorageEngine.Instance.Config(false, contextUser);
-
         const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
         if (!(await file.Load(fileId))) return null;
 
-        const storageProvider = await md.GetEntityObject<MJFileStorageProviderEntity>(
-            'MJ: File Storage Providers',
-            contextUser
-        );
+        // Prefer account-scoped credentials (gated) when an account links to this provider. ResolveFileObject configures
+        // the engine first, so a cold process does not silently skip this branch.
+        const resolved = await FileStorageEngine.Instance.ResolveFileObject(file, contextUser, access, md);
+        if (resolved) {
+            return { file, driver: resolved.Driver, objectKey: resolved.ObjectKey };
+        }
+        return this.environmentDriverFor(file, contextUser, md);
+    }
+
+    /** The environment-configured driver for a file whose provider has no account — after the tracked-file rule. */
+    private async environmentDriverFor(
+        file: MJFileEntity,
+        contextUser: UserInfo,
+        md: IMetadataProvider
+    ): Promise<{ file: MJFileEntity; driver: FileStorageBase; objectKey: string } | null> {
+        const storageProvider = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
         if (!(await storageProvider.Load(file.ProviderID))) return null;
-
-        // Prefer account-scoped credentials when an account links to this provider; fall back to
-        // environment-configured credentials otherwise.
-        const matchingAccounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
-        const driver =
-            matchingAccounts.length > 0
-                ? await FileStorageEngine.Instance.GetDriver(matchingAccounts[0].ID, contextUser)
-                : MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
-                      FileStorageBase,
-                      storageProvider.ServerDriverKey
-                  );
-
-        return { file, driver, objectKey: file.ProviderKey || file.Name };
+        const objectKey = file.ProviderKey || file.Name;
+        await StorageAccessEvaluator.Instance.AssertTrackedObjectsReadable(file.ProviderID, [objectKey], contextUser, md);
+        const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, storageProvider.ServerDriverKey);
+        return { file, driver, objectKey };
     }
 }

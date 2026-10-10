@@ -36,9 +36,22 @@ A `MJ: Search Scope` is a named, reusable search boundary. Each scope owns 4 chi
 Search Scope
 ├─ Search Scope Providers          → which providers participate (+ per-provider query transforms)
 ├─ Search Scope External Indexes   → which vector / 3rd-party indexes
-├─ Search Scope Entities           → which entities for entity + full-text search
+├─ Search Scope Entities           → which entities for entity + full-text + tag search (+ an ExtraFilter bound)
 └─ Search Scope Storage Accounts   → which file storage accounts / folders
 ```
+
+### How a scope bounds a search (empty means nothing)
+
+A **non-global** scope is bounded by its rows. Nothing it leaves out is searched — an empty child table never means "everything":
+
+- **It runs only its enabled provider rows.** A scope with no enabled `MJ: Search Scope Providers` row runs **no provider** and returns nothing; its scope decision is `Reachable: false` with a diagnostic saying so, and `ExplainScope` reports the same before you run anything. (Previously a scope with no provider rows ran *every* provider, so disabling a scope's last provider row widened it to all of them.) A row runs a provider only when it names a configured, available one (preview-capable, for a preview search).
+- **Each provider searches only the lanes of its own kind.** Each provider declares the lane kinds it reads (`BaseSearchProvider.ConsumesLaneKinds`): entity lanes for the entity (`Database`), full-text (`Database Full-Text`) and tag providers; external-index lanes for the vector (`Semantic`) and 3rd-party index providers; storage lanes for the storage provider. A provider with no lane of its kinds in the scope is **not called**, so it can never fall back to a configured default index. A provider that is called still receives an empty list for the kinds the scope leaves empty, and returns nothing from those: no external-index rows of its own `IndexType` → a vector or 3rd-party provider returns nothing. If none of a scope's providers reads a lane kind it configures — a `Semantic` row over entity lanes only, say — the scope reaches nothing, and `ExplainScope` says so. A scope with **no lanes at all** reaches nothing (`Reachable: false`).
+- **A lane `ExtraFilter` bounds that entity for every provider.** The entity provider applies it in SQL. Every other provider's hits for that entity — full-text, tag, vector, 3rd-party — are kept only when the record satisfies the same rendered filter, checked as the searching user (`PK IN (...) AND (<ExtraFilter>)`, one read per filtered entity per scope). That includes a `MJ: Content Items` hit promoted to the record it was derived from: promotion runs per scope, and the promoted hit is held to the origin entity's lane filter whichever provider found it. A failed check drops those hits. Several lanes on one entity are ORed; a lane on the entity with no `ExtraFilter` leaves it unbounded.
+- **A storage lane's `FolderPath` restricts.** If it renders empty, renders a path with an empty segment (`clients/{{ context.SecondaryScopes.Client }}` with the dimension absent renders `clients/` — every client's folder), contains a `..` segment, or interpolates a value that is `..` or `.` or contains `/` or `\`, the scope is **refused** (the search fails with an error naming the lane). `ExplainScope` marks the lane `Skipped` with the reason and the scope unreachable, even when its other lanes are healthy, because the search refuses rather than search the others. A value that merely contains `..` (`Acme..Inc`) is an ordinary segment. A storage row with no `FolderPath` still covers the whole account.
+
+A **global** scope (`IsGlobal = true`) is unconstrained: it runs every available provider with no scope constraints, as an unscoped search does.
+
+To give a non-global scope its old breadth, add the rows explicitly — one enabled `MJ: Search Scope Providers` row per provider it should run, and lanes for what each provider should search.
 
 ### Creating a scope (metadata sync)
 
@@ -60,7 +73,7 @@ Create `metadata/search-scopes/.your-scope.json`:
         {
           "fields": {
             "SearchScopeID": "@parent:ID",
-            "EntityID": "@lookup:Entities.Name=Knowledge Articles",
+            "EntityID": "@lookup:MJ: Entities.Name=Knowledge Articles",
             "ExtraFilter": "CategoryID = '<hr-category-uuid>'"
           }
         }
@@ -69,7 +82,14 @@ Create `metadata/search-scopes/.your-scope.json`:
         {
           "fields": {
             "SearchScopeID": "@parent:ID",
-            "SearchProviderID": "@lookup:MJ: Search Providers.Name=Semantic",
+            "SearchProviderID": "@lookup:MJ: Search Providers.Name=Database",
+            "Enabled": true
+          }
+        },
+        {
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "SearchProviderID": "@lookup:MJ: Search Providers.Name=Database Full-Text",
             "Enabled": true
           }
         }
@@ -81,6 +101,8 @@ Create `metadata/search-scopes/.your-scope.json`:
 
 Run `pnpm mj sync push --dir=metadata --include="search-scopes"`.
 
+The provider rows must read the lanes the scope configures: `Database` and `Database Full-Text` read entity lanes. To search the same articles semantically, add a `Semantic` provider row **and** a `MJ: Search Scope External Indexes` row with `IndexType: "Vector"` and the `VectorIndexID` of the articles' index — a `Semantic` row over entity lanes alone reaches nothing, and `ExplainScope` reports the scope unreachable.
+
 ### Personal vs. Organization-wide scopes
 - Set `OwnerUserID=<user-id>` for **personal scopes** (only visible to that user in the selector UI).
 - Leave `OwnerUserID=NULL` for **organization-wide scopes** (visible to all users — Phase 2 adds per-role permission control).
@@ -90,6 +112,8 @@ Set `StartAt` / `EndAt` to auto-activate a scope for a specific window:
 - Incident response: "give the support agent access to these logs for 48 hours"
 - Seasonal: "Q4 financial reports are searchable Oct 1 – Jan 31"
 - Onboarding: "new-hire documents are scoped for the first 30 days of employment"
+
+**A search that names a scope it cannot resolve is refused.** If any ID in `SearchParams.ScopeIDs` is inactive, outside its `StartAt`/`EndAt` window, or not found, `Search()` returns `Success: false` with an error naming the scope, writes a `Failure` row to `MJ: Search Execution Logs`, and runs no provider. Before, such a scope was skipped, and a search whose only scopes were skipped ran with no scope at all — a global search. One dead scope among several refuses the whole search: dropping it silently would change what the caller asked for. The check runs before the result cache, so a scope that expired seconds ago is not served from its old entry. `ExplainScope` agrees: an inactive or expired scope is reported unreachable, and when one of several requested scopes cannot be resolved, every scope in that dry run is reported unreachable with the reason.
 
 ### Advanced `ScopeConfig` JSON
 
@@ -111,7 +135,7 @@ Recognized keys:
 - `rrfK` — RRF smoothing constant (default 60).
 - `fusionWeights` — per-provider weights for cross-source RRF fusion within this scope.
 - `reRanker` — optional re-ranker stage (see [§6](#6-optional-re-ranker)).
-- `permissionOverfetchFactor` — multiplier on per-provider `topK` to compensate for residual permission filtering. Default 2.
+- `permissionOverfetchFactor` — multiplier on per-provider `topK` to compensate for residual permission filtering. Default 2; the largest factor across the resolved scopes applies (a scope that declares none counts as the default), clamped to 1–20. See [Overfetch factor tuning](#overfetch-factor-tuning).
 
 ---
 
@@ -137,11 +161,19 @@ Every agent has one of three access levels:
 |---|---|
 | `All` | Can use any scope including Global. `__Scoped_Search` does not restrict. |
 | `Assigned` | Can use ONLY scopes in its `MJ: AI Agent Search Scopes` rows. `__Scoped_Search` rejects anything else with `ACCESS_DENIED`. |
-| `None` | No search capability. `__Scoped_Search` rejects all requests. |
+| `None` | No search capability. `__Scoped_Search` rejects all requests, and pre-execution RAG searches nothing. |
 
 ### Pre-Execution RAG
 
 When an agent has any active `Phase IN ('PreExecution','Both')` rows, `BaseAgent` automatically runs `AgentPreExecutionRAG` during Phase 2 (in parallel with config load, data preload, and memory injection). The results are formatted as a `<retrieved_context>` system message and unshifted onto the conversation messages.
+
+**The same permission gate as `__Scoped_Search`.** An assignment row says which scopes the agent reads from; it is not a grant to the person asking. Before searching each scope, `AgentPreExecutionRAG` resolves `ResolveEffectivePermission` for the acting user, with the agent as principal, the run's `PrimaryScopeRecordID` as tenant, and — when exactly one skill is active in the run — that skill as a second principal (several active skills: none, the action's rule). The bar is the action's: allowed **and above `Read`**. In practice:
+
+- `SearchScopeAccess='None'` → no pre-execution retrieval.
+- `Assigned` → each scope needs a `MJ: Search Scope Permissions` grant at `Search` or `Manage` for the user or one of their roles.
+- `All` → the agent supplies `Search` when the user has no grant of their own and may run the agent. A user or role grant at `Read` is found first and refuses the scope, as it does for the action and the GraphQL resolver.
+
+A refused scope is skipped (the others still run) and logged as one `Forbidden` row in `MJ: Search Execution Logs`; a resolver failure skips the scope with a `LogError` and no `Forbidden` row. A turn with no query text (an empty or multimodal last message, and no query template) skips the scope before the gate.
 
 **Zero added latency** — Phase 2 already has slower tasks running in parallel; RAG slots alongside them without extending the critical path.
 
@@ -151,7 +183,7 @@ Assign `__Scoped_Search` to an agent's action set. When the agent calls it, the 
 1. Resolves the agent identity from `params.Context.AgentID` (or explicit `AgentID` param).
 2. Enforces `SearchScopeAccess`.
 3. Resolves the target scope (explicit `ScopeID`, agent's default, or Global).
-4. Reads the optional `PrimaryScopeRecordID` (string UUID) and `SecondaryScopes` (JSON string) inputs, assembling a `SearchContext` when at least one is supplied. See [§10](#10-multi-tenant-search-context) for the runtime context model.
+4. Resolves the tenant (`PrimaryScopeRecordID`) and secondary dimensions (`SecondaryScopes`). **Inside an agent run the run's scope is authoritative** (see [below](#inside-an-agent-run-the-runs-scope-is-authoritative)); outside one the optional inputs are used as given. A `SearchContext` is assembled when a tenant or a dimension applies, and the same tenant goes into the permission decision (`ResolveEffectivePermission`), so tenant-scoped grants and denies judge exactly the search that runs. See [§10](#10-multi-tenant-search-context) for the runtime context model.
 5. Runs `SearchEngine.Search()` with `ScopeIDs: [resolvedScopeID]` and `SearchContext: <assembled>`.
 6. Returns ranked results + `ScopeID_Resolved` / `ScopeName_Resolved` output params.
 
@@ -161,8 +193,35 @@ The action accepts two optional inputs whose values flow into `SearchParams.Sear
 
 | Input | Type | Purpose |
 |---|---|---|
-| `PrimaryScopeRecordID` | string (UUID) | Primary tenant key (e.g. `OrganizationID`). Available in templates as `{{ context.PrimaryScopeRecordID }}`. |
-| `SecondaryScopes` | JSON string | Flat object of additional dimensions as `{ "<key>": <value> }`. Each value must be `string \| number \| boolean \| string[]`. Available in templates as `{{ context.SecondaryScopes.<key> }}`. Incompatible value types are dropped at parse time with a log; malformed JSON falls back to `undefined` rather than failing the call. |
+| `PrimaryScopeRecordID` | string (UUID) | Primary tenant key (e.g. `OrganizationID`). Available in templates as `{{ context.PrimaryScopeRecordID }}`. Inside an agent run it may only restate the run's tenant — see below. |
+| `SecondaryScopes` | JSON object string, or an object | Flat object of additional dimensions as `{ "<key>": <value> }`. Each value must be `string \| number \| boolean \| string[]`. Available in templates as `{{ context.SecondaryScopes.<key> }}`. Input that is not valid JSON, is not an object, or holds a value of another type is **refused** (`INVALID_PARAM`) — never dropped, which would run the search without that dimension. The refusal message states the expected shape, so a model can correct its call. |
+
+#### Inside an agent run, the run's scope is authoritative
+
+Inside a Loop agent the action's inputs are written by the model, so they are bound to the run exactly as `AgentID` and `AISkillID` are. `BaseAgent.ExecuteSingleAction` stamps every dispatch with `RunActionParams.RunScope` — the run's tenant and secondary dimensions as `initializeAgentRun` validated them and wrote them to the `MJ: AI Agent Runs` row (the agent's `ScopeConfig` defaults applied; `null` fields for an unscoped run). It is a typed field beside `Audience`, not a `Context` key, and the model cannot set it. The action then:
+
+| Model input | Run has tenant `A` | Run has no tenant |
+|---|---|---|
+| `PrimaryScopeRecordID` omitted | searches `A` | searches with no tenant |
+| `PrimaryScopeRecordID` = `A` (any case) | searches `A` | — |
+| `PrimaryScopeRecordID` = anything else | **refused**: `INVALID_PARAM` and a `Forbidden` search-log row (attributed to the run's tenant; the reason names both) | **refused**, the same way |
+
+`SecondaryScopes` follows the same rule per key: a key the run sets may only be restated with an equal value (text compared case-insensitively, arrays as sets; the run's value is the one used) — a different value is refused like a tenant; a key the run does not set is added, as outside a run, and stays bounded by the scope's own dimension trust rules ([§10](#10-multi-tenant-search-context)).
+
+**The host sets a run's tenant, never the model**: pass `ExecuteAgentParams.PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes` (or the same keys in `data`, which a run reads only when its params set `TrustReservedRunData` — see [Agent Memory Scoping](../packages/AI/Agents/docs/AGENT_MEMORY_SCOPING.md#scope-through-data-trusted-callers-only)). Sub-agents inherit the parent's scope; `BaseAgent` strips those keys (and `__agentTypePromptParams`) from a sub-agent request's model-authored `templateParameters` before they reach the child's `data` — the reserved list (`RESERVED_AGENT_RUN_DATA_KEYS` in `@memberjunction/ai-core-plus`) `BaseAgent.Execute` strips from every untrusted run's `data` — together with the browser, conversation and realtime controls a host sets and a model never does (`clientTools`, `sessionID`, `appContext`, `applicationId`, `conversationId`, `targetAgentID`, `agentSessionId`, `recording`, `realtime*`: `HOST_ONLY_AGENT_RUN_DATA_KEYS`). Outside an agent run (no `RunScope` — a direct action call, a workflow, an external orchestrator) the inputs are used as given.
+
+One consequence: a single agent run can no longer search several tenants (e.g. compare orgs in one turn) by passing different `PrimaryScopeRecordID` values. Run one agent run per tenant instead.
+
+The refusal messages say what to do — inside an agent run the tenant comes from the run, so omit `PrimaryScopeRecordID`; omit a `SecondaryScopes` key the run sets differently — because a model reads them to correct its next call. (The parameter descriptions in the action's metadata still describe the tenant as supplied per call; they are updated in a metadata change.)
+
+The rest of the run honours the same scope:
+
+- **Memory, RAG and prompt configuration read the validated scope.** Notes and examples, pre-execution RAG, scoped prompt parts and scoped prompt configs take the scope `initializeAgentRun` validated (trimmed, the agent's `ScopeConfig` defaults applied, never an untrusted `data` scope) — the scope on the run row and on every dispatch.
+- **The plain Search action is refused** (`RUN_SCOPE_UNSUPPORTED`) when `RunScope` carries a tenant or a secondary dimension: it takes no tenant, so it would search across every tenant the caller can reach. The message points the model at Scoped Search.
+- **Task graphs are withheld**, as under an audience: a graph's action nodes run in the task-graph runner with no `RunScope` (a model-written Scoped Search node would take the "outside a run" branch), and an agent node's run would drop the tenant.
+- **Execute Agent passes the scope on**: the nested run gets the calling run's `RunScope` as its first-class `PrimaryScope*` / `SecondaryScopes` fields.
+
+A model-added secondary dimension (a `SecondaryScopes` key the run does not set) is still accepted by Scoped Search, bounded by the scope's own dimension trust rules — by design: the run's dimensions are a floor, not a ceiling.
 
 #### The skill principal
 
@@ -178,7 +237,7 @@ Four consequences worth being explicit about, because a skill is a principal tha
 - **A bad value fails closed.** A non-UUID, or an ID that will not load, is rejected with `INVALID_PARAM` rather than being dropped. Silently continuing would bind an unjudged ID into the expansion query.
 - **The caller must be allowed to use it on this agent.** Loading a skill is not permission to wield it as a principal. Because `SkillUnscopedAll` grants `Search` on any scope, and AISkill permissions are open by default (no permission rows means everyone may View and Run), an unchecked ID would be a scope grant for the asking. `SearchScopePermissionResolver` intersects the skill against `GetSkillsForAgent(agent, user)` — agent-accepted ∩ user-permitted ∩ Active, the same call `BaseAgent.preActivateRequestedSkills` gates real activation on — and refuses with `PrincipalNotActivatable`, which the action returns as `ACCESS_DENIED`, attributed to the skill in the Forbidden log.
 
-  The two principals are judged at **different points, for a reason**. A skill is judged wherever it is named, because a skill is only ever supplied to steer: it binds into `Principals.SkillID` and, for a `restricts: true` dimension, the expansion query's output *is* the bound — so judging it only at the `All` fallback would let a user who holds their own grant name any skill and widen with it. An agent is judged only where it **widens** (its `All` fallback), because elsewhere `AIAgentID` is attribution — the pre-execution RAG path threads it purely so `SearchExecutionLog` can attribute the search, and gating that would turn an analytics field into a retrieval outage. `ExplainScope` applies both gates, so a preview cannot promise what the search would refuse.
+  The two principals are judged at **different points, for a reason**. A skill is judged wherever it is named, because a skill is only ever supplied to steer: it binds into `Principals.SkillID` and, for a `restricts: true` dimension, the expansion query's output *is* the bound — so judging it only at the `All` fallback would let a user who holds their own grant name any skill and widen with it. An agent is judged only where it **widens** (its `All` fallback). Every agent-mediated search supplies the running agent as a principal — `__Scoped_Search` and pre-execution RAG both do — and where it only restricts, checking whether the caller may run it would let an agent missing from the AI metadata cache refuse users whose own grant covers the scope. `ExplainScope` applies both gates, so a preview cannot promise what the search would refuse.
 
 - **Containment of a principal id is the QUERY AUTHOR's job, not the platform's.** An expansion query
   is server-authored SQL, but MJ renders query parameters through Nunjucks with `autoescape: false`
@@ -190,7 +249,7 @@ Four consequences worth being explicit about, because a skill is a principal tha
 
 Omit the input and the principal is null, which is the behaviour for every caller that does not pass it.
 
-Example agent tool call selecting only Finance-department content for Org `O1`:
+Example call **outside an agent run** (a direct invocation) selecting only Finance-department content for Org `O1`. Inside a run scoped to `O1` the same call would omit `PrimaryScopeRecordID` — the run's tenant applies:
 
 ```json
 {
@@ -228,20 +287,109 @@ No scope duplication needed.
 
 ### Per-provider push-down mechanisms
 
-| Provider | Mechanism |
+| Provider | Mechanism | Late ownership check (no row filter) |
+|---|---|---|
+| `EntitySearchProvider` / `FullTextSearchProvider` | RunView already evaluates `UserRowLevelSecurity` for `ContextCurrentUser`. The providers thread `contextUser` through to RunView — nothing extra required. In a scoped search both search only the scope's entity lanes; an empty entity list returns nothing. The entity provider applies each lane's `ExtraFilter` in its RunView; full-text hits are held to the same filter by the engine (below). | None: the hits are rows read from the labelled entity (`ResultsAreRowsOfLabelledEntity`). A hit promoted from a `MJ: Content Items` row to its origin record is verified: one `PK IN (...)` read per origin entity. |
+| `TagSearchProvider` | Restricted to the scope's entity lanes (none → nothing); its hits are held to each lane's `ExtraFilter` by the engine. | Verified: one `PK IN (...)` read per labelled entity. |
+| `VectorSearchProvider` | Each embedded record must carry permission metadata (role IDs, owner ID, tenant ID) at ingest time. At query time, translate `contextUser`'s roles into a native metadata filter and merge it with the scope's rendered `MetadataFilter` via `$and`. In a scoped search it queries only the scope's `Vector` index rows — none means no query, never every index. | One `PK IN (...)` read per labelled entity. |
+| `StorageSearchProvider` | Folder-path bounded by the scope, and account-permission bounded by `MJ: File Storage Account Permissions`, **evaluated per call** for the searching user by `StorageAccessEvaluator` (`@memberjunction/storage`): nothing is snapshotted at startup, so a grant or revocation applies to the next search. The rows are read as the MJ system user, never truncated by the entity row cap, and decided for the caller (Everyone, Role or User rows; `CanRead`); an account with no rows is open (the current product rule); a failed evaluation searches nothing. The searchable accounts themselves are read per search from `FileStorageEngine`'s live cache. **Storage hits are then re-checked in the late filter**: `SearchEngine.filterByPermissions` keeps a `storage-file` result only when its engine-stamped `ProviderId` is a `StorageSearchProvider` entry, its `RawMetadata.accountId` is readable by the user now, and the object it names (`RawMetadata.path` / `objectId`) does not back an `MJ: Files` row the user cannot read (the tracked-file rule: keys compared the way the account's driver addresses them, case-insensitively; one batched lookup per account; an account whose driver or provider cannot be resolved loses its hits) — a `storage-file` hit from any other provider, or naming no object, is dropped. Under an `Audience` storage hits are dropped: they are re-checked for the caller only, and per-reader storage checks are a follow-up. The storage GraphQL routes (`FileResolver`) and the File Storage core actions run the same evaluator and tracked-file rule before any driver call. | Not an entity row: re-checked against the account and the tracked-file rule instead (above). |
+| 3rd-party index providers (Azure AI Search, Typesense, Elasticsearch, OpenSearch, custom) | Use the engine's native permission/ACL filter, through the scope's `MetadataFilter`. In a scoped search each queries only the scope's rows of its own `IndexType`; with none it queries nothing. The configured `defaultIndex` / `defaultCollection` is used **only** by an unscoped search. | One `PK IN (...)` read per labelled entity. A hit whose document id is not the entity's primary key is dropped. |
+| **Every provider, lane `ExtraFilter`** | After the providers return and before per-scope fusion, `SearchEngine` keeps a hit for an entity that has a lane `ExtraFilter` in the scope only when its record satisfies that filter: one RunView per filtered entity per scope, as the user, with the lane's rendered filter ANDed to `PK IN (...)`. Content-item promotion runs per scope between two such passes, so a `MJ: Content Items` hit is held to a Content Items lane and the origin record it becomes to that record's lane. Only hits whose engine-stamped `ProviderId` names a provider declaring `AppliesLaneExtraFilter` (`EntitySearchProvider`, which applied the filter itself) are exempt, and never a promoted hit — the declared `SourceType` is not trusted. Storage files pass. A failed read drops that entity's hits. | — |
+
+### Which results are verified as rows of the entity they name
+
+`EntityName` and `RecordID` are provider output. For the vector and external-index lanes they come from the index: vector metadata's `Entity` key, or the index name, and the document's own id. Admitting a hit on its label alone would let whoever writes an index choose which entity's permissions are evaluated — a document in an index named after an entity the user can read would pass as that entity's row.
+
+So the late check (`filterByPermissions`) verifies a result with one `PK IN (...)` RunView per labelled entity, as the user, unless the result came from a provider that reads the labelled entity through `RunView` itself. That is decided by the provider the engine **stamped** on the result (`ProviderId`, overwritten on every hit before fusion) and its `BaseSearchProvider.ResultsAreRowsOfLabelledEntity` flag — set only by `EntitySearchProvider` and `FullTextSearchProvider` — and never by the `SourceType` label. Every shipped external-index provider labels its hits `'fulltext'`, and `SearchSource` is a closed union, so a third-party provider must pick one of its values and can pick `'entity'`; neither is trusted for it. A result with no `ProviderId` (a fusion fallback) or one naming no configured provider is verified. So is a `MJ: Content Items` hit promoted to the record it was derived from (`SearchResultItem.PromotedFromContentItemID`): its provider read the content item, never the origin row, which a stale document can name after it is gone. The promoted hit keeps its `ProviderId` for attribution; only the trust is withdrawn. Fusion and dedup never move a `ProviderId` onto another item's `EntityName`, `RecordID` or `SourceType`: a merged result is one provider's item, whole, and only scores, `ScoreBreakdown`, tags and (in dedup) a snippet replacing a generic one come from the items it absorbed. Dedup merges items sharing `EntityName` + `RecordID`, but per-scope RRF merges `ScoreBreakdown` across items that share only a `RecordID`, of any entity, keeping the first — so a merge can lend an item another row's scores, never its trust.
+
+When a row filter applies to the user, every result is verified regardless — ownership is checked as a side effect of filtering.
+
+**Cost and consequence for external indexes.** Each search that returns external-index hits pays one `PK IN (...)` read per labelled entity. Hits are kept only when their document id **is** the MJ primary key of the entity the index is named after (bare value, or a `Field|value` segment for a composite key); an index keyed by anything else returns nothing through this lane. The entity and full-text lanes cost nothing extra.
+
+### The origin-record gate for derived content
+
+A content item or chunk is a row of its own entity, but it was *derived* from another record — the file, task or conversation it was extracted from — and the right to read it belongs to that origin. Row-level security on `MJ: Content Items` / `MJ: Content Item Chunks` can only say who may read the content table; it cannot see the origin's own row filters.
+
+So after a content result passes the entity-level ownership and row-filter check, `SearchEngine.VerifyOriginRecords` follows chunk → item (→ root item, for a split child) → `MJ: Entity Record Documents` → the origin record, and keeps the result only when the origin is a row the user may read, verified exactly as the result's own entity was (`PK IN (...)` under the origin entity's row filter, as the user). Content with no Entity Record Document has no origin and passes unchanged; non-content entities are untouched. The hook is `protected`, so a host can extend the rule to another derived-content family (reusing the protected `ReadableOriginRecordIDs` for the origin check), and it fails closed.
+
+Consequences for an app that indexes documents behind its own permissions:
+- **Every lookup runs as the user, and that adds grants a chunk reader did not need before.** Anyone who should see chunk hits needs read on the base `MJ: Content Items` (the chunk → item hop reads it, through the base entity even for IS-A subtypes, because `RootParentID` is a view-computed column a subtype's view does not project). Anyone who should see hits derived from a record needs read on `MJ: Entity Record Documents`. Grant both under the app's row filters. Without the item grant, every chunk hit is dropped; without the document grant, the document-bearing hits are, and crawled content still passes.
+- **Field-level security on a link column counts as a failed hop, never as "no origin".** If the user's roles deny `ContentItemID`, `ParentID`, `RootParentID`, `EntityRecordDocumentID`, or a document's `Entity` / `RecordID`, the lookup comes back without that column and the rows that depended on it are dropped.
+- A split child (an item with a `ParentID`) is judged by its own document first, and by its root's only when it has none. A root is its own `RootParentID` in the view and is never re-read. A child whose root the view cannot resolve (`RootParentID` null, or its own id) is dropped.
+- An origin's `RecordID` is read as a key segment: a bare value, or `Field|value` pairs. A composite-key segment is used only when it names exactly the origin entity's primary-key fields; any other is dropped and never reaches the SQL.
+- Changing who may read the *origin* record takes effect on the next uncached search (the result cache holds entries up to 30 s); nothing in the index needs to change. Push-down (the scope's `MetadataFilter`) stays the recall mechanism; this gate is the truth.
+- Cost: the hops are sequential `PK IN (...)` reads. A chunk group does up to four (chunks → items → root items when any hit is a split child without its own document → documents when any item has one), plus one view per origin entity, issued together in one `RunViews` batch. An item group does up to three plus the origin batch; crawled chunk content (no documents) costs two. Groups run in parallel.
+
+**Prefixed record ids — a fix for every entity, not only content.** The late check reads each result's `RecordID` as a key segment, so a result written with the prefixed encoding (`ID|<value>`, what `CompositeKey.ToRecordID()` writes) is now checked against its value and kept when readable. Before, `ID IN ('ID|<value>')` could never match, so such results were dropped as unauthorized. The same parsing applies to composite keys, with the same rule: a segment naming a field that is not a primary key is dropped.
+
+### Searching for an audience
+
+Everything above is about one person: the caller. When the results will be shown to **several** people — an agent answering in a shared conversation — the caller's reach is the ceiling, not the floor: a document one participant can't open must not be quoted to the room because another participant could.
+
+`SearchParams.Audience.Readers` names the other people who will see the results. The engine runs its permission safety net (entity read, row filters, ownership, and the origin-record gate above) once for the caller and once per reader (concurrently), and keeps the intersection. Readers can only remove results, never add them. The audience is part of the result-cache key, so a search the caller ran alone is never served to a room, nor the reverse. The GraphQL surface does not expose this today — it is for server-side callers such as a host's conversation turn handler.
+
+Four rules for callers:
+1. **Pass hydrated `UserInfo` objects** (e.g. from `UserCache`): every reader needs a non-empty `ID` and a `UserRoles` array. A malformed audience — `Readers` not an array, a `null` reader, a reader with no `ID` or with no `UserRoles` array — fails the search (`Success: false`, an error starting "SearchEngine: invalid Audience"); the engine never skips a reader it cannot check, because a skipped reader would restrict nothing. `UserRoles: []` is legitimate: that reader reads nothing, and the room gets an empty result.
+2. **Expect no storage hits.** `MJ: File Storage Account Permissions` are re-checked for the caller in the late filter, but the audience pass does not yet combine per-reader storage answers, so a `storage-file` result is dropped rather than shown on the caller's permission alone. Per-reader storage checks are a follow-up.
+3. **Show the room `fused`/`final` results.** `streamSearch`'s `provider` events never carry results — only `providerName`, `durationMs` and `resultCount`, for progress — because they arrive before any permission pass. This is true with or without an audience.
+4. **Check each reader's scope entitlement yourself.** Scope entitlement (`SearchScopePermission`), `ServerDerived` dimensions, scope `ExtraFilter`/`MetadataFilter` templates and vector push-down are all evaluated for the **caller only**. Before passing `ScopeIDs` for a room, confirm every reader may use those scopes, and don't rely on dimension-only bounds to keep a room inside its reach.
+
+Two further limits:
+- **`SourceCounts`, and a streamed `provider` event's `resultCount`, are counted before the permission and audience passes**, so they reveal the caller's unfiltered reach to anyone shown them. Don't show them to a room. (For a scoped search they also differ from each other: `SourceCounts`, and the `ProvidersJSON` of its log row, are counted after the lane `ExtraFilter` step and content-item promotion; `resultCount` is counted before them.)
+- **The result cache keys on reader IDs.** Within the 30 s TTL, a reader object with the same `ID` but different hydration (roles changed, say) gets the cached verdict.
+
+Audience filtering raises the residual-filter rate, so a host serving rooms should raise the over-fetch factor (below). Carrying the audience into push-down is achievable today only through an expansion query keyed on the conversation's `PrimaryScopeRecordID`; a resolver that sees the audience is a follow-up. The audience pass is the truth; push-down is the recall.
+
+#### A whole agent run for an audience
+
+`SearchParams.Audience` bounds one search. `ExecuteAgentParams.Audience` bounds a whole agent run — every path in it that reads data on the caller's behalf, or shows the room the caller's own context — and is what a host sets when an agent answers in a shared conversation:
+
+```typescript
+const result = await new AgentRunner().RunAgent({
+    agent,
+    conversationMessages,
+    contextUser: asker,                       // the person who asked; their reach is the ceiling
+    // Everyone else in the room, from the host's own participant list — never from client input.
+    Audience: { Mode: 'Intersection', UserIDs: otherParticipantIDs },
+});
+```
+
+It is a typed, server-only field: it is never read from `data`, and the GraphQL, MCP and A2A agent runners pass named fields (client JSON lands in `data`), so no client can set or clear it. `Mode` is `'Caller'` (no readers — the same as omitting it) or `'Intersection'` (only what the caller **and** every listed user may see). Every gate below fires only when the audience adds a reader **other than the caller**, so an `'Intersection'` whose only ID is the caller behaves exactly as `'Caller'`.
+
+**The run fails before any prompt** — marked Failed like a refused permission — when the audience is malformed (an unknown `Mode`, including a name `Object.prototype` carries such as `'toString'`; an `'Intersection'` with no IDs or a blank one; a `'Caller'` with IDs) or names an ID no user has. `BaseAgent` hydrates the IDs from the server's `UserCache` (each reader with its roles), refreshing the cache once for an unknown ID, and refuses rather than skips one it still cannot find: a skipped reader would restrict nothing. An inactive user is accepted as a reader — a reader only narrows what the run shows. Each sub-agent run, and a realtime delegation target, inherits the audience and hydrates it again. `BaseAgent.ResolveAudienceUsers` is the override point for a host with its own user directory. The hydrated readers are per run: they are forgotten when the run ends.
+
+What the run then does:
+
+| Path | Under an audience |
 |---|---|
-| `EntitySearchProvider` / `FullTextSearchProvider` | RunView already evaluates `UserRowLevelSecurity` for `ContextCurrentUser`. The providers thread `contextUser` through to RunView — nothing extra required. |
-| `VectorSearchProvider` | Each embedded record must carry permission metadata (role IDs, owner ID, tenant ID) at ingest time. At query time, translate `contextUser`'s roles into a native metadata filter and merge it with the scope's rendered `MetadataFilter` via `$and`. |
-| `StorageSearchProvider` | Already folder-path / account-permission bounded via `MJ: File Storage Account Permissions`. |
-| 3rd-party index providers | Use the engine's native permission/ACL filter. Documented in the "how to add a provider" guide. |
+| Pre-execution RAG | Each reader must pass the same scope gate as the caller (`ResolveEffectivePermission` with the reader as `User`, the caller as `ContextUser`, the same agent, skill and tenant; the bar is above `Read`). A refused reader skips that scope and writes a `Forbidden` search-log row naming them by ID and the verdict's `Source` only — the row is the caller's to read, so never the reader's name or the resolver's reason. The searches carry `Audience: { Readers }`; a streamed search writes no provider counts to the trace. |
+| Agent notes and examples | Only shared ones (`UserID` empty) are injected, on both the cache and the semantic path; scope matching still applies. |
+| Agent data-source preload | Skipped (it loads with the caller's rights alone), logged. |
+| The previous turn's tool results | Not carried forward (they were fetched for whoever ran that turn). |
+| Actions | Each dispatch carries `RunActionParams.Audience`: the readers besides the user the action runs as (the caller is one of them when the action runs as someone else). The engine refuses (`AUDIENCE_UNSUPPORTED`, without running it or writing an execution log row) every action whose class does not declare `BaseAction.SupportsAudience`, every runtime-defined or deferred action, and — under a malformed audience — every action at all; the agent locks a refused action out for the run under its own breaker reason (`'audience'`), and the model is told it is not available in a shared conversation (not that it is misconfigured). Only **Search** and **Scoped Search** declare support: they pass the audience to the search (even a malformed one, which the engine refuses), Scoped Search runs the per-reader scope gate, and both leave `SourceCounts` out of their output — and Scoped Search's streamed `ProgressEvents` carry no provider counts. An agent whose work needs other actions is therefore limited to search in a shared room — by design. |
+| Task graphs | Not offered (`enableTaskGraphs` off for the run, on a copy of the cached prompt params), and a graph the model writes anyway is refused: its action nodes run outside the run's gates. Withheld in a tenant-scoped run too (above). |
+| Client tools and app context | Client tools are not offered (they run in the caller's browser, and what they return reaches the room) and a client-tools step the model emits anyway is refused; the caller's app context (`data.appContext`, with its `AdditionalContext`) is not injected into the prompt. |
+| Memory writes | Not saved, and the memory-writes docs are left out of the prompt: a write is the caller's note, and its reply ("already exists verbatim", superseded) is read against the caller's own notes. |
+| Asking the user, presenting a plan | The question or plan still reaches the room, which answers in the conversation (where the host starts the next run with the room's audience). No `MJ: AI Agent Requests` row is raised: answered on the dashboard or through the API, it would resume the run without the audience. |
+| Realtime / voice / bridge sessions | Refused; a live session acts outside the gates above. |
+
+**Limits, by design for now:**
+- **Per-reader scope expansion.** `ScopeDimensionResolver` binds one `UserID` (the caller's), so expansion queries and `ServerDerived` dimensions resolve for the caller only. The per-reader result filter covers scopes whose lanes carry per-user row filters; don't rely on dimension-only bounds for a room (rule 4 above).
+- **No `Union`, and no anchor or narrowing modes.** A run bounded by a shared record or tenant uses `PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes`.
+- **Resume.** `MJAIAgentRequestEntityServer.resumeAgent` (a request answered on the dashboard or through the API) resumes as the responder and has nowhere to read an audience from — neither the request nor the run row has a field for it — so a run with an audience raises no request (above). Persisting the audience needs a column — an open design point shared with bound action parameters. Until then an agent with `RequirePlanMode` cannot have a plan approved in a shared conversation.
+- **Conversation history and artifacts** are what the host passes in; choosing what a room may see of them is the host's job.
 
 ### Overfetch factor tuning
 
 `effectiveTopK = userTopK * permissionOverfetchFactor` compensates for residual filtering. Default 2. Tune higher for corpora where permission sparsity is high (>50% of matches filtered).
 
+The factor is resolved per search, in this order: the caller's `SearchParams.PermissionOverfetchFactor`; else the **largest** `permissionOverfetchFactor` declared by any resolved scope's `ScopeConfig`; else the engine default (`SearchEngineConfig.DefaultPermissionOverfetchFactor`, 2). Whatever the source, the value is held to **1–20** (a value below 1 means no over-fetch; above 20 is clamped and logged, since one metadata edit would otherwise multiply every provider call for every caller of the scope). The largest wins across scopes because a lane trimmed heavily by late permission checks needs the extra candidates whichever scope it belongs to; a scope that declares nothing counts as the default, so one scope's low factor never lowers a neighbour's. A larger factor never changes which results a caller gets (the final list is still trimmed to `MaxResults`), but it costs more than provider work: dedup, the content exclusion and the permission passes handle more candidates, a re-ranker is fed up to its `inputTopN` from a bigger pool, and `streamSearch`'s per-provider `resultCount` is counted from the larger pool (each count is capped to the caller's `MaxResults`). Declare it on the scope when its author knows the lanes are sparse after permissions — for example a scope whose hits are re-checked per participant of a shared conversation — so every caller doesn't have to know to pass it.
+
 ### Observability
 
-The engine logs `lateFilteredCount` per search whenever the residual safety net trims anything. If this is consistently non-zero for a provider, that provider's push-down is incomplete and should be fixed.
+The engine logs `lateFilteredCount` per search whenever the residual safety net (the entity-level and row-filter steps of `filterByPermissions`) trims anything. If this is consistently non-zero for a provider, that provider's push-down is incomplete and should be fixed.
+
+The origin-record gate drops by design — no provider can push an origin record's own row filters into a content index — so its removals are counted separately and logged as `SearchEngine: origin-record gate removed N result(s) …`. They do not count toward `lateFilteredCount`. A steady non-zero origin-gate count is not a push-down defect; it means users are matching content they may not open, which costs `topK` recall (raise `permissionOverfetchFactor`, or narrow the scope).
 
 ### Test requirements (Phase 1F integration)
 
@@ -363,9 +511,9 @@ Two distinct paths populate `SearchContext` at runtime. They use the same `Secon
 | Path | How context arrives | Where it's read |
 |---|---|---|
 | **Pre-execution RAG** (auto) | `ExecuteAgentParams.primaryScopeRecordId` + `secondaryScopes` flow directly from the agent run config | `AgentPreExecutionRAG` constructs `SearchContext` and calls `SearchEngine.Search()` before the agent's first LLM turn |
-| **Agent-invoked Scoped Search** (explicit) | `PrimaryScopeRecordID` and `SecondaryScopes` (JSON string) supplied as action params on each `__Scoped_Search` call | `ScopedSearchAction` parses and validates the inputs, builds `SearchContext`, and passes it via `SearchParams.SearchContext` to `SearchEngine.Search()` |
+| **Agent-invoked Scoped Search** | Inside an agent run, the run's own scope, stamped by `BaseAgent` on every dispatch as `RunActionParams.RunScope`; the action's `PrimaryScopeRecordID` / `SecondaryScopes` inputs may only restate it (or add a secondary key the run does not set). Outside a run, the inputs as supplied on each `__Scoped_Search` call | `ScopedSearchAction` resolves the tenant ([§3](#inside-an-agent-run-the-runs-scope-is-authoritative)), builds `SearchContext`, and passes it via `SearchParams.SearchContext` to `SearchEngine.Search()` — and the same tenant to the permission decision |
 
-The explicit-input path lets a single agent run multiple scoped queries with different tenant contexts (e.g. comparison across orgs in one turn) and lets callers other than `BaseAgent` — manual GraphQL invocations, external orchestrators — drive the action with per-call tenant info. Use `ActionInputMapping` on the agent step to wire `ExecuteAgentParams`-style values into the action's `PrimaryScopeRecordID` / `SecondaryScopes` inputs when you want a single agent payload to drive both paths consistently.
+Inside an agent run the two paths therefore search the same tenant: the one the host gave the run. The explicit inputs remain for callers other than `BaseAgent` — manual GraphQL invocations, workflows, external orchestrators — which drive the action with per-call tenant info. A run that must cover several tenants is several runs.
 
 ### Nunjucks rendering of scope config
 
@@ -373,7 +521,7 @@ The engine renders these fields at search time with `context.PrimaryScopeRecordI
 - `SearchScopeExternalIndex.MetadataFilter` (rendered + JSON-parsed → native vector/ES filter)
 - `SearchScopeEntity.ExtraFilter` (rendered → RunView `ExtraFilter`)
 - `SearchScopeEntity.UserSearchString` (rendered → RunView `UserSearchString`)
-- `SearchScopeStorageAccount.FolderPath` (rendered → path prefix filter)
+- `SearchScopeStorageAccount.FolderPath` (rendered → path prefix filter). It **restricts**, so it is guarded like a filter: a render that is empty, has an empty segment, contains a `..` segment, or interpolates a value containing `..`, `/` or `\` refuses the scope rather than widening it. The `path` escaper refuses such a value outright — it used to strip it, which turned `..` into nothing and `../other` into `other`.
 
 Available filters in scope templates (matching `@memberjunction/templates`): `json`, `jsoninline`, `jsonparse`.
 
@@ -382,6 +530,10 @@ Available filters in scope templates (matching `@memberjunction/templates`): `js
 Configured per dimension in `SearchScope.SearchContextConfig.dimensions[].inheritanceMode`:
 - **Strict**: only exact matches. Content must be tagged with the queried dimension value.
 - **Cascading**: broader — content without a dimension tag is treated as "applies to all". Use for soft hierarchies (e.g., org-wide policies visible to every department, but department-specific content only within that department).
+
+A **cascading template must carry an `{% else %}<column> IS NULL` branch.** The engine never renders `inheritanceMode`; the mode lives in the author's template. Under the `{% if x | length %}` idiom an empty set removes the clause, and without an `{% else %}` a reader who reaches no tagged value sees every tagged row instead of only the untagged ones. Declare `RequiredMetadataKeys` on the lane as well, so a dropped clause is caught at render time.
+
+**`required`** on a dimension refuses the search (`ScopeDimensionError`) when the dimension does not resolve or resolves to nothing (`null`, an empty set, a blank string), instead of letting the lane run with its clause dropped. A dimension declared `inheritanceMode: 'cascading'` is exempt, because there empty is meaningful (see above). The message names the scope and the dimension and says whether the caller sent an empty value, the declared `defaultValue` is empty, or nothing is reachable for the user. One refused scope fails a multi-scope search; the Scoped Search action and pre-execution RAG search one scope per call.
 
 ### Tenant provisioning flow
 
@@ -400,9 +552,12 @@ Wrap these steps in an MJ Action invoked by the onboarding workflow so every new
 The engine logs at key points (check `LogStatus` / `LogError` output):
 - `SearchEngine: Search complete in Nms - K result(s) [across N scope(s)]` — per-search completion.
 - `SearchEngine: Residual permission filter removed X result(s)` — non-zero values indicate incomplete provider push-down.
+- `SearchEngine: origin-record gate removed X result(s) …` — content derived from records the user may not read. Expected, and not counted in the residual figure above.
 - `SearchEngine: Re-ranker "DriverClass" returned N result(s) (input=I, outputTopN=O)` — re-rank stage telemetry.
+- `SearchEngine: search refused — scope "ID" could not be resolved …` (LogError) — a named scope is inactive, expired, or missing; the search returned `Success: false` and a `Failure` row was logged.
 - `AgentPreExecutionRAG: Exception searching scope "NAME"` — per-scope search failures.
 - `AgentPreExecutionRAG: Template "ID" render failed` — template-rendering failures fall back to `lastUserMessage`.
+- `AgentPreExecutionRAG: permission for scope "NAME" could not be resolved` — the resolver threw; that scope was skipped. Refused scopes log only at verbose level; read them from the `Forbidden` rows in `MJ: Search Execution Logs`.
 
 Key signals to watch:
 - Consistent `lateFilteredCount > 0` → fix provider push-down.
@@ -419,7 +574,7 @@ Phase-2-onward delivery log. Quick status here:
 - **Phase 1** (entities, runtime, providers, RAG hook, ScopedSearchAction, GraphQL, Angular, dashboards) — shipped.
 - **Phase 2A** (per-user permissions) — `SearchScopePermission` table, `SearchScopePermissionResolver`, GraphQL + Action enforcement, child-grid UIs, RLS safety-net test (PM-01–PM-10) — shipped.
 - **Phase 2B** (`SearchResultSetToolLibrary`) — re-parented onto Data Snapshot, 5 search-specific tools (`filterByScore`, `groupBySourceProvider`, `getMatchingChunks`, `followSourceLink`, `rerankInline`) — shipped.
-- **Phase 2C** (streaming) — `SearchEngine.streamSearch` async iterable, `StreamScopedSearch` mutation + `SearchStreamEvents` subscription, `AgentPreExecutionRAG` partials, `ScopedSearchAction.streamingMode`, Angular UI with per-provider chip strip (opt-in via `?stream=1`) — shipped.
+- **Phase 2C** (streaming) — `SearchEngine.streamSearch` async iterable, `StreamScopedSearch` mutation + `SearchStreamEvents` subscription, `AgentPreExecutionRAG` per-provider progress, `ScopedSearchAction.streamingMode`, Angular UI with per-provider chip strip (opt-in via `?stream=1`) — shipped.
 - **Phase 2D** (reranker catalog) — `BaseReRanker` contract additions (Name, Version, GetMaxResultCount, EstimateCostCents, CostReporter), CohereReRanker, VoyageReRanker, OpenAIReRanker (chat-judge), BGEReRanker, `RerankerBudgetGuard` + `SearchScope.RerankerBudgetCents` — shipped (server). Form dropdown + budget field UI owed.
 - **Phase 3** (observability) — `SearchExecutionLog` entity + logging hook in `SearchEngine.Search` — shipped (server). Analytics dashboard tab + per-scope CSV export owed.
 - **Phase 4** (tuning UI) — fully owed (Angular session): live preview side-panel, fusion weight sliders, reranker A/B comparison with Kendall-tau / RBO, `SearchScopeTestQuery` per-scope canonical queries.
@@ -477,9 +632,17 @@ if (!result.Allowed) {
 ## 14. Streaming Search (Phase 2C)
 
 The synchronous `SearchEngine.Search()` call blocks until every provider has
-returned and fusion + reranking complete. `streamSearch()` yields events as
-each provider reports, letting agents reason about partials and the UI render
-progressively.
+returned and fusion + reranking complete. `streamSearch()` yields a progress
+event as each provider reports, so agents and the UI can show progress before
+the result set is ready.
+
+**Progress events carry counts, not results.** A `provider` event arrives
+before the permission pass, so it carries `providerName`, `durationMs` and
+`resultCount` (that provider's hit count, capped at `MaxResults`) — and
+`results: []`, always. Results arrive in `fused` and `final`, which carry
+exactly what `Search()` returns. Before, a `provider` event carried the
+provider's hits, including rows the caller's row filters would drop and
+unverified external-index hits.
 
 ### GraphQL surface
 
@@ -489,7 +652,8 @@ Two-step protocol:
    `{ Success, StreamID, ErrorMessage }`. The server starts the search in
    the background, keyed by StreamID.
 2. **`SearchStreamEvents(streamID)` subscription** — delivers events:
-   `{ phase: 'provider', providerName, results, durationMs }`,
+   `{ phase: 'provider', providerName, resultCount, durationMs }` (wire fields
+   `ProviderName`, `ResultCount`, `DurationMs`; `Results` is always empty),
    `{ phase: 'fused', results }`, `{ phase: 'reranked', results }`,
    `{ phase: 'final', results }`, `{ phase: 'error', errorMessage }`.
 
@@ -501,10 +665,10 @@ that wraps the two steps so component code only sees a single subscribe point.
 `SearchOverlayComponent` and `SearchResultsResource` both opt in via
 `EnableStreaming` (Input on the overlay; URL query param `?stream=1` on the
 resource page during rollout). On opt-in, both components subscribe to
-`SearchService.StreamSearch(request)`, append per-provider results to the
-list as 'provider' events arrive, and replace partials with the canonical
-fused list on 'final'. A small status chip strip above the results renders
-each provider's name + count + latency (or error message).
+`SearchService.StreamSearch(request)`, add each provider's name and
+`ResultCount` to a status chip strip as 'provider' events arrive, and render
+the result list from 'final'. The chip strip shows each provider's name +
+count + latency (or error message).
 
 Defaulting `EnableStreaming` to `false` preserves Phase 1 request-response UX.
 When the team is ready to flip the default, change the `false` to `true`
@@ -512,8 +676,8 @@ in the consuming component.
 
 ### Agent consumer
 
-`AgentPreExecutionRAG` consumes `streamSearch` and appends partials to the
-agent's scratchpad as markdown (not JSON — markdown's lower token cost +
+`AgentPreExecutionRAG` consumes `streamSearch` and appends each provider's
+count (`resultCount`) and latency to the agent's scratchpad as markdown (not JSON — markdown's lower token cost +
 better LLM accuracy is the standing convention). The `'reranked'` and
 `'final'` events are flushed into the prompt at logical boundaries.
 
@@ -596,10 +760,19 @@ Four external providers ship today:
 | `OpenSearchSearchProvider` | OpenSearch (incl. Amazon OpenSearch Service) | username+password OR pre-signed AWS SigV4 header | OS query DSL = ES 7.x compatible |
 
 Each consumes `SearchScope.ExternalIndexes` rows with the matching
-`IndexType`. The scope's rendered `MetadataFilter` (a JSON object or string in
+`IndexType` — and in a scoped search, only those: a scope with no row of the
+provider's type gets nothing from it (the configured default index or collection
+serves unscoped searches only). The scope's rendered `MetadataFilter` (a JSON object or string in
 the engine's native filter DSL — already-rendered with SearchContext via
 Nunjucks) composes into the engine's filter clause for permission / tenant
 push-down. Per-engine connection options live on `SearchProvider.ProviderConfig`.
+
+Each hit is labelled with the index name as `EntityName` and the document's
+own id as `RecordID`, and the engine verifies it as a row of that entity (one
+`PK IN (...)` read per labelled entity, as the user) — see [Which results are
+verified](#which-results-are-verified-as-rows-of-the-entity-they-name). Name
+the index after the MJ entity it mirrors and key its documents by that
+entity's primary key, or its hits are dropped.
 
 ---
 
@@ -622,7 +795,9 @@ export class MySearchProvider extends BaseSearchProvider {
     }
 
     public async Search(query, topK, filters, contextUser, scopeConstraints?): Promise<SearchResultItem[]> {
-        // 1. If scopeConstraints?.ExternalIndexes is set, filter to your IndexType
+        // 1. If scopeConstraints?.ExternalIndexes is set, filter to your IndexType — this.ScopedExternalIndexRows(scopeConstraints, 'MyIndexType').
+        //    A DEFINED but empty result means the scope gives you nothing: return [] without querying.
+        //    Fall back to a configured default index only when it is undefined (an unscoped search).
         // 2. If scopeConstraints?.QueryTransforms?.[this.SourceType] is set, use that as the query
         // 3. Push permission predicate (scope.MetadataFilter / equivalent) into your engine's WHERE clause
         // 4. Map results to SearchResultItem[]
@@ -630,6 +805,10 @@ export class MySearchProvider extends BaseSearchProvider {
     }
 }
 ```
+
+Leave `ResultsAreRowsOfLabelledEntity` at its default (`false`) unless every
+hit is a row you read from the labelled entity through `RunView` as
+`contextUser`; with `false`, the engine verifies your hits against that entity.
 
 Then seed a `MJ: Search Provider` row with `DriverClass = 'MySearchProvider'`.
 The provider auto-appears in the discovery dropdown via

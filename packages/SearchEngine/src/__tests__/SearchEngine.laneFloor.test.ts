@@ -196,11 +196,16 @@ describe('SearchEngine MinScore is a semantic-lane floor applied before fusion',
         engine.InjectProviders([
             makeEntry('Vec', new FixedProvider('vector', [scored('v-high', 'vector', 0.8), scored('v-low', 'vector', 0.2)])),
         ]);
-        const streamed: string[] = [];
+        // A provider event carries only a count (its hits precede the permission pass), so the
+        // floor shows there as the count, and in the final results.
+        const streamedCounts: number[] = [];
+        let final: string[] = [];
         for await (const ev of engine.streamSearch({ Query: 'floor-f', MinScore: 0.5 } as SearchParams, user)) {
             const e = ev as SearchStreamEvent;
-            if (e.phase === 'provider') streamed.push(...e.results.map(r => r.RecordID));
+            if (e.phase === 'provider') streamedCounts.push(e.resultCount);
+            if (e.phase === 'final') final = e.results.map(r => r.RecordID);
         }
-        expect(streamed).toEqual(['v-high']);
+        expect(streamedCounts).toEqual([1]);
+        expect(final).toEqual(['v-high']);
     });
 });

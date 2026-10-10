@@ -1,4 +1,4 @@
-import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams, ActionParam, ActionRunScopeIsBounded } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
@@ -33,6 +33,9 @@ interface FormattedSearchResult {
     RawMetadata?: string;
 }
 
+/** The result code the Search action returns, without searching, inside a tenant-scoped agent run. */
+export const SEARCH_RUN_SCOPE_UNSUPPORTED = 'RUN_SCOPE_UNSUPPORTED';
+
 /**
  * Action that executes a universal search across the organization's knowledge base.
  *
@@ -43,6 +46,11 @@ interface FormattedSearchResult {
  *
  * Designed for use by AI agents (Sage, etc.), MCP connectors, A2A connectors,
  * and workflow orchestration.
+ *
+ * **Not inside a tenant-scoped agent run.** It searches across every tenant the caller can reach — it takes no
+ * tenant — so when `RunActionParams.RunScope` carries a tenant or a secondary dimension (`ActionRunScopeIsBounded`)
+ * it refuses with {@link SEARCH_RUN_SCOPE_UNSUPPORTED} and points the model at Scoped Search, which searches the run's
+ * tenant. Outside an agent run, or in an unscoped one, it searches as before.
  *
  * @example
  * ```typescript
@@ -68,33 +76,27 @@ interface FormattedSearchResult {
 @RegisterClass(BaseAction, "__Internal_Search")
 export class SearchAction extends BaseAction {
 
+    /**
+     * Honours an audience (`RunActionParams.Audience`): the search keeps only results every reader may read
+     * (`SearchParams.Audience`), and `SourceCounts` — counted before that filtering — are left out of the output.
+     * The search names no scope, so there is no scope entitlement to check per reader.
+     */
+    public override get SupportsAudience(): boolean {
+        return true;
+    }
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            // --- Extract and validate input parameters ---
-            const query = this.getStringParam(params, "query");
-            if (!query) {
-                return this.createErrorResult("Query parameter is required", "MISSING_QUERY");
+            // --- Validate inputs (and refuse inside a tenant-scoped agent run) ---
+            const checked = this.checkInputs(params);
+            if ('result' in checked) {
+                return checked.result;
             }
 
-            if (!params.ContextUser) {
-                return this.createErrorResult("User context is required", "MISSING_USER_CONTEXT");
-            }
-
-            const maxResults = this.getNumericParam(params, "maxresults", 25);
-            const minScore = this.getNumericParam(params, "minscore", 0);
-            const includeSources = this.parseIncludeSources(params);
-            const entityNames = this.parseEntityNames(params);
-            const tags = this.parseTags(params);
-
-            // --- Ensure SearchEngine is configured ---
+            // --- Ensure SearchEngine is configured, then search ---
             await SearchEngine.Instance.Config({}, params.ContextUser);
-
-            // --- Build SearchParams ---
-            const searchParams = this.buildSearchParams(query, maxResults, minScore, entityNames, includeSources, tags);
-
-            LogStatus(`SearchAction: Searching for "${query}" (max ${maxResults}, minScore ${minScore})`);
-
-            // --- Execute search ---
+            const searchParams = this.searchParamsFor(params, checked.query);
+            LogStatus(`SearchAction: Searching for "${checked.query}" (max ${searchParams.MaxResults}, minScore ${searchParams.MinScore})`);
             const result: SearchResult = await SearchEngine.Instance.Search(searchParams, params.ContextUser);
 
             if (!result.Success) {
@@ -103,25 +105,8 @@ export class SearchAction extends BaseAction {
                     "SEARCH_FAILED"
                 );
             }
-
-            // --- Format results for output ---
-            const formattedResults = this.formatResults(result.Results);
-
-            // --- Build output parameters ---
-            const outputParams: ActionParam[] = [
-                { Name: "Results",      Value: formattedResults,     Type: "Output" },
-                { Name: "TotalCount",   Value: result.TotalCount,    Type: "Output" },
-                { Name: "ElapsedMs",    Value: result.ElapsedMs,     Type: "Output" },
-                { Name: "SourceCounts", Value: result.SourceCounts,  Type: "Output" }
-            ];
-
-            return {
-                Success: true,
-                ResultCode: "SUCCESS",
-                Message: `Found ${result.TotalCount} result(s) for "${query}" in ${result.ElapsedMs}ms`,
-                Params: outputParams
-            };
-
+            // `!== undefined`: any audience at all — even a malformed one the engine refused — withholds SourceCounts.
+            return this.buildSuccessResult(result, checked.query, params.Audience !== undefined);
         } catch (error) {
             LogError(`SearchAction error: ${error instanceof Error ? error.message : String(error)}`);
             return this.createErrorResult(
@@ -132,6 +117,71 @@ export class SearchAction extends BaseAction {
     }
 
     // ─── Private helpers ──────────────────────────────────────────────
+
+    /**
+     * The query to search for, or the refusal: a tenant-scoped agent run (`RunActionParams.RunScope` carrying a tenant
+     * or a secondary dimension) — this action takes no tenant, so it would search across tenants; a missing query; or
+     * no user context.
+     */
+    private checkInputs(params: RunActionParams): { query: string } | { result: ActionResultSimple } {
+        if (ActionRunScopeIsBounded(params.RunScope)) {
+            return { result: this.createErrorResult(
+                "Search is not available in this agent run: the run is scoped to a tenant, and Search takes none, so it would search " +
+                "across every tenant. Use the Scoped Search action instead — inside an agent run it searches the run's tenant.",
+                SEARCH_RUN_SCOPE_UNSUPPORTED
+            ) };
+        }
+        const query = this.getStringParam(params, "query");
+        if (!query) {
+            return { result: this.createErrorResult("Query parameter is required", "MISSING_QUERY") };
+        }
+        if (!params.ContextUser) {
+            return { result: this.createErrorResult("User context is required", "MISSING_USER_CONTEXT") };
+        }
+        return { query };
+    }
+
+    /**
+     * The SearchParams for this call: the query, the numeric and filter parameters, and the audience. The audience is
+     * passed on whenever it is present (`!== undefined`), so a malformed one — even `null` — reaches the search engine,
+     * which refuses it, rather than running as an unbounded search.
+     */
+    private searchParamsFor(params: RunActionParams, query: string): SearchParams {
+        const searchParams = this.buildSearchParams(
+            query,
+            this.getNumericParam(params, "maxresults", 25),
+            this.getNumericParam(params, "minscore", 0),
+            this.parseEntityNames(params),
+            this.parseIncludeSources(params),
+            this.parseTags(params)
+        );
+        // Everyone else who will see these results (normalized by the engine): keep only what all of them may read.
+        if (params.Audience !== undefined) {
+            searchParams.Audience = params.Audience;
+        }
+        return searchParams;
+    }
+
+    /**
+     * The success envelope: Results, TotalCount and ElapsedMs, and SourceCounts only with no audience — they are counted
+     * before the permission and audience passes, so they reveal the caller's unfiltered reach: never shown to a room.
+     */
+    private buildSuccessResult(result: SearchResult, query: string, withholdSourceCounts: boolean): ActionResultSimple {
+        const outputParams: ActionParam[] = [
+            { Name: "Results",      Value: this.formatResults(result.Results), Type: "Output" },
+            { Name: "TotalCount",   Value: result.TotalCount,                  Type: "Output" },
+            { Name: "ElapsedMs",    Value: result.ElapsedMs,                   Type: "Output" }
+        ];
+        if (!withholdSourceCounts) {
+            outputParams.push({ Name: "SourceCounts", Value: result.SourceCounts, Type: "Output" });
+        }
+        return {
+            Success: true,
+            ResultCode: "SUCCESS",
+            Message: `Found ${result.TotalCount} result(s) for "${query}" in ${result.ElapsedMs}ms`,
+            Params: outputParams
+        };
+    }
 
     /**
      * Parse the IncludeSources parameter into a SearchSource array.

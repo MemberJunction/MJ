@@ -11,6 +11,7 @@
 import { CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
+import type { LaneKind } from './ScopeExplanation';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
 import { EnvIntOverride } from './env-config';
 
@@ -22,6 +23,15 @@ import { EnvIntOverride } from './env-config';
 @RegisterClass(BaseSearchProvider, 'EntitySearchProvider')
 export class EntitySearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'entity';
+
+    /** Reads the scope's entity lanes, each with its own ExtraFilter and UserSearchString (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['Entity'];
+
+    /** Every hit is a row of the entity it names, read through `RunView` as the user (see the base class). */
+    public override readonly ResultsAreRowsOfLabelledEntity: boolean = true;
+
+    /** Each lane's rendered `ExtraFilter` is applied in the `RunView` that reads its entity (see the base class). */
+    public override readonly AppliesLaneExtraFilter: boolean = true;
 
     /**
      * Minimum trimmed term length we accept. A single-character substring against a
@@ -167,18 +177,19 @@ export class EntitySearchProvider extends BaseSearchProvider {
     /**
      * Resolve the entity list to actually search.
      *
-     * - If `scopeConstraints.Entities` is provided, use those directly (each carries its own
-     *   rendered ExtraFilter + UserSearchString) — this is the "scoped" path.
-     * - Otherwise fall back to the legacy unscoped path (`AllowUserSearchAPI=true` with
-     *   optional `filters.EntityNames` restriction) and wrap each in a trivial constraint.
+     * - If `scopeConstraints.Entities` is defined, use it verbatim (each entry carries its own
+     *   rendered ExtraFilter + UserSearchString) — this is the "scoped" path. An EMPTY list means
+     *   the scope gives this provider no entity, so nothing is searched — never every entity.
+     * - Only when it is `undefined` (an unscoped search) fall back to the legacy path
+     *   (`AllowUserSearchAPI=true` with optional `filters.EntityNames`), wrapping each in a trivial constraint.
      */
     private buildScopedEntityList(
         md: IMetadataProvider,
         scopeConstraints: ScopeConstraints | undefined,
         filters: SearchFilters | undefined
     ): ScopeEntityConstraint[] {
-        if (scopeConstraints?.Entities?.length) {
-            // Honor the scope's explicit entity list verbatim.
+        if (scopeConstraints?.Entities) {
+            // Honor the scope's explicit entity list verbatim — including an empty one.
             return scopeConstraints.Entities;
         }
 

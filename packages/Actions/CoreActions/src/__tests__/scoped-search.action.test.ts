@@ -12,6 +12,7 @@ vi.mock('@memberjunction/global', async () => {
 });
 
 const searchSpy = vi.fn();
+const streamSearchSpy = vi.fn();
 const permissionResolveSpy = vi.fn();
 const logForbiddenSpy = vi.fn();
 
@@ -43,6 +44,7 @@ vi.mock('@memberjunction/search-engine', () => ({
     SearchEngine: {
         Instance: {
             Search: (...args: unknown[]) => searchSpy(...args),
+            streamSearch: (...args: unknown[]) => streamSearchSpy(...args),
             LogForbiddenSearch: (...args: unknown[]) => logForbiddenSpy(...args),
         }
     },
@@ -61,7 +63,8 @@ const getActiveScopeByIDSpy = vi.fn();
 // the one where resolveScopeAll yields an undefined scopeID.
 let globalScopeStub: unknown = { ID: 'global-id', Name: 'Global', IsGlobal: true };
 
-vi.mock('@memberjunction/core-entities', () => ({
+vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
     SearchEngineBase: {
         Instance: {
             Config: vi.fn(async () => {}),
@@ -90,7 +93,9 @@ const loadedSkillStub: { ID: string; Name: string; SearchScopeAccess: string; Lo
     Load: async () => true,
 };
 
-vi.mock('@memberjunction/core', () => ({
+// importOriginal: the action calls actions-base's ActionRunScopeIsBounded at runtime, and actions-base loads core.
+vi.mock('@memberjunction/core', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
     LogError: vi.fn(),
     LogStatusEx: vi.fn(),
     IsVerboseLoggingEnabled: () => false,
@@ -217,6 +222,24 @@ describe('ScopedSearchAction', () => {
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('ACCESS_DENIED');
         expect(searchSpy).not.toHaveBeenCalled();
+    });
+
+    it('streamingMode=partials reports each provider\'s count from resultCount — a progress event carries no rows', async () => {
+        loadedAgentStub.SearchScopeAccess = 'All';
+        streamSearchSpy.mockImplementation(async function* () {
+            yield { phase: 'provider', providerName: 'FullText', results: [], resultCount: 3, durationMs: 11 };
+            yield { phase: 'fused', results: [] };
+            yield { phase: 'final', results: [], sourceCounts: { Vector: 0, FullText: 3, Entity: 0, Storage: 0 }, elapsedMs: 14 };
+        });
+        const action = new ScopedSearchAction();
+        const result = await run(action, mkParams([
+            { Name: 'Query', Value: 'q' },
+            { Name: 'AgentID', Value: 'agent-1' },
+            { Name: 'StreamingMode', Value: 'partials' }
+        ]));
+        expect(result.Success).toBe(true);
+        const progress = result.Params?.find((p: { Name: string }) => p.Name === 'ProgressEvents')?.Value as Array<Record<string, unknown>>;
+        expect(progress[0]).toEqual({ phase: 'provider', providerName: 'FullText', count: 3, durationMs: 11 });
     });
 
     it('enforces Assigned scope rows — uses IsDefault when no scopeID supplied', async () => {
@@ -712,34 +735,29 @@ describe('ScopedSearchAction', () => {
             });
         });
 
-        it('drops SecondaryScopes entries with unsupported value types but keeps valid ones', async () => {
+        // Dropping a bad dimension used to run the search WITHOUT it — wider than the caller asked for. Every
+        // malformed shape is now refused before any gate or search runs.
+        it.each<[string, unknown]>([
+            ['an object-valued entry', JSON.stringify({ Region: 'US', NestedJunk: { foo: 'bar' } })],
+            ['a null entry', JSON.stringify({ Region: 'US', NullValue: null })],
+            ['a mixed array entry', JSON.stringify({ Tags: ['ok', 42, true] })],
+            ['JSON that is not an object (an array)', JSON.stringify(['US'])],
+            ['JSON that is not an object (a number)', '42'],
+            ['an array passed as is', ['US']],
+        ])('REFUSES SecondaryScopes with %s instead of dropping it (INVALID_PARAM, no search)', async (_label, value) => {
             loadedAgentStub.SearchScopeAccess = 'All';
-            const action = new ScopedSearchAction();
-            // Object-valued, null, and mixed-array entries are unsupported and should be dropped.
-            const payload = JSON.stringify({
-                Region: 'US',                             // string — kept
-                NestedJunk: { foo: 'bar' },                // object — dropped
-                NullValue: null,                            // null   — dropped
-                MixedArray: ['ok', 42, true],               // mixed  — dropped
-                Tags: ['policy', 'audit']                  // string[] — kept
-            });
-            const result = await run(action, mkParams([
+            const result = await run(new ScopedSearchAction(), mkParams([
                 { Name: 'Query', Value: 'q' },
                 { Name: 'AgentID', Value: 'agent-1' },
-                { Name: 'SecondaryScopes', Value: payload }
+                { Name: 'SecondaryScopes', Value: value }
             ]));
-            expect(result.Success).toBe(true);
-            const callArgs = searchSpy.mock.calls[0][0];
-            expect(callArgs.SearchContext).toEqual({
-                PrimaryScopeRecordID: undefined,
-                SecondaryScopes: {
-                    Region: 'US',
-                    Tags: ['policy', 'audit']
-                }
-            });
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(searchSpy).not.toHaveBeenCalled();
+            expect(permissionResolveSpy).not.toHaveBeenCalled();
         });
 
-        it('treats malformed SecondaryScopes JSON as absent and still runs the search', async () => {
+        it('REFUSES malformed SecondaryScopes JSON instead of searching without it', async () => {
             loadedAgentStub.SearchScopeAccess = 'All';
             const action = new ScopedSearchAction();
             const result = await run(action, mkParams([
@@ -748,13 +766,322 @@ describe('ScopedSearchAction', () => {
                 { Name: 'PrimaryScopeRecordID', Value: 'ORG-O1' },
                 { Name: 'SecondaryScopes', Value: '{not valid json' }
             ]));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(result.Message).toMatch(/not valid JSON/);
+            // Tells the model exactly what a well-formed value is (the metadata's parameter description predates the refusal).
+            expect(result.Message).toMatch(/SecondaryScopes must be a JSON object mapping each dimension name to a string, number, boolean/);
+            expect(result.Message).toMatch(/or array of strings/);
+            expect(searchSpy).not.toHaveBeenCalled();
+            expect(logForbiddenSpy).not.toHaveBeenCalled(); // malformed input, not an access attempt
+        });
+
+        it.each<[string, unknown]>([
+            ['an array', ['US']],
+            ['an unsupported value', { Region: { nested: true } }],
+        ])('tells the model the shape SecondaryScopes must have when it is %s', async (_label, value) => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            const result = await run(new ScopedSearchAction(), mkParams([
+                { Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }, { Name: 'SecondaryScopes', Value: value },
+            ]));
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(result.Message).toMatch(/must be a JSON object mapping each dimension name/);
+            expect(result.Message).toMatch(/or be omitted/);
+        });
+
+        it('accepts SecondaryScopes passed as an object, not only as a JSON string', async () => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            const result = await run(new ScopedSearchAction(), mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'SecondaryScopes', Value: { Region: 'US', Tags: ['policy'] } }
+            ]));
             expect(result.Success).toBe(true);
-            const callArgs = searchSpy.mock.calls[0][0];
-            // Primary is still set; SecondaryScopes is dropped due to parse failure.
-            expect(callArgs.SearchContext).toEqual({
-                PrimaryScopeRecordID: 'ORG-O1',
-                SecondaryScopes: undefined,
+            expect(searchSpy.mock.calls[0][0].SearchContext).toEqual({
+                PrimaryScopeRecordID: undefined,
+                SecondaryScopes: { Region: 'US', Tags: ['policy'] },
             });
+        });
+
+        it('treats a blank SecondaryScopes as absent', async () => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            const result = await run(new ScopedSearchAction(), mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'SecondaryScopes', Value: '   ' }
+            ]));
+            expect(result.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].SearchContext).toBeUndefined();
+        });
+    });
+
+    describe('Tenant — bound to the RUN when inside one (RunActionParams.RunScope)', () => {
+        // BaseAgent.ExecuteSingleAction stamps RunActionParams.RunScope (the run's validated tenant and secondary
+        // scopes) on every dispatch. Inside a Loop agent PrimaryScopeRecordID / SecondaryScopes are written by the
+        // MODEL, so the run is the authority, exactly as for AISkillID: a missing tenant defaults to the run's, and one
+        // the run does not carry is refused rather than searched.
+        const TENANT = 'aaaaaaaa-1111-4222-8333-444444444444';
+        const OTHER_TENANT = 'bbbbbbbb-1111-4222-8333-444444444444';
+        const inRun = (
+            runScope: { PrimaryScopeRecordID: string | null; SecondaryScopes?: Record<string, unknown> | null },
+            extra: Array<{ Name: string; Value: unknown }> = [],
+        ): RunActionParams => {
+            const params = mkParams([{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }, { Name: 'ScopeID', Value: 'scope-1' }, ...extra],
+                { AgentID: 'agent-1', ActiveSkillIDs: [] });
+            (params as unknown as { RunScope: unknown }).RunScope = runScope;
+            return params;
+        };
+        const gateTenant = (): unknown => (permissionResolveSpy.mock.calls[0][0] as { PrimaryScopeRecordID: unknown }).PrimaryScopeRecordID;
+
+        beforeEach(() => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            getActiveScopeByIDSpy.mockReturnValue({ ID: 'scope-1', Name: 'HR' });
+        });
+
+        it("searches the run's tenant when the model names none, and the permission decision is made for it", async () => {
+            const result = await run(new ScopedSearchAction(), inRun({ PrimaryScopeRecordID: TENANT }));
+            expect(result.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].SearchContext).toEqual({ PrimaryScopeRecordID: TENANT, SecondaryScopes: undefined });
+            expect(gateTenant()).toBe(TENANT);
+        });
+
+        it("REFUSES a model tenant that is not the run's: INVALID_PARAM, a Forbidden row, no gate and no search", async () => {
+            const params = inRun({ PrimaryScopeRecordID: TENANT }, [{ Name: 'PrimaryScopeRecordID', Value: OTHER_TENANT }]);
+            const result = await run(new ScopedSearchAction(), params);
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(result.Message).toContain(OTHER_TENANT);
+            expect(result.Message).not.toContain(TENANT); // the caller is not told the run's tenant
+            expect(result.Message).toMatch(/Inside an agent run the tenant comes from the run — omit PrimaryScopeRecordID and the run's tenant applies/);
+            expect(searchSpy).not.toHaveBeenCalled();
+            expect(permissionResolveSpy).not.toHaveBeenCalled();
+            expect(logForbiddenSpy).toHaveBeenCalledOnce();
+            const row = logForbiddenSpy.mock.calls[0][0] as { FailureReason: string; AIAgentID: string; ScopeIDs: string[]; ContextUser: { ID: string } };
+            expect(row).toMatchObject({ AIAgentID: 'agent-1', ScopeIDs: ['scope-1'], ContextUser: { ID: 'u1' }, PrimaryScopeRecordID: TENANT });
+            expect(row.FailureReason).toContain(OTHER_TENANT);
+            expect(row.FailureReason).toContain(TENANT);
+        });
+
+        it("accepts a case variant of the run's tenant and searches with the run's own spelling", async () => {
+            const params = inRun({ PrimaryScopeRecordID: TENANT }, [{ Name: 'PrimaryScopeRecordID', Value: ` ${TENANT.toUpperCase()} ` }]);
+            const result = await run(new ScopedSearchAction(), params);
+            expect(result.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].SearchContext.PrimaryScopeRecordID).toBe(TENANT);
+            expect(gateTenant()).toBe(TENANT);
+        });
+
+        it('REFUSES any model tenant when the run is unscoped (no tenant to restate)', async () => {
+            const result = await run(new ScopedSearchAction(), inRun({ PrimaryScopeRecordID: null }, [{ Name: 'PrimaryScopeRecordID', Value: OTHER_TENANT }]));
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(result.Message).toMatch(/this agent run is not scoped to a tenant\./);
+            expect(result.Message).toMatch(/Inside an agent run the tenant comes from the run — omit PrimaryScopeRecordID/);
+            expect(searchSpy).not.toHaveBeenCalled();
+            expect((logForbiddenSpy.mock.calls[0][0] as { FailureReason: string }).FailureReason).toMatch(/no tenant/);
+            expect((logForbiddenSpy.mock.calls[0][0] as { PrimaryScopeRecordID: unknown }).PrimaryScopeRecordID).toBeNull();
+        });
+
+        it("attributes a permission denial inside the run to the run's tenant", async () => {
+            permissionResolveSpy.mockResolvedValue({ Allowed: false, Level: 'None', Source: 'NoGrant', Reason: 'tenant deny', toSqlPredicate: () => '1=0' });
+            const result = await run(new ScopedSearchAction(), inRun({ PrimaryScopeRecordID: TENANT }));
+            expect(result.ResultCode).toBe('PERMISSION_DENIED');
+            expect(gateTenant()).toBe(TENANT);
+            expect(logForbiddenSpy.mock.calls[0][0]).toMatchObject({ PrimaryScopeRecordID: TENANT, ScopeIDs: ['scope-1'] });
+        });
+
+        it('an unscoped run with no model tenant searches with no tenant, as before', async () => {
+            const result = await run(new ScopedSearchAction(), inRun({ PrimaryScopeRecordID: null, SecondaryScopes: null }));
+            expect(result.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].SearchContext).toBeUndefined();
+            expect(gateTenant()).toBeNull();
+        });
+
+        it('outside an agent run (no RunScope) the model tenant is honoured, unchanged', async () => {
+            const result = await run(new ScopedSearchAction(), mkParams([
+                { Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }, { Name: 'ScopeID', Value: 'scope-1' },
+                { Name: 'PrimaryScopeRecordID', Value: OTHER_TENANT },
+            ]));
+            expect(result.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].SearchContext.PrimaryScopeRecordID).toBe(OTHER_TENANT);
+            expect(gateTenant()).toBe(OTHER_TENANT);
+        });
+
+        it("applies the run's secondary scopes when the model passes none", async () => {
+            await run(new ScopedSearchAction(), inRun({ PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'EMEA' } }));
+            expect(searchSpy.mock.calls[0][0].SearchContext).toEqual({ PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'EMEA' } });
+        });
+
+        it('REFUSES a SecondaryScopes key the run sets with a different value (INVALID_PARAM, Forbidden row, no search)', async () => {
+            const result = await run(new ScopedSearchAction(), inRun(
+                { PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'EMEA' } },
+                [{ Name: 'SecondaryScopes', Value: JSON.stringify({ Region: 'US' }) }],
+            ));
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(result.Message).toContain('Region');
+            expect(result.Message).not.toContain('EMEA');
+            expect(searchSpy).not.toHaveBeenCalled();
+            expect(logForbiddenSpy).toHaveBeenCalledOnce();
+        });
+
+        it("allows restating a run key with an equal value (case-insensitive, arrays as sets) and adds keys the run does not set", async () => {
+            const result = await run(new ScopedSearchAction(), inRun(
+                { PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'EMEA', Tags: ['a', 'b'] } },
+                [{ Name: 'SecondaryScopes', Value: { Region: 'emea', Tags: ['B', 'a'], Department: 'Finance' } }],
+            ));
+            expect(result.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].SearchContext).toEqual({
+                PrimaryScopeRecordID: TENANT,
+                SecondaryScopes: { Region: 'EMEA', Tags: ['a', 'b'], Department: 'Finance' },
+            });
+        });
+
+        it('REFUSES malformed SecondaryScopes inside a run too, without a Forbidden row', async () => {
+            const result = await run(new ScopedSearchAction(), inRun({ PrimaryScopeRecordID: TENANT }, [{ Name: 'SecondaryScopes', Value: '{oops' }]));
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(searchSpy).not.toHaveBeenCalled();
+            expect(logForbiddenSpy).not.toHaveBeenCalled();
+        });
+
+        it('REFUSES the Global scope inside a tenant-scoped run (it would search every tenant)', async () => {
+            const params = inRun({ PrimaryScopeRecordID: TENANT });
+            params.Params = params.Params.filter(p => p.Name !== 'ScopeID'); // 'All' agent, no ScopeID → Global
+            const result = await run(new ScopedSearchAction(), params);
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(result.Message).toMatch(/scoped to a tenant/);
+            expect(searchSpy).not.toHaveBeenCalled();
+            expect(logForbiddenSpy.mock.calls[0][0]).toMatchObject({ ScopeIDs: ['global-id'], PrimaryScopeRecordID: TENANT });
+        });
+
+        it('REFUSES a search with no scope at all inside a tenant-scoped run (no IsGlobal row)', async () => {
+            globalScopeStub = undefined;
+            try {
+                const params = inRun({ PrimaryScopeRecordID: null, SecondaryScopes: { Region: 'EMEA' } });
+                params.Params = params.Params.filter(p => p.Name !== 'ScopeID');
+                const result = await run(new ScopedSearchAction(), params);
+                expect(result.ResultCode).toBe('INVALID_PARAM');
+                expect(searchSpy).not.toHaveBeenCalled();
+            } finally {
+                globalScopeStub = { ID: 'global-id', Name: 'Global', IsGlobal: true };
+            }
+        });
+
+        it('an unscoped run may still use the Global scope, as before', async () => {
+            const params = inRun({ PrimaryScopeRecordID: null, SecondaryScopes: null });
+            params.Params = params.Params.filter(p => p.Name !== 'ScopeID');
+            const result = await run(new ScopedSearchAction(), params);
+            expect(result.Success).toBe(true);
+        });
+
+        it("judges every audience reader under the run's tenant, not a model value", async () => {
+            const params = inRun({ PrimaryScopeRecordID: TENANT });
+            (params as unknown as { Audience: unknown }).Audience = { Readers: [{ ID: 'reader-a', Name: 'Reader A', UserRoles: [] }] };
+            await run(new ScopedSearchAction(), params);
+            expect(permissionResolveSpy).toHaveBeenCalledTimes(2);
+            for (const call of permissionResolveSpy.mock.calls) {
+                expect((call[0] as { PrimaryScopeRecordID: unknown }).PrimaryScopeRecordID).toBe(TENANT);
+            }
+        });
+    });
+
+    describe('Audience (RunActionParams.Audience — a shared conversation)', () => {
+        const readerA = { ID: 'reader-a', Name: 'Reader A', UserRoles: [] };
+        const readerB = { ID: 'reader-b', Name: 'Reader B', UserRoles: [] };
+        const resultWithCounts = {
+            Success: true,
+            Results: [],
+            TotalCount: 0,
+            ElapsedMs: 1,
+            SourceCounts: { Vector: 3, FullText: 2, Entity: 7, Storage: 1 },
+            Providers: [],
+        };
+        const withAudience = (readers: unknown[], extra: Array<{ Name: string; Value: unknown }> = []): RunActionParams => {
+            const params = mkParams([{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }, { Name: 'ScopeID', Value: 'scope-1' }, ...extra]);
+            (params as unknown as { Audience: unknown }).Audience = { Readers: readers };
+            return params;
+        };
+        const userOf = (call: number): { ID: string } => (permissionResolveSpy.mock.calls[call][0] as { User: { ID: string } }).User;
+
+        beforeEach(() => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            getActiveScopeByIDSpy.mockReturnValue({ ID: 'scope-1', Name: 'HR' });
+            searchSpy.mockResolvedValue(resultWithCounts);
+        });
+
+        it('declares that it can honour an audience', () => {
+            expect(new ScopedSearchAction().SupportsAudience).toBe(true);
+        });
+
+        it('passes the audience to the search and withholds SourceCounts from the output', async () => {
+            const params = withAudience([readerA]);
+            const result = await run(new ScopedSearchAction(), params);
+            expect(result.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].Audience).toBe((params as unknown as { Audience: unknown }).Audience);
+            expect(result.Params?.some((p: { Name: string }) => p.Name === 'SourceCounts')).toBe(false);
+            expect(result.Params?.find((p: { Name: string }) => p.Name === 'Results')?.Value).toEqual([]);
+        });
+
+        it('without an audience: no Audience on the search and SourceCounts are returned, as before', async () => {
+            const result = await run(new ScopedSearchAction(), mkParams([{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }]));
+            expect(searchSpy.mock.calls[0][0].Audience).toBeUndefined();
+            expect(result.Params?.find((p: { Name: string }) => p.Name === 'SourceCounts')?.Value).toEqual(resultWithCounts.SourceCounts);
+        });
+
+        it('runs the scope gate for every reader, with the caller as ContextUser and the same principals and tenant', async () => {
+            await run(new ScopedSearchAction(), withAudience([readerA, readerB], [{ Name: 'PrimaryScopeRecordID', Value: 'ORG-1' }]));
+            expect(permissionResolveSpy).toHaveBeenCalledTimes(3);
+            expect(userOf(0).ID).toBe('u1');
+            expect([userOf(1).ID, userOf(2).ID].sort()).toEqual(['reader-a', 'reader-b']);
+            for (const call of permissionResolveSpy.mock.calls.slice(1)) {
+                expect(call[0]).toMatchObject({ ContextUser: { ID: 'u1' }, SearchScopeID: 'scope-1', Agent: loadedAgentStub, PrimaryScopeRecordID: 'ORG-1' });
+            }
+            expect(searchSpy).toHaveBeenCalledOnce();
+        });
+
+        it('refuses the search when a reader may not search the scope: PERMISSION_DENIED and a Forbidden row naming the reader', async () => {
+            permissionResolveSpy.mockImplementation(async (input: { User: { ID: string } }) => input.User.ID === 'reader-b'
+                ? { Allowed: false, Level: 'None', Source: 'NoGrant', Reason: 'no grant', toSqlPredicate: () => '1=0' }
+                : { Allowed: true, Level: 'Search', Source: 'RoleGrant', Reason: 'ok', toSqlPredicate: () => '1=1' });
+            const result = await run(new ScopedSearchAction(), withAudience([readerA, readerB]));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('PERMISSION_DENIED');
+            expect(result.Message).not.toContain('Reader B');
+            expect(searchSpy).not.toHaveBeenCalled();
+            expect(logForbiddenSpy).toHaveBeenCalledOnce();
+            expect(logForbiddenSpy.mock.calls[0][0]).toMatchObject({ ScopeIDs: ['scope-1'], ContextUser: { ID: 'u1' }, AIAgentID: 'agent-1' });
+            // Recorded under the caller: the reader's ID and the verdict's fixed Source, never their name or the resolver's reason.
+            expect(logForbiddenSpy.mock.calls[0][0].FailureReason).toBe('Audience reader reader-b may not search this scope (NoGrant).');
+        });
+
+        it('refuses a reader whose grant is only Read, as it does the caller', async () => {
+            permissionResolveSpy.mockImplementation(async (input: { User: { ID: string } }) => input.User.ID === 'reader-a'
+                ? { Allowed: true, Level: 'Read', Source: 'RoleGrant', Reason: 'read only', toSqlPredicate: () => '1=1' }
+                : { Allowed: true, Level: 'Search', Source: 'RoleGrant', Reason: 'ok', toSqlPredicate: () => '1=1' });
+            const result = await run(new ScopedSearchAction(), withAudience([readerA]));
+            expect(result.ResultCode).toBe('PERMISSION_DENIED');
+            expect(logForbiddenSpy.mock.calls[0][0].FailureReason)
+                .toBe('Audience reader reader-a may not search this scope (Read level: visibility, not search).');
+        });
+
+        it("streamingMode=partials under an audience: no provider counts (the caller's unfiltered reach), the rest of the trail kept", async () => {
+            streamSearchSpy.mockImplementation(async function* () {
+                yield { phase: 'provider', providerName: 'FullText', results: [], resultCount: 3, durationMs: 11 };
+                yield { phase: 'fused', results: [] };
+                yield { phase: 'final', results: [], sourceCounts: { Vector: 0, FullText: 3, Entity: 0, Storage: 0 }, elapsedMs: 14 };
+            });
+            const result = await run(new ScopedSearchAction(), withAudience([readerA], [{ Name: 'StreamingMode', Value: 'partials' }]));
+            expect(result.Success).toBe(true);
+            const progress = result.Params?.find((p: { Name: string }) => p.Name === 'ProgressEvents')?.Value as Array<Record<string, unknown>>;
+            expect(progress).toEqual([{ phase: 'fused', count: 0 }, { phase: 'final', count: 0, elapsedMs: 14 }]);
+            expect(JSON.stringify(result.Params)).not.toContain('"provider"');
+            expect(result.Params?.some((p: { Name: string }) => p.Name === 'SourceCounts')).toBe(false);
+        });
+
+        it('does not judge the readers when the caller is already refused', async () => {
+            permissionResolveSpy.mockResolvedValue({
+                Allowed: false, Level: 'None', Source: 'NoGrant', Reason: 'caller no grant', toSqlPredicate: () => '1=0',
+            });
+            await run(new ScopedSearchAction(), withAudience([readerA]));
+            expect(permissionResolveSpy).toHaveBeenCalledOnce();
+            expect(logForbiddenSpy).toHaveBeenCalledOnce();
         });
     });
 

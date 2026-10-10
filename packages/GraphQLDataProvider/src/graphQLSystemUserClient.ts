@@ -1059,6 +1059,11 @@ export class GraphQLSystemUserClient {
      * @private
      */
     private prepareAgentVariables(params: ExecuteAgentParams): Record<string, any> {
+        // Server-only params: RunAIAgent has no input for them, so sending the run without them would run it with the
+        // caller's full reach (an Audience) or silently untrusted. Refuse rather than drop them.
+        if (params.Audience !== undefined || params.TrustReservedRunData === true) {
+            throw new Error('ExecuteAgentParams.Audience and TrustReservedRunData are server-only; they cannot be sent over GraphQL. Run the agent on the server (AgentRunner) to bound it by an audience.');
+        }
         const variables: Record<string, any> = {
             agentId: params.agent.ID,
             messages: JSON.stringify(params.conversationMessages),

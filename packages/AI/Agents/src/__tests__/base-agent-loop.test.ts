@@ -60,6 +60,8 @@ import type { AIEngine } from '@memberjunction/aiengine';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
 import { AIAPIKeys } from '@memberjunction/ai';
+import { UserInfo as CoreUserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 // ============================================================================
 // Module mocks (boundaries only)
@@ -168,6 +170,8 @@ interface ScriptedActionParam {
 /** ActionResult-shaped record returned from the scripted RunAction boundary. */
 interface ScriptedActionResult {
     Success: boolean;
+    /** The raw result code (`ActionResult.ResultCode`) — set by the engine's own refusals, e.g. AUDIENCE_UNSUPPORTED. */
+    ResultCode?: string;
     Message: string;
     Params: ScriptedActionParam[];
     Result: { ResultCode: string } | null;
@@ -184,6 +188,8 @@ interface RunActionCall {
     resolveAPIKey?: unknown;
     /** `RunActionParams.CredentialScope` — absent when the run sets none. */
     credentialScope?: unknown;
+    /** `RunActionParams.Audience` — absent when the run's audience adds no reader. */
+    audience?: unknown;
 }
 
 /** Save-queue flush diagnostics (shape from AgentRunStepSaveQueue.Flush). */
@@ -285,6 +291,8 @@ class LoopHarness {
     public steps: MockStepEntity[] = [];
     public runActionCalls: RunActionCall[] = [];
     public runActionParamsJSON: string[] = [];
+    /** `RunActionParams.RunScope` per dispatch — kept off the call record so the toEqual assertions over it stay exact. */
+    public runScopes: unknown[] = [];
     /** Scripted RunAction responder — override per test. */
     public runAction: (call: RunActionCall) => ScriptedActionResult = () => ({
         Success: true,
@@ -367,10 +375,20 @@ class LoopHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown }; RuntimeAPIKeyResolver?: unknown; CredentialScope?: unknown }): Promise<ScriptedActionResult> => {
+            RunAction: async (input: {
+                Action: { Name: string };
+                Params: ScriptedActionParam[];
+                Context?: { ActiveSkillIDs?: unknown };
+                RuntimeAPIKeyResolver?: unknown;
+                CredentialScope?: unknown;
+                Audience?: unknown;
+                RunScope?: unknown;
+            }): Promise<ScriptedActionResult> => {
+                this.runScopes.push(input.RunScope);
                 const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs };
                 if (input.RuntimeAPIKeyResolver !== undefined) call.resolveAPIKey = input.RuntimeAPIKeyResolver;
                 if (input.CredentialScope !== undefined) call.credentialScope = input.CredentialScope;
+                if (input.Audience !== undefined) call.audience = input.Audience;
                 // What any log of the whole RunActionParams could contain — kept off the call record so
                 // the toEqual assertions over runActionCalls stay exact.
                 this.runActionParamsJSON.push(JSON.stringify({ ...input, Action: input.Action.Name }));
@@ -1554,7 +1572,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
 
     /** Run params for an agent whose finishIf gates are `mode` (gates are opt-in; the default is off). */
     function gateParams(mode: 'on' | 'shadow'): ExecuteAgentParams {
-        return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } } });
+        return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } }, TrustReservedRunData: true });
     }
 
     function gatedActionsEnvelope(): LoopAgentResponse {
@@ -1939,6 +1957,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         const result = await agent.Execute(makeParams({
             payload: { tickets: ['Printer on fire.', 'Password reset.', 'Coffee machine.'] },
             data: { __agentTypePromptParams: { decisionsMaxCallsPerTurn: 2 } },
+            TrustReservedRunData: true,
         }));
 
         expect(result.success).toBe(true);
@@ -1969,7 +1988,7 @@ describe('BaseAgent.Execute — a finishIfMode that is not a mode', () => {
             () => llmEnvelope(actionsEnvelope()),
             () => llmEnvelope(successEnvelope()),
         ]);
-        const result = await agent.Execute(makeParams({ data: { __agentTypePromptParams: { finishIfMode } } }));
+        const result = await agent.Execute(makeParams({ data: { __agentTypePromptParams: { finishIfMode } }, TrustReservedRunData: true }));
         expect(result.success).toBe(true);
         expect(runner.Calls).toHaveLength(2);
     }
@@ -2138,6 +2157,352 @@ describe("BaseAgent.Execute — a memory rerank's cost", () => {
         expect(result.success).toBe(false);
         expect(harness.run.ErrorMessage).toContain('Maximum token limit of 100 exceeded');
         expect(harness.runActionCalls).toHaveLength(0);
+    });
+});
+
+describe('BaseAgent.Execute — a run with an audience (ExecuteAgentParams.Audience)', () => {
+    const READER_ID = 'aaaaaaaa-0000-4000-8000-0000000000b2';
+    const UNKNOWN_ID = 'aaaaaaaa-0000-4000-8000-0000000000e2';
+    const READER = new CoreUserInfo(undefined, { ID: READER_ID, Name: 'Room Reader', Email: 'reader@test.mj', UserRoles: [] });
+    const room = { Audience: { Mode: 'Intersection' as const, UserIDs: [READER_ID] } };
+
+    beforeEach(() => {
+        UserCache.Instance.SetUsers([READER]);
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        UserCache.Instance.SetUsers([]);
+    });
+
+    it('fails the run before any prompt when the audience names a user who does not exist (after one cache refresh)', async () => {
+        const refresh = vi.spyOn(UserCache.Instance, 'Refresh').mockResolvedValue(undefined);
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        const result = await agent.Execute(makeParams({ Audience: { Mode: 'Intersection', UserIDs: [READER_ID, UNKNOWN_ID] } }));
+
+        expect(result.success).toBe(false);
+        expect(runner.Calls).toHaveLength(0);
+        expect(harness.runActionCalls).toHaveLength(0);
+        expect(harness.run.Status).toBe('Failed');
+        expect(harness.run.ErrorMessage).toContain(UNKNOWN_ID);
+        // The refresh reads through the run's provider; the harness provider is not a database provider,
+        // so the cache is only consulted again — the point here is that the run is refused, not skipped.
+        expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['an Intersection with no readers', { Mode: 'Intersection' as const, UserIDs: [] }],
+        ['a Caller audience that names readers', { Mode: 'Caller' as const, UserIDs: [READER_ID] }],
+    ])('fails the run before any prompt for %s', async (_label, audience) => {
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const result = await agent.Execute(makeParams({ Audience: audience }));
+        expect(result.success).toBe(false);
+        expect(runner.Calls).toHaveLength(0);
+        expect(harness.run.ErrorMessage).toMatch(/^Invalid Audience: /);
+    });
+
+    it('hands every action dispatch the hydrated readers', async () => {
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams(room));
+
+        expect(result.success).toBe(true);
+        expect(harness.runActionCalls).toHaveLength(1);
+        expect(harness.runActionCalls[0].audience).toEqual({ Readers: [READER] });
+    });
+
+    it('runs as with no audience when the only reader is the caller: no Audience on the dispatch, task graphs as configured', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams({ Audience: { Mode: 'Intersection', UserIDs: [USER_ID.toUpperCase()] } }));
+
+        expect(harness.runActionCalls[0].audience).toBeUndefined();
+        expect(runner.Calls[0].data?.__agentTypePromptParams).toMatchObject({ enableTaskGraphs: true });
+    });
+
+    it('locks out an action the engine refuses for the audience: the model is told, and it is never dispatched again', async () => {
+        harness.runAction = () => ({
+            Success: false,
+            ResultCode: 'AUDIENCE_UNSUPPORTED',
+            Message: `Action '${ACTION_NAME}' is not available here: its output would be shown to people besides the caller.`,
+            Params: [],
+            Result: null,
+            LogEntry: null,
+        });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams(room));
+
+        expect(harness.runActionCalls).toHaveLength(1);
+        const told = (runner.Calls[1].conversationMessages ?? []).map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)));
+        // Told it is unavailable in a shared conversation — not that it failed with a configuration or credential error.
+        expect(told.some((c) => c.includes('[CRITICAL/NOT_AVAILABLE_IN_SHARED_CONVERSATION]') && c.includes(ACTION_NAME))).toBe(true);
+        expect(told.some((c) => c.includes('[CRITICAL/ACTION_UNAVAILABLE]') || c.includes('configuration or credential error'))).toBe(false);
+        const repeat = (runner.Calls[2].conversationMessages ?? []).map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)));
+        expect(repeat.some((c) => c.includes('not available in this shared conversation') && c.includes('Do not call it again'))).toBe(true);
+    });
+
+    it('withholds task graphs from the prompt, without writing the cached base params', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        await agent.Execute(makeParams(room));
+
+        expect(runner.Calls[0].data?.__agentTypePromptParams).toMatchObject({ enableTaskGraphs: false, includeResponseTypeDefinition: { tasks: false } });
+        const catalog = (harness.engineInstance.GetAgentBaseCatalog as (id: string) => { baseAgentTypePromptParams: Record<string, unknown> })(AGENT_ID);
+        expect(catalog.baseAgentTypePromptParams.enableTaskGraphs).toBe(true);
+    });
+
+    it("offers no client tools and injects none of the caller's app context (control: both without an audience)", async () => {
+        const data = {
+            clientTools: [{ Name: 'NavigateTo', Description: 'Open a view in the browser', InputSchema: {} }],
+            appContext: { App: { Name: 'CRM' }, AdditionalContext: { selectedAccount: 'Acme (private)' } },
+        };
+        const roomRun = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await roomRun.agent.Execute(makeParams({ ...room, data }));
+        expect(roomRun.runner.Calls[0].data?.clientToolDetails).toBe('');
+        expect(roomRun.runner.Calls[0].data?.appContext).toBe('');
+        expect(JSON.stringify(roomRun.runner.Calls[0].data)).not.toContain('Acme (private)');
+
+        harness = new LoopHarness();
+        const alone = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await alone.agent.Execute(makeParams({ data }));
+        expect(alone.runner.Calls[0].data?.clientToolDetails).toContain('NavigateTo');
+        expect(alone.runner.Calls[0].data?.appContext).toContain('Acme (private)');
+    });
+
+    it('leaves the memory-writes docs out of the prompt for an agent that may write memory (control: they are in without one)', async () => {
+        harness.agent = makeAgentRow({ AllowMemoryWrite: true });
+        const roomRun = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await roomRun.agent.Execute(makeParams(room));
+        expect(roomRun.runner.Calls[0].data?._MEMORY_WRITES_ENABLED).toBeUndefined();
+
+        harness = new LoopHarness();
+        harness.agent = makeAgentRow({ AllowMemoryWrite: true });
+        const alone = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await alone.agent.Execute(makeParams());
+        expect(alone.runner.Calls[0].data?._MEMORY_WRITES_ENABLED).toBe(true);
+    });
+
+    it('forgets the hydrated readers when the run ends, so a later direct dispatch hydrates its own', async () => {
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await agent.Execute(makeParams(room));
+        const state = agent as unknown as { _audienceReaders: unknown; _audienceSource: unknown; _runScope: unknown };
+        expect(state._audienceReaders).toBeUndefined();
+        expect(state._audienceSource).toBeUndefined();
+        expect(state._runScope).toBeUndefined();
+    });
+
+    it('refuses a session-driven (realtime) agent type before opening a session', async () => {
+        class SessionAgent extends HarnessAgent {
+            public SessionsOpened = 0;
+            protected override isSessionDrivenAgentType(_agentType: BaseAgentType): _agentType is BaseAgentType & { IsSessionDriven: true } {
+                return true;
+            }
+            protected override async executeRealtimeSession<R>(): Promise<never> {
+                this.SessionsOpened++;
+                throw new Error('a session must not be opened for a room');
+            }
+        }
+        const agent = new SessionAgent();
+        (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner([() => llmEnvelope(successEnvelope())]);
+
+        const result = await agent.Execute(makeParams(room));
+
+        expect(result.success).toBe(false);
+        expect(agent.SessionsOpened).toBe(0);
+        expect(harness.run.ErrorMessage).toMatch(/session-driven/);
+    });
+});
+
+describe('BaseAgent.Execute — the run scope on every action dispatch (RunActionParams.RunScope)', () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000a7';
+    const scopedRun = (): FakeAgentRun & { PrimaryScopeRecordID?: string; SecondaryScopes?: string } =>
+        harness.run as FakeAgentRun & { PrimaryScopeRecordID?: string; SecondaryScopes?: string };
+
+    it('hands every dispatch the scope initializeAgentRun validated and wrote to the run row (defaults applied)', async () => {
+        harness.agent = makeAgentRow({ ScopeConfig: JSON.stringify({ dimensions: [{ name: 'Region', defaultValue: 'EMEA' }] }) });
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT, SecondaryScopes: { Team: 'alpha' } }));
+
+        expect(result.success).toBe(true);
+        const expected = { PrimaryScopeEntityName: null, PrimaryScopeRecordID: TENANT, SecondaryScopes: { Team: 'alpha', Region: 'EMEA' } };
+        expect(harness.runScopes).toEqual([expected, expected]);
+        expect(scopedRun().PrimaryScopeRecordID).toBe(TENANT);
+        expect(JSON.parse(scopedRun().SecondaryScopes ?? '{}')).toEqual(expected.SecondaryScopes);
+    });
+
+    it('an unscoped run hands every dispatch a RunScope of nulls — "inside a run, no tenant"', async () => {
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams());
+
+        expect(harness.runScopes).toEqual([{ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null }]);
+    });
+
+    it('forgets the run scope once the run is over, so a later direct dispatch resolves its own', async () => {
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT }));
+
+        const action = (harness.actionEngineInstance.Actions as MJActionEntityExtended[])[0];
+        await agent.ExecuteSingleAction(makeParams(), { name: ACTION_NAME, params: {} }, action, TEST_USER as unknown as UserInfo);
+
+        expect(harness.runScopes[0]).toMatchObject({ PrimaryScopeRecordID: TENANT });
+        expect(harness.runScopes[1]).toMatchObject({ PrimaryScopeRecordID: null });
+    });
+});
+
+describe("BaseAgent.Execute — memory, RAG and the prompt read the run's validated scope", () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000c7';
+    type Spied = { mock: { calls: unknown[][] } };
+    function spyContext(agent: HarnessAgent): { memory: Spied; rag: Spied; parts: Spied } {
+        const keyhole = agent as unknown as Record<string, (...args: unknown[]) => unknown>;
+        return {
+            memory: vi.spyOn(keyhole, 'InjectContextMemory').mockResolvedValue({ notes: [], examples: [] }),
+            rag: vi.spyOn(keyhole, 'InjectPreExecutionRAG').mockResolvedValue(null),
+            parts: vi.spyOn(keyhole, 'InjectScopedPromptParts').mockReturnValue(undefined),
+        };
+    }
+
+    it('hands notes, pre-execution RAG and scoped prompt parts the scope the run row records: trimmed, defaults applied', async () => {
+        harness.agent = makeAgentRow({ ScopeConfig: JSON.stringify({ dimensions: [{ name: 'Region', defaultValue: 'EMEA' }] }) });
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const spies = spyContext(agent);
+
+        await agent.Execute(makeParams({ PrimaryScopeRecordID: `  ${TENANT}  `, SecondaryScopes: { Team: 'alpha' } }));
+
+        const expected = { RecordID: TENANT, Secondary: { Team: 'alpha', Region: 'EMEA' } };
+        const memory = spies.memory.mock.calls[0];
+        expect({ RecordID: memory[7], Secondary: memory[8] }).toEqual(expected);
+        const rag = spies.rag.mock.calls[0];
+        expect({ RecordID: rag[6], Secondary: rag[7] }).toEqual(expected);
+        const parts = spies.parts.mock.calls[0];
+        expect({ RecordID: parts[3], Secondary: parts[4] }).toEqual(expected);
+        expect(harness.run).toMatchObject({ PrimaryScopeRecordID: TENANT });
+    });
+
+    it('never reads a scope from data the caller was not trusted to set', async () => {
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const spies = spyContext(agent);
+
+        await agent.Execute(makeParams({ data: { PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'US' } } }));
+
+        expect(spies.memory.mock.calls[0].slice(6, 9)).toEqual([undefined, undefined, undefined]);
+        expect(spies.rag.mock.calls[0].slice(5, 8)).toEqual([undefined, undefined, undefined]);
+    });
+
+    it('withholds task graphs from the prompt of a tenant-scoped run (control: an unscoped run keeps them)', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const scoped = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await scoped.agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT }));
+        expect(scoped.runner.Calls[0].data?.__agentTypePromptParams)
+            .toMatchObject({ enableTaskGraphs: false, includeResponseTypeDefinition: { tasks: false } });
+
+        harness = new LoopHarness();
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const unscoped = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await unscoped.agent.Execute(makeParams());
+        expect(unscoped.runner.Calls[0].data?.__agentTypePromptParams).toMatchObject({ enableTaskGraphs: true });
+    });
+});
+
+describe('BaseAgent.Execute — the reserved run-data keys count only with TrustReservedRunData', () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000b7';
+    /** What an untrusted caller (a browser, an Execute Agent action call, MCP, A2A) might put in `data`. */
+    const hostileData = (): Record<string, unknown> => ({
+        topic: 'refunds',
+        PrimaryScopeRecordID: TENANT,
+        SecondaryScopes: { Region: 'EMEA' },
+        __agentTypePromptParams: { enableTaskGraphs: true },
+    });
+    const scopedRun = (): FakeAgentRun & { PrimaryScopeRecordID?: string | null } => harness.run as FakeAgentRun & { PrimaryScopeRecordID?: string | null };
+    const promptParamsSeen = (runner: ScriptedPromptRunner): Record<string, unknown> | undefined =>
+        runner.Calls[0].data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+    const reservedKeyLogs = (): string[] => vi.mocked(LogStatus).mock.calls.map((c) => String(c[0])).filter((m) => m.includes('reserved run-data key'));
+
+    beforeEach(() => {
+        vi.mocked(LogStatus).mockClear();
+    });
+
+    function makeRun(): { agent: HarnessAgent; runner: ScriptedPromptRunner } {
+        return makeAgent([() => llmEnvelope(actionsEnvelope()), () => llmEnvelope(successEnvelope())]);
+    }
+
+    it('without it, drops the scope and agent-type keys from data before the run starts, and keeps the rest', async () => {
+        const { agent, runner } = makeRun();
+
+        const result = await agent.Execute(makeParams({ data: hostileData() }));
+
+        expect(result.success).toBe(true);
+        expect(harness.runScopes).toEqual([{ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null }]);
+        expect(scopedRun().PrimaryScopeRecordID ?? null).toBeNull();
+        expect(promptParamsSeen(runner)?.enableTaskGraphs).not.toBe(true);
+        expect(runner.Calls[0].data?.topic).toBe('refunds');
+    });
+
+    it("never mutates the caller's params or data, and logs the dropped keys once, never their values", async () => {
+        const data = hostileData();
+        const params = makeParams({ data });
+        const { agent } = makeRun();
+
+        await agent.Execute(params);
+
+        expect(params.data).toBe(data);
+        expect(data).toEqual(hostileData());
+        expect(reservedKeyLogs()).toHaveLength(1);
+        expect(reservedKeyLogs()[0]).toContain('PrimaryScopeRecordID, SecondaryScopes, __agentTypePromptParams');
+        expect(reservedKeyLogs()[0]).not.toContain(TENANT);
+    });
+
+    it('with it, the run reads its scope and agent-type parameters from data, as a trusted server caller intends', async () => {
+        const { agent, runner } = makeRun();
+
+        await agent.Execute(makeParams({ data: hostileData(), TrustReservedRunData: true }));
+
+        expect(harness.runScopes).toEqual([{ PrimaryScopeEntityName: null, PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'EMEA' } }]);
+        expect(scopedRun().PrimaryScopeRecordID).toBe(TENANT);
+        // The trusted agent-type params turn task graphs on, but a tenant-scoped run withholds them (a graph runs outside its scope).
+        expect(promptParamsSeen(runner)?.enableTaskGraphs).toBe(false);
+        expect(reservedKeyLogs()).toHaveLength(0);
+    });
+
+    it('with it and no scope in data, the agent-type parameters from data apply (task graphs on)', async () => {
+        const { agent, runner } = makeRun();
+
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { enableTaskGraphs: true } }, TrustReservedRunData: true }));
+
+        expect(promptParamsSeen(runner)?.enableTaskGraphs).toBe(true);
+    });
+
+    it('leaves the first-class scope fields alone: server code sets a scope without the marker', async () => {
+        const { agent } = makeRun();
+
+        await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT, data: { PrimaryScopeRecordID: 'aaaaaaaa-0000-4000-8000-0000000000ff' } }));
+
+        expect(harness.runScopes[0]).toMatchObject({ PrimaryScopeRecordID: TENANT });
     });
 });
 

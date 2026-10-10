@@ -258,3 +258,148 @@ describe('a defaultValue must not relabel a discard (regression, pass 5)', () =>
         expect(p.Note).toMatch(/discarded/i);
     });
 });
+
+describe('a required dimension that resolves to NOTHING fails closed', () => {
+    // `[]` is the dangerous shape for a bound, not the safe one: under the `{% if x | length %}` idiom
+    // an empty set removes the clause, so the lane runs unbounded (a bare `{% if x %}` keeps it, since
+    // `[]` is truthy, and renders `IN ('')`). The resolver already refuses a
+    // narrowing that meets to nothing; a required dimension that derives nothing must be refused the
+    // same way, instead of passing the `undefined` check because `[]` is a value.
+    class StubbedResolver extends ScopeDimensionResolver {
+        constructor(private readonly serverValue: string[] | undefined) { super(); }
+        protected override async deriveServerValue(): Promise<string[] | undefined> { return this.serverValue; }
+    }
+    const bound: ScopeSearchContextConfig = {
+        dimensions: [{ name: 'SpaceID', restricts: true, required: true, valueType: 'uuid[]', expansionQueryID: 'Q-SUBTREE' }],
+    };
+
+    it('refuses to search when a required, server-derived bound comes back with no rows', async () => {
+        const r = new StubbedResolver([]);
+        await expect(r.Resolve({ Scope: scopeWith(bound), CallerContext: undefined, ContextUser: USER }))
+            .rejects.toThrow(/resolved to no value/i);
+    });
+
+    it('still reports an UNRESOLVED required dimension with the original message', async () => {
+        const r = new StubbedResolver(undefined);
+        await expect(r.Resolve({ Scope: scopeWith(bound), CallerContext: undefined, ContextUser: USER }))
+            .rejects.toThrow(/could not be resolved/i);
+    });
+
+    it('resolves normally when the bound has at least one row', async () => {
+        const r = new StubbedResolver([ORG_A]);
+        const result = await r.Resolve({ Scope: scopeWith(bound), CallerContext: undefined, ContextUser: USER });
+        expect(result.Context?.SecondaryScopes?.SpaceID).toEqual([ORG_A]);
+    });
+
+    it('refuses an EMPTY caller-supplied set on a required dimension too', async () => {
+        const config: ScopeSearchContextConfig = {
+            dimensions: [{ name: 'Sources', trust: 'CallerSupplied', required: true, valueType: 'uuid[]' }],
+        };
+        await expect(resolve(scopeWith(config), { SecondaryScopes: { Sources: [] } })).rejects.toThrow(/resolved to no value/i);
+    });
+
+    it('refuses a blank required string', async () => {
+        const config: ScopeSearchContextConfig = {
+            dimensions: [{ name: 'Keywords', trust: 'CallerSupplied', required: true, valueType: 'freetext' }],
+        };
+        await expect(resolve(scopeWith(config), { SecondaryScopes: { Keywords: '   ' } })).rejects.toThrow(/resolved to no value/i);
+    });
+
+    it('leaves an empty set alone on a dimension that is NOT required', async () => {
+        const config: ScopeSearchContextConfig = {
+            dimensions: [{ name: 'Optional', trust: 'CallerSupplied', valueType: 'uuid[]' }],
+        };
+        const result = await resolve(scopeWith(config), { SecondaryScopes: { Optional: [] } });
+        expect(result.Context?.SecondaryScopes?.Optional).toEqual([]);
+    });
+
+    it('lets an empty value through on a required CASCADING dimension — untagged content applies to everyone', async () => {
+        const cascading: ScopeSearchContextConfig = {
+            dimensions: [{
+                name: 'Tags', restricts: true, required: true, valueType: 'uuid[]', expansionQueryID: 'Q-TAGS',
+                inheritanceMode: 'cascading', acknowledgeCascadingOnBoundary: true,
+            }],
+        };
+        const r = new StubbedResolver([]);
+        const result = await r.Resolve({ Scope: scopeWith(cascading), CallerContext: undefined, ContextUser: USER });
+        expect(result.Context?.SecondaryScopes?.Tags).toEqual([]);
+    });
+
+    it('refuses a defaultValue of [] standing in for a required dimension', async () => {
+        const config: ScopeSearchContextConfig = {
+            dimensions: [{ name: 'Sources', trust: 'CallerSupplied', required: true, valueType: 'uuid[]', defaultValue: [] }],
+        };
+        await expect(resolve(scopeWith(config), { SecondaryScopes: {} })).rejects.toThrow(/resolved to no value/i);
+    });
+
+    it('drops, rather than refuses, an ADVISORY required dimension that resolves to nothing (advisory is fail-soft)', async () => {
+        const advisory: ScopeSearchContextConfig = {
+            dimensions: [{ name: 'Hint', trust: 'CallerSupplied', required: true, valueType: 'uuid[]', advisory: true }],
+        };
+        const result = await resolve(scopeWith(advisory), { SecondaryScopes: { Hint: [] } });
+        expect(result.Context?.SecondaryScopes?.Hint).toBeUndefined();
+    });
+});
+
+describe('the empty-bound refusal: shape, type and message by provenance', () => {
+    class StubbedResolver extends ScopeDimensionResolver {
+        constructor(private readonly serverValue: string[] | undefined) { super(); }
+        protected override async deriveServerValue(): Promise<string[] | undefined> { return this.serverValue; }
+    }
+    const callerSources: ScopeSearchContextConfig = {
+        dimensions: [{ name: 'Sources', trust: 'CallerSupplied', required: true, valueType: 'uuid[]' }],
+    };
+
+    it('refuses `null` on a required dimension: it would otherwise pass the undefined check and drop the clause', async () => {
+        const config: ScopeSearchContextConfig = {
+            dimensions: [{ name: 'Keywords', trust: 'CallerSupplied', required: true, valueType: 'freetext' }],
+        };
+        const caller = { SecondaryScopes: { Keywords: null } } as unknown as SearchContext;
+        await expect(resolve(scopeWith(config), caller)).rejects.toThrow(/resolved to no value/i);
+    });
+
+    it('throws a ScopeDimensionError, and tells a CALLER that sent an empty value to fix its call', async () => {
+        const err = await resolve(scopeWith(callerSources), { SecondaryScopes: { Sources: [] } }).catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(ScopeDimensionError);
+        expect((err as Error).message).toMatch(/the caller supplied an empty value/);
+        expect((err as Error).message).not.toMatch(/nothing is reachable/);
+    });
+
+    it('names an empty declared defaultValue as the reason', async () => {
+        const config: ScopeSearchContextConfig = {
+            dimensions: [{ name: 'Sources', trust: 'CallerSupplied', required: true, valueType: 'uuid[]', defaultValue: [] }],
+        };
+        await expect(resolve(scopeWith(config), { SecondaryScopes: {} })).rejects.toThrow(/declared defaultValue is empty/);
+    });
+
+    it('says "nothing is reachable" only for a value the server derived', async () => {
+        const bound: ScopeSearchContextConfig = {
+            dimensions: [{ name: 'SpaceID', restricts: true, required: true, valueType: 'uuid[]', expansionQueryID: 'Q-SUBTREE' }],
+        };
+        const err = await new StubbedResolver([]).Resolve({ Scope: scopeWith(bound), CallerContext: undefined, ContextUser: USER }).catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(ScopeDimensionError);
+        expect((err as Error).message).toMatch(/nothing is reachable for this user/);
+    });
+
+    it('exempts only an EXPLICIT inheritanceMode of cascading: a non-restricting required dimension with no mode is still refused', async () => {
+        const noMode: ScopeSearchContextConfig = {
+            dimensions: [{ name: 'Tags', trust: 'CallerSupplied', required: true, valueType: 'uuid[]' }],
+        };
+        await expect(resolve(scopeWith(noMode), { SecondaryScopes: { Tags: [] } })).rejects.toThrow(/resolved to no value/i);
+        const strict: ScopeSearchContextConfig = {
+            dimensions: [{ name: 'Tags', trust: 'CallerSupplied', required: true, valueType: 'uuid[]', inheritanceMode: 'strict' }],
+        };
+        await expect(resolve(scopeWith(strict), { SecondaryScopes: { Tags: [] } })).rejects.toThrow(/resolved to no value/i);
+    });
+
+    it('pins the documented exemption: a restricting cascading dimension lets a blank through, which is why its template needs an else branch', async () => {
+        const cascading: ScopeSearchContextConfig = {
+            dimensions: [{
+                name: 'Tags', restricts: true, required: true, valueType: 'uuid[]', expansionQueryID: 'Q-TAGS',
+                inheritanceMode: 'cascading', acknowledgeCascadingOnBoundary: true,
+            }],
+        };
+        const result = await new StubbedResolver([]).Resolve({ Scope: scopeWith(cascading), CallerContext: undefined, ContextUser: USER });
+        expect(result.Context?.SecondaryScopes?.Tags).toEqual([]);
+    });
+});

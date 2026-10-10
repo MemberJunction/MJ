@@ -30,6 +30,7 @@
     "@memberjunction/context-crush": "6.2.0-edge.3",
     "@memberjunction/core": "6.2.0-edge.3",
     "@memberjunction/core-entities": "6.2.0-edge.3",
+    "@memberjunction/generic-database-provider": "6.2.0-edge.3",
     "@memberjunction/global": "6.2.0-edge.3",
     "@memberjunction/rubrics": "6.2.0-edge.3",
     "@memberjunction/search-engine": "6.2.0-edge.3",

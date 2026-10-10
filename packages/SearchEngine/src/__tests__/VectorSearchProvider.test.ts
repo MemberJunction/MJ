@@ -284,6 +284,22 @@ describe('VectorSearchProvider', () => {
             expect(results).toEqual([]);
         });
 
+        it('a scoped search whose scope names no vector index queries nothing — not every index', async () => {
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ ID: 'index-1', Name: 'all-docs' }] });
+            mockRunEmbeddingFn.mockClear();
+
+            const noRows = await provider.Search('test query', 10, undefined, contextUser, { ExternalIndexes: [] });
+            // Rows for OTHER providers (an Elasticsearch index) give the vector lane nothing either.
+            const otherRows = await provider.Search('test query', 10, undefined, contextUser, {
+                ExternalIndexes: [{ IndexType: 'Elasticsearch', ExternalIndexName: 'es-docs' }],
+            });
+
+            expect(noRows).toEqual([]);
+            expect(otherRows).toEqual([]);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+            expect(mockRunEmbeddingFn).not.toHaveBeenCalled();
+        });
+
         it('should return empty array when Search throws an error internally', async () => {
             mockRunViewFn.mockRejectedValue(new Error('Unexpected error'));
 

@@ -194,6 +194,24 @@ describe('TagSearchProvider', () => {
         });
     });
 
+    describe('scope entity lane list (empty means nothing, not everything)', () => {
+        beforeEach(() => {
+            mockTags.push({ ID: 't-cheddar', Name: 'Cheddar', Status: 'Active' });
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+        });
+
+        it('a scoped search whose scope names no entity makes no query', async () => {
+            const results = await provider.Search('Cheddar', 10, undefined, contextUser, { Entities: [] });
+            expect(results).toEqual([]);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('an unscoped search (no Entities list) still queries the tagged items', async () => {
+            await provider.Search('Cheddar', 10, undefined, contextUser, {});
+            expect(mockRunViewFn).toHaveBeenCalled();
+        });
+    });
+
     describe('Tag Matching & Weight Scaling', () => {
         beforeEach(() => {
             mockTags.push(

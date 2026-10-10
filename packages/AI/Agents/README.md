@@ -403,6 +403,21 @@ const result = await runner.ExecuteAgent({
 
 See [`docs/AGENT_MEMORY_SCOPING.md`](./docs/AGENT_MEMORY_SCOPING.md) for the full model — built-in scopes, primary/secondary semantics, inheritance modes, and how scope propagates through sub-agent invocations.
 
+### For an Audience (Shared Conversations)
+
+When an agent answers in a conversation several people share, set `Audience` so the run shows only what the asker **and** every other participant may see. Set it from the host's own participant list, server-side; it is never read from `data`.
+
+```typescript
+const result = await new AgentRunner().RunAgent({
+    agent,
+    conversationMessages: messages,
+    contextUser: asker,
+    Audience: { Mode: 'Intersection', UserIDs: otherParticipantIDs }   // MJ: Users IDs
+});
+```
+
+The run fails before any prompt if the audience is malformed or names an ID no user has (the server's `UserCache` is refreshed once first). Under an audience that adds a reader besides the caller: pre-execution RAG checks every reader's scope permission and searches with `SearchParams.Audience`; only shared notes and examples are injected; data-source preloading and the previous turn's tool results are skipped; task graphs, client tools, the caller's app context, memory writes and realtime sessions are withheld or refused; no out-of-conversation request (`MJ: AI Agent Requests`) is raised, so the run is never resumed without the audience; and every action call carries `RunActionParams.Audience`, which the action engine refuses (`AUDIENCE_UNSUPPORTED`, locked out for the run under its own `'audience'` breaker reason) for any action that does not declare `SupportsAudience` — today only Search and Scoped Search do. Sub-agents inherit the audience. Limits (no persisted audience to resume with; per-reader scope expansion; no `Union` mode) and the full table are in [Searching for an audience](../../../guides/SEARCH_SCOPES_AND_RAG_GUIDE.md#searching-for-an-audience).
+
 ### With Message Lifecycle Management
 
 ```typescript

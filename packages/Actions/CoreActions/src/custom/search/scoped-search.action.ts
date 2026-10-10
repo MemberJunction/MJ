@@ -1,12 +1,15 @@
-import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams, ActionParam, ActionRunScopeIsBounded, type ActionRunScope } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
+import { IsPlainObject, NormalizeUUID, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from "@memberjunction/core";
 import {
     SearchEngine,
+    SearchAudience,
     SearchResult,
     SearchResultItem,
-    GetSearchScopePermissionResolver
+    SearchStreamEvent,
+    GetSearchScopePermissionResolver,
+    EffectivePermission
 } from "@memberjunction/search-engine";
 import {
     SearchEngineBase,
@@ -37,6 +40,13 @@ interface FormattedSearchResult {
     MatchedAt: string;
     RawMetadata?: string;
 }
+
+/**
+ * What a well-formed `SecondaryScopes` is, said in every refusal of a malformed one so the model can correct the call.
+ * (The parameter descriptions in the action's metadata predate the refusal; this text is the authority until they are updated.)
+ */
+const SECONDARY_SCOPES_SHAPE = 'SecondaryScopes must be a JSON object mapping each dimension name to a string, number, boolean or '
+    + 'array of strings — e.g. {"Department":"Finance","Tags":["q3"]} — or be omitted.';
 
 /** Strict UUID shape for the skill principal — it is caller-supplied and binds into a query. */
 const SCOPED_SEARCH_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -71,31 +81,47 @@ const SCOPED_SEARCH_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
  *       - If `ScopeID` supplied: used as-is.
  *       - If omitted: uses the Global scope.
  *
- * Multi-tenant `SearchContext` (per-call):
- *   Two optional inputs assemble a `SearchContext` that is threaded into
+ * Multi-tenant `SearchContext`:
+ *   A tenant and secondary dimensions assemble a `SearchContext` that is threaded into
  *   `SearchParams.SearchContext`. The engine renders the values into every
  *   scope-level Nunjucks template (MetadataFilter, ExtraFilter, UserSearchString,
- *   FolderPath) at search time — so one scope definition serves many tenants.
+ *   FolderPath) at search time — so one scope definition serves many tenants. The
+ *   same tenant goes into the permission decision (`ResolveEffectivePermission`),
+ *   so tenant-scoped grants and denies apply to exactly the search that runs.
  *
  *   - `PrimaryScopeRecordID` (string) — primary tenant key (e.g. OrganizationID).
  *     Available in templates as `{{ context.PrimaryScopeRecordID }}`.
- *   - `SecondaryScopes` (JSON string) — flat object of additional dimensions.
- *     Each value must be `string | number | boolean | string[]`. Available in
- *     templates as `{{ context.SecondaryScopes.<key> }}`. Incompatible value
- *     types are dropped with a log; malformed JSON falls back to undefined
- *     rather than failing the call.
+ *   - `SecondaryScopes` (a JSON object string, or an object) — flat object of
+ *     additional dimensions. Each value must be `string | number | boolean | string[]`.
+ *     Available in templates as `{{ context.SecondaryScopes.<key> }}`. Input that is
+ *     not valid JSON, not an object, or holds an unsupported value is REFUSED
+ *     (`INVALID_PARAM`) — never dropped, which would search without the dimension.
  *
- *   `SearchContext` is included only when at least one of the two inputs is
- *   provided — omitting both preserves the original "no per-call tenant
- *   filter" behavior. See `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` §10 for the
- *   full multi-tenant model and template-rendering details.
+ *   INSIDE AN AGENT RUN THE RUN'S SCOPE IS AUTHORITATIVE. BaseAgent stamps the run's
+ *   validated scope on every dispatch (`RunActionParams.RunScope`); the two inputs are
+ *   model-written there, so they are bound to the run as `AISkillID` is:
+ *   - no `PrimaryScopeRecordID` → the run's tenant (none when the run is unscoped);
+ *   - a `PrimaryScopeRecordID` that is not the run's (case-insensitive), or any value
+ *     when the run has no tenant → refused with `INVALID_PARAM` and a `Forbidden`
+ *     search-log row. The host sets a run's tenant (`ExecuteAgentParams.PrimaryScope*`);
+ *     the model never does;
+ *   - `SecondaryScopes` may restate a dimension the run sets only with an equal value
+ *     (refused otherwise, as above); a dimension the run does not set is added, bounded
+ *     by the scope's own dimension trust rules.
+ *   Outside an agent run (no `RunScope`, e.g. a direct call) both inputs are used as given.
+ *
+ *   `SearchContext` is included only when a tenant or a secondary dimension applies —
+ *   none preserves the original "no per-call tenant filter" behavior. See
+ *   `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` §10 for the full multi-tenant model and
+ *   template-rendering details.
  *
  * @example Agent tool call
  * ```
  * { "tool": "Scoped Search", "params": { "Query": "refund policy", "AgentID": "<agent-uuid>" } }
  * ```
  *
- * @example Per-tenant scoped call
+ * @example Per-tenant scoped call (a direct call outside an agent run; inside a run scoped to `<org-uuid>`, omit
+ * `PrimaryScopeRecordID` — the run's tenant applies)
  * ```
  * {
  *   "tool": "Scoped Search",
@@ -110,6 +136,15 @@ const SCOPED_SEARCH_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
  */
 @RegisterClass(BaseAction, "__Scoped_Search")
 export class ScopedSearchAction extends BaseAction {
+
+    /**
+     * Honours an audience (`RunActionParams.Audience`): every reader must pass the same scope-permission gate
+     * the caller does, the search keeps only results every reader may read (`SearchParams.Audience`), and
+     * `SourceCounts` — counted before that filtering — are left out of the output.
+     */
+    public override get SupportsAudience(): boolean {
+        return true;
+    }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         // Track action-call wall-clock so any Forbidden log row reports
@@ -147,6 +182,14 @@ export class ScopedSearchAction extends BaseAction {
             if ('result' in vetted) return vetted.result;
             const skill = vetted.skill;
 
+            // 1c. The tenant and secondary scopes, for the permission decision AND the search. THE RUN IS THE
+            // AUTHORITY inside an agent run (RunActionParams.RunScope): a missing tenant defaults to the run's and one
+            // the run does not carry is refused — inside a Loop agent these parameters are model-written. Outside a
+            // run they are used as given. Malformed SecondaryScopes are refused either way, never dropped.
+            const tenantOutcome = await this.resolveAndVetTenant(params, agent, skill, query, requestedScopeID, startTime);
+            if ('result' in tenantOutcome) return tenantOutcome.result;
+            const { tenant } = tenantOutcome;
+
             // 2. Resolve scope (agent-side SearchScopeAccess gate, with denial logging)
             await SearchEngineBase.Instance.Config(false, params.ContextUser);
             // skill?.ID, not the raw caller string. By here the skill is loaded and validated, and
@@ -157,39 +200,22 @@ export class ScopedSearchAction extends BaseAction {
                 agent, query, requestedScopeID, params, startTime, skill?.ID ?? undefined);
             if ('result' in scopeOutcome) return scopeOutcome.result;
             const { scope, scopeID } = scopeOutcome;
+            const unboundedDenial = await this.refuseUnboundedScopeInScopedRun(agent, skill, scope, query, params, startTime);
+            if (unboundedDenial) return unboundedDenial;
 
-            // 3. User-side permission check (Phase 2A) + Read-level gate, with denial logging
-            const permDenial = await this.enforceUserPermission(agent, skill, scopeID, query, params, startTime);
+            // 3. User-side permission check (Phase 2A) + Read-level gate, with denial logging — then the same
+            // gate for every reader of the run's audience: a room may search a scope only if each of them may.
+            const permDenial = await this.enforceUserPermission(agent, skill, scopeID, query, params, startTime, tenant.primaryScopeRecordID);
             if (permDenial) return permDenial;
+            const audienceDenial = await this.enforceAudiencePermission(agent, skill, scopeID, query, params, startTime, tenant.primaryScopeRecordID);
+            if (audienceDenial) return audienceDenial;
 
-            // 4. Run the search (sync or streaming)
-            const maxResults = this.getNumericParam(params, "maxresults", 25);
-            const minScore = this.getNumericParam(params, "minscore", 0);
-            const streamingMode = (this.getStringParam(params, "streamingmode") ?? 'finalOnly').toLowerCase();
-            // Per-call multi-tenant context. PrimaryScopeRecordID is the
-            // primary tenant key (e.g. OrganizationID). SecondaryScopes is
-            // an opaque JSON object of additional dimensions; each key
-            // becomes `{{ context.SecondaryScopes.<key> }}` available to
-            // the scope's Nunjucks-rendered MetadataFilter / ExtraFilter /
-            // UserSearchString / FolderPath. Dimensions are fully dynamic
-            // here — validation against scope.SearchContextConfig.dimensions
-            // (if desired) is the engine's responsibility, not the action's.
-            const primaryScopeRecordID = this.getStringParam(params, "primaryscoperecordid");
-            const secondaryScopes = this.parseSecondaryScopes(params);
-            LogStatusEx({
-                message: `ScopedSearchAction: Agent="${agent.Name}" scope="${scope?.Name ?? 'Global'}" query="${query}" streamingMode="${streamingMode}" primaryScopeRecordID="${primaryScopeRecordID ?? ''}" aiSkillID="${aiSkillID ?? ''}" secondaryScopeKeys=[${Object.keys(secondaryScopes ?? {}).join(',')}]`,
-                verboseOnly: true,
-                isVerboseEnabled: IsVerboseLoggingEnabled
-            });
-            const exec = await this.runSearch({
-                query, maxResults, minScore, scopeID, agent,
-                contextUser: params.ContextUser, streamingMode,
-                primaryScopeRecordID, secondaryScopes, aiSkillID: skill?.ID ?? undefined,
-            });
+            // 4. Run the search (sync or streaming) under the tenant resolved in 1c
+            const exec = await this.searchUnderTenant(params, { query, agent, scope, scopeID, skillID: skill?.ID ?? undefined, tenant });
             if ('result' in exec) return exec.result;
 
-            // 5. Build the success response
-            return this.buildSuccessResult(exec.sr, scope, scopeID, exec.progressEvents);
+            // 5. Build the success response (no SourceCounts for a room: they are counted before the audience pass)
+            return this.buildSuccessResult(exec.sr, scope, scopeID, exec.progressEvents, params.Audience !== undefined);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`ScopedSearchAction error: ${msg}`);
@@ -282,6 +308,39 @@ export class ScopedSearchAction extends BaseAction {
     }
 
     /**
+     * Step 2b — inside a tenant-scoped agent run (`ActionRunScopeIsBounded(params.RunScope)`), refuse a search with
+     * no scope or the Global scope: neither renders the run's tenant, so it would reach every tenant the user can
+     * read — the reason the Search action is refused in such a run. `null` when the search may proceed. A non-global
+     * scope whose templates ignore the tenant is still the scope author's to bound.
+     */
+    private async refuseUnboundedScopeInScopedRun(
+        agent: MJAIAgentEntity,
+        skill: MJAISkillEntity | null,
+        scope: MJSearchScopeEntity | undefined,
+        query: string,
+        params: RunActionParams,
+        startTime: number,
+    ): Promise<ActionResultSimple | null> {
+        if (!ActionRunScopeIsBounded(params.RunScope) || (scope && !scope.IsGlobal)) return null;
+        const which = scope ? `the Global scope '${scope.Name}'` : 'no search scope';
+        await SearchEngine.Instance.LogForbiddenSearch({
+            Query: query,
+            ScopeIDs: scope ? [scope.ID] : undefined,
+            FailureReason: `Refused ${which} inside a tenant-scoped agent run: it would search across every tenant.`,
+            StartTime: startTime,
+            ContextUser: params.ContextUser,
+            AIAgentID: agent.ID,
+            AISkillID: skill?.ID ?? null,
+            PrimaryScopeRecordID: params.RunScope ? this.runTenantID(params.RunScope) ?? null : null,
+        });
+        return this.createErrorResult(
+            `This agent run is scoped to a tenant, and ${which} would search across every tenant. `
+                + 'Pass a ScopeID for a scope that is bounded to the tenant.',
+            'INVALID_PARAM',
+        );
+    }
+
+    /**
      * Step 3 helper — Phase 2A user-side permission check. Returns null when
      * the user is allowed to invoke; returns a denial response (with a
      * Forbidden SearchExecutionLog row already written) otherwise.
@@ -297,6 +356,7 @@ export class ScopedSearchAction extends BaseAction {
         query: string,
         params: RunActionParams,
         startTime: number,
+        primaryScopeRecordID: string | undefined,
     ): Promise<ActionResultSimple | null> {
         if (!scopeID) {
             // No scope resolved, so there is nothing for the per-scope rules to judge. Unchanged for
@@ -313,6 +373,7 @@ export class ScopedSearchAction extends BaseAction {
                 ContextUser: params.ContextUser,
                 AIAgentID: agent.ID,
                 AISkillID: skill.ID,
+                PrimaryScopeRecordID: primaryScopeRecordID ?? null,
             });
             return this.createErrorResult(
                 `Forbidden: no search scope resolved, so the supplied skill principal cannot be judged.`,
@@ -327,8 +388,8 @@ export class ScopedSearchAction extends BaseAction {
         // decision — which cuts both ways, and the second way is a fail-open: a tenant-scoped
         // PermissionLevel='None' (an explicit admin deny) was discarded too, so a user holding any
         // NULL-tenant role grant had that deny silently evaporate. `ExplainScope` passed the tenant
-        // and denied correctly, so preview and search disagreed in both directions.
-        const primaryScopeRecordID = this.getStringParam(params, "primaryscoperecordid");
+        // and denied correctly, so preview and search disagreed in both directions. The tenant is the one resolved
+        // for the search (resolveTenant) — inside an agent run, the run's — so the decision and the search agree.
         const verdict = await permResolver.ResolveEffectivePermission({
             User: params.ContextUser,
             SearchScopeID: scopeID,
@@ -373,6 +434,7 @@ export class ScopedSearchAction extends BaseAction {
                 // Attribute the denial to the skill too. A skill can BE the reason for it
                 // (SkillNone / SkillAssignedNotListed), so a NULL here loses the cause.
                 AISkillID: skill?.ID ?? null,
+                PrimaryScopeRecordID: primaryScopeRecordID ?? null,
             });
             // THE AUDIT ROW ABOVE KEEPS THE FULL REASON. THE CALLER GETS BACK ONLY WHAT IT SENT.
             //
@@ -412,10 +474,95 @@ export class ScopedSearchAction extends BaseAction {
                 // cause HERE is the Read level, not the skill — SkillNone/SkillAssignedNotListed
                 // deny outright and can never reach this branch.
                 AISkillID: skill?.ID ?? null,
+                PrimaryScopeRecordID: primaryScopeRecordID ?? null,
             });
             return this.createErrorResult(`Forbidden: ${reason}`, 'PERMISSION_DENIED');
         }
         return null;
+    }
+
+    /**
+     * Step 3b — the run's audience (`RunActionParams.Audience`, already normalized by the engine to the distinct
+     * readers beyond the caller). Each reader must pass the gate the caller just passed — the same principals and
+     * tenant, the same bar above `Read` — because the search engine judges scope entitlement for the caller only.
+     * Every refused reader gets its own `Forbidden` search-log row naming them; the caller is told only that the
+     * scope is not open to everyone the results are for. A resolver failure propagates, as the caller's does.
+     */
+    private async enforceAudiencePermission(
+        agent: MJAIAgentEntity,
+        skill: MJAISkillEntity | null,
+        scopeID: string | undefined,
+        query: string,
+        params: RunActionParams,
+        startTime: number,
+        primaryScopeRecordID: string | undefined,
+    ): Promise<ActionResultSimple | null> {
+        const readers = Array.isArray(params.Audience?.Readers) ? params.Audience.Readers : [];
+        if (!scopeID || readers.length === 0) return null;
+        const resolver = GetSearchScopePermissionResolver();
+        const verdicts = await Promise.all(readers.map(reader => resolver.ResolveEffectivePermission({
+            User: reader, SearchScopeID: scopeID, Agent: agent, Skill: skill,
+            PrimaryScopeRecordID: primaryScopeRecordID ?? null, ContextUser: params.ContextUser,
+        })));
+        const refused = readers
+            .map((reader, i) => ({ reader, verdict: verdicts[i] }))
+            .filter(r => !r.verdict.Allowed || r.verdict.Level === 'Read');
+        if (refused.length === 0) return null;
+        for (const { reader, verdict } of refused) {
+            await SearchEngine.Instance.LogForbiddenSearch({
+                Query: query,
+                ScopeIDs: [scopeID],
+                FailureReason: this.audienceRefusalReason(reader, verdict),
+                StartTime: startTime,
+                ContextUser: params.ContextUser,
+                AIAgentID: agent.ID,
+                AISkillID: skill?.ID ?? null,
+                PrimaryScopeRecordID: primaryScopeRecordID ?? null,
+            });
+        }
+        return this.createErrorResult(
+            `Forbidden: scope '${scopeID}' is not open to everyone these results are for (${refused[0].verdict.Source}).`,
+            'PERMISSION_DENIED');
+    }
+
+    /**
+     * The audit reason for one refused audience reader. The row is recorded under the CALLER, who can read their own
+     * search log, so it names the reader by ID with the verdict's fixed `Source` (or the `Read` level) only — never the
+     * reader's name, nor the resolver's `Reason`, which describes the reader's own grants and principals.
+     */
+    private audienceRefusalReason(reader: UserInfo, verdict: EffectivePermission): string {
+        const kind = verdict.Allowed && verdict.Level === 'Read' ? 'Read level: visibility, not search' : verdict.Source;
+        return `Audience reader ${reader.ID} may not search this scope (${kind}).`.substring(0, 500);
+    }
+
+    /**
+     * Step 4 — read the search options and run the search ({@link runSearch}) under the tenant resolved in step 1c.
+     * Each secondary key becomes `{{ context.SecondaryScopes.<key> }}` in the scope's Nunjucks templates; validating
+     * the keys against the scope's dimensions is the engine's job, not the action's.
+     */
+    private async searchUnderTenant(params: RunActionParams, resolved: {
+        query: string; agent: MJAIAgentEntity; scope: MJSearchScopeEntity | undefined; scopeID: string | undefined;
+        skillID: string | undefined; tenant: ResolvedTenant;
+    }): Promise<{ ok: true; sr: SearchResult; progressEvents: Array<Record<string, unknown>> } | { ok: false; result: ActionResultSimple }> {
+        const { query, agent, scope, scopeID, skillID, tenant } = resolved;
+        const streamingMode = (this.getStringParam(params, "streamingmode") ?? 'finalOnly').toLowerCase();
+        LogStatusEx({
+            message: `ScopedSearchAction: Agent="${agent.Name}" scope="${scope?.Name ?? 'Global'}" query="${query}" streamingMode="${streamingMode}" `
+                + `primaryScopeRecordID="${tenant.primaryScopeRecordID ?? ''}" aiSkillID="${skillID ?? ''}" `
+                + `secondaryScopeKeys=[${Object.keys(tenant.secondaryScopes ?? {}).join(',')}]`,
+            verboseOnly: true,
+            isVerboseEnabled: IsVerboseLoggingEnabled
+        });
+        return this.runSearch({
+            query, scopeID, agent, streamingMode,
+            maxResults: this.getNumericParam(params, "maxresults", 25),
+            minScore: this.getNumericParam(params, "minscore", 0),
+            contextUser: params.ContextUser,
+            primaryScopeRecordID: tenant.primaryScopeRecordID,
+            secondaryScopes: tenant.secondaryScopes,
+            aiSkillID: skillID,
+            audience: params.Audience,
+        });
     }
 
     /**
@@ -435,6 +582,7 @@ export class ScopedSearchAction extends BaseAction {
         primaryScopeRecordID: string | undefined;
         secondaryScopes: Record<string, SecondaryScopeValue> | undefined;
         aiSkillID: string | undefined;
+        audience: SearchAudience | undefined;
     }): Promise<{ ok: true; sr: SearchResult; progressEvents: Array<Record<string, unknown>> } | { ok: false; result: ActionResultSimple }> {
         // Construct a SearchContext only when the caller supplied at least
         // one runtime dimension. Leaving it undefined preserves the existing
@@ -470,6 +618,9 @@ export class ScopedSearchAction extends BaseAction {
             // / FolderPath fields at search time so a single scope definition
             // can serve many tenants.
             SearchContext: searchContext,
+            // Everyone else who will see these results (RunActionParams.Audience, normalized by the engine):
+            // the engine keeps only what every reader may read.
+            Audience: input.audience,
         };
         if (input.streamingMode !== 'partials') {
             const sr = await SearchEngine.Instance.Search(baseParams, input.contextUser);
@@ -487,22 +638,13 @@ export class ScopedSearchAction extends BaseAction {
         let finalEvent: { results: SearchResultItem[]; sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number }; elapsedMs: number } | undefined;
         let errorMsg: string | undefined;
         for await (const ev of SearchEngine.Instance.streamSearch(baseParams, input.contextUser)) {
-            // Skip 'final' event's results from the progress trail to keep
-            // the param size sane — the final results are returned via the
-            // Results output param anyway.
             if (ev.phase === 'final') {
                 finalEvent = { results: ev.results, sourceCounts: ev.sourceCounts, elapsedMs: ev.elapsedMs };
-                progressEvents.push({ phase: 'final', count: ev.results.length, elapsedMs: ev.elapsedMs });
-            } else if (ev.phase === 'provider') {
-                progressEvents.push({ phase: 'provider', providerName: ev.providerName, count: ev.results.length, durationMs: ev.durationMs });
-            } else if (ev.phase === 'fused') {
-                progressEvents.push({ phase: 'fused', count: ev.results.length });
-            } else if (ev.phase === 'reranked') {
-                progressEvents.push({ phase: 'reranked', rerankerName: ev.rerankerName, count: ev.results.length });
             } else if (ev.phase === 'error') {
                 errorMsg = ev.error;
-                progressEvents.push({ phase: 'error', error: ev.error });
             }
+            const progress = this.progressEventFor(ev, input.audience !== undefined);
+            if (progress) progressEvents.push(progress);
         }
         if (errorMsg || !finalEvent) {
             return { ok: false, result: this.createErrorResult(errorMsg ?? 'Stream completed without a final event', 'SEARCH_FAILED') };
@@ -519,6 +661,29 @@ export class ScopedSearchAction extends BaseAction {
     }
 
     /**
+     * One streamed event as a `ProgressEvents` entry, or null when it is left out. A 'final' event carries only its
+     * count (the results are the Results output). A 'provider' event carries a count, never the rows — and that count
+     * precedes the permission and audience passes, so it is the caller's unfiltered reach: under an audience (`!== undefined`
+     * at the call, so a malformed one counts) provider events are left out entirely, as `SourceCounts` are.
+     */
+    private progressEventFor(ev: SearchStreamEvent, underAudience: boolean): Record<string, unknown> | null {
+        switch (ev.phase) {
+            case 'final':
+                return { phase: 'final', count: ev.results.length, elapsedMs: ev.elapsedMs };
+            case 'provider':
+                return underAudience ? null : { phase: 'provider', providerName: ev.providerName, count: ev.resultCount, durationMs: ev.durationMs };
+            case 'fused':
+                return { phase: 'fused', count: ev.results.length };
+            case 'reranked':
+                return { phase: 'reranked', rerankerName: ev.rerankerName, count: ev.results.length };
+            case 'error':
+                return { phase: 'error', error: ev.error };
+            default:
+                return null;
+        }
+    }
+
+    /**
      * Step 5 helper — pack the SearchResult into the action's output
      * envelope (Results + counts + scope echo + optional ProgressEvents).
      */
@@ -527,13 +692,17 @@ export class ScopedSearchAction extends BaseAction {
         scope: MJSearchScopeEntity | undefined,
         scopeID: string | undefined,
         progressEvents: Array<Record<string, unknown>>,
+        withholdSourceCounts: boolean,
     ): ActionResultSimple {
         const formatted = this.formatResults(sr.Results);
+        // SourceCounts are counted before the permission and audience passes, so they reveal the caller's
+        // unfiltered reach: never shown to a room.
+        const sourceCounts: ActionParam[] = withholdSourceCounts ? [] : [{ Name: "SourceCounts", Value: sr.SourceCounts, Type: "Output" }];
         const outputParams: ActionParam[] = [
             { Name: "Results",            Value: formatted,                Type: "Output" },
             { Name: "TotalCount",         Value: sr.TotalCount,             Type: "Output" },
             { Name: "ElapsedMs",          Value: sr.ElapsedMs,              Type: "Output" },
-            { Name: "SourceCounts",       Value: sr.SourceCounts,           Type: "Output" },
+            ...sourceCounts,
             { Name: "ScopeID_Resolved",   Value: scopeID ?? null,           Type: "Output" },
             { Name: "ScopeName_Resolved", Value: scope?.Name ?? "Global",   Type: "Output" }
         ];
@@ -765,6 +934,118 @@ export class ScopedSearchAction extends BaseAction {
         }
     }
 
+    // ─── Tenant: PrimaryScopeRecordID + SecondaryScopes ────────────────
+
+    /**
+     * Step 1c — resolve the tenant and secondary scopes ({@link resolveTenant}) and turn a refusal into the caller's
+     * result. A malformed `SecondaryScopes` is `INVALID_PARAM`. A tenant or secondary value the run does not carry is
+     * `INVALID_PARAM` too, and also a `Forbidden` search-log row: it is an attempt to search outside the run's tenant.
+     */
+    private async resolveAndVetTenant(
+        params: RunActionParams, agent: MJAIAgentEntity, skill: MJAISkillEntity | null,
+        query: string, requestedScopeID: string | undefined, startTime: number,
+    ): Promise<{ tenant: ResolvedTenant } | { result: ActionResultSimple }> {
+        const resolution = this.resolveTenant(params);
+        if ('tenant' in resolution) return { tenant: resolution.tenant };
+        if ('malformed' in resolution) return { result: this.createErrorResult(resolution.malformed, 'INVALID_PARAM') };
+        await SearchEngine.Instance.LogForbiddenSearch({
+            Query: query,
+            ScopeIDs: requestedScopeID ? [requestedScopeID] : undefined,
+            FailureReason: resolution.audit.substring(0, 500),
+            StartTime: startTime,
+            ContextUser: params.ContextUser,
+            AIAgentID: agent.ID,
+            AISkillID: skill?.ID ?? null,
+            // The row belongs to the run's tenant (a refusal happens only inside a run); the named one is in the reason.
+            PrimaryScopeRecordID: params.RunScope ? this.runTenantID(params.RunScope) ?? null : null,
+        });
+        return { result: this.createErrorResult(resolution.forbidden, 'INVALID_PARAM') };
+    }
+
+    /**
+     * The tenant (`PrimaryScopeRecordID`) and secondary scopes this search runs under — used for BOTH the permission
+     * decision and the search. THE RUN IS THE AUTHORITY inside an agent run (`params.RunScope`, stamped by BaseAgent
+     * on every dispatch), where these parameters are model-written, as `AISkillID` is bound to the run's skills:
+     *  - a missing `PrimaryScopeRecordID` defaults to the run's; one that differs from the run's (case-insensitively),
+     *    or any value at all when the run has no tenant, is refused;
+     *  - `SecondaryScopes` may restate a key the run sets only with an equal value, and the run's value is used; a key
+     *    the run does not set is added, as outside a run (the scope's dimension trust rules still bound it).
+     * Outside a run (no `RunScope`) both parameters are used as given. A malformed `SecondaryScopes` is refused either way.
+     */
+    private resolveTenant(params: RunActionParams): TenantResolution {
+        const parsed = this.parseSecondaryScopes(params);
+        if ('malformed' in parsed) return parsed;
+        const named = this.getStringParam(params, "primaryscoperecordid");
+        const run = params.RunScope;
+        if (!run) return { tenant: { primaryScopeRecordID: named, secondaryScopes: parsed.value } };
+        const runTenant = this.runTenantID(run);
+        if (named && !(runTenant && UUIDsEqual(named, runTenant))) return this.tenantRefusal(named, runTenant);
+        const secondary = this.mergeRunSecondaryScopes(run.SecondaryScopes ?? undefined, parsed.value);
+        if ('forbidden' in secondary) return secondary;
+        return { tenant: { primaryScopeRecordID: runTenant, secondaryScopes: secondary.value } };
+    }
+
+    /**
+     * The refusal of a model-named tenant the run does not carry. The caller is told exactly what to do — inside an
+     * agent run the tenant comes from the run, so omit `PrimaryScopeRecordID` — and never the run's own tenant; the
+     * audit row names both.
+     */
+    private tenantRefusal(named: string, runTenant: string | undefined): TenantRefusal {
+        const why = runTenant
+            ? `PrimaryScopeRecordID '${named}' is not this agent run's tenant.`
+            : `PrimaryScopeRecordID '${named}' was given, but this agent run is not scoped to a tenant.`;
+        return {
+            forbidden: `${why} Inside an agent run the tenant comes from the run — omit PrimaryScopeRecordID`
+                + `${runTenant ? " and the run's tenant applies" : ''}; never pass one.`,
+            audit: `Refused a PrimaryScopeRecordID the agent run does not carry: '${named}' (the run is scoped to `
+                + `${runTenant ? `'${runTenant}'` : 'no tenant'}).`,
+        };
+    }
+
+    /** The run's tenant as a non-blank string, or `undefined` when the run has none. */
+    private runTenantID(run: ActionRunScope): string | undefined {
+        const id = run.PrimaryScopeRecordID;
+        return typeof id === 'string' && id.trim().length > 0 ? id.trim() : undefined;
+    }
+
+    /**
+     * The run's secondary scopes plus the caller's: a key the run sets keeps the run's value and may be restated only
+     * with an equal one ({@link scopeValuesEqual}); a key it does not set is added.
+     */
+    private mergeRunSecondaryScopes(
+        run: Record<string, SecondaryScopeValue> | undefined,
+        named: Record<string, SecondaryScopeValue> | undefined,
+    ): { value: Record<string, SecondaryScopeValue> | undefined } | TenantRefusal {
+        const runEntries = Object.entries(run ?? {});
+        const added: Array<[string, SecondaryScopeValue]> = [];
+        for (const [key, value] of Object.entries(named ?? {})) {
+            const runEntry = runEntries.find(([runKey]) => runKey === key);
+            if (!runEntry) {
+                added.push([key, value]);
+            } else if (!this.scopeValuesEqual(runEntry[1], value)) {
+                return {
+                    forbidden: `SecondaryScopes '${key}' differs from this agent run's value for it. Inside an agent run the run's `
+                        + `dimensions come from the run — omit '${key}' from SecondaryScopes and the run's value applies.`,
+                    audit: `Refused a SecondaryScopes value the agent run does not carry: '${key}' = ${JSON.stringify(value)} `
+                        + `(the run has ${JSON.stringify(runEntry[1])}).`,
+                };
+            }
+        }
+        const merged = [...runEntries, ...added];
+        return { value: merged.length > 0 ? Object.fromEntries(merged) : undefined };
+    }
+
+    /** Whether a restated secondary value matches the run's: text compared case-insensitively, arrays as sets. */
+    private scopeValuesEqual(runValue: SecondaryScopeValue, named: SecondaryScopeValue): boolean {
+        if (!Array.isArray(runValue) || !Array.isArray(named)) {
+            return !Array.isArray(runValue) && !Array.isArray(named) && UUIDsEqual(String(runValue), String(named));
+        }
+        const normalized = (values: string[]): string[] => values.map(v => NormalizeUUID(v)).sort();
+        const left = normalized(runValue);
+        const right = normalized(named);
+        return left.length === right.length && left.every((v, i) => v === right[i]);
+    }
+
     // ─── Result formatting ─────────────────────────────────────────────
 
     private formatResults(items: SearchResultItem[]): FormattedSearchResult[] {
@@ -803,40 +1084,48 @@ export class ScopedSearchAction extends BaseAction {
     }
 
     /**
-     * Parse the optional SecondaryScopes input. Accepts a JSON string
-     * containing a flat object of dimension keys to values. Values are
-     * passed through verbatim; the SearchEngine's Nunjucks render handles
-     * type coercion when interpolating into MetadataFilter / ExtraFilter
-     * templates. Malformed input is logged and treated as undefined rather
-     * than failing the whole search — a stray bad payload shouldn't kill
-     * an otherwise-valid query.
+     * Parse the optional `SecondaryScopes` input: a JSON object string, or an object passed as is, of dimension keys
+     * to values (`string | number | boolean | string[]`). Absent or blank is no secondary scopes. Anything else is
+     * REFUSED, not dropped: dropping a dimension runs the search without it, wider than the caller asked for.
      */
-    private parseSecondaryScopes(params: RunActionParams): Record<string, SecondaryScopeValue> | undefined {
-        const raw = this.getStringParam(params, "secondaryscopes");
-        if (!raw) return undefined;
-        let parsed: unknown;
+    private parseSecondaryScopes(params: RunActionParams): { value: Record<string, SecondaryScopeValue> | undefined } | { malformed: string } {
+        const raw = this.readSecondaryScopesInput(params);
+        if ('malformed' in raw) return raw;
+        if (raw.value === undefined) return { value: undefined };
+        if (!IsPlainObject(raw.value)) {
+            return { malformed: `SecondaryScopes is ${this.describeScopeValue(raw.value)}, not an object. ${SECONDARY_SCOPES_SHAPE}` };
+        }
+        const entries = Object.entries(raw.value);
+        const valid = entries.filter((entry): entry is [string, SecondaryScopeValue] => this.isSecondaryScopeValue(entry[1]));
+        const bad = entries.find(([, value]) => !this.isSecondaryScopeValue(value));
+        if (bad) {
+            return { malformed: `SecondaryScopes key '${bad[0]}' has an unsupported value (${this.describeScopeValue(bad[1])}). `
+                + SECONDARY_SCOPES_SHAPE };
+        }
+        // fromEntries defines own properties, so a '__proto__' key stays a plain key rather than a prototype.
+        return { value: valid.length > 0 ? Object.fromEntries(valid) : undefined };
+    }
+
+    /** The raw `SecondaryScopes` input: an object as passed, a JSON string parsed; `undefined` when absent or blank. */
+    private readSecondaryScopesInput(params: RunActionParams): { value: unknown } | { malformed: string } {
+        const param = params.Params.find(p => p.Name.trim().toLowerCase() === 'secondaryscopes');
+        const value: unknown = param?.Value;
+        if (value === undefined || value === null) return { value: undefined };
+        if (typeof value !== 'string') return { value };
+        if (value.trim().length === 0) return { value: undefined };
         try {
-            parsed = JSON.parse(raw);
+            const parsed: unknown = JSON.parse(value);
+            return { value: parsed };
         } catch (e) {
-            LogError(`ScopedSearchAction: SecondaryScopes was not valid JSON; ignoring: ${e instanceof Error ? e.message : String(e)}`);
-            return undefined;
+            return { malformed: `SecondaryScopes is not valid JSON (${e instanceof Error ? e.message : String(e)}). ${SECONDARY_SCOPES_SHAPE}` };
         }
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-            LogError(`ScopedSearchAction: SecondaryScopes must be a JSON object, got ${Array.isArray(parsed) ? 'array' : typeof parsed} — ignoring.`);
-            return undefined;
-        }
-        // Validate each value against SecondaryScopeValue = string | number | boolean | string[].
-        // Drop incompatible entries (with a log) rather than failing the whole call — partial
-        // context is more useful than no context.
-        const cleaned: Record<string, SecondaryScopeValue> = {};
-        for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-            if (this.isSecondaryScopeValue(value)) {
-                cleaned[key] = value;
-            } else {
-                LogError(`ScopedSearchAction: SecondaryScopes key '${key}' has unsupported value type (${Array.isArray(value) ? 'mixed-array' : typeof value}); skipping.`);
-            }
-        }
-        return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+    }
+
+    /** A short, value-free description of an input's shape for an error message. */
+    private describeScopeValue(value: unknown): string {
+        if (value === null) return 'null';
+        if (Array.isArray(value)) return 'an array';
+        return typeof value === 'object' ? 'an object' : `a ${typeof value}`;
     }
 
     /** Type guard mirroring `SecondaryScopeValue` from @memberjunction/ai-core-plus. */
@@ -870,6 +1159,20 @@ export function LoadScopedSearchAction(): void {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _ref = ScopedSearchAction;
 }
+
+/** The tenant and secondary scopes a search runs under, as `ScopedSearchAction.resolveTenant` resolved them. */
+interface ResolvedTenant {
+    primaryScopeRecordID: string | undefined;
+    secondaryScopes: Record<string, SecondaryScopeValue> | undefined;
+}
+
+/** A tenant or secondary value the agent run does not carry: what the caller is told, and what the audit row records. */
+interface TenantRefusal {
+    forbidden: string;
+    audit: string;
+}
+
+type TenantResolution = { tenant: ResolvedTenant } | { malformed: string } | TenantRefusal;
 
 interface ScopeResolutionResult {
     success: boolean;
