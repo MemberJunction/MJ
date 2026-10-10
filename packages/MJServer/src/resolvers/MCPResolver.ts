@@ -639,11 +639,14 @@ export class MCPResolver extends ResolverBase {
             // Publish syncing progress
             this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'syncing', 'Synchronizing tools to database...');
 
-            // Perform the sync
-            const syncResult: MCPSyncToolsResult = await manager.syncTools(ConnectionID, { contextUser: user });
-
-            // Remove event listener
-            manager.removeEventListener('toolsSynced', eventHandler);
+            // Perform the sync; always detach the listener, even if syncTools throws, so failed
+            // syncs don't stack handlers on the shared manager.
+            let syncResult: MCPSyncToolsResult;
+            try {
+                syncResult = await manager.syncTools(ConnectionID, { contextUser: user });
+            } finally {
+                manager.removeEventListener('toolsSynced', eventHandler);
+            }
 
             if (!syncResult.success) {
                 this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'error', `Sync failed: ${syncResult.error}`);

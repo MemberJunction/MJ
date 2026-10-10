@@ -54,8 +54,38 @@ export class DialInRateLimiter {
     return { allowed: true };
   }
 
+  /** Above this many tracked keys, RecordFailure sweeps expired entries (keys are caller-supplied, so unbounded otherwise). */
+  private static readonly SweepThreshold = 1000;
+  /** Hard ceiling; if a sweep can't get below it (a flood of live entries), the oldest entries are dropped. */
+  private static readonly MaxEntries = 10000;
+
+  /** Removes entries whose window and lockout have both elapsed. */
+  private sweepExpired(now: number): void {
+    for (const [key, entry] of this.attempts) {
+      const lockExpired = !entry.lockedUntil || entry.lockedUntil <= now;
+      if (lockExpired && now - entry.firstAttemptAt > this.windowMs) {
+        this.attempts.delete(key);
+      }
+    }
+    // Map iterates in insertion order, so the first keys are the oldest. Leave room for the entry about to be inserted.
+    for (const key of this.attempts.keys()) {
+      if (this.attempts.size < DialInRateLimiter.MaxEntries) {
+        break;
+      }
+      this.attempts.delete(key);
+    }
+  }
+
+  /** Number of tracked keys (diagnostics/tests). */
+  public get Size(): number {
+    return this.attempts.size;
+  }
+
   public RecordFailure(key: string): void {
     const now = Date.now();
+    if (this.attempts.size >= DialInRateLimiter.SweepThreshold) {
+      this.sweepExpired(now);
+    }
     const entry = this.attempts.get(key);
     if (!entry || now - entry.firstAttemptAt > this.windowMs) {
       this.attempts.set(key, { attempts: 1, firstAttemptAt: now });
