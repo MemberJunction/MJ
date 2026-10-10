@@ -105,6 +105,13 @@ export interface IRealtimeVideoConformanceHarness {
     SendVoice(pcm16: ArrayBuffer, mediaTimeMs?: number): Promise<void>;
     /** The model sends a part of any MIME type, as the provider's wire names it. */
     SendPart?(mimeType: string, data: ArrayBuffer): Promise<void>;
+    /**
+     * The model starts speaking its answer: its first words, as the provider transcribes them (Gemini: the output
+     * transcription). The video that follows is the answer's until the turn's generation completes; video outside an
+     * answer (an avatar's between answers, which Vertex AI streams) plays, but is not the agent speaking. Without it the
+     * kit can't tell the two apart, and VC13 leaves that part out.
+     */
+    AnswerStarted?(): Promise<void>;
     /** The model has generated the whole turn; its media may still be arriving. Without it the kit uses {@link TurnComplete}. */
     GenerationComplete?(): Promise<void>;
     /** The model's turn is over. */

@@ -61,6 +61,11 @@ export interface IVideoFrameDecoder {
     Flush(): void;
     /** Whether the decoder's own audio is audibly playing (an MP4 that carries the voice); `false` for decoders without audio. */
     readonly IsPlaying: boolean;
+    /**
+     * How many of the frames it took are still to play: waiting, being decoded or appended, or buffered ahead of the
+     * playhead. A frame it dropped (a barge-in's flush, an overflow, a decode error) or played past is not counted.
+     */
+    readonly FramesAhead: number;
     /** Stops, releases the element and frees what it holds. */
     Dispose(): void;
 }

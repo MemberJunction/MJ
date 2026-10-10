@@ -227,7 +227,9 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  *   this client triggers a response (text / narration / tool result) and on the first model
  *   output of a turn (audio part or output-transcription delta); cleared on `turnComplete`,
  *   and on a `toolCall` frame (the model has yielded the floor pending the tool result — so a
- *   slow `turnComplete` can never deadlock the queued result).
+ *   slow `turnComplete` can never deadlock the queued result). In an avatar session, video sets
+ *   it only while the model's answer is under way: Vertex AI streams the avatar's video between
+ *   answers too, and that idle video plays without marking the agent speaking or busy.
  * - **Collision safety**: ANY `sendClientContent` interrupts in-flight Gemini generation (per
  *   the Live API contract), so text / narration / context-note / tool-result sends issued
  *   while a turn is in flight are queued and flushed in order on `turnComplete` (the flush
@@ -319,8 +321,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * Whether a turn is in progress. A turn opens at its first sign: the user's first transcribed words, a turn this
      * client sends (typed text, a spoken update), or the model's output (a transcription delta, a thought, a tool call,
-     * an audio part in a session without an avatar, or, on an `interactionStatus` model, the `IN_PROGRESS` status; an
-     * avatar's video never opens one, since Vertex AI streams it between turns too). It closes at the turn's
+     * an audio part, which in an avatar session must play as the voice, or, on an `interactionStatus` model, the
+     * `IN_PROGRESS` status; the video an avatar streams between turns never opens one). It closes at the turn's
      * `turnComplete` (the true idle signal on an `interactionStatus` model) once no tool call is pending, or when the last
      * pending call's result goes out after that; and at a resume. The session moves to a new connection only between
      * turns.
@@ -880,8 +882,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Computed directly from the playout engine's playhead clock — this client OWNS the output
      * buffer (no WebRTC playback events exist on Gemini), so "audibly playing" is precisely
      * "scheduled audio extends beyond the audio context's current time". In an avatar session
-     * the avatar's video counts too, while it plays with media ahead of its playhead: its MP4
-     * usually carries the voice.
+     * the avatar's video counts too, while some of an answer's media is still ahead of its
+     * playhead: its MP4 usually carries the voice. The idle video that follows an answer does
+     * not count.
      */
     public get IsAudioPlaying(): boolean {
         return (this.playback?.IsPlaying ?? false) || (this.avatarOutput?.IsPlaying ?? false);
@@ -1414,6 +1417,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (this.contentOpensTurn(content)) {
             this.markTurnOpen();
         }
+        if (this.avatarOutput && GeminiRealtimeClient.hasText(content.outputTranscription)) {
+            // The model speaks: the avatar's video is its answer's from here, this message's parts included.
+            this.avatarOutput.AnswerStarted();
+        }
         if (content.interrupted) {
             this.handleInterruption();
         }
@@ -1471,8 +1478,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Plays inline model parts. In an avatar session the avatar output routes each part to the
-     * video, to the PCM playback or nowhere; otherwise base64 PCM16 @ 24 kHz parts go to the
-     * playout queue.
+     * video, to the PCM playback or nowhere; only the answer's parts mark generation started
+     * (and the turn open): the idle video between answers plays without making the agent
+     * speaking or busy. Otherwise base64 PCM16 @ 24 kHz parts go to the playout queue.
      */
     private handleModelMedia(modelTurn: Content): void {
         if (!modelTurn.parts) {
@@ -1487,7 +1495,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                 continue;
             }
             if (this.avatarOutput) {
-                if (this.avatarOutput.Accept(inline.mimeType, Base64ToArrayBuffer(inline.data))) {
+                if (this.avatarOutput.Accept(inline.mimeType, Base64ToArrayBuffer(inline.data)) === 'answer') {
+                    this.markTurnOpen();
                     this.markGenerationStarted();
                 }
                 continue;
@@ -1588,6 +1597,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (!functionCalls || functionCalls.length === 0) {
             return;
         }
+        // The answer stops at the call: the avatar's video until the model speaks again is idle.
+        this.avatarOutput?.ToolCalled();
         if (!this.isNonBlocking) {
             if (this.currentState === 'speaking') {
                 this.currentState = 'connected';
@@ -1659,9 +1670,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * First model output of a turn (audio part or transcription delta): the user's turn is
-     * over (finalize their pending transcript), the model is busy, and the client is audibly /
-     * imminently `'speaking'`.
+     * First model output of a turn (audio part, transcription delta, or a part of an avatar's
+     * answer): the user's turn is over (finalize their pending transcript), the model is busy,
+     * and the client is audibly / imminently `'speaking'`.
      */
     private markGenerationStarted(): void {
         this.finalizeUserTranscript();
@@ -1716,7 +1727,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         return (content.modelTurn?.parts ?? []).some((part) => this.partOpensTurn(part));
     }
 
-    /** Whether a model part is a sign of a turn: a thought, or audio (as this client plays it) in a session without an avatar. */
+    /**
+     * Whether a model part is a sign of a turn: a thought, or audio (as this client plays it) in a session without an
+     * avatar. In an avatar session, a voice part opens the turn once it plays ({@link handleModelMedia}).
+     */
     private partOpensTurn(part: Part): boolean {
         if (part.thought) {
             return !!part.text;

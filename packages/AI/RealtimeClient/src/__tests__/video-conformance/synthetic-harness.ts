@@ -89,6 +89,11 @@ abstract class SyntheticHarnessBase implements IRealtimeVideoConformanceHarness 
         this.Wire.Send(typeof mediaTimeMs === 'number' ? { Kind: 'voice', Data: pcm16, MediaTimeMs: mediaTimeMs } : { Kind: 'voice', Data: pcm16 });
     }
 
+    /** The model's first words, transcribed: its answer is under way. */
+    public async AnswerStarted(): Promise<void> {
+        this.Wire.Send({ Kind: 'transcript', Text: 'Here is what I found.' });
+    }
+
     public async TurnComplete(): Promise<void> {
         this.Wire.Send({ Kind: 'turn-complete' });
     }

@@ -40,6 +40,12 @@ export class FakeSourceBuffer extends EventTarget {
     public readonly AppendErrors: Error[] = [];
     /** Every `changeType(type)`, in order, with the number of pieces appended before it. */
     public readonly TypeChanges: Array<{ Type: string; AfterAppends: number }> = [];
+    /**
+     * Seconds of media each append adds when it completes, laid end to end as `sequence` mode lays them: the end of
+     * {@link buffered} moves on by this much (from the playhead's 0 when nothing is buffered). 0, the default, leaves
+     * {@link buffered} to the test.
+     */
+    public SecondsPerAppend = 0;
     /** Bumped by abort, so an aborted operation's completion is ignored. */
     private operation = 0;
 
@@ -67,7 +73,19 @@ export class FakeSourceBuffer extends EventTarget {
         this.parent?.OpenAgainIfEnded();
         this.Appended.push(data);
         this.OffsetAtAppend.push(this.timestampOffset);
-        this.finishLater();
+        this.finishLater(() => this.extendBuffered());
+    }
+
+    /** What a completed append adds to {@link buffered}, when the test set {@link SecondsPerAppend}. */
+    private extendBuffered(): void {
+        if (this.SecondsPerAppend <= 0) {
+            return;
+        }
+        const ranges = this.buffered.Ranges;
+        const last = ranges.at(-1);
+        const start = Math.max(last?.[1] ?? 0, this.timestampOffset);
+        const end = start + this.SecondsPerAppend;
+        this.buffered = new FakeTimeRanges(last && last[1] >= start ? [...ranges.slice(0, -1), [last[0], end]] : [...ranges, [start, end]]);
     }
 
     /** Records the removal; it cuts the range out of {@link buffered} when it completes. */

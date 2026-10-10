@@ -272,10 +272,13 @@ export interface RealtimeClientError {
  *    audio. Its player gets each frame as the model sent it (a `RealtimeVideoFrame`, in order).
  *    Barge-in flushes the video with the voice (obligation #3) and the cut turn's late media never
  *    plays; a turn's end lets its video play out; a video that carries the voice never plays it
- *    twice; each second of generated video is reported once (`OutputTokenDetails.VideoSeconds`); a
- *    resumed session keeps its video; `Disconnect` releases it. A driver whose voice and video share
- *    a media timeline queues its PCM at its media times and gives the player its voice playback as the
- *    clock (`VideoPlayoutOptions.Clock`). The video conformance kit
+ *    twice; each second of generated video is reported once (`OutputTokenDetails.VideoSeconds`); the
+ *    video a model streams between answers (Vertex AI's avatar does) plays, but is not the agent
+ *    speaking: it reports no `'speaking'`, leaves {@link IsBusy} as it was, and does not keep
+ *    {@link IsAudioPlaying} true once the answer's media has played; a resumed session keeps its
+ *    video; `Disconnect` releases it. A driver whose voice and video share a media timeline queues
+ *    its PCM at its media times and gives the player its voice playback as the clock
+ *    (`VideoPlayoutOptions.Clock`). The video conformance kit
  *    (`@memberjunction/ai-realtime-client/testing`) checks each rule.
  */
 export abstract class BaseRealtimeClient {

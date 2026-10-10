@@ -17,10 +17,19 @@
  * - **Turns.** `generationComplete` ends the turn's video, so it plays to its true end and holds the last frame;
  *   `turnComplete` is the fallback. `interrupted` stops the video at once and drops the turn's late parts until its
  *   `turnComplete`. A resume lets a turn the drop cut off play out what arrived, without a flush.
+ * - **Answer or idle.** Vertex AI streams the avatar's video between answers too. The model's answer is under way from
+ *   its first spoken words (the client reports its output transcription with {@link GeminiAvatarOutput.AnswerStarted})
+ *   or a PCM voice part that plays, until its `generationComplete`, the turn's `turnComplete`, a barge-in or cancel, a
+ *   tool call, or a resume. Video inside the answer is the answer's; video outside it is idle: it plays (the avatar keeps
+ *   its face) but is not the agent speaking. {@link GeminiAvatarOutput.Accept} says which, so the client marks the agent
+ *   speaking and busy for the answer only, and {@link GeminiAvatarOutput.IsPlaying} counts the avatar only while some of
+ *   the answer's media is still ahead of the player's playhead.
  * - **Usage.** The seconds of video the model generated count from the fragments' durations (Core's reader, timed by
  *   the latest init segment): video that arrives inside a model turn, from its first part until `generationComplete`;
  *   an interrupted turn counts what arrived before `interrupted`. Video after `generationComplete` (idle frames while
  *   the avatar listens) does not count. A flush never subtracts: generated video is billed whether or not it played.
+ *   The count does not follow the answer above: all video from the session's start, a `turnComplete` or a resume until
+ *   the next `generationComplete` counts, idle or not, while how Google bills avatar video is open (#5312).
  *
  * @module @memberjunction/ai-realtime-client
  */
@@ -58,14 +67,21 @@ interface AvatarTurn {
 /** How a part plays: as the avatar's video, as PCM voice, or not at all. */
 type AvatarPartKind = 'video' | 'voice' | 'other';
 
+/**
+ * What {@link GeminiAvatarOutput.Accept} did with a part: `'answer'`, the answer's video or its voice, which plays;
+ * `'idle'`, video outside an answer (the avatar between answers), which plays but is not the agent speaking;
+ * `'dropped'`, nothing plays.
+ */
+export type GeminiAvatarPartRoute = 'answer' | 'idle' | 'dropped';
+
 function newTurn(): AvatarTurn {
     return { HasVideo: false, HasVoice: false, VideoEnded: false, Dropping: false, GenerationComplete: false, VoiceStartedAt: null, VideoStartedAt: null };
 }
 
 /**
- * Routes a Gemini Live avatar session's model parts to the avatar's video player and the session's PCM playback, and
- * applies each turn boundary to both. The Gemini client creates one at connect, only when the server granted an avatar
- * and the host established the outbound video track.
+ * Routes a Gemini Live avatar session's model parts to the avatar's video player and the session's PCM playback, applies
+ * each turn boundary to both, and tells the answer's media from the idle video between answers. The Gemini client
+ * creates one at connect, only when the server granted an avatar and the host established the outbound video track.
  */
 export class GeminiAvatarOutput {
     private readonly reported = new Set<string>();
@@ -77,6 +93,12 @@ export class GeminiAvatarOutput {
     private init: Fmp4Init | null = null;
     /** Seconds of video generated and not yet taken by {@link TakeVideoSeconds}. */
     private pendingVideoSeconds = 0;
+    /** Whether the model's answer is under way (see the module's "Answer or idle"): video outside it is idle. */
+    private answering = false;
+    /** Frames handed to the player so far. */
+    private framesHanded = 0;
+    /** {@link framesHanded} just after the latest frame of an answer: the answers' media ends there. 0 until one. */
+    private answerEndsAtFrame = 0;
 
     /**
      * @param playout The avatar's video player, created with `CarriesVoice` from the grant.
@@ -96,21 +118,29 @@ export class GeminiAvatarOutput {
         return this.playout.Source;
     }
 
-    /** Whether the avatar's video plays with media buffered ahead of the playhead. */
+    /**
+     * Whether the avatar is audibly answering: its video plays with media buffered ahead of the playhead, and the playhead
+     * has not yet passed the last frame of an answer (the player's {@link IAvatarVideoPlayout.FramesAhead}). The idle
+     * video that follows an answer plays on, but does not count.
+     */
     public get IsPlaying(): boolean {
-        return this.playout.IsPlaying;
+        if (this.answerEndsAtFrame === 0 || !this.playout.IsPlaying) {
+            return false;
+        }
+        const played = this.framesHanded - this.playout.FramesAhead;
+        return played < this.answerEndsAtFrame;
     }
 
     /**
-     * Plays one model part, or drops it. Returns whether it plays, as video or as voice: the caller then counts the turn's
-     * generation as started.
+     * Plays one model part, or drops it, and says which: the answer's video or voice (the caller then counts the turn's
+     * generation as started), idle video (it plays, but no answer is under way, so the agent is not speaking), or dropped.
      *
      * @param mimeType The part's `inlineData.mimeType`, when it names one.
      * @param data The part's bytes.
      */
-    public Accept(mimeType: string | undefined, data: ArrayBuffer): boolean {
+    public Accept(mimeType: string | undefined, data: ArrayBuffer): GeminiAvatarPartRoute {
         if (this.turn.Dropping) {
-            return false;
+            return 'dropped';
         }
         const kind = GeminiAvatarOutput.kindOf(mimeType, data);
         if (kind === 'video') {
@@ -120,7 +150,20 @@ export class GeminiAvatarOutput {
             return this.acceptVoice(data);
         }
         this.reportOnce(`type:${mimeType}`, `[GeminiRealtimeClient] Dropped model output of type ${mimeType}: an avatar session plays its video and PCM audio only.`);
-        return false;
+        return 'dropped';
+    }
+
+    /**
+     * The model's answer is under way: its output transcription has words. The video that follows is the answer's until
+     * its generation completes, the turn completes, a barge-in or cancel stops it, or the model calls a tool.
+     */
+    public AnswerStarted(): void {
+        this.answering = true;
+    }
+
+    /** The model called a tool: its answer stops there, and the video until it speaks again is idle. */
+    public ToolCalled(): void {
+        this.answering = false;
     }
 
     /**
@@ -134,41 +177,52 @@ export class GeminiAvatarOutput {
     }
 
     /**
-     * `generationComplete`: the turn's media is all in, so its video plays to the true end and holds the last frame.
-     * Video that still arrives in this turn is not counted as generated.
+     * `generationComplete`: the turn's media is all in, so its video plays to the true end and holds the last frame, and
+     * the answer is over. Video that still arrives in this turn is idle, and not counted as generated.
      */
     public GenerationComplete(): void {
         this.turn.GenerationComplete = true;
+        this.answering = false;
         this.endTurnVideo();
     }
 
-    /** `turnComplete`: ends the turn's video if `generationComplete` didn't, ends a barge-in's drop window, starts a new turn. */
+    /**
+     * `turnComplete`: ends the turn's video if `generationComplete` didn't, ends the answer and a barge-in's drop window,
+     * starts a new turn.
+     */
     public TurnComplete(): void {
         this.endTurnVideo();
+        this.answering = false;
         this.turn = newTurn();
     }
 
     /**
-     * `interrupted`: the user cut the turn off. Stops its video now (the last frame stays) and drops its late parts until
-     * its `turnComplete`. The caller flushes the PCM.
+     * `interrupted`: the user cut the turn off. Stops its video now (the last frame stays), ends the answer, and drops the
+     * turn's late parts until its `turnComplete`. The caller flushes the PCM.
      */
     public Interrupted(): void {
         this.playout.Flush();
+        this.answering = false;
         this.turn.VideoEnded = true;
         this.turn.Dropping = true;
     }
 
-    /** The client cancelled the response (`CancelActiveResponse`): stops the video now. The caller flushes the PCM. */
+    /**
+     * The client cancelled the response (`CancelActiveResponse`): stops the video now and ends the answer; what still
+     * arrives of it is idle until the model speaks again. The caller flushes the PCM.
+     */
     public Cancel(): void {
         this.playout.Flush();
+        this.answering = false;
     }
 
     /**
      * The session resumed on a new connection, where a turn the drop cut off never completes: its video plays out what
-     * arrived and holds the last frame (no flush), and a new turn starts.
+     * arrived and holds the last frame (no flush), the answer ends, and a new turn starts.
      */
     public Resumed(): void {
         this.endTurnVideo();
+        this.answering = false;
         this.turn = newTurn();
     }
 
@@ -197,13 +251,16 @@ export class GeminiAvatarOutput {
         return IsPcmAudioMimeType(type) ? 'voice' : 'other';
     }
 
-    /** Hands a video part to the player as a frame; a part that isn't MP4 is dropped, reported once per type. */
-    private acceptVideo(mimeType: string | undefined, piece: ArrayBuffer): boolean {
+    /**
+     * Hands a video part to the player as a frame, the answer's while one is under way and idle otherwise; a part that
+     * isn't MP4 is dropped, reported once per type.
+     */
+    private acceptVideo(mimeType: string | undefined, piece: ArrayBuffer): GeminiAvatarPartRoute {
         const frame = Fmp4PieceToVideoFrame(piece, mimeType, this.init);
         if (!frame) {
             const message = `[GeminiRealtimeClient] Dropped model output of type ${mimeType}: it is not fragmented MP4, the only video an avatar plays.`;
             this.reportOnce(`type:${mimeType}`, message);
-            return false;
+            return 'dropped';
         }
         if (frame.Piece === 'init') {
             this.takeInit(piece);
@@ -214,8 +271,12 @@ export class GeminiAvatarOutput {
         // More media came, so the turn's video is not over even if generationComplete said so.
         this.turn.VideoEnded = false;
         this.playout.Append(frame);
+        this.framesHanded++;
+        if (this.answering) {
+            this.answerEndsAtFrame = this.framesHanded;
+        }
         this.countGeneratedVideo(piece);
-        return true;
+        return this.answering ? 'answer' : 'idle';
     }
 
     /** Keeps an init segment's tracks to time the fragments by; the session's first readable one also decides the voice. */
@@ -253,18 +314,20 @@ export class GeminiAvatarOutput {
         this.logSeparateVoiceOffset();
     }
 
-    private acceptVoice(pcm: ArrayBuffer): boolean {
+    /** Queues a PCM part as the voice, unless the turn's video carries it. Voice that plays means the answer is under way. */
+    private acceptVoice(pcm: ArrayBuffer): GeminiAvatarPartRoute {
         if (this.videoCarriesVoice && this.turn.HasVideo) {
             this.reportOnce('pcm-with-video', '[GeminiRealtimeClient] Dropped PCM audio in a turn whose avatar video carries the voice.');
-            return false;
+            return 'dropped';
         }
         this.voice.Enqueue(pcm);
+        this.answering = true;
         if (!this.turn.HasVoice) {
             this.turn.HasVoice = true;
             this.turn.VoiceStartedAt = Date.now();
             this.logSeparateVoiceOffset();
         }
-        return true;
+        return 'answer';
     }
 
     /**

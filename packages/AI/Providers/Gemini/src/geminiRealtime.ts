@@ -1193,11 +1193,13 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /**
      * Whether a model turn is currently being generated. Minimal turn tracking mirroring the
      * client driver: set when model output arrives (Gemini has no `response.created`-style frame,
-     * so the first `modelTurn` content is the signal) and eagerly when this session itself sends a
-     * turn-triggering client content; cleared on `turnComplete`, `interrupted`, and a tool-call
-     * frame (the model yields the floor pending the result). Consumed by {@link enqueueOrRun}:
-     * on Gemini Live ANY client content sent mid-turn INTERRUPTS the in-flight generation, so
-     * interim-update sends are deferred rather than sent into an active turn.
+     * so the first `modelTurn` content is the signal; an avatar's video sets it only while the
+     * model's answer is under way, since Vertex AI streams it between answers too) and eagerly
+     * when this session itself sends a turn-triggering client content; cleared on `turnComplete`,
+     * `interrupted`, and a tool-call frame (the model yields the floor pending the result).
+     * Consumed by {@link enqueueOrRun}: on Gemini Live ANY client content sent mid-turn
+     * INTERRUPTS the in-flight generation, so interim-update sends are deferred rather than sent
+     * into an active turn.
      */
     private responseActive = false;
 
@@ -1285,7 +1287,8 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /**
      * Records what became of the session's avatar request. A granted one (a server-side session whose host publishes the
      * avatar into a room) sends the model's MP4 pieces as frames to {@link OnVideoFrame}, keeps PCM to turns without
-     * video, and reports the avatar's video seconds through {@link OnUsage}. Called by the driver before {@link Open}.
+     * video, marks the model generating for its answer's media only, and reports the avatar's video seconds through
+     * {@link OnUsage}. Called by the driver before {@link Open}.
      *
      * @param status The avatar status, or `undefined` when the session asked for no avatar.
      * @param encoding The avatar's MSE type from the model's profile.
@@ -1298,6 +1301,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
                   OnVideoFrame: (frame) => this.videoFrameHandler?.(frame),
                   OnPcm: (pcm) => this.outputHandler?.(pcm),
                   OnVideoSeconds: (seconds) => this.usageHandler?.({ InputTokens: 0, OutputTokens: 0, OutputTokenDetails: { VideoSeconds: seconds } }),
+                  OnAnswer: () => this.markAnswering(),
                   Report: (message) => console.warn(message),
               })
             : null;
@@ -1330,8 +1334,8 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /**
      * Whether a turn is in progress. A turn opens at its first sign: the user's first transcribed words (outside meeting
      * mode, where room speech is no turn until the bridge commits one), a spoken update this session sends, or the
-     * model's output (a transcription delta, a thought, a tool call, or an audio part in a session without an avatar; an
-     * avatar's video never opens one, since Vertex AI streams it between turns too). It closes at the turn's
+     * model's output (a transcription delta, a thought, a tool call, or an audio part, which in an avatar session must
+     * play as the voice; the video an avatar streams between turns never opens one). It closes at the turn's
      * `turnComplete` once no tool call is pending, or when the last pending call's result goes out after that; at a
      * meeting-mode commit that produced no turn; and at a resume. The session moves to a new connection only between
      * turns.
@@ -1920,7 +1924,10 @@ class GeminiRealtimeSession implements IRealtimeSession {
         return (content.modelTurn?.parts ?? []).some((part) => this.partOpensTurn(part));
     }
 
-    /** Whether a model part is a sign of a turn: a thought, or audio (as this session plays it) in a session without an avatar. */
+    /**
+     * Whether a model part is a sign of a turn: a thought, or audio (as this session plays it) in a session without an
+     * avatar. In an avatar session, a voice part opens the turn once it plays (the avatar output's `OnAnswer`).
+     */
     private partOpensTurn(part: Part): boolean {
         if (part.thought) {
             return GeminiRealtimeSession.hasText(part.text);
@@ -2015,6 +2022,10 @@ class GeminiRealtimeSession implements IRealtimeSession {
         if (this.contentOpensTurn(content)) {
             this.markTurnOpen();
         }
+        if (this.avatarOutput && GeminiRealtimeSession.hasText(content.outputTranscription?.text)) {
+            // The model speaks: the avatar's video is its answer's from here, this message's parts included.
+            this.avatarOutput.AnswerStarted();
+        }
         if (content.interrupted) {
             this.avatarOutput?.Interrupted(); // before the parts of this message: the turn's late media is dropped
             this.interruptionHandler?.();
@@ -2022,11 +2033,12 @@ class GeminiRealtimeSession implements IRealtimeSession {
         }
         if (content.modelTurn) {
             // First model output of a turn marks generation in flight (Gemini emits no explicit
-            // "response started" frame), so interim-update sends defer instead of interrupting.
-            if (!this.responseActive) {
-                RealtimeDiagLog('[GeminiRealtime][diag] modelTurn — model is GENERATING output (the activityEnd worked)');
+            // "response started" frame), so interim-update sends defer instead of interrupting. In an
+            // avatar session the avatar output marks it for the answer's media (OnAnswer): the video
+            // Vertex AI streams between answers is not generation.
+            if (!this.avatarOutput || GeminiRealtimeSession.carriesMoreThanMedia(content.modelTurn)) {
+                this.markGenerating();
             }
-            this.responseActive = true;
             this.emitModelMedia(content.modelTurn);
             this.emitThoughtOutput(content.modelTurn);
         }
@@ -2047,10 +2059,34 @@ class GeminiRealtimeSession implements IRealtimeSession {
         }
     }
 
+    /** The model is generating: sends wait for the turn's boundary instead of interrupting it. */
+    private markGenerating(): void {
+        if (!this.responseActive) {
+            RealtimeDiagLog('[GeminiRealtime][diag] modelTurn — model is GENERATING output (the activityEnd worked)');
+        }
+        this.responseActive = true;
+    }
+
+    /** A part of the avatar session's answer is about to reach the host: the turn is open and the model generating. */
+    private markAnswering(): void {
+        this.markTurnOpen();
+        this.markGenerating();
+    }
+
+    /**
+     * Whether a model turn carries something besides media parts (a thought, a part without inline data) or nothing at
+     * all: generation in an avatar session, whatever its media turn out to be.
+     */
+    private static carriesMoreThanMedia(modelTurn: Content): boolean {
+        const parts = modelTurn.parts ?? [];
+        return parts.length === 0 || parts.some((part) => part.thought || !part.inlineData?.data);
+    }
+
     /**
      * Forwards the model turn's inline media parts. Thought parts (`part.thought === true`) are skipped — thoughts are
      * reasoning summaries, not synthesized media. A session with a granted avatar routes each part through its avatar
-     * output (MP4 pieces to the host, PCM only before the turn's video); every other session plays PCM only.
+     * output (MP4 pieces to the host, PCM only before the turn's video; the answer's parts mark the model generating);
+     * every other session plays PCM only.
      */
     private emitModelMedia(modelTurn: Content): void {
         for (const part of modelTurn.parts ?? []) {
@@ -2143,7 +2179,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
         // draining the queue; queued sends flush at the next real turn boundary) so the eventual
         // SendToolResult and any fresh context note are not deferred behind a turn that will not
         // complete until after the result is sent. Mirrors the client driver's deadlock guard.
+        // The answer stops at the call: the avatar's video until the model speaks again is idle.
         this.responseActive = false;
+        this.avatarOutput?.ToolCalled();
         for (const call of functionCalls) {
             const callID = call.id ?? '';
             const toolName = call.name ?? '';

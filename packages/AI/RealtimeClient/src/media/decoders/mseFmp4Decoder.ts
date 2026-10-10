@@ -83,6 +83,10 @@ export class MseFmp4Decoder implements IVideoFrameDecoder {
     private trimmedTo = 0;
     /** Set by EndOfTurn: end the stream once every pending piece is in. */
     private endPending = false;
+    /** Where each appended piece ends on the element's timeline (seconds), oldest first, until the playhead passes it. */
+    private readonly appendedEnds: number[] = [];
+    /** Whether the source buffer is appending a piece: its `updateend` records where the piece ends. */
+    private appending = false;
     private disposed = false;
 
     /** Whether this browser can play `mimeType` through MSE. */
@@ -108,6 +112,17 @@ export class MseFmp4Decoder implements IVideoFrameDecoder {
             return false;
         }
         return buffered.end(buffered.length - 1) - element.currentTime > PLAYING_EPSILON_SECONDS;
+    }
+
+    /**
+     * How many pieces are still to play: pending (waiting for the source buffer, or for an element), being appended, or
+     * appended and ending past the playhead. The source buffer lays pieces end to end (`sequence` mode), so a piece ends
+     * where the buffered media ended once it was in. A piece a {@link Flush} removed, or the browser rejected, is not
+     * counted; nor is media of an element the decoder let go.
+     */
+    public get FramesAhead(): number {
+        this.forgetPlayedPieces();
+        return this.pending.length + (this.appending ? 1 : 0) + this.appendedEnds.length;
     }
 
     /** Hands over one frame, in the order they arrived: an init segment or a media fragment. */
@@ -147,6 +162,9 @@ export class MseFmp4Decoder implements IVideoFrameDecoder {
     public Flush(): void {
         this.pending.length = 0;
         this.endPending = false;
+        // What is buffered ahead of the playhead is removed, and an append under way is aborted: none of it plays.
+        this.appendedEnds.length = 0;
+        this.appending = false;
         const buffer = this.sourceBuffer;
         const element = this.element;
         if (!buffer || !element) {
@@ -249,6 +267,7 @@ export class MseFmp4Decoder implements IVideoFrameDecoder {
             }
             buffer.appendBuffer(frame.Data);
             this.pending.shift();
+            this.appending = true;
             this.retriedAfterQuota = false;
         } catch (err) {
             this.handleAppendError(err);
@@ -277,12 +296,38 @@ export class MseFmp4Decoder implements IVideoFrameDecoder {
 
     /** After each append or removal: trims played media, appends the next piece, and ends a finished turn. */
     private afterUpdate(): void {
+        this.recordAppendedEnd();
         this.resumeWhenMediaArrives();
         if (this.trimBackBuffer()) {
             return;
         }
         this.pump();
         this.endStreamWhenDrained();
+    }
+
+    /**
+     * An append finished: the piece ends where the buffered media now ends, since the buffer lays pieces end to end.
+     * Pieces the playhead has passed are forgotten here too, so the list holds only what is ahead.
+     */
+    private recordAppendedEnd(): void {
+        if (!this.appending) {
+            return;
+        }
+        this.appending = false;
+        const buffered = this.sourceBuffer?.buffered;
+        this.appendedEnds.push(buffered && buffered.length > 0 ? buffered.end(buffered.length - 1) : 0);
+        this.forgetPlayedPieces();
+    }
+
+    /** Forgets the appended pieces the playhead has reached the end of (to within {@link PLAYING_EPSILON_SECONDS}). */
+    private forgetPlayedPieces(): void {
+        const element = this.element;
+        if (!element) {
+            return;
+        }
+        while (this.appendedEnds.length > 0 && this.appendedEnds[0] - element.currentTime <= PLAYING_EPSILON_SECONDS) {
+            this.appendedEnds.shift();
+        }
     }
 
     /** Ends the stream for a finished turn once nothing is pending or in flight. */
@@ -374,6 +419,9 @@ export class MseFmp4Decoder implements IVideoFrameDecoder {
         this.restartAtPlayhead = false;
         this.trimmedTo = 0;
         this.endPending = false;
+        // The media source and what it buffered are gone; the pending pieces stay for the next element.
+        this.appendedEnds.length = 0;
+        this.appending = false;
     }
 }
 

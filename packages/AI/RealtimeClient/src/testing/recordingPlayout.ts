@@ -16,13 +16,15 @@ import { RealtimeVideoConformanceTimeline } from './conformanceTimeline';
  * A video player that records what the driver does with it: each frame appended, each end of turn, flush and dispose.
  *
  * `IsPlaying` models the element: true once a piece is appended, false after a flush, a dispose or
- * {@link FinishPlaying}. An end of turn leaves it playing (the element plays out what it has).
+ * {@link FinishPlaying}. An end of turn leaves it playing (the element plays out what it has). `FramesAhead` models the
+ * playhead the same way: every frame appended since the last flush, dispose or {@link FinishPlaying} is still to play.
  */
 export class RecordingVideoPlayout implements IAvatarVideoPlayout {
     /** The video to show. The same object every time, so a check can tell this player's video from another's. */
     public readonly Source: MediaVideoSource = { Kind: 'element', Attach: () => () => undefined };
     private carriesVoice: boolean;
     private playing = false;
+    private framesAhead = 0;
 
     /**
      * @param Options What the driver created the player with.
@@ -43,6 +45,11 @@ export class RecordingVideoPlayout implements IAvatarVideoPlayout {
         return this.playing;
     }
 
+    /** How many of the frames appended are still to play: those since the last flush, dispose or {@link FinishPlaying}. */
+    public get FramesAhead(): number {
+        return this.framesAhead;
+    }
+
     /** Whether the player plays the video's audio; `false` mutes it. Each change is recorded. */
     public get CarriesVoice(): boolean {
         return this.carriesVoice;
@@ -52,10 +59,11 @@ export class RecordingVideoPlayout implements IAvatarVideoPlayout {
         this.Timeline.Record({ Kind: 'player-carries-voice', Player: this.Index, CarriesVoice: value });
     }
 
-    /** Records the frame; the player now plays. */
+    /** Records the frame; the player now plays, and the frame is still to play. */
     public Append(frame: RealtimeVideoFrame): void {
         this.Timeline.Record({ Kind: 'player-append', Player: this.Index, Frame: frame });
         this.playing = true;
+        this.framesAhead++;
     }
 
     /** Records the end of the turn's video. */
@@ -63,10 +71,11 @@ export class RecordingVideoPlayout implements IAvatarVideoPlayout {
         this.Timeline.Record({ Kind: 'player-end-of-turn', Player: this.Index });
     }
 
-    /** Records the flush; the player stops. */
+    /** Records the flush; the player stops, and drops every frame still to play. */
     public Flush(): void {
         this.Timeline.Record({ Kind: 'player-flush', Player: this.Index });
         this.playing = false;
+        this.framesAhead = 0;
     }
 
     /** The recorder reports no problems: it plays nothing. Returns the function that removes the handler. */
@@ -74,15 +83,17 @@ export class RecordingVideoPlayout implements IAvatarVideoPlayout {
         return () => undefined;
     }
 
-    /** Records the dispose; the player stops. */
+    /** Records the dispose; the player stops, with nothing left to play. */
     public Dispose(): void {
         this.Timeline.Record({ Kind: 'player-dispose', Player: this.Index });
         this.playing = false;
+        this.framesAhead = 0;
     }
 
-    /** Models the element reaching the end of what it was given: it stops playing. Not recorded. */
+    /** Models the element reaching the end of what it was given: it stops playing, every frame played. Not recorded. */
     public FinishPlaying(): void {
         this.playing = false;
+        this.framesAhead = 0;
     }
 }
 

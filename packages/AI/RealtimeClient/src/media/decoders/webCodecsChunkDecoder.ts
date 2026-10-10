@@ -77,6 +77,12 @@ export class WebCodecsChunkDecoder implements IVideoFrameDecoder {
         return false;
     }
 
+    /** Frames still to show: chunks waiting to be decoded, chunks the decoder is decoding, and frames waiting for their time. */
+    public get FramesAhead(): number {
+        const decoding = this.decoder && this.decoder.state !== 'closed' ? this.decoder.decodeQueueSize : 0;
+        return this.waiting.length + decoding + this.scheduler.Size;
+    }
+
     public Attach(element: HTMLVideoElement): void {
         if (!this.disposed) {
             this.canvas.Attach(element);

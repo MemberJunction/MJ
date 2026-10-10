@@ -141,7 +141,20 @@ export class ConformanceSession {
         await this.Harness.TurnComplete();
     }
 
+    /** Models the agent's media playing out: every video player and the voice reach the end of what they were given. */
+    public FinishPlaying(): void {
+        for (const player of this.players) {
+            player.FinishPlaying();
+        }
+        this.Voice.FinishPlaying();
+    }
+
     // ── Reading the timeline ─────────────────────────────────────────────────────────────────────────────────────
+
+    /** The states the client reported, from a mark on. */
+    public States(since: number = 0): RealtimeClientState[] {
+        return this.Timeline.Of('state', since).map((event) => event.State);
+    }
 
     /** How many events of a kind happened from a mark on. */
     public Count(kind: RealtimeVideoConformanceEventKind, since: number = 0): number {

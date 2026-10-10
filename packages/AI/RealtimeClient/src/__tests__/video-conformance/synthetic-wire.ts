@@ -13,6 +13,8 @@ export type SyntheticModelMessage =
     | { Kind: 'voice'; Data: ArrayBuffer; MediaTimeMs?: number }
     /** A part of any type, as a provider names it: video, PCM, or something no driver plays. */
     | { Kind: 'part'; MimeType: string; Data: ArrayBuffer }
+    /** The model's spoken words, as transcribed: its answer is under way. */
+    | { Kind: 'transcript'; Text: string }
     | { Kind: 'generation-complete' }
     | { Kind: 'turn-complete' }
     | { Kind: 'interrupted' }
@@ -76,6 +78,8 @@ export interface SyntheticFaults {
     SecondsTwice?: boolean;
     /** VC13: counts the frames an interrupted turn still sends. */
     CountsLateFrames?: boolean;
+    /** VC13: takes the video between answers as the agent speaking. */
+    IdleVideoIsSpeech?: boolean;
     /** VC14: flushes the video when the session resumes. */
     FlushOnResume?: boolean;
     /** VC15: keeps the video player after Disconnect. */

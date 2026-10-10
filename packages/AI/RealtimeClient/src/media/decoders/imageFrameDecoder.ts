@@ -53,6 +53,11 @@ export class ImageFrameDecoder implements IVideoFrameDecoder {
         return false;
     }
 
+    /** Images still to show: waiting to be decoded, decoding, or decoded and waiting for their time. */
+    public get FramesAhead(): number {
+        return this.waiting.length + (this.decoding ? 1 : 0) + this.scheduler.Size;
+    }
+
     public Attach(element: HTMLVideoElement): void {
         if (!this.disposed) {
             this.canvas.Attach(element);

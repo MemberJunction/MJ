@@ -193,6 +193,7 @@ describe('GeminiRealtimeClient avatar video in usage', () => {
 
         it("a flush does not subtract: a cancelled response's video still counts, and so does what follows in the turn", async () => {
             const { Client: client, Usages: usages } = await connectAvatar();
+            emit(client, { outputTranscription: { text: 'Here is the answer.' } });
             emitPieces(client, AvatarInitSegment(), ...frames(2));
             client.CancelActiveResponse();
             emitPieces(client, ...frames(1));
@@ -232,6 +233,39 @@ describe('GeminiRealtimeClient avatar video in usage', () => {
             await client.Disconnect();
 
             expect(secondsEmitted(usages)).toEqual(frameSeconds(1));
+        });
+    });
+
+    /** Vertex AI streams the avatar's video between answers too. */
+    describe('idle video between answers', () => {
+        it('after turnComplete it plays, but the agent is neither speaking nor busy', async () => {
+            const { Client: client } = await connectAvatar();
+            const states: string[] = [];
+            client.OnStateChange((state) => states.push(state));
+            emit(client, { outputTranscription: { text: 'Here it is.' } });
+            emitPieces(client, AvatarInitSegment(), ...frames(2));
+            emit(client, { generationComplete: true });
+            emit(client, { turnComplete: true });
+            expect(states.at(-1)).toBe('listening');
+            const mark = states.length;
+
+            emitPieces(client, ...frames(3));
+            expect(client.Playout.Appended).toHaveLength(6);
+            expect(states.slice(mark)).toEqual([]);
+            expect(client.IsBusy).toBe(false);
+        });
+
+        it('a tool call ends the answer: its result goes out at once while the idle video plays', async () => {
+            const { Client: client } = await connectAvatar();
+            emit(client, { outputTranscription: { text: 'Let me check.' } });
+            emitPieces(client, AvatarInitSegment(), ...frames(1));
+            client.Emit({ toolCall: { functionCalls: [{ id: 'call-1', name: 'LookUpOrder', args: {} }] } } as LiveServerMessage);
+            emitPieces(client, ...frames(2));
+
+            // A result waits for a turn in flight (supportsBlocking, as 3.8 Live's profile mints it), and none is.
+            client.SendToolResult('call-1', JSON.stringify({ status: 'shipped' }));
+            expect(client.Fake.ToolResponses).toHaveLength(1);
+            expect(client.Fake.ToolResponses[0].functionResponses[0]).toMatchObject({ id: 'call-1', name: 'LookUpOrder', response: { status: 'shipped' } });
         });
     });
 

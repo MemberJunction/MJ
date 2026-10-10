@@ -156,6 +156,29 @@ describe('ImageFrameDecoder', () => {
         expect(decodes[2].Blob.type).toBe('image/png');
     });
 
+    it('counts the images still to show: waiting, decoding, and decoded until their time; none after a flush', async () => {
+        decoder.Append(image(0));
+        decoder.Append(image(500));
+        decoder.Append(image(1000));
+        // One decoding, two waiting.
+        expect(decoder.FramesAhead).toBe(3);
+
+        decodes[0].Resolve('a');
+        await settle();
+        expect(shown()).toEqual(['a']);
+        expect(decoder.FramesAhead).toBe(2);
+        decodes[1].Resolve('b');
+        await settle();
+        // 'b' waits for its time while 'c' decodes.
+        expect(decoder.FramesAhead).toBe(2);
+        vi.advanceTimersByTime(500);
+        expect(shown()).toEqual(['a', 'b']);
+        expect(decoder.FramesAhead).toBe(1);
+
+        decoder.Flush();
+        expect(decoder.FramesAhead).toBe(0);
+    });
+
     it("reports an image the browser can't decode, and plays the next one", async () => {
         decoder.Append(image());
         decoder.Append(image());

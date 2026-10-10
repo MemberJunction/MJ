@@ -291,6 +291,75 @@ describe('VideoPlayout', () => {
         });
     });
 
+    describe('FramesAhead', () => {
+        it('counts the pieces waiting, being appended, and buffered past the playhead, and forgets those the playhead passed', async () => {
+            const buffer = attachAndOpen();
+            buffer.SecondsPerAppend = 1;
+            playout.Append(PieceFrame(FakeInitSegment()));
+            playout.Append(PieceFrame(FakeFragment()));
+            playout.Append(PieceFrame(FakeFragment()));
+            // One being appended, two waiting.
+            expect(playout.FramesAhead).toBe(3);
+
+            await settle();
+            // All in, laid end to end: they end at 1, 2 and 3 s.
+            expect(buffer.buffered.Ranges).toEqual([[0, 3]]);
+            expect(playout.FramesAhead).toBe(3);
+            dom.Videos[0].currentTime = 1;
+            expect(playout.FramesAhead).toBe(2);
+            dom.Videos[0].currentTime = 2.97;
+            expect(playout.FramesAhead).toBe(0);
+        });
+
+        it('drops every piece still to play at a flush, and counts what is appended after it', async () => {
+            const buffer = attachAndOpen();
+            buffer.SecondsPerAppend = 1;
+            playout.Append(PieceFrame(FakeInitSegment()));
+            playout.Append(PieceFrame(FakeFragment()));
+            await settle();
+            playout.Append(PieceFrame(FakeFragment()));
+            playout.Append(PieceFrame(FakeFragment()));
+            expect(playout.FramesAhead).toBe(4);
+
+            playout.Flush();
+            expect(playout.FramesAhead).toBe(0);
+            // The aborted append's own updateend records nothing.
+            await settle();
+            expect(playout.FramesAhead).toBe(0);
+            playout.Append(PieceFrame(FakeFragment()));
+            await settle();
+            expect(playout.FramesAhead).toBe(1);
+        });
+
+        it('counts pieces waiting for an element; letting the element go forgets what its media source buffered', async () => {
+            playout.Append(PieceFrame(FakeInitSegment()));
+            playout.Append(PieceFrame(FakeFragment()));
+            expect(playout.FramesAhead).toBe(2);
+
+            const detach = AttachVideoSource(playout.Source, video);
+            const source = FakeMediaSource.Instances[0];
+            source.Open();
+            source.Buffers[0].SecondsPerAppend = 1;
+            await settle();
+            expect(playout.FramesAhead).toBe(2);
+
+            playout.Append(PieceFrame(FakeFragment()));
+            detach();
+            expect(playout.FramesAhead).toBe(0);
+        });
+
+        it('does not count a frame no decoder plays', async () => {
+            const buffer = attachAndOpen();
+            buffer.SecondsPerAppend = 1;
+            playout.Append(PieceFrame(FakeInitSegment()));
+            await settle();
+            dom.Videos[0].currentTime = 0;
+            playout.Append({ Kind: 'image', Data: new ArrayBuffer(4), MimeType: 'image/x-unknown' });
+            expect(problems).toContain('no-decoder');
+            expect(playout.FramesAhead).toBe(1);
+        });
+    });
+
     describe('EndOfTurn', () => {
         it('ends the stream once every pending piece is in, so playback runs to the true end', async () => {
             attachAndOpen();

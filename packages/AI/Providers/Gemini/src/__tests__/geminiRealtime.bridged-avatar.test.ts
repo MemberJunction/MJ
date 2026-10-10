@@ -7,15 +7,27 @@ import { ConfirmGeminiSetup } from './live-session-test-helpers';
 // ── Fakes ──────────────────────────────────────────────────────────────────────
 
 class FakeConnection implements GeminiLiveSession {
-    public sendRealtimeInput(_params: { audio?: GeminiBlob }): void {}
-    public sendClientContent(_params: { turns?: Content[]; turnComplete?: boolean }): void {}
-    public sendToolResponse(_params: { functionResponses: FunctionResponse[] | FunctionResponse }): void {}
+    /** Every realtime input sent: audio, text, activity markers. */
+    public readonly RealtimeInputs: Array<{ audio?: GeminiBlob; text?: string; activityStart?: unknown; activityEnd?: unknown }> = [];
+    public readonly ClientContents: Array<{ turns?: Content[]; turnComplete?: boolean }> = [];
+    public readonly ToolResponses: Array<FunctionResponse[] | FunctionResponse> = [];
+    public sendRealtimeInput(params: { audio?: GeminiBlob; text?: string; activityStart?: unknown; activityEnd?: unknown }): void {
+        this.RealtimeInputs.push(params);
+    }
+    public sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void {
+        this.ClientContents.push(params);
+    }
+    public sendToolResponse(params: { functionResponses: FunctionResponse[] | FunctionResponse }): void {
+        this.ToolResponses.push(params.functionResponses);
+    }
     public close(): void {}
 }
 
 /** The driver on Gemini Enterprise (or the Developer API), opening sessions on a fake connection. */
 class BridgedGemini extends GeminiRealtime {
     public Args: GeminiConnectArgs | null = null;
+    /** The connection opened last. */
+    public Connection: FakeConnection | null = null;
 
     constructor(private readonly endpoint: 'developer' | 'enterprise' = 'enterprise') {
         super('k');
@@ -28,7 +40,8 @@ class BridgedGemini extends GeminiRealtime {
     protected override async connectLiveSession(args: GeminiConnectArgs): Promise<GeminiLiveSession> {
         this.Args = args;
         ConfirmGeminiSetup(args);
-        return new FakeConnection();
+        this.Connection = new FakeConnection();
+        return this.Connection;
     }
 
     public Content(content: LiveServerContent): void {
@@ -93,6 +106,8 @@ const pcmPart = (bytes: number[]): Part => ({ inlineData: { data: b64(bytes), mi
 
 const BEN: NonNullable<RealtimeSessionParams['Avatar']> = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' };
 const params = (avatar?: RealtimeSessionParams['Avatar'], model = 'gemini-3.8-live'): RealtimeSessionParams => ({ Model: model, SystemPrompt: 'hi', Avatar: avatar });
+/** A meeting's session: the bridge commits each turn (automatic activity detection off). */
+const meetingParams = (avatar: RealtimeSessionParams['Avatar']): RealtimeSessionParams => ({ ...params(avatar), Config: { disableAutoResponse: true } });
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
@@ -360,6 +375,85 @@ describe('a bridged Gemini session whose host publishes the avatar into a room',
             driver.Parts([mp4Part(fragment(1, 0, 45000)), mp4Part(INIT), mp4Part(fragment(2, 0, 24000))]);
             driver.Content({ generationComplete: true });
             expect(usage).toHaveLength(0);
+        });
+    });
+
+    /** Vertex AI streams the avatar's video between answers too: it goes to the room, but the model is not generating. */
+    describe('answer or idle', () => {
+        let driver: BridgedGemini;
+        let session: IRealtimeSession;
+        let avatar: RealtimeVideoFrame[];
+
+        /** Starts a session and has the model answer one turn with video: its words, the pieces, the turn's end. */
+        async function afterOneAnswer(sessionParams: RealtimeSessionParams = params({ ...BEN, Delivery: 'room' })): Promise<void> {
+            driver = new BridgedGemini('enterprise');
+            session = await driver.StartSession(sessionParams);
+            avatar = [];
+            session.OnVideoFrame?.((frame) => avatar.push(frame));
+            driver.Content({ outputTranscription: { text: 'Here is what I found.' } });
+            driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 0, 3750))]);
+            driver.Content({ generationComplete: true });
+            driver.Content({ turnComplete: true });
+        }
+
+        const spokenUpdates = (): string[] => (driver.Connection?.RealtimeInputs ?? []).flatMap((input) => (input.text ? [input.text] : []));
+
+        it('idle video after turnComplete goes to the room, and holds no context note or spoken update: each goes out at once', async () => {
+            await afterOneAnswer();
+            driver.Parts([mp4Part(fragment(1, 3750, 3750))]);
+            driver.Parts([mp4Part(fragment(1, 7500, 3750))]);
+            expect(avatar).toHaveLength(4);
+
+            session.SendContextNote?.('The report is ready.');
+            session.RequestSpokenUpdate?.('Say that the report is ready.');
+            expect(driver.Connection?.ClientContents.map((content) => content.turns?.[0]?.parts?.[0]?.text)).toEqual(['The report is ready.']);
+            expect(spokenUpdates()).toEqual(['Say that the report is ready.']);
+        });
+
+        it("in a meeting, the bridge's next commit after idle video is not skipped as a duplicate", async () => {
+            await afterOneAnswer(meetingParams({ ...BEN, Delivery: 'room' }));
+            driver.Parts([mp4Part(fragment(1, 3750, 3750))]);
+
+            expect(session.RequestSpokenUpdate?.('')).toBe(true);
+            expect(driver.Connection?.RealtimeInputs.filter((input) => input.activityEnd)).toHaveLength(1);
+        });
+
+        it('a tool call ends the answer: the video while the tool runs holds no context note, and the result goes out at once', async () => {
+            driver = new BridgedGemini('enterprise');
+            session = await driver.StartSession(params({ ...BEN, Delivery: 'room' }));
+            driver.Content({ outputTranscription: { text: 'Let me check.' } });
+            driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 0, 3750))]);
+            driver.Args?.OnMessage({ toolCall: { functionCalls: [{ id: 'call-1', name: 'LookUpOrder', args: {} }] } } as LiveServerMessage);
+            driver.Parts([mp4Part(fragment(1, 3750, 3750))]);
+
+            session.SendContextNote?.('Still looking.');
+            await session.SendToolResult('call-1', JSON.stringify({ status: 'shipped' }));
+            expect(driver.Connection?.ClientContents).toHaveLength(1);
+            expect(driver.Connection?.ToolResponses).toHaveLength(1);
+        });
+
+        it("the answer's video marks the model generating: a context note waits for the turn's end", async () => {
+            driver = new BridgedGemini('enterprise');
+            session = await driver.StartSession(params({ ...BEN, Delivery: 'room' }));
+            driver.Content({ outputTranscription: { text: 'Sure.' }, modelTurn: { role: 'model', parts: [mp4Part(INIT)] } });
+
+            session.SendContextNote?.('A note for later.');
+            expect(driver.Connection?.ClientContents).toHaveLength(0);
+            driver.Content({ turnComplete: true });
+            expect(driver.Connection?.ClientContents).toHaveLength(1);
+        });
+
+        it('video before the model speaks is idle, and a voice part that plays starts the answer', async () => {
+            driver = new BridgedGemini('enterprise');
+            session = await driver.StartSession(params({ ...BEN, Delivery: 'room' }));
+            driver.Parts([mp4Part(INIT)]);
+            session.SendContextNote?.('First note.');
+            expect(driver.Connection?.ClientContents).toHaveLength(1);
+
+            driver.Content({ turnComplete: true });
+            driver.Parts([pcmPart([1, 1])]);
+            session.SendContextNote?.('Second note.');
+            expect(driver.Connection?.ClientContents).toHaveLength(1);
         });
     });
 

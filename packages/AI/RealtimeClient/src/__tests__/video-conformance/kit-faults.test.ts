@@ -29,7 +29,8 @@ const FAULTS: FaultCase[] = [
     { Fault: 'AsksForAudioOnly', Fails: ['VC03'], Says: 'the provider was asked for the avatar the host shows: expected true, got false' },
     { Fault: 'IgnoresHost', Fails: ['VC04'], Says: 'agent video handed over to a host that shows none: expected 0, got 1' },
     { Fault: 'IgnoresPlayability', Fails: ['VC05'], Says: 'the outbound video track of a session that shows no avatar is not live: it is live' },
-    { Fault: 'VideoToVoice', Fails: ['VC06', 'VC09', 'VC11'], Says: 'frames of video played as the voice: expected 0, got 4' },
+    // VC13 too: the idle video after a turn, played as the voice, is audible.
+    { Fault: 'VideoToVoice', Fails: ['VC06', 'VC09', 'VC11', 'VC13'], Says: 'frames of video played as the voice: expected 0, got 4' },
     { Fault: 'DropsInitSegment', Fails: ['VC06', 'VC10', 'VF01'], Says: 'every frame of video reaches the player once, in order, unchanged: expected 4 pieces, got 3' },
     { Fault: 'PlaysUnknownParts', Fails: ['VC07'], Says: 'application/x-unknown parts played as video: expected 0, got 2' },
     { Fault: 'KeepsVideoOnBargeIn', Fails: ['VC08'], Says: 'flushes of the video player at a barge-in: expected 1, got 0' },
@@ -39,6 +40,7 @@ const FAULTS: FaultCase[] = [
     { Fault: 'NoSecondsAtDisconnect', Fails: ['VC12'], Says: 'video seconds reported at Disconnect for the turn it cut off' },
     { Fault: 'SecondsTwice', Fails: ['VC12', 'VC13', 'VC14'], Says: 'video seconds reported for a turn, once' },
     { Fault: 'CountsLateFrames', Fails: ['VC13'], Says: 'video seconds reported for an interrupted turn: what arrived before it' },
+    { Fault: 'IdleVideoIsSpeech', Fails: ['VC13'], Says: "'speaking' reported for idle video after a turn: expected 0, got 2" },
     { Fault: 'FlushOnResume', Fails: ['VC14'], Says: 'flushes of the video by a resume: expected 0, got 1' },
     { Fault: 'KeepsPlayerOnDisconnect', Fails: ['VC15'], Says: 'disposes of the video player by Disconnect, called twice: expected 1, got 0' },
     { Fault: 'MislabelsPieces', Fails: ['VF01'], Says: "fMP4 frame 1's piece (init or fragment, by its first box): expected init, got fragment" },

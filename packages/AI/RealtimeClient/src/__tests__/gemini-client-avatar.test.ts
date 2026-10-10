@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { LiveServerContent, LiveServerMessage, Part } from '@google/genai';
 import type { MediaVideoSource } from '../media/model';
+import type { RealtimeClientTranscript } from '../generic/baseRealtimeClient';
 import { GEMINI_AVATAR_MP4_TYPE } from '../media/videoPlayout';
 import { AttachVideoSource } from '../media/attachVideoSource';
 import type { GeminiClientConnectArgs, GeminiLiveClientSession } from '../drivers/geminiRealtimeClient';
@@ -36,6 +37,11 @@ function emit(client: GeminiTestClient, content: LiveServerContent): void {
 
 function emitParts(client: GeminiTestClient, ...parts: Part[]): void {
     emit(client, { modelTurn: { role: 'model', parts } });
+}
+
+/** The model starts speaking: its output transcription's first words. The avatar's video is the answer's from here. */
+function answerStarts(client: GeminiTestClient, text = 'Hello there.'): void {
+    emit(client, { outputTranscription: { text } });
 }
 
 /** Lets the fake source buffer finish its pending operations. */
@@ -402,6 +408,7 @@ describe('GeminiRealtimeClient avatar playout', () => {
             const { Client: client } = await connectAvatar();
             const states: string[] = [];
             client.OnStateChange((state) => states.push(state));
+            answerStarts(client);
             emitParts(client, videoPart(AvatarInitSegment()), videoPart(AvatarFragment(1)));
 
             emit(client, { interrupted: true });
@@ -415,6 +422,7 @@ describe('GeminiRealtimeClient avatar playout', () => {
 
             emit(client, { turnComplete: true });
             expect(client.Playout.EndOfTurnCount).toBe(0);
+            answerStarts(client, 'As I was saying');
             emitParts(client, videoPart(AvatarFragment(4)));
             expect(client.Playout.Appended).toHaveLength(3);
             expect(states.at(-1)).toBe('speaking');
@@ -430,14 +438,16 @@ describe('GeminiRealtimeClient avatar playout', () => {
 
         it('CancelActiveResponse stops the video as well as the voice', async () => {
             const { Client: client } = await connectAvatar();
+            answerStarts(client);
             emitParts(client, videoPart(AvatarInitSegment()));
             client.CancelActiveResponse();
             expect(client.Playout.FlushCount).toBe(1);
             expect(client.Playback.FlushCount).toBe(1);
         });
 
-        it('IsAudioPlaying follows the video, and CancelActiveResponse acts on a video that is still playing', async () => {
+        it("IsAudioPlaying follows the answer's video, and CancelActiveResponse acts on a video that is still playing", async () => {
             const { Client: client } = await connectAvatar();
+            answerStarts(client);
             emitParts(client, videoPart(AvatarInitSegment()));
             emit(client, { turnComplete: true });
             expect(client.IsAudioPlaying).toBe(false);
@@ -447,6 +457,127 @@ describe('GeminiRealtimeClient avatar playout', () => {
             client.CancelActiveResponse();
             expect(client.Playout.FlushCount).toBe(1);
             expect(client.IsAudioPlaying).toBe(false);
+        });
+    });
+
+    /** Vertex AI streams the avatar's video between answers too: it plays, but the agent is not speaking. */
+    describe('answer or idle', () => {
+        /** Connects and has the model answer one turn with video: its words, an init and a fragment, then its end. */
+        async function afterOneAnswer(): Promise<AvatarHarness> {
+            const harness = await connectAvatar();
+            answerStarts(harness.Client);
+            emitParts(harness.Client, videoPart(AvatarInitSegment()), videoPart(AvatarFragment(1)));
+            emit(harness.Client, { generationComplete: true });
+            emit(harness.Client, { turnComplete: true });
+            return harness;
+        }
+
+        it("idle video after turnComplete plays, but reports no 'speaking', leaves the model idle, and cuts no user words short", async () => {
+            const { Client: client, Events: events } = await afterOneAnswer();
+            const transcripts: RealtimeClientTranscript[] = [];
+            client.OnTranscript((transcript) => transcripts.push(transcript));
+            expect(events.at(-1)).toBe('listening');
+            const mark = events.length;
+
+            emit(client, { inputTranscription: { text: 'Could you' } });
+            emitParts(client, videoPart(AvatarFragment(2)));
+            emitParts(client, videoPart(AvatarFragment(3)));
+            expect(client.Playout.Appended).toHaveLength(4);
+            expect(events.slice(mark)).toEqual([]);
+            expect(client.IsBusy).toBe(false);
+
+            emit(client, { inputTranscription: { text: ' check that?', finished: true } });
+            const finals = transcripts.filter((transcript) => transcript.Role === 'User' && transcript.IsFinal);
+            expect(finals.map((transcript) => transcript.Text)).toEqual(['Could you check that?']);
+        });
+
+        it('idle video holds no context note or spoken update: each goes out at once', async () => {
+            const { Client: client } = await afterOneAnswer();
+            emitParts(client, videoPart(AvatarFragment(2)));
+
+            client.SendContextNote('The report is ready.');
+            client.RequestSpokenUpdate('Say that the report is ready.');
+            expect(client.Fake.ClientContents.map((content) => content.turns?.[0]?.parts?.[0]?.text)).toEqual(['The report is ready.']);
+            expect(client.Fake.RealtimeInputs.filter((input) => input.text).map((input) => input.text)).toEqual(['Say that the report is ready.']);
+        });
+
+        it('the answer ends at generationComplete: the video after it is idle, so the model is not busy again', async () => {
+            const { Client: client } = await connectAvatar();
+            answerStarts(client);
+            emitParts(client, videoPart(AvatarInitSegment()), videoPart(AvatarFragment(1)));
+            expect(client.IsBusy).toBe(true);
+            emit(client, { generationComplete: true });
+            expect(client.IsBusy).toBe(false);
+
+            emitParts(client, videoPart(AvatarFragment(2)));
+            expect(client.IsBusy).toBe(false);
+            client.SendContextNote('A note for later.');
+            expect(client.Fake.ClientContents).toHaveLength(1);
+        });
+
+        it("the answer starts at the model's first words, in the same message as its video too; video before them is idle", async () => {
+            const { Client: client } = await connectAvatar();
+            emitParts(client, videoPart(AvatarInitSegment()));
+            client.Playout.IsPlaying = true;
+            expect(client.IsBusy).toBe(false);
+            expect(client.IsAudioPlaying).toBe(false);
+
+            emit(client, { outputTranscription: { text: 'Sure.' }, modelTurn: { role: 'model', parts: [videoPart(AvatarFragment(1))] } });
+            expect(client.IsBusy).toBe(true);
+            expect(client.IsAudioPlaying).toBe(true);
+        });
+
+        it("IsAudioPlaying counts the avatar while the answer's frames are ahead of the playhead, not the idle video after them", async () => {
+            const { Client: client } = await afterOneAnswer();
+            emitParts(client, videoPart(AvatarFragment(2)), videoPart(AvatarFragment(3)));
+            client.Playout.IsPlaying = true;
+            expect(client.IsAudioPlaying).toBe(true);
+
+            // The playhead is in the answer's fragment, then past it: the idle video plays on, but not as the voice.
+            client.Playout.Played = 1;
+            expect(client.IsAudioPlaying).toBe(true);
+            client.Playout.Played = 2;
+            expect(client.IsAudioPlaying).toBe(false);
+            expect(client.Playout.FramesAhead).toBe(2);
+        });
+
+        it('CancelActiveResponse while only idle video plays stops nothing', async () => {
+            const { Client: client } = await afterOneAnswer();
+            client.Playout.Played = 2;
+            emitParts(client, videoPart(AvatarFragment(2)));
+            client.Playout.IsPlaying = true;
+
+            client.CancelActiveResponse();
+            expect(client.Playout.FlushCount).toBe(0);
+            expect(client.Playback.FlushCount).toBe(0);
+        });
+
+        it('a voice part that plays starts the answer, and opens the turn', async () => {
+            const { Client: client, Events: events } = await connectAvatar({ AudioMuxed: false });
+            const mark = events.length;
+            emitParts(client, pcmPart(1));
+            expect(client.IsTurnOpen).toBe(true);
+            expect(events.slice(mark)).toEqual(['speaking']);
+
+            // The video that follows is the answer's: it counts as audible while its frames are ahead.
+            client.Playback.IsPlaying = false;
+            emitParts(client, videoPart(AvatarInitSegment(false)));
+            client.Playout.IsPlaying = true;
+            expect(client.IsAudioPlaying).toBe(true);
+        });
+
+        it('a barge-in ends the answer: the video after its turnComplete is idle', async () => {
+            const { Client: client, Events: events } = await connectAvatar();
+            answerStarts(client);
+            emitParts(client, videoPart(AvatarInitSegment()));
+            emit(client, { interrupted: true });
+            emit(client, { turnComplete: true });
+            const mark = events.length;
+
+            emitParts(client, videoPart(AvatarFragment(1)));
+            expect(client.Playout.Appended).toHaveLength(2);
+            expect(events.slice(mark)).toEqual([]);
+            expect(client.IsBusy).toBe(false);
         });
     });
 
@@ -553,15 +684,37 @@ describe('GeminiRealtimeClient avatar playout', () => {
 
         it('interrupted pauses the element and drops what has not played; IsAudioPlaying follows the element', async () => {
             const { Client: client, Element: element, Buffer: buffer } = await connectAndShow();
-            emitParts(client, videoPart(AvatarInitSegment()));
-            await settle();
+            answerStarts(client);
+            emitParts(client, videoPart(AvatarInitSegment()), videoPart(AvatarFragment(1)));
+            // The answer's pieces are buffered up to 8 s once appended.
             buffer.buffered = new FakeTimeRanges([[0, 8]]);
+            await settle();
             element.currentTime = 3;
             expect(client.IsAudioPlaying).toBe(true);
 
             emit(client, { interrupted: true });
             expect(element.Paused).toBe(true);
             expect(buffer.Removed).toEqual([[3, Infinity]]);
+            expect(client.IsAudioPlaying).toBe(false);
+        });
+
+        it("IsAudioPlaying holds while the answer's media is ahead of the playhead, and ends with it though the idle video plays on", async () => {
+            const { Client: client, Element: element, Buffer: buffer } = await connectAndShow();
+            buffer.SecondsPerAppend = 1;
+            answerStarts(client);
+            emitParts(client, videoPart(AvatarInitSegment()), videoPart(AvatarFragment(1)), videoPart(AvatarFragment(2)));
+            emit(client, { generationComplete: true });
+            emit(client, { turnComplete: true });
+            // Vertex AI's idle video follows at once, laid after the answer in the same buffer.
+            emitParts(client, videoPart(AvatarFragment(3)), videoPart(AvatarFragment(4)));
+            await settle();
+            expect(buffer.buffered.Ranges).toEqual([[0, 5]]);
+
+            // The answer's pieces end at 1, 2 and 3 s, the idle ones at 4 and 5 s.
+            element.currentTime = 2.5;
+            expect(client.IsAudioPlaying).toBe(true);
+            element.currentTime = 3.5;
+            expect(element.Paused).toBe(false);
             expect(client.IsAudioPlaying).toBe(false);
         });
 
@@ -650,9 +803,10 @@ describe('GeminiRealtimeClient avatar playout', () => {
             it('barge-in on the new connection still stops the video at once and drops what has not played', async () => {
                 const { Client: client, Element: element, Buffer: buffer } = await speakingWhenCut();
                 await client.Resume();
+                answerStarts(client);
                 emitParts(client, videoPart(AvatarInitSegment()), videoPart(AvatarFragment(2)));
-                await settle();
                 buffer.buffered = new FakeTimeRanges([[0, 4]]);
+                await settle();
                 element.currentTime = 2.5;
                 expect(client.IsAudioPlaying).toBe(true);
 
