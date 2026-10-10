@@ -207,7 +207,9 @@ interface SdkSocket {
 /**
  * The driver over the real `@google/genai` client, with the SDK's websocket factory swapped for one that records each
  * socket and connects nothing, and the key's `JWT` holding a token already: a bridged session reaches no network, and
- * each recorded URL is the one the SDK built from the driver's options. With `movedUrl`, a subclass that moves `LiveUrl`.
+ * each recorded URL is the one the SDK built from the driver's options. Each socket answers the setup it is sent with
+ * `setupComplete`, as Google does: a session puts a connection to use only once its setup is confirmed. With `movedUrl`,
+ * a subclass that moves `LiveUrl`.
  */
 class SdkEnterprise extends GeminiEnterpriseRealtime {
     public readonly Sockets: SdkSocket[] = [];
@@ -240,6 +242,10 @@ class SdkEnterprise extends GeminiEnterpriseRealtime {
                     connect: () => callbacks.onopen(),
                     send: (message: string) => {
                         socket.Sent.push(message);
+                        // Google confirms the setup; the session puts the connection to use only after that.
+                        if ((JSON.parse(message) as { setup?: LiveClientSetup }).setup) {
+                            callbacks.onmessage({ data: JSON.stringify({ setupComplete: {} }) });
+                        }
                     },
                     close: () => undefined,
                 };
