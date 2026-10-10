@@ -5,8 +5,8 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { MJGlobal } from '@memberjunction/global';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
+import { createLLMInstance } from '../utils/llm-factory.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
 import { SchemaDefinition } from '../types/state.js';
 import {
@@ -28,20 +28,23 @@ export class LLMDiscoveryValidator {
     private statsCache: ColumnStatsCache,
     private schemas: SchemaDefinition[]
   ) {
-    // Create LLM instance using MJ ClassFactory
-    const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
-      BaseLLM,
-      aiConfig.provider,
-      aiConfig.apiKey
-    );
-
-    if (!llm) {
-      throw new Error(
-        `Failed to create LLM instance for provider: ${aiConfig.provider}. Check that the provider name matches a registered BaseLLM subclass.`
-      );
-    }
-
-    this.llm = llm;
+    // Through the factory, which maps a PROVIDER NAME to the registered DRIVER
+    // CLASS. This used to call ClassFactory directly with `aiConfig.provider`,
+    // and the two are not the same string: the config says `openrouter`, the
+    // registration is `OpenRouterLLM`. Every provider missed — `openai`,
+    // `anthropic`, `gemini`, all of them.
+    //
+    // And it did not fail. ClassFactory's fallback returns an instance of the
+    // BASE class when no registration matches and the base is not marked
+    // `@RequiresSubclass()`, so `llm` was truthy, the guard below never fired,
+    // and validation ran against an LLM that cannot answer. A run with no
+    // working validator still reports the same relationship-discovery trigger
+    // and still spends the budget behind it.
+    //
+    // `createLLMInstance` is this package's own map of provider → driver class
+    // and throws on an unknown provider, which is what the message below always
+    // claimed to do.
+    this.llm = createLLMInstance(aiConfig.provider, aiConfig.apiKey);
   }
 
   /**
