@@ -85,7 +85,7 @@ import { IntegrationProgressEmitter } from '@memberjunction/integration-progress
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
-import { SessionJanitor } from './agentSessions/index.js';
+import { SessionJanitor, SetHostInstancePort } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
@@ -416,6 +416,10 @@ GetAttachmentService().BlobStore = new MJStorageBlobStore();
 
 export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
   const t0 = performance.now();
+  // Name this MJAPI instance by its port before anything stamps a session row with its identity, so the janitor's
+  // startup recovery closes only the sessions an earlier boot of this instance left, never those of another MJAPI on
+  // the same host (#5309).
+  SetHostInstancePort(graphqlPort);
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
   // the one-line summary; at `verbose`+ each phase prints inline as before.
