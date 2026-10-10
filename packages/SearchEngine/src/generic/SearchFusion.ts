@@ -36,6 +36,10 @@ export const RRF_K = 60;
  */
 export function ApplySemanticFloor(source: SearchSource, results: SearchResultItem[], minScore: number | undefined): SearchResultItem[] {
     if (source !== 'vector' || !minScore || minScore <= 0) return results;
+    // Falling back to `Score` is valid HERE only: this runs before fusion, on the vector
+    // provider's own items, where `Score` is still the provider's raw similarity. The client-side
+    // counterpart (ng-search `PassesSemanticFloor`) sees fused results, where `Score` is
+    // rank-based, so it deliberately does NOT fall back. Keep the two as they are.
     return results.filter(r => (r.ScoreBreakdown?.Vector ?? r.Score) >= minScore);
 }
 
@@ -307,7 +311,9 @@ export class SearchFusion {
      * A provider can return results from sources whose scores aren't comparable (the vector
      * provider: one embedding model per lane). Fusing them as separate RRF lists merges them by
      * rank instead of by score. Each sub-list keeps the provider's `Source`, so it gets that
-     * source's fusion weight. A list with no lane tags is returned unchanged.
+     * source's fusion weight. A list with no lane tags is returned unchanged. Providers should
+     * tag all results or none; in a partly tagged list the untagged remainder forms its own lane
+     * (key `''`), so it is still merged by rank, never by score.
      */
     private splitByFusionLane(list: LabeledResultList): LabeledResultList[] {
         if (!list.Results.some(r => r.FusionLane)) return [list];

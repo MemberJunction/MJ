@@ -912,7 +912,10 @@ describe('VectorSearchProvider', () => {
             topK: number,
             filter: object | undefined,
             providerConfig: Record<string, unknown> | undefined,
-            contextUser: UserInfo
+            contextUser: UserInfo,
+            // Mirrors the real 8th parameter (UnmergedFilters). The colocated path ignores it, but a
+            // test of the entity-document pool path written against this alias must be able to pass it.
+            unmerged?: { Search?: unknown; ScopeHasMetadataFilter: boolean }
         ) => Promise<Array<{ Score: number }>>;
 
         it('routes a colocated provider through ColocatedQuery as a vector-only (semantic) search', async () => {

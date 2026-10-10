@@ -478,7 +478,11 @@ export interface SearchResultItem {
      * list, so results whose scores are not comparable are merged by rank, never by score. The
      * vector provider sets it to the embedding model: cosine scales differ by model (gte-small
      * scores weak matches ~0.9, Gemini strong ones ~0.85), so one model's numbers say nothing
-     * about another's. Unset = the provider's list is a single ranked list.
+     * about another's.
+     *
+     * Contract: a provider tags ALL of its results or NONE. Fully untagged = one ranked list.
+     * If a list is only partly tagged, the untagged remainder becomes its own lane rather than
+     * being merged into a tagged lane by raw score, which would compare scales again.
      */
     FusionLane?: string;
 }

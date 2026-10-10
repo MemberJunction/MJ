@@ -39,6 +39,7 @@ import { SearchEngine } from '../generic/SearchEngine';
 import type { SearchResultItem, SearchParams, SearchStreamEvent } from '../generic/search.types';
 import { BaseSearchProvider } from '../generic/ISearchProvider';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { ScopeBundle } from '@memberjunction/core-entities';
 
 function createUser(id: string): UserInfo {
     return { ID: id, Name: 'Test User', Email: 't@example.com' } as UserInfo;
@@ -198,6 +199,62 @@ describe('SearchEngine MinScore is a semantic-lane floor applied before fusion',
         ]);
         const streamed: string[] = [];
         for await (const ev of engine.streamSearch({ Query: 'floor-f', MinScore: 0.5 } as SearchParams, user)) {
+            const e = ev as SearchStreamEvent;
+            if (e.phase === 'provider') streamed.push(...e.results.map(r => r.RecordID));
+        }
+        expect(streamed).toEqual(['v-high']);
+    });
+});
+
+// ────────────────────────────────────────────────────────────────
+// The SCOPED path (executeScopeBundle) has its own ApplySemanticFloor call. Agents search through
+// scopes, so it is pinned separately: only scope lookup is stubbed; the real scoped code runs.
+// ────────────────────────────────────────────────────────────────
+describe('SearchEngine MinScore floor on the scoped path (executeScopeBundle)', () => {
+    let engine: TestSearchEngine;
+    let resolveScopesSpy: ReturnType<typeof vi.spyOn>;
+    const user = createUser('u-floor-scoped');
+    const bundle = {
+        Scope: { ID: 'scope-floor', Name: 'Floor Scope', IsGlobal: false, ScopeConfig: null, SearchContextConfig: null },
+        Providers: [], ExternalIndexes: [], Entities: [], StorageAccounts: [],
+    } as unknown as ScopeBundle;
+
+    beforeEach(() => {
+        engine = new TestSearchEngine();
+        mockEntityByName.mockReturnValue({ Name: 'Test', FirstPrimaryKey: { Name: 'ID' } });
+        mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+        resolveScopesSpy = vi.spyOn(engine as unknown as { resolveScopes: (ids?: string[]) => ScopeBundle[] }, 'resolveScopes')
+            .mockReturnValue([bundle]);
+    });
+
+    it('drops vector hits below MinScore before fusion, and goes through the scoped branch', async () => {
+        engine.InjectProviders([
+            makeEntry('Vec', new FixedProvider('vector', [scored('v-high', 'vector', 0.8), scored('v-low', 'vector', 0.2)])),
+            makeEntry('Kw', new FixedProvider('entity', [scored('k', 'entity', 0.59)])),
+        ]);
+        const result = await engine.Search({ Query: 'scoped-a', MinScore: 0.5, ScopeIDs: ['scope-floor'] } as SearchParams, user);
+        expect(resolveScopesSpy).toHaveBeenCalled();
+        const ids = result.Results.map(r => r.RecordID);
+        expect(ids).toContain('v-high');
+        expect(ids).toContain('k');
+        expect(ids).not.toContain('v-low');
+        expect(result.SourceCounts.Vector).toBe(1);
+    });
+
+    it('never drops keyword hits on the scoped path', async () => {
+        engine.InjectProviders([
+            makeEntry('Kw', new FixedProvider('entity', [scored('k-weak', 'entity', 0.15)])),
+        ]);
+        const result = await engine.Search({ Query: 'scoped-b', MinScore: 0.9, ScopeIDs: ['scope-floor'] } as SearchParams, user);
+        expect(result.Results.map(r => r.RecordID)).toEqual(['k-weak']);
+    });
+
+    it('applies the floor to streamed per-provider results on the scoped path', async () => {
+        engine.InjectProviders([
+            makeEntry('Vec', new FixedProvider('vector', [scored('v-high', 'vector', 0.8), scored('v-low', 'vector', 0.2)])),
+        ]);
+        const streamed: string[] = [];
+        for await (const ev of engine.streamSearch({ Query: 'scoped-c', MinScore: 0.5, ScopeIDs: ['scope-floor'] } as SearchParams, user)) {
             const e = ev as SearchStreamEvent;
             if (e.phase === 'provider') streamed.push(...e.results.map(r => r.RecordID));
         }
