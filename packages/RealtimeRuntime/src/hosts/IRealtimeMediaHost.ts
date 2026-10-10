@@ -68,9 +68,14 @@ export interface IRealtimeMediaHost {
      * route, and that setting outlives the call — every later sound in the app plays through the
      * call route, at call volume, until something puts it back.
      *
-     * Called by the runtime on teardown, after the microphone tracks are stopped, on every exit
-     * path including a failed start. Best-effort: a rejection is logged and swallowed, because
-     * restoring audio state is never worth failing the end of a call over.
+     * Called by the runtime once each time it asks for the microphone (through
+     * {@link AcquireMicrophone} or the session's controller), after the request returns, opened or
+     * failed, and the microphone tracks are stopped: when the session ends, on every exit path
+     * including a failed start, or, when the session ended while the request was pending, once the
+     * request returns, so the call undoes what the request did. When a newer session has asked for
+     * the microphone by then, that session's end makes the call instead. A session that ends before
+     * asking for the microphone gets no call. Best-effort: a rejection is logged and swallowed,
+     * because restoring audio state is never worth failing the end of a call over.
      */
     ReleaseMicrophone?(): Promise<void> | void;
 

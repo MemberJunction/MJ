@@ -333,6 +333,14 @@ function microphoneStartError(reason: LocalMediaFailure, message: string): Error
 type OpenedMicrophone = { Stream: MediaStream; Error: null } | { Stream: null; Error: Error };
 
 /**
+ * One start's opening of the host's microphone, from asking for it until {@link IRealtimeMediaHost.ReleaseMicrophone}
+ * hands it back. `Opening` stays true until the opening returns, whether it opened the microphone or failed.
+ */
+interface MicrophoneLease {
+  Opening: boolean;
+}
+
+/**
  * One thought/reasoning narration emitted on {@link RealtimeSessionRuntime.ThoughtNarration$}.
  * Distinct from spoken progress narrations: thought summaries are authored by reasoning models
  * (e.g. Gemini 3.8 Live Extended Thinking) and are NOT spoken aloud.
@@ -983,6 +991,20 @@ export class RealtimeSessionRuntime {
   private teardownInFlight: Promise<void> | null = null;
 
   /**
+   * The latest start's opening of the host's microphone, until {@link IRealtimeMediaHost.ReleaseMicrophone} hands it
+   * back; `null` when no opening is owed a release, so a session that ends before asking for the microphone releases
+   * nothing.
+   *
+   * The host gets one release per opening, after the opening returns. A release while the microphone is still
+   * opening undoes nothing: the React Native host puts iOS into the call audio category inside `AcquireMicrophone`,
+   * after the permission prompt. So {@link runTeardown} releases an opening that has returned and leaves one still
+   * opening to its start, which releases it once it returns ({@link unwindAbandonedStart}), unless a newer start has
+   * opened the microphone since; that start's own end releases it. Whoever releases clears this first, so no
+   * opening is released twice.
+   */
+  private microphoneLease: MicrophoneLease | null = null;
+
+  /**
    * Why the last session start failed, or `null` when none has.
    *
    * The runtime reports failure as `'error'` on {@link ConnectionState$}, which is enough to show
@@ -1425,10 +1447,14 @@ export class RealtimeSessionRuntime {
       // Everything past here awaits on hardware and the network, during which the host may end the
       // session. Each await is followed by a staleness check so an abandoned start releases what it
       // just acquired instead of leaving a live microphone and a live call behind it.
-      const microphone = await this.openMicrophone();
+      const lease: MicrophoneLease = { Opening: true };
+      this.microphoneLease = lease;
+      const microphone = await this.openMicrophone().finally(() => {
+        lease.Opening = false;
+      });
       this.localStream = microphone.Stream;
       if (this.startGeneration !== generation) {
-        await this.unwindAbandonedStart(session, client);
+        await this.unwindAbandonedStart(session, client, lease);
         return;
       }
       if (microphone.Error) {
@@ -1438,7 +1464,7 @@ export class RealtimeSessionRuntime {
       const clientConfig = this.BuildClientConfig(session);
       await client.Connect(clientConfig, microphone.Stream);
       if (this.startGeneration !== generation) {
-        await this.unwindAbandonedStart(session, client);
+        await this.unwindAbandonedStart(session, client, lease);
         return;
       }
       // Tracks are negotiated now, so a capture can tell whether the model takes video, and the call whether it shows
@@ -1521,18 +1547,29 @@ export class RealtimeSessionRuntime {
    *
    * Reached only when {@link teardown} ran while this start was awaiting the microphone or the
    * provider connection. Teardown found nothing to release because nothing existed yet, so this
-   * start owns the cleanup: stop the microphone, close the provider connection, and close the
-   * server-side session row that the mint created.
+   * start owns the cleanup: stop the microphone, hand it back to the host when teardown left that
+   * to it ({@link microphoneLease}), close the provider connection, and close the server-side
+   * session row that the mint created.
+   *
+   * @param lease This start's opening of the microphone.
    */
   private async unwindAbandonedStart(
     session: StartRealtimeClientSessionResult,
-    client: BaseRealtimeClient
+    client: BaseRealtimeClient,
+    lease: MicrophoneLease
   ): Promise<void> {
     console.warn('[RealtimeSession] Session was ended while starting — releasing the partial session.');
     this.closeCaptures();
     this.closeLocalMedia();
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
+    // Teardown left the release to this start when the microphone was still opening. A cleared or
+    // replaced lease means teardown already released it, or a newer start has opened the microphone
+    // since and its own end releases it.
+    if (this.microphoneLease === lease) {
+      this.microphoneLease = null;
+      await this.releaseMicrophone();
+    }
     try {
       await client.Disconnect();
     } catch (error) {
@@ -4425,14 +4462,15 @@ export class RealtimeSessionRuntime {
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
 
-    // Hand the platform back whatever acquiring the microphone changed. Stopping the tracks is not
+    // Hand the platform back whatever opening the microphone changed. Stopping the tracks is not
     // the same thing: iOS, for instance, is put into a record-and-play audio category for the call,
     // and leaving it there changes the route and volume behaviour of every sound the app makes
-    // afterwards. Best-effort by contract — a failure here must never block ending a call.
-    try {
-      await this.mediaHost.ReleaseMicrophone?.();
-    } catch (error) {
-      console.error('[RealtimeSession] Media host failed to release the microphone:', error);
+    // afterwards. A microphone still opening is left to its start, which releases it once the
+    // opening returns ({@link microphoneLease}).
+    const lease = this.microphoneLease;
+    if (lease && !lease.Opening) {
+      this.microphoneLease = null;
+      await this.releaseMicrophone();
     }
 
     if (this.client) {
@@ -4486,6 +4524,18 @@ export class RealtimeSessionRuntime {
         sessionId: closedSessionId,
         reason: closeServerSession ? 'explicit' : 'error',
       });
+    }
+  }
+
+  /**
+   * Calls the host's {@link IRealtimeMediaHost.ReleaseMicrophone}. Best-effort by contract: a failure
+   * is logged and never thrown, because it must never block ending a call.
+   */
+  private async releaseMicrophone(): Promise<void> {
+    try {
+      await this.mediaHost.ReleaseMicrophone?.();
+    } catch (error) {
+      console.error('[RealtimeSession] Media host failed to release the microphone:', error);
     }
   }
 

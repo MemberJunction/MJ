@@ -218,9 +218,9 @@ describe('session lifecycle, driven end to end with fakes', () => {
         }
     }
 
-    function mintedSession(provider: string): StartRealtimeClientSessionResult {
+    function mintedSession(provider: string, agentSessionId = 'session-1'): StartRealtimeClientSessionResult {
         return {
-            AgentSessionId: 'session-1',
+            AgentSessionId: agentSessionId,
             ConversationId: 'conv-1',
             Provider: provider,
             Model: 'model-1',
@@ -305,6 +305,180 @@ describe('session lifecycle, driven end to end with fakes', () => {
         expect(runtime.CurrentAgentSessionId).toBeNull();
         // Closed exactly once, by whichever half got there — never left Active for the janitor.
         expect(mutationNames(provider).filter((n) => n === 'CloseAgentSession')).toHaveLength(1);
+    });
+
+    describe('hands the microphone back once per opening, after it returns (#5386)', () => {
+        /**
+         * A host that logs, in order, each microphone opening and each release, and can hold an opening until the test
+         * lets it return: the window in which the user ends a call that is still starting.
+         */
+        class OrderingHost extends FakeMediaHost {
+            public readonly Events: string[] = [];
+            /** What an opening rejects with once it returns. */
+            public Failure: Error | null = null;
+            private held: Promise<void> | null = null;
+
+            /** Holds the next opening until the test calls the function this returns. */
+            public HoldNextOpening(): () => void {
+                let open: () => void = () => undefined;
+                this.held = new Promise<void>((resolve) => (open = resolve));
+                return open;
+            }
+
+            public override async AcquireMicrophone(): Promise<MediaStream> {
+                const held = this.held;
+                this.held = null;
+                await held;
+                if (this.Failure) {
+                    this.Events.push('failed');
+                    throw this.Failure;
+                }
+                this.Events.push('opened');
+                return super.AcquireMicrophone();
+            }
+
+            public async ReleaseMicrophone(): Promise<void> {
+                this.Events.push('released');
+            }
+        }
+
+        /** A driver whose Connect says when it was reached and waits until the test lets it finish. */
+        @RegisterClass(BaseRealtimeClient, 'held-connect-provider')
+        class HeldConnectClient extends FakeRealtimeClient {
+            public static Reached: () => void = () => undefined;
+            public static Gate: Promise<void> | null = null;
+            public override async Connect(): Promise<void> {
+                HeldConnectClient.Reached();
+                await HeldConnectClient.Gate;
+            }
+        }
+
+        it('releases once, after the microphone opens, when the call ended while it was opening', async () => {
+            // The React Native host puts iOS into the call audio category inside the opening, after the permission
+            // prompt, so a release before the opening returns undoes nothing.
+            const host = new OrderingHost();
+            const open = host.HoldNextOpening();
+            const { runtime } = build(host);
+
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+            await runtime.EndRealtimeSession();
+            expect(host.Events).toEqual([]);
+            open();
+            await starting;
+
+            expect(host.Events).toEqual(['opened', 'released']);
+            expect(runtime.IsActive).toBe(false);
+        });
+
+        it('releases once, after the opening fails, when the call ended while it was opening', async () => {
+            // The React Native host sets the call category before getUserMedia, which can still fail after it.
+            const host = new OrderingHost();
+            host.Failure = new Error('No microphone is available on this device.');
+            const open = host.HoldNextOpening();
+            const { runtime } = build(host);
+
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+            await runtime.EndRealtimeSession();
+            open();
+            await starting;
+
+            expect(host.Events).toEqual(['failed', 'released']);
+            expect(runtime.LastStartError).toBeNull();
+        });
+
+        it('releases once when the call ended while it was connecting', async () => {
+            // The microphone was already open when the call ended: teardown hands it back, and the start's unwind
+            // must not hand it back again.
+            const host = new OrderingHost();
+            const { runtime } = build(host);
+            const reached = new Promise<void>((resolve) => (HeldConnectClient.Reached = resolve));
+            let connect: () => void = () => undefined;
+            HeldConnectClient.Gate = new Promise<void>((resolve) => (connect = resolve));
+            try {
+                const starting = runtime.StartRealtimeSessionFromResult(mintedSession('held-connect-provider'));
+                await reached;
+                await runtime.EndRealtimeSession();
+                connect();
+                await starting;
+            } finally {
+                HeldConnectClient.Gate = null;
+            }
+
+            expect(host.Events).toEqual(['opened', 'released']);
+        });
+
+        it('releases once when the call ended while it was connecting and the connection then fails', async () => {
+            // The failed connection unwinds through a second teardown, which finds nothing left to release.
+            const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const host = new OrderingHost();
+            const { runtime } = build(host);
+            const reached = new Promise<void>((resolve) => (HeldConnectClient.Reached = resolve));
+            let fail: (reason: Error) => void = () => undefined;
+            HeldConnectClient.Gate = new Promise<void>((_resolve, reject) => (fail = reject));
+            try {
+                const starting = runtime.StartRealtimeSessionFromResult(mintedSession('held-connect-provider'));
+                await reached;
+                await runtime.EndRealtimeSession();
+                fail(new Error('The socket closed before setup.'));
+                await starting;
+            } finally {
+                HeldConnectClient.Gate = null;
+                error.mockRestore();
+            }
+
+            expect(host.Events).toEqual(['opened', 'released']);
+        });
+
+        it('releases nothing when the start ends before it opens the microphone', async () => {
+            class DecliningRuntime extends RealtimeSessionRuntime {
+                protected override hostCanUseProvider(): boolean {
+                    return false;
+                }
+            }
+            const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+            try {
+                const host = new OrderingHost();
+                const runtime = new DecliningRuntime(host);
+                runtime.Provider = new RecordingProvider() as unknown as IMetadataProvider;
+
+                await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+
+                expect(runtime.LastStartError).not.toBeNull();
+                expect(host.Events).toEqual([]);
+            } finally {
+                error.mockRestore();
+            }
+        });
+
+        it('releases once when the microphone fails to open and the start fails', async () => {
+            const host = new OrderingHost();
+            host.Failure = new Error('No microphone is available on this device.');
+            const { runtime } = build(host);
+
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+
+            expect(runtime.LastStartError).toBe(host.Failure);
+            expect(host.Events).toEqual(['failed', 'released']);
+        });
+
+        it('leaves the release to a newer call that opened the microphone since', async () => {
+            // The audio category is shared by the whole app: releasing it for the abandoned start would take the newer
+            // call out of it. The newer call's own end hands it back.
+            const host = new OrderingHost();
+            const { runtime } = build(host);
+            const open = host.HoldNextOpening();
+            const abandoned = runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-1'));
+            await runtime.EndRealtimeSession();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-2'));
+            expect(runtime.IsActive).toBe(true);
+
+            open();
+            await abandoned;
+            expect(host.Events).toEqual(['opened', 'opened']);
+
+            await runtime.EndRealtimeSession();
+            expect(host.Events).toEqual(['opened', 'opened', 'released']);
+        });
     });
 
     it('declines an unusable provider through the shared teardown, and says which one', async () => {
