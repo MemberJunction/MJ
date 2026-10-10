@@ -530,9 +530,16 @@ export interface BridgeRealtimeRuntime {
     PromptRunID?: string;
     /**
      * Writes the session's last usage, then finalizes the co-agent + prompt run; usage reported afterwards is not
-     * stored. Idempotent; safe to call from multiple teardown paths.
+     * stored. Idempotent: the first call decides the outcome, and later calls from other teardown paths do nothing.
+     *
+     * The session's `Close()` finalizes with `success` true, so a host whose bridge start failed calls
+     * `Finalize(false, error)` BEFORE it closes the session: the run, its prompt run and its step then read `Failed`
+     * with the start's error, and the close finalizes nothing more.
+     *
+     * @param success `true` → `Completed`, `false` → `Failed`.
+     * @param errorMessage Why the session failed, stamped on the failed run, prompt run and step. Ignored on success.
      */
-    Finalize: (success: boolean) => Promise<void>;
+    Finalize: (success: boolean, errorMessage?: string) => Promise<void>;
     /**
      * Aborts every delegated run currently in flight for this session (and drops pending narration). This is the
      * EXPLICIT cancel — on a phone it backs the `cancel_pending_work` tool — and is deliberately NOT what a
@@ -1027,15 +1034,16 @@ export class RealtimeClientSessionService {
     /**
      * The bridged session's idempotent finalizer. It closes the usage recorder first (no more updates; the unwritten
      * usage is written), so the prompt run's cost, computed when finalize stamps `CompletedAt`, covers the whole session.
+     * The first call decides the outcome (see {@link BridgeRealtimeRuntime.Finalize}).
      */
     private createBridgeFinalizer(
         obs: CoAgentObservabilityRunIds | null,
         usage: BridgeRealtimeUsageRecorder | undefined,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-    ): (success: boolean) => Promise<void> {
+    ): (success: boolean, errorMessage?: string) => Promise<void> {
         let finalized = false;
-        return async (success: boolean): Promise<void> => {
+        return async (success: boolean, errorMessage?: string): Promise<void> => {
             if (finalized) {
                 return;
             }
@@ -1043,7 +1051,7 @@ export class RealtimeClientSessionService {
             await usage?.Close();
             await this.FinalizeCoAgentRun(
                 obs?.CoAgentRunID ?? null, obs?.PromptRunID ?? null,
-                contextUser, provider, success, obs?.CoAgentRunStepID ?? null,
+                contextUser, provider, success, obs?.CoAgentRunStepID ?? null, errorMessage,
             );
         };
     }
@@ -1078,7 +1086,8 @@ export class RealtimeClientSessionService {
 
     /**
      * Finalizes on graceful teardown (the bridge calls `Close()`) and on an unexpected drop. Both go through the
-     * idempotent finalizer, so a double fire is harmless.
+     * idempotent finalizer, so a double fire is harmless. Both finalize as completed: a host whose bridge start failed
+     * calls {@link BridgeRealtimeRuntime.Finalize} with `false` and the start's error before it closes the session.
      */
     private finalizeOnBridgeClose(
         session: IRealtimeSession,
@@ -1632,6 +1641,8 @@ export class RealtimeClientSessionService {
      * @param provider The request-scoped metadata provider.
      * @param success Whether the session ended successfully (controls Completed vs Failed).
      * @param coAgentRunStepID The co-agent run's single `MJ: AI Agent Run Steps` row id, or `null` to skip.
+     * @param errorMessage Why the session failed (for example the bridge start's error), stamped as `ErrorMessage` on each
+     *   record it fails. Ignored when `success` is true. Without it the step gets a generic line and the runs none.
      */
     public async FinalizeCoAgentRun(
         coAgentRunID: string | null,
@@ -1640,11 +1651,13 @@ export class RealtimeClientSessionService {
         provider: IMetadataProvider,
         success: boolean = true,
         coAgentRunStepID: string | null = null,
+        errorMessage?: string,
     ): Promise<void> {
+        const failure = success ? undefined : errorMessage?.trim() || undefined;
         try {
-            await this.finalizeAgentRun(coAgentRunID, contextUser, provider, success);
-            await this.finalizePromptRun(promptRunID, contextUser, provider, success);
-            await this.finalizeRunStep(coAgentRunStepID, contextUser, provider, success);
+            await this.finalizeAgentRun(coAgentRunID, contextUser, provider, success, failure);
+            await this.finalizePromptRun(promptRunID, contextUser, provider, success, failure);
+            await this.finalizeRunStep(coAgentRunStepID, contextUser, provider, success, failure);
         } finally {
             // Even when a finalize step throws, the run still owes its cost, and the watchdog must stop
             // treating it as alive — or a run stuck at Running would be kept fresh indefinitely.
@@ -1792,12 +1805,16 @@ export class RealtimeClientSessionService {
         return { PromptRunID: promptRuns.Results[0]?.ID ?? null, StepID: stepID };
     }
 
-    /** Loads + finalizes the co-agent `AIAgentRun` if still `Running`. Tolerant: logs, never throws. */
+    /**
+     * Loads + finalizes the co-agent `AIAgentRun` if still `Running`, with `failure` as its `ErrorMessage` when it fails.
+     * Tolerant: logs, never throws.
+     */
     private async finalizeAgentRun(
         coAgentRunID: string | null,
         contextUser: UserInfo,
         provider: IMetadataProvider,
         success: boolean,
+        failure?: string,
     ): Promise<void> {
         if (!coAgentRunID) {
             return;
@@ -1809,6 +1826,9 @@ export class RealtimeClientSessionService {
         run.Status = success ? 'Completed' : 'Failed';
         run.CompletedAt = new Date();
         run.Success = success;
+        if (failure) {
+            run.ErrorMessage = failure;
+        }
         if (!(await run.Save())) {
             LogError(`RealtimeClientSessionService.finalizeAgentRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
@@ -1816,14 +1836,16 @@ export class RealtimeClientSessionService {
 
     /**
      * Loads + finalizes the co-agent run's single system-prompt `MJ: AI Agent Run Steps` row if
-     * still `Running` (Status `Completed`/`Failed`, `CompletedAt`, `Success`). Tolerant: a
-     * missing/already-finalized step is a no-op; a load/save failure is logged, never thrown.
+     * still `Running` (Status `Completed`/`Failed`, `CompletedAt`, `Success`; a failed step's `ErrorMessage` is
+     * `failure`, or a generic line without one). Tolerant: a missing/already-finalized step is a no-op; a
+     * load/save failure is logged, never thrown.
      */
     private async finalizeRunStep(
         coAgentRunStepID: string | null,
         contextUser: UserInfo,
         provider: IMetadataProvider,
         success: boolean,
+        failure?: string,
     ): Promise<void> {
         if (!coAgentRunStepID) {
             return;
@@ -1837,7 +1859,7 @@ export class RealtimeClientSessionService {
             step.CompletedAt = new Date();
             step.Success = success;
             if (!success) {
-                step.ErrorMessage = 'The realtime session ended in an error state.';
+                step.ErrorMessage = failure ?? 'The realtime session ended in an error state.';
             }
             if (!(await step.Save())) {
                 LogError(`RealtimeClientSessionService.finalizeRunStep save failed: ${step.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -1847,12 +1869,16 @@ export class RealtimeClientSessionService {
         }
     }
 
-    /** Loads + finalizes the co-agent `AIPromptRun` if still `Running`. Tolerant: logs, never throws. */
+    /**
+     * Loads + finalizes the co-agent `AIPromptRun` if still `Running`, with `failure` as its `ErrorMessage` when it fails.
+     * Tolerant: logs, never throws.
+     */
     private async finalizePromptRun(
         promptRunID: string | null,
         contextUser: UserInfo,
         provider: IMetadataProvider,
         success: boolean,
+        failure?: string,
     ): Promise<void> {
         if (!promptRunID) {
             return;
@@ -1867,6 +1893,9 @@ export class RealtimeClientSessionService {
             run.Status = success ? 'Completed' : 'Failed';
             run.CompletedAt = new Date();
             run.Success = success;
+            if (failure) {
+                run.ErrorMessage = failure;
+            }
             if (!(await run.Save())) {
                 LogError(`RealtimeClientSessionService.finalizePromptRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }

@@ -5,7 +5,8 @@
  *   2. mints the agent bot's scoped LiveKit token ({@link LiveKitTokenService}), whose attributes depend on the session, and
  *   3. bridges that session into the room through {@link AIBridgeEngine.StartBridgeSession} (which wires
  *      the transport seam + turn-taking automatically).
- * A start that fails after step 1 closes the model session before the error propagates.
+ * A start that fails after step 1 closes the model session before the error propagates, recording the failure on the
+ * agent's co-agent run first ({@link FailedStartRecorder}).
  *
  * The realtime-session factory is a seam (mirroring `LiveKitBridge.SetSdkFactory`): production binds it to
  * the real model-resolution path (`@memberjunction/ai-agents`), and tests/de-risk inject a stub session.
@@ -169,6 +170,14 @@ export type TurnToolBinder = (session: IRealtimeSession, handler: BridgeTurnTaki
 export type AgentVisionResolver = (session: IRealtimeSession) => boolean;
 
 /**
+ * Records a failed start on the co-agent run of the model session the start opened, with the start's error — the seam
+ * that keeps this package free of the agent runtime, like {@link TurnToolBinder}. Production binds it to the session's
+ * bridged runtime (`Finalize(false, error)`, `@memberjunction/ai-agents`). The coordinator calls it before it closes that
+ * session, because the close alone finalizes the run as completed, which is what happens when nothing is bound.
+ */
+export type FailedStartRecorder = (session: IRealtimeSession, error: string) => Promise<void>;
+
+/**
  * Opens a realtime model session for the agent. Production binds this to the real model-resolution path;
  * tests inject a stub. Defaults to a clear "not bound" error so misconfiguration fails loudly.
  */
@@ -256,6 +265,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
   private bridgeOps: BridgeOps = AIBridgeEngine.Instance;
   private turnToolBinder?: TurnToolBinder;
   private agentVisionResolver?: AgentVisionResolver;
+  private failedStartRecorder?: FailedStartRecorder;
   private turnStateSource: (roomKey: string) => RoomTurnSnapshot | null = (roomKey) => AIBridgeEngine.Instance.GetRoomTurnSnapshot(roomKey);
   private sessionFactory: RealtimeSessionFactory = () => {
     throw new Error(
@@ -306,6 +316,16 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
   }
 
   /**
+   * Binds the seam that records a failed start on the agent's co-agent run. Without it, the run of an agent whose start
+   * failed reads as completed: closing its model session finalizes the run that way.
+   *
+   * @param recorder The recorder, or `undefined` to clear it.
+   */
+  public SetFailedStartRecorder(recorder: FailedStartRecorder | undefined): void {
+    this.failedStartRecorder = recorder;
+  }
+
+  /**
    * Overrides where a room's turn-taking snapshot comes from (an injectable seam for unit testing; production
    * reads the process-wide {@link AIBridgeEngine}).
    *
@@ -350,8 +370,9 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
    * bridges the session into the room.
    *
    * A start that fails once the model session is open (the bot token can't be minted, the bridge doesn't start) closes
-   * that session before the error propagates. The agent session it runs under (`AgentSessionID`) is the caller's: a caller
-   * that created one for this start closes it.
+   * that session before the error propagates, after recording the failure, with the start's error, on the session's
+   * co-agent run ({@link SetFailedStartRecorder}), which would otherwise read as completed. The agent session it runs under
+   * (`AgentSessionID`) is the caller's: a caller that created one for this start closes it.
    *
    * @param params The session parameters.
    * @returns The active session handles.
@@ -496,7 +517,8 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     const started: { SessionBridgeID?: string } = {};
     // Until the bridge engine holds the model session (StartBridgeSession resolves), the session is this start's to close:
     // when the bot's token can't be minted or the bridge doesn't start, it is closed before the error propagates, so a
-    // failed start leaves no model connection open (#5308). From then on the engine closes it when the bridge ends.
+    // failed start leaves no model connection open (#5308), and its co-agent run reads as failed, with the start's error.
+    // From then on the engine closes it when the bridge ends.
     let botToken: MintedToken;
     let active: ActiveBridgeSession;
     try {
@@ -564,7 +586,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
         },
       });
     } catch (err) {
-      await this.closeModelSessionOfFailedStart(session);
+      await this.closeModelSessionOfFailedStart(session, err);
       throw err;
     }
     started.SessionBridgeID = active.SessionBridgeID;
@@ -649,10 +671,16 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
 
   /**
    * Closes the model session of a start that failed before the bridge engine took it: the bot's token could not be minted,
-   * or the bridge did not start (its row could not be saved, the driver could not connect). A close that fails is logged,
-   * never thrown, so the caller sees why the start failed.
+   * or the bridge did not start (its row could not be saved, the driver could not connect). The failure is recorded on the
+   * session's co-agent run first ({@link FailedStartRecorder}), since the close alone would finalize that run as completed.
+   * Neither step throws: a failure is logged, so the caller sees why the start failed and the session is still closed.
    */
-  private async closeModelSessionOfFailedStart(session: IRealtimeSession): Promise<void> {
+  private async closeModelSessionOfFailedStart(session: IRealtimeSession, startError: unknown): Promise<void> {
+    try {
+      await this.failedStartRecorder?.(session, startError instanceof Error ? startError.message : String(startError));
+    } catch (err) {
+      LogError(`[LiveKitAgentRoomCoordinator] recording a failed start on the agent's run failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
     try {
       await session.Close();
     } catch (err) {

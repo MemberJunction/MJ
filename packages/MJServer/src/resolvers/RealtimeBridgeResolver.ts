@@ -58,6 +58,16 @@ LiveKitAgentRoomCoordinator.Instance.SetTurnToolBinder((session, handler) => {
 LiveKitAgentRoomCoordinator.Instance.SetAgentVisionResolver((session) => GetBridgeRealtimeRuntime(session)?.WatchesMeetingVideo === true);
 
 /**
+ * Binds how a failed agent start is recorded on the agent's co-agent run (same module-load rationale as the factory
+ * above). The coordinator closes the model session of a start that fails before the bridge engine takes it; that close
+ * alone finalizes the run as Completed, so the coordinator first has the session's runtime finalize it as Failed, with the
+ * start's error.
+ */
+LiveKitAgentRoomCoordinator.Instance.SetFailedStartRecorder(async (session, error) => {
+  await GetBridgeRealtimeRuntime(session)?.Finalize(false, error);
+});
+
+/**
  * Binds the co-agent run finalizer onto the bridge engine (same module-load rationale as the factory above).
  * Lets the engine finalize a session's dangling co-agent observability run when it reaps a bridge WITHOUT a
  * live in-memory session (a prior-boot orphan / cross-host reap) — the one teardown path the agent layer's
@@ -352,7 +362,8 @@ export class RealtimeBridgeResolver extends ResolverBase {
 
   /**
    * Starts (or reuses) an agent's presence in a LiveKit room and returns a client token so the calling
-   * user can immediately join the same room. When no `AgentSessionID` is passed, an agent session is created for the
+   * user can immediately join the same room. The token is minted before anything starts, so a start that can't give the
+   * user one fails with nothing started. When no `AgentSessionID` is passed, an agent session is created for the
    * agent; if the agent then fails to start, that session is closed (`Error`) before the failure is returned.
    */
   @Mutation(() => LiveKitAgentRoomSessionResult)
@@ -384,18 +395,22 @@ export class RealtimeBridgeResolver extends ResolverBase {
         }
       }
 
+      // The user's token first: a start that can't let the user into the room fails before anything starts there. Minted
+      // after the agent joined, a failure left the agent in a room the user couldn't enter and gave the UI no bridge id to
+      // stop it by.
+      const clientToken = await new LiveKitTokenService().MintClientToken(roomName, this.participantIdentity(user), user.Name ?? user.Email);
+
       // Opt-in: an agent that can bring a person, a number or another agent into this room (the same room, so a visitor
       // is escalated without leaving it). Falls through to the standard start when the server cannot do handoffs.
       const handoffSessionBridgeID = await this.startWithHandoff(input, roomName, user, provider);
       if (handoffSessionBridgeID) {
-        const handoffToken = await new LiveKitTokenService().MintClientToken(roomName, this.participantIdentity(user), user.Name ?? user.Email);
         return {
           Success: true,
           SessionBridgeID: handoffSessionBridgeID,
           RoomName: roomName,
-          ServerUrl: handoffToken.ServerUrl,
-          ClientToken: handoffToken.Token,
-          Identity: handoffToken.Identity,
+          ServerUrl: clientToken.ServerUrl,
+          ClientToken: clientToken.Token,
+          Identity: clientToken.Identity,
         };
       }
 
@@ -434,9 +449,6 @@ export class RealtimeBridgeResolver extends ResolverBase {
         ContextUser: user,
         MetadataProvider: provider,
       });
-
-      const tokenService = new LiveKitTokenService();
-      const clientToken = await tokenService.MintClientToken(roomName, this.participantIdentity(user), user.Name ?? user.Email);
 
       return {
         Success: true,
@@ -806,8 +818,8 @@ export class RealtimeBridgeResolver extends ResolverBase {
    * (`createdSessionID`) is this start's to close: once the agent has joined, through the end-of-session hook from
    * {@link closeSessionWhenAgentLeaves}; when the start fails, at once, as `Error`, through
    * {@link SessionManager.CloseSessionForFailedStart}, before the error propagates, since the agent never joined and that
-   * hook never runs (#5308). By then the coordinator has closed any model session the start opened. A session the caller
-   * supplied gets neither: it is the caller's.
+   * hook never runs (#5308). By then the coordinator has closed any model session the start opened, its co-agent run
+   * finalized as failed. A session the caller supplied gets neither: it is the caller's.
    */
   private async startAgentInRoom(
     createdSessionID: string | undefined,

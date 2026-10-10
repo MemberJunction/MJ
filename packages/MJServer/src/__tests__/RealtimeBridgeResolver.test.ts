@@ -24,6 +24,7 @@ const h = vi.hoisted(() => ({
   getRoomTurnState: vi.fn((room: string): unknown => (room === 'busy-room' ? { RoomId: room, Agents: [] } : null)),
   setTurnToolBinder: vi.fn(),
   setAgentVisionResolver: vi.fn(),
+  setFailedStartRecorder: vi.fn(),
   getBridgeRuntime: vi.fn(),
   stopRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_COMPLETE' })),
   setAgentVision: vi.fn(async (): Promise<{ Success: boolean; NotInRoom?: boolean; ErrorMessage?: string }> => ({ Success: true })),
@@ -49,6 +50,7 @@ vi.mock('@memberjunction/livekit-room-server', () => ({
       SetSessionFactory: vi.fn(),
       SetTurnToolBinder: h.setTurnToolBinder,
       SetAgentVisionResolver: h.setAgentVisionResolver,
+      SetFailedStartRecorder: h.setFailedStartRecorder,
       GetRoomTurnState: h.getRoomTurnState,
       StopAgentRoomSession: h.stopAgentRoomSession,
       StopAllAgentsInRoom: h.stopAllAgentsInRoom,
@@ -144,6 +146,8 @@ type TurnToolBinderFn = (session: object, handler: object) => void;
 const installedTurnToolBinder = h.setTurnToolBinder.mock.calls[0]?.[0] as TurnToolBinderFn | undefined;
 type AgentVisionResolverFn = (session: object) => boolean;
 const installedAgentVisionResolver = h.setAgentVisionResolver.mock.calls[0]?.[0] as AgentVisionResolverFn | undefined;
+type FailedStartRecorderFn = (session: object, error: string) => Promise<void>;
+const installedFailedStartRecorder = h.setFailedStartRecorder.mock.calls[0]?.[0] as FailedStartRecorderFn | undefined;
 
 describe('RealtimeBridgeResolver', () => {
   let resolver: TestableResolver;
@@ -237,6 +241,24 @@ describe('RealtimeBridgeResolver', () => {
     it('says no for a session with no bridge runtime', () => {
       h.getBridgeRuntime.mockReturnValueOnce(undefined);
       expect(installedAgentVisionResolver!({})).toBe(false);
+    });
+  });
+
+  describe('failed start binding', () => {
+    it("finalizes the model session's co-agent run as failed, with the start's error", async () => {
+      const finalize = vi.fn(async () => undefined);
+      h.getBridgeRuntime.mockReturnValueOnce({ Finalize: finalize });
+      const session = {};
+
+      await installedFailedStartRecorder!(session, 'Failed to create AIAgentSessionBridge: denied');
+
+      expect(h.getBridgeRuntime).toHaveBeenCalledWith(session);
+      expect(finalize).toHaveBeenCalledWith(false, 'Failed to create AIAgentSessionBridge: denied');
+    });
+
+    it('does nothing for a session with no bridge runtime', async () => {
+      h.getBridgeRuntime.mockReturnValueOnce(undefined);
+      await expect(installedFailedStartRecorder!({}, 'mint failed')).resolves.toBeUndefined();
     });
   });
 
@@ -380,6 +402,17 @@ describe('RealtimeBridgeResolver', () => {
       expect(h.startAgentRoomSession).not.toHaveBeenCalled();
     });
 
+    it("fails before the handoff-capable agent joins when the user's token can't be minted", async () => {
+      const starter = vi.fn(async () => ({ SessionBridgeID: 'bridge-h' }));
+      h.handoffDeps.AgentStarter = starter;
+      h.mintClientToken.mockRejectedValueOnce(new Error('LiveKitTokenService is not configured.'));
+
+      const result = await resolver.StartLiveKitAgentRoomSession(input({ EnableHandoff: true }), ctx);
+
+      expect(result).toMatchObject({ Success: false, ErrorMessage: 'LiveKitTokenService is not configured.', SessionBridgeID: '' });
+      expect(starter).not.toHaveBeenCalled();
+    });
+
     it('requires an authenticated user', async () => {
       resolver.user = undefined;
       const result = await resolver.StartLiveKitAgentRoomSession(input({ EnableHandoff: true }), ctx);
@@ -460,6 +493,11 @@ describe('RealtimeBridgeResolver', () => {
         this.agents.delete(sessionBridgeID);
         await params.Host?.OnSessionEnded?.(reason);
         return true;
+      }
+
+      /** How many agents are in the room now. */
+      public AgentsIn(roomName: string): number {
+        return [...this.agents.values()].filter((params) => params.RoomName === roomName).length;
       }
     }
 
@@ -592,6 +630,18 @@ describe('RealtimeBridgeResolver', () => {
 
       expect(started).toMatchObject({ Success: false, ErrorMessage: 'mint failed' });
       expect(sessions.get('AS-1')?.Status).toBe('Active');
+    });
+
+    // Minted after the agent joined, a token that couldn't be minted failed the start with the agent left in the room and
+    // its session Active, and the UI got no bridge id to stop it by.
+    it("starts nothing when the user's token can't be minted: no agent joins, no session is left Active", async () => {
+      h.mintClientToken.mockRejectedValueOnce(new Error('LiveKitTokenService is not configured.'));
+
+      const started = await start();
+
+      expect(started).toMatchObject({ Success: false, ErrorMessage: 'LiveKitTokenService is not configured.' });
+      expect(rooms.AgentsIn('meet-room')).toBe(0);
+      expect([...sessions.values()].filter((row) => row.Status === 'Active')).toEqual([]);
     });
   });
 

@@ -4,7 +4,7 @@
  * would close it: the bridge engine closes a model session only once it holds one, so a failed bridge start left a live
  * model connection in MJAPI until the provider timed it out.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IRealtimeSession, RealtimeInputFrame, RealtimeToolDefinition } from '@memberjunction/ai';
 import type { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
 import type { ActiveBridgeSession } from '@memberjunction/ai-bridge-server';
@@ -139,5 +139,80 @@ describe('LiveKitAgentRoomCoordinator — a failed start closes the model sessio
         expect(session.CloseCalls).toBe(0);
         expect(ops.StartBridgeSession).toHaveBeenCalledWith(expect.objectContaining({ RealtimeSession: session }));
         expect(coordinator.GetAgentsInRoom(roomName())).toEqual([expect.objectContaining({ SessionBridgeID: started.SessionBridgeID })]);
+    });
+});
+
+/**
+ * Closing the model session finalizes its co-agent run as completed: the agent layer's close always does. So a start that
+ * fails records the failure on that run, with the start's error, before it closes the session, and the run of an agent
+ * that never joined reads as failed.
+ */
+describe("LiveKitAgentRoomCoordinator — a failed start's co-agent run reads as failed, with the start's error", () => {
+    const coordinator = LiveKitAgentRoomCoordinator.Instance;
+    let room = 0;
+    let session: FakeModelSession;
+    /** Each recorded failure, with how many times its session had been closed when it was recorded. */
+    let recorded: Array<{ Session: IRealtimeSession; Error: string; ClosesBefore: number }>;
+    const start = () => coordinator.StartAgentRoomSession({ AgentSessionID: `failed-run-${++room}`, RoomName: `failed-run-room-${room}`, AgentName: 'Sage' });
+
+    beforeEach(() => {
+        session = new FakeModelSession();
+        recorded = [];
+        coordinator.SetSessionFactory(async () => session);
+        coordinator.SetTokenService(new LiveKitTokenService(CONFIG));
+        coordinator.SetFailedStartRecorder(async (failed, error) => {
+            recorded.push({ Session: failed, Error: error, ClosesBefore: session.CloseCalls });
+        });
+    });
+
+    afterEach(() => {
+        coordinator.SetFailedStartRecorder(undefined);
+    });
+
+    const failures: Array<[string, string, () => void]> = [
+        [
+            "the bot's token can't be minted",
+            'mint failed',
+            () => {
+                coordinator.SetBridgeOps(makeBridgeOps());
+                coordinator.SetTokenService(new FailingMintTokenService(CONFIG));
+            },
+        ],
+        ["the bridge doesn't start", BRIDGE_ROW_ERROR, () => coordinator.SetBridgeOps(makeBridgeOps(new Error(BRIDGE_ROW_ERROR)))],
+    ];
+
+    it.each(failures)('records the failure before it closes the model session, when %s', async (_why, startError, failStart) => {
+        failStart();
+
+        await expect(start()).rejects.toThrow(startError);
+
+        expect(recorded).toEqual([{ Session: session, Error: startError, ClosesBefore: 0 }]);
+        expect(session.CloseCalls).toBe(1);
+    });
+
+    it("still closes the model session, and reports the start's own error, when recording the failure fails", async () => {
+        coordinator.SetBridgeOps(makeBridgeOps(new Error(BRIDGE_ROW_ERROR)));
+        coordinator.SetFailedStartRecorder(async () => {
+            throw new Error('database unreachable');
+        });
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        try {
+            await expect(start()).rejects.toThrow(BRIDGE_ROW_ERROR);
+
+            expect(session.CloseCalls).toBe(1);
+            expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("recording a failed start on the agent's run failed: database unreachable"));
+        } finally {
+            consoleError.mockRestore();
+        }
+    });
+
+    it('records nothing when the start succeeds', async () => {
+        coordinator.SetBridgeOps(makeBridgeOps());
+
+        await start();
+
+        expect(recorded).toEqual([]);
+        expect(session.CloseCalls).toBe(0);
     });
 });
