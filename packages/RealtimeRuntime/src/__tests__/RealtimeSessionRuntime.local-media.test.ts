@@ -335,6 +335,24 @@ describe('RealtimeSessionRuntime with a host controller for the microphone', () 
         expect(host.Controllers[0].Disposed).toBeGreaterThan(0);
         expect(provider.Mutations.filter((m) => m.includes('CloseAgentSession'))).toHaveLength(1);
     });
+
+    it("hands the host's microphone back once when the session is ended while the controller is starting it", async () => {
+        class ReleasingControllerHost extends ControllerHost {
+            public ReleaseCalls = 0;
+            public async ReleaseMicrophone(): Promise<void> {
+                this.ReleaseCalls++;
+            }
+        }
+        const host = new ReleasingControllerHost();
+        host.Prepare = (controller) => controller.HoldStart();
+        const { runtime } = build(host);
+
+        const starting = runtime.StartRealtimeSessionFromResult(mintedSession());
+        await runtime.EndRealtimeSession();
+        await starting;
+
+        expect(host.ReleaseCalls).toBe(1);
+    });
 });
 
 describe('RealtimeSessionRuntime with a host that has no controller', () => {
