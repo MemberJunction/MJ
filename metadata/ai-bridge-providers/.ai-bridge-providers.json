@@ -177,7 +177,7 @@
       "BridgeType": "Meeting",
       "DriverClass": "LiveKitBridge",
       "Status": "Active",
-      "SupportedFeatures": "{\"OnDemandJoin\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
+      "SupportedFeatures": "{\"OnDemandJoin\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"SpeakerDiarization\":true}"
     },
     "primaryKey": {
       "ID": "94DA5B27-F5D8-42D8-AE92-D9C402195D07"
