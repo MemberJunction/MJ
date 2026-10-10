@@ -2,7 +2,8 @@
  * @fileoverview AI Agent Session lifecycle substrate (server-side, record + janitor layer).
  *
  * Exposes the session-record lifecycle manager, the orphan-reconciliation janitor, and the
- * host-instance identity (`hostname:port:pid:bootId`) the janitor matches sessions by. The
+ * host-instance identity (`hostname:port:pid:bootId`) the janitor matches sessions by, which the
+ * realtime bridge engine is given for its bridge rows too (`BindBridgeEngineHostInstance`). The
  * audio/media (WebRTC) transport and the long-lived realtime agent run are deliberately **not**
  * part of this layer — they arrive in P5.
  *
@@ -34,5 +35,6 @@ BindRemoteBrowserGoalEngine();
 
 export * from './remoteBrowserGoalEngine.js';
 export * from './HostInstance.js';
+export * from './BridgeHostInstance.js';
 export * from './SessionManager.js';
 export * from './SessionJanitor.js';
