@@ -458,6 +458,18 @@ describe('LiveKitBridge — participants', () => {
         expect(bot).toMatchObject({ Role: 'Agent', IsAgent: true });
     });
 
+    it("counts another agent's bot (agent-…, in any case) as an agent, though it is a remote participant", async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        sdk.DriveJoin({ Identity: 'Agent-7F3C', DisplayName: 'Rex', Role: 'Participant' });
+        sdk.DriveJoin({ Identity: 'p-agentina', DisplayName: 'Agentina', Role: 'Participant' });
+
+        const roster = await bridge.GetParticipants();
+
+        expect(roster.find((p) => p.ExternalId === 'Agent-7F3C')).toMatchObject({ Role: 'Participant', IsAgent: true });
+        expect(roster.find((p) => p.ExternalId === 'p-agentina')).toMatchObject({ Role: 'Participant', IsAgent: false });
+    });
+
     it('OnParticipantChange fires the full roster on a join and a leave', async () => {
         const bridge = makeBridge(sdk);
         await bridge.Connect(ctx());

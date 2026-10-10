@@ -3,9 +3,9 @@
  * model, how often it samples them, and teardown.
  *
  * ## Rules
- * - **Eligible:** a remote participant who is not an agent (`agent-*`) and whose `mj.agentCanSee` attribute is `'true'`
- *   (`AllowsAgentVision`; any other value means no), publishing an unmuted camera (when `Cameras`) or screen share
- *   (when `Screens`).
+ * - **Eligible:** a remote participant who is not an agent (`agent-*`, `IsAgentParticipantIdentity`) and whose
+ *   `mj.agentCanSee` attribute is `'true'` (`AllowsAgentVision`; any other value means no), publishing an unmuted camera
+ *   (when `Cameras`) or screen share (when `Screens`).
  * - **Selection:** up to `Streams` sources at once, ranked by `video-source-policy.ts`: a shared screen first (the most
  *   recent), else the active speaker's camera once they have led the room's active-speaker list for the onset, else the
  *   camera being read, else the camera of whoever spoke last, else the first eligible camera in room order. A camera
@@ -43,13 +43,12 @@
 
 import { performance } from 'node:perf_hooks';
 import { LogError, LogStatusEx } from '@memberjunction/core';
-import { AllowsAgentVision, RealtimeVideoFrameIntervalMs } from '@memberjunction/ai';
-import {
-    IsAgentParticipantIdentity,
-    type NativeRoomVideoFrame,
-    type NativeRoomVideoOptions,
-    type NativeRoomVideoSourceEnd,
-    type NativeRoomVideoSourceKind,
+import { AllowsAgentVision, IsAgentParticipantIdentity, RealtimeVideoFrameIntervalMs } from '@memberjunction/ai';
+import type {
+    NativeRoomVideoFrame,
+    NativeRoomVideoOptions,
+    NativeRoomVideoSourceEnd,
+    NativeRoomVideoSourceKind,
 } from '@memberjunction/ai-bridge-livekit';
 import type {
     RtcNodeModule,

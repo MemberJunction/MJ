@@ -2359,6 +2359,9 @@ importers:
 
   packages/AI/RealtimeBridge/Providers/LiveKit:
     dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.3
+        version: link:../../../Core
       '@memberjunction/ai-bridge-base':
         specifier: 6.2.0-edge.3
         version: link:../../Base
