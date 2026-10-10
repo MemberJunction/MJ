@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SQLExpressionValidator, StripSQLStringLiterals } from '../SQLExpressionValidator';
+import { SQLScreeningDialect } from '../SQLScreeningScanner';
 
 /**
  * Adversarial security tests for SQLExpressionValidator.
@@ -275,7 +276,8 @@ describe('SQLExpressionValidator - Security', () => {
    */
   describe('literal stripper must match database parsing (backslash is NOT an escape)', () => {
     it('strips a doubled-quote literal exactly, leaving injected code visible', () => {
-      expect(StripSQLStringLiterals(`Name = 'O''Brien'`)).toBe('Name = ');
+      // The literal becomes one space, which keeps the token boundary the database sees.
+      expect(StripSQLStringLiterals(`Name = 'O''Brien'`)).toBe('Name =  ');
       expect(StripSQLStringLiterals(`x = 'a\\') ; DROP TABLE Users; --'`)).toContain('DROP TABLE Users');
     });
 
@@ -302,7 +304,9 @@ describe('SQLExpressionValidator - Security', () => {
         entityFields: ['A'],
       });
       expect(r.valid).toBe(false);
-      expect(r.trigger).toBe('DROP');
+      // The literal closes at the second quote, so the trailing quote never closes and the text
+      // is rejected before any keyword check.
+      expect(r.trigger).toBe('unclassified');
     });
 
     it('blocks a backslash-hidden WAITFOR in an aggregate expression', () => {
@@ -330,6 +334,186 @@ describe('SQLExpressionValidator - Security', () => {
     it('still allows legitimate literals containing backslashes', () => {
       const r = validator.validateFullQuery(`SELECT * FROM __mj.vwFiles WHERE Path = 'C:\\temp\\'`);
       expect(r.valid).toBe(true);
+    });
+  });
+
+  /**
+   * 🚨 A quote is only a literal delimiter where the database says it is. Inside a T-SQL `[…]`
+   * identifier, a comment, or a PostgreSQL `$$…$$` string it is plain text; inside a PostgreSQL
+   * `E'…'` string a backslash escapes it. A stripper that misses any of these opens a literal the
+   * database never sees and hides the statement behind it. The payloads below run a harmless
+   * second statement (`SELECT 1`) on the database they target.
+   */
+  describe('literal stripper must agree with the database on identifiers, dialect strings and comments', () => {
+    const BRACKET_HIDDEN_STATEMENT = "Name = [a'] ; SELECT 1 ; SELECT [b']";
+
+    it('rejects a stacked statement hidden behind a bracket identifier containing a quote (where_clause)', () => {
+      const r = validator.validate(BRACKET_HIDDEN_STATEMENT, { context: 'where_clause' });
+      expect(r.valid).toBe(false);
+    });
+
+    it('rejects a stacked statement hidden behind bracket identifiers in an aggregate', () => {
+      const r = validator.validate("COUNT(*) AS [a'] ; SELECT 1 ; SELECT COUNT(*) AS [b'], COUNT(*)", {
+        context: 'aggregate',
+      });
+      expect(r.valid).toBe(false);
+    });
+
+    it('rejects a stacked statement hidden behind bracket identifiers in a full query', () => {
+      const r = validator.ValidateFullQuery("SELECT [a'] FROM T ; SELECT 1 ; SELECT [b'] FROM T");
+      expect(r.valid).toBe(false);
+    });
+
+    it('rejects a stacked statement hidden behind a PostgreSQL E-string escaped quote', () => {
+      const r = validator.validate("Name = E'\\'' ; SELECT 1 ; --'", { context: 'where_clause' });
+      expect(r.valid).toBe(false);
+    });
+
+    it('rejects a stacked statement hidden behind a PostgreSQL dollar-quoted string', () => {
+      const r = validator.validate("Name = $$'$$ ; SELECT 1 ; --'", { context: 'where_clause' });
+      expect(r.valid).toBe(false);
+    });
+
+    it('rejects a stacked statement hidden behind an E string written against an operator (PostgreSQL full query)', () => {
+      // `@@` is an operator, so PostgreSQL reads E'\'' as a one-character literal and runs SELECT 2.
+      const r = validator.ValidateFullQuery("SELECT 'a' @@E'\\'' ; SELECT 2 ; --'", 'postgresql');
+      expect(r.valid).toBe(false);
+    });
+
+    it('rejects a stacked statement hidden behind an apostrophe in a line comment (full query)', () => {
+      const r = validator.ValidateFullQuery("SELECT 1 -- it's\n; SELECT 2 --'");
+      expect(r.valid).toBe(false);
+    });
+
+    it('rejects a stacked statement hidden behind an apostrophe in a block comment (full query)', () => {
+      const r = validator.ValidateFullQuery("SELECT 1 /* it's */ ; SELECT 2 ; /* ' */");
+      expect(r.valid).toBe(false);
+    });
+
+    it('keeps a keyword that directly follows a literal visible', () => {
+      // SQL Server ends N'x' at the quote, so SELECT starts a new statement.
+      const r = validator.validate("Name = N'x'SELECT 1", { context: 'where_clause' });
+      expect(r.valid).toBe(false);
+      expect(r.trigger).toBe('SELECT');
+    });
+
+    it('StripSQLStringLiterals leaves the statement behind a bracket identifier visible', () => {
+      expect(StripSQLStringLiterals(BRACKET_HIDDEN_STATEMENT)).toContain('SELECT 1');
+    });
+
+    it('keeps a keyword that directly follows a number visible', () => {
+      const r = validator.validate('ID = 1SELECT 1', { context: 'where_clause' });
+      expect(r.valid).toBe(false);
+      expect(r.trigger).toBe('SELECT');
+    });
+  });
+
+  /**
+   * SQL Server runs the first statement of a batch as a procedure call without EXEC, and a quoted
+   * name is valid there. So a full query must open with the SELECT or WITH keyword itself, read as
+   * a token: not a quoted name, a literal or a longer word that starts with those letters.
+   */
+  describe('a full query must open with the SELECT or WITH keyword', () => {
+    const DIALECT_SETTINGS: Array<[string, SQLScreeningDialect | undefined]> = [
+      ['sqlserver', 'sqlserver'],
+      ['postgresql', 'postgresql'],
+      ['no dialect', undefined],
+    ];
+    const OPENERS = [
+      "[sp_executesql] N'SELECT 2' SELECT 1",
+      '[sp_who] SELECT 1',
+      `"sp_executesql" N'SELECT 2' SELECT 1`,
+      '"sp_who" SELECT 1',
+      "N'x' SELECT 1",
+      '1 SELECT 1',
+      'WithdrawFunds 1',
+      'SelectiveDelete 5',
+    ];
+    for (const [label, dialect] of DIALECT_SETTINGS) {
+      it.each(OPENERS)(`refuses %s (${label})`, sql => {
+        const r = validator.ValidateFullQuery(sql, dialect);
+        expect(r.valid).toBe(false);
+      });
+    }
+
+    it.each([
+      'select Name from __mj.vwUsers',
+      '-- header\n/* block */\nWITH cte AS (SELECT 1 AS One) SELECT One FROM cte',
+    ])('accepts %s', sql => {
+      expect(validator.ValidateFullQuery(sql, 'sqlserver').valid).toBe(true);
+      expect(validator.ValidateFullQuery(sql, 'postgresql').valid).toBe(true);
+    });
+  });
+
+  /**
+   * SQL Server reads a currency symbol such as ¥, £ or € as the start of a money literal, so the
+   * keyword written directly after the amount is a separate token.
+   */
+  describe('a keyword written against a currency-prefixed number', () => {
+    it.each<SQLScreeningDialect | undefined>(['sqlserver', undefined])('stays visible in a where clause (%s)', dialect => {
+      const r = validator.validate('ID = ¥1SELECT 1', { context: 'where_clause', Dialect: dialect });
+      expect(r.valid).toBe(false);
+      expect(validator.validate('ID = £1EXEC sp_who', { context: 'where_clause', Dialect: dialect }).valid).toBe(false);
+    });
+
+    it.each<SQLScreeningDialect | undefined>(['sqlserver', undefined])('stays visible in a full query (%s)', dialect => {
+      expect(validator.ValidateFullQuery('SELECT £1EXEC sp_who', dialect).valid).toBe(false);
+      expect(validator.ValidateFullQuery("SELECT €1WAITFOR DELAY '00:00:01'", dialect).valid).toBe(false);
+    });
+  });
+
+  describe('dialect-aware reading', () => {
+    const POSSESSIVE_ALIAS = "SELECT COUNT(*) AS [Today's Count] FROM __mj.vwUsers WHERE Status = 'Active'";
+
+    it('accepts a bracket identifier that contains a quote when the dialect is SQL Server', () => {
+      expect(validator.ValidateFullQuery(POSSESSIVE_ALIAS, 'sqlserver').valid).toBe(true);
+    });
+
+    it('rejects it when the dialect is unknown, because PostgreSQL reads the quote as a literal', () => {
+      const r = validator.ValidateFullQuery(POSSESSIVE_ALIAS);
+      expect(r.valid).toBe(false);
+      expect(r.trigger).toBe('unclassified');
+    });
+
+    it('accepts E strings and dollar-quoted strings when the dialect is PostgreSQL', () => {
+      const ctx = { context: 'where_clause' as const, Dialect: 'postgresql' as const };
+      expect(validator.validate("Name = E'it\\'s'", ctx).valid).toBe(true);
+      expect(validator.validate("Name = $$it's$$", ctx).valid).toBe(true);
+    });
+
+    it('does not read keywords inside quoted identifiers', () => {
+      expect(validator.validate('[Delete Flag] = 1', { context: 'where_clause', Dialect: 'sqlserver' }).valid).toBe(true);
+      expect(validator.validate('"Update" = 1', { context: 'where_clause' }).valid).toBe(true);
+    });
+
+    it('accepts an apostrophe in the header comment of a full query', () => {
+      const r = validator.ValidateFullQuery("-- Customer's open orders\nSELECT * FROM __mj.vwOrders WHERE Status = 'Open'");
+      expect(r.valid).toBe(true);
+    });
+
+    it('accepts a trailing semicolon followed by a comment in a full query', () => {
+      expect(validator.ValidateFullQuery('SELECT Name FROM __mj.vwUsers ORDER BY Name; -- by name').valid).toBe(true);
+    });
+
+    it.each([
+      'SELECT * FROM [INFORMATION_SCHEMA].[TABLES]',
+      'SELECT name FROM [sys].[sql_logins]',
+      'SELECT * FROM "pg_catalog"."pg_authid"',
+    ])('catches a system catalog written with quoted names: %s', sql => {
+      const r = validator.ValidateFullQuery(sql);
+      expect(r.valid).toBe(false);
+      expect(r.trigger).toBe('system-object');
+    });
+
+    it('checks a quoted function name against the allowlist', () => {
+      const r = validator.validate('[dbo].[fnSecret](1) = 1', { context: 'where_clause', Dialect: 'sqlserver' });
+      expect(r.valid).toBe(false);
+      expect(r.trigger).toBe('FNSECRET');
+    });
+
+    it('StripSQLStringLiterals reads the given dialect, and removes nothing when the dialects disagree', () => {
+      expect(StripSQLStringLiterals("x = E'\\'' ; SELECT 1", 'postgresql')).toBe('x =   ; SELECT 1');
+      expect(StripSQLStringLiterals("x = E'\\'' ; SELECT 1")).toBe("x = E'\\'' ; SELECT 1");
     });
   });
 

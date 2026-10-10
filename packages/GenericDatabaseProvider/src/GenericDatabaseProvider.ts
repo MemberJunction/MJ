@@ -2571,10 +2571,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Note this restores the pre-#4392 screen for this path; it does not close the
             // unquoted-format hole, which the denylist never covered (`1) OR 1=1` carries no
             // forbidden keyword). Quoting `{0}` in the format is what actually closes that.
-            if (this.userSearchFieldsUseCustomFormat(entityInfo, deniedSearchFields) && !this.ValidateUserProvidedSQLClause(userSearchString)) {
+            //
+            // The screen reads the quote-doubled term, because that is the text `{0}` becomes.
+            if (this.userSearchFieldsUseCustomFormat(entityInfo, deniedSearchFields) && !this.ValidateUserProvidedSQLClause(safeUserSearchString)) {
                 throw new Error(
                     `Invalid User Search string: this entity has a field using UserSearchParamFormatAPI, ` +
-                    `which splices the term directly into SQL, and the term contains forbidden keywords.`,
+                    `which splices the term directly into SQL, and the term is not allowed there: it contains ` +
+                    `a forbidden keyword, a comment or a semicolon, or text that cannot be read as complete SQL ` +
+                    `tokens, such as an unbalanced quote or bracket.`,
                 );
             }
             const escapedTerm = this.escapeLikeTerm(safeUserSearchString);
@@ -4556,7 +4560,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected async ExecuteAdhocQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         try {
             const validator = SQLExpressionValidator.Instance;
-            const validation = validator.validateFullQuery(params.SQL!);
+            const validation = validator.ValidateFullQuery(params.SQL!, this.PlatformKey);
             const statementCheck = IsReadOnlyQuery(params.SQL!, this.Dialect);
             if (!validation.valid || !statementCheck.IsReadOnly) {
                 return {
