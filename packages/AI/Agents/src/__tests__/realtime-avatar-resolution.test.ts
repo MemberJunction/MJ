@@ -1,18 +1,22 @@
 /**
  * Which live avatar a realtime session asks for: the voiced agent's persona face when its video setting is on, then the
  * co-agent's, never the model's own first persona; an explicit avatar id only when it names a real binding; the avatar
- * persona's voice to go with it; and none when the model's Video/Output row turns video off.
+ * persona's voice to go with it; and none when the model's Video/Output row turns video off. Then the status a browser
+ * call, or a server-side (bridged) session, reports about it.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import type { RealtimeAvatarUnavailableReason } from '@memberjunction/ai';
 import type { ResolvedAgentPersona, ResolvedModelPersona } from '@memberjunction/ai-engine-base';
 import type { MJAIAgentPersonaEntity, MJAIPersonaEntity, MJAIPersonaVendorEntity } from '@memberjunction/core-entities';
 import {
     ResolveAvatarUnseenReason,
+    ResolveBridgedAvatarStatus,
     ResolveRealtimeAvatar,
     ResolveRealtimeAvatarStatus,
-    ResolveUnseenAvatarStatus,
     WithoutUnseenAvatar,
     type RealtimeAvatarPersonaSource,
+    type RealtimeAvatarResolution,
+    type RealtimeBridgedAvatarStatusInput,
 } from '../realtime/realtime-avatar-resolution';
 import { BuildRealtimeOverridesJson, ResolveEffectiveRealtimeConfig, type RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
 
@@ -236,14 +240,6 @@ describe('A phone call asks for no avatar (WithoutUnseenAvatar)', () => {
         expect(WithoutUnseenAvatar(resolved, {})).toBe(resolved);
         expect(WithoutUnseenAvatar(resolved, { PhoneCall: false })).toBe(resolved);
     });
-
-    it("gives a phone call's bridged session the phone status its driver can't, and leaves every other driver status", () => {
-        expect(ResolveUnseenAvatarStatus({ Voice: 'Puck', Reason: 'phone' }, undefined)).toEqual({ Requested: true, Granted: false, Reason: 'phone' });
-        const driver = { Requested: true, Granted: false, Reason: 'bridged' as const };
-        expect(ResolveUnseenAvatarStatus({ Avatar: BEN_REQUEST }, driver)).toBe(driver);
-        expect(ResolveUnseenAvatarStatus({ Reason: 'no-binding' }, undefined)).toBeUndefined();
-        expect(ResolveUnseenAvatarStatus(undefined, undefined)).toBeUndefined();
-    });
 });
 
 describe('An app that shows no agent video asks for no avatar (host)', () => {
@@ -265,5 +261,55 @@ describe('An app that shows no agent video asks for no avatar (host)', () => {
         const host = { Requested: true, Granted: false, Reason: 'host' };
         expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'host' }, ModelSupportsAvatarOutput: false })).toEqual(host);
         expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'host', Voice: 'Puck' }, ModelSupportsAvatarOutput: true })).toEqual(host);
+    });
+});
+
+describe("A server-side (bridged) session's avatar status (ResolveBridgedAvatarStatus)", () => {
+    const BEN_REQUEST = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' as const };
+    const audioOnly = (reason: RealtimeAvatarUnavailableReason) => ({ Requested: true, Granted: false, Reason: reason });
+
+    /** A meeting session whose host publishes the avatar, on a model that shows avatars, whose driver reported nothing. */
+    function meeting(resolution: RealtimeAvatarResolution | undefined, overrides: Partial<RealtimeBridgedAvatarStatusInput> = {}) {
+        return ResolveBridgedAvatarStatus({ Resolution: resolution, RoomDelivery: true, ModelShowsAvatar: () => true, DriverStatus: undefined, ...overrides });
+    }
+
+    it("says why when the prep asked the driver for no avatar: no face for the vendor, an unknown avatar, video turned off (#5319)", () => {
+        expect(meeting({ Reason: 'no-binding' })).toEqual(audioOnly('no-binding'));
+        expect(meeting({ Reason: 'unknown-avatar' })).toEqual(audioOnly('unknown-avatar'));
+        expect(meeting({ Reason: 'endpoint' }, { ModelShowsAvatar: () => false })).toEqual(audioOnly('endpoint'));
+    });
+
+    it('says the voice model shows none before the face reasons, as a browser call does', () => {
+        expect(meeting({ Reason: 'no-binding' }, { ModelShowsAvatar: () => false })).toEqual(audioOnly('endpoint'));
+        expect(meeting({ Reason: 'unknown-avatar' }, { ModelShowsAvatar: () => false })).toEqual(audioOnly('endpoint'));
+    });
+
+    it('says bridged when the host publishes no avatar into a room, as a driver asked there does, before the model or the face', () => {
+        const model = vi.fn(() => false);
+        for (const reason of ['no-binding', 'unknown-avatar', 'endpoint'] as const) {
+            expect(meeting({ Reason: reason }, { RoomDelivery: false, ModelShowsAvatar: model })).toEqual(audioOnly('bridged'));
+        }
+        expect(model).not.toHaveBeenCalled();
+    });
+
+    it("says phone on a phone call before anything else, and asks nothing about the model", () => {
+        const model = vi.fn(() => false);
+        expect(meeting({ Voice: 'Puck', Reason: 'phone' }, { ModelShowsAvatar: model })).toEqual(audioOnly('phone'));
+        expect(meeting({ Reason: 'phone' }, { RoomDelivery: false, ModelShowsAvatar: model })).toEqual(audioOnly('phone'));
+        expect(model).not.toHaveBeenCalled();
+    });
+
+    it("keeps the driver's status when the prep asked it for an avatar: a grant stays a grant, whatever the model says", () => {
+        const granted = { Requested: true, Granted: true };
+        expect(meeting({ Avatar: BEN_REQUEST, Voice: 'Puck' }, { DriverStatus: granted, ModelShowsAvatar: () => false })).toBe(granted);
+        const bridged = audioOnly('bridged');
+        expect(meeting({ Avatar: BEN_REQUEST }, { RoomDelivery: false, DriverStatus: bridged })).toBe(bridged);
+        expect(meeting({ Avatar: BEN_REQUEST })).toBeUndefined();
+    });
+
+    it('says nothing when the agent asked for no avatar (its video setting is off) or there was no prep', () => {
+        expect(meeting({})).toBeUndefined();
+        expect(meeting({ Voice: 'Puck' })).toBeUndefined();
+        expect(meeting(undefined, { RoomDelivery: false, ModelShowsAvatar: () => false })).toBeUndefined();
     });
 });

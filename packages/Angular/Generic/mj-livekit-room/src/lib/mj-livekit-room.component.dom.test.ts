@@ -720,6 +720,15 @@ describe("MJLiveKitRoomComponent: an agent's avatar that can't be shown (DOM)", 
     expect(texts(f)).toEqual(["Audio only for Sage: this voice model can't show an avatar"]);
   });
 
+  it("words the reasons the session prep decides: no avatar for the voice model, an avatar that wasn't found", () => {
+    const { f, state } = render();
+    state([agent('sage', { Reason: 'no-binding' }), agent('rowan', { Reason: 'unknown-avatar' })]);
+    expect(texts(f)).toEqual([
+      'Audio only for Sage: this agent has no avatar for this voice model',
+      "Audio only for Rowan: the chosen avatar wasn't found",
+    ]);
+  });
+
   it('shows nothing for an agent whose avatar shows, nor for a person', () => {
     const { f, state } = render();
     state([agent('sage'), { ...person('ada'), AvatarAudioOnly: { Reason: 'bridged' } }]);

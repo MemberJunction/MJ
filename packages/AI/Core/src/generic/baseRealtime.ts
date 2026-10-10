@@ -648,9 +648,11 @@ export interface IRealtimeSession {
     OnVideoOutput?(handler: (chunk: ArrayBuffer) => void): void;
 
     /**
-     * What became of the session's avatar request, as decided when the session opened: by its driver, or, for a phone
-     * call, by the session prep, which asks the driver for no avatar and reports `'phone'`. Absent when the session asked
-     * for no avatar, or the driver does not report it.
+     * What became of the session's avatar request, as decided when the session opened. Its driver decides, except when
+     * the session prep asked the driver for no avatar; the prep then says why: a phone call (`'phone'`), no face for the
+     * model's vendor (`'no-binding'`), an unknown avatar (`'unknown-avatar'`), a model that shows none (`'endpoint'`), or
+     * a host that publishes no avatar into a room (`'bridged'`). Absent when the session asked for no avatar (the voiced
+     * agent's video setting is off), or the driver does not report it.
      */
     AvatarStatus?: RealtimeAvatarStatus;
 

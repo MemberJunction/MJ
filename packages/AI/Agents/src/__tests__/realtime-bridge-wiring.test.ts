@@ -558,3 +558,27 @@ describe('WireBridgeRealtimeSession — the avatar status of a phone call', () =
         expect(fake.AvatarStatus).toEqual(PHONE);
     });
 });
+
+describe("WireBridgeRealtimeSession — the avatar status of a meeting whose prep asked for no avatar (#5319)", () => {
+    /** A prep that asked the driver for no avatar, for `reason`, on a model whose driver renders avatars. */
+    function prepWithoutAvatar(reason: 'no-binding' | 'unknown-avatar'): RealtimeSessionParamsPrep {
+        const prep = makePrep([]);
+        const model = { SupportsAvatarOutput: () => true };
+        return { ...prep, Resolution: { ...prep.Resolution, Model: model }, AvatarResolution: { Reason: reason } } as unknown as RealtimeSessionParamsPrep;
+    }
+    const roomInput = { ...input, AvatarDelivery: 'room' } as PrepareClientSessionInput;
+
+    it("reports the prep's reason on a session whose host publishes the avatar, so its bot can say why", async () => {
+        for (const reason of ['no-binding', 'unknown-avatar'] as const) {
+            const fake = new FakeSession() as unknown as IRealtimeSession;
+            await new WiringService().WireBridgeRealtimeSession(fake, roomInput, prepWithoutAvatar(reason), contextUser, provider);
+            expect(fake.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: reason });
+        }
+    });
+
+    it('reports bridged on a session whose host publishes no avatar into a room', async () => {
+        const fake = new FakeSession() as unknown as IRealtimeSession;
+        await new WiringService().WireBridgeRealtimeSession(fake, input, prepWithoutAvatar('no-binding'), contextUser, provider);
+        expect(fake.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'bridged' });
+    });
+});
