@@ -2,8 +2,11 @@
 // is loaded first. Vitest does not bring it in automatically — this MUST precede the resolver import.
 import 'reflect-metadata';
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { UserInfo } from '@memberjunction/core';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
+import type { BridgeDisconnectReason } from '@memberjunction/ai-bridge-base';
+import type { AgentRoomSession, StartAgentRoomSessionParams } from '@memberjunction/livekit-room-server';
 
 // Mock the server-side LiveKit services so the thin resolver is tested in isolation (no LiveKit creds).
 const h = vi.hoisted(() => ({
@@ -13,7 +16,9 @@ const h = vi.hoisted(() => ({
     Identity: identity,
     RoomName: room,
   })),
-  startAgentRoomSession: vi.fn(async () => ({ SessionBridgeID: 'bridge-std', RoomName: 'room-std', ServerUrl: 'wss://x.livekit.cloud' })),
+  startAgentRoomSession: vi.fn(
+    async (_params: StartAgentRoomSessionParams): Promise<AgentRoomSession> => ({ SessionBridgeID: 'bridge-std', RoomName: 'room-std', ServerUrl: 'wss://x.livekit.cloud' }),
+  ),
   handoffDeps: { AgentStarter: undefined as undefined | ((req: Record<string, unknown>) => Promise<{ SessionBridgeID: string }>) },
   startRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_ACTIVE' })),
   getRoomTurnState: vi.fn((room: string): unknown => (room === 'busy-room' ? { RoomId: room, Agents: [] } : null)),
@@ -24,9 +29,10 @@ const h = vi.hoisted(() => ({
   setAgentVision: vi.fn(async (): Promise<{ Success: boolean; NotInRoom?: boolean; ErrorMessage?: string }> => ({ Success: true })),
   writeConsentAudit: vi.fn(async () => undefined),
   getRoomForEgress: vi.fn(async (_id: string): Promise<string | undefined> => 'room-1'),
-  stopAgentRoomSession: vi.fn(async () => true),
-  stopAllAgentsInRoom: vi.fn(async () => 1),
+  stopAgentRoomSession: vi.fn(async (_sessionBridgeID: string, _reason?: BridgeDisconnectReason): Promise<boolean> => true),
+  stopAllAgentsInRoom: vi.fn(async (_roomName: string, _reason?: BridgeDisconnectReason): Promise<number> => 1),
   getRoomForBridge: vi.fn((_id: string): string | undefined => 'room-1'),
+  sessionClosedHook: vi.fn(async () => undefined),
 }));
 
 // These two are instantiated with `new` by the resolver, so they must be constructible. They were
@@ -97,6 +103,8 @@ vi.mock('@memberjunction/ai-agents', () => ({
   RealtimeClientSessionService: class {
     FinalizeCoAgentRun = vi.fn(async () => undefined);
   },
+  // SessionManager.CloseSession tells the channel-plugin host a session closed.
+  RealtimeChannelServerHost: { Instance: { OnSessionClosed: h.sessionClosedHook } },
 }));
 
 // Mock the meeting-recording registration so the thin resolver is tested in isolation (no MJStorage /
@@ -114,6 +122,7 @@ import { GetRealtimeModelVoices } from '@memberjunction/ai-agents';
 import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput, SetLiveKitAgentVisionInput, StartLiveKitAgentRoomSessionInput, RealtimeModelVoicesResult } from '../resolvers/RealtimeBridgeResolver';
 import { RoomAuthorizationService } from '@memberjunction/livekit-room-server';
 import type { AppContext } from '../types.js';
+import type { SessionManager } from '../agentSessions/SessionManager.js';
 
 /** A resolver subclass that supplies a fake authenticated user (GetUserFromPayload is protected). */
 class TestableResolver extends RealtimeBridgeResolver {
@@ -122,6 +131,10 @@ class TestableResolver extends RealtimeBridgeResolver {
     return this.user;
   }
 }
+
+/** The resolver's own session manager (a private field), so a test can stand in for or watch the writes it makes. */
+const sessionManagerOf = (resolver: RealtimeBridgeResolver): SessionManager =>
+  (resolver as unknown as { sessionManager: SessionManager }).sessionManager;
 
 const ctx = {} as AppContext;
 
@@ -372,6 +385,177 @@ describe('RealtimeBridgeResolver', () => {
       const result = await resolver.StartLiveKitAgentRoomSession(input({ EnableHandoff: true }), ctx);
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/current user/i);
+    });
+  });
+
+  describe('the agent session it created closes when the agent leaves the room (#5356)', () => {
+    /** One `MJ: AI Agent Sessions` row in the fake database. */
+    interface SessionRow {
+      ID: string;
+      Status: string;
+      ClosedAt: Date | null;
+      CloseReason: string | null;
+      ConversationID: string | null;
+      Config_: string | null;
+    }
+
+    /** An `MJ: AI Agent Sessions` entity over the fake database: `Load` reads a row, `Save` writes it back. */
+    class FakeSessionEntity implements SessionRow {
+      public ID = '';
+      public Status = '';
+      public ClosedAt: Date | null = null;
+      public CloseReason: string | null = null;
+      public ConversationID: string | null = null;
+      public Config_: string | null = null;
+
+      constructor(private readonly rows: Map<string, SessionRow>) {}
+
+      public async Load(id: string): Promise<boolean> {
+        const row = this.rows.get(id);
+        if (!row) {
+          return false;
+        }
+        Object.assign(this, row);
+        return true;
+      }
+
+      public async Save(): Promise<boolean> {
+        const { ID, Status, ClosedAt, CloseReason, ConversationID, Config_ } = this;
+        this.rows.set(ID, { ID, Status, ClosedAt, CloseReason, ConversationID, Config_ });
+        return true;
+      }
+    }
+
+    /**
+     * Stands in for the room coordinator and the bridge engine: a stop runs the stopped agent's end-of-session hook before
+     * it resolves, as the engine does once the bridge row is terminal.
+     */
+    class FakeRooms {
+      private readonly agents = new Map<string, StartAgentRoomSessionParams>();
+      private seq = 0;
+
+      public readonly Start = async (params: StartAgentRoomSessionParams): Promise<AgentRoomSession> => {
+        const id = `bridge-${++this.seq}`;
+        this.agents.set(id, params);
+        return { SessionBridgeID: id, RoomName: params.RoomName, ServerUrl: 'wss://x.livekit.cloud' };
+      };
+
+      public readonly Stop = async (sessionBridgeID: string, reason: BridgeDisconnectReason = 'Explicit'): Promise<boolean> =>
+        this.End(sessionBridgeID, reason);
+
+      public readonly StopAll = async (roomName: string, reason: BridgeDisconnectReason = 'Explicit'): Promise<number> => {
+        const ids = [...this.agents].filter(([, params]) => params.RoomName === roomName).map(([id]) => id);
+        for (const id of ids) {
+          await this.End(id, reason);
+        }
+        return ids.length;
+      };
+
+      /** The agent's bridge ends: stopped, or on its own (everyone left, the model session was lost). */
+      public async End(sessionBridgeID: string, reason: BridgeDisconnectReason): Promise<boolean> {
+        const params = this.agents.get(sessionBridgeID);
+        if (!params) {
+          return false;
+        }
+        this.agents.delete(sessionBridgeID);
+        await params.Host?.OnSessionEnded?.(reason);
+        return true;
+      }
+    }
+
+    const sessions = new Map<string, SessionRow>();
+    const db = {
+      GetEntityObject: async (entityName: string) => {
+        if (entityName !== 'MJ: AI Agent Sessions') {
+          throw new Error(`Unexpected entity ${entityName}`);
+        }
+        return new FakeSessionEntity(sessions);
+      },
+      RunView: async () => ({ Success: true, Results: [] }), // the sessions have no channel rows to disconnect
+    } as unknown as IMetadataProvider;
+    const dbCtx = { providers: [{ type: 'Read-Write', provider: db }] } as unknown as AppContext;
+    let rooms: FakeRooms;
+
+    const addSession = (id: string): void => {
+      sessions.set(id, { ID: id, Status: 'Active', ClosedAt: null, CloseReason: null, ConversationID: null, Config_: null });
+    };
+    const start = (over: Partial<StartLiveKitAgentRoomSessionInput> = {}) =>
+      resolver.StartLiveKitAgentRoomSession(
+        Object.assign(new StartLiveKitAgentRoomSessionInput(), { RoomName: 'meet-room', AgentID: 'co-agent', TargetAgentID: 'target-agent', AgentName: 'Sage', ...over }),
+        dbCtx,
+      );
+
+    beforeEach(() => {
+      sessions.clear();
+      rooms = new FakeRooms();
+      h.startAgentRoomSession.mockImplementation(rooms.Start);
+      h.stopAgentRoomSession.mockImplementation(rooms.Stop);
+      h.stopAllAgentsInRoom.mockImplementation(rooms.StopAll);
+      let created = 0;
+      vi.spyOn(sessionManagerOf(resolver), 'CreateSession').mockImplementation(async () => {
+        const id = `AS-${++created}`;
+        addSession(id);
+        return { ID: id } as unknown as MJAIAgentSessionEntity;
+      });
+    });
+
+    afterEach(() => {
+      // Back to the file's defaults for the blocks that follow.
+      h.startAgentRoomSession.mockReset();
+      h.stopAgentRoomSession.mockReset();
+      h.stopAllAgentsInRoom.mockReset();
+    });
+
+    it('closes it at once when the agent is stopped, as Explicit', async () => {
+      const started = await start();
+      expect(started.Success).toBe(true);
+      expect(sessions.get('AS-1')?.Status).toBe('Active');
+
+      expect(await resolver.StopLiveKitAgentRoomSession(started.SessionBridgeID, dbCtx)).toBe(true);
+
+      expect(sessions.get('AS-1')).toMatchObject({ Status: 'Closed', CloseReason: 'Explicit', ClosedAt: expect.any(Date) });
+    });
+
+    it("closes every agent's session when the meeting is ended", async () => {
+      await start({ AgentName: 'Sage' });
+      await start({ AgentName: 'Analyst', TargetAgentID: 'other-target' });
+
+      expect(await resolver.EndLiveKitRoom('meet-room', dbCtx)).toBe(true);
+
+      expect(sessions.get('AS-1')).toMatchObject({ Status: 'Closed', CloseReason: 'Explicit' });
+      expect(sessions.get('AS-2')).toMatchObject({ Status: 'Closed', CloseReason: 'Explicit' });
+    });
+
+    it('closes it when the agent leaves on its own: everyone gone as Explicit, the model session lost as Error', async () => {
+      const first = await start();
+      const second = await start();
+
+      await rooms.End(first.SessionBridgeID, 'HostEnded');
+      await rooms.End(second.SessionBridgeID, 'Error');
+
+      expect(sessions.get('AS-1')).toMatchObject({ Status: 'Closed', CloseReason: 'Explicit' });
+      expect(sessions.get('AS-2')).toMatchObject({ Status: 'Closed', CloseReason: 'Error' });
+    });
+
+    it('closes it as the user who started the agent, whoever stops it', async () => {
+      const starter = resolver.user;
+      const started = await start();
+      const close = vi.spyOn(sessionManagerOf(resolver), 'CloseSession');
+      resolver.user = { ID: 'U2', Name: 'Second Participant', Email: 'second@example.com' } as unknown as UserInfo;
+
+      await resolver.StopLiveKitAgentRoomSession(started.SessionBridgeID, dbCtx);
+
+      expect(close).toHaveBeenCalledWith('AS-1', starter, db, 'Explicit');
+    });
+
+    it("leaves open a session the caller supplied: it is the caller's to close", async () => {
+      addSession('AS-supplied');
+      const started = await start({ AgentSessionID: 'AS-supplied' });
+
+      await resolver.StopLiveKitAgentRoomSession(started.SessionBridgeID, dbCtx);
+
+      expect(sessions.get('AS-supplied')?.Status).toBe('Active');
+      expect(sessionManagerOf(resolver).CreateSession).not.toHaveBeenCalled();
     });
   });
 

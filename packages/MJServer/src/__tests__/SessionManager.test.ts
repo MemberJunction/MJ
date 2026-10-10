@@ -427,6 +427,52 @@ describe('SessionManager.CloseSession', () => {
     });
 });
 
+describe('SessionManager.CloseSessionForEndedBridge (a bridged agent left its room)', () => {
+    it.each([
+        ['Explicit', 'Explicit'],
+        ['HostEnded', 'Explicit'],
+        ['Error', 'Error'],
+        ['Janitor', 'Janitor'],
+        ['Shutdown', 'Shutdown'],
+    ] as const)('closes the session when its bridge ended with %s, stamping %s', async (bridgeReason, sessionReason) => {
+        const session = makeSessionEntity({ ID: 'session-bridged', Status: 'Active' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const ok = await mgr.CloseSessionForEndedBridge('session-bridged', bridgeReason, makeUser(), provider);
+
+        expect(ok).toBe(true);
+        expect(session.Status).toBe('Closed');
+        expect(session.ClosedAt).toBeInstanceOf(Date);
+        expect(session.CloseReason).toBe(sessionReason);
+        // The same close the janitor runs: the channel plugins hear about it too.
+        expect(hostSessionClosedMock).toHaveBeenCalledWith('session-bridged', sessionReason);
+    });
+
+    it('keeps the reason of a session something else closed first (the janitor, the user)', async () => {
+        const session = makeSessionEntity({ ID: 'session-bridged', Status: 'Closed', CloseReason: 'Janitor' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const ok = await mgr.CloseSessionForEndedBridge('session-bridged', 'Explicit', makeUser(), provider);
+
+        expect(ok).toBe(true);
+        expect(session.CloseReason).toBe('Janitor');
+        expect(session.Save).not.toHaveBeenCalled();
+    });
+
+    it('never throws: a close that fails is reported as not closed, leaving the session to the janitor', async () => {
+        const provider = {
+            GetEntityObject: vi.fn(async () => {
+                throw new Error('database unreachable');
+            }),
+        } as unknown as IMetadataProvider;
+        const mgr = new SessionManager();
+
+        await expect(mgr.CloseSessionForEndedBridge('session-bridged', 'Explicit', makeUser(), provider)).resolves.toBe(false);
+    });
+});
+
 describe('SessionManager.Heartbeat', () => {
     it('coalesces writes within the min interval (one write, not two)', async () => {
         const session = makeSessionEntity({ ID: 'session-1', Status: 'Active' });

@@ -10,6 +10,7 @@ import {
   LiveKitParticipantService,
   LiveKitUserIdentity,
   RoomHandoffEngine,
+  type AgentRoomHostOptions,
   type ParticipantUpdateResult,
 } from '@memberjunction/livekit-room-server';
 import { AppContext } from '../types.js';
@@ -400,6 +401,9 @@ export class RealtimeBridgeResolver extends ResolverBase {
       // freshly-created one. Previously this minted a bare random UUID with no backing row, so the
       // bridge INSERT failed the FK_AIAgentSessionBridge_Session constraint.
       let agentSessionID = input.AgentSessionID?.trim();
+      // A session created here exists for this agent's time in the room alone, so it closes when the agent leaves, however
+      // it leaves. A session the caller supplied is the caller's to close.
+      let host: AgentRoomHostOptions | undefined;
       if (!agentSessionID) {
         if (!input.AgentID?.trim()) {
           return failure('An AgentID is required to start an agent room session.', roomName);
@@ -410,6 +414,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
           provider,
         );
         agentSessionID = createdSession.ID;
+        host = this.closeSessionWhenAgentLeaves(createdSession.ID, user, provider);
       }
 
       const session = await LiveKitAgentRoomCoordinator.Instance.StartAgentRoomSession({
@@ -424,6 +429,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
         TurnAddressing: this.normalizeTurnAddressing(input.TurnAddressing),
         ContextUser: user,
         MetadataProvider: provider,
+        Host: host,
       });
 
       const tokenService = new LiveKitTokenService();
@@ -448,6 +454,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
    * Stops one agent's presence in a room (the bot leaves) — the remove half of in-room agent management.
    * Identified by the `SessionBridgeID` returned from {@link StartLiveKitAgentRoomSession}. Returns `true`
    * when the bridge was stopped. Best-effort: a missing/already-stopped bridge or any error resolves `false`.
+   * The agent session the start created for the agent is closed (`Explicit`) before this returns.
    *
    * @param sessionBridgeID The `MJ: AI Agent Session Bridges` row id of the agent to remove.
    */
@@ -482,6 +489,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
    * coordinator's server-side roster). This is the "End meeting" half of the Zoom-style leave control —
    * usable by any participant, including one who only *joined* the room and never tracked the bridge ids.
    * Returns `true` when the teardown ran (even if the room held zero agents). Best-effort: any error → `false`.
+   * The agent sessions the starts created for the agents are closed (`Explicit`) as each agent leaves.
    *
    * @param roomName The LiveKit room to end.
    */
@@ -788,6 +796,20 @@ export class RealtimeBridgeResolver extends ResolverBase {
       RealtimeVoice: input.RealtimeVoice,
     });
     return started.SessionBridgeID;
+  }
+
+  /**
+   * What the coordinator is given for an agent session created for one agent's time in a room: its end-of-session hook
+   * closes the session once the agent's bridge has ended, whatever ended it (the agent stopped, the meeting ended, everyone
+   * left, the model session lost), through {@link SessionManager.CloseSessionForEndedBridge}. The close runs as the user
+   * who started the agent, whoever stops it: the session is theirs.
+   */
+  private closeSessionWhenAgentLeaves(agentSessionID: string, user: UserInfo, provider: IMetadataProvider): AgentRoomHostOptions {
+    return {
+      OnSessionEnded: async (reason) => {
+        await this.sessionManager.CloseSessionForEndedBridge(agentSessionID, reason, user, provider);
+      },
+    };
   }
 
   /** Builds a stable, lowercased participant identity from the authenticated user (shared with the handoff engine, which watches for it). */
