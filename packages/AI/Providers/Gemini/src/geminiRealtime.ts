@@ -27,6 +27,7 @@ import {
 import {
     BaseRealtimeModel,
     RealtimeDiagLog,
+    RealtimeDroppedInputReporter,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -1230,8 +1231,8 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** MIME types of model output this session dropped, so each is reported once. */
     private droppedOutputTypes = new Set<string>();
 
-    /** Kinds and MIME types of input this session dropped, so each is reported once. */
-    private droppedInputTypes = new Set<string>();
+    /** Reports the input frames {@link SendInput} drops, once per kind and type. */
+    private readonly droppedInput = new RealtimeDroppedInputReporter('GeminiRealtime', 'Gemini Live takes PCM audio and JPEG or PNG video frames');
 
     /**
      * Fingerprint of the tool set bound at connect time (set via {@link SetConnectTimeTools});
@@ -1496,7 +1497,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private sendAudioInput(frame: RealtimeInputFrame): void {
         const mimeType = frame.MimeType ?? GEMINI_INPUT_AUDIO_MIME_TYPE;
         if (!IsPcmAudioMimeType(mimeType)) {
-            this.reportDroppedInput('audio', mimeType);
+            this.droppedInput.Report(frame);
             return;
         }
         const live = this.requireLive();
@@ -1515,20 +1516,10 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private sendVideoInput(frame: RealtimeInputFrame): void {
         const mimeType = frame.MimeType?.trim().toLowerCase();
         if (!mimeType || !GEMINI_VIDEO_INPUT_MIME_TYPES.has(mimeType)) {
-            this.reportDroppedInput('video', mimeType ?? '(no type)');
+            this.droppedInput.Report(frame);
             return;
         }
         this.requireLive().sendRealtimeInput({ video: { data: GeminiRealtimeSession.arrayBufferToBase64(frame.Data), mimeType } });
-    }
-
-    /** Reports each kind and type of dropped input once per session, not once per frame. */
-    private reportDroppedInput(kind: RealtimeInputFrame['Kind'], mimeType: string): void {
-        const key = `${kind}:${mimeType}`;
-        if (this.droppedInputTypes.has(key)) {
-            return;
-        }
-        this.droppedInputTypes.add(key);
-        console.warn(`[GeminiRealtime] Dropped ${kind} input of type ${mimeType}: Gemini Live takes PCM audio and JPEG or PNG video frames.`);
     }
 
     /**

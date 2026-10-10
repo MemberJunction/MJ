@@ -101,6 +101,65 @@ describe('GeminiRealtime routes input frames by kind and MIME type', () => {
         });
     });
 
+    describe('the dropped-input line', () => {
+        const REASON = 'Gemini Live takes PCM audio and JPEG or PNG video frames.';
+
+        /** The warnings so far about dropped input frames. */
+        function droppedInputLines(): string[] {
+            return warn.mock.calls.map((call: unknown[]) => String(call[0])).filter((line: string) => line.includes(' input of type '));
+        }
+
+        it('names the driver, the kind, the type and what Gemini Live takes, once per kind and type', () => {
+            session.SendInput({ Data: bytes(1), Kind: 'video', MimeType: 'video/x-raw' });
+            session.SendInput({ Data: bytes(2), Kind: 'video', MimeType: 'video/x-raw' });
+            session.SendInput({ Data: bytes(3), Kind: 'audio', MimeType: 'audio/opus' });
+            session.SendInput({ Data: bytes(4), Kind: 'audio', MimeType: 'audio/opus' });
+            session.SendInput({ Data: bytes(5), Kind: 'video', MimeType: 'image/gif' });
+
+            expect(driver.Fake.Sent).toEqual([]);
+            expect(droppedInputLines()).toEqual([
+                `[GeminiRealtime] Dropped video input of type video/x-raw: ${REASON}`,
+                `[GeminiRealtime] Dropped audio input of type audio/opus: ${REASON}`,
+                `[GeminiRealtime] Dropped video input of type image/gif: ${REASON}`,
+            ]);
+        });
+
+        it('keeps a separate record for each session', async () => {
+            const firstSession = session;
+            firstSession.SendInput({ Data: bytes(1), Kind: 'video', MimeType: 'video/x-raw' });
+            await start();
+            session.SendInput({ Data: bytes(2), Kind: 'video', MimeType: 'video/x-raw' });
+            firstSession.SendInput({ Data: bytes(3), Kind: 'video', MimeType: 'video/x-raw' });
+
+            expect(droppedInputLines()).toHaveLength(2);
+        });
+
+        it('reads a blank type as (no type), the same entry as a frame with none', () => {
+            session.SendInput({ Data: bytes(1), Kind: 'video' });
+            session.SendInput({ Data: bytes(2), Kind: 'video', MimeType: '  ' });
+            session.SendInput({ Data: bytes(3), Kind: 'audio', MimeType: '' });
+
+            expect(driver.Fake.Sent).toEqual([]);
+            expect(droppedInputLines()).toEqual([
+                `[GeminiRealtime] Dropped video input of type (no type): ${REASON}`,
+                `[GeminiRealtime] Dropped audio input of type (no type): ${REASON}`,
+            ]);
+        });
+
+        it('treats a type in any letter case as one entry, shown as the first frame gave it', () => {
+            session.SendInput({ Data: bytes(1), Kind: 'video', MimeType: 'VIDEO/X-RAW' });
+            session.SendInput({ Data: bytes(2), Kind: 'video', MimeType: 'video/x-raw' });
+            session.SendInput({ Data: bytes(3), Kind: 'audio', MimeType: 'audio/opus' });
+            session.SendInput({ Data: bytes(4), Kind: 'audio', MimeType: 'AUDIO/OPUS' });
+
+            expect(driver.Fake.Sent).toEqual([]);
+            expect(droppedInputLines()).toEqual([
+                `[GeminiRealtime] Dropped video input of type VIDEO/X-RAW: ${REASON}`,
+                `[GeminiRealtime] Dropped audio input of type audio/opus: ${REASON}`,
+            ]);
+        });
+    });
+
     describe('meeting mode', () => {
         beforeEach(async () => {
             await start({ Config: { disableAutoResponse: true } });
