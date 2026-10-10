@@ -15,6 +15,9 @@
  * same event in either. The notes speak to the model in the second person, so in a room with other agents one can't be
  * read as another agent's view.
  *
+ * In a meeting, a camera or screen that has no name of its own is "a participant's camera" or "a participant's screen"
+ * ({@link UnnamedVideoSourceLabel}), whether the bridge engine or the LiveKit bridge names it.
+ *
  * @module @memberjunction/ai
  * @author MemberJunction.com
  */
@@ -65,4 +68,16 @@ export function VideoSourceTurnedOffNote(sourceLabel: string): string {
  */
 export function VideoSourceTurnedOnNote(sourceLabel: string): string {
     return `[You can now see: ${sourceLabel} (turned back on)]`;
+}
+
+/**
+ * What a meeting calls a camera or screen that has no name of its own: "a participant's camera", "a participant's
+ * screen". A meeting's bridge engine gives it to a source its driver gave no label, and the LiveKit bridge to a source
+ * whose person has no display name, so the model reads the same name from either. A call doesn't need it: each of its
+ * sources has a label.
+ *
+ * @param kind Whether the source is a person's camera or a screen they share.
+ */
+export function UnnamedVideoSourceLabel(kind: 'camera' | 'screen'): string {
+    return kind === 'screen' ? "a participant's screen" : "a participant's camera";
 }

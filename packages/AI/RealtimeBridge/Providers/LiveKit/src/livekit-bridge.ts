@@ -28,7 +28,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
-import { IsAgentParticipantIdentity } from '@memberjunction/ai';
+import { IsAgentParticipantIdentity, UnnamedVideoSourceLabel } from '@memberjunction/ai';
 import {
     BaseRealtimeBridge,
     BridgeAvatarFailure,
@@ -121,10 +121,14 @@ export function IsAvatarMediaFrame(frame: BridgeMediaFrame): boolean {
 /** The outbound tracks a frame can arrive on that the room has no publisher for (beyond an avatar on `video-out`). */
 type UnpublishedOutboundTrack = Extract<BridgeMediaTrackKind, 'video-out' | 'screen-out'>;
 
-/** The name the model is given for a video source: "Ada's camera", "Ada's screen", or "a participant's camera". */
+/**
+ * The name the model is given for a video source: "Ada's camera", "Ada's screen". A source whose person has no display
+ * name gets the name for an unnamed source in `@memberjunction/ai` ("a participant's camera";
+ * {@link UnnamedVideoSourceLabel}), the one the bridge engine gives a source its driver didn't name.
+ */
 export function VideoSourceLabelOf(displayName: string | undefined, source: LiveKitVideoSourceKind): string {
-    const owner = displayName && displayName.trim().length > 0 ? `${displayName.trim()}'s` : "a participant's";
-    return `${owner} ${source}`;
+    const name = displayName?.trim();
+    return name ? `${name}'s ${source}` : UnnamedVideoSourceLabel(source);
 }
 
 /**

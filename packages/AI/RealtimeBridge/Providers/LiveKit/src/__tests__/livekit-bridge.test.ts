@@ -10,6 +10,13 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...actual, LogStatus: mocks.LogStatus };
 });
 
+// The name for a source whose person has no display name is wrapped, with its own behaviour, so a test can show the
+// bridge takes it from @memberjunction/ai.
+vi.mock('@memberjunction/ai', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai')>();
+    return { ...actual, UnnamedVideoSourceLabel: vi.fn(actual.UnnamedVideoSourceLabel) };
+});
+
 import type {
     MJAIBridgeProviderEntity_IBridgeProviderFeatures,
 } from '@memberjunction/core-entities';
@@ -39,6 +46,7 @@ import {
     LiveKitVideoFrame,
     LiveKitVideoSourceEnd,
 } from '../livekit-sdk';
+import { UnnamedVideoSourceLabel } from '@memberjunction/ai';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // FakeLiveKitRoomSdk — an in-memory ILiveKitRoomSdk with drive helpers + capture
@@ -196,6 +204,7 @@ let sdk: FakeLiveKitRoomSdk;
 beforeEach(() => {
     sdk = new FakeLiveKitRoomSdk([{ Identity: 'p-alice', DisplayName: 'Alice', Role: 'Host' }]);
     mocks.LogStatus.mockClear();
+    vi.mocked(UnnamedVideoSourceLabel).mockReset();
 });
 
 /** The bridge's log lines about outbound frames it dropped. */
@@ -485,6 +494,25 @@ describe('LiveKitBridge — video in (what the agent sees)', () => {
         expect(VideoSourceIdOf('p-ada', 'camera')).not.toBe(VideoSourceIdOf('p-ada', 'screen'));
         expect(VideoTrackOf('camera')).toBe('video-in');
         expect(VideoTrackOf('screen')).toBe('screen-in');
+    });
+
+    it("names a source whose person has no display name with @memberjunction/ai's name for it, in its frames and when it ends", async () => {
+        vi.mocked(UnnamedVideoSourceLabel).mockImplementation((kind) => `unnamed ${kind}`);
+        const bridge = makeBridge(sdk);
+        const seen: BridgeMediaFrame[] = [];
+        const ended: BridgeVideoSourceEnd[] = [];
+        bridge.OnMedia((f) => seen.push(f));
+        bridge.OnVideoSourceEnded((s) => ended.push(s));
+        await bridge.Connect(ctx());
+
+        sdk.DriveVideoFrame(cameraFrame({ DisplayName: undefined }));
+        sdk.DriveVideoFrame(cameraFrame({ DisplayName: '  ', Source: 'screen' }));
+        sdk.DriveVideoFrame(cameraFrame());
+        sdk.DriveVideoSourceEnded({ ParticipantIdentity: 'p-ada', Source: 'camera' });
+
+        expect(seen.map((f) => f.SourceLabel)).toEqual(['unnamed camera', 'unnamed screen', "Ada's camera"]);
+        expect(ended.map((s) => s.SourceLabel)).toEqual(['unnamed camera']);
+        expect(vi.mocked(UnnamedVideoSourceLabel).mock.calls).toEqual([['camera'], ['screen'], ['camera']]);
     });
 });
 
