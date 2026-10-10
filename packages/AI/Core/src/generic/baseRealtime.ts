@@ -175,18 +175,15 @@ export abstract class BaseRealtimeModel extends BaseModel {
     }
 
     /**
-     * Whether this driver's sessions carry a **video** track in addition to audio — i.e. the model
-     * accepts video input (it can "see" the user's camera) and/or emits video output (a talking-head
-     * avatar / generated video), in sync with audio.
+     * Whether this driver's sessions carry a **video** track in addition to audio.
      *
-     * Defaults to `false` (audio-only — today's realtime models). Video-capable drivers (a native
-     * multimodal realtime model, or an avatar provider) override this to `true`. The session's media
-     * plane is media-tagged ({@link IRealtimeSession.SendInput} takes a {@link RealtimeInputFrame} with a {@link RealtimeMediaKind};
-     * {@link IRealtimeSession.OnVideoFrame} delivers video-out as typed frames), so a video session reuses the entire
-     * realtime contract — only the media frames gain a `video` kind. Resolution prefers a video-capable
-     * model when an agent requests video, and degrades to audio-only otherwise.
+     * @deprecated Nothing reads it, and no driver overrides it: it is `false` for Gemini Live, which takes camera video
+     * and renders avatars. What a session does with video is declared on its {@link IRealtimeSession.Capabilities}:
+     * {@link RealtimeSessionCapabilities.SupportedInboundTracks} for video in and
+     * {@link RealtimeSessionCapabilities.SupportedOutboundTracks} for video out, each track with its encoding. Whether a
+     * model renders a live avatar is {@link SupportsAvatarOutput}. A driver declares video there, not here.
      *
-     * @returns `true` if sessions can carry video; `false` (audio-only) otherwise.
+     * @returns `false` in every MJ driver.
      */
     public get SupportsVideo(): boolean {
         return false;
@@ -579,7 +576,8 @@ export interface IRealtimeSession {
      *
      * Fire-and-forget: frames are streamed straight to the provider with no JSON intermediation.
      * {@link RealtimeInputFrame.Kind} tags the media plane: `'audio'`, or `'video'` for a camera or
-     * screen frame to a video-capable model (one that {@link BaseRealtimeModel.SupportsVideo}).
+     * screen frame to a model that takes video (its session declares an inbound video track in
+     * {@link RealtimeSessionCapabilities.SupportedInboundTracks}).
      * {@link RealtimeInputFrame.MimeType} says what format the frame is in. A driver drops a frame
      * it cannot send rather than sending it as something else.
      *

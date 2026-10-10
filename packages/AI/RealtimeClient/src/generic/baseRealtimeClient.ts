@@ -811,8 +811,9 @@ export abstract class BaseRealtimeClient {
      * `AttachVideoSource`.
      *
      * **Optional capability:** audio-only drivers (the default) never emit — registering is always safe,
-     * but hosts must not assume video arrives. Video-capable drivers ({@link BaseRealtimeModel.SupportsVideo})
-     * call {@link emitRemoteVideo} when it is live.
+     * but hosts must not assume video arrives. A driver whose model sends video (the server driver declares an
+     * outbound video track in its session's `Capabilities.SupportedOutboundTracks`, or renders an avatar,
+     * `BaseRealtimeModel.SupportsAvatarOutput`) calls {@link emitRemoteVideo} when it is live.
      *
      * @param handler Invoked with the remote video when it becomes available.
      */

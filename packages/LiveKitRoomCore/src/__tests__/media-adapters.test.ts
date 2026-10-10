@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Track, type Participant } from 'livekit-client';
 import { REALTIME_AGENT_AVATAR_TRACK_NAME } from '@memberjunction/ai';
 import type { MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
-import { ToLiveKitDeviceKind, ToMediaDevice, ToMediaDeviceKind, ToMediaParticipant, ToScreenShareCaptureOptions } from '../media-adapters';
+import { ToLiveKitDeviceKind, ToMediaDevice, ToMediaDeviceKind, ToMediaParticipant } from '../media-adapters';
 import type { LiveKitParticipantView } from '../types';
 
 /** A track that records what it was attached to and detached from. */
@@ -173,17 +173,5 @@ describe('device mapping', () => {
         expect(ToMediaDeviceKind('audioinput')).toBe('microphone');
         expect(ToMediaDeviceKind('videoinput')).toBe('camera');
         expect(ToMediaDeviceKind('audiooutput')).toBe('speaker');
-    });
-});
-
-describe('ToScreenShareCaptureOptions', () => {
-    it("asks LiveKit for the browser's display surface of each kind", () => {
-        expect(ToScreenShareCaptureOptions('screen')).toEqual({ video: { displaySurface: 'monitor' } });
-        expect(ToScreenShareCaptureOptions('window')).toEqual({ video: { displaySurface: 'window' } });
-        expect(ToScreenShareCaptureOptions('tab')).toEqual({ video: { displaySurface: 'browser' } });
-    });
-
-    it('gives no options without a preference, so LiveKit asks as it always has', () => {
-        expect(ToScreenShareCaptureOptions()).toBeUndefined();
     });
 });

@@ -61,7 +61,7 @@ import {
 import { RealtimeSessionEventHub, type IRealtimeSessionEventSource, type RealtimeSessionStreamEvent } from './session-event-hub';
 import { BuildNarrationInstructions } from '../narration/narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
-import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient, ChannelVideoSourceID, RealtimeChannelContext } from '../channels/base-realtime-channel-client';
 import { DEFAULT_CHANNEL_SURFACE_PLACEMENT, ReadChannelSurfacePlacement, type ChannelSurfacePlacement } from '../channels/channel-surface-placement';
 import { IRealtimeMediaHost, IRealtimeSessionRecorder } from '../hosts/IRealtimeMediaHost';
 import { ChannelActionDispatcher, type DispatchableChannel } from '../channels/channel-action-dispatcher';
@@ -1894,7 +1894,12 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Relays a video frame to the underlying realtime client if active.
+   * Relays a video frame straight to the underlying realtime client, if a session is live.
+   *
+   * It bypasses the session's {@link VideoSourceArbiter}: the frame overrides the source the arbiter picked, and the
+   * model is not told what it is looking at. Channels no longer send through it (their context's `SendVideoFrame` goes
+   * through the arbiter); a host that shows the model something registers a source there instead, as
+   * `ChannelInboundVideoBridge` does.
    */
   public SendVideoFrame(base64Image: string, mimeType?: string): void {
     if (!this.client || !this.isSessionLive()) {
@@ -2248,6 +2253,48 @@ export class RealtimeSessionRuntime {
     const kind = plugin.CaptureKind;
     if (kind) {
       this.captures?.SetVisibleToAgent(kind, plugin.Exposure === 'pixels');
+    }
+    this.syncChannelVideoSource(plugin);
+  }
+
+  /**
+   * Sends a frame from a channel's context ({@link RealtimeChannelContext.SendVideoFrame}, deprecated) through the
+   * session's {@link VideoSourceArbiter}, as the channel's own source: it reaches the model only while the arbiter picks
+   * that source, and the arbiter tells the model when it switches. The source registers with the first frame, under the
+   * id the channel's own frame bridge uses, switched on only while the channel's exposure allows pixels.
+   */
+  private sendChannelVideoFrame(plugin: BaseRealtimeChannelClient, base64Image: string, mimeType?: string): void {
+    const client = this.client;
+    if (!client || !this.isSessionLive() || !client.IsTrackEstablished('video', 'inbound')) {
+      return;
+    }
+    const arbiter = VideoSourceArbiter.ForSink(client);
+    const descriptor = plugin.GetDescriptor();
+    const sourceId = ChannelVideoSourceID(descriptor.Key, plugin.InstanceId);
+    if (!arbiter.HasSource(sourceId)) {
+      arbiter.RegisterSource({
+        SourceID: sourceId,
+        Label: descriptor.DisplayName,
+        Kind: 'surface',
+        ChannelKey: descriptor.Key,
+        Enabled: plugin.Exposure === 'pixels',
+      });
+    }
+    arbiter.PushFrame(sourceId, base64Image, mimeType);
+  }
+
+  /**
+   * Keeps a channel's video source at the arbiter, when it has one, in step with the channel's exposure: on while the
+   * agent may see its pixels, off otherwise. Quiet, because the channel tells the model about its own exposure change.
+   */
+  private syncChannelVideoSource(plugin: BaseRealtimeChannelClient): void {
+    if (!this.client) {
+      return;
+    }
+    const arbiter = VideoSourceArbiter.ForSink(this.client);
+    const sourceId = ChannelVideoSourceID(plugin.GetDescriptor().Key, plugin.InstanceId);
+    if (arbiter.HasSource(sourceId)) {
+      arbiter.SetSourceEnabled(sourceId, plugin.Exposure === 'pixels', false);
     }
   }
 
@@ -2813,7 +2860,8 @@ export class RealtimeSessionRuntime {
       get Client(): BaseRealtimeClient | null {
         return service.client;
       },
-      SendVideoFrame: (base64Image: string, mimeType?: string) => this.SendVideoFrame(base64Image, mimeType),
+      // Through the arbiter, as this channel's source (deprecated: channels use a ChannelInboundVideoBridge).
+      SendVideoFrame: (base64Image: string, mimeType?: string) => this.sendChannelVideoFrame(plugin, base64Image, mimeType),
       IsTrackEstablished: (modality: string, direction: RealtimeTrackDirection) => this.IsTrackEstablished(modality, direction),
       // The camera and screen share, for a channel that fronts one: their state, and the user's clicks on its surface.
       Captures$: this.Captures$,

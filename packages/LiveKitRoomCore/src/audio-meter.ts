@@ -1,13 +1,15 @@
 /**
- * @fileoverview {@link LiveKitAudioMeter} — a tiny, pure, DOM-free smoother that turns a stream of raw
- * 0..1 audio levels (e.g. `participant.audioLevel`) into a smoothed level plus a set of bar bins for a
- * voice visualizer. UI layers call {@link LiveKitAudioMeter.Next} on each animation frame; keeping the
- * math here (not in a component) makes it framework-agnostic and unit-testable.
+ * @fileoverview The room's audio meter settings, and the deprecated {@link LiveKitAudioMeter}.
+ *
+ * The constants are how the room's meters move: seven bars, quick to rise and slow to fall. The room passes them to the
+ * shared meter (`LIVEKIT_METER_SETTINGS` in `@memberjunction/ng-livekit-room`), which runs on `AudioLevelSmoother` from
+ * `@memberjunction/ai-realtime-client/media`. {@link LiveKitAudioMeter} is the smoother the room used before; nothing in
+ * MJ uses it now.
  *
  * @module @memberjunction/livekit-room-core
  */
 
-/** The number of visualizer bars produced by {@link LiveKitAudioMeter}. */
+/** The number of bars in the room's audio meters. */
 export const AUDIO_METER_BIN_COUNT = 7;
 
 /** Below this level the meter is treated as silent (clamps idle noise to a flat baseline). */
@@ -19,7 +21,12 @@ export const AUDIO_METER_ATTACK = 0.6;
 /** How fast the meter falls toward a quieter level, 0..1. */
 export const AUDIO_METER_DECAY = 0.18;
 
-/** One smoothed frame of audio-visual data. */
+/**
+ * One smoothed frame of audio-visual data.
+ *
+ * @deprecated Use `AudioLevelFrame` from `@memberjunction/ai-realtime-client/media`, the frame `AudioLevelSmoother`
+ * returns. It has the same members, with `Bars` in place of `Bins`.
+ */
 export interface LiveKitAudioMeterFrame {
   /** Smoothed level, 0..1. */
   Level: number;
@@ -32,6 +39,11 @@ export interface LiveKitAudioMeterFrame {
 /**
  * Exponential-smoothing audio meter. Attack (rising) is faster than decay (falling) so the meter feels
  * responsive when speech starts but settles gently — the standard VU-meter feel.
+ *
+ * @deprecated Use `AudioLevelSmoother` from `@memberjunction/ai-realtime-client/media`, the shared smoother the room's
+ * meters run on. With this meter's settings (`BarCount` {@link AUDIO_METER_BIN_COUNT}, `Attack`
+ * {@link AUDIO_METER_ATTACK}, `Decay` {@link AUDIO_METER_DECAY}, `SilenceFloor` {@link AUDIO_METER_SILENCE_FLOOR}) it
+ * returns the same frames.
  */
 export class LiveKitAudioMeter {
   private smoothed = 0;
