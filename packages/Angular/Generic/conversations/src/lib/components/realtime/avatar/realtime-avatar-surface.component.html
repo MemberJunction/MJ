@@ -6,7 +6,9 @@
     [ShowConnectionQuality]="false"
     [ShowActiveSpeakerRing]="false"
     [StallAfterMs]="StallAfterMs"
-    [Status]="StatusLabel">
+    [HoldLastFrame]="HoldLastFrame"
+    [Status]="StatusLabel"
+    (FramesFlowingChange)="OnFramesFlowingChange($event)">
     <mj-realtime-agent-orb mjMediaTilePlaceholder class="avatar__orb" [State]="OrbState"></mj-realtime-agent-orb>
   </mj-media-tile>
 </div>

@@ -64,6 +64,7 @@ export class RealtimeAvatarChannel extends BaseRealtimeChannelClient<RealtimeAva
     instance.AgentName = this.Context?.AgentName ?? 'The assistant';
     instance.Video$ = this.Context?.AgentVideo$ ?? null;
     instance.State$ = this.Context?.ConnectionState$ ?? null;
+    instance.Resuming$ = this.Context?.Resuming$ ?? null;
   }
 }
 
