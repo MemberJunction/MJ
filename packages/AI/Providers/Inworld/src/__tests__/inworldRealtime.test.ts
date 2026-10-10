@@ -7,7 +7,7 @@ vi.mock('@memberjunction/global', () => ({
 
 // Mock @memberjunction/ai — provide BaseModel/BaseRealtimeModel base classes only. The realtime
 // type aliases (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
-vi.mock('@memberjunction/ai', () => {
+vi.mock('@memberjunction/ai', async () => {
     class BaseModel {
         private _apiKey: string;
         protected get apiKey(): string {
@@ -38,7 +38,10 @@ vi.mock('@memberjunction/ai', () => {
     // in the shared vocabulary at all — is pinned in @memberjunction/ai's own suite. Neither test
     // can drift without the other failing.
     const REALTIME_SHARED_CONFIG_KEYS = ['voice', 'firstMessage', 'reasoningEffort', 'mcpTools'];
-    return { BaseModel, BaseRealtimeModel, REALTIME_SHARED_CONFIG_KEYS };
+    // The dropped-input reporter is dependency-free, so the REAL implementation loads from its own
+    // module without the barrel: the drop tests below assert against shipped behavior.
+    const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
+    return { BaseModel, BaseRealtimeModel, REALTIME_SHARED_CONFIG_KEYS, RealtimeDroppedInputReporter };
 });
 
 import {
@@ -378,6 +381,27 @@ describe('InworldRealtime', () => {
             const append = driver.Fake.Find('input_audio.append') as { audio?: string };
             expect(append).toBeDefined();
             expect(append.audio).toBe(Buffer.from(bytes).toString('base64'));
+        });
+
+        it('SendInput drops a video frame instead of appending it as audio, reports it once, and still sends audio (#5091)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const session = await startReadySession(driver);
+                driver.Fake.Reset();
+                const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+
+                expect(driver.Fake.Sent).toEqual([]);
+                const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[InworldRealtime] Dropped video input of type image/jpeg'));
+                expect(drops).toHaveLength(1);
+
+                const audio = new Uint8Array([1, 2, 3, 4]);
+                session.SendInput({ Data: audio.buffer, Kind: 'audio' });
+                expect(driver.Fake.Sent).toEqual([{ type: 'input_audio.append', audio: Buffer.from(audio).toString('base64') }]);
+            } finally {
+                warn.mockRestore();
+            }
         });
 
         it('RegisterTools sends a mid-session session.update with mapped tools', async () => {

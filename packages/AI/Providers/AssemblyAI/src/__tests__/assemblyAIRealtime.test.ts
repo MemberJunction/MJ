@@ -452,6 +452,28 @@ describe('AssemblyAIRealtime server-bridged session (StartSession)', () => {
             });
         });
 
+        it('drops a video frame instead of sending it as audio, reports it once, and still sends audio (#5091)', () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const framesBefore = driver.Socket.Sent.length;
+                const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+
+                expect(driver.Socket.Sent.length).toBe(framesBefore);
+                const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[AssemblyAIRealtime] Dropped video input of type image/jpeg'));
+                expect(drops).toHaveLength(1);
+
+                const audio = new Uint8Array([9, 8, 7]);
+                session.SendInput({ Data: audio.buffer, Kind: 'audio' });
+                expect(driver.Socket.SentFrames().slice(framesBefore)).toEqual([
+                    { type: 'input.audio', audio: Buffer.from(audio).toString('base64') },
+                ]);
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
         it('completes the tool round-trip: tool.call → tool.result with the JSON-string result', async () => {
             driver.Emit({ type: 'tool.call', call_id: 'c_1', name: 'get_weather', arguments: { city: 'NYC' } });
 

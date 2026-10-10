@@ -17,6 +17,7 @@ import {
     JSONObject,
     RealtimeTurnDetectionMode,
     RealtimeTurnDetectionSettings,
+    RealtimeDroppedInputReporter,
     type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { ClientRealtimeSessionConfig, ResolveResponseDoneUsage } from '@memberjunction/ai';
@@ -863,12 +864,19 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private lastUserTranscript = '';
 
     /**
+     * Reports the frames {@link SendInput} drops, once per kind and type. Named for the profile's provider, so an xAI or
+     * Hugging Face session's line says which it is.
+     */
+    private readonly droppedInput: RealtimeDroppedInputReporter;
+
+    /**
      * @param connection The injectable provider-connection seam.
      * @param profile The provider profile (defaults to OpenAI's so existing direct construction keeps working).
      */
     constructor(connection: IOpenAIRealtimeConnection, profile: OpenAIRealtimeProfile = OPENAI_REALTIME_PROFILE) {
         this.connection = connection;
         this.profile = profile;
+        this.droppedInput = new RealtimeDroppedInputReporter(`${profile.providerKey}Realtime`, 'this session sends audio only');
         this.configAppliedPromise = new Promise<void>((resolve, reject) => {
             this.resolveConfigApplied = resolve;
             this.rejectConfigApplied = reject;
@@ -1007,8 +1015,18 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     // ---- IRealtimeSession outbound ----
 
-    /** @inheritdoc */
+    /**
+     * @inheritdoc
+     *
+     * Appends one audio frame to the input audio buffer. The session sends audio only, so a frame of another kind (a
+     * camera or screen frame) is dropped, never appended as audio, and reported once per kind and type. The xAI and
+     * Hugging Face sessions inherit this.
+     */
     public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this.droppedInput.Report(frame);
+            return;
+        }
         this.connection.send({
             type: 'input_audio_buffer.append',
             audio: this.encodeBase64(frame.Data),

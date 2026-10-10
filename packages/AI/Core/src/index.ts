@@ -21,6 +21,7 @@ export * from './generic/baseRealtime';
 export * from './generic/realtimeUsage';
 export * from './generic/modelConfiguration';
 export * from './generic/transcriptContinuation';
+export * from './generic/realtimeDroppedInputReporter';
 export * from './generic/realtimeProxyRegistry';
 export * from './generic/baseRealtimeChannelServer';
 export * from './generic/errorTypes';

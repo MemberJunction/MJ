@@ -27,7 +27,9 @@ vi.mock('@memberjunction/ai', async () => {
     // top-level-usage bug survived: the sibling xAI test asserted against a hand-written
     // OpenAI-shaped frame and passed while real Grok sessions recorded nothing.
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
-    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
+    // Same for RealtimeDroppedInputReporter: dependency-free, and the drop tests assert its real once-per-type report.
+    const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
+    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -339,6 +341,27 @@ describe('OpenAIRealtime', () => {
             expect(append).toBeDefined();
             if (append?.type === 'input_audio_buffer.append') {
                 expect(append.audio).toBe(Buffer.from(bytes).toString('base64'));
+            }
+        });
+
+        it('SendInput drops a video frame instead of appending it as audio, reports it once, and still appends audio (#5091)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
+                driver.Fake.Sent = [];
+                const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+
+                expect(driver.Fake.Sent).toEqual([]);
+                const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[openaiRealtime] Dropped video input of type image/jpeg'));
+                expect(drops).toHaveLength(1);
+
+                const audio = new Uint8Array([1, 2, 3, 4]);
+                session.SendInput({ Data: audio.buffer, Kind: 'audio' });
+                expect(driver.Fake.Sent).toEqual([{ type: 'input_audio_buffer.append', audio: Buffer.from(audio).toString('base64') }]);
+            } finally {
+                warn.mockRestore();
             }
         });
 
