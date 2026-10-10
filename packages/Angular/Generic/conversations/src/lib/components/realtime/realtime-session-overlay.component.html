@@ -39,6 +39,18 @@
         (CloseRequested)="OnReviewClose()">
       </mj-realtime-agent-banner>
 
+      <!-- No microphone works: the call lost its microphone, so the agent hears nothing until the user picks one in the
+           device menu. It stays for as long as that lasts, with no dismiss button, and goes once a microphone is on.
+           Never in review. -->
+      @if (MicrophoneNotice; as message) {
+        <mj-alert class="call-microphone-notice"
+                  Variant="warning"
+                  Size="sm"
+                  Icon="fa-solid fa-microphone-slash"
+                  [Message]="message">
+        </mj-alert>
+      }
+
       <!-- Why the call shows no avatar its agent asked for: once per call, from the moment it connects, until the user
            dismisses it or it hides itself after 10 s. Never in review. -->
       @if (AvatarNotice) {

@@ -577,6 +577,119 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
     });
   });
 
+  describe('the notice while no microphone works (#5406)', () => {
+    const BUILT_IN_MIC: MediaDevice = { DeviceID: 'mic-built-in', Kind: 'microphone', Label: 'Built-in Microphone', GroupID: 'laptop' };
+    const HEADSET: MediaDevice = { DeviceID: 'mic-headset', Kind: 'microphone', Label: 'USB Headset', GroupID: 'headset' };
+    const WORKING: RealtimeMicrophoneState = { DeviceID: 'mic-built-in', Devices: [BUILT_IN_MIC, HEADSET] };
+    /** The call lost its microphone: the switch and the fallback to the default both failed. */
+    const LOST: RealtimeMicrophoneState = { Devices: [BUILT_IN_MIC, HEADSET], Failure: 'in-use' };
+    const LOST_LINE = "Sage can't hear you: no microphone is working. Connect one, or choose one from the arrow next to the microphone button.";
+    const BLOCKED_LINE =
+      "Sage can't hear you: the browser blocked the microphone. Allow it for this site, then choose it from the arrow next to the microphone button.";
+
+    /** A live call fronting Sage, in the given chrome; the test publishes the call's microphone. */
+    const renderCall = async (chrome: 'orb' | 'console' = 'console', inputs: Record<string, unknown> = {}) => {
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } },
+        ],
+        inputs: { Chrome: chrome, AgentName: 'Sage', ...inputs },
+        autoDetect: true,
+      });
+      await settle();
+      return { f, ...session };
+    };
+    type Fixture = Awaited<ReturnType<typeof renderCall>>['f'];
+    const noticeOf = (f: Fixture): HTMLElement | null => query(f, 'mj-alert.call-microphone-notice') as HTMLElement | null;
+    const microphoneSelect = (f: Fixture): HTMLSelectElement => query(f, 'mj-realtime-composer .devices select') as HTMLSelectElement;
+
+    it('says under the banner, as an alert with no dismiss button, that the agent cannot hear the user', async () => {
+      const { f, microphone$ } = await renderCall();
+      microphone$.next(WORKING);
+      await settle();
+      expect(noticeOf(f)).toBeNull();
+
+      microphone$.next(LOST);
+      await settle();
+      const notice = noticeOf(f);
+      expect(notice?.textContent?.trim()).toBe(LOST_LINE);
+      expect(notice?.getAttribute('role')).toBe('alert');
+      expect(notice?.classList.contains('mj-alert--warning')).toBe(true);
+      expect(notice?.classList.contains('mj-alert--sm')).toBe(true);
+      expect(notice?.querySelector('.mj-alert__icon')?.classList.contains('fa-microphone-slash')).toBe(true);
+      expect(notice?.querySelector('.mj-alert__dismiss')).toBeNull();
+      expect(notice?.previousElementSibling?.tagName).toBe('MJ-REALTIME-AGENT-BANNER');
+    });
+
+    it('says to allow the microphone first when the browser blocked it, in the orb chrome too', async () => {
+      const { f, microphone$ } = await renderCall('orb');
+      microphone$.next({ ...LOST, Failure: 'denied' });
+      await settle();
+      expect(query(f, '.hero')).not.toBeNull();
+      expect(noticeOf(f)?.textContent?.trim()).toBe(BLOCKED_LINE);
+    });
+
+    it('opens a picked microphone through the session, stays while none opens, and goes once one is on', async () => {
+      const { f, microphone$, calls } = await renderCall();
+      microphone$.next(LOST);
+      await settle();
+      (query(f, 'mj-realtime-composer button[title="Choose microphone"]') as HTMLButtonElement).click();
+      await settle();
+      expect(microphoneSelect(f).value).toBe('');
+
+      // The headset cannot open either: the call still has no microphone, and says so.
+      microphoneSelect(f).value = 'mic-headset';
+      microphoneSelect(f).dispatchEvent(new Event('change'));
+      await settle();
+      expect(calls).toEqual(['SwitchMicrophone:mic-headset']);
+      expect(noticeOf(f)?.textContent?.trim()).toBe(LOST_LINE);
+      expect(f.componentInstance.SelectedMicrophoneID).toBeNull();
+
+      // It opens on the next pick: the call names it, and the notice goes.
+      microphoneSelect(f).value = 'mic-headset';
+      microphoneSelect(f).dispatchEvent(new Event('change'));
+      microphone$.next({ DeviceID: 'mic-headset', Devices: [BUILT_IN_MIC, HEADSET] });
+      await settle();
+      expect(calls).toEqual(['SwitchMicrophone:mic-headset', 'SwitchMicrophone:mic-headset']);
+      expect(noticeOf(f)).toBeNull();
+      expect(microphoneSelect(f).value).toBe('mic-headset');
+    });
+
+    it('goes when the call ends', async () => {
+      const { f, microphone$ } = await renderCall();
+      microphone$.next(LOST);
+      await settle();
+      expect(noticeOf(f)).not.toBeNull();
+      microphone$.next(REALTIME_MICROPHONE_NONE);
+      await settle();
+      expect(noticeOf(f)).toBeNull();
+    });
+
+    it('says nothing in review', async () => {
+      const review: RealtimeSessionReview = {
+        SessionID: 'past-1', AgentID: 'agent-1', AgentName: 'Sage', TargetAgentID: 'agent-1', ConversationID: null,
+        Status: 'Closed', CloseReason: null, StartedAt: null, LastActiveAt: null, ClosedAt: null,
+        RecordingFileID: null, RecordingStartedAt: null, RecordingMedia: null,
+        Turns: [], DelegatedRuns: [], ChannelStates: [], Legs: [], Artifacts: [],
+      };
+      const { f, microphone$ } = await renderCall('console', { ReviewData: review });
+      microphone$.next(LOST);
+      await settle();
+      expect(f.componentInstance.IsReviewing).toBe(true);
+      expect(noticeOf(f)).toBeNull();
+    });
+
+    it('has no axe violations while it shows', async () => {
+      const { f, microphone$ } = await renderCall();
+      microphone$.next(LOST);
+      await settle();
+      expect(noticeOf(f)).not.toBeNull();
+      await ExpectNoAxeViolations(f);
+    });
+  });
+
   describe('the Share menu\'s "This panel"', () => {
     /** A whiteboard whose surface the user may share on its own, as the real one's. */
     class ShareableWhiteboardChannel extends TestWhiteboardChannel {

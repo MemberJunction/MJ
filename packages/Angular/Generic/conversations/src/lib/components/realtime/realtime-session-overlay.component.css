@@ -277,7 +277,9 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* The avatar notice under the banner: mj-alert brings its own tint, border and text colours; this only places it. */
+/* The call's notices under the banner (no microphone works; no avatar): mj-alert brings its own tint, border and text
+   colours; this only places them. */
+.call-microphone-notice,
 .call-avatar-notice {
   flex-shrink: 0;
   margin: var(--mj-space-2) var(--mj-space-5) 0;

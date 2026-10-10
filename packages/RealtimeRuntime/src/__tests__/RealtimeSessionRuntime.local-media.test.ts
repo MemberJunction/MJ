@@ -42,17 +42,22 @@ class FakeStream {
 
 /**
  * A controller whose microphone the test drives: it can hold a start, fail one, swap the track in its stream,
- * switch devices as the browser's does, and list devices. Like the browser's, disposing it fails a start still
- * in flight.
+ * switch devices as the browser's does, lose the microphone, open one again in a new stream, and list devices.
+ * Like the browser's, disposing it fails a start still in flight.
  */
 class FakeLocalMediaController implements ILocalMediaController {
     public readonly FakeStream = new FakeStream();
     public readonly Stream = this.FakeStream as unknown as MediaStream;
     public readonly StartCalls: LocalMediaKind[] = [];
+    /** The device each start asked for; `undefined` for the default. */
+    public readonly StartDevices: Array<string | undefined> = [];
     /** Each device switch asked for: the kind and the device. */
     public readonly SwitchCalls: Array<[LocalMediaKind, string]> = [];
-    /** How the next switch ends: on the new device, or back on the one in use when the new one cannot open. */
-    public NextSwitch: 'switched' | 'back' = 'switched';
+    /**
+     * How the next switch ends: on the new device; back on the one in use when the new one cannot open; or with no
+     * microphone when the one in use cannot open again either.
+     */
+    public NextSwitch: 'switched' | 'back' | 'lost' = 'switched';
     public Disposed = 0;
     /** A failure the next start reports. */
     public NextFailure: { Reason: LocalMediaFailure; Message: string } | null = null;
@@ -60,6 +65,8 @@ class FakeLocalMediaController implements ILocalMediaController {
     public CompletesOnDispose = true;
     private readonly state = new BehaviorSubject<LocalMediaState>({ Camera: { Status: 'off' }, Microphone: { Status: 'off' }, Devices: [] });
     private held: { Release: () => void; Done: Promise<void> } | null = null;
+    /** The stream of the microphone it has open: the first one, none once it lost or stopped it, then the one it opened again. */
+    private live: FakeStream | null = this.FakeStream;
 
     public get State(): LocalMediaState {
         return this.state.value;
@@ -67,27 +74,49 @@ class FakeLocalMediaController implements ILocalMediaController {
     public get State$(): Observable<LocalMediaState> {
         return this.state.asObservable();
     }
+    /** The stream of the microphone it has open now; `null` while it has none. */
+    public get LiveStream(): FakeStream | null {
+        return this.live;
+    }
     public GetStream(_kind: LocalMediaKind): MediaStream | null {
-        return this.Stream;
+        return this.live as unknown as MediaStream | null;
     }
     public async RefreshDevices(): Promise<MediaDevice[]> {
         return [];
     }
-    public async Start(kind: LocalMediaKind): Promise<LocalMediaResult> {
+    /**
+     * Starts the microphone: the call's first start opens the first stream. With no microphone open (lost or stopped), a
+     * start opens a new stream, as the browser's controller does: it reports starting, then the device or why it failed.
+     */
+    public async Start(kind: LocalMediaKind, deviceId?: string): Promise<LocalMediaResult> {
         this.StartCalls.push(kind);
+        this.StartDevices.push(deviceId);
+        const reopening = this.live === null;
+        if (reopening) {
+            this.state.next({ ...this.state.value, Microphone: { Status: 'starting' } });
+        }
         await this.held?.Done;
         if (this.Disposed > 0) {
             return { Status: 'failed', Reason: 'error', Message: 'Stopped before the device started.' };
         }
         if (this.NextFailure) {
-            return { Status: 'failed', ...this.NextFailure };
+            const failure = this.NextFailure;
+            if (reopening) {
+                this.NextFailure = null;
+                this.state.next({ ...this.state.value, Microphone: { Status: 'failed', Failure: failure.Reason, Message: failure.Message } });
+            }
+            return { Status: 'failed', ...failure };
         }
-        this.publishMicrophone('mic-built-in');
-        return { Status: 'started', Stream: this.Stream };
+        if (reopening) {
+            this.live = new FakeStream();
+        }
+        this.publishMicrophone(deviceId ?? 'mic-built-in');
+        return { Status: 'started', Stream: this.live as unknown as MediaStream };
     }
     /**
      * Switches the microphone as the browser's controller does: the old track leaves the stream and the new one arrives
-     * in it. When the new device cannot open, the one in use is opened again, also as a new track.
+     * in it. When the new device cannot open, the one in use is opened again, also as a new track; when that fails too,
+     * the controller has no microphone left.
      */
     public async SwitchDevice(kind: LocalMediaKind, deviceId: string): Promise<LocalMediaResult> {
         this.SwitchCalls.push([kind, deviceId]);
@@ -95,14 +124,24 @@ class FakeLocalMediaController implements ILocalMediaController {
         const outcome = this.NextSwitch;
         this.NextSwitch = 'switched';
         await Promise.resolve();
-        if (outcome === 'back') {
-            this.SwapTrack(previous);
+        if (outcome !== 'switched') {
+            if (outcome === 'back') {
+                this.SwapTrack(previous);
+            } else {
+                this.LoseMicrophone('in-use');
+            }
             return { Status: 'failed', Reason: 'in-use', Message: 'Another application is using the microphone.' };
         }
         this.SwapTrack(deviceId);
-        return { Status: 'started', Stream: this.Stream };
+        return { Status: 'started', Stream: (this.live ?? this.FakeStream) as unknown as MediaStream };
     }
-    public Stop(_kind: LocalMediaKind): void {
+    /** Stops the microphone as the browser's controller does: its track stops, and the controller has none open. */
+    public Stop(kind: LocalMediaKind): void {
+        if (kind !== 'microphone') {
+            return;
+        }
+        this.live?.Track?.stop();
+        this.live = null;
         this.state.next({ ...this.state.value, Microphone: { Status: 'off' } });
     }
     public Dispose(): void {
@@ -113,23 +152,44 @@ class FakeLocalMediaController implements ILocalMediaController {
         }
     }
 
-    /** Makes the next start wait until {@link Dispose} (or the test) releases it. */
+    /** Makes the next start wait until {@link Dispose} or {@link ReleaseStart}. */
     public HoldStart(): void {
         let release: () => void = () => undefined;
         const done = new Promise<void>((resolve) => (release = resolve));
         this.held = { Release: release, Done: done };
+    }
+    /** Lets a held start go on. */
+    public ReleaseStart(): void {
+        this.held?.Release();
     }
     /**
      * A device switch or a lost device, in the browser controller's order: the old track leaves the stream
      * and the kind reports starting, then the new track arrives and the new device is reported.
      */
     public SwapTrack(deviceId: string): FakeTrack {
-        this.FakeStream.Track = null;
+        const stream = this.live ?? this.FakeStream;
+        stream.Track = null;
         this.state.next({ ...this.state.value, Microphone: { Status: 'starting' } });
         const track = new FakeTrack();
-        this.FakeStream.Track = track;
+        stream.Track = track;
         this.publishMicrophone(deviceId);
         return track;
+    }
+    /**
+     * The controller loses the microphone, in the browser controller's order: the track leaves the stream and stops, and
+     * the kind reports starting while the controller tries the default; that fails too, so it stops the kind and reports
+     * why.
+     */
+    public LoseMicrophone(reason: LocalMediaFailure): void {
+        const stream = this.live;
+        stream?.Track?.stop();
+        if (stream) {
+            stream.Track = null;
+        }
+        this.state.next({ ...this.state.value, Microphone: { Status: 'starting' } });
+        this.live = null;
+        this.state.next({ ...this.state.value, Microphone: { Status: 'off' } });
+        this.state.next({ ...this.state.value, Microphone: { Status: 'failed', Failure: reason, Message: 'Could not start audio source.' } });
     }
     /** A state change that keeps the same track (a device-list refresh). */
     public Republish(): void {
@@ -202,7 +262,10 @@ class AcquiringHost implements IRealtimeMediaHost {
     }
 }
 
-/** A driver that records the stream it connected with and every microphone it was moved to. */
+/**
+ * A driver that records the stream it connected with and every microphone it was moved to. Like a real driver, it
+ * mutes the stream it sends: the one it connected with, then the last one it was moved to.
+ */
 @RegisterClass(BaseRealtimeClient, 'mic-following-provider')
 class MicFollowingClient extends BaseRealtimeClient {
     public static Instances: MicFollowingClient[] = [];
@@ -226,7 +289,10 @@ class MicFollowingClient extends BaseRealtimeClient {
     public SendContextNote(): void {}
     public RequestSpokenUpdate(): void {}
     public SendToolResult(): void {}
-    public SetMuted(): void {}
+    public SetMuted(muted: boolean): void {
+        const sent = this.Replaced[this.Replaced.length - 1] ?? this.ConnectedWith;
+        sent?.getAudioTracks().forEach((track) => (track.enabled = !muted));
+    }
     public async Disconnect(): Promise<void> {}
     public get IsBusy(): boolean {
         return false;
@@ -506,7 +572,7 @@ describe('RealtimeSessionRuntime: the microphone the user can switch to (#5371)'
         await runtime.EndRealtimeSession();
     });
 
-    it('names no microphone while the call has none open, and switches nothing then', async () => {
+    it('names no microphone while the call has none open, and a pick then opens one instead of switching (#5406)', async () => {
         const host = listingHost();
         const { runtime } = build(host);
         await runtime.StartRealtimeSessionFromResult(mintedSession());
@@ -514,8 +580,11 @@ describe('RealtimeSessionRuntime: the microphone the user can switch to (#5371)'
 
         controller.Stop('microphone');
         expect(current(runtime)).toEqual({ Devices: [BUILT_IN, HEADSET] });
-        await runtime.SwitchMicrophone('mic-headset');
+        expect(await runtime.SwitchMicrophone('mic-headset')).toEqual({ DeviceID: 'mic-headset', Devices: [BUILT_IN, HEADSET] });
         expect(controller.SwitchCalls).toEqual([]);
+        expect(controller.StartDevices).toEqual([undefined, 'mic-headset']);
+        expect(lastClient().Replaced).toHaveLength(1);
+        expect(lastClient().Replaced[0]).toBe(controller.LiveStream);
         await runtime.EndRealtimeSession();
     });
 
@@ -543,5 +612,94 @@ describe('RealtimeSessionRuntime: the microphone the user can switch to (#5371)'
         await runtime.StartRealtimeSessionFromResult(mintedSession('session-2'));
         expect(current(runtime)).toEqual({ DeviceID: 'mic-built-in', Devices: [HEADSET] });
         await runtime.EndRealtimeSession();
+    });
+
+    describe('a microphone the call lost (#5406)', () => {
+        /** A connected call that records, and its controller. */
+        const call = async () => {
+            const host = listingHost();
+            const { runtime } = build(host);
+            await runtime.StartRealtimeSessionFromResult(mintedSession(), { recordingConsent: true });
+            return { host, runtime, controller: host.Controllers[0] };
+        };
+
+        it('says no microphone works when the switch and the fallback both fail, and moves the driver nowhere', async () => {
+            const { host, runtime, controller } = await call();
+            controller.NextSwitch = 'lost';
+
+            const switched = await runtime.SwitchMicrophone('mic-headset');
+
+            expect(switched).toEqual({ Devices: [BUILT_IN, HEADSET], Failure: 'in-use' });
+            expect(current(runtime)).toEqual(switched);
+            expect(lastClient().Replaced).toEqual([]);
+            expect(host.Recorder.ReplaceMicrophone).not.toHaveBeenCalled();
+            await runtime.EndRealtimeSession();
+        });
+
+        it('says no microphone works when the last one goes away', async () => {
+            const { runtime, controller } = await call();
+
+            controller.LoseMicrophone('not-found');
+            controller.SetDevices([CAMERA]);
+
+            expect(current(runtime)).toEqual({ Devices: [], Failure: 'not-found' });
+            await runtime.EndRealtimeSession();
+        });
+
+        it('opens the picked microphone again: the driver and the recording move to it, and the call names it and no longer says none works', async () => {
+            const { host, runtime, controller } = await call();
+            controller.LoseMicrophone('not-found');
+
+            const switched = await runtime.SwitchMicrophone('mic-headset');
+
+            const reopened = controller.LiveStream;
+            expect(reopened).not.toBeNull();
+            expect(reopened).not.toBe(controller.FakeStream);
+            expect(controller.StartDevices).toEqual([undefined, 'mic-headset']);
+            expect(controller.SwitchCalls).toEqual([]);
+            expect(lastClient().Replaced).toHaveLength(1);
+            expect(lastClient().Replaced[0]).toBe(reopened);
+            expect(host.Recorder.ReplaceMicrophone).toHaveBeenCalledTimes(1);
+            expect(host.Recorder.ReplaceMicrophone.mock.calls[0][0]).toBe(reopened);
+            expect(switched).toEqual({ DeviceID: 'mic-headset', Devices: [BUILT_IN, HEADSET] });
+            expect(current(runtime)).toEqual(switched);
+
+            // The reopened microphone is the call's now: unmuted as the call was, muted by the mute button, stopped at the end.
+            const track = reopened?.Track;
+            expect(track?.enabled).toBe(true);
+            expect(runtime.ToggleMute()).toBe(true);
+            expect(track?.enabled).toBe(false);
+            await runtime.EndRealtimeSession();
+            expect(track?.Stopped).toBe(true);
+        });
+
+        it('keeps saying no microphone works while the picked one opens, and after, when it cannot open', async () => {
+            const { runtime, controller } = await call();
+            controller.LoseMicrophone('not-found');
+            controller.HoldStart();
+            controller.NextFailure = { Reason: 'in-use', Message: 'Another application is using the microphone.' };
+
+            const picking = runtime.SwitchMicrophone('mic-headset');
+            expect(current(runtime)).toEqual({ Devices: [BUILT_IN, HEADSET], Failure: 'not-found' });
+            controller.ReleaseStart();
+
+            expect(await picking).toEqual({ Devices: [BUILT_IN, HEADSET], Failure: 'in-use' });
+            expect(lastClient().Replaced).toEqual([]);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('keeps the mute: the mute button changes nothing while no microphone is open, and a muted call opens its next microphone muted', async () => {
+            const { runtime, controller } = await call();
+            expect(runtime.ToggleMute()).toBe(true);
+            controller.LoseMicrophone('not-found');
+
+            expect(runtime.ToggleMute()).toBe(true);
+            await runtime.SwitchMicrophone('mic-headset');
+            const track = controller.LiveStream?.Track;
+            expect(track?.enabled).toBe(false);
+            expect(runtime.ToggleMute()).toBe(false);
+            expect(track?.enabled).toBe(true);
+            await runtime.EndRealtimeSession();
+        });
     });
 });
