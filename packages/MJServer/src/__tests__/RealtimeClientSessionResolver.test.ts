@@ -3793,6 +3793,26 @@ describe('RealtimeClientSessionResolver — channel scoping at mint (Realtime Ch
         expect(none.AvatarStatusJson).toBeUndefined();
     });
 
+    it("threads an app's showsAgentVideo: false to PrepareClientSession, and nothing when the app did not say", async () => {
+        const startWith = (showsAgentVideo?: boolean | null) =>
+            makeResolver().StartRealtimeClientSession(
+                'target-1', makeCtx(),
+                undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+                undefined, undefined, undefined, showsAgentVideo as boolean | undefined,
+            );
+        setupStart({ AvatarStatus: { Requested: true, Granted: false, Reason: 'host' } });
+        const result = await startWith(false);
+        expect((prepareClientSessionMock.mock.calls[0][0] as { ShowsAgentVideo?: boolean }).ShowsAgentVideo).toBe(false);
+        expect(JSON.parse(result.AvatarStatusJson ?? 'null')).toEqual({ Requested: true, Granted: false, Reason: 'host' });
+
+        for (const unstated of [undefined, null]) {
+            prepareClientSessionMock.mockClear();
+            setupStart();
+            await startWith(unstated);
+            expect((prepareClientSessionMock.mock.calls[0][0] as { ShowsAgentVideo?: boolean }).ShowsAgentVideo).toBeUndefined();
+        }
+    });
+
     it('sends no candidates and returns no policy when the caller reported none (a client that predates scoping)', async () => {
         setupStart();
         const result = await start(undefined);

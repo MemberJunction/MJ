@@ -955,7 +955,9 @@ export interface RealtimeAvatarSettings {
  * - `'custom-disabled'`: custom avatars are not enabled;
  * - `'unknown-avatar'`: the request names no avatar the vendor knows;
  * - `'no-binding'`: the persona has no avatar on this vendor;
- * - `'host'`: the avatar was granted, but the app showing the call asked for no agent video;
+ * - `'host'`: the app showing the call shows no agent video: it told the mint so (the embeddable widgets and the mobile
+ *   app have no channel that shows it), so the session asked the model for none, or the avatar was granted and the app
+ *   asked for no agent video when it connected;
  * - `'browser'`: the avatar was granted and the app asked for it, but the browser could not play it;
  * - `'decoder-missing'`: the meeting host has no usable decoder (no ffmpeg, one too old, or one without the H.264 and
  *   AAC decoders), so the meeting session asked for audio;

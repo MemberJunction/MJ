@@ -54,7 +54,8 @@ import {
 } from '@/voice/rn-realtime-driver';
 import { RNRealtimeMediaHost } from '@/voice/rn-media-host';
 import { MobileVoiceSession } from '@/voice/MobileVoiceSession';
-import type { RealtimeAvatarNotice } from '@memberjunction/realtime-runtime';
+import type { RealtimeAvatarNotice, RealtimeSessionLaunchRequest } from '@memberjunction/realtime-runtime';
+import type { IMetadataProvider } from '@memberjunction/core';
 
 describe('IsRealtimeProviderSupported', () => {
     it('accepts the WebRTC providers this build ships a driver for', () => {
@@ -161,5 +162,32 @@ describe('MobileVoiceSession', () => {
         });
         subscription.unsubscribe();
         expect(seen).toEqual([null]);
+    });
+
+    it("tells the mint it shows no agent video, though the registry has an Avatar row, so a video agent's call asks for no avatar", async () => {
+        // The registry this app reads lists the Avatar channel, but its plugin lives in the Angular conversations
+        // package, which this app does not load: no channel here shows the agent's video.
+        const avatarRow = { ID: 'avatar-row', Name: 'Avatar', ClientPluginClass: 'RealtimeAvatarChannel', IsActive: true, UIConfig: null };
+        const provider = {
+            Entities: [],
+            ExecuteGQL: async () => ({ RunDynamicView: { Success: true, Results: [{ Data: JSON.stringify(avatarRow) }] } }),
+        } as unknown as IMetadataProvider;
+        const requests: RealtimeSessionLaunchRequest[] = [];
+        const session = new MobileVoiceSession();
+        session.Provider = provider;
+        session.Launcher = {
+            Launch: async (request) => {
+                requests.push(request);
+                throw new Error('the test stops at the mint');
+            },
+        };
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        await session.StartRealtimeSession('agent-1', null, null, 'Sage', null, null, null, null, false);
+
+        expect(requests).toHaveLength(1);
+        expect(requests[0].ShowsAgentVideo).toBe(false);
+        vi.restoreAllMocks();
     });
 });

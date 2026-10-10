@@ -302,6 +302,13 @@ export interface PrepareClientSessionInput {
      */
     PhoneCall?: boolean;
     /**
+     * `false` when the app showing a browser session shows no agent video: none of its channels shows it (the embeddable
+     * widgets and the mobile app today; the mint's `showsAgentVideo` argument). The session then asks the driver for no
+     * avatar and reports why (`host`), the avatar persona's voice is kept, and the default model walk prefers no avatar
+     * model. Absent or `true`: the app may show it, and the browser decides at connect (`host` or `browser` then).
+     */
+    ShowsAgentVideo?: boolean;
+    /**
      * Optional server-authoritative hard ceiling on the session's wall-clock duration, in seconds.
      * Threaded into {@link RealtimeSessionParams.MaxSessionSeconds} so a driver can bound the
      * provider session/token, and surfaced so the transport layer (the MJServer resolver) can stamp
@@ -1214,7 +1221,8 @@ export class RealtimeClientSessionService {
         // folds the app tier into the capability manifest the prompt renders. The scoped input is what
         // the prompt/tool builders see, so a vetoed channel is absent from the framing as well as the tools.
         const scoped = await this.scopeSessionInput(effectiveInput, effectiveConfig, contextUser, provider, zeroDataRetention);
-        // A session nobody would see an avatar in (a phone call) asks the driver for none and keeps the persona's voice.
+        // A session nobody would see an avatar in (a phone call, an app without agent video) asks the driver for none
+        // and keeps the persona's voice.
         const avatar = WithoutUnseenAvatar(
             this.ResolveSessionAvatar(scoped.Input, coAgent, effectiveConfig, resolution.ModelID, resolution.ModelVendorID),
             scoped.Input,
@@ -2249,9 +2257,9 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Whether the session could show an avatar at all: a browser session, or a server-side one whose host publishes the
-     * avatar into a room. A phone call ({@link ResolveAvatarUnseenReason}), or a meeting whose host can't publish video,
-     * can't.
+     * Whether the session could show an avatar at all: a browser session whose app may show agent video, or a server-side
+     * one whose host publishes the avatar into a room. A phone call or an app without agent video
+     * ({@link ResolveAvatarUnseenReason}), or a meeting whose host can't publish video, can't.
      */
     private sessionCanShowAvatar(input: PrepareClientSessionInput): boolean {
         if (ResolveAvatarUnseenReason(input)) {
@@ -2632,8 +2640,9 @@ export class RealtimeClientSessionService {
             : input.ExtraTools;
         const tools = this.appendHostTools(this.buildStableToolSet(combinedExtra), input.HostTools);
         // Hoisted (rather than built inline at the return) so the mint log below can report the voice
-        // that ACTUALLY reached the driver — see the `voice=` field. Same bag, built once. A phone call
-        // carries no avatar request whoever resolved it (WithoutUnseenAvatar is idempotent).
+        // that ACTUALLY reached the driver — see the `voice=` field. Same bag, built once. A phone call, or
+        // an app without agent video, carries no avatar request whoever resolved it (WithoutUnseenAvatar is
+        // idempotent).
         const avatar = WithoutUnseenAvatar(resolvedAvatar ?? this.ResolveSessionAvatar(input, coAgent, effectiveConfig, modelID, modelVendorID), input);
         const configBag = this.withAvatarVoice(this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID), avatar, input);
         WarnOnUnmatchedProviderVoice(effectiveConfig, driverClass, 'RealtimeClientSessionService');
@@ -2706,7 +2715,8 @@ export class RealtimeClientSessionService {
     /**
      * The config bag with the avatar persona's voice, so the face and the voice match, unless a voice was picked in this
      * call (a runtime override's `realtime.voice.default.voice`), which wins. A session nobody would see the avatar in (a
-     * phone call) keeps the voice without the face, so the agent sounds the same as in a call that shows it.
+     * phone call, an app without agent video) keeps the voice without the face, so the agent sounds the same as in a call
+     * that shows it.
      */
     private withAvatarVoice(bag: JSONObject | undefined, avatar: RealtimeAvatarResolution, input: PrepareClientSessionInput): JSONObject | undefined {
         if (!avatar.Voice) {

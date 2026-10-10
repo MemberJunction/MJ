@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { IMetadataProvider } from '@memberjunction/core';
-import type { ClientRealtimeSessionConfig } from '@memberjunction/ai';
+import type { ClientRealtimeSessionConfig, RealtimeTrackDescriptor } from '@memberjunction/ai';
 import type { RealtimeSessionClientPolicy } from '@memberjunction/ai-core-plus';
 import {
     BaseRealtimeChannelClient,
@@ -19,6 +19,23 @@ import { LegacyEchoChannel } from './channel-test-helpers';
 
 @RegisterClass(BaseRealtimeChannelClient, 'LauncherEchoChannel')
 class LauncherEcho extends LegacyEchoChannel {}
+
+/** A channel that shows the agent's video: it sinks outbound video, as the Avatar channel does. */
+@RegisterClass(BaseRealtimeChannelClient, 'LauncherAvatarChannel')
+class LauncherAvatar extends LegacyEchoChannel {
+    public override get ChannelName(): string {
+        return 'Avatar';
+    }
+    public override get ToolNamePrefix(): string {
+        return 'Avatar_';
+    }
+    public override GetToolDefinitions(): [] {
+        return [];
+    }
+    public override GetSunkTracks(): readonly RealtimeTrackDescriptor[] {
+        return [{ Modality: 'video', Direction: 'outbound' }];
+    }
+}
 
 @RegisterClass(BaseRealtimeClient, 'launcher-fake-provider')
 class LauncherFakeClient extends BaseRealtimeClient {
@@ -106,6 +123,8 @@ class MintProvider {
     public RejectTransport = false;
     /** Which rejection a server that predates both names first (a validation error carries one message). */
     public AvatarRejectionFirst = false;
+    /** A server that predates the `showsAgentVideo` argument. */
+    public RejectAgentVideo = false;
     /** What the mint returns, over the defaults. */
     public MintOverrides: Partial<StartRealtimeClientSessionResult> = {};
     public Entities: unknown[] = [{ Name: 'MJ: AI Agent Channels' }];
@@ -121,6 +140,9 @@ class MintProvider {
                     : null,
                 this.RejectTransport && query.includes('RelayUrl')
                     ? 'Cannot query field "Transport" on type "StartRealtimeClientSessionResult".'
+                    : null,
+                this.RejectAgentVideo && query.includes('showsAgentVideo')
+                    ? 'Unknown argument "showsAgentVideo" on field "Mutation.StartRealtimeClientSession".'
                     : null,
             ].filter((message): message is string => message !== null);
             if (rejections.length > 0) {
@@ -157,10 +179,12 @@ function request(overrides: Partial<RealtimeSessionLaunchRequest> = {}): Realtim
     };
 }
 
-function stubRegistry(): void {
+const ECHO_ROW = { ID: 'c1', Name: 'Echo', ClientPluginClass: 'LauncherEchoChannel', IsActive: true };
+
+function stubRegistry(rows: Array<Record<string, unknown>> = [ECHO_ROW]): void {
     vi.spyOn(AIEngineBase, 'GetProviderInstance').mockReturnValue({
         Config: async () => undefined,
-        AgentChannels: [{ ID: 'c1', Name: 'Echo', ClientPluginClass: 'LauncherEchoChannel', IsActive: true }],
+        AgentChannels: rows,
     } as unknown as AIEngineBase);
 }
 
@@ -328,6 +352,48 @@ describe('DefaultRealtimeSessionLauncher', () => {
         await expect(new DefaultRealtimeSessionLauncher().Launch(request(), { Provider: provider as unknown as IMetadataProvider })).rejects.toThrow('no ephemeral token');
     });
 
+    describe('an app that shows no agent video', () => {
+        it('says so (showsAgentVideo: false) only when the request does, so a host that may show it mints as before', async () => {
+            const provider = new MintProvider();
+            const launcher = new DefaultRealtimeSessionLauncher();
+            const context: RealtimeSessionLaunchContext = { Provider: provider as unknown as IMetadataProvider };
+            await launcher.Launch(request({ ShowsAgentVideo: false }), context);
+            await launcher.Launch(request({ ShowsAgentVideo: true }), context);
+            await launcher.Launch(request(), context);
+            const [none, shows, unstated] = provider.mints();
+            expect(none.query).toContain('$showsAgentVideo: Boolean');
+            expect(none.query).toContain('showsAgentVideo: $showsAgentVideo');
+            expect(none.variables['showsAgentVideo']).toBe(false);
+            for (const mint of [shows, unstated]) {
+                expect(mint.query).not.toContain('showsAgentVideo');
+                expect('showsAgentVideo' in mint.variables).toBe(false);
+            }
+        });
+
+        it('drops only showsAgentVideo for a server that predates it, keeping the other extensions, and remembers', async () => {
+            const provider = new MintProvider();
+            provider.RejectAgentVideo = true;
+            const launcher = new DefaultRealtimeSessionLauncher();
+            const context: RealtimeSessionLaunchContext = { Provider: provider as unknown as IMetadataProvider };
+            const result = await launcher.Launch(request({ ShowsAgentVideo: false, ChannelCandidatesJson: '[]' }), context);
+            expect(result.EphemeralToken).toBe('t');
+            const [rejected, retried] = provider.mints();
+            expect(rejected.query).toContain('showsAgentVideo');
+            expect(retried.query).not.toContain('showsAgentVideo');
+            expect('showsAgentVideo' in retried.variables).toBe(false);
+            expect(retried.query).toContain('$channelCandidatesJson');
+            expect(retried.query).toContain('AvatarStatusJson');
+            expect(retried.query).toContain('RelayUrl');
+            expect(vi.mocked(console.warn).mock.calls.map((call) => String(call[0]))).toContain(
+                "[RealtimeSession] The server does not take showsAgentVideo — minting without it; it may ask for an avatar this app can't show (the call stays audio only)."
+            );
+
+            await launcher.Launch(request({ ShowsAgentVideo: false }), context);
+            expect(provider.mints()).toHaveLength(3); // asked once; the next mint went straight to the mutation without it
+            expect(provider.mints()[2].query).not.toContain('showsAgentVideo');
+        });
+    });
+
     describe('the relay transport', () => {
         const launch = (provider: MintProvider, launcher = new DefaultRealtimeSessionLauncher()) =>
             launcher.Launch(request(), { Provider: provider as unknown as IMetadataProvider });
@@ -491,6 +557,60 @@ describe('RealtimeSessionRuntime.Launcher', () => {
         expect('Transport' in unknown).toBe(false);
         expect(runtime.BuildClientConfig(mintResult({ Transport: 'direct' })).Transport).toBe('direct');
         expect(runtime.BuildClientConfig(mintResult(RELAY_MINT))).toMatchObject({ Transport: 'relay', RelayUrl: RELAY_URL, EphemeralToken: '' });
+    });
+
+    describe("whether the host can show the agent's video", () => {
+        const AVATAR_ROW = { ID: 'c2', Name: 'Avatar', ClientPluginClass: 'LauncherAvatarChannel', IsActive: true };
+
+        it('tells the mint that a host with no channel that shows it (the embeddable widget, the mobile app) shows no agent video', async () => {
+            const { runtime, provider } = build();
+            await start(runtime);
+            const [mint] = provider.mints();
+            expect(mint.query).toContain('showsAgentVideo: $showsAgentVideo');
+            expect(mint.variables['showsAgentVideo']).toBe(false);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('tells a custom launcher the same, in the request', async () => {
+            const { runtime } = build();
+            const seen: RealtimeSessionLaunchRequest[] = [];
+            runtime.Launcher = {
+                Launch: async (req) => {
+                    seen.push(req);
+                    return mintResult();
+                },
+            };
+            await start(runtime);
+            expect(seen[0].ShowsAgentVideo).toBe(false);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('says nothing for a host whose Avatar channel shows the agent video, so it mints as before', async () => {
+            stubRegistry([ECHO_ROW, AVATAR_ROW]);
+            const { runtime, provider } = build();
+            await start(runtime);
+            const [mint] = provider.mints();
+            expect(mint.query).not.toContain('showsAgentVideo');
+            expect('showsAgentVideo' in mint.variables).toBe(false);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('counts a channel the host brings that shows the agent video', async () => {
+            const { runtime, provider } = build();
+            await runtime.StartRealtimeSession('agent-1', null, null, 'Sage', null, null, null, null, false, null, null, null, {
+                HostChannels: [{ Create: () => new LauncherAvatar() }],
+            });
+            expect('showsAgentVideo' in provider.mints()[0].variables).toBe(false);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('counts an Avatar channel switched off in the registry as none', async () => {
+            stubRegistry([ECHO_ROW, { ...AVATAR_ROW, IsActive: false }]);
+            const { runtime, provider } = build();
+            await start(runtime);
+            expect(provider.mints()[0].variables['showsAgentVideo']).toBe(false);
+            await runtime.EndRealtimeSession();
+        });
     });
 
     it('restores the stock launcher when set to null', async () => {

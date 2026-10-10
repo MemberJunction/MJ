@@ -245,3 +245,25 @@ describe('A phone call asks for no avatar (WithoutUnseenAvatar)', () => {
         expect(ResolveUnseenAvatarStatus(undefined, undefined)).toBeUndefined();
     });
 });
+
+describe('An app that shows no agent video asks for no avatar (host)', () => {
+    const BEN_REQUEST = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' as const };
+
+    it("names host for an app that said it shows no agent video, and phone for a phone call whatever the app", () => {
+        expect(ResolveAvatarUnseenReason({ ShowsAgentVideo: false })).toBe('host');
+        expect(ResolveAvatarUnseenReason({ ShowsAgentVideo: true })).toBeUndefined();
+        expect(ResolveAvatarUnseenReason({ PhoneCall: true, ShowsAgentVideo: false })).toBe('phone');
+    });
+
+    it("drops the request and keeps the persona's voice", () => {
+        expect(WithoutUnseenAvatar({ Avatar: BEN_REQUEST, Voice: 'Puck' }, { ShowsAgentVideo: false })).toEqual({ Voice: 'Puck', Reason: 'host' });
+        expect(WithoutUnseenAvatar({ Reason: 'no-binding' }, { ShowsAgentVideo: false })).toEqual({ Reason: 'host' });
+        expect(WithoutUnseenAvatar({}, { ShowsAgentVideo: false })).toEqual({});
+    });
+
+    it("says host before the model's or the face's reason, at the mint", () => {
+        const host = { Requested: true, Granted: false, Reason: 'host' };
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'host' }, ModelSupportsAvatarOutput: false })).toEqual(host);
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'host', Voice: 'Puck' }, ModelSupportsAvatarOutput: true })).toEqual(host);
+    });
+});

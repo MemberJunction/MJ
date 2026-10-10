@@ -2,9 +2,10 @@
  * @fileoverview Whether a connected call tells the user it shows no avatar, and why.
  *
  * The server decides the reasons it can see at mint (the model renders no avatar, the persona has no face for it, a
- * custom avatar) and returns them as the session's avatar status. Two more show only in the browser, once the call is
- * connected: the app asked for no agent video (`host`), or it asked and the browser could not play it (`browser`).
- * {@link ResolveAvatarNotice} puts the three facts together; the runtime publishes the result once per call.
+ * custom avatar, an app that said at mint it shows no agent video: `host`) and returns them as the session's avatar
+ * status. Two more show only in the browser, once the call is connected: the app asked for no agent video (`host`), or
+ * it asked and the browser could not play it (`browser`). {@link ResolveAvatarNotice} puts the three facts together; the
+ * runtime publishes the result once per call.
  *
  * @module @memberjunction/realtime-runtime
  */

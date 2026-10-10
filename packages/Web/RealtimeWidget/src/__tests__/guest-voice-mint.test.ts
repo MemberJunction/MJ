@@ -60,7 +60,7 @@ describe('CreateGuestVoiceMint', () => {
         executeGQL.mockResolvedValue(minted({ Transport: null, RelayUrl: null }));
         const result = await CreateGuestVoiceMint(SESSION)([]);
 
-        expect(executeGQL.mock.calls[0][1]).toEqual({ targetAgentId: 'agent-1', clientToolsJson: undefined });
+        expect(executeGQL.mock.calls[0][1]).toEqual({ targetAgentId: 'agent-1', clientToolsJson: undefined, showsAgentVideo: false });
         expect(queries()[0]).toMatch(/\n\s+Transport\n\s+RelayUrl\n/);
         expect(result).toEqual({
             provider: 'openai',
@@ -97,6 +97,49 @@ describe('CreateGuestVoiceMint', () => {
         expect(queries().map((query) => query.includes('RelayUrl'))).toEqual([true, false, false]);
         expect(queries()[1]).not.toMatch(/\n\s+Transport\n/);
         expect(vi.mocked(console.warn).mock.calls).toHaveLength(1);
+    });
+
+    it('tells the server the widget shows no agent video, so it asks the model for no avatar', async () => {
+        executeGQL.mockResolvedValue(minted());
+        await CreateGuestVoiceMint(SESSION)([]);
+        expect(queries()[0]).toContain('$showsAgentVideo: Boolean');
+        expect(queries()[0]).toContain('showsAgentVideo: $showsAgentVideo');
+        expect(executeGQL.mock.calls[0][1]).toMatchObject({ showsAgentVideo: false });
+    });
+
+    it('mints without showsAgentVideo against a server that predates it, keeping the transport fields, says so once, and remembers', async () => {
+        executeGQL.mockImplementation(async (query: string) => {
+            if (query.includes('showsAgentVideo')) {
+                throw new Error('Unknown argument "showsAgentVideo" on field "Mutation.StartRealtimeClientSession".');
+            }
+            return minted();
+        });
+        const mint = CreateGuestVoiceMint(SESSION);
+        const first = await mint([]);
+        await mint([]);
+
+        expect(first.sessionConfig.EphemeralToken).toBe('ek_1');
+        expect(queries().map((query) => query.includes('showsAgentVideo'))).toEqual([true, false, false]);
+        expect(queries().every((query) => query.includes('RelayUrl'))).toBe(true);
+        expect('showsAgentVideo' in (executeGQL.mock.calls[1][1] as Record<string, unknown>)).toBe(false);
+        expect(vi.mocked(console.warn).mock.calls).toHaveLength(1);
+    });
+
+    it('drops both, one at a time, against a server that predates both', async () => {
+        executeGQL.mockImplementation(async (query: string) => {
+            if (query.includes('showsAgentVideo')) {
+                throw new Error('Unknown argument "showsAgentVideo" on field "Mutation.StartRealtimeClientSession".');
+            }
+            if (query.includes('RelayUrl')) {
+                throw new Error(UNSUPPORTED);
+            }
+            return minted();
+        });
+        const result = await CreateGuestVoiceMint(SESSION)([]);
+        expect(result.sessionConfig.EphemeralToken).toBe('ek_1');
+        expect(executeGQL).toHaveBeenCalledTimes(3);
+        expect(queries()[2]).not.toContain('showsAgentVideo');
+        expect(queries()[2]).not.toContain('RelayUrl');
     });
 
     it('surfaces any other failure, one that merely mentions a transport included, without retrying', async () => {

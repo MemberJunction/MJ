@@ -3047,6 +3047,43 @@ describe('RealtimeClientSessionService.PrepareClientSession: the avatar status f
             expect(prep.SessionParams?.Avatar).toEqual({ ...BEN, Delivery: 'room' });
         });
     });
+
+    describe('an app that shows no agent video (ShowsAgentVideo false: the widget, the mobile app)', () => {
+        it("mints no avatar request, keeps the persona's voice, and returns host as the status", async () => {
+            const svc = new StatusService();
+            svc.UseModel(new AvatarModel());
+            svc.Resolution = { Avatar: BEN, Voice: 'Puck' };
+            const result = await svc.PrepareClientSession(makePrepInput({ ShowsAgentVideo: false }), contextUser, provider);
+            expect(result.Success).toBe(true);
+            expect(result.SessionParams?.Avatar).toBeUndefined();
+            expect(svc.Model.LastParams?.Avatar).toBeUndefined();
+            expect(result.SessionParams?.Config?.['voice']).toBe('Puck');
+            expect(result.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'host' });
+            expect(avatarLines()).toEqual(['[RealtimeCoAgent] mint avatar model=mock-realtime shown=false reason=host']);
+        });
+
+        it('says host on a model that renders no avatar too: the app is the reason first', async () => {
+            const svc = new StatusService();
+            svc.Resolution = { Avatar: BEN };
+            const result = await svc.PrepareClientSession(makePrepInput({ ShowsAgentVideo: false }), contextUser, provider);
+            expect(result.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'host' });
+        });
+
+        it('mints the avatar as before for an app that may show it', async () => {
+            const svc = new StatusService();
+            svc.UseModel(new AvatarModel());
+            svc.Resolution = { Avatar: BEN, Voice: 'Puck' };
+            const result = await svc.PrepareClientSession(makePrepInput({ ShowsAgentVideo: true }), contextUser, provider);
+            expect(svc.Model.LastParams?.Avatar).toEqual(BEN);
+            expect(result.AvatarStatus).toEqual({ Requested: true, Granted: true });
+        });
+
+        it('returns no status when the agent asked for no avatar', async () => {
+            const svc = new StatusService();
+            const result = await svc.PrepareClientSession(makePrepInput({ ShowsAgentVideo: false }), contextUser, provider);
+            expect('AvatarStatus' in result).toBe(false);
+        });
+    });
 });
 
 /** Makes the AI engine's cache hold one Video/Output row for a model (restored by `vi.restoreAllMocks`). */

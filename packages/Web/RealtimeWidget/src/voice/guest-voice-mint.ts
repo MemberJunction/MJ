@@ -4,6 +4,8 @@
  * PINNED agent and maps the result to the `ClientRealtimeSessionConfig` the realtime client
  * applies verbatim — exactly mirroring Explorer's `buildClientConfig`, a relay session's
  * `Transport` and `RelayUrl` included. Reuses the shipped mint resolver; no new server endpoint.
+ * The widget shows no agent video, so it tells the mint (`showsAgentVideo: false`) and the server
+ * asks the model for no avatar.
  *
  * NOTE: a live mint needs the guest GraphQL provider configured by RuntimeWidgetTransport and a
  * running MJAPI; the unit tests drive it through a stand-in provider.
@@ -34,7 +36,7 @@ interface StartRealtimeSessionGQLResult {
 }
 
 /** The mint's variables. */
-type StartRealtimeSessionVariables = Record<string, string | undefined>;
+type StartRealtimeSessionVariables = Record<string, string | boolean | undefined>;
 
 /** The fields every server returns. */
 const MINT_FIELDS: readonly string[] = ['AgentSessionId', 'Provider', 'Model', 'EphemeralToken', 'ExpiresAt', 'SessionConfigJson'];
@@ -42,29 +44,51 @@ const MINT_FIELDS: readonly string[] = ['AgentSessionId', 'Provider', 'Model', '
 /** A relay session's transport and URL. A server that predates them rejects the mint at validation. */
 const TRANSPORT_FIELDS: readonly string[] = ['Transport', 'RelayUrl'];
 
-/** What the widget says, once per mint function, when the server rejects the transport fields. */
-const TRANSPORT_UNSUPPORTED_WARNING =
-    '[RealtimeWidget] The server does not report the session transport — minting without it; every session connects directly.';
+/**
+ * What the mint asks for beyond what every server takes. A server that predates one rejects the mint at validation; the
+ * mint then goes without that one alone, and keeps doing so.
+ */
+interface WidgetMintExtensions {
+    /** A relay session's transport and URL: the `Transport` and `RelayUrl` fields. */
+    Transport: boolean;
+    /** The widget shows no agent video: the `showsAgentVideo: false` argument, so the server asks for no avatar. */
+    NoAgentVideo: boolean;
+}
 
-/** The mint mutation, with or without the transport fields. */
-function startRealtimeMutation(withTransport: boolean): string {
-    const fields = withTransport ? [...MINT_FIELDS, ...TRANSPORT_FIELDS] : MINT_FIELDS;
+/** What the widget says, once per mint function, when the server rejects an extension. */
+const UNSUPPORTED_WARNINGS: Readonly<Record<keyof WidgetMintExtensions, string>> = {
+    Transport: '[RealtimeWidget] The server does not report the session transport — minting without it; every session connects directly.',
+    NoAgentVideo:
+        "[RealtimeWidget] The server does not take showsAgentVideo — minting without it; it may ask for an avatar the widget can't show (the call stays audio only).",
+};
+
+/** The mint mutation, with the extensions asked for. */
+function startRealtimeMutation(asked: WidgetMintExtensions): string {
+    const fields = asked.Transport ? [...MINT_FIELDS, ...TRANSPORT_FIELDS] : MINT_FIELDS;
+    const variable = asked.NoAgentVideo ? ', $showsAgentVideo: Boolean' : '';
+    const argument = asked.NoAgentVideo ? ', showsAgentVideo: $showsAgentVideo' : '';
     return `
-mutation StartWidgetVoiceSession($targetAgentId: String, $clientToolsJson: String) {
-  StartRealtimeClientSession(targetAgentId: $targetAgentId, clientToolsJson: $clientToolsJson) {
+mutation StartWidgetVoiceSession($targetAgentId: String, $clientToolsJson: String${variable}) {
+  StartRealtimeClientSession(targetAgentId: $targetAgentId, clientToolsJson: $clientToolsJson${argument}) {
     ${fields.join('\n    ')}
   }
 }`;
 }
 
 /**
- * Whether a mint failure is a server that predates the transport fields rejecting them at validation
- * (`Cannot query field "Transport"…`). The quoted field name, not the bare word: "Transport" alone could
- * be any transport error.
+ * The extension a mint failure rejects, when it is a server that predates one rejecting it at validation
+ * (`Unknown argument "showsAgentVideo"…`, `Cannot query field "Transport"…`); `null` for any other failure. The quoted
+ * field name, not the bare word: "Transport" alone could be any transport error.
  */
-function rejectsTransportFields(error: unknown): boolean {
+function rejectedExtension(error: unknown, asked: WidgetMintExtensions): keyof WidgetMintExtensions | null {
     const message = error instanceof Error ? error.message : String(error);
-    return message.includes('field "Transport"') || message.includes('RelayUrl');
+    if (asked.NoAgentVideo && message.includes('showsAgentVideo')) {
+        return 'NoAgentVideo';
+    }
+    if (asked.Transport && (message.includes('field "Transport"') || message.includes('RelayUrl'))) {
+        return 'Transport';
+    }
+    return null;
 }
 
 /**
@@ -73,24 +97,28 @@ function rejectsTransportFields(error: unknown): boolean {
  * start (so it can call e.g. `Whiteboard_*`); `RealtimeToolDefinition` is structurally identical to
  * {@link WidgetChannelToolDefinition} (Name / Description / ParametersSchema), so they serialize as-is.
  *
- * It asks for the session's transport and relay URL too. A server that predates them rejects the
- * mint at validation; the function then mints without them, and keeps doing so.
+ * It asks for the session's transport and relay URL too, and says the widget shows no agent video
+ * (`showsAgentVideo: false`). A server that predates one of them rejects the mint at validation; the
+ * function then mints without that one alone, and keeps doing so.
  */
 export function CreateGuestVoiceMint(session: WidgetSession): VoiceMintFn {
-    let serverLacksTransport = false;
+    const serverLacks = new Set<keyof WidgetMintExtensions>();
     const mint = async (variables: StartRealtimeSessionVariables): Promise<StartRealtimeSessionGQLResult> => {
-        if (!serverLacksTransport) {
+        let asked: WidgetMintExtensions = { Transport: !serverLacks.has('Transport'), NoAgentVideo: !serverLacks.has('NoAgentVideo') };
+        for (;;) {
             try {
-                return (await GraphQLDataProvider.Instance.ExecuteGQL(startRealtimeMutation(true), variables)) as StartRealtimeSessionGQLResult;
+                const sent = asked.NoAgentVideo ? { ...variables, showsAgentVideo: false } : variables;
+                return (await GraphQLDataProvider.Instance.ExecuteGQL(startRealtimeMutation(asked), sent)) as StartRealtimeSessionGQLResult;
             } catch (error) {
-                if (!rejectsTransportFields(error)) {
+                const rejected = rejectedExtension(error, asked);
+                if (!rejected) {
                     throw error;
                 }
-                serverLacksTransport = true;
-                console.warn(TRANSPORT_UNSUPPORTED_WARNING);
+                serverLacks.add(rejected);
+                console.warn(UNSUPPORTED_WARNINGS[rejected]);
+                asked = { ...asked, [rejected]: false };
             }
         }
-        return (await GraphQLDataProvider.Instance.ExecuteGQL(startRealtimeMutation(false), variables)) as StartRealtimeSessionGQLResult;
     };
     return async (clientTools: WidgetChannelToolDefinition[]): Promise<VoiceMintResult> => {
         const data = await mint({
