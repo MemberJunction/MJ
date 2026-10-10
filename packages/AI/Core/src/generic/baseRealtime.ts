@@ -192,10 +192,10 @@ export abstract class BaseRealtimeModel extends BaseModel {
     /**
      * Whether this driver's sessions can render a live avatar for the model, on the endpoint the driver serves.
      *
-     * Defaults to `false`: a driver whose models render no avatar says nothing more. A driver that renders one for some
-     * models (Gemini Enterprise) overrides it. The client-session service reads it to tell a call that asked for an
-     * avatar "this voice model can't show an avatar" ({@link RealtimeAvatarUnavailableReason} `'endpoint'`), whichever
-     * driver serves it.
+     * Defaults to `false`: a driver whose models render no avatar says nothing more, and may ignore an avatar request. A
+     * driver that renders one for some models (Gemini Enterprise) overrides it. The client-session service reads it to
+     * tell a call or a meeting that asked for an avatar "this voice model can't show an avatar"
+     * ({@link RealtimeAvatarUnavailableReason} `'endpoint'`), whichever driver serves it.
      *
      * @param _model The provider's API name for the model.
      * @returns `true` when sessions on this model can render a live avatar; `false` otherwise.
@@ -649,10 +649,11 @@ export interface IRealtimeSession {
 
     /**
      * What became of the session's avatar request, as decided when the session opened. Its driver decides, except when
-     * the session prep asked the driver for no avatar; the prep then says why: a phone call (`'phone'`), no face for the
-     * model's vendor (`'no-binding'`), an unknown avatar (`'unknown-avatar'`), a model that shows none (`'endpoint'`), or
-     * a host that publishes no avatar into a room (`'bridged'`). Absent when the session asked for no avatar (the voiced
-     * agent's video setting is off), or the driver does not report it.
+     * the driver has nothing to report: the session prep asked it for no avatar, or it renders no avatar and ignored the
+     * request. The agent runtime then says why: a phone call (`'phone'`), no face for the model's vendor
+     * (`'no-binding'`), an unknown avatar (`'unknown-avatar'`), a model that shows none (`'endpoint'`), or a host that
+     * publishes no avatar into a room (`'bridged'`). Absent when the session asked for no avatar (the voiced agent's video
+     * setting is off), or its driver reported nothing about one on a model that shows avatars.
      */
     AvatarStatus?: RealtimeAvatarStatus;
 

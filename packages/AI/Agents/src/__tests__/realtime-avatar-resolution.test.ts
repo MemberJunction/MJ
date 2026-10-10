@@ -312,4 +312,32 @@ describe("A server-side (bridged) session's avatar status (ResolveBridgedAvatarS
         expect(meeting({ Voice: 'Puck' })).toBeUndefined();
         expect(meeting(undefined, { RoomDelivery: false, ModelShowsAvatar: () => false })).toBeUndefined();
     });
+
+    describe('when the driver was asked for the avatar and reported nothing, as a driver that renders none does (#5429)', () => {
+        it('says the voice model shows none, as a browser call does', () => {
+            const model = vi.fn(() => false);
+            expect(meeting({ Avatar: BEN_REQUEST, Voice: 'Puck' }, { ModelShowsAvatar: model })).toEqual(audioOnly('endpoint'));
+            expect(model).toHaveBeenCalledTimes(1);
+        });
+
+        it('says bridged when the host publishes no avatar into a room, as a driver asked there does, and asks nothing about the model', () => {
+            const model = vi.fn(() => false);
+            expect(meeting({ Avatar: BEN_REQUEST }, { RoomDelivery: false, ModelShowsAvatar: model })).toEqual(audioOnly('bridged'));
+            expect(model).not.toHaveBeenCalled();
+        });
+
+        it("says nothing on a model that shows avatars: the driver's silence names no reason", () => {
+            const model = vi.fn(() => true);
+            expect(meeting({ Avatar: BEN_REQUEST }, { ModelShowsAvatar: model })).toBeUndefined();
+            expect(model).toHaveBeenCalledTimes(1);
+        });
+
+        it("keeps every status a driver did report, whatever the model says, and asks nothing about the model", () => {
+            const model = vi.fn(() => false);
+            for (const reported of [{ Requested: true, Granted: true }, audioOnly('custom-disabled'), audioOnly('endpoint'), audioOnly('bridged')]) {
+                expect(meeting({ Avatar: BEN_REQUEST }, { DriverStatus: reported, ModelShowsAvatar: model })).toBe(reported);
+            }
+            expect(model).not.toHaveBeenCalled();
+        });
+    });
 });

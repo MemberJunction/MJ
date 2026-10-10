@@ -307,7 +307,8 @@ export interface PrepareClientSessionInput {
      * `'room'` for a server-side (bridged) session whose host publishes the agent's avatar into a meeting room: the
      * avatar request resolved for the voiced agent carries it (`RealtimeAvatarSettings.Delivery`), so a driver may
      * render it there. Absent: a server-side session asks for no video (the driver logs `bridged`), and its avatar
-     * status says `bridged` also when the prep asked the driver for none. Ignored on a {@link PhoneCall}.
+     * status says `bridged` also when the prep asked the driver for none, or the driver reported nothing. Ignored on a
+     * {@link PhoneCall}.
      */
     AvatarDelivery?: 'room';
     /**
@@ -1001,10 +1002,10 @@ export class RealtimeClientSessionService {
      * under the co-agent run, supports barge-in cancel + paused-run resume — all of it, for free).
      *
      * Responsibilities, in order:
-     * 0. Report the avatar status the prep decided before the driver: a prep that asked the driver for no avatar (a phone
-     *    call, no face for the model's vendor, an unknown avatar, a Video/Output row that turns video off) leaves the
-     *    driver nothing to report, so the session's `AvatarStatus` says why instead of saying nothing
-     *    ({@link ResolveBridgedAvatarStatus}).
+     * 0. Report the avatar status the driver had nothing to say about: a prep that asked the driver for no avatar (a
+     *    phone call, no face for the model's vendor, an unknown avatar, a Video/Output row that turns video off) leaves
+     *    the driver nothing to report, and a driver that renders no avatar ignores a request, so the session's
+     *    `AvatarStatus` says why instead of saying nothing ({@link ResolveBridgedAvatarStatus}).
      * 1. Create the co-agent observability run (+ prompt run + step) so the voice session shows up in the
      *    agent-run timeline and delegated runs nest under it (best-effort; a failure just omits the ids).
      * 2. Record the session's usage on the co-agent prompt run, as client-direct calls do: `session.OnUsage` →
@@ -1032,7 +1033,7 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<BridgeRealtimeRuntime> {
-        this.reportPrepAvatarStatus(session, input, prep);
+        this.reportBridgedAvatarStatus(session, input, prep);
         const coAgent = prep.CoAgent;
         const resolution = prep.Resolution;
         if (!coAgent || !resolution) {
@@ -1089,13 +1090,13 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Gives a bridged session the avatar status its prep decided before the driver ({@link ResolveBridgedAvatarStatus}):
-     * a prep that asked the driver for no avatar (a phone call, no face for the model's vendor, an unknown avatar, a
-     * Video/Output row that turns video off) leaves the driver nothing to report, so the session says why instead, with
-     * one log line. A host reads it like any driver's status (the LiveKit room puts it on the agent's bot, so the room
-     * shows its notice). A session that asked for an avatar keeps the driver's status.
+     * Gives a bridged session the avatar status its driver had nothing to say about ({@link ResolveBridgedAvatarStatus}),
+     * with one log line: a prep that asked the driver for no avatar (a phone call, no face for the model's vendor, an
+     * unknown avatar, a Video/Output row that turns video off) leaves the driver nothing to report, and a driver that
+     * renders no avatar ignores a request and reports nothing. A host reads it like any driver's status (the LiveKit room
+     * puts it on the agent's bot, so the room shows its notice). A status the driver reported stands.
      */
-    private reportPrepAvatarStatus(session: IRealtimeSession, input: PrepareClientSessionInput, prep: RealtimeSessionParamsPrep): void {
+    private reportBridgedAvatarStatus(session: IRealtimeSession, input: PrepareClientSessionInput, prep: RealtimeSessionParamsPrep): void {
         const model = prep.Resolution;
         const status = ResolveBridgedAvatarStatus({
             Resolution: prep.AvatarResolution,
@@ -1103,10 +1104,12 @@ export class RealtimeClientSessionService {
             ModelShowsAvatar: () => (model ? RealtimeModelShowsAvatar(model, AIEngine.Instance) : false),
             DriverStatus: session.AvatarStatus,
         });
-        if (status && status !== session.AvatarStatus) {
-            session.AvatarStatus = status;
-            LogStatus(`[RealtimeCoAgent] bridged session avatar: audio only (${status.Reason}); the driver was asked for none.`);
+        if (!status || status === session.AvatarStatus) {
+            return;
         }
+        session.AvatarStatus = status;
+        const asked = prep.AvatarResolution?.Reason ? 'the driver was asked for none' : 'the driver was asked for one and reported nothing';
+        LogStatus(`[RealtimeCoAgent] bridged session avatar: audio only (${status.Reason}); ${asked}.`);
     }
 
     /**
