@@ -129,6 +129,13 @@ import { BuildSessionChannelPolicy, type RealtimeChannelRegistryRow } from './re
 const VIDEO_SECONDS_GRACE = 30;
 
 /**
+ * How long closing a bridged (server-held) session waits for its model session to close before the session's runs are
+ * finalized anyway, in milliseconds. A model session reports its last usage while it closes (a Gemini avatar session,
+ * the seconds of video it has not reported yet), and the runs are priced from what was stored when they are finalized.
+ */
+export const BRIDGE_SESSION_CLOSE_WAIT_MS = 5_000;
+
+/**
  * Context passed to {@link PrepareClientSessionInput.ResolveHostTools} describing the
  * model, vendor, and driver resolved for the realtime session.
  */
@@ -519,9 +526,9 @@ export interface RealtimeSessionParamsPrep {
  * The runtime handle returned by {@link RealtimeClientSessionService.WireBridgeRealtimeSession} — the
  * server long-lived (bridged) counterpart to what `PrepareClientSession` returns for the browser. The
  * bridge holds this for the life of the session: the observability run ids (for nesting + correlation)
- * and an **idempotent** {@link Finalize} the bridge MUST call on teardown so the co-agent run + prompt
- * run don't dangle in `Running`. Finalize also runs automatically when the session's `Close()` is invoked
- * or the connection drops — calling it again is a safe no-op.
+ * and an **idempotent** {@link Finalize} that keeps the co-agent run + prompt run from dangling in
+ * `Running`. It runs when the session's `Close()` is invoked, once the model session has closed, and when
+ * the connection drops — calling it again does nothing.
  */
 export interface BridgeRealtimeRuntime {
     /** The `MJ: AI Agent Runs` row id created for this voice session (delegated runs nest under it). */
@@ -530,7 +537,8 @@ export interface BridgeRealtimeRuntime {
     PromptRunID?: string;
     /**
      * Writes the session's last usage, then finalizes the co-agent + prompt run; usage reported afterwards is not
-     * stored. Idempotent; safe to call from multiple teardown paths.
+     * stored. Closing the session runs it after the model session closed, so what the session reports while closing
+     * is kept; calling it before `Close()` would drop that report. Idempotent: every teardown path may call it.
      */
     Finalize: (success: boolean) => Promise<void>;
     /**
@@ -603,6 +611,38 @@ interface BridgeToolCallWiring {
  */
 export function GetBridgeRealtimeRuntime(session: IRealtimeSession): BridgeRealtimeRuntime | undefined {
     return bridgeRuntimes.get(session);
+}
+
+/**
+ * Closes a bridged model session, waiting for it up to `waitMs`. Resolves when the close finishes or the wait runs out;
+ * rejects when the close fails within the wait. A close still running when the wait runs out is logged (what the
+ * session reports from then on is not stored), and so is its failure, should it fail later.
+ *
+ * @param close The session's own `Close()`.
+ * @param waitMs How long to wait for it.
+ * @param label Names the session in the log lines (its co-agent prompt run).
+ */
+async function closeBridgedSessionWithin(close: () => Promise<void>, waitMs: number, label: string): Promise<void> {
+    const closing = Promise.resolve(close());
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const waitRanOut = new Promise<true>((resolve) => {
+        timer = setTimeout(() => resolve(true), waitMs);
+        timer.unref?.();
+    });
+    try {
+        const ranOut = await Promise.race([closing.then(() => false), waitRanOut]);
+        if (ranOut) {
+            LogError(
+                `[Bridged usage] ${label}: the model session took more than ${waitMs} ms to close; its runs are finalized ` +
+                    `without waiting, so usage it reports while closing is not stored.`,
+            );
+            closing.catch((error: unknown) =>
+                LogError(`[Bridged usage] ${label}: closing the model session failed: ${error instanceof Error ? error.message : String(error)}`),
+            );
+        }
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 /**
@@ -929,8 +969,10 @@ export class RealtimeClientSessionService {
      * 3. Wire `session.OnToolCall` → `ExecuteRelayedTool` → `session.SendToolResult`.
      * 4. Guarantee finalize-once: wrap `session.Close()` and listen for an unexpected drop (`OnClose`), both
      *    routed through one idempotent finalizer. The bridge teardown calls `Close()`, so the run finalizes
-     *    on graceful end; a dropped socket finalizes via `OnClose`. The finalizer writes the session's last
-     *    usage before it finalizes the runs, so the prompt run is priced from its final counts.
+     *    on graceful end; a dropped socket finalizes via `OnClose`. The wrapped `Close()` closes the model
+     *    session first (waiting up to {@link BRIDGE_SESSION_CLOSE_WAIT_MS}), so the usage it reports while
+     *    closing is recorded; the finalizer then writes the session's last usage before it finalizes the runs,
+     *    so the prompt run is priced from its final counts.
      *
      * @param session The live realtime session the bridge owns (from `model.StartSession`).
      * @param input The same prep input used to build the session (carries AgentSessionID, TargetAgentID, …).
@@ -983,7 +1025,7 @@ export class RealtimeClientSessionService {
             ContextUser: contextUser,
             Provider: provider,
         });
-        this.finalizeOnBridgeClose(session, narrator, finalize);
+        this.finalizeOnBridgeClose(session, narrator, finalize, obs?.PromptRunID);
 
         const runtime: BridgeRealtimeRuntime = {
             CoAgentRunID: obs?.CoAgentRunID,
@@ -1027,6 +1069,7 @@ export class RealtimeClientSessionService {
     /**
      * The bridged session's idempotent finalizer. It closes the usage recorder first (no more updates; the unwritten
      * usage is written), so the prompt run's cost, computed when finalize stamps `CompletedAt`, covers the whole session.
+     * On a graceful close it runs after the model session closed (see `finalizeOnBridgeClose`).
      */
     private createBridgeFinalizer(
         obs: CoAgentObservabilityRunIds | null,
@@ -1079,17 +1122,29 @@ export class RealtimeClientSessionService {
     /**
      * Finalizes on graceful teardown (the bridge calls `Close()`) and on an unexpected drop. Both go through the
      * idempotent finalizer, so a double fire is harmless.
+     *
+     * `Close()` closes the model session before it finalizes: a session reports its last usage while it closes (a
+     * Gemini avatar session, the seconds of video not reported yet), and the finalizer stores only what was reported
+     * before it ran. The close is waited for up to {@link BRIDGE_SESSION_CLOSE_WAIT_MS}. The runs are finalized whether
+     * the close finished, failed or is still running; a failed close still rejects, after the finalize.
+     *
+     * @param promptRunID The session's co-agent prompt run, which names the session in a log line.
      */
     private finalizeOnBridgeClose(
         session: IRealtimeSession,
         narrator: DelegationNarrator,
         finalize: (success: boolean) => Promise<void>,
+        promptRunID: string | undefined,
     ): void {
         const originalClose = session.Close.bind(session);
+        const label = promptRunID ? `prompt run ${promptRunID}` : 'a session with no co-agent prompt run';
         session.Close = async (): Promise<void> => {
-            narrator.Cancel();
-            await finalize(true);
-            await originalClose();
+            narrator.Cancel(); // nothing more is spoken on a session that is closing
+            try {
+                await closeBridgedSessionWithin(originalClose, BRIDGE_SESSION_CLOSE_WAIT_MS, label);
+            } finally {
+                await finalize(true);
+            }
         };
         session.OnClose?.(() => { void finalize(true); });
     }
