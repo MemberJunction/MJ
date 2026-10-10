@@ -357,6 +357,13 @@ export async function ExecuteStartMeeting(
           MetadataProvider: provider,
           TurnMode: 'Active',
           TurnAddressing: 'Auto',
+          // The session exists for this agent's time in the room alone: it closes when the agent leaves (the meeting is
+          // ended, everyone leaves, the agent is stopped), not when the janitor finds it idle.
+          Host: {
+            OnSessionEnded: async (reason) => {
+              await sessionManager.CloseSessionForEndedBridge(createdSession.ID, reason, user, provider);
+            },
+          },
         });
       } catch (agentErr) {
         LogError(`[MeetingResolver] Failed to start agent participant ${ap.AgentID} in room ${meeting.RoomName}: ${agentErr instanceof Error ? agentErr.message : String(agentErr)}`);

@@ -120,7 +120,8 @@ export interface RealtimeSessionStartContext {
 /**
  * What a HOST that owns the call (a phone call arriving in a room, a web room with handoff tools) adds to an agent's
  * room session beyond the plain "join the room" the coordinator does for the Meet UI. All optional: a session started
- * without it behaves exactly as before.
+ * without it behaves exactly as before. A start that created the agent session for this agent alone (a Meet room, a
+ * scheduled meeting) passes only {@link AgentRoomHostOptions.OnSessionEnded}, to close that session when the agent leaves.
  */
 export interface AgentRoomHostOptions {
   /** Tools the host executes itself. */
@@ -140,7 +141,10 @@ export interface AgentRoomHostOptions {
   OnBargeIn?: () => void;
   /** Re-open the model session once, with the conversation so far, if it drops mid-call. */
   RecoverModelSession?: boolean;
-  /** Called once when the session has fully ended, for the host's own bookkeeping. */
+  /**
+   * Called once when the session has fully ended, for whatever reason (a stop, an emptied room, a lost model session),
+   * for the host's own bookkeeping: closing the agent session it created, freeing a capacity slot.
+   */
   OnSessionEnded?: (reason: BridgeDisconnectReason) => void | Promise<void>;
   /** How the agent got into the room. Default `'OnDemand'`. */
   JoinMethod?: 'InboundRoute' | 'OnDemand' | 'Invite';
@@ -203,7 +207,10 @@ export interface StartAgentRoomSessionParams {
   ContextUser?: UserInfo;
   /** The metadata provider for the session. */
   MetadataProvider?: IMetadataProvider;
-  /** What a host that owns the call adds (tools, framing, transcript, recovery). Absent for a plain Meet room. */
+  /**
+   * What a host that owns the call adds (tools, framing, transcript, recovery). A plain Meet room passes at most its
+   * end-of-session hook, to close the agent session it created.
+   */
   Host?: AgentRoomHostOptions;
 }
 

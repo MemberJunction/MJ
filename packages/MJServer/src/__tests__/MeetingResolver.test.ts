@@ -3,12 +3,14 @@ import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type {
+  MJAIAgentSessionEntity,
   MJMeetingEntity,
   MJMeetingParticipantEntity,
   MJPhoneNumberEntity,
   MJInteractionEntity,
   MJInteractionEventEntity,
 } from '@memberjunction/core-entities';
+import type { StartAgentRoomSessionParams } from '@memberjunction/livekit-room-server';
 
 const mocks = vi.hoisted(() => ({
   mintClientToken: vi.fn(async (roomName: string, identity: string, name?: string) => ({
@@ -16,7 +18,7 @@ const mocks = vi.hoisted(() => ({
     Identity: identity,
     ServerUrl: 'wss://livekit.example.com',
   })),
-  startAgentRoomSession: vi.fn(async () => ({
+  startAgentRoomSession: vi.fn(async (_params: StartAgentRoomSessionParams) => ({
     SessionBridgeID: 'bridge-123',
     RoomName: 'room-123',
   })),
@@ -69,6 +71,7 @@ import {
   type RSVPMeetingInput,
 } from '../resolvers/MeetingResolver.js';
 import type { AppContext } from '../types.js';
+import type { SessionManager } from '../agentSessions/SessionManager.js';
 
 class MockEntityBase {
   public ID: string = `mock-${Date.now()}-${Math.random()}`;
@@ -361,6 +364,40 @@ describe('MeetingResolver', () => {
       expect(m.Status).toBe('Ended');
       expect(m.EndedAt).toBeDefined();
       expect(mocks.stopAllAgentsInRoom).toHaveBeenCalledWith('mj-mtg-standup-1', 'Explicit', resolver.user, mockProvider);
+    });
+
+    it("closes an agent participant's session when its agent leaves the room (#5356)", async () => {
+      const m = new MockMeetingEntity();
+      m.ID = 'mtg-live-2';
+      m.HostUserID = 'user-host-1';
+      m.RoomName = 'mj-mtg-standup-2';
+      m.Status = 'Scheduled';
+      resolver.mockMeetings.push(m);
+
+      // The resolver's protected seams this test stands in for.
+      const seams = resolver as unknown as {
+        loadMeetingEntity: () => Promise<MockMeetingEntity>;
+        isUserHostOrCoHost: () => Promise<boolean>;
+        loadParticipants: () => Promise<object[]>;
+        sessionManager: SessionManager;
+      };
+      vi.spyOn(seams, 'loadMeetingEntity').mockResolvedValue(m);
+      vi.spyOn(seams, 'isUserHostOrCoHost').mockResolvedValue(true);
+      vi.spyOn(seams, 'loadParticipants').mockResolvedValue([
+        { ID: 'p-1', MeetingID: m.ID, Role: 'Agent', AgentID: 'agent-co-1', InviteStatus: 'Accepted' },
+      ]);
+      vi.spyOn(seams.sessionManager, 'CreateSession').mockResolvedValue({ ID: 'agent-session-789' } as unknown as MJAIAgentSessionEntity);
+      const closeSession = vi.spyOn(seams.sessionManager, 'CloseSession').mockResolvedValue(true);
+
+      await resolver.StartMeeting(m.ID, ctx);
+      const started = mocks.startAgentRoomSession.mock.calls[0][0];
+      expect(started.AgentSessionID).toBe('agent-session-789');
+      expect(closeSession).not.toHaveBeenCalled();
+
+      // The agent leaves (the meeting was ended, or everyone left): the coordinator runs the hook once its bridge has ended.
+      await started.Host?.OnSessionEnded?.('Explicit');
+
+      expect(closeSession).toHaveBeenCalledWith('agent-session-789', resolver.user, mockProvider, 'Explicit');
     });
   });
 
