@@ -148,6 +148,37 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         expect(Array.from(decoded2)).toEqual([3, 4, 5, 6]);
     });
 
+    it('SendInput drops a video frame instead of appending it as audio, reports it once, and still appends audio', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const mockSocket = new MockLiveWebSocket();
+            const session = new OpenAILiveSession(mockSocket, {
+                Model: 'gpt-live-1',
+                SystemPrompt: 'Prompt',
+            });
+            mockSocket.triggerOpen();
+            mockSocket.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-1' }));
+            await session.WaitForStarted();
+            mockSocket.sentFrames = [];
+
+            const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer;
+            session.SendInput({ Data: jpeg, Kind: 'video', MimeType: 'image/jpeg' });
+            session.SendInput({ Data: jpeg, Kind: 'video', MimeType: 'image/jpeg' });
+
+            expect(mockSocket.sentFrames).toEqual([]);
+            const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[OpenAILiveRealtime] Dropped'));
+            expect(drops).toEqual([['[OpenAILiveRealtime] Dropped video input of type image/jpeg: this session sends audio only.']]);
+
+            session.SendInput({ Data: new Uint8Array([1, 2, 3, 4]).buffer, Kind: 'audio' });
+            expect(mockSocket.sentFrames).toHaveLength(1);
+            const append = JSON.parse(mockSocket.sentFrames[0]);
+            expect(append.type).toBe('session.input_audio.append');
+            expect(Array.from(Buffer.from(append.audio, 'base64'))).toEqual([1, 2, 3, 4]);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
     it('handles audio, transcripts, and usage telemetry deltas', async () => {
         const mockSocket = new MockLiveWebSocket();
         const session = new OpenAILiveSession(mockSocket, {

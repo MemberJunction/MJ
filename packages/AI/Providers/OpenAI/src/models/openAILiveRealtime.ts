@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
     RealtimeDiagLog,
+    RealtimeDroppedInputReporter,
     IRealtimeSession,
     RealtimeSessionCapabilities,
     RealtimeSessionParams,
@@ -204,6 +205,9 @@ export class OpenAILiveSession implements IRealtimeSession {
     private _countedResponseIds = new Set<string>();
     private _currentTaskRevision = 0;
     private _toolBatchBarrier = new RealtimeToolBatchBarrier();
+
+    /** Reports the frames {@link SendInput} drops, once per kind and type. */
+    private readonly _droppedInput = new RealtimeDroppedInputReporter('OpenAILiveRealtime', 'this session sends audio only');
 
     private _outputHandlers: Array<(chunk: ArrayBuffer) => void> = [];
     private _transcriptHandlers: Array<(t: RealtimeTranscript) => void> = [];
@@ -701,9 +705,17 @@ export class OpenAILiveSession implements IRealtimeSession {
 
     // ─── IRealtimeSession Implementation ──────────────────────────────────────────
 
+    /**
+     * @inheritdoc
+     *
+     * Appends an audio frame to the session's input audio (`session.input_audio.append`). The session sends audio only,
+     * so a frame of another kind (a camera or screen frame) is dropped, never appended as audio, and reported once per
+     * kind and type.
+     */
     public SendInput(frame: RealtimeInputFrame): void {
-        if (frame.Kind === 'video') {
-            return; // Audio-only driver ignores video frames
+        if (frame.Kind !== 'audio') {
+            this._droppedInput.Report(frame);
+            return;
         }
         const chunk = frame.Data;
         if (this._closed) {
