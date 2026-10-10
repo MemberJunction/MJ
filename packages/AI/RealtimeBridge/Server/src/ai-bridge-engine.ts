@@ -15,6 +15,7 @@ import {
     InboundVideoRateOf,
     InboundVideoStreamsOf,
     IRealtimeSession,
+    IsAgentParticipantIdentity,
     ReadFmp4Init,
     RealtimeMediaKind,
     RealtimeTranscript,
@@ -1279,7 +1280,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             if (chunk && !active.ModelRecovering) {
                 if (!this.diagInbound.has(active.SessionBridgeID)) {
                     this.diagInbound.add(active.SessionBridgeID);
-                    LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). The agent is HEARING you.`, verboseOnly: true });
+                    LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). ${firstInboundFrameMeaning(frame.Track)}`, verboseOnly: true });
                 }
                 if (kind === 'video') {
                     this.tellModelVideoSourceSeen(active, frame);
@@ -1905,9 +1906,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // Only a REAL human turn counts as presence. In a multi-agent room every agent transcribes its peers'
         // speech as a 'user' turn (it has no other role to assign overheard audio); if those counted as a human,
         // an agents-only room would keep cancelling its own auto-leave and babble forever after the humans left —
-        // burning realtime tokens at full cost. The diarized inbound speaker tells us: an `agent-…` identity is a
-        // peer agent, NOT a human, so it must NOT keep the room alive.
-        const overheardAgent = source.LastInboundSpeaker?.toLowerCase().startsWith('agent-') === true;
+        // burning realtime tokens at full cost. The diarized inbound speaker tells us: an agent's identity
+        // (`agent-…`, IsAgentParticipantIdentity) is a peer agent, NOT a human, so it must NOT keep the room alive.
+        const overheardAgent = IsAgentParticipantIdentity(source.LastInboundSpeaker);
         if (!overheardAgent) {
             // A real human just spoke → definitive presence for EVERY agent in the room. Cancel any pending
             // empty-room auto-leave + reset the consecutive-agent-only counter.
@@ -2007,7 +2008,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             if (!active.IsTranscriptScribe) {
                 return; // only the scribe records human turns (avoids one copy per transcribing agent)
             }
-            if (active.LastInboundSpeaker?.toLowerCase().startsWith('agent-')) {
+            if (IsAgentParticipantIdentity(active.LastInboundSpeaker)) {
                 return; // the scribe is overhearing another agent — that agent's own bridge records it
             }
         }
@@ -2312,7 +2313,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
     /** Whether an inbound speaker label belongs to a human (diarized, and not a peer `agent-…` bot). */
     private isHumanSpeaker(label: string | undefined): boolean {
-        return label !== undefined && label.length > 0 && !label.toLowerCase().startsWith('agent-');
+        return label !== undefined && label.length > 0 && !IsAgentParticipantIdentity(label);
     }
 
     /**
@@ -3271,6 +3272,21 @@ function mediaKindOf(track: BridgeMediaTrackKind): RealtimeMediaKind {
 /** The name a camera or screen gets in a note when its driver gave none: never its `SourceID`. */
 function fallbackVideoSourceLabel(track: BridgeMediaTrackKind): string {
     return track === 'screen-in' ? "a participant's screen" : "a participant's camera";
+}
+
+/**
+ * What a bridge's first inbound frame tells the diagnostic log: a camera or screen frame means the agent can see it, and
+ * any other frame means the agent hears the room.
+ */
+function firstInboundFrameMeaning(track: BridgeMediaTrackKind): string {
+    switch (track) {
+        case 'video-in':
+            return 'The agent can SEE your camera.';
+        case 'screen-in':
+            return 'The agent can SEE your screen.';
+        default:
+            return 'The agent is HEARING you.';
+    }
 }
 
 /**

@@ -2,16 +2,17 @@
  * The coordinator decides whether an agent's bot watches a meeting: the agent's setting is on (through the bound
  * resolver) AND its model session takes video. When it watches, the bot's join token carries `mj.agentWatches`, so the
  * room offers people the choice from the moment the bot joins, and the bridge is told to read the cameras and screens
- * of people who allow it.
+ * of people who allow it. The bot joins with an agent's identity, so other agents' bots never read its video.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TokenVerifier } from 'livekit-server-sdk';
-import type {
-    IRealtimeSession,
-    RealtimeInputFrame,
-    RealtimeSessionCapabilities,
-    RealtimeToolDefinition,
-    RealtimeTrackDescriptor,
+import {
+    IsAgentParticipantIdentity,
+    type IRealtimeSession,
+    type RealtimeInputFrame,
+    type RealtimeSessionCapabilities,
+    type RealtimeToolDefinition,
+    type RealtimeTrackDescriptor,
 } from '@memberjunction/ai';
 import type { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
 import type { ActiveBridgeSession } from '@memberjunction/ai-bridge-server';
@@ -153,5 +154,17 @@ describe('LiveKitAgentRoomCoordinator — whether the bot watches', () => {
 
         await expect(start()).rejects.toThrow(/LiveKitTokenService is not configured/);
         expect(factory).not.toHaveBeenCalled();
+    });
+
+    it("joins the bot as agent-<agent session id>, so other agents' bots never read its camera or avatar as a person's", async () => {
+        const { ops, starts } = makeBridgeOps();
+        coordinator.SetBridgeOps(ops);
+        coordinator.SetSessionFactory(async () => new FakeModelSession(true));
+
+        await coordinator.StartAgentRoomSession({ AgentSessionID: '2B6F3C4D-1A2B-4C3D-8E9F-0123456789AB', RoomName: 'vision-room-identity', AgentName: 'Sage' });
+
+        const claims = await new TokenVerifier(CONFIG.ApiKey, CONFIG.ApiSecret).verify(String(starts[0].Configuration?.AccessToken));
+        expect(claims.sub).toBe('agent-2B6F3C4D-1A2B-4C3D-8E9F-0123456789AB');
+        expect(IsAgentParticipantIdentity(claims.sub)).toBe(true);
     });
 });

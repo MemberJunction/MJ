@@ -28,6 +28,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
+import { IsAgentParticipantIdentity as AIIsAgentParticipantIdentity } from '@memberjunction/ai';
 import {
     BaseRealtimeBridge,
     BridgeAvatarFailure,
@@ -80,25 +81,29 @@ function mapParticipantRole(role: LiveKitParticipantRole, isLocal: boolean | und
 }
 
 /**
- * The bot-identity convention the LiveKit room coordinator mints (`agent-<agentSessionId>`). A bridge only
- * knows its OWN bot via `IsLocal`; OTHER agents in a multi-agent room are REMOTE participants, so they must
- * be recognized by this identity prefix. Without it every other agent reads as a human — breaking
- * turn-taking's agent-exclusion (an agent treats another agent's speech as being addressed) AND the
- * "are any humans still present?" occupancy check the engine uses to auto-leave an empty room. The native room client
- * uses it too, so an agent's bot never reads another agent's video.
+ * Whether a LiveKit participant identity is an agent bot's: it starts with `agent-`, in any case.
+ *
+ * @deprecated Use `IsAgentParticipantIdentity` from `@memberjunction/ai`, which the room coordinator, the bridge engine
+ * and the bot share with this bridge. This calls it.
  */
 export function IsAgentParticipantIdentity(identity: string | undefined): boolean {
-    return typeof identity === 'string' && identity.toLowerCase().startsWith('agent-');
+    return AIIsAgentParticipantIdentity(identity);
 }
 
-/** Maps a LiveKit participant onto the bridge's {@link BridgeParticipantInfo}. */
+/**
+ * Maps a LiveKit participant onto the bridge's {@link BridgeParticipantInfo}. A bridge knows only its OWN bot, through
+ * `IsLocal`; OTHER agents in a multi-agent room are REMOTE participants, recognized by the identity the room coordinator
+ * gives every bot (`IsAgentParticipantIdentity` in `@memberjunction/ai`). Without it every other agent reads as a
+ * human, breaking turn-taking's agent exclusion (an agent treats another agent's speech as being addressed) AND the
+ * "are any humans still present?" occupancy check the engine uses to auto-leave an empty room.
+ */
 function toBridgeParticipant(p: LiveKitParticipant): BridgeParticipantInfo {
     return {
         ExternalId: p.Identity,
         DisplayName: p.DisplayName,
         Role: mapParticipantRole(p.Role, p.IsLocal),
         // The local bot OR any remote agent bot (by identity convention) counts as an agent, not a human.
-        IsAgent: p.IsLocal === true || IsAgentParticipantIdentity(p.Identity),
+        IsAgent: p.IsLocal === true || AIIsAgentParticipantIdentity(p.Identity),
     };
 }
 

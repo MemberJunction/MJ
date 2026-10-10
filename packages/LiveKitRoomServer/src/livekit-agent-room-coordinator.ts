@@ -18,6 +18,7 @@ import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
   AgentAvatarAttributes,
+  AgentParticipantIdentity,
   AgentWatchesAttributes,
   InboundVideoStreamsOf,
   ResolveIsModelFullDuplex,
@@ -391,7 +392,8 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     }
 
     const botName = params.AgentName ?? 'Agent';
-    const botIdentity = `agent-${params.AgentSessionID}`;
+    // `agent-<agent session id>`: the identity the bridge, the engine and other agents' bots read as an agent's.
+    const botIdentity = AgentParticipantIdentity(params.AgentSessionID);
     // Fail before opening a model session when LiveKit isn't configured. The bot's token itself is minted once the
     // session is open, because whether the bot watches depends on the session (see agentWatches).
     this.tokenService.AssertConfigured();
