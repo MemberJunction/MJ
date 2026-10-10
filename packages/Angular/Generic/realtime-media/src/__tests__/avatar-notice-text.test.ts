@@ -79,7 +79,7 @@ describe('AvatarNoticeText in a meeting (NameAgent)', () => {
   });
 });
 
-describe('AvatarNoticeText for a reason this version does not know (null)', () => {
+describe('AvatarNoticeText for a reason this version does not know (null, or one with no line here)', () => {
   it("says the avatar couldn't be shown, naming the agent, with or without the option", () => {
     const line = "Audio only for Sage: the avatar couldn't be shown in this meeting";
     expect(AvatarNoticeText(null, null, 'Sage', { NameAgent: true })).toBe(line);
@@ -88,8 +88,36 @@ describe('AvatarNoticeText for a reason this version does not know (null)', () =
     expect(AVATAR_NOTICE_UNKNOWN_REASON_TEXT).toBe("Audio only for {Agent}: the avatar couldn't be shown in this meeting");
   });
 
-  it("doesn't take a host's words: none of its lines covers a reason it can't name", () => {
+  it("doesn't take a host's line for a reason it knows in its place", () => {
     const overrides = { 'decoder-failed': 'Example Meet lost the avatar', bridged: '{Agent} is audio only here' };
     expect(AvatarNoticeText(null, overrides, 'Sage', { NameAgent: true })).toBe("Audio only for Sage: the avatar couldn't be shown in this meeting");
+  });
+
+  it("uses the host's own line for it (unknown) as written, with {Agent} filled, with or without the option", () => {
+    const overrides = { unknown: 'Example Meet shows {Agent} as audio only', bridged: '{Agent} is audio only here' };
+    expect(AvatarNoticeText(null, overrides, 'Sage', { NameAgent: true })).toBe('Example Meet shows Sage as audio only');
+    expect(AvatarNoticeText(null, overrides, 'Sage')).toBe('Example Meet shows Sage as audio only');
+    expect(AvatarNoticeText(null, overrides)).toBe('Example Meet shows the agent as audio only');
+  });
+
+  it('keeps the stock line when the host gives a blank one for it, so the notice is never empty', () => {
+    const line = "Audio only for Sage: the avatar couldn't be shown in this meeting";
+    expect(AvatarNoticeText(null, { unknown: '' }, 'Sage')).toBe(line);
+    expect(AvatarNoticeText(null, { unknown: '   ' }, 'Sage', { NameAgent: true })).toBe(line);
+  });
+
+  it("keeps a known reason's stock line when the host words only the unknown one", () => {
+    const overrides = { unknown: 'Example Meet shows {Agent} as audio only' };
+    expect(AvatarNoticeText('bridged', overrides, 'Sage')).toBe("Audio only for Sage: the avatar can't be shown in this meeting");
+    expect(AvatarNoticeText('endpoint', overrides, 'Sage', { NameAgent: true })).toBe("Audio only for Sage: this voice model can't show an avatar");
+  });
+
+  it('reads a reason with no line here, such as a newer one, as one it does not know', () => {
+    const newer: string = 'some-newer-reason';
+    const inherited: string = 'constructor';
+    for (const reason of [newer, inherited] as RealtimeAvatarUnavailableReason[]) {
+      expect(AvatarNoticeText(reason, null, 'Sage'), reason).toBe("Audio only for Sage: the avatar couldn't be shown in this meeting");
+      expect(AvatarNoticeText(reason, { unknown: '{Agent} is audio only here' }, 'Sage', { NameAgent: true }), reason).toBe('Sage is audio only here');
+    }
   });
 });

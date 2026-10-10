@@ -843,8 +843,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public EnableAgentVisionControl = true;
   /**
    * The host's own words for why the room shows an agent without its avatar, per reason (for example its product's name
-   * for "this app"), shown as written; `{Agent}` stands for the agent's name. A reason it leaves out keeps the stock
-   * line, which names the agent, and a reason the room doesn't know always does.
+   * for "this app"), shown as written; `{Agent}` stands for the agent's name. `unknown` words a reason the room doesn't
+   * know, such as a newer bot's. A reason it leaves out keeps the stock line, which names the agent.
    */
   @Input() public AvatarNoticeLabels: AvatarNoticeOverrides | null = null;
   /** Enable the server-authorized recording control (composite egress). */
