@@ -431,11 +431,14 @@ describe('Realtime.Pricing as seeded for Gemini 3.8 Live (metadata/ai-models)', 
         expect(ResolveEffectiveModelConfiguration(Model, Row)?.Realtime?.Pricing).toBeUndefined();
     });
 
-    it('the Vertex AI row states the Google row\'s Realtime knobs, so only the price differs', () => {
-        const { Pricing, ...vertexKnobs } = seededLayers('Gemini 3.8 Live', 'Vertex AI').Row?.Realtime ?? {};
+    it('the Vertex AI row states the Google row\'s Realtime knobs, so only the price and the turn coverage differ', () => {
+        const { Pricing, TurnDetection: vertexTurns, ...vertexKnobs } = seededLayers('Gemini 3.8 Live', 'Vertex AI').Row?.Realtime ?? {};
+        const { TurnDetection: googleTurns, ...googleKnobs } = seededLayers('Gemini 3.8 Live', 'Google').Row?.Realtime ?? {};
 
         expect(Pricing).toBeDefined();
-        expect(vertexKnobs).toEqual(seededLayers('Gemini 3.8 Live', 'Google').Row?.Realtime);
+        expect(vertexTurns?.Coverage, 'Vertex AI refuses TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO at session setup').toBe('audioActivityOnly');
+        expect(vertexKnobs).toEqual(googleKnobs);
+        expect({ ...vertexTurns, Coverage: undefined }).toEqual({ ...googleTurns, Coverage: undefined });
     });
 });
 
