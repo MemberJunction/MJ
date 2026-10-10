@@ -1,7 +1,8 @@
 /**
  * A fake `@livekit/rtc-node` module for unit tests (no native addon, no network): a room whose events the test emits,
- * an outbound audio source that records captures, inbound audio streams, and, for participant video, video streams the
- * test pushes frames into, publications that record `setSubscribed`, and participants with attributes.
+ * an outbound audio source that records captures, inbound audio streams (real `ReadableStream`s, as the SDK's are) and,
+ * for participant video, video streams the test pushes frames into, publications that record `setSubscribed`, and
+ * participants with attributes.
  *
  * Mirrors the SDK's ordering where it matters: a test that makes a participant leave removes them from the room
  * before emitting `ParticipantDisconnected`, and a test that changes attributes or mutes a track updates the object
@@ -44,6 +45,88 @@ export const TRACK_KIND = { KIND_AUDIO: 1, KIND_VIDEO: 2 };
 export const TRACK_SOURCE = { SOURCE_UNKNOWN: 0, SOURCE_CAMERA: 1, SOURCE_MICROPHONE: 2, SOURCE_SCREENSHARE: 3, SOURCE_SCREENSHARE_AUDIO: 4 };
 export const VIDEO_BUFFER_TYPE = { RGBA: 0, I420: 5 };
 export const VIDEO_ROTATION = { VIDEO_ROTATION_0: 0, VIDEO_ROTATION_90: 1, VIDEO_ROTATION_180: 2, VIDEO_ROTATION_270: 3 };
+
+/**
+ * An inbound audio stream as rtc-node 0.13.29 builds one: a real WHATWG `ReadableStream` with no `close()`, so iterating it
+ * with `for await` locks it and a locked stream refuses `cancel()`. Its source's `cancel` is where the SDK stops listening
+ * for the stream's frames and disposes the native stream; here it records the reason. `push` hands the stream a frame
+ * (ignored once it was cancelled or ended: the SDK's listener is gone by then), and `end` is the SDK's end of stream.
+ * Reads through `getReader()` are counted, so a test can tell whether the bot is still reading.
+ */
+export class FakeAudioStream extends ReadableStream<RtcAudioFrame> {
+    public readonly track: RtcTrack;
+    /** The reason of each cancel that reached the stream's source (at most one: a cancelled stream is closed). */
+    public readonly cancelReasons: Array<string | undefined>;
+    /** `read()` calls through readers from `getReader()` still waiting for a frame. */
+    public pendingReads = 0;
+    /** `read()` calls made after the stream's source was cancelled. */
+    public readsAfterCancel = 0;
+    private readonly controller: ReadableStreamDefaultController<RtcAudioFrame>;
+    private ended = false;
+
+    /** @param frames Frames queued before the bot reads: the stream's first frames. */
+    public constructor(track: RtcTrack, frames: readonly RtcAudioFrame[] = []) {
+        const cancelReasons: Array<string | undefined> = [];
+        let controller: ReadableStreamDefaultController<RtcAudioFrame> | undefined;
+        super({
+            start: (c) => {
+                controller = c;
+            },
+            cancel: (reason?: string) => {
+                cancelReasons.push(reason);
+            },
+        });
+        if (!controller) {
+            throw new Error('the stream did not start');
+        }
+        this.track = track;
+        this.cancelReasons = cancelReasons;
+        this.controller = controller;
+        for (const frame of frames) {
+            controller.enqueue(frame);
+        }
+    }
+
+    /** Whether a cancel reached the stream's source (the SDK disposed the native stream). */
+    public get cancelled(): boolean {
+        return this.cancelReasons.length > 0;
+    }
+
+    /** Hands the stream one frame, as the SDK does when the native stream delivers one. */
+    public push(frame: RtcAudioFrame): void {
+        if (!this.cancelled && !this.ended) {
+            this.controller.enqueue(frame);
+        }
+    }
+
+    /** The SDK's end of stream: queued frames stay readable, then `done`. */
+    public end(): void {
+        if (!this.cancelled && !this.ended) {
+            this.ended = true;
+            this.controller.close();
+        }
+    }
+
+    public override getReader(): ReadableStreamDefaultReader<RtcAudioFrame>;
+    public override getReader(options: { mode: 'byob' }): ReadableStreamBYOBReader;
+    public override getReader(options?: ReadableStreamGetReaderOptions): ReadableStreamReader<RtcAudioFrame> {
+        if (options?.mode === 'byob') {
+            return super.getReader({ mode: 'byob' });
+        }
+        const reader = super.getReader();
+        const read = reader.read.bind(reader);
+        reader.read = (): Promise<ReadableStreamReadResult<RtcAudioFrame>> => {
+            this.pendingReads++;
+            if (this.cancelled) {
+                this.readsAfterCancel++;
+            }
+            return read().finally(() => {
+                this.pendingReads--;
+            });
+        };
+        return reader;
+    }
+}
 
 /** A video stream the test feeds: `push` hands the reader a frame, `end` is the SDK's end of stream. */
 export class FakeVideoStream implements RtcVideoStream {
@@ -214,7 +297,7 @@ export interface FakePublishRecord {
     sid: string;
 }
 
-/** Records every captured outbound frame, every AudioStream rate request and every VideoStream opened. */
+/** Records every captured outbound frame, every AudioStream opened (and the rate it asked for) and every VideoStream opened. */
 export class Capture {
     /** The avatar's video sources and their captured frames. */
     public videoSources: FakeVideoSourceRecord[] = [];
@@ -233,6 +316,8 @@ export class Capture {
     public captured: RtcAudioFrame[] = [];
     public audioSourceRates: Array<[number, number]> = [];
     public audioStreamRates: Array<[number, number]> = [];
+    /** Every inbound audio stream opened, in order. */
+    public audioStreams: FakeAudioStream[] = [];
     public publishedSources: number[] = [];
     public publishedData: Uint8Array[] = [];
     public videoStreams: FakeVideoStream[] = [];
@@ -247,18 +332,6 @@ export class Capture {
     }
 }
 
-/** A fake async audio stream that yields the queued frames once, then ends. */
-function fakeAudioStream(frames: RtcAudioFrame[]): AsyncIterable<RtcAudioFrame> & { close?: () => void } {
-    return {
-        close: vi.fn(),
-        async *[Symbol.asyncIterator]() {
-            for (const f of frames) {
-                yield f;
-            }
-        },
-    };
-}
-
 /** What {@link makeFakeRtc} returns: the module, its recorder, and handles to drive the room. */
 export interface FakeRtc {
     module: RtcNodeModule;
@@ -266,6 +339,7 @@ export interface FakeRtc {
     /** The room's remote participants (mutable: push to join, splice to leave). */
     remote: RtcParticipant[];
     emit: (event: string, ...args: unknown[]) => void;
+    /** Sets the frames each audio stream opened from now on starts with; the stream then stays open, as a live track's does. */
     inboundFramesFor: (frames: RtcAudioFrame[]) => void;
 }
 
@@ -361,9 +435,11 @@ export function makeFakeRtc(remote: RtcParticipant[] = []): FakeRtc {
     function FakeAudioFrame(this: unknown, data: Int16Array, sampleRate: number, channels: number, samplesPerChannel: number): RtcAudioFrame {
         return { data, sampleRate, channels, samplesPerChannel };
     }
-    function FakeAudioStream(this: unknown, _track: RtcTrack, rate?: number, ch?: number): AsyncIterable<RtcAudioFrame> {
+    function FakeAudioStreamCtor(this: unknown, track: RtcTrack, rate?: number, ch?: number): FakeAudioStream {
         cap.audioStreamRates.push([rate ?? 0, ch ?? 0]);
-        return fakeAudioStream(queuedInbound);
+        const stream = new FakeAudioStream(track, queuedInbound);
+        cap.audioStreams.push(stream);
+        return stream;
     }
     function FakeVideoStreamCtor(this: unknown, track: RtcTrack): RtcVideoStream {
         const stream = new FakeVideoStream(track);
@@ -375,7 +451,7 @@ export function makeFakeRtc(remote: RtcParticipant[] = []): FakeRtc {
         Room: FakeRoom as unknown as RtcNodeModule['Room'],
         AudioSource: FakeAudioSource as unknown as RtcNodeModule['AudioSource'],
         AudioFrame: FakeAudioFrame as unknown as RtcNodeModule['AudioFrame'],
-        AudioStream: FakeAudioStream as unknown as RtcNodeModule['AudioStream'],
+        AudioStream: FakeAudioStreamCtor as unknown as RtcNodeModule['AudioStream'],
         VideoStream: FakeVideoStreamCtor as unknown as RtcNodeModule['VideoStream'],
         VideoBufferType: VIDEO_BUFFER_TYPE,
         VideoRotation: VIDEO_ROTATION,

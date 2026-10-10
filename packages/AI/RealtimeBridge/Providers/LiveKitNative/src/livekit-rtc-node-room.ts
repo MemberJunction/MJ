@@ -10,6 +10,8 @@
  * - **Hearing in** — each remote participant's subscribed audio track is read via an `AudioStream` and
  *   surfaced as a diarized `NativeRoomAudioFrame` (`{ data, participantIdentity, name }`). Screen-share audio (a shared
  *   tab's or screen's sound) is not the participant's speech: it is unsubscribed as it arrives and never reaches the model.
+ *   Each stream is read through a reader the client keeps, and cancelled when its track is unsubscribed, its participant
+ *   leaves, or the bot leaves the room; in rtc-node 0.13.29 none of these ends the stream by itself.
  * - **Seeing in** — when the client is created with video options (the agent watches the meeting), a
  *   {@link RoomVideoWatcher} reads the cameras and screens of people who let agents see them, as many at once as the
  *   model takes (one today), picked by a ranking: a shared screen first, else the active speaker's camera after a short
@@ -199,11 +201,32 @@ export interface RtcLocalAudioTrack {
     readonly __isLocalAudioTrack?: true;
 }
 
-/** An async stream of inbound PCM frames for one subscribed audio track. VERIFY: async-iterable. */
-export type RtcAudioStream = AsyncIterable<RtcAudioFrame> & {
-    /** Closes the stream and releases resources. */
-    close?(): void;
-};
+/** What one `read()` of an audio stream resolves to (the WHATWG `ReadableStreamReadResult`). */
+export type RtcAudioReadResult =
+    | { done: false; value: RtcAudioFrame }  // case-violation-ok-legacy-back-compat: mirrors the WHATWG stream API's member names
+    | { done: true; value?: undefined };  // case-violation-ok-legacy-back-compat: mirrors the WHATWG stream API's member names
+
+/**
+ * The reader of an `AudioStream`. VERIFY against @livekit/rtc-node: `cancel()` runs the stream source's `cancel`, which
+ * stops listening for the stream's frames and disposes its native handle (0.13.29's `AudioStreamSource.cancel`).
+ */
+export interface RtcAudioStreamReader {
+    /** Resolves with the next frame, or `done` once the stream ended or was cancelled. */
+    read(): Promise<RtcAudioReadResult>;  // case-violation-ok-legacy-back-compat: mirrors the WHATWG stream API's member names
+    /** Cancels the stream: a pending `read()` resolves `done`, queued frames are dropped, and the native stream is released. */
+    cancel(reason?: string): Promise<void>;  // case-violation-ok-legacy-back-compat: mirrors the WHATWG stream API's member names
+}
+
+/**
+ * The PCM frames of one subscribed audio track. VERIFY against @livekit/rtc-node: `new AudioStream(track, sampleRate,
+ * channels)` is a WHATWG `ReadableStream` (since 0.13.12) with no `close()`. Iterating it with `for await` locks it, and a
+ * locked stream refuses `cancel()`, so the client reads it through a reader it keeps and stops it by cancelling that reader.
+ * In 0.13.29 neither an unsubscribed track nor leaving the room ends the stream (0.13.32 ends it on unsubscribe).
+ */
+export interface RtcAudioStream {
+    /** Locks the stream to a reader. */
+    getReader(): RtcAudioStreamReader;  // case-violation-ok-legacy-back-compat: mirrors the WHATWG stream API's member names
+}
 
 /** The source the bot shows its avatar's frames through. VERIFY: `captureFrame(frame)` is synchronous. */
 export interface RtcVideoSource {
@@ -465,6 +488,16 @@ export const DefaultRtcNodeLoader: RtcNodeLoader = async (): Promise<RtcNodeModu
 /** @deprecated Use {@link DefaultRtcNodeLoader}. */
 export const defaultRtcNodeLoader: RtcNodeLoader = DefaultRtcNodeLoader;
 
+/** One subscribed audio track the client reads: the reader that stops it, and whose track it is. */
+interface InboundAudioStream {
+    /** The track's publication: `TrackUnsubscribed` names it again. */
+    publication: RtcTrackPublication;
+    participant: RtcParticipant;
+    reader: RtcAudioStreamReader;
+    /** Set once the client cancels the stream: a frame read before that but not yet handled is dropped, and the loop ends. */
+    cancelled: boolean;
+}
+
 /**
  * A real {@link NativeRoomClient} over `@livekit/rtc-node`. One instance per room session. Constructed by
  * {@link CreateLiveKitRtcNodeModule}'s `createRoomClient`, driven by `LiveKitNativeMeetingSdk`.
@@ -486,7 +519,10 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
      * `InvalidState` (the agent generates audio but is never heard).
      */
     private audioTrack: RtcLocalAudioTrack | null = null;
-    private readonly inboundStreams: RtcAudioStream[] = [];
+    /** The inbound audio streams being read. A stream leaves when it is cancelled or ends. */
+    private readonly inboundStreams = new Set<InboundAudioStream>();
+    /** Set when the bot leaves the room (`disconnect()`, or the room's `Disconnected`): no audio stream opens after that. */
+    private leftRoom = false;
 
     /**
      * Outbound audio is fed through a SERIAL queue, not fired concurrently. The realtime model emits its
@@ -586,7 +622,10 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         return { localIdentity: room.localParticipant.identity, roomName: room.name ?? '' };
     }
 
-    /** Disconnects, closes inbound streams, and releases the room. Tolerant of teardown errors. */
+    /**
+     * Disconnects: stops reading participant video and audio (every inbound audio stream is cancelled, and none opens
+     * after this), then releases the room. Tolerant of teardown errors.
+     */
     public async disconnect(): Promise<void> {
         const room = this.room;
         const monitor = GetModuleEventLoopMonitor();
@@ -606,7 +645,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         this.videoWatcher = null;
         this.avatarPublisher?.Dispose(); // ends the decoders; the room's teardown takes the camera track down
         this.avatarPublisher = null;
-        this.closeInboundStreams();
+        this.stopHearing('the bot left the room');
         this.inboundGaps.clear();
         this.screenShareAudioLogged.clear();
         this.lastCaptureFinishMs = undefined;
@@ -865,9 +904,13 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         });
     }
 
-    /** Wires room-level events (track-subscribed → inbound audio or video; participant + disconnect events). */
+    /**
+     * Wires room-level events: a subscribed track goes to inbound audio or video, and an unsubscribed one ends what read
+     * it; participant and disconnect events. VERIFY against @livekit/rtc-node: `(track, publication, participant)` for
+     * TrackSubscribed and TrackUnsubscribed; and, as LiveKit's Rust SDK reads, a participant who leaves has each subscribed
+     * track unsubscribed before `ParticipantDisconnected`, while the bot leaving the room unsubscribes nothing.
+     */
     private wireRoomEvents(rtc: RtcNodeModule, room: RtcRoom): void {
-        // VERIFY against @livekit/rtc-node: TrackSubscribed listener arity (track, publication, participant).
         room.on(rtc.RoomEvent.TrackSubscribed, ((track: RtcTrack, publication: RtcTrackPublication, participant: RtcParticipant) => {
             if (track.kind === rtc.TrackKind.KIND_AUDIO) {
                 this.routeInboundAudio(rtc, track, publication, participant);
@@ -876,11 +919,17 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
             }
         }) as (...args: never[]) => void);
 
+        room.on(rtc.RoomEvent.TrackUnsubscribed, ((_track: RtcTrack, publication: RtcTrackPublication, participant: RtcParticipant) => {
+            this.cancelInboundAudioOf(publication, participant, 'track unsubscribed');
+            this.videoWatcher?.HandleTrackUnsubscribed(publication, participant);
+        }) as (...args: never[]) => void);
+
         room.on(rtc.RoomEvent.ParticipantConnected, ((participant: RtcParticipant) => {
             this.participantConnectedHandler?.({ identity: participant.identity, name: participant.name });
         }) as (...args: never[]) => void);
 
         room.on(rtc.RoomEvent.ParticipantDisconnected, ((participant: RtcParticipant) => {
+            this.cancelInboundAudioFrom(participant, 'participant left'); // any track not unsubscribed first
             this.inboundGaps.delete(participant.identity);
             this.screenShareAudioLogged.delete(participant.identity);
             this.videoWatcher?.HandleParticipantDisconnected(participant);
@@ -888,6 +937,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         }) as (...args: never[]) => void);
 
         room.on(rtc.RoomEvent.Disconnected, ((reason?: unknown) => {
+            this.stopHearing('the room disconnected');
             this.videoWatcher?.Stop();
             this.disconnectedHandler?.(reason === undefined ? undefined : String(reason));
         }) as (...args: never[]) => void);
@@ -902,14 +952,18 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
      * (`SOURCE_SCREENSHARE_AUDIO`, the sound of a shared tab or screen): that is not the person speaking, and tab or system
      * audio is not model input. It is unsubscribed, as video the bot does not read is. Every other source is heard,
      * `SOURCE_UNKNOWN` and a missing source included: clients built on LiveKit's Rust SDK (rtc-node, the Python SDK)
-     * publish audio as `SOURCE_UNKNOWN` unless they name a source, so hearing only microphones would silence them.
+     * publish audio as `SOURCE_UNKNOWN` unless they name a source, so hearing only microphones would silence them. Once the
+     * bot has left the room, nothing is heard.
      */
     private routeInboundAudio(rtc: RtcNodeModule, track: RtcTrack, publication: RtcTrackPublication, participant: RtcParticipant): void {
+        if (this.leftRoom) {
+            return;
+        }
         if (publication.source === rtc.TrackSource.SOURCE_SCREENSHARE_AUDIO) {
             this.dropScreenShareAudio(publication, participant);
             return;
         }
-        this.consumeInboundAudio(rtc, track, participant);
+        this.consumeInboundAudio(rtc, track, publication, participant);
     }
 
     /**
@@ -942,16 +996,14 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     }
 
     /**
-     * Wires the events that end, open or rank a video source. VERIFY against @livekit/rtc-node: listener arities —
-     * `(track, publication, participant)` for TrackUnsubscribed, `(trackSid, participant, error)` for TrackSubscriptionFailed
-     * (as rtc-node 0.13.29's room.ts emits it), `(publication, participant)` for TrackPublished / TrackUnpublished /
-     * TrackMuted / TrackUnmuted (TrackPublished's participant may be undefined when the SDK can't find it),
-     * `(changedAttributes, participant)` for ParticipantAttributesChanged, and `(speakers)` for ActiveSpeakersChanged (the
-     * bot itself included when the agent speaks; the watcher drops it).
+     * Wires the events that end, open or rank a video source; TrackUnsubscribed reaches the watcher through
+     * {@link wireRoomEvents}. VERIFY against @livekit/rtc-node: listener arities — `(trackSid, participant, error)` for
+     * TrackSubscriptionFailed (as rtc-node 0.13.29's room.ts emits it), `(publication, participant)` for TrackPublished /
+     * TrackUnpublished / TrackMuted / TrackUnmuted (TrackPublished's participant may be undefined when the SDK can't find
+     * it), `(changedAttributes, participant)` for ParticipantAttributesChanged, and `(speakers)` for ActiveSpeakersChanged
+     * (the bot itself included when the agent speaks; the watcher drops it).
      */
     private wireVideoEvents(rtc: RtcNodeModule, room: RtcRoom, watcher: RoomVideoWatcher): void {
-        room.on(rtc.RoomEvent.TrackUnsubscribed, ((_track: RtcTrack, publication: RtcTrackPublication, participant: RtcParticipant) =>
-            watcher.HandleTrackUnsubscribed(publication, participant)) as (...args: never[]) => void);
         room.on(rtc.RoomEvent.TrackSubscriptionFailed, ((trackSid: string, participant: RtcParticipant, error?: string) =>
             watcher.HandleTrackSubscriptionFailed(trackSid, participant, error)) as (...args: never[]) => void);
         room.on(rtc.RoomEvent.TrackPublished, ((publication: RtcTrackPublication, participant: RtcParticipant | undefined) =>
@@ -970,54 +1022,132 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 
     /**
      * Reads one subscribed audio track via an `AudioStream` (constructed at the model's INPUT rate so frames
-     * arrive resampled) and forwards each frame as a diarized {@link NativeRoomAudioFrame}.
+     * arrive resampled) and forwards each frame as a diarized {@link NativeRoomAudioFrame}. The stream is read through a
+     * reader the client keeps, which is how it is stopped ({@link cancelInboundStream}).
      */
-    private consumeInboundAudio(rtc: RtcNodeModule, track: RtcTrack, participant: RtcParticipant): void {
-        const stream = new rtc.AudioStream(track, this.inboundRate, this.channels);
-        this.inboundStreams.push(stream);
-        void this.pumpAudioStream(stream, participant);
+    private consumeInboundAudio(rtc: RtcNodeModule, track: RtcTrack, publication: RtcTrackPublication, participant: RtcParticipant): void {
+        let reader: RtcAudioStreamReader;
+        try {
+            reader = new rtc.AudioStream(track, this.inboundRate, this.channels).getReader();
+        } catch (err) {
+            LogError(`[LiveKitRtcNodeRoomClient] could not open the audio stream of '${participant.identity}': ${err instanceof Error ? err.message : String(err)}`);
+            return;
+        }
+        const stream: InboundAudioStream = { publication, participant, reader, cancelled: false };
+        this.inboundStreams.add(stream);
+        void this.pumpAudioStream(stream);
     }
 
-    /** Async-iterates an inbound stream, mapping each frame to the diarized seam frame. Tolerant of errors. */
-    private async pumpAudioStream(stream: RtcAudioStream, participant: RtcParticipant): Promise<void> {
-        let hist = this.inboundGaps.get(participant.identity);
-        if (!hist) {
-            hist = { lt10ms: 0, b10_20ms: 0, b20_30ms: 0, b30_50ms: 0, b50_100ms: 0, gte100ms: 0, totalFrames: 0 };
-            this.inboundGaps.set(participant.identity, hist);
-        }
+    /**
+     * Reads an inbound stream until it ends or the client cancels it, mapping each frame to the diarized seam frame. A
+     * frame whose read finished just before a cancel is dropped, not handled after it. However the loop ends, the stream is
+     * cancelled and leaves the list, so a loop that an error stopped releases its native stream too (on a stream that
+     * ended, the cancel does nothing).
+     */
+    private async pumpAudioStream(stream: InboundAudioStream): Promise<void> {
+        const participant = stream.participant;
+        const hist = this.inboundGapHistogram(participant.identity);
         try {
-            for await (const frame of stream) {
-                const now = performance.now();
-                if (hist.lastFrameMs !== undefined) {
-                    const gap = now - hist.lastFrameMs;
-                    hist.totalFrames++;
-                    if (gap < 10) hist.lt10ms++;
-                    else if (gap < 20) hist.b10_20ms++;
-                    else if (gap < 30) hist.b20_30ms++;
-                    else if (gap < 50) hist.b30_50ms++;
-                    else if (gap < 100) hist.b50_100ms++;
-                    else hist.gte100ms++;
+            for (;;) {
+                const result = await stream.reader.read();
+                if (result.done || stream.cancelled) {
+                    break;
                 }
-                hist.lastFrameMs = now;
-
-                if (hist.totalFrames > 0 && hist.totalFrames % 500 === 0) {
-                    LogStatusEx({
-                        message: `[LiveKitRtcNodeRoomClient][telemetry] inbound frame gap histogram for '${participant.identity}': ` +
-                            `total=${hist.totalFrames} <10ms=${hist.lt10ms} 10-20ms=${hist.b10_20ms} 20-30ms=${hist.b20_30ms} ` +
-                            `30-50ms=${hist.b30_50ms} 50-100ms=${hist.b50_100ms} >=100ms=${hist.gte100ms}`,
-                        verboseOnly: true,
-                    });
-                }
-
+                this.recordInboundGap(participant.identity, hist);
                 this.audioHandler?.({
-                    data: Int16ToArrayBuffer(frame.data),
+                    data: Int16ToArrayBuffer(result.value.data),
                     participantIdentity: participant.identity,
                     name: participant.name,
                 });
             }
         } catch (err) {
-            LogError(`[LiveKitRtcNodeRoomClient] inbound audio stream for '${participant.identity}' ended with error: ${err instanceof Error ? err.message : String(err)}`);
+            if (!stream.cancelled) {
+                LogError(`[LiveKitRtcNodeRoomClient] inbound audio stream for '${participant.identity}' ended with error: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        } finally {
+            this.cancelInboundStream(stream, 'reading stopped');
         }
+    }
+
+    /** The participant's inbound frame-gap histogram, created when their first stream opens. */
+    private inboundGapHistogram(identity: string): InboundFrameGapHistogram {
+        let hist = this.inboundGaps.get(identity);
+        if (!hist) {
+            hist = { lt10ms: 0, b10_20ms: 0, b20_30ms: 0, b30_50ms: 0, b50_100ms: 0, gte100ms: 0, totalFrames: 0 };
+            this.inboundGaps.set(identity, hist);
+        }
+        return hist;
+    }
+
+    /** Counts the gap since the previous inbound frame, and logs the histogram every 500 frames (verbose only). */
+    private recordInboundGap(identity: string, hist: InboundFrameGapHistogram): void {
+        const now = performance.now();
+        if (hist.lastFrameMs !== undefined) {
+            const gap = now - hist.lastFrameMs;
+            hist.totalFrames++;
+            if (gap < 10) hist.lt10ms++;
+            else if (gap < 20) hist.b10_20ms++;
+            else if (gap < 30) hist.b20_30ms++;
+            else if (gap < 50) hist.b30_50ms++;
+            else if (gap < 100) hist.b50_100ms++;
+            else hist.gte100ms++;
+        }
+        hist.lastFrameMs = now;
+
+        if (hist.totalFrames > 0 && hist.totalFrames % 500 === 0) {
+            LogStatusEx({
+                message: `[LiveKitRtcNodeRoomClient][telemetry] inbound frame gap histogram for '${identity}': ` +
+                    `total=${hist.totalFrames} <10ms=${hist.lt10ms} 10-20ms=${hist.b10_20ms} 20-30ms=${hist.b20_30ms} ` +
+                    `30-50ms=${hist.b30_50ms} 50-100ms=${hist.b50_100ms} >=100ms=${hist.gte100ms}`,
+                verboseOnly: true,
+            });
+        }
+    }
+
+    /**
+     * Cancels one inbound stream, once, and drops it from the list: a pending `read()` resolves `done`, queued frames are
+     * dropped, and the SDK releases the native stream. Best-effort: a failure is logged.
+     */
+    private cancelInboundStream(stream: InboundAudioStream, reason: string): void {
+        this.inboundStreams.delete(stream);
+        if (stream.cancelled) {
+            return;
+        }
+        stream.cancelled = true;
+        const logFailure = (err: unknown): void =>
+            LogError(`[LiveKitRtcNodeRoomClient] cancelling the audio stream of '${stream.participant.identity}' failed: ${err instanceof Error ? err.message : String(err)}`);
+        try {
+            stream.reader.cancel(reason).catch(logFailure);
+        } catch (err) {
+            logFailure(err);
+        }
+    }
+
+    /** Cancels the inbound streams that match. */
+    private cancelInboundStreams(reason: string, matches: (stream: InboundAudioStream) => boolean): void {
+        for (const stream of Array.from(this.inboundStreams)) {
+            if (matches(stream)) {
+                this.cancelInboundStream(stream, reason);
+            }
+        }
+    }
+
+    /** A track was unsubscribed: cancels the streams of its publication (the same object, or the same participant and track sid). */
+    private cancelInboundAudioOf(publication: RtcTrackPublication, participant: RtcParticipant, reason: string): void {
+        this.cancelInboundStreams(reason, (stream) =>
+            stream.publication === publication ||
+            (publication.sid !== undefined && stream.publication.sid === publication.sid && stream.participant.identity === participant.identity));
+    }
+
+    /** A participant left: cancels every stream of theirs. */
+    private cancelInboundAudioFrom(participant: RtcParticipant, reason: string): void {
+        this.cancelInboundStreams(reason, (stream) => stream.participant.identity === participant.identity);
+    }
+
+    /** The bot is leaving the room: cancels every inbound stream, and none opens after this. Idempotent. */
+    private stopHearing(reason: string): void {
+        this.leftRoom = true;
+        this.cancelInboundStreams(reason, () => true);
     }
 
     /**
@@ -1040,18 +1170,6 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
             snapshot.video = this.videoWatcher.GetTelemetry();
         }
         return snapshot;
-    }
-
-    /** Closes all inbound audio streams (best-effort). */
-    private closeInboundStreams(): void {
-        for (const stream of this.inboundStreams) {
-            try {
-                stream.close?.();
-            } catch {
-                // best-effort teardown
-            }
-        }
-        this.inboundStreams.length = 0;
     }
 }
 
