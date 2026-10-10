@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { RegisterClass } from '@memberjunction/global';
@@ -408,8 +408,7 @@ describe('session lifecycle, driven end to end with fakes', () => {
         });
 
         it('releases once when the call ended while it was connecting and the connection then fails', async () => {
-            // The failed connection unwinds through a second teardown, which finds nothing left to release.
-            const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+            // Teardown hands the microphone back; the unwind after the failed connection must not hand it back again.
             const host = new OrderingHost();
             const { runtime } = build(host);
             const reached = new Promise<void>((resolve) => (HeldConnectClient.Reached = resolve));
@@ -423,7 +422,6 @@ describe('session lifecycle, driven end to end with fakes', () => {
                 await starting;
             } finally {
                 HeldConnectClient.Gate = null;
-                error.mockRestore();
             }
 
             expect(host.Events).toEqual(['opened', 'released']);
@@ -478,6 +476,207 @@ describe('session lifecycle, driven end to end with fakes', () => {
 
             await runtime.EndRealtimeSession();
             expect(host.Events).toEqual(['opened', 'opened', 'released']);
+        });
+    });
+
+    describe('a call ended while it was connecting (#5420)', () => {
+        /**
+         * The provider handshake behind one Connect, which the test settles as the provider would. With
+         * `DisconnectFails`, the driver's Disconnect fails a handshake still in flight, as the WebSocket drivers do.
+         */
+        class Handshake {
+            public readonly Reached: Promise<void>;
+            public readonly Done: Promise<void>;
+            public Reach: () => void = () => undefined;
+            public Succeed: () => void = () => undefined;
+            public Fail: (error: Error) => void = () => undefined;
+
+            constructor(public readonly DisconnectFails = false) {
+                this.Reached = new Promise<void>((resolve) => (this.Reach = resolve));
+                this.Done = new Promise<void>((resolve, reject) => {
+                    this.Succeed = resolve;
+                    this.Fail = reject;
+                });
+            }
+        }
+
+        /** A driver whose Connect waits on the handshake the test puts in `Next`. */
+        @RegisterClass(BaseRealtimeClient, 'handshake-provider')
+        class HandshakeClient extends FakeRealtimeClient {
+            public static Next: Handshake | null = null;
+            private handshake: Handshake | null = null;
+
+            public override async Connect(): Promise<void> {
+                const handshake = HandshakeClient.Next;
+                HandshakeClient.Next = null;
+                this.handshake = handshake;
+                handshake?.Reach();
+                await handshake?.Done;
+            }
+
+            public override async Disconnect(): Promise<void> {
+                if (this.handshake?.DisconnectFails) {
+                    this.handshake.Fail(new Error('Disconnected while connecting.'));
+                }
+                await super.Disconnect();
+            }
+        }
+
+        /** A provider that can hold `CloseAgentSession`, so a test can act while the teardown that sent it runs. */
+        class HoldingProvider extends RecordingProvider {
+            private closeGate: Promise<void> | null = null;
+
+            /** Holds every `CloseAgentSession` until the test calls the function this returns. */
+            public HoldClose(): () => void {
+                let release: () => void = () => undefined;
+                this.closeGate = new Promise<void>((resolve) => (release = resolve));
+                return release;
+            }
+
+            public override async ExecuteGQL(query: string): Promise<unknown> {
+                const result = await super.ExecuteGQL(query);
+                if (query.includes('CloseAgentSession')) {
+                    await this.closeGate;
+                }
+                return result;
+            }
+        }
+
+        /** A runtime on a holding provider, with what a host watching it sees from the start. */
+        function buildWatched() {
+            const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+            const provider = new HoldingProvider();
+            runtime.Provider = provider as unknown as IMetadataProvider;
+            const states: string[] = [];
+            const active: boolean[] = [];
+            const ended: { sessionId: string; reason: string }[] = [];
+            runtime.ConnectionState$.subscribe((state) => states.push(state));
+            runtime.Active$.subscribe((isActive) => active.push(isActive));
+            runtime.SessionEnded$.subscribe((end) => ended.push(end));
+            return { runtime, provider, states, active, ended };
+        }
+
+        /** How many times the server session was closed. */
+        function closes(provider: RecordingProvider): number {
+            return mutationNames(provider).filter((n) => n === 'CloseAgentSession').length;
+        }
+
+        /** Lets every pending promise step run. */
+        function settle(): Promise<void> {
+            return new Promise<void>((resolve) => setTimeout(resolve, 0));
+        }
+
+        afterEach(() => {
+            HandshakeClient.Next = null;
+            vi.restoreAllMocks();
+        });
+
+        it('stays closed, with no start error and one teardown, when the connection fails after the call was ended', async () => {
+            const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const handshake = (HandshakeClient.Next = new Handshake());
+            const { runtime, provider, states, active, ended } = buildWatched();
+
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider'));
+            await handshake.Reached;
+            await runtime.EndRealtimeSession();
+            handshake.Fail(new Error('The socket closed before setup.'));
+            await starting;
+
+            expect(states).not.toContain('error');
+            expect(states.at(-1)).toBe('closed');
+            expect(runtime.LastStartError).toBeNull();
+            expect(error).not.toHaveBeenCalled();
+            // Each teardown ends by reporting the session inactive, so one teardown is one `false` after `true`.
+            expect(active).toEqual([false, true, false]);
+            expect(ended).toEqual([{ sessionId: 'session-1', reason: 'explicit' }]);
+            expect(closes(provider)).toBe(1);
+        });
+
+        it('leaves the end to the teardown when ending the call is what fails the connection', async () => {
+            // A WebSocket driver's Disconnect fails a handshake still in flight, so the start hears of the failure
+            // while the teardown is still closing the session.
+            const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const handshake = (HandshakeClient.Next = new Handshake(true));
+            const { runtime, provider, states, ended } = buildWatched();
+            const letClose = provider.HoldClose();
+
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider'));
+            await handshake.Reached;
+            const ending = runtime.EndRealtimeSession();
+            await settle();
+            letClose();
+            await Promise.all([starting, ending]);
+
+            expect(states).not.toContain('error');
+            expect(states.at(-1)).toBe('closed');
+            expect(runtime.LastStartError).toBeNull();
+            expect(error).not.toHaveBeenCalled();
+            expect(ended).toEqual([{ sessionId: 'session-1', reason: 'explicit' }]);
+            expect(closes(provider)).toBe(1);
+        });
+
+        it('leaves the server session to a teardown still running when the ended call connects after all', async () => {
+            const handshake = (HandshakeClient.Next = new Handshake());
+            const { runtime, provider, ended } = buildWatched();
+            const letClose = provider.HoldClose();
+
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider'));
+            await handshake.Reached;
+            const ending = runtime.EndRealtimeSession();
+            await settle();
+            handshake.Succeed();
+            await settle();
+            letClose();
+            await Promise.all([starting, ending]);
+
+            expect(ended).toEqual([{ sessionId: 'session-1', reason: 'explicit' }]);
+            expect(closes(provider)).toBe(1);
+            expect(runtime.Client).toBeNull();
+        });
+
+        it("does not end a newer call when the ended call's connection fails", async () => {
+            // A runtime can serve every call in an app (Explorer's is a root service), so a newer call can be live
+            // by the time the ended call's provider answers.
+            const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const abandoned = (HandshakeClient.Next = new Handshake());
+            const { runtime, states, ended } = buildWatched();
+            const first = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider', 'session-1'));
+            await abandoned.Reached;
+            await runtime.EndRealtimeSession();
+            const newer = (HandshakeClient.Next = new Handshake());
+            const second = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider', 'session-2'));
+            await newer.Reached;
+            newer.Succeed();
+            await second;
+
+            abandoned.Fail(new Error('The socket closed before setup.'));
+            await first;
+
+            expect(runtime.IsActive).toBe(true);
+            expect(runtime.CurrentAgentSessionId).toBe('session-2');
+            expect(runtime.LastStartError).toBeNull();
+            expect(states).not.toContain('error');
+            expect(error).not.toHaveBeenCalled();
+            expect(ended).toEqual([{ sessionId: 'session-1', reason: 'explicit' }]);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('still reports a connection that fails while the call is starting', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const handshake = (HandshakeClient.Next = new Handshake());
+            const { runtime, states, active, ended } = buildWatched();
+            const failure = new Error('The provider refused the session.');
+
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider'));
+            await handshake.Reached;
+            handshake.Fail(failure);
+            await starting;
+
+            expect(states.at(-1)).toBe('error');
+            expect(runtime.LastStartError).toBe(failure);
+            expect(runtime.IsActive).toBe(false);
+            expect(active).toEqual([false, true, false]);
+            expect(ended).toEqual([{ sessionId: 'session-1', reason: 'error' }]);
         });
     });
 
