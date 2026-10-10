@@ -16,11 +16,12 @@
  *   that silently starts seeing something else will describe the old thing.
  * - **The user can switch a source off.** A disabled source is not a candidate, sends nothing, and the
  *   model is told it was turned off (`[You can no longer see: Camera (the user turned it off)]`).
- *
- * The notes speak to the model in the second person, as one set with the notes a meeting's bot sends
- * (`[You can now see: …]`, `[You can no longer see: …]`).
  * - **The rate comes only from the negotiated track.** Pacing is read from the sink
  *   (`InboundVideoRate`), never a constant here.
+ *
+ * The notes' wording comes from `@memberjunction/ai` ({@link VideoSourceSeenNote}, {@link VideoSourceTurnedOffNote},
+ * {@link VideoSourceTurnedOnNote}), where a meeting's bridge engine gets its notes too, so the model reads one style of
+ * note in a call and in a meeting.
  *
  * It deliberately depends only on the narrow {@link IVideoFrameSink} interface (which
  * `BaseRealtimeClient` satisfies) and imports nothing from `generic/` or the drivers, so the media code
@@ -31,7 +32,7 @@
  * @module @memberjunction/ai-realtime-client
  */
 
-import type { RealtimeTrackDirection } from '@memberjunction/ai';
+import { VideoSourceSeenNote, VideoSourceTurnedOffNote, VideoSourceTurnedOnNote, type RealtimeTrackDirection } from '@memberjunction/ai';
 import { MinVideoFrameSpacingMs } from './videoPacing';
 
 /**
@@ -153,13 +154,13 @@ export interface VideoSourceArbiterOptions {
     Policy?: readonly VideoSourcePolicyRule[];
     /**
      * The note sent when the set of sources the model sees changes while sources are being arbitrated.
-     * Receives the labels now in view. Return `null` to send nothing. Default:
-     * `[You can now see: <label>]` (labels joined with ", ").
+     * Receives the labels now in view. Return `null` to send nothing. Default: {@link VideoSourceSeenNote}
+     * with every label in view.
      */
     FormatSwitchNote?: (labels: readonly string[]) => string | null;
-    /** The note sent when a source is turned off. Default: `[You can no longer see: <label> (the user turned it off)]`. */
+    /** The note sent when a source is turned off. Return `null` to send nothing. Default: {@link VideoSourceTurnedOffNote}. */
     FormatDisabledNote?: (label: string) => string | null;
-    /** The note sent when a source is turned back on. Default: `[You can now see: <label> (turned back on)]`. */
+    /** The note sent when a source is turned back on. Return `null` to send nothing. Default: {@link VideoSourceTurnedOnNote}. */
     FormatEnabledNote?: (label: string) => string | null;
     /** Reports a problem (a throwing sink). Defaults to `console.error`; the arbiter never throws into a caller's timer. */
     OnError?: (context: string, error: unknown) => void;
@@ -515,17 +516,17 @@ export class VideoSourceArbiter {
             return;
         }
         const labels = active.map((id) => this.sources.get(id)?.Label ?? id);
-        this.sendNote(this.options.FormatSwitchNote ? this.options.FormatSwitchNote(labels) : `[You can now see: ${labels.join(', ')}]`);
+        this.sendNote(this.options.FormatSwitchNote ? this.options.FormatSwitchNote(labels) : VideoSourceSeenNote(labels));
     }
 
     // ── plumbing ────────────────────────────────────────────────────────────
 
     private formatDisabledNote(label: string): string | null {
-        return this.options.FormatDisabledNote ? this.options.FormatDisabledNote(label) : `[You can no longer see: ${label} (the user turned it off)]`;
+        return this.options.FormatDisabledNote ? this.options.FormatDisabledNote(label) : VideoSourceTurnedOffNote(label);
     }
 
     private formatEnabledNote(label: string): string | null {
-        return this.options.FormatEnabledNote ? this.options.FormatEnabledNote(label) : `[You can now see: ${label} (turned back on)]`;
+        return this.options.FormatEnabledNote ? this.options.FormatEnabledNote(label) : VideoSourceTurnedOnNote(label);
     }
 
     private now(): number {
