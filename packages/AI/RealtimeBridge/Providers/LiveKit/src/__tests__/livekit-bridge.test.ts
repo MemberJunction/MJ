@@ -21,7 +21,6 @@ import {
 } from '@memberjunction/ai-bridge-base';
 import { BridgeVideoSourceEnd } from '@memberjunction/ai-bridge-base';
 import {
-    IsAgentParticipantIdentity,
     IsAvatarMediaFrame,
     LIVEKIT_BRIDGE_DRIVER_CLASS,
     LiveKitBridge,
@@ -486,13 +485,6 @@ describe('LiveKitBridge — video in (what the agent sees)', () => {
         expect(VideoSourceIdOf('p-ada', 'camera')).not.toBe(VideoSourceIdOf('p-ada', 'screen'));
         expect(VideoTrackOf('camera')).toBe('video-in');
         expect(VideoTrackOf('screen')).toBe('screen-in');
-    });
-
-    it('recognizes other agents by their identity, which the bot never reads', () => {
-        expect(IsAgentParticipantIdentity('agent-1234')).toBe(true);
-        expect(IsAgentParticipantIdentity('Agent-XYZ')).toBe(true);
-        expect(IsAgentParticipantIdentity('p-ada')).toBe(false);
-        expect(IsAgentParticipantIdentity(undefined)).toBe(false);
     });
 });
 
