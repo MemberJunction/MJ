@@ -661,6 +661,27 @@ describe('session lifecycle, driven end to end with fakes', () => {
             await runtime.EndRealtimeSession();
         });
 
+        it("reports no start error, not even an earlier call's, when the connection fails after the call was ended (#5431)", async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const { runtime, states } = buildWatched();
+            const refused = (HandshakeClient.Next = new Handshake());
+            const failed = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider', 'session-1'));
+            await refused.Reached;
+            refused.Fail(new Error('The provider refused the session.'));
+            await failed;
+            expect(runtime.LastStartError?.message).toBe('The provider refused the session.');
+
+            const handshake = (HandshakeClient.Next = new Handshake());
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider', 'session-2'));
+            await handshake.Reached;
+            await runtime.EndRealtimeSession();
+            handshake.Fail(new Error('The socket closed before setup.'));
+            await starting;
+
+            expect(runtime.LastStartError).toBeNull();
+            expect(states.at(-1)).toBe('closed');
+        });
+
         it('still reports a connection that fails while the call is starting', async () => {
             vi.spyOn(console, 'error').mockImplementation(() => {});
             const handshake = (HandshakeClient.Next = new Handshake());
@@ -702,11 +723,44 @@ describe('session lifecycle, driven end to end with fakes', () => {
         expect(mutationNames(provider)).toContain('CloseAgentSession');
     });
 
-    it('clears the last start error when a later session starts cleanly', async () => {
-        const { runtime } = build(new FakeMediaHost());
-        await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
-        expect(runtime.LastStartError).toBeNull();
-        await runtime.EndRealtimeSession();
+    it("keeps a failed start's error until the next start, which clears it before it reports connecting (#5431)", async () => {
+        /** A host whose microphone stays blocked until the user allows it. */
+        class BlockingHost extends FakeMediaHost {
+            public Blocked: Error | null = null;
+            public override async AcquireMicrophone(): Promise<MediaStream> {
+                if (this.Blocked) {
+                    throw this.Blocked;
+                }
+                return super.AcquireMicrophone();
+            }
+        }
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            const host = new BlockingHost();
+            const blocked = Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' });
+            host.Blocked = blocked;
+            const { runtime } = build(host);
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-1'));
+            expect(runtime.LastStartError).toBe(blocked);
+
+            // The user allows the microphone and tries again. Hosts read the error when the state changes, so record
+            // what one would read at each change; subscribing replays the failed start's 'error' first.
+            host.Blocked = null;
+            const read: { state: string; error: Error | null }[] = [];
+            const watch = runtime.ConnectionState$.subscribe((state) => read.push({ state, error: runtime.LastStartError }));
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-2'));
+            watch.unsubscribe();
+
+            expect(runtime.IsActive).toBe(true);
+            expect(read).toEqual([
+                { state: 'error', error: blocked },
+                { state: 'connecting', error: null },
+            ]);
+            expect(runtime.LastStartError).toBeNull();
+            await runtime.EndRealtimeSession();
+        } finally {
+            error.mockRestore();
+        }
     });
 
     describe('recording mixes the agent stream (#5153)', () => {

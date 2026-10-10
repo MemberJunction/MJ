@@ -459,6 +459,27 @@ describe('RealtimeSessionRuntime.Launcher', () => {
         expect(runtime.LastStartError?.message).toContain('guest exchange refused');
     });
 
+    it("clears a failed launch's error when the next start launches (#5431)", async () => {
+        const { runtime } = build();
+        let refuse = true;
+        runtime.Launcher = {
+            Launch: async () => {
+                if (refuse) {
+                    throw new Error('guest exchange refused');
+                }
+                return mintResult();
+            },
+        };
+        await start(runtime);
+        expect(runtime.LastStartError?.message).toContain('guest exchange refused');
+
+        refuse = false;
+        await start(runtime);
+        expect(runtime.IsActive).toBe(true);
+        expect(runtime.LastStartError).toBeNull();
+        await runtime.EndRealtimeSession();
+    });
+
     it('fails the start when a launcher returns no ephemeral token', async () => {
         const { runtime } = build();
         runtime.Launcher = { Launch: async () => mintResult({ EphemeralToken: '' }) };
