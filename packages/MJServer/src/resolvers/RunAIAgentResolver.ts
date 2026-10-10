@@ -753,6 +753,41 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
+     * The ID of this agent's newest root run in the conversation IF the user stopped it, else
+     * null. The query spans the runs that could be the predecessor (settled, or stopped by the
+     * user) and the newest decides, so a stopped run that a later settled run already followed
+     * is not chained to again. Uses the same filter and recognizer as `BaseAgent.findUserStoppedPredecessorRunId`
+     * (`MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter` / `IsUserStopped`), which carries the stopped run's
+     * completed results into the new run's context, so the two cannot pick different runs.
+     * Fail-soft: a lookup failure means no chaining, never a failed turn.
+     */
+    private async findUserStoppedPredecessorRunId(
+        conversationId: string,
+        agentId: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<string | null> {
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const newest = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(conversationId, agentId),
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 1,
+                Fields: ['ID', 'Status', 'CancellationReason'],
+                ResultType: 'simple',
+                // The row this looks for was written by the Stop button moments ago; read the database, not a cache.
+                BypassCache: true,
+            }, contextUser);
+            const run = newest.Success ? newest.Results?.[0] : undefined;
+            return run && MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason) ? run.ID : null;
+        } catch (error) {
+            LogError(`findUserStoppedPredecessorRunId failed; the turn runs unchained: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    }
+
+    /**
      * When a continuation run completes (lastRunId was provided), sync the corresponding
      * AIAgentRequest by marking it as responded. This keeps the dashboard accurate when
      * users respond to Chat steps via the conversation UI.
@@ -935,6 +970,22 @@ export class RunAIAgentResolver extends ResolverBase {
             }
             const conversationId = currentDetail.ConversationID;
 
+            // A turn that follows a run the user STOPPED continues that run rather than starting
+            // over: chain it by LastRunID (the chat client never sends one) and, when the caller
+            // supplied no payload, roll the stopped run's FinalPayload into this run's start.
+            let effectiveLastRunId = lastRunId;
+            let effectiveAutoPopulate = autoPopulateLastRunPayload;
+            if (!effectiveLastRunId) {
+                const stoppedRunId = await this.findUserStoppedPredecessorRunId(conversationId, effectiveAgentId, currentUser, p);
+                if (stoppedRunId) {
+                    effectiveLastRunId = stoppedRunId;
+                    if (effectiveAutoPopulate === undefined && payload == null) {
+                        effectiveAutoPopulate = true;
+                    }
+                    LogStatus(`↩️ Continuing from user-stopped run ${stoppedRunId} (chained by LastRunID)`);
+                }
+            }
+
             // Load conversation history with attachments from DB
             const messages = await this.loadConversationHistoryWithAttachments(
                 conversationId,
@@ -955,7 +1006,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 // The client will receive the result via WebSocket PubSub completion event.
                 this.executeAgentInBackground(
                     p, dataSource, effectiveAgentId, effectiveUserPayload, messagesJson, sessionId, pubSub,
-                    data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
+                    data, payload, effectiveLastRunId, effectiveAutoPopulate, configurationId,
                     conversationDetailId, createArtifacts || false, createNotification || false,
                     sourceArtifactId, sourceArtifactVersionId, conversationId, planMode, requestedSkillIDs,
                     undefined, // taskGraphDebug
@@ -982,8 +1033,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 data,
                 payload,
                 undefined, // templateData
-                lastRunId,
-                autoPopulateLastRunPayload,
+                effectiveLastRunId,
+                effectiveAutoPopulate,
                 configurationId,
                 conversationDetailId,
                 createArtifacts || false,

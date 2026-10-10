@@ -65,6 +65,20 @@
         </span>
       }
 
+      <!-- Stop control for an in-flight agent reply. Marks the run Cancelled; the owning
+           server process aborts the in-flight step and finalizes the run as stopped. -->
+      @if (CanStopRun) {
+        <button
+          type="button"
+          class="stop-run-pill"
+          [disabled]="IsStopping"
+          (click)="OnStopClick()"
+          [title]="IsStopping ? 'Stopping the run…' : 'Stop this run'">
+          <i class="fas" [ngClass]="IsStopping ? 'fa-circle-notch fa-spin' : 'fa-stop'"></i>
+          {{ IsStopping ? 'Stopping…' : 'Stop' }}
+        </button>
+      }
+
       <!-- Test feedback icon (appears for test runs only) -->
       @if (message.TestRunID) {
         <span

@@ -164,3 +164,125 @@ describe('AgentRunWatchdog', () => {
         });
     });
 });
+
+describe('AgentRunWatchdog stop relay (cancellation poll)', () => {
+    beforeEach(() => {
+        resetSingletons();
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+    });
+
+    /** Routes the poll's SELECT to `cancelledRows` and every other statement to `[]`. */
+    function providerWithCancelledRows(cancelledRows: Array<{ ID: string; CancellationReason: string | null }>): MockProvider {
+        const p = makeProvider();
+        p.ExecuteSQL.mockImplementation(async (sql: string) =>
+            /\[Status\] = 'Cancelled'/.test(sql) ? cancelledRows : []);
+        return p;
+    }
+
+    it('aborts a tracked run whose row was marked Cancelled with User Request, using the user-cancel reason', async () => {
+        const p = providerWithCancelledRows([{ ID: RUN_A, CancellationReason: 'User Request' }]);
+        const controller = new AbortController();
+        const wd = AgentRunWatchdog.Instance;
+        wd.Track(RUN_A, asProvider(p), mockUser, controller);
+
+        await vi.advanceTimersByTimeAsync(3_000);
+
+        expect(controller.signal.aborted).toBe(true);
+        expect(controller.signal.reason).toBe(AgentRunWatchdog.UserCancelAbortReason);
+        // Aborted runs leave the guarded set — nothing else to heartbeat for them.
+        expect(wd.TrackedCount).toBe(0);
+        expect(wd.IsStoppable(RUN_A)).toBe(false);
+    });
+
+    it('polls only the runs that registered a controller, and only while any did', async () => {
+        const p = providerWithCancelledRows([]);
+        const wd = AgentRunWatchdog.Instance;
+        wd.Track(RUN_A, asProvider(p), mockUser); // no controller — a stop cannot reach it
+        await vi.advanceTimersByTimeAsync(3_000);
+        expect(p.ExecuteSQL.mock.calls.some(c => /\[Status\] = 'Cancelled'/.test(String(c[0])))).toBe(false);
+
+        wd.Track(RUN_B, asProvider(p), mockUser, new AbortController());
+        await vi.advanceTimersByTimeAsync(3_000);
+        const pollCall = p.ExecuteSQL.mock.calls.find(c => /\[Status\] = 'Cancelled'/.test(String(c[0])));
+        expect(pollCall).toBeTruthy();
+        const sql = String(pollCall![0]);
+        expect(sql).toContain(`'${RUN_B}'`);
+        expect(sql).not.toContain(`'${RUN_A}'`);
+        expect(sql).toContain('[__mj].[vwAIAgentRuns]');
+    });
+
+    it('leaves a run alone while its row is still Running', async () => {
+        const p = providerWithCancelledRows([]);
+        const controller = new AbortController();
+        const wd = AgentRunWatchdog.Instance;
+        wd.Track(RUN_A, asProvider(p), mockUser, controller);
+
+        await vi.advanceTimersByTimeAsync(9_000);
+
+        expect(controller.signal.aborted).toBe(false);
+        expect(wd.TrackedCount).toBe(1);
+    });
+
+    it('uses the external-cancel reason when the row carries any other CancellationReason', async () => {
+        const p = providerWithCancelledRows([{ ID: RUN_A, CancellationReason: 'System' }]);
+        const controller = new AbortController();
+        AgentRunWatchdog.Instance.Track(RUN_A, asProvider(p), mockUser, controller);
+
+        await vi.advanceTimersByTimeAsync(3_000);
+
+        expect(controller.signal.aborted).toBe(true);
+        expect(controller.signal.reason).toBe(AgentRunWatchdog.ExternalCancelAbortReason);
+    });
+
+    it('raises distinct reasons for a user stop and an external cancel, so a reader never confuses them', () => {
+        expect(AgentRunWatchdog.UserCancelAbortReason).not.toBe(AgentRunWatchdog.ExternalCancelAbortReason);
+    });
+
+    it('RequestCancel aborts in-process without waiting for the poll, once', () => {
+        const p = makeProvider();
+        const controller = new AbortController();
+        const wd = AgentRunWatchdog.Instance;
+        wd.Track(RUN_A, asProvider(p), mockUser, controller);
+
+        expect(wd.RequestCancel(RUN_A)).toBe(true);
+        expect(controller.signal.aborted).toBe(true);
+        expect(controller.signal.reason).toBe(AgentRunWatchdog.UserCancelAbortReason);
+        // Already fired and untracked: a second request is a no-op.
+        expect(wd.RequestCancel(RUN_A)).toBe(false);
+        expect(wd.RequestCancel(RUN_B)).toBe(false);
+    });
+
+    it('Untrack drops the controller so a later cancel cannot reach a finished run', () => {
+        const p = makeProvider();
+        const controller = new AbortController();
+        const wd = AgentRunWatchdog.Instance;
+        wd.Track(RUN_A, asProvider(p), mockUser, controller);
+        wd.Untrack(RUN_A);
+
+        expect(wd.IsStoppable(RUN_A)).toBe(false);
+        expect(wd.RequestCancel(RUN_A)).toBe(false);
+        expect(controller.signal.aborted).toBe(false);
+    });
+
+    it('a failing poll query is logged, not thrown, and the run stays tracked', async () => {
+        const p = makeProvider();
+        p.ExecuteSQL.mockImplementation(async (sql: string) => {
+            if (/\[Status\] = 'Cancelled'/.test(sql)) {
+                throw new Error('boom');
+            }
+            return [];
+        });
+        const controller = new AbortController();
+        const wd = AgentRunWatchdog.Instance;
+        wd.Track(RUN_A, asProvider(p), mockUser, controller);
+
+        await expect(vi.advanceTimersByTimeAsync(3_000)).resolves.toBeTruthy(); // the timer tick itself never rejects
+
+        expect(controller.signal.aborted).toBe(false);
+        expect(wd.TrackedCount).toBe(1);
+    });
+});

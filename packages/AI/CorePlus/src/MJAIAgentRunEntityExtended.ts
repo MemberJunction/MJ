@@ -7,6 +7,55 @@ import { MJAIAgentRunStepEntityExtended } from "./MJAIAgentRunStepEntityExtended
 export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
     private _runSteps: MJAIAgentRunStepEntityExtended[] = [];
 
+    // ---- Run-state vocabulary ---------------------------------------------------------------
+    // Typed from the entity's own unions so a CHECK-constraint change surfaces here at compile
+    // time. Shared by the agent framework (BaseAgent) and the server (RunAIAgentResolver) so the
+    // two cannot drift on what a settled or a user-stopped run is.
+
+    /**
+     * The statuses a conversational turn settles in. `AwaitingFeedback` is included because a
+     * Chat final step is the normal per-turn completion for conversational agents.
+     * `ReadonlyArray<Union>` rather than an `as const` tuple so `.includes(status)` typechecks
+     * against the wider entity union while each literal is still checked.
+     */
+    public static readonly SettledStatuses: ReadonlyArray<MJAIAgentRunEntity['Status']> = ['Completed', 'AwaitingFeedback'];
+
+    /** The status a cancellation leaves behind. */
+    public static readonly CancelledStatus: MJAIAgentRunEntity['Status'] = 'Cancelled';
+
+    /** The cancellation reason a user's stop writes on the run. */
+    public static readonly UserRequestCancellationReason: NonNullable<MJAIAgentRunEntity['CancellationReason']> = 'User Request';
+
+    /**
+     * True when a run with this status and reason is one the user stopped: Cancelled, for a
+     * user request. Static so a `ResultType: 'simple'` row can be judged without an entity;
+     * {@link WasStoppedByUser} is the instance form.
+     */
+    public static IsUserStopped(status: string | null | undefined, cancellationReason: string | null | undefined): boolean {
+        return status === MJAIAgentRunEntityExtended.CancelledStatus
+            && cancellationReason === MJAIAgentRunEntityExtended.UserRequestCancellationReason;
+    }
+
+    /** True when the user stopped this run. See {@link IsUserStopped}. */
+    public get WasStoppedByUser(): boolean {
+        return MJAIAgentRunEntityExtended.IsUserStopped(this.Status, this.CancellationReason);
+    }
+
+    /**
+     * The `ExtraFilter` selecting, for one agent in one conversation, the root runs that could be
+     * the next turn's predecessor: those that settled, and those the user stopped. Ordered
+     * newest-first by the caller, the first row decides; a stopped run older than a settled one is
+     * history the settled run already built on and is not chained to again.
+     */
+    public static BuildStoppedPredecessorFilter(conversationId: string, agentId: string): string {
+        const settled = MJAIAgentRunEntityExtended.SettledStatuses.map((status) => `'${status}'`).join(', ');
+        return (
+            `ConversationID='${conversationId}' AND ParentRunID IS NULL AND AgentID='${agentId}' ` +
+            `AND (Status IN (${settled}) OR (Status='${MJAIAgentRunEntityExtended.CancelledStatus}' ` +
+            `AND CancellationReason='${MJAIAgentRunEntityExtended.UserRequestCancellationReason}'))`
+        );
+    }
+
     /**
      * Steps is the array of steps that are excuted within this run.
      */

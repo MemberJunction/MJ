@@ -92,6 +92,29 @@ export function selectPrimaryArtifact(
  */
 export class AgentRunner {
     /**
+     * The status and message the agent's reply detail ends with, from the run's result.
+     *
+     * A run the user stopped is not an error: its reply is marked Complete with a short "stopped"
+     * message, so the chat shows a quiet end rather than a red failure, and the run row (Cancelled,
+     * with its reason and the payload as it stood) carries the detail. Every other outcome keeps the
+     * long-standing mapping: the run's message when it wrote one, else Completed or the error.
+     */
+    public static ResolveFinalDetailState(agentResult: ExecuteAgentResult): { Status: 'Complete' | 'Error'; Message: string } {
+        const run = agentResult.agentRun;
+        if (run?.Status === 'Cancelled') {
+            const byUser = run.CancellationReason === 'User Request';
+            return {
+                Status: 'Complete',
+                Message: byUser ? '⏹️ Stopped by user' : `⏹️ Stopped: ${run.ErrorMessage || 'the run was cancelled'}`,
+            };
+        }
+        return {
+            Status: agentResult.success ? 'Complete' : 'Error',
+            Message: run?.Message || (agentResult.success ? '✅ Completed' : run?.ErrorMessage || '❌ Failed'),
+        };
+    }
+
+    /**
      * Why a conversation-detail `Save()` returned false, for an error or log line. The owner gate in
      * `MJConversationDetailEntityExtended` refuses a non-owner's write (e.g. the elevated System user
      * on a widget guest's conversation) and records the reason ONLY on `LatestResult` — it logs
@@ -525,11 +548,9 @@ export class AgentRunner {
                         LogError(`Failed to reload agent response detail ${agentResponseDetailId}`);
                     }
 
-                    agentResponseDetail.Message = agentResult.agentRun?.Message ||
-                                                 (agentResult.success
-                                                     ? '✅ Completed'
-                                                     : agentResult.agentRun?.ErrorMessage || '❌ Failed');
-                    agentResponseDetail.Status = agentResult.success ? 'Complete' : 'Error';
+                    const finalState = AgentRunner.ResolveFinalDetailState(agentResult);
+                    agentResponseDetail.Message = finalState.Message;
+                    agentResponseDetail.Status = finalState.Status;
 
                     // Set response form and command fields
                     if (agentResult.responseForm) {

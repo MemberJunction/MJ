@@ -27,6 +27,7 @@ import { ConversationAgentService } from '../../services/conversation-agent.serv
 import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
+  BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
@@ -48,6 +49,13 @@ export type MessageLivenessState = 'live' | 'checking' | 'stalled';
  * Silence after which an in-flight run is no longer presented as healthy. Three missed heartbeats
  * (`AgentRunWatchdogConfig.heartbeatIntervalMs` is 30s), so ordinary jitter never trips it.
  */
+/**
+ * How long the Stop control stays in its "Stopping…" state before it is offered again. The
+ * server's cancellation poll runs every few seconds, so a stop that has not landed by now
+ * most likely did not take.
+ */
+export const STOP_RETRY_AFTER_MS = 15_000;
+
 export const LIVENESS_CHECKING_MS = 90_000;
 
 /**
@@ -357,6 +365,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
   /** Hides the response form and actionable commands on this message. */
   @Input() public ReadOnly = false;
+
+  /**
+   * Whether the Stop control is offered on an in-progress agent reply. A host can turn stopping
+   * off for a surface without making the conversation read-only. Default true.
+   */
+  @Input() public AllowStopRun = true;
   /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
   @Input() public AssistantDisplayName: string | null = null;
 
@@ -579,6 +593,30 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   @Output() public afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
 
+  /**
+   * Fired BEFORE a stop is requested, when the person clicks Stop on this in-progress agent
+   * reply. Listeners may set `event.Cancel = true` to keep the run going; the control then
+   * stays available and nothing else happens. Carries the reply's detail id and the run id
+   * when the chat has seen the run row.
+   */
+  @Output() public BeforeStopClicked = new EventEmitter<BeforeStopClickedEventArgs>();
+
+  /**
+   * Fired when a stop was requested and no `BeforeStopClicked` listener canceled it. Carries
+   * the reply's conversation detail; the host resolves the run behind it, stops it, and fires
+   * its `AfterStopClicked` with the outcome.
+   */
+  @Output() public StopRequested = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * True from the moment Stop was clicked until the message leaves In-Progress, so the button
+   * reads "Stopping…" and cannot be clicked twice while the server catches up. Falls back to
+   * false after {@link STOP_RETRY_AFTER_MS} if the run is still going, so a stop that did not
+   * take (the row write was refused, the owning process is gone) can be tried again.
+   */
+  public IsStopping = false;
+  private _stopRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
   public ElapsedTimeFormatted: string = '0:00';
@@ -731,6 +769,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // Update previous status for next check
     this._previousMessageStatus = currentStatus;
 
+    // Once the run has ended (stopped or otherwise) the Stop control is gone; clear the
+    // "stopping" state so a later in-progress message on this item starts clean.
+    if (currentStatus !== 'In-Progress' && this.IsStopping) {
+      this.IsStopping = false;
+      this.clearStopRetryTimer();
+    }
+
     // Rebuild cached values so they're stable during Angular's check/verify cycle.
     // ngDoCheck runs once per CD pass but NOT during the dev-mode verify pass, so
     // snapshotting here produces values that don't change between the two reads.
@@ -881,6 +926,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   ngOnDestroy() {
     this.stopElapsedTimeUpdater();
+    this.clearStopRetryTimer();
   }
 
   /**
@@ -1432,6 +1478,45 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   public get IsInProgressAIMessage(): boolean {
     return this._stableIsInProgressAIMessage;
+  }
+
+  /**
+   * Whether this message offers a Stop control: an AI reply still in progress, in a conversation
+   * the viewer may write to. The server's permission check is the real gate; this only decides
+   * whether the control is shown.
+   */
+  public get CanStopRun(): boolean {
+    return this.IsInProgressAIMessage && !this.ReadOnly && this.AllowStopRun;
+  }
+
+  /** Stop button handler: marks the message as stopping and hands the request to the host. */
+  public OnStopClick(): void {
+    if (!this.CanStopRun || this.IsStopping) {
+      return;
+    }
+    // Listeners see the request first and may veto it. Cancel propagates synchronously through
+    // the message-list and chat-area re-emit bindings, so by the time emit() returns,
+    // event.Cancel reflects every subscriber's answer (same contract as the response-form pair).
+    const beforeEvent = new BeforeStopClickedEventArgs(this.message.ID, this.AgentRun?.ID ?? null);
+    this.BeforeStopClicked.emit(beforeEvent);
+    if (beforeEvent.Cancel) {
+      return;
+    }
+    this.IsStopping = true;
+    this.clearStopRetryTimer();
+    this._stopRetryTimer = setTimeout(() => {
+      this._stopRetryTimer = null;
+      this.IsStopping = false;
+      this.cdRef?.markForCheck?.();
+    }, STOP_RETRY_AFTER_MS);
+    this.StopRequested.emit(this.message);
+  }
+
+  private clearStopRetryTimer(): void {
+    if (this._stopRetryTimer) {
+      clearTimeout(this._stopRetryTimer);
+      this._stopRetryTimer = null;
+    }
   }
 
   /** @deprecated Use {@link IsInProgressAIMessage}. */
