@@ -9,7 +9,7 @@ import { AllBut, OutcomeOf } from './run-outcomes';
 
 describe('the video conformance kit on gemini-developer', () => {
     for (const check of ListRealtimeVideoConformanceChecks(() => new GeminiDeveloperHarness())) {
-        (check.SkipReason ? it.skip : it)(`${check.Id} ${check.Title}`, () => check.Run());
+        it.skipIf(check.SkipReason !== null)(`${check.Id} ${check.Title}`, () => check.Run());
     }
 
     it('passes the audio-only checks and skips the avatar checks: the Developer endpoint grants no avatar', async () => {

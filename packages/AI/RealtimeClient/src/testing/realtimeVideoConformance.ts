@@ -5,7 +5,7 @@
  *
  * ```ts
  * for (const check of ListRealtimeVideoConformanceChecks(() => new MyProviderHarness())) {
- *     (check.SkipReason ? it.skip : it)(`${check.Id} ${check.Title}`, () => check.Run());
+ *     it.skipIf(check.SkipReason !== null)(`${check.Id} ${check.Title}`, () => check.Run());
  * }
  * ```
  *
@@ -46,9 +46,10 @@ export async function RunRealtimeVideoConformance(driverFactory: RealtimeVideoCo
 }
 
 /**
- * The checks bound to a provider, for a test runner to register one test each. A check whose `SkipReason` is set should
- * be registered as skipped; its `Run` does nothing. `Run` makes a new harness, runs the check, disposes the harness, and
- * rejects with a {@link RealtimeVideoConformanceError} when the provider breaks a rule.
+ * The checks bound to a provider, for a test runner to register one test each. A check whose `SkipReason` is set has a
+ * `Run` that does nothing; register it as a conditional skip (vitest: `it.skipIf(check.SkipReason !== null)`), since the
+ * harness's traits and methods decide it, not as a disabled test. `Run` makes a new harness, runs the check, disposes
+ * the harness, and rejects with a {@link RealtimeVideoConformanceError} when the provider breaks a rule.
  *
  * `driverFactory` is called once here, to read the harness's traits and methods, and that harness is disposed.
  *
