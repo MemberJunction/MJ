@@ -571,53 +571,19 @@ export class UserProfileSettingsComponent extends BaseAngularComponent implement
    * This will trigger auto-sync from auth provider on next login
    */
   async RevertToDefault(): Promise<void> {
-    this.IsSaving = true;
-    this.errorMessage = '';
-    this.ShowSuccessMessage = false;
-
-    try {
-      // Clear both avatar fields
-      this.CurrentUser.UserImageURL = null;
-      this.CurrentUser.UserImageIconClass = null;
-
-      // Save to database
-      const saved = await this.CurrentUser.Save();
-
-      if (saved) {
-        // Clear local state
-        this.ImageUrlInput = '';
-        this.SelectedIconClass = '';
-        this.UploadedImageBase64 = '';
-        this.UploadedFileName = '';
-        this.PreviewUrl = '';
-        this.PreviewIconClass = '';
-
-        this.showSuccess('Avatar reverted to default! Your auth provider image will sync on next login.');
-
-        // Notify header component to update avatar display
-        MJGlobal.Instance.RaiseEvent({
-          event: MJEventType.ComponentEvent,
-          eventCode: EventCodes.AvatarUpdated,
-          component: this,
-          args: {
-            imageUrl: null,
-            iconClass: null
-          }
-        });
-      } else {
-        this.errorMessage = 'Failed to revert avatar. Please try again.';
-      }
-    } catch (error) {
-      console.error('Error reverting avatar:', error);
-      this.ngZone.run(() => {
-        this.errorMessage = 'An error occurred while reverting. Please try again.';
-        this.cdr.markForCheck();
-      });
-    } finally {
-      this.ngZone.run(() => {
-        this.IsSaving = false;
-        this.cdr.markForCheck();
-      });
+    const reverted = await this.applyAvatar(
+      null,
+      null,
+      'Avatar reverted to default! Your auth provider image will sync on next login.'
+    );
+    if (reverted) {
+      // Clear local state
+      this.ImageUrlInput = '';
+      this.SelectedIconClass = '';
+      this.UploadedImageBase64 = '';
+      this.UploadedFileName = '';
+      this.PreviewUrl = '';
+      this.PreviewIconClass = '';
     }
   }
 
@@ -656,69 +622,79 @@ export class UserProfileSettingsComponent extends BaseAngularComponent implement
    * Saves avatar settings to database
    */
   async save(): Promise<void> {
+    this.errorMessage = '';
+    this.ShowSuccessMessage = false;
+    const avatar = this.avatarForSelectedTab();
+    if (avatar) {
+      await this.applyAvatar(avatar.ImageURL, avatar.IconClass, 'Avatar updated successfully!');
+    }
+  }
+
+  /**
+   * The avatar the selected tab describes, or null (with `errorMessage` set) when the tab has
+   * nothing valid to save.
+   */
+  private avatarForSelectedTab(): { ImageURL: string | null; IconClass: string | null } | null {
+    switch (this.SelectedTab) {
+      case 'upload':
+        if (!this.UploadedImageBase64) {
+          this.errorMessage = 'Please select an image to upload';
+          return null;
+        }
+        return { ImageURL: this.UploadedImageBase64, IconClass: null };
+      case 'url':
+        if (!this.ImageUrlInput || !this.userAvatarService.isValidUrl(this.ImageUrlInput)) {
+          this.errorMessage = 'Please enter a valid image URL';
+          return null;
+        }
+        return { ImageURL: this.ImageUrlInput, IconClass: null };
+      case 'icon':
+        if (!this.SelectedIconClass) {
+          this.errorMessage = 'Please select an icon';
+          return null;
+        }
+        return { ImageURL: null, IconClass: this.SelectedIconClass };
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Saves the avatar through the server's self-service mutation (no Update permission on
+   * `MJ: Users` needed), reloads `CurrentUser` so it is clean, and tells the shell. On failure,
+   * shows the server's message.
+   *
+   * @returns true when the avatar was saved
+   */
+  private async applyAvatar(imageURL: string | null, iconClass: string | null, successMessage: string): Promise<boolean> {
     this.IsSaving = true;
     this.errorMessage = '';
     this.ShowSuccessMessage = false;
 
     try {
-      // Update user entity based on selected tab
-      switch (this.SelectedTab) {
-        case 'upload':
-          if (!this.UploadedImageBase64) {
-            this.errorMessage = 'Please select an image to upload';
-            this.IsSaving = false;
-            return;
-          }
-          this.CurrentUser.UserImageURL = this.UploadedImageBase64;
-          this.CurrentUser.UserImageIconClass = null;
-          break;
-
-        case 'url':
-          if (!this.ImageUrlInput || !this.userAvatarService.isValidUrl(this.ImageUrlInput)) {
-            this.errorMessage = 'Please enter a valid image URL';
-            this.IsSaving = false;
-            return;
-          }
-          this.CurrentUser.UserImageURL = this.ImageUrlInput;
-          this.CurrentUser.UserImageIconClass = null;
-          break;
-
-        case 'icon':
-          if (!this.SelectedIconClass) {
-            this.errorMessage = 'Please select an icon';
-            this.IsSaving = false;
-            return;
-          }
-          this.CurrentUser.UserImageURL = null;
-          this.CurrentUser.UserImageIconClass = this.SelectedIconClass;
-          break;
+      const result = await this.userAvatarService.UpdateMyAvatar(imageURL, iconClass, this.ProviderToUse);
+      if (!result.Success) {
+        this.errorMessage = result.ErrorMessage || 'Failed to save avatar. Please try again.';
+        return false;
       }
+      await this.CurrentUser.Load(this.CurrentUser.ID);
+      this.showSuccess(successMessage);
 
-      // Save to database
-      const saved = await this.CurrentUser.Save();
-
-      if (saved) {
-        this.showSuccess('Avatar updated successfully!');
-
-        // Notify header component to update avatar display
-        MJGlobal.Instance.RaiseEvent({
-          event: MJEventType.ComponentEvent,
-          eventCode: EventCodes.AvatarUpdated,
-          component: this,
-          args: {
-            imageUrl: this.CurrentUser.UserImageURL,
-            iconClass: this.CurrentUser.UserImageIconClass
-          }
-        });
-      } else {
-        this.errorMessage = 'Failed to save avatar. Please try again.';
-      }
+      // Notify header component to update avatar display
+      MJGlobal.Instance.RaiseEvent({
+        event: MJEventType.ComponentEvent,
+        eventCode: EventCodes.AvatarUpdated,
+        component: this,
+        args: {
+          imageUrl: this.CurrentUser.UserImageURL,
+          iconClass: this.CurrentUser.UserImageIconClass
+        }
+      });
+      return true;
     } catch (error) {
       console.error('Error saving avatar:', error);
-      this.ngZone.run(() => {
-        this.errorMessage = 'An error occurred while saving. Please try again.';
-        this.cdr.markForCheck();
-      });
+      this.errorMessage = 'An error occurred while saving. Please try again.';
+      return false;
     } finally {
       this.ngZone.run(() => {
         this.IsSaving = false;

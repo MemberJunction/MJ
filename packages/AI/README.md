@@ -101,32 +101,34 @@ graph TB
 
 Each provider implements one or more capability interfaces from `@memberjunction/ai`. The table below shows what each provider supports.
 
-| Provider | npm Package | LLM | Embeddings | Image Gen | Audio | Video | Reranking |
-|----------|-------------|:---:|:----------:|:---------:|:-----:|:-----:|:---------:|
-| **OpenAI** | `@memberjunction/ai-openai` | x | x | x | x | | |
-| **Anthropic** | `@memberjunction/ai-anthropic` | x | | | | | |
-| **Google Gemini** | `@memberjunction/ai-gemini` | x | x | x | | | |
-| **Mistral** | `@memberjunction/ai-mistral` | x | x | | | | |
-| **Groq** | `@memberjunction/ai-groq` | x | | | | | |
-| **xAI (Grok)** | `@memberjunction/ai-xai` | x | | | | | |
-| **Azure AI** | `@memberjunction/ai-azure` | x | x | | | | |
-| **Amazon Bedrock** | `@memberjunction/ai-bedrock` | x | x | | | | |
-| **Google Vertex** | `@memberjunction/ai-vertex` | x | | | | | |
-| **Fireworks** | `@memberjunction/ai-fireworks` | x | | | | | |
-| **OpenRouter** | `@memberjunction/ai-openrouter` | x | | | | | |
-| **Cerebras** | `@memberjunction/ai-cerebras` | x | | | | | |
-| **MiniMax** | `@memberjunction/ai-minimax` | x | | | | | |
-| **Zhipu (Z.AI)** | `@memberjunction/ai-zhipu` | x | | | | | |
-| **Ollama** | `@memberjunction/ai-ollama` | x | x | | | | |
-| **LM Studio** | `@memberjunction/ai-lmstudio` | x | | | | | |
-| **BettyBot** | `@memberjunction/ai-betty-bot` | x | | | | | |
-| **Black Forest Labs** | `@memberjunction/ai-blackforestlabs` | | | x | | | |
-| **ElevenLabs** | `@memberjunction/ai-elevenlabs` | | | | x | | |
-| **HeyGen** | `@memberjunction/ai-heygen` | | | | | x | |
-| **Cohere** | `@memberjunction/ai-cohere` | | x | | | | x |
-| **Local Embeddings** | `@memberjunction/ai-local-embeddings` | | x | | | | |
-| **Pinecone** | `@memberjunction/ai-vectors-pinecone` | | | | | | |
-| **Rex (rasa.io)** | `@memberjunction/ai-recommendations-rex` | | | | | | |
+| Provider | npm Package | LLM | Embeddings | Image Gen | Audio | Video | Reranking | Decision |
+|----------|-------------|:---:|:----------:|:---------:|:-----:|:-----:|:---------:|:--------:|
+| **OpenAI** | `@memberjunction/ai-openai` | x | x | x | x | | | |
+| **Anthropic** | `@memberjunction/ai-anthropic` | x | | | | | | |
+| **Google Gemini** | `@memberjunction/ai-gemini` | x | x | x | | | | |
+| **Mistral** | `@memberjunction/ai-mistral` | x | x | | | | | |
+| **Groq** | `@memberjunction/ai-groq` | x | | | | | | |
+| **xAI (Grok)** | `@memberjunction/ai-xai` | x | | | | | | |
+| **Azure AI** | `@memberjunction/ai-azure` | x | x | | | | | |
+| **Amazon Bedrock** | `@memberjunction/ai-bedrock` | x | x | | | | | |
+| **Google Vertex** | `@memberjunction/ai-vertex` | x | | | | | | |
+| **Fireworks** | `@memberjunction/ai-fireworks` | x | | | | | | |
+| **OpenRouter** | `@memberjunction/ai-openrouter` | x | | | | | | x |
+| **Cloudflare Workers AI** | `@memberjunction/ai-cloudflare` | | | | | | | x |
+| **System One endpoint, Perplexity** | `@memberjunction/ai-systemone` | | | | | | | x |
+| **Cerebras** | `@memberjunction/ai-cerebras` | x | | | | | | |
+| **MiniMax** | `@memberjunction/ai-minimax` | x | | | | | | |
+| **Zhipu (Z.AI)** | `@memberjunction/ai-zhipu` | x | | | | | | |
+| **Ollama** | `@memberjunction/ai-ollama` | x | x | | | | | |
+| **LM Studio** | `@memberjunction/ai-lmstudio` | x | | | | | | |
+| **BettyBot** | `@memberjunction/ai-betty-bot` | x | | | | | | |
+| **Black Forest Labs** | `@memberjunction/ai-blackforestlabs` | | | x | | | | |
+| **ElevenLabs** | `@memberjunction/ai-elevenlabs` | | | | x | | | |
+| **HeyGen** | `@memberjunction/ai-heygen` | | | | | x | | |
+| **Cohere** | `@memberjunction/ai-cohere` | | x | | | | x | |
+| **Local Embeddings** | `@memberjunction/ai-local-embeddings` | | x | | | | | |
+| **Pinecone** | `@memberjunction/ai-vectors-pinecone` | | | | | | | |
+| **Rex (rasa.io)** | `@memberjunction/ai-recommendations-rex` | | | | | | | |
 
 > Pinecone and Rex implement vector database and recommendation interfaces respectively, not the base AI model interfaces.
 

@@ -1,0 +1,216 @@
+[
+  {
+    "fields": {
+      "Name": "Kev-0.8B",
+      "Description": "The 0.8B model of Kev 1.0, Jared Palmer's open-weight (Apache-2.0) family of decision models: a LoRA adapter and a pointer head on Qwen3.5-0.8B-Base. It answers Likelihood, Choice (up to 255 options) and Score (2 to 10 levels) questions with a probability for every allowed option, takes the same System One request as Jev, and writes no text. Each checkpoint ships with a fitted temperature; set thresholds on your own data. Its model card validates states of up to 8,192 tokens. It is the smallest Kev, for when size matters more than accuracy. It is self-hosted: MJ reaches it through the System One Endpoint vendor and the SystemOneDecision driver, at any server with a /v1/systemone route, such as Kev's own server (for example deployed on Modal) or llama.cpp's llama-server, with the endpoint in an API Key with Endpoint credential bound to this model's row.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 45,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 10,
+          "MaxStateTokens": 8192
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=System One Endpoint",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "SystemOneDecision",
+            "APIName": "kev-latest",
+            "MaxInputTokens": 8192,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "874E61E7-7C9A-4F1A-A961-18ABDD181648"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E6E14ECA-7B94-44AE-9ED1-85F50FA058A2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kev-4B",
+      "Description": "The 4B model of Kev 1.0, Jared Palmer's open-weight (Apache-2.0) family of decision models: a LoRA adapter and a pointer head on Qwen3.5-4B-Base. It answers Likelihood, Choice (up to 255 options) and Score (2 to 10 levels) questions with a probability for every allowed option, takes the same System One request as Jev, and writes no text. Each checkpoint ships with a fitted temperature; set thresholds on your own data. Its model card validates states of up to 8,192 tokens. OpenRouter serves it through its Decisions API as jaredpalmer/kev-4b-20260924 (hosted by SiliconFlow in fp8, with an 8,192-token context), reached through the OpenRouterDecision driver. It can also be self-hosted: MJ reaches a self-hosted Kev-4B through the System One Endpoint vendor and the SystemOneDecision driver, at any server with a /v1/systemone route, such as Kev's own server (for example deployed on Modal) or llama.cpp's llama-server, with the endpoint in an API Key with Endpoint credential bound to this model's row.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 52,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 10,
+          "MaxStateTokens": 8192
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 2,
+            "Status": "Active",
+            "DriverClass": "OpenRouterDecision",
+            "APIName": "jaredpalmer/kev-4b-20260924",
+            "MaxInputTokens": 8192,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "2CB42D78-1756-4FCB-9322-89E5A1590606"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=System One Endpoint",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "SystemOneDecision",
+            "APIName": "kev-latest",
+            "MaxInputTokens": 8192,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "38D10B7D-C741-4AFE-8CD4-3701C8E13CBC"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-10-02T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.042,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Kev-4B through OpenRouter's Decisions API (jaredpalmer/kev-4b-20260924, served by SiliconFlow in fp8), October 2026: $0.042 per million input tokens; output is free."
+          },
+          "primaryKey": {
+            "ID": "DA44CD31-D165-4030-934D-1822DA13B0A5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6AD78221-0AE5-451D-BB2C-10A17BFB6909"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kev-9B",
+      "Description": "The 9B model of Kev 1.0, Jared Palmer's open-weight (Apache-2.0) family of decision models: a LoRA adapter and a pointer head on Qwen3.5-9B-Base. It answers Likelihood, Choice (up to 255 options) and Score (2 to 10 levels) questions with a probability for every allowed option, takes the same System One request as Jev, and writes no text. Each checkpoint ships with a fitted temperature; set thresholds on your own data. Its model card validates states of up to 8,192 tokens. It is self-hosted: MJ reaches it through the System One Endpoint vendor and the SystemOneDecision driver, at any server with a /v1/systemone route, such as Kev's own server (for example deployed on Modal) or llama.cpp's llama-server, with the endpoint in an API Key with Endpoint credential bound to this model's row.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 53,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 10,
+          "MaxStateTokens": 8192
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=System One Endpoint",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "SystemOneDecision",
+            "APIName": "kev-latest",
+            "MaxInputTokens": 8192,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6802D2F0-78EA-499D-A72D-6C6AA5F89337"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5A5BE70D-4543-488E-9806-AEB43D14FA9B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kev-27B",
+      "Description": "The 27B model of Kev 1.0, Jared Palmer's open-weight (Apache-2.0) family of decision models: a pointer head on Qwen3.8-27B (Qwen's post-trained release), with every weight fine-tuned, served in bf16 on an 80 GB GPU. It answers Likelihood, Choice (up to 255 options) and Score (2 to 10 levels) questions with a probability for every allowed option, takes the same System One request as Jev, and writes no text. Each checkpoint ships with a fitted temperature; set thresholds on your own data. Its model card validates states of up to 65,536 tokens. It is self-hosted: MJ reaches it through the System One Endpoint vendor and the SystemOneDecision driver, at any server with a /v1/systemone route, such as Kev's own server (for example deployed on Modal) or llama.cpp's llama-server, with the endpoint in an API Key with Endpoint credential bound to this model's row.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 56,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 10,
+          "MaxStateTokens": 65536
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=System One Endpoint",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "SystemOneDecision",
+            "APIName": "kev-latest",
+            "MaxInputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "06462BD0-65D3-4A62-9C8E-AC4D638EEB3D"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E7E06D9B-1B17-45BF-895E-E853781ACAC1"
+    }
+  }
+]
