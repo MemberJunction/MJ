@@ -9,7 +9,7 @@ import {
     LogStatus,
 } from '@memberjunction/core';
 import { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
-import { GetHostInstanceID, GetHostNamePrefix } from './HostInstance.js';
+import { GetCurrentHostInstance, GetHostInstanceID, HostInstanceIdentity } from './HostInstance.js';
 import { SessionManager, SessionCloseReason } from './SessionManager.js';
 
 /** Entity name for session rows (kept in sync with {@link SessionManager}). */
@@ -39,9 +39,10 @@ const DEFAULT_CONFIG: SessionJanitorConfig = {
  * Two sweeps, both writing through {@link SessionManager.CloseSession} so Record Changes captures
  * each transition and channel rows are disconnected consistently:
  *
- * 1. **Own-host recovery ({@link RunStartupRecovery})** — run once at boot. Closes any `Active`/`Idle`
- *    session whose `HostInstanceID` belongs to a *previous* boot of *this* host (same hostname prefix,
- *    different `bootId`). Primary defense against the "Active forever" leak after a restart.
+ * 1. **Own-instance recovery ({@link RunStartupRecovery})** — run once at boot. Closes any `Active`/`Idle`
+ *    session whose `HostInstanceID` belongs to an *earlier* boot of *this* MJAPI instance (same host and port,
+ *    different boot; see {@link HostInstanceIdentity}). Another MJAPI on the same host serves on another port,
+ *    so its live sessions are left alone. Primary defense against the "Active forever" leak after a restart.
  * 2. **Global staleness sweep ({@link RunStalenessSweep})** — run periodically on every instance.
  *    Closes any `Active`/`Idle` session whose `LastActiveAt` is older than `closeThresholdMinutes`,
  *    regardless of host. Catches sessions whose owner died without a clean reboot (OOM, scaled-down pod).
@@ -139,19 +140,34 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     }
 
     /**
-     * Force-close any `Active`/`Idle` session left behind by a *previous boot of this host*
-     * (matching hostname prefix, differing `bootId`). Returns the number of sessions closed.
+     * Force-close any `Active`/`Idle` session left behind by an earlier boot of this MJAPI instance: its
+     * `HostInstanceID` has this instance's prefix (`hostname:port:`) and another boot. The sessions of another
+     * MJAPI on the same host carry another port and stay open. Returns the number of sessions closed.
+     *
+     * @param provider The metadata provider for the reads and writes.
+     * @param systemUser The user the closes run as.
+     * @param hostInstance The instance whose earlier boots to close. Defaults to this process's
+     *   ({@link GetCurrentHostInstance}).
      */
-    public async RunStartupRecovery(provider: IMetadataProvider, systemUser: UserInfo): Promise<number> {
-        const prefix = GetHostNamePrefix().replace(/'/g, "''");
-        const current = GetHostInstanceID().replace(/'/g, "''");
+    public async RunStartupRecovery(
+        provider: IMetadataProvider,
+        systemUser: UserInfo,
+        hostInstance: HostInstanceIdentity = GetCurrentHostInstance(),
+    ): Promise<number> {
+        const prefix = hostInstance.GetInstancePrefix().replace(/'/g, "''");
+        const current = hostInstance.GetHostInstanceID().replace(/'/g, "''");
         const filter =
             `Status IN ('Active','Idle') ` +
             `AND HostInstanceID LIKE '${prefix}%' ` +
             `AND HostInstanceID <> '${current}'`;
-        const closed = await this.sweepAndClose(filter, provider, systemUser, 'Janitor');
+        // The LIKE narrows the read; the exact check decides, since LIKE reads a `_` in a host name as any character.
+        const isPriorBoot = (session: MJAIAgentSessionEntity): boolean => hostInstance.IsPriorBoot(session.HostInstanceID);
+        const closed = await this.sweepAndClose(filter, provider, systemUser, 'Janitor', isPriorBoot);
         if (closed > 0) {
-            LogStatus(`[SessionJanitor] Startup recovery closed ${closed} orphaned session(s) from a prior boot of this host`);
+            LogStatus(
+                `[SessionJanitor] Startup recovery closed ${closed} orphaned session(s) from an earlier boot of this instance ` +
+                    `(${hostInstance.GetInstancePrefix()})`,
+            );
         }
         return closed;
     }
