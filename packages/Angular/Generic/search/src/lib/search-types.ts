@@ -49,9 +49,32 @@ export interface SearchResultItem {
 
 /** Breakdown of score contribution from each search source */
 export interface ScoreBreakdown {
+    /** Semantic (vector) similarity, on the embedding model's own scale. */
     Vector?: number;
     FullText?: number;
+    /** Keyword (LIKE) match on searchable entity fields. */
     Entity?: number;
+    Storage?: number;
+    Tag?: number;
+    ReRank?: number;
+}
+
+/**
+ * Whether a result passes the "similar-meaning cutoff" (the relevance slider), 0–1.
+ *
+ * The cutoff applies to SEMANTIC similarity only, matching the server, which applies `MinScore`
+ * to the vector lane before fusion. A result found by any text lane (keyword, full-text, storage,
+ * tag) always passes: a hit there already means the text matched. The fused `Score` is never
+ * compared: it is rank-based (RRF ÷ max), so a hit found by one of N lanes tops out at 1/N and
+ * filtering on it would hide most results when three or more lanes return hits.
+ */
+export function PassesSemanticFloor(result: SearchResultItem, minScore: number): boolean {
+    if (!minScore || minScore <= 0) return true;
+    const b = result.ScoreBreakdown ?? {};
+    const hasTextEvidence = b.Entity != null || b.FullText != null || b.Storage != null || b.Tag != null;
+    if (hasTextEvidence) return true;
+    if (b.Vector == null) return true; // nothing to judge it by
+    return b.Vector >= minScore;
 }
 
 /** Grouped search results by source type */

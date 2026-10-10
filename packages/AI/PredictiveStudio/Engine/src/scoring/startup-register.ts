@@ -26,6 +26,7 @@ import { IMetadataProvider, IStartupSink, LogStatusEx, RegisterForStartup, UserI
 import { BaseSingleton } from '@memberjunction/global';
 
 import { RegisterMLScoringProcessor } from './register';
+import { PipelineAutoTrainer } from './auto-train';
 import { BuildProductionMLInferenceDeps } from '../operations/delegation';
 
 /**
@@ -56,7 +57,8 @@ export class PredictiveStudioScoringStartup extends BaseSingleton<PredictiveStud
    * @param _provider unused — see above
    */
   public async HandleStartup(_contextUser?: UserInfo, _provider?: IMetadataProvider): Promise<void> {
-    RegisterMLScoringProcessor(BuildProductionMLInferenceDeps());
+    // The auto-trainer only acts for Record Processes that declare `Configuration.autoTrain`.
+    RegisterMLScoringProcessor(BuildProductionMLInferenceDeps(), new PipelineAutoTrainer());
     // Routine boot registration — only surface it under verbose logging to keep startup quiet.
     LogStatusEx({
       message: '[PredictiveStudioScoringStartup] Registered ML Model scoring processor for Record Set Processing.',

@@ -167,8 +167,9 @@ import {
     SiliconFlowLLM,
 } from '@memberjunction/ai-siliconflow';
 
-// @memberjunction/ai-systemone (1 classes)
+// @memberjunction/ai-systemone (2 classes)
 import {
+    PerplexityDecision,
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
@@ -1709,6 +1710,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenRouterDecision,
     OpenRouterLLM,
     SiliconFlowLLM,
+    PerplexityDecision,
     SystemOneDecision,
     VertexLLM,
     xAILLM,
@@ -1864,11 +1866,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
     MJCommunicationProviderEntity,
-    MJCommunicationProviderMessageTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
@@ -2068,11 +2070,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecommendationProviderEntity,
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
-    MJRecordChangeReplayRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
@@ -2272,11 +2274,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetSingleTypeformResponseAction,
     GetSurveyMonkeyDetailsAction,
     GetSurveyMonkeyResponsesAction,
-    GetSurveyMonkeyStatisticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetSurveyMonkeyStatisticsAction,
     GetTypeformAction,
     GetTypeformFileContentAction,
     GetTypeformFormsAction,
@@ -2476,11 +2478,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DataSnapshotToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
-    ExcelToolLibrary,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
     JSONToolLibrary,
@@ -2680,11 +2682,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateDocumentAction,
     CreateEmployeeAction,
     CreateFormContributionAction,
-    CreateInteractiveFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
@@ -2850,7 +2852,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1149;
+export const CLASS_REGISTRATIONS_COUNT = 1150;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
