@@ -174,6 +174,132 @@ function ThrowIfRateLimitedOrForbidden(error: unknown, context: string): void {
 }
 
 /**
+ * What a repository-visibility probe concluded.
+ *
+ * Three states rather than two, deliberately: a probe that itself failed has NOT established that
+ * the repository is readable, and folding that into `Readable` would reintroduce, in a narrower
+ * corner, exactly the misattribution this type exists to prevent.
+ */
+type RepoVisibility =
+    | { State: 'Readable' }
+    | { State: 'NotReadable' }
+    | { State: 'Undetermined'; Reason: string };
+
+/**
+ * Asks GitHub whether the REPOSITORY itself is readable with the caller's credential.
+ *
+ * This is the only way to disambiguate a 404 on something inside a repo. GitHub returns 404 —
+ * never 403 — for a private repository the caller cannot see, so "this ref/file is absent" and
+ * "this repository is invisible to you" are indistinguishable on the inner call. Verified against
+ * the live API (#4505): with no credential, `GET /repos/MemberJunction/bizapps-ats` 404s while the
+ * same repo's existing tag `v6.0.0` also 404s; with a credential both return 200.
+ *
+ * Uses the SAME resolved credential as the call that failed — a probe made unauthenticated would
+ * 404 on every private repo and report a missing credential to a caller who supplied one.
+ */
+async function ProbeRepoVisibility(
+    repoUrl: string,
+    parsed: { Owner: string; Repo: string },
+    options: GitHubClientOptions
+): Promise<RepoVisibility> {
+    try {
+        await CreateOctokit(repoUrl, options).repos.get({ owner: parsed.Owner, repo: parsed.Repo });
+        return { State: 'Readable' };
+    }
+    catch (error: unknown) {
+        if (OctokitStatus(error) === 404) {
+            return { State: 'NotReadable' };
+        }
+        // Anything else (403/429 rate limit, network) leaves visibility genuinely unknown rather
+        // than readable: the probe failed for a reason unrelated to whether the repo exists, so
+        // treating that as confirmation would be a guess dressed up as a result.
+        return { State: 'Undetermined', Reason: error instanceof Error ? error.message : String(error) };
+    }
+}
+
+/**
+ * How to configure a GitHub credential, shared by every message that tells a caller to go set one.
+ * A single copy so the two messages that name it (the no-credential branch below, and
+ * `DescribeNotFound`'s `Undetermined` case) cannot drift apart again — they already had once: A2
+ * fixed this branch to also name the per-repo `openApps.github.tokens` map and left the other
+ * message naming only the two older options.
+ *
+ * Ordered by how fast a reader can act, NOT by precedence: `GITHUB_TOKEN` leads because exporting an
+ * env var is the fastest way to get unblocked. Within `mj.config.cjs`, `openApps.github.tokens` is
+ * named before `openApps.github.token` because `ResolveToken` (below) checks the per-repo map first.
+ *
+ * The EFFECTIVE precedence does not simply reverse this list: `GITHUB_TOKEN` is listed first for
+ * speed but resolves LAST, while the two `mj.config.cjs` options keep the same relative order in
+ * both the string and in resolution. `buildGitHubOptions`
+ * (packages/MJCLI/src/utils/open-app-context.ts) resolves `Token` as
+ * `config.openApps?.github?.token ?? process.env.GITHUB_TOKEN`, so a configured `token` already beats
+ * `GITHUB_TOKEN` before this module ever sees either one; `ResolveToken` then checks `TokenMap`
+ * before `Token`. Highest wins first: `openApps.github.tokens` → `openApps.github.token` →
+ * `GITHUB_TOKEN`. Don't "fix" the string above to match — its order is the right one for a remedy,
+ * not a precedence table.
+ */
+const CONFIGURE_CREDENTIAL_REMEDY =
+    'set GITHUB_TOKEN in the environment, or add the repo to openApps.github.tokens (or set openApps.github.token) in mj.config.cjs';
+
+/**
+ * The message for a repository GitHub will not show us. Names the remedy, and names the RIGHT one:
+ * telling a caller who already supplied a token to supply a token sends them to check the one thing
+ * they already did.
+ */
+function UnreadableRepoMessage(
+    repoUrl: string,
+    parsed: { Owner: string; Repo: string },
+    options: GitHubClientOptions
+): string {
+    const target = `${parsed.Owner}/${parsed.Repo}`;
+    return ResolveToken(repoUrl, options)
+        ? `Cannot read ${target}. The repository does not exist, or the GitHub credential supplied does not grant access to it — check the token is valid and carries 'repo' scope for ${target}.`
+        : `Cannot read ${target}. The repository is private or does not exist, and no GitHub credential was supplied — ${CONFIGURE_CREDENTIAL_REMEDY}, then retry.`;
+}
+
+/**
+ * Turns a 404 on something INSIDE a repository into the message that is actually true.
+ *
+ * Every caller reading a ref, a file or a directory gets a bare 404 for two very different reasons,
+ * and guessing wrong sends the reader somewhere useless: #4505 reported `mj app install` telling a
+ * maintainer a tag was missing — and pointing at the repo's /tags page — when the tag was there and
+ * the real cause was that no credential had been supplied. Opening /tags while signed in then
+ * *confirms* the wrong conclusion. Probing the repository is what separates the two cases, so it
+ * happens here, once, instead of being re-derived at every call site.
+ *
+ * Not cached: this runs only on a path that has already failed and is about to stop, so the extra
+ * request costs nothing on any successful install.
+ *
+ * @param describeMissingTarget - the message to use when the repository IS readable, i.e. when the
+ *                                addressed thing really is absent. Lazy, so it is built only then.
+ */
+async function DescribeNotFound(
+    repoUrl: string,
+    parsed: { Owner: string; Repo: string },
+    options: GitHubClientOptions,
+    describeMissingTarget: () => string
+): Promise<string> {
+    const visibility = await ProbeRepoVisibility(repoUrl, parsed, options);
+    switch (visibility.State) {
+        case 'Readable':
+            return describeMissingTarget();
+        case 'NotReadable':
+            return UnreadableRepoMessage(repoUrl, parsed, options);
+        case 'Undetermined':
+            // Lead with the doubt, not the missing-target message: Undetermined is likeliest a
+            // rate limit on an UNAUTHENTICATED call — i.e. exactly the caller whose repo probably
+            // is NOT readable. Leading with a confident "not found" (plus the /tags link some
+            // callers' describeMissingTarget includes) invites a signed-in maintainer to check,
+            // see the tag, and conclude the CLI was wrong — the misattribution #4505 reports. The
+            // final clause is marked conditional ("if it is readable") rather than stated flatly,
+            // since it is exactly the claim this branch could not verify.
+            return `Could not confirm ${parsed.Owner}/${parsed.Repo} is readable: ${visibility.Reason}. `
+                + `If it is private, a GitHub credential may be required — ${CONFIGURE_CREDENTIAL_REMEDY}. `
+                + `If it is readable, then: ${describeMissingTarget()}`;
+    }
+}
+
+/**
  * Reads the UTF-8 content of a single repo FILE via Octokit. Handles GitHub's
  * 1MB inline-content cap by falling back to the Git Blob API for larger files.
  * Throws on directories or a non-file response.
@@ -273,7 +399,14 @@ export async function FetchManifestFromGitHub(
     }
     catch (error: unknown) {
         if (OctokitStatus(error) === 404) {
-            return { Success: false, ErrorMessage: `${manifestPath} not found in ${parsed.Owner}/${parsed.Repo} at ref ${ref}` };
+            // The manifest may be absent, or the whole repo may be invisible to this credential —
+            // and with no --version this is the FIRST call an install makes, so it is where a
+            // private-repo install without a token actually lands.
+            return {
+                Success: false,
+                ErrorMessage: await DescribeNotFound(repoUrl, parsed, options, () =>
+                    `${manifestPath} not found in ${parsed.Owner}/${parsed.Repo} at ref ${ref}`),
+            };
         }
         const message = error instanceof Error ? error.message : String(error);
         return { Success: false, ErrorMessage: `Failed to fetch manifest: ${message}` };
@@ -720,7 +853,12 @@ export async function ValidateGitHubTag(
     }
     catch (error: unknown) {
         if (OctokitStatus(error) === 404) {
-            return { Exists: false, ErrorMessage: `Tag '${tag}' not found in ${parsed.Owner}/${parsed.Repo}. Available versions can be checked at ${repoUrl}/tags` };
+            // A 404 here may be the tag OR the whole repository — DescribeNotFound tells them apart.
+            return {
+                Exists: false,
+                ErrorMessage: await DescribeNotFound(repoUrl, parsed, options, () =>
+                    `Tag '${tag}' not found in ${parsed.Owner}/${parsed.Repo}. Available versions can be checked at ${repoUrl}/tags`),
+            };
         }
         const message = error instanceof Error ? error.message : String(error);
         return { Exists: false, ErrorMessage: `Failed to validate tag '${tag}': ${message}` };
