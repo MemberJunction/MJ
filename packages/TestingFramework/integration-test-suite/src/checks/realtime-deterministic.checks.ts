@@ -22,7 +22,8 @@
  *  - realtime driver wiring (RD14): every Active realtime vendor row's DriverClass resolves to a BaseRealtimeModel in the
  *    ClassFactory, so a driver missing from the class-registration manifest is caught,
  *  - a bridged (server-held) realtime session's usage landing on its co-agent prompt run before
- *    finalize prices it, through the real wiring with a usage-only stand-in session (RD15),
+ *    finalize prices it, through the real wiring with a usage-only stand-in session that reports its last avatar
+ *    seconds while closing; those seconds are stored and priced too (RD15),
  *  - avatar video pricing (RD16): a tagged co-agent-shaped prompt run on Gemini 3.8 Live × Vertex AI stores a minute of
  *    avatar usage through the real usage write and is finalized; its cost is the token row's line plus the video line
  *    priced from the model vendor's configuration, and both lines are written into its details; the run is deleted.
@@ -568,7 +569,10 @@ class UnopenedRealtimeModel extends BaseRealtimeModel {
     }
 }
 
-/** A model session that only reports usage: RD15's stand-in for a provider socket (no network, no media). */
+/**
+ * A model session that only reports usage: RD15's stand-in for a provider socket (no network, no media). Like a Gemini
+ * avatar session, it reports the avatar seconds it has not reported yet while it closes.
+ */
 class UsageReportingSession implements IRealtimeSession {
     private usageHandler?: (usage: RealtimeUsage) => void;
     public SendInput(): void { /* no media */ }
@@ -582,7 +586,10 @@ class UsageReportingSession implements IRealtimeSession {
     public OnUsage(handler: (usage: RealtimeUsage) => void): void {
         this.usageHandler = handler;
     }
-    public async Close(): Promise<void> { /* no socket */ }
+    /** No socket to close; the last report comes while closing. */
+    public async Close(): Promise<void> {
+        this.Report(RD15_CLOSE);
+    }
     /** Reports usage as a driver does after a turn. */
     public Report(usage: RealtimeUsage): void {
         this.usageHandler?.(usage);
@@ -601,6 +608,11 @@ interface BridgedUsageFixture {
     VendorID: string;
     /** Whether the model and vendor have an active Tokens price, so finalize must give the run a cost. */
     Priced: boolean;
+    /**
+     * The model vendor's avatar video price per minute (`Realtime.Pricing.AvatarVideoOutput`), when the pair has one:
+     * finalize must then price the stored video seconds on a line of their own.
+     */
+    VideoPricePerMinute?: number;
 }
 
 /** One turn's usage, as the Gemini driver reports it; output video seconds stand in for an avatar's. */
@@ -612,6 +624,10 @@ const RD15_TURN: RealtimeUsage = {
 };
 /** A duration-only update (a running total), as GPT-Live reports it. */
 const RD15_DURATION: RealtimeUsage = { InputTokens: 0, OutputTokens: 0, DurationSeconds: 42 };
+/** What the session reports while it closes, as a Gemini avatar session does: avatar seconds not reported yet. */
+const RD15_CLOSE: RealtimeUsage = { InputTokens: 0, OutputTokens: 0, OutputTokenDetails: { VideoSeconds: 1.5 } };
+/** The output video seconds the run must store and price: the turn's 2.5 s and the 1.5 s reported while closing. */
+const RD15_VIDEO_SECONDS = 4;
 /** Usage reported after the session was closed: never stored. */
 const RD15_LATE: RealtimeUsage = { InputTokens: 999, OutputTokens: 999 };
 
@@ -624,7 +640,23 @@ function hasActiveSystemPrompt(agentID: string): boolean {
     return !!first && (engine.Prompts ?? []).some(p => UUIDsEqual(p.ID, first.PromptID));
 }
 
-/** An active Realtime co-agent with a system prompt, and a Realtime model-vendor pair (a priced one when there is one). */
+/**
+ * A model-vendor row's avatar video price per minute, from its resolved configuration; `undefined` when it has none. Only
+ * an inference provider's row prices a run's video.
+ */
+function avatarVideoPricePerMinute(row: MJAIModelVendorEntity): number | undefined {
+    const engine = AIEngineBase.Instance;
+    if (!engine.IsInferenceProvider(row)) {
+        return undefined;
+    }
+    const price = engine.GetEffectiveModelConfiguration(row.ModelID, row.ID)?.Realtime?.Pricing?.AvatarVideoOutput;
+    return typeof price?.Price === 'number' ? price.Price : undefined;
+}
+
+/**
+ * An active Realtime co-agent with a system prompt, and a Realtime model-vendor pair: one with a Tokens price and an
+ * avatar video price when there is one (Gemini 3.8 Live on Vertex AI), else one with a Tokens price, else any.
+ */
 function findBridgedUsageFixture(): BridgedUsageFixture | undefined {
     const engine = AIEngine.Instance;
     const realtimeType = (engine.AgentTypes ?? []).find(t => t.Name?.trim().toLowerCase() === REALTIME_AGENT_TYPE_NAME.toLowerCase());
@@ -633,12 +665,20 @@ function findBridgedUsageFixture(): BridgedUsageFixture | undefined {
         : undefined;
     const realtimeModels = (engine.Models ?? []).filter(m => m.IsActive && m.AIModelType?.trim().toLowerCase() === 'realtime');
     const pairs = (engine.ModelVendors ?? []).filter(mv => realtimeModels.some(m => UUIDsEqual(m.ID, mv.ModelID)));
-    const priced = pairs.find(mv => AIEngineBase.Instance.GetActiveModelCost(mv.ModelID, mv.VendorID, 'Realtime', 'Tokens') !== null);
-    const pair = priced ?? pairs[0];
+    const priced = pairs.filter(mv => AIEngineBase.Instance.GetActiveModelCost(mv.ModelID, mv.VendorID, 'Realtime', 'Tokens') !== null);
+    const videoPriced = priced.find(mv => avatarVideoPricePerMinute(mv) !== undefined);
+    const pair = videoPriced ?? priced[0] ?? pairs[0];
     if (!coAgent || !pair) {
         return undefined;
     }
-    return { CoAgent: coAgent, ModelID: pair.ModelID, VendorID: pair.VendorID, Priced: !!priced };
+    const videoPrice = videoPriced ? avatarVideoPricePerMinute(videoPriced) : undefined;
+    return {
+        CoAgent: coAgent,
+        ModelID: pair.ModelID,
+        VendorID: pair.VendorID,
+        Priced: priced.length > 0,
+        ...(videoPrice !== undefined ? { VideoPricePerMinute: videoPrice } : {}),
+    };
 }
 
 /** The prep a host hands the wiring after `PrepareRealtimeSessionParams`: the co-agent and the resolved model's ids. */
@@ -665,7 +705,7 @@ interface StoredRealtimeUsage {
     DurationSeconds?: number;
 }
 
-/** Asserts the prompt run holds the turn's tokens and record, finalized, and nothing from after close. */
+/** Asserts the prompt run holds the turn's tokens and record and what the session reported while closing, finalized, and nothing from after close. */
 function assertPromptRunUsage(promptRun: MJAIPromptRunEntity): void {
     AssertEqual(promptRun.TokensPrompt, 1200, 'TokensPrompt holds the reported input (the late update not added)');
     AssertEqual(promptRun.TokensCompletion, 300, 'TokensCompletion holds the reported output');
@@ -677,14 +717,39 @@ function assertPromptRunUsage(promptRun: MJAIPromptRunEntity): void {
     AssertEqual(record?.Input?.AudioTokens, 1000, 'RealtimeUsage.Input.AudioTokens');
     AssertEqual(record?.Input?.TextTokens, 200, 'RealtimeUsage.Input.TextTokens');
     AssertEqual(record?.Output?.AudioTokens, 300, 'RealtimeUsage.Output.AudioTokens');
-    AssertEqual(record?.Output?.VideoSeconds, 2.5, 'RealtimeUsage.Output.VideoSeconds');
+    AssertEqual(record?.Output?.VideoSeconds, RD15_VIDEO_SECONDS,
+        "RealtimeUsage.Output.VideoSeconds: the turn's 2.5 s and the 1.5 s the session reported while closing");
     AssertEqual(record?.DurationSeconds, 42, 'RealtimeUsage.DurationSeconds (a running total)');
 }
 
-/** Asserts the run was priced at finalize (when it can be) and that the co-agent run carries its totals. */
-function assertPricedAndRolledUp(promptRun: MJAIPromptRunEntity, coAgentRun: MJAIAgentRunEntity, mustBePriced: boolean): void {
+/**
+ * Asserts finalize priced the run's 4 s of avatar video, the 1.5 s the session reported while closing included, on a
+ * line of its own at the pair's per-minute price, and that the run's cost is the sum of its lines.
+ */
+function assertVideoPriced(promptRun: MJAIPromptRunEntity, pricePerMinute: number | undefined): void {
+    if (pricePerMinute === undefined) {
+        console.warn('  ⚠ realtime-deterministic.RD15: the video line not asserted — no Realtime model-vendor pair with an active '
+            + 'Tokens price has a Realtime.Pricing.AvatarVideoOutput price');
+        return;
+    }
+    const lines = ReadCostLines(promptRun.ModelSpecificResponseDetails);
+    const video = lines.find(line => line.Modality === 'Video');
+    Assert(!!video, 'finalize wrote no video cost line: the stored avatar seconds went unpriced');
+    AssertEqual(
+        JSON.stringify([video?.Measure, video?.Output, video?.Cost]),
+        JSON.stringify(['Seconds', RD15_VIDEO_SECONDS, RoundCost((RD15_VIDEO_SECONDS / 60) * pricePerMinute)]),
+        'the video line prices 4 s at the per-minute price, the 1.5 s reported while closing included',
+    );
+    // Each line is rounded to 8 decimals, so the lines' sum may differ from Cost in the last place.
+    const linesTotal = lines.reduce((sum, line) => sum + line.Cost, 0);
+    Assert(Math.abs(Number(promptRun.Cost) - linesTotal) < 1e-7, `Cost should be the sum of its lines (${linesTotal}), was ${promptRun.Cost}`);
+}
+
+/** Asserts the run was priced at finalize (when it can be), its video on a line of its own, and that the co-agent run carries its totals. */
+function assertPricedAndRolledUp(promptRun: MJAIPromptRunEntity, coAgentRun: MJAIAgentRunEntity, mustBePriced: boolean, videoPricePerMinute: number | undefined): void {
     if (mustBePriced) {
         Assert(promptRun.Cost != null, 'an active Tokens price exists and pricing runs on this Save path, yet finalize left Cost NULL');
+        assertVideoPriced(promptRun, videoPricePerMinute);
     } else {
         console.warn('  ⚠ realtime-deterministic.RD15: cost not asserted — no Realtime model-vendor pair has an active Tokens price, '
             + 'or the prompt run server subclass (pricing) is not active on this Save path');
@@ -697,8 +762,9 @@ function assertPricedAndRolledUp(promptRun: MJAIPromptRunEntity, coAgentRun: MJA
 
 /**
  * Wires a usage-only stand-in session through the real `WireBridgeRealtimeSession`, reports a turn and a duration,
- * closes it (which finalizes the runs), reports once more, and checks what landed. Adds the co-agent run it created
- * to `cleanup` as soon as it exists, so the caller deletes it even when an assertion fails.
+ * closes it (the session reports its last avatar seconds while closing, then the close finalizes the runs), reports
+ * once more, and checks what landed. Adds the co-agent run it created to `cleanup` as soon as it exists, so the caller
+ * deletes it even when an assertion fails.
  */
 async function runBridgedUsageScenario(ctx: IntegrationCheckContext, fixture: BridgedUsageFixture, cleanup: string[]): Promise<void> {
     const session = new UsageReportingSession();
@@ -725,7 +791,7 @@ async function runBridgedUsageScenario(ctx: IntegrationCheckContext, fixture: Br
     if (promptRun && coAgentRun) {
         assertPromptRunUsage(promptRun);
         const pricingActive = serverInvariantsActive(ctx.Provider.ProviderType, 'MJ: AI Prompt Runs');
-        assertPricedAndRolledUp(promptRun, coAgentRun, fixture.Priced && pricingActive);
+        assertPricedAndRolledUp(promptRun, coAgentRun, fixture.Priced && pricingActive, fixture.VideoPricePerMinute);
     }
 }
 
@@ -1538,7 +1604,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
     },
     {
         Id: 'realtime-deterministic.RD15',
-        Name: "RD15: a bridged session's usage lands on its co-agent prompt run before finalize prices it; usage after close is not stored",
+        Name: "RD15: a bridged session's usage, what it reports while closing included, lands on its co-agent prompt run before finalize prices it; usage after close is not stored",
         Fn: async (ctx): Promise<void> => {
             await AIEngine.Instance.Config(false, ctx.User, ctx.Provider);
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
@@ -1554,7 +1620,10 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             } finally {
                 await DeepDeleteRunTrees(ctx.Provider, ctx.User, cleanup);
             }
-            console.log(`      → usage stored on the co-agent prompt run, priced at finalize${fixture.Priced ? '' : ' (no price row: cost not asserted)'}; runs removed`);
+            const priced = !fixture.Priced || !serverInvariantsActive(ctx.Provider.ProviderType, 'MJ: AI Prompt Runs') ? ' (cost not asserted)'
+                : fixture.VideoPricePerMinute === undefined ? ' (no avatar video price: video line not asserted)'
+                : `, ${RD15_VIDEO_SECONDS} s of video on its own line`;
+            console.log(`      → usage stored on the co-agent prompt run, priced at finalize${priced}; runs removed`);
         }
     },
     {
