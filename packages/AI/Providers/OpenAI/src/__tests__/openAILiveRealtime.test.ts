@@ -1,7 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
+    JSONObject,
+    RealtimeProxyRegistry,
     RealtimeSessionParams,
     RealtimeTranscript,
     RealtimeToolCall,
@@ -962,5 +964,86 @@ describe('OpenAILiveRealtime Driver & Session', () => {
 
         expect(instructions).toContain('Delegation policy:');
         expect(instructions).toContain('Backend tools:');
+    });
+});
+
+describe('OpenAILiveRealtime SDP broker URL', () => {
+    const ENV_KEYS = ['MJAPI_PUBLIC_URL', 'GRAPHQL_BASE_URL', 'GRAPHQL_PORT'];
+    const saved: Record<string, string | undefined> = {};
+    beforeEach(() => {
+        for (const key of ENV_KEYS) {
+            saved[key] = process.env[key];
+            delete process.env[key];
+        }
+    });
+    afterEach(() => {
+        for (const key of ENV_KEYS) {
+            if (saved[key] === undefined) delete process.env[key];
+            else process.env[key] = saved[key];
+        }
+    });
+
+    /** Mints a client session and returns the broker URL the browser is handed (`EphemeralToken`). */
+    async function mintBrokerUrl(config?: JSONObject): Promise<string> {
+        const driver = new OpenAILiveRealtime('test-key');
+        const clientConfig = await driver.CreateClientSession({ Model: 'gpt-live-1', SystemPrompt: 'Hello', Config: config });
+        return clientConfig.EphemeralToken;
+    }
+
+    /** The ticket id a broker URL carries. */
+    function ticketOf(brokerUrl: string): string {
+        return new URL(brokerUrl, 'http://relative.invalid').searchParams.get('ticket') ?? '';
+    }
+
+    it("with no MJAPI URL configured, points the browser at MJAPI's default port 4000", async () => {
+        const brokerUrl = await mintBrokerUrl();
+        const ticket = ticketOf(brokerUrl);
+
+        expect(brokerUrl).toBe(`http://localhost:4000/realtime/sdp-exchange?ticket=${ticket}`);
+        // The URL carries the ticket the mint issued, for the broker to consume.
+        expect(RealtimeProxyRegistry.Instance.Consume(ticket)?.DriverClass).toBe('OpenAILiveRealtime');
+    });
+
+    it("follows MJAPI's port and base URL settings (GRAPHQL_PORT, GRAPHQL_BASE_URL)", async () => {
+        process.env['GRAPHQL_PORT'] = '4100';
+        expect((await mintBrokerUrl()).startsWith('http://localhost:4100/realtime/sdp-exchange?ticket=')).toBe(true);
+
+        process.env['GRAPHQL_BASE_URL'] = 'https://api.example.com';
+        process.env['GRAPHQL_PORT'] = '8443';
+        expect((await mintBrokerUrl()).startsWith('https://api.example.com:8443/realtime/sdp-exchange?ticket=')).toBe(true);
+    });
+
+    it('uses the origin of MJAPI_PUBLIC_URL: MJAPI serves the broker at its root, not under a GraphQL path', async () => {
+        process.env['MJAPI_PUBLIC_URL'] = 'https://abc123.ngrok.io/graphql';
+        process.env['GRAPHQL_PORT'] = '4100';
+
+        const brokerUrl = await mintBrokerUrl();
+        expect(brokerUrl).toBe(`https://abc123.ngrok.io/realtime/sdp-exchange?ticket=${ticketOf(brokerUrl)}`);
+    });
+
+    it('an explicit brokerBaseUrl or proxyBaseUrl still wins over the environment, proxyBaseUrl first', async () => {
+        process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+
+        expect((await mintBrokerUrl({ brokerBaseUrl: 'https://edge.example.com' })).startsWith('https://edge.example.com/realtime/sdp-exchange?ticket=')).toBe(true);
+        expect((await mintBrokerUrl({ proxyBaseUrl: 'https://proxy.example.com' })).startsWith('https://proxy.example.com/realtime/sdp-exchange?ticket=')).toBe(true);
+        expect(
+            (await mintBrokerUrl({ proxyBaseUrl: 'https://proxy.example.com', brokerBaseUrl: 'https://edge.example.com' })).startsWith(
+                'https://proxy.example.com/realtime/sdp-exchange?ticket='
+            )
+        ).toBe(true);
+    });
+
+    it('a blank proxyBaseUrl does not hide brokerBaseUrl', async () => {
+        process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+
+        const brokerUrl = await mintBrokerUrl({ proxyBaseUrl: '  ', brokerBaseUrl: 'https://edge.example.com' });
+        expect(brokerUrl.startsWith('https://edge.example.com/realtime/sdp-exchange?ticket=')).toBe(true);
+    });
+
+    it('a relative brokerBaseUrl stays relative, for a page served from the same origin as MJAPI', async () => {
+        process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+
+        const brokerUrl = await mintBrokerUrl({ brokerBaseUrl: '/' });
+        expect(brokerUrl).toBe(`/realtime/sdp-exchange?ticket=${ticketOf(brokerUrl)}`);
     });
 });

@@ -243,15 +243,54 @@ export function BuildRealtimeRelayUrl(baseWs: string, id: string): string {
  * Resolves the browser-facing MJAPI websocket origin (`ws(s)://host[:port]`) for proxy and relay URLs. Precedence:
  * `params.Config.proxyBaseUrl` → `MJAPI_PUBLIC_URL` → `GRAPHQL_BASE_URL` + `GRAPHQL_PORT` (defaults `http://localhost`
  * and `4000`), the env vars MJAPI derives its public URL from. Only the origin is kept; callers append
- * {@link REALTIME_PROXY_PATH} or use {@link BuildRealtimeRelayUrl}.
+ * {@link REALTIME_PROXY_PATH} or use {@link BuildRealtimeRelayUrl}. {@link ResolveRealtimeProxyBaseHttpUrl} returns
+ * the same origin with an `http(s)` scheme.
  */
 export function ResolveRealtimeProxyBaseWsUrl(params: Pick<RealtimeSessionParams, 'Config'>): string {
+    return HttpOriginToWs(resolveMjapiPublicSource(params));
+}
+
+/**
+ * Resolves the browser-facing MJAPI origin (`http(s)://host[:port]`) for MJAPI's realtime HTTP routes, such as the
+ * WebRTC SDP broker at {@link REALTIME_SDP_EXCHANGE_PATH}. It is the origin {@link ResolveRealtimeProxyBaseWsUrl}
+ * returns, from the same source and precedence, with an `http(s)` scheme (`ws` and `wss` sources become `http` and
+ * `https`). Only the origin is kept, because MJAPI serves its realtime routes at the server root, not under the
+ * GraphQL path that `MJAPI_PUBLIC_URL` may carry. A relative `proxyBaseUrl` (`/`) stays relative, for a page served
+ * from MJAPI's own origin.
+ */
+export function ResolveRealtimeProxyBaseHttpUrl(params: Pick<RealtimeSessionParams, 'Config'>): string {
+    return toHttpOrigin(resolveMjapiPublicSource(params));
+}
+
+/**
+ * The URL MJAPI's browser-facing origin is read from, first match wins: `params.Config.proxyBaseUrl` (non-blank),
+ * `MJAPI_PUBLIC_URL`, then `GRAPHQL_BASE_URL` + `GRAPHQL_PORT`. With nothing set this is `http://localhost:4000`.
+ * These are the env vars and defaults MJAPI's own configuration reads for `publicUrl`, `baseUrl` and `graphqlPort`
+ * (`DEFAULT_SERVER_CONFIG` in `@memberjunction/server`), so the default names the port MJAPI listens on. An empty
+ * `GRAPHQL_PORT` counts as unset, as it does there.
+ */
+function resolveMjapiPublicSource(params: Pick<RealtimeSessionParams, 'Config'>): string {
     const override = params.Config?.['proxyBaseUrl'];
-    const source =
+    return (
         (typeof override === 'string' && override.trim().length > 0 ? override.trim() : '') ||
         readProcessEnv('MJAPI_PUBLIC_URL') ||
-        `${readProcessEnv('GRAPHQL_BASE_URL') ?? 'http://localhost'}:${readProcessEnv('GRAPHQL_PORT') ?? '4000'}`;
-    return HttpOriginToWs(source);
+        `${readProcessEnv('GRAPHQL_BASE_URL') ?? 'http://localhost'}:${readProcessEnv('GRAPHQL_PORT') || '4000'}`
+    );
+}
+
+/**
+ * Converts an http(s) or ws(s) URL (or origin) into an `http(s)://host[:port]` origin, dropping any path. A source that
+ * is not an absolute URL (a relative path such as `/mjapi`) keeps its text, without trailing slashes.
+ */
+function toHttpOrigin(source: string): string {
+    try {
+        const url = new URL(source);
+        const httpScheme = url.protocol === 'https:' || url.protocol === 'wss:' ? 'https' : 'http';
+        return `${httpScheme}://${url.host}`;
+    } catch {
+        // Not a parseable absolute URL: best-effort scheme swap, without trailing slashes.
+        return trimTrailingSlashes(source).replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
+    }
 }
 
 /** Converts an http(s) URL (or origin) into a `ws(s)://host[:port]` origin, dropping any path. */
