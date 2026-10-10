@@ -29,7 +29,10 @@ interface FakeChannelRow {
 const engineCoAgentsMock = vi.fn((): FakeCoAgentRow[] => []);
 const engineChannelsMock = vi.fn((): FakeChannelRow[] => []);
 const engineConfigMock = vi.fn(async (): Promise<void> => undefined);
-vi.mock('@memberjunction/ai-engine-base', () => ({
+// PARTIAL mock: the engine and the permission helper are stubbed; the pure usage-record functions (read, merge)
+// stay real, so the usage relay's details tests assert what is actually stored.
+vi.mock('@memberjunction/ai-engine-base', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
     AIAgentPermissionHelper: {
         HasPermission: (...args: unknown[]) => hasPermissionMock(...(args as [])),
     },
@@ -391,6 +394,38 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
         expect(prepArg.PreferredModelID).toBeUndefined();
         expect(result.ModelName).toBeUndefined();
         expect(result.NarrationInstructionsTemplate).toBeUndefined();
+        // A direct session says nothing about the transport.
+        expect(result.Transport).toBeUndefined();
+        expect(result.RelayUrl).toBeUndefined();
+    });
+
+    it("returns a relay session's transport and relay URL as minted, with no token, and logs neither", async () => {
+        const ticket = '7d1e0c2a-5555-4666-8777-988899990000';
+        const relayUrl = `wss://mjapi.example.test/realtime/relay/${ticket}`;
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-relay' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: {
+                Provider: 'gemini-enterprise',
+                Model: 'gemini-3.8-live',
+                EphemeralToken: '',
+                ExpiresAt: '2026-01-01T00:00:00Z',
+                Transport: 'relay',
+                RelayUrl: relayUrl,
+                SessionConfig: { model: 'gemini-3.8-live' },
+            },
+        });
+        const consoleSpies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((method) => vi.spyOn(console, method));
+
+        const result = await makeResolver().StartRealtimeClientSession('target-1', makeCtx());
+
+        expect(result).toMatchObject({ Provider: 'gemini-enterprise', EphemeralToken: '', Transport: 'relay', RelayUrl: relayUrl });
+        expect(result.SessionConfigJson).not.toContain(ticket);
+        const logged = consoleSpies.flatMap((spy) => spy.mock.calls.map((call: unknown[]) => call.map(String).join(' ')));
+        expect(logged.filter((line) => line.includes(ticket))).toEqual([]);
+        consoleSpies.forEach((spy) => spy.mockRestore());
     });
 
     it('propagates the preferred-model failure (and closes the session) — no silent fallback', async () => {
@@ -2432,6 +2467,69 @@ describe('RealtimeClientSessionResolver.RelayRealtimeUsage', () => {
         expect(promptRun.TokensCompletion).toBe(3);
         expect(promptRun.TokensUsed).toBe(12);
     });
+
+    describe('per-modality details (usageDetailsJson)', () => {
+        /** The usage record the run's details hold after the relay. */
+        function storedRecord(promptRun: FakeSession): unknown {
+            const details = promptRun['ModelSpecificResponseDetails'];
+            return typeof details === 'string' ? (JSON.parse(details) as Record<string, unknown>)['RealtimeUsage'] : undefined;
+        }
+
+        it('adds the relayed blocks into the usage record on the prompt run', async () => {
+            const { provider, promptRun } = makeUsageProvider({});
+            currentProvider = provider;
+            const details = JSON.stringify({ Input: { TextTokens: 60, AudioTokens: 40 }, Output: { AudioTokens: 100, VideoTokens: 6192, VideoSeconds: 1.5 } });
+
+            const ok = await makeResolver().RelayRealtimeUsage('session-1', 100, 6292, makeCtx(), details);
+
+            expect(ok).toBe(true);
+            expect(promptRun.TokensCompletion).toBe(6292);
+            expect(storedRecord(promptRun)).toEqual({ Input: { TextTokens: 60, AudioTokens: 40 }, Output: { AudioTokens: 100, VideoTokens: 6192, VideoSeconds: 1.5 } });
+        });
+
+        it('stores a relay that carries only avatar video seconds, rather than treating it as a no-op', async () => {
+            const { provider, promptRun } = makeUsageProvider({});
+            currentProvider = provider;
+
+            const ok = await makeResolver().RelayRealtimeUsage('session-1', 0, 0, makeCtx(), JSON.stringify({ Output: { VideoSeconds: 2.25 } }));
+
+            expect(ok).toBe(true);
+            expect(promptRun.Save).toHaveBeenCalled();
+            expect(storedRecord(promptRun)).toEqual({ Output: { VideoSeconds: 2.25 } });
+        });
+
+        it('is a no-op for details with nothing in them and no tokens', async () => {
+            const { provider, promptRun } = makeUsageProvider({});
+            currentProvider = provider;
+
+            for (const details of ['{"Output":{"VideoSeconds":0}}', '{broken', '{"Output":{"Bogus":5}}']) {
+                await expect(makeResolver().RelayRealtimeUsage('session-1', 0, 0, makeCtx(), details)).resolves.toBe(true);
+            }
+            expect(promptRun.Load).not.toHaveBeenCalled();
+        });
+
+        it('drops details longer than a relay ever needs, and still stores the tokens', async () => {
+            const { provider, promptRun } = makeUsageProvider({});
+            currentProvider = provider;
+            const oversized = JSON.stringify({ Output: { VideoSeconds: 2 }, Padding: 'x'.repeat(5000) });
+
+            const ok = await makeResolver().RelayRealtimeUsage('session-1', 10, 5, makeCtx(), oversized);
+
+            expect(ok).toBe(true);
+            expect(promptRun.TokensPrompt).toBe(10);
+            expect(storedRecord(promptRun)).toBeUndefined();
+        });
+
+        it('keeps only the fields a block defines, with usable values', async () => {
+            const { provider, promptRun } = makeUsageProvider({});
+            currentProvider = provider;
+            const details = JSON.stringify({ Output: { VideoSeconds: -3, AudioTokens: 'lots', VideoTokens: 12, Injected: 1 }, Other: { TextTokens: 1 } });
+
+            await makeResolver().RelayRealtimeUsage('session-1', 1, 1, makeCtx(), details);
+
+            expect(storedRecord(promptRun)).toEqual({ Output: { VideoTokens: 12 } });
+        });
+    });
 });
 
 describe('RealtimeClientSessionResolver.StartRealtimeClientSession — pairing constraints (MJ: AI Agent Co Agents)', () => {
@@ -3683,6 +3781,36 @@ describe('RealtimeClientSessionResolver — channel scoping at mint (Realtime Ch
         const prepArg = prepareClientSessionMock.mock.calls[0][0] as { ChannelCandidates?: Array<{ Key: string }> };
         expect(prepArg.ChannelCandidates?.map((c) => c.Key)).toEqual(['Whiteboard']);
         expect(JSON.parse(result.ClientPolicyJson ?? 'null')).toEqual(POLICY);
+    });
+
+    it('returns the avatar status as AvatarStatusJson, and none when the prepare reported none', async () => {
+        setupStart({ AvatarStatus: { Requested: true, Granted: false, Reason: 'endpoint' } });
+        const result = await start(undefined);
+        expect(JSON.parse(result.AvatarStatusJson ?? 'null')).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+
+        setupStart();
+        const none = await start(undefined);
+        expect(none.AvatarStatusJson).toBeUndefined();
+    });
+
+    it("threads an app's showsAgentVideo: false to PrepareClientSession, and nothing when the app did not say", async () => {
+        const startWith = (showsAgentVideo?: boolean | null) =>
+            makeResolver().StartRealtimeClientSession(
+                'target-1', makeCtx(),
+                undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+                undefined, undefined, undefined, showsAgentVideo as boolean | undefined,
+            );
+        setupStart({ AvatarStatus: { Requested: true, Granted: false, Reason: 'host' } });
+        const result = await startWith(false);
+        expect((prepareClientSessionMock.mock.calls[0][0] as { ShowsAgentVideo?: boolean }).ShowsAgentVideo).toBe(false);
+        expect(JSON.parse(result.AvatarStatusJson ?? 'null')).toEqual({ Requested: true, Granted: false, Reason: 'host' });
+
+        for (const unstated of [undefined, null]) {
+            prepareClientSessionMock.mockClear();
+            setupStart();
+            await startWith(unstated);
+            expect((prepareClientSessionMock.mock.calls[0][0] as { ShowsAgentVideo?: boolean }).ShowsAgentVideo).toBeUndefined();
+        }
     });
 
     it('sends no candidates and returns no policy when the caller reported none (a client that predates scoping)', async () => {

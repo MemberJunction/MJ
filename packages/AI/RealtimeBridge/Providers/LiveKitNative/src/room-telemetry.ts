@@ -1,7 +1,7 @@
 /**
- * @fileoverview Audio-plane telemetry shared by the in-process {@link LiveKitRtcNodeRoomClient} and the
- * worker-thread media plane: inbound inter-frame gap histograms, outbound capture/underrun counters, and
- * the per-thread event-loop delay monitor.
+ * @fileoverview Media-plane telemetry shared by the in-process {@link LiveKitRtcNodeRoomClient} and the
+ * worker-thread media plane: inbound inter-frame gap histograms, outbound capture/underrun counters, participant-video
+ * counters, and the per-thread event-loop delay monitor.
  *
  * Kept free of any room/worker imports so both sides can depend on it without an import cycle.
  *
@@ -41,8 +41,79 @@ export interface OutboundAudioTelemetry {
     lastQueuedDuration?: number;
 }
 
+/**
+ * Where participant video is encoded: on the encode worker's own thread, or on the thread that hosts the room (the
+ * fallback, or with the encode worker turned off).
+ */
+export type VideoEncodeLocation = 'worker' | 'in-process';
+
+/**
+ * Participant-video telemetry: what the bot read from people's cameras and screens, and what it cost. Present while the
+ * bot watches the meeting (the client was created with video options).
+ */
+export interface RoomVideoTelemetry {
+    /** Frames decoded from the selected sources (every frame is drained, sampled or not). */
+    framesReceived: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames encoded and handed to the bridge. */
+    framesSent: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames dropped because the source's next frame was not due yet (pacing to the session's rate). */
+    framesSkippedNotDue: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Duration of the most recent encode (scale, rotate, JPEG), in ms, on the thread that encoded it. */
+    encodeMsLast?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Longest encode so far, in ms. */
+    encodeMsMax: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** JPEG bytes handed to the bridge. */
+    bytesSent: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Sources selected now (being read, or subscribed and waiting for their track). */
+    selectedSources: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Where frames are encoded now. */
+    encoder?: VideoEncodeLocation;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /**
+     * Most recent time from sending a frame to the encoder to its reply, in ms, on the room's thread: queueing behind other
+     * rooms' frames, the hops between threads, and the encode.
+     */
+    encodeRoundTripMsLast?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Longest round trip so far, in ms. */
+    encodeRoundTripMsMax?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /**
+     * Longest cost to the room's thread of sending one sampled frame, in ms: the copy and the post to the encode worker,
+     * or the whole encode when frames are encoded in-process.
+     */
+    encodeDispatchMsMax?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** This room's frames being encoded now: its queue depth. */
+    encodeInFlight?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Due frames dropped because the source's previous frame was still being encoded. */
+    framesSkippedEncoding?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames encoded, then dropped: consent withdrawn, the source ended or the bot left while they were encoded. */
+    framesDroppedAfterEncode?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames that failed to encode: a rejected frame, a request that timed out, or the encode worker failing with it in flight. */
+    encodeFailures?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames sent to the encode worker and not answered yet, from every room on this thread. */
+    encodeQueueDepth?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Encode worker failures on this thread since the process started. */
+    encodeWorkerRestarts?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /**
+     * Sources the ranking replaced while they could still be read: a screen was shared, or a speaker took the view. Not
+     * counted: a source that ended (an opt-out, a leave, an unpublish, a mute, its stream ending).
+     */
+    sourceSwitches?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Changes the hold delayed (a speaker who had not led long enough, a camera inside its dwell), each counted once. */
+    switchesHeld?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Active-speaker updates LiveKit sent the bot. */
+    activeSpeakerUpdates?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /**
+     * Most recent time from picking a source to its first frame reaching the bridge, in ms (subscription, first keyframe,
+     * sampling, encode): after a switch, how long the model saw nothing.
+     */
+    switchGapMsLast?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Longest such gap so far, in ms. */
+    switchGapMsMax?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+}
+
 /** Telemetry snapshot for the room client. */
 export interface RoomAudioTelemetrySnapshot {
+    /** Participant-video telemetry; absent when the bot does not watch the meeting. */
+    video?: RoomVideoTelemetry;  // case-violation-ok-legacy-back-compat: matches the snapshot's existing camelCase fields
     /** Inbound inter-frame gap histogram per participant identity. */
     inboundGaps: Record<string, InboundFrameGapHistogram>;
     /** Outbound telemetry. */

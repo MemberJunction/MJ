@@ -1,7 +1,7 @@
 import { MJAIBridgeProviderEntity_IBridgeProviderFeatures } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { BridgeCapabilityNotSupportedError } from './capability-errors';
-import { BridgeMediaFrame, BridgeMediaTrackKind, BridgeParticipantInfo } from './media-tracks';
+import { BridgeAvatarFailure, BridgeMediaFrame, BridgeMediaTrackKind, BridgeParticipantInfo, BridgeVideoSourceEnd } from './media-tracks';
 import { IBridgeMeetingControlsEventSource } from './channel-plane';
 
 /**
@@ -196,6 +196,34 @@ export abstract class BaseRealtimeBridge {
      */
     public FlushOutboundMedia(): void {
         // Default: nothing buffered to flush.
+    }
+
+    /**
+     * Registers a handler invoked when an inbound camera or screen source the driver was sending stops: the person
+     * stopped letting agents see them, left, stopped sharing or turned the camera off, or the driver moved the model's
+     * view to another source. The engine tells the model, so it stops describing what it can no longer see.
+     *
+     * **No-op by default** (NOT capability-gated): a driver that sends no inbound video has no source to end, so
+     * registering is always safe. Drivers that send camera or screen frames override it.
+     *
+     * @param _handler Invoked with each source that ended.
+     */
+    public OnVideoSourceEnded(_handler: (source: BridgeVideoSourceEnd) => void): void {
+        // Default: this driver sends no inbound video, so no source ever ends.
+    }
+
+    /**
+     * Registers a handler invoked when the driver can no longer show the agent's avatar (see {@link BridgeAvatarFailure}):
+     * it has taken the avatar's video down and told the room. The engine then replaces the model session with one that
+     * renders no avatar, so the model stops generating (and billing) video nobody sees.
+     *
+     * **No-op by default** (NOT capability-gated): a driver that publishes no avatar never loses one, so registering is
+     * always safe. Drivers that publish an agent's avatar override it.
+     *
+     * @param _handler Invoked once, with why the avatar can no longer be shown.
+     */
+    public OnAvatarUnavailable(_handler: (reason: BridgeAvatarFailure) => void): void {
+        // Default: this driver publishes no avatar, so none is ever lost.
     }
 
     // ──────────────────────────────────────────────────────────────────────────────

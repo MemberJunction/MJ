@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRealtimeClient, REQUESTED_TRACKS_SESSION_KEY } from '@memberjunction/ai-realtime-client';
+import { BaseRealtimeClient, MEDIA_PLACEMENTS, REQUESTED_TRACKS_SESSION_KEY } from '@memberjunction/ai-realtime-client';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
@@ -218,9 +218,9 @@ describe('session lifecycle, driven end to end with fakes', () => {
         }
     }
 
-    function mintedSession(provider: string): StartRealtimeClientSessionResult {
+    function mintedSession(provider: string, agentSessionId = 'session-1'): StartRealtimeClientSessionResult {
         return {
-            AgentSessionId: 'session-1',
+            AgentSessionId: agentSessionId,
             ConversationId: 'conv-1',
             Provider: provider,
             Model: 'model-1',
@@ -307,6 +307,400 @@ describe('session lifecycle, driven end to end with fakes', () => {
         expect(mutationNames(provider).filter((n) => n === 'CloseAgentSession')).toHaveLength(1);
     });
 
+    describe('hands the microphone back once per opening, after it returns (#5386)', () => {
+        /**
+         * A host that logs, in order, each microphone opening and each release, and can hold an opening until the test
+         * lets it return: the window in which the user ends a call that is still starting.
+         */
+        class OrderingHost extends FakeMediaHost {
+            public readonly Events: string[] = [];
+            /** What an opening rejects with once it returns. */
+            public Failure: Error | null = null;
+            private held: Promise<void> | null = null;
+
+            /** Holds the next opening until the test calls the function this returns. */
+            public HoldNextOpening(): () => void {
+                let open: () => void = () => undefined;
+                this.held = new Promise<void>((resolve) => (open = resolve));
+                return open;
+            }
+
+            public override async AcquireMicrophone(): Promise<MediaStream> {
+                const held = this.held;
+                this.held = null;
+                await held;
+                if (this.Failure) {
+                    this.Events.push('failed');
+                    throw this.Failure;
+                }
+                this.Events.push('opened');
+                return super.AcquireMicrophone();
+            }
+
+            public async ReleaseMicrophone(): Promise<void> {
+                this.Events.push('released');
+            }
+        }
+
+        /** A driver whose Connect says when it was reached and waits until the test lets it finish. */
+        @RegisterClass(BaseRealtimeClient, 'held-connect-provider')
+        class HeldConnectClient extends FakeRealtimeClient {
+            public static Reached: () => void = () => undefined;
+            public static Gate: Promise<void> | null = null;
+            public override async Connect(): Promise<void> {
+                HeldConnectClient.Reached();
+                await HeldConnectClient.Gate;
+            }
+        }
+
+        it('releases once, after the microphone opens, when the call ended while it was opening', async () => {
+            // The React Native host puts iOS into the call audio category inside the opening, after the permission
+            // prompt, so a release before the opening returns undoes nothing.
+            const host = new OrderingHost();
+            const open = host.HoldNextOpening();
+            const { runtime } = build(host);
+
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+            await runtime.EndRealtimeSession();
+            expect(host.Events).toEqual([]);
+            open();
+            await starting;
+
+            expect(host.Events).toEqual(['opened', 'released']);
+            expect(runtime.IsActive).toBe(false);
+        });
+
+        it('releases once, after the opening fails, when the call ended while it was opening', async () => {
+            // The React Native host sets the call category before getUserMedia, which can still fail after it.
+            const host = new OrderingHost();
+            host.Failure = new Error('No microphone is available on this device.');
+            const open = host.HoldNextOpening();
+            const { runtime } = build(host);
+
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+            await runtime.EndRealtimeSession();
+            open();
+            await starting;
+
+            expect(host.Events).toEqual(['failed', 'released']);
+            expect(runtime.LastStartError).toBeNull();
+        });
+
+        it('releases once when the call ended while it was connecting', async () => {
+            // The microphone was already open when the call ended: teardown hands it back, and the start's unwind
+            // must not hand it back again.
+            const host = new OrderingHost();
+            const { runtime } = build(host);
+            const reached = new Promise<void>((resolve) => (HeldConnectClient.Reached = resolve));
+            let connect: () => void = () => undefined;
+            HeldConnectClient.Gate = new Promise<void>((resolve) => (connect = resolve));
+            try {
+                const starting = runtime.StartRealtimeSessionFromResult(mintedSession('held-connect-provider'));
+                await reached;
+                await runtime.EndRealtimeSession();
+                connect();
+                await starting;
+            } finally {
+                HeldConnectClient.Gate = null;
+            }
+
+            expect(host.Events).toEqual(['opened', 'released']);
+        });
+
+        it('releases once when the call ended while it was connecting and the connection then fails', async () => {
+            // Teardown hands the microphone back; the unwind after the failed connection must not hand it back again.
+            const host = new OrderingHost();
+            const { runtime } = build(host);
+            const reached = new Promise<void>((resolve) => (HeldConnectClient.Reached = resolve));
+            let fail: (reason: Error) => void = () => undefined;
+            HeldConnectClient.Gate = new Promise<void>((_resolve, reject) => (fail = reject));
+            try {
+                const starting = runtime.StartRealtimeSessionFromResult(mintedSession('held-connect-provider'));
+                await reached;
+                await runtime.EndRealtimeSession();
+                fail(new Error('The socket closed before setup.'));
+                await starting;
+            } finally {
+                HeldConnectClient.Gate = null;
+            }
+
+            expect(host.Events).toEqual(['opened', 'released']);
+        });
+
+        it('releases nothing when the start ends before it opens the microphone', async () => {
+            class DecliningRuntime extends RealtimeSessionRuntime {
+                protected override hostCanUseProvider(): boolean {
+                    return false;
+                }
+            }
+            const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+            try {
+                const host = new OrderingHost();
+                const runtime = new DecliningRuntime(host);
+                runtime.Provider = new RecordingProvider() as unknown as IMetadataProvider;
+
+                await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+
+                expect(runtime.LastStartError).not.toBeNull();
+                expect(host.Events).toEqual([]);
+            } finally {
+                error.mockRestore();
+            }
+        });
+
+        it('releases once when the microphone fails to open and the start fails', async () => {
+            const host = new OrderingHost();
+            host.Failure = new Error('No microphone is available on this device.');
+            const { runtime } = build(host);
+
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+
+            expect(runtime.LastStartError).toBe(host.Failure);
+            expect(host.Events).toEqual(['failed', 'released']);
+        });
+
+        it('leaves the release to a newer call that opened the microphone since', async () => {
+            // The audio category is shared by the whole app: releasing it for the abandoned start would take the newer
+            // call out of it. The newer call's own end hands it back.
+            const host = new OrderingHost();
+            const { runtime } = build(host);
+            const open = host.HoldNextOpening();
+            const abandoned = runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-1'));
+            await runtime.EndRealtimeSession();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-2'));
+            expect(runtime.IsActive).toBe(true);
+
+            open();
+            await abandoned;
+            expect(host.Events).toEqual(['opened', 'opened']);
+
+            await runtime.EndRealtimeSession();
+            expect(host.Events).toEqual(['opened', 'opened', 'released']);
+        });
+    });
+
+    describe('a call ended while it was connecting (#5420)', () => {
+        /**
+         * The provider handshake behind one Connect, which the test settles as the provider would. With
+         * `DisconnectFails`, the driver's Disconnect fails a handshake still in flight, as the WebSocket drivers do.
+         */
+        class Handshake {
+            public readonly Reached: Promise<void>;
+            public readonly Done: Promise<void>;
+            public Reach: () => void = () => undefined;
+            public Succeed: () => void = () => undefined;
+            public Fail: (error: Error) => void = () => undefined;
+
+            constructor(public readonly DisconnectFails = false) {
+                this.Reached = new Promise<void>((resolve) => (this.Reach = resolve));
+                this.Done = new Promise<void>((resolve, reject) => {
+                    this.Succeed = resolve;
+                    this.Fail = reject;
+                });
+            }
+        }
+
+        /** A driver whose Connect waits on the handshake the test puts in `Next`. */
+        @RegisterClass(BaseRealtimeClient, 'handshake-provider')
+        class HandshakeClient extends FakeRealtimeClient {
+            public static Next: Handshake | null = null;
+            private handshake: Handshake | null = null;
+
+            public override async Connect(): Promise<void> {
+                const handshake = HandshakeClient.Next;
+                HandshakeClient.Next = null;
+                this.handshake = handshake;
+                handshake?.Reach();
+                await handshake?.Done;
+            }
+
+            public override async Disconnect(): Promise<void> {
+                if (this.handshake?.DisconnectFails) {
+                    this.handshake.Fail(new Error('Disconnected while connecting.'));
+                }
+                await super.Disconnect();
+            }
+        }
+
+        /** A provider that can hold `CloseAgentSession`, so a test can act while the teardown that sent it runs. */
+        class HoldingProvider extends RecordingProvider {
+            private closeGate: Promise<void> | null = null;
+
+            /** Holds every `CloseAgentSession` until the test calls the function this returns. */
+            public HoldClose(): () => void {
+                let release: () => void = () => undefined;
+                this.closeGate = new Promise<void>((resolve) => (release = resolve));
+                return release;
+            }
+
+            public override async ExecuteGQL(query: string): Promise<unknown> {
+                const result = await super.ExecuteGQL(query);
+                if (query.includes('CloseAgentSession')) {
+                    await this.closeGate;
+                }
+                return result;
+            }
+        }
+
+        /** A runtime on a holding provider, with what a host watching it sees from the start. */
+        function buildWatched() {
+            const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+            const provider = new HoldingProvider();
+            runtime.Provider = provider as unknown as IMetadataProvider;
+            const states: string[] = [];
+            const active: boolean[] = [];
+            const ended: { sessionId: string; reason: string }[] = [];
+            runtime.ConnectionState$.subscribe((state) => states.push(state));
+            runtime.Active$.subscribe((isActive) => active.push(isActive));
+            runtime.SessionEnded$.subscribe((end) => ended.push(end));
+            return { runtime, provider, states, active, ended };
+        }
+
+        /** How many times the server session was closed. */
+        function closes(provider: RecordingProvider): number {
+            return mutationNames(provider).filter((n) => n === 'CloseAgentSession').length;
+        }
+
+        /** Lets every pending promise step run. */
+        function settle(): Promise<void> {
+            return new Promise<void>((resolve) => setTimeout(resolve, 0));
+        }
+
+        afterEach(() => {
+            HandshakeClient.Next = null;
+            vi.restoreAllMocks();
+        });
+
+        it('stays closed, with no start error and one teardown, when the connection fails after the call was ended', async () => {
+            const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const handshake = (HandshakeClient.Next = new Handshake());
+            const { runtime, provider, states, active, ended } = buildWatched();
+
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider'));
+            await handshake.Reached;
+            await runtime.EndRealtimeSession();
+            handshake.Fail(new Error('The socket closed before setup.'));
+            await starting;
+
+            expect(states).not.toContain('error');
+            expect(states.at(-1)).toBe('closed');
+            expect(runtime.LastStartError).toBeNull();
+            expect(error).not.toHaveBeenCalled();
+            // Each teardown ends by reporting the session inactive, so one teardown is one `false` after `true`.
+            expect(active).toEqual([false, true, false]);
+            expect(ended).toEqual([{ sessionId: 'session-1', reason: 'explicit' }]);
+            expect(closes(provider)).toBe(1);
+        });
+
+        it('leaves the end to the teardown when ending the call is what fails the connection', async () => {
+            // A WebSocket driver's Disconnect fails a handshake still in flight, so the start hears of the failure
+            // while the teardown is still closing the session.
+            const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const handshake = (HandshakeClient.Next = new Handshake(true));
+            const { runtime, provider, states, ended } = buildWatched();
+            const letClose = provider.HoldClose();
+
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider'));
+            await handshake.Reached;
+            const ending = runtime.EndRealtimeSession();
+            await settle();
+            letClose();
+            await Promise.all([starting, ending]);
+
+            expect(states).not.toContain('error');
+            expect(states.at(-1)).toBe('closed');
+            expect(runtime.LastStartError).toBeNull();
+            expect(error).not.toHaveBeenCalled();
+            expect(ended).toEqual([{ sessionId: 'session-1', reason: 'explicit' }]);
+            expect(closes(provider)).toBe(1);
+        });
+
+        it('leaves the server session to a teardown still running when the ended call connects after all', async () => {
+            const handshake = (HandshakeClient.Next = new Handshake());
+            const { runtime, provider, ended } = buildWatched();
+            const letClose = provider.HoldClose();
+
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider'));
+            await handshake.Reached;
+            const ending = runtime.EndRealtimeSession();
+            await settle();
+            handshake.Succeed();
+            await settle();
+            letClose();
+            await Promise.all([starting, ending]);
+
+            expect(ended).toEqual([{ sessionId: 'session-1', reason: 'explicit' }]);
+            expect(closes(provider)).toBe(1);
+            expect(runtime.Client).toBeNull();
+        });
+
+        it("does not end a newer call when the ended call's connection fails", async () => {
+            // A runtime can serve every call in an app (Explorer's is a root service), so a newer call can be live
+            // by the time the ended call's provider answers.
+            const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const abandoned = (HandshakeClient.Next = new Handshake());
+            const { runtime, states, ended } = buildWatched();
+            const first = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider', 'session-1'));
+            await abandoned.Reached;
+            await runtime.EndRealtimeSession();
+            const newer = (HandshakeClient.Next = new Handshake());
+            const second = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider', 'session-2'));
+            await newer.Reached;
+            newer.Succeed();
+            await second;
+
+            abandoned.Fail(new Error('The socket closed before setup.'));
+            await first;
+
+            expect(runtime.IsActive).toBe(true);
+            expect(runtime.CurrentAgentSessionId).toBe('session-2');
+            expect(runtime.LastStartError).toBeNull();
+            expect(states).not.toContain('error');
+            expect(error).not.toHaveBeenCalled();
+            expect(ended).toEqual([{ sessionId: 'session-1', reason: 'explicit' }]);
+            await runtime.EndRealtimeSession();
+        });
+
+        it("reports no start error, not even an earlier call's, when the connection fails after the call was ended (#5431)", async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const { runtime, states } = buildWatched();
+            const refused = (HandshakeClient.Next = new Handshake());
+            const failed = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider', 'session-1'));
+            await refused.Reached;
+            refused.Fail(new Error('The provider refused the session.'));
+            await failed;
+            expect(runtime.LastStartError?.message).toBe('The provider refused the session.');
+
+            const handshake = (HandshakeClient.Next = new Handshake());
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider', 'session-2'));
+            await handshake.Reached;
+            await runtime.EndRealtimeSession();
+            handshake.Fail(new Error('The socket closed before setup.'));
+            await starting;
+
+            expect(runtime.LastStartError).toBeNull();
+            expect(states.at(-1)).toBe('closed');
+        });
+
+        it('still reports a connection that fails while the call is starting', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const handshake = (HandshakeClient.Next = new Handshake());
+            const { runtime, states, active, ended } = buildWatched();
+            const failure = new Error('The provider refused the session.');
+
+            const starting = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider'));
+            await handshake.Reached;
+            handshake.Fail(failure);
+            await starting;
+
+            expect(states.at(-1)).toBe('error');
+            expect(runtime.LastStartError).toBe(failure);
+            expect(runtime.IsActive).toBe(false);
+            expect(active).toEqual([false, true, false]);
+            expect(ended).toEqual([{ sessionId: 'session-1', reason: 'error' }]);
+        });
+    });
+
     it('declines an unusable provider through the shared teardown, and says which one', async () => {
         class WebRtcOnly extends RealtimeSessionRuntime {
             protected override hostCanUseProvider(p: string): boolean {
@@ -329,11 +723,44 @@ describe('session lifecycle, driven end to end with fakes', () => {
         expect(mutationNames(provider)).toContain('CloseAgentSession');
     });
 
-    it('clears the last start error when a later session starts cleanly', async () => {
-        const { runtime } = build(new FakeMediaHost());
-        await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
-        expect(runtime.LastStartError).toBeNull();
-        await runtime.EndRealtimeSession();
+    it("keeps a failed start's error until the next start, which clears it before it reports connecting (#5431)", async () => {
+        /** A host whose microphone stays blocked until the user allows it. */
+        class BlockingHost extends FakeMediaHost {
+            public Blocked: Error | null = null;
+            public override async AcquireMicrophone(): Promise<MediaStream> {
+                if (this.Blocked) {
+                    throw this.Blocked;
+                }
+                return super.AcquireMicrophone();
+            }
+        }
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            const host = new BlockingHost();
+            const blocked = Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' });
+            host.Blocked = blocked;
+            const { runtime } = build(host);
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-1'));
+            expect(runtime.LastStartError).toBe(blocked);
+
+            // The user allows the microphone and tries again. Hosts read the error when the state changes, so record
+            // what one would read at each change; subscribing replays the failed start's 'error' first.
+            host.Blocked = null;
+            const read: { state: string; error: Error | null }[] = [];
+            const watch = runtime.ConnectionState$.subscribe((state) => read.push({ state, error: runtime.LastStartError }));
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-2'));
+            watch.unsubscribe();
+
+            expect(runtime.IsActive).toBe(true);
+            expect(read).toEqual([
+                { state: 'error', error: blocked },
+                { state: 'connecting', error: null },
+            ]);
+            expect(runtime.LastStartError).toBeNull();
+            await runtime.EndRealtimeSession();
+        } finally {
+            error.mockRestore();
+        }
     });
 
     describe('recording mixes the agent stream (#5153)', () => {
@@ -391,26 +818,27 @@ describe('channel registry on a connect-only provider (#4887)', () => {
     // A connect-only provider has no entity metadata, so AIEngineBase cannot load — but the embed
     // still needs its channels: without them Whiteboard/Media tools never reach the mint and the
     // agent loses them (seen live on Caliber's widget). The registry is read over GraphQL instead.
-    const registryRow = (Name: string, IsActive: boolean) => ({
-        Data: JSON.stringify({ ID: `id-${Name}`, Name, ClientPluginClass: `${Name}Channel`, IsActive }),
+    const registryRow = (Name: string, IsActive: boolean, UIConfig?: string) => ({
+        Data: JSON.stringify({ ID: `id-${Name}`, Name, ClientPluginClass: `${Name}Channel`, IsActive, ...(UIConfig ? { UIConfig } : {}) }),
     });
 
     it('reads the registry rows over GraphQL, active and inactive (an inactive row is the kill switch), without touching AIEngineBase, when the provider has no entity metadata', async () => {
         const spy = vi.spyOn(AIEngineBase, 'GetProviderInstance');
         const ExecuteGQL = vi.fn().mockResolvedValue({
-            RunDynamicView: { Success: true, Results: [registryRow('Whiteboard', true), registryRow('Retired', false)] },
+            RunDynamicView: { Success: true, Results: [registryRow('Whiteboard', true, JSON.stringify({ Placement: 'pip' })), registryRow('Retired', false)] },
         });
         try {
             const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
             runtime.Provider = { Entities: [], ExecuteGQL } as never; // Entities + ExecuteGQL are all it reads
 
             await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([
-                { ID: 'id-Whiteboard', Name: 'Whiteboard', ClientPluginClass: 'WhiteboardChannel', IsActive: true },
-                { ID: 'id-Retired', Name: 'Retired', ClientPluginClass: 'RetiredChannel', IsActive: false },
+                { ID: 'id-Whiteboard', Name: 'Whiteboard', ClientPluginClass: 'WhiteboardChannel', IsActive: true, SurfacePlacement: { Default: 'pip', Allowed: MEDIA_PLACEMENTS } },
+                { ID: 'id-Retired', Name: 'Retired', ClientPluginClass: 'RetiredChannel', IsActive: false, SurfacePlacement: { Default: 'tab', Allowed: MEDIA_PLACEMENTS } },
             ]);
             expect(ExecuteGQL).toHaveBeenCalledTimes(1);
             expect(ExecuteGQL.mock.calls[0][1]).toMatchObject({ input: { EntityName: 'MJ: AI Agent Channels' } });
             expect(ExecuteGQL.mock.calls[0][1].input.ExtraFilter).toBeUndefined();
+            expect(ExecuteGQL.mock.calls[0][1].input.Fields).toContain('UIConfig');
             expect(spy).not.toHaveBeenCalled();
         } finally {
             spy.mockRestore();
@@ -459,7 +887,7 @@ describe('BuildClientConfig: the requested-tracks key has one home', () => {
     it('writes channel-sourced tracks under REQUESTED_TRACKS_SESSION_KEY, keeping the mint-supplied ones', () => {
         const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
         const video = { Direction: 'Inbound', Modality: 'Video' } as const;
-        runtime['_activeChannels$'].next([{ GetSourcedTracks: () => [video] } as never]);
+        runtime['_activeChannels$'].next([{ GetSourcedTracks: () => [video], GetSunkTracks: () => [] } as never]);
         const minted = { Direction: 'Outbound', Modality: 'Video' };
         const config = runtime.BuildClientConfig(session(JSON.stringify({ [REQUESTED_TRACKS_SESSION_KEY]: [minted] })));
         const tracks = config.SessionConfig?.[REQUESTED_TRACKS_SESSION_KEY] as Array<{ Direction: string; Modality: string }>;

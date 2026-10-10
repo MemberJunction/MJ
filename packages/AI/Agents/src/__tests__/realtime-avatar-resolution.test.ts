@@ -1,0 +1,343 @@
+/**
+ * Which live avatar a realtime session asks for: the voiced agent's persona face when its video setting is on, then the
+ * co-agent's, never the model's own first persona; an explicit avatar id only when it names a real binding; the avatar
+ * persona's voice to go with it; and none when the model's Video/Output row turns video off. Then the status a browser
+ * call, or a server-side (bridged) session, reports about it.
+ */
+import { describe, it, expect, vi } from 'vitest';
+import type { RealtimeAvatarUnavailableReason } from '@memberjunction/ai';
+import type { ResolvedAgentPersona, ResolvedModelPersona } from '@memberjunction/ai-engine-base';
+import type { MJAIAgentPersonaEntity, MJAIPersonaEntity, MJAIPersonaVendorEntity } from '@memberjunction/core-entities';
+import {
+    ResolveAvatarUnseenReason,
+    ResolveBridgedAvatarStatus,
+    ResolveRealtimeAvatar,
+    ResolveRealtimeAvatarStatus,
+    WithoutUnseenAvatar,
+    type RealtimeAvatarPersonaSource,
+    type RealtimeAvatarResolution,
+    type RealtimeBridgedAvatarStatusInput,
+} from '../realtime/realtime-avatar-resolution';
+import { BuildRealtimeOverridesJson, ResolveEffectiveRealtimeConfig, type RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
+
+const MODEL = 'model-38-live';
+const VERTEX = 'vendor-vertex';
+
+function persona(id: string, name: string): MJAIPersonaEntity {
+    return { ID: id, Name: name } as unknown as MJAIPersonaEntity;
+}
+
+function binding(apiName: string, avatar?: { Kind?: 'preset' | 'custom'; Resolution?: 'low' | 'standard' | 'high' }): MJAIPersonaVendorEntity {
+    return { APIName: apiName, VendorSettingsObject: avatar ? { Avatar: avatar } : null } as unknown as MJAIPersonaVendorEntity;
+}
+
+/** A fake persona source: faces (Video) and voices (Audio) per vendor, and each agent's personas. */
+class FakePersonas implements RealtimeAvatarPersonaSource {
+    public Faces: ResolvedModelPersona[] = [];
+    public Voices: ResolvedModelPersona[] = [];
+    public Agents: Record<string, ResolvedAgentPersona[]> = {};
+    public VendorsAsked: Array<string | undefined> = [];
+
+    public GetModelPersonas(modelId: string, modalityName = 'Audio', vendorId?: string): ResolvedModelPersona[] {
+        this.VendorsAsked.push(vendorId);
+        if (modelId !== MODEL) {
+            return [];
+        }
+        return modalityName === 'Video' ? this.Faces : this.Voices;
+    }
+
+    public GetAgentPersonas(agentId: string): ResolvedAgentPersona[] {
+        return this.Agents[agentId] ?? [];
+    }
+}
+
+function agentPersona(p: MJAIPersonaEntity, isDefault = false): ResolvedAgentPersona {
+    return { Persona: p, AgentPersona: { IsDefault: isDefault } as unknown as MJAIAgentPersonaEntity };
+}
+
+const BEN = persona('p-ben', 'Ben');
+const KAI = persona('p-kai', 'Kai');
+const VIDEO_ON: RealtimeCoAgentConfig = { realtime: { video: { enabled: true } } };
+
+function source(): FakePersonas {
+    const s = new FakePersonas();
+    s.Faces = [
+        { Persona: BEN, PersonaVendor: binding('Ben', { Kind: 'preset', Resolution: 'standard' }) },
+        { Persona: KAI, PersonaVendor: binding('Kai') },
+    ];
+    s.Voices = [{ Persona: BEN, PersonaVendor: binding('Puck') }];
+    return s;
+}
+
+describe('ResolveRealtimeAvatar', () => {
+    it("asks for nothing while the agent's video setting is off, and reads no persona", () => {
+        const s = source();
+        s.Agents['target'] = [agentPersona(BEN, true)];
+        for (const cfg of [{}, { realtime: { video: { enabled: false } } }, null] as Array<RealtimeCoAgentConfig | null>) {
+            expect(ResolveRealtimeAvatar({ EffectiveConfig: cfg, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX }, s)).toEqual({});
+        }
+        expect(s.VendorsAsked).toEqual([]);
+    });
+
+    it("uses the voiced agent's persona face, its settings, and the same persona's voice on the vendor", () => {
+        const s = source();
+        s.Agents['target'] = [agentPersona(BEN, true)];
+        const result = ResolveRealtimeAvatar({ EffectiveConfig: VIDEO_ON, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX }, s);
+        expect(result).toEqual({
+            Avatar: { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona', Kind: 'preset', Resolution: 'standard' },
+            Voice: 'Puck',
+        });
+        expect(new Set(s.VendorsAsked)).toEqual(new Set([VERTEX]));
+    });
+
+    it("prefers the agent's default persona, then its others in order, skipping personas without a face", () => {
+        const s = source();
+        const nobody = persona('p-none', 'No face');
+        s.Agents['target'] = [agentPersona(BEN), agentPersona(nobody), agentPersona(KAI, true)];
+        expect(ResolveRealtimeAvatar({ EffectiveConfig: VIDEO_ON, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL }, s).Avatar?.AvatarID).toBe('Kai');
+        s.Agents['target'] = [agentPersona(nobody, true), agentPersona(BEN)];
+        expect(ResolveRealtimeAvatar({ EffectiveConfig: VIDEO_ON, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL }, s).Avatar?.AvatarID).toBe('Ben');
+    });
+
+    it("falls back to the co-agent's persona face when the voiced agent has none", () => {
+        const s = source();
+        s.Agents['co'] = [agentPersona(KAI, true)];
+        const result = ResolveRealtimeAvatar({ EffectiveConfig: VIDEO_ON, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL }, s);
+        expect(result.Avatar).toEqual({ AvatarID: 'Kai', PersonaName: 'Kai', Source: 'persona' });
+        expect(result.Voice).toBeUndefined();
+    });
+
+    it("prefers the voiced agent's face over the co-agent's", () => {
+        const s = source();
+        s.Agents['target'] = [agentPersona(KAI, true)];
+        s.Agents['co'] = [agentPersona(BEN, true)];
+        expect(ResolveRealtimeAvatar({ EffectiveConfig: VIDEO_ON, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL }, s).Avatar?.AvatarID).toBe('Kai');
+    });
+
+    it("never uses the model's own first persona: no agent persona means no face", () => {
+        const result = ResolveRealtimeAvatar({ EffectiveConfig: VIDEO_ON, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL }, source());
+        expect(result).toEqual({ Reason: 'no-binding' });
+    });
+
+    it('takes realtime.video.avatarId only when it names a face the model has on the vendor', () => {
+        const s = source();
+        s.Agents['target'] = [agentPersona(BEN, true)];
+        const picked = ResolveRealtimeAvatar(
+            { EffectiveConfig: { realtime: { video: { enabled: true, avatarId: ' kai ' } } }, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL }, s);
+        expect(picked.Avatar).toEqual({ AvatarID: 'Kai', PersonaName: 'Kai', Source: 'override' });
+
+        const unknown = ResolveRealtimeAvatar(
+            { EffectiveConfig: { realtime: { video: { enabled: true, avatarId: 'Nobody' } } }, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL }, s);
+        expect(unknown).toEqual({ Reason: 'unknown-avatar' });
+    });
+
+    it("asks for no avatar when the model's Video/Output row turns video off: reason endpoint, and no persona is read", () => {
+        const s = source();
+        s.Agents['target'] = [agentPersona(BEN, true)];
+        const result = ResolveRealtimeAvatar(
+            { EffectiveConfig: VIDEO_ON, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX, VideoOutputRow: 'unsupported' }, s);
+        expect(result).toEqual({ Reason: 'endpoint' });
+        expect(s.VendorsAsked).toEqual([]);
+    });
+
+    it("gives no reason for a turned-off row while the agent's video setting is off", () => {
+        expect(ResolveRealtimeAvatar(
+            { EffectiveConfig: { realtime: { video: { enabled: false } } }, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VideoOutputRow: 'unsupported' },
+            source(),
+        )).toEqual({});
+    });
+
+    it("resolves the persona's face when the row allows video, or the model has none (the driver decides then)", () => {
+        for (const row of ['supported', 'unstated'] as const) {
+            const s = source();
+            s.Agents['target'] = [agentPersona(BEN, true)];
+            const result = ResolveRealtimeAvatar(
+                { EffectiveConfig: VIDEO_ON, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX, VideoOutputRow: row }, s);
+            expect(result.Avatar?.AvatarID).toBe('Ben');
+        }
+    });
+
+    it("asks for the avatar a picker override names, even when the voiced agent's video setting is off", () => {
+        // The picker's override (voice + the avatar that comes with it) is the top layer of the effective config.
+        const target = JSON.stringify({ realtime: { video: { enabled: false } } });
+        const effective = ResolveEffectiveRealtimeConfig(null, null, BuildRealtimeOverridesJson(MODEL, 'Puck', 'Ben'), target);
+        const result = ResolveRealtimeAvatar({ EffectiveConfig: effective, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX }, source());
+        expect(result.Avatar).toEqual({ AvatarID: 'Ben', PersonaName: 'Ben', Source: 'override', Kind: 'preset', Resolution: 'standard' });
+    });
+});
+
+describe('ResolveRealtimeAvatarStatus', () => {
+    const BEN = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' as const };
+
+    it('says nothing when the session asked for no avatar, whatever the model and driver say', () => {
+        expect(ResolveRealtimeAvatarStatus({ Resolution: {}, ModelSupportsAvatarOutput: true, DriverStatus: { Requested: true, Granted: true } })).toBeUndefined();
+        expect(ResolveRealtimeAvatarStatus({ Resolution: {}, ModelSupportsAvatarOutput: false })).toBeUndefined();
+    });
+
+    it('says the voice model shows none when the model renders no avatar, before the persona reasons', () => {
+        const endpoint = { Requested: true, Granted: false, Reason: 'endpoint' };
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Avatar: BEN }, ModelSupportsAvatarOutput: false })).toEqual(endpoint);
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'no-binding' }, ModelSupportsAvatarOutput: false })).toEqual(endpoint);
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'unknown-avatar' }, ModelSupportsAvatarOutput: false })).toEqual(endpoint);
+    });
+
+    it("says the voice model shows none when the model's Video/Output row turned video off at the prep", () => {
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'endpoint' }, ModelSupportsAvatarOutput: false, DriverStatus: { Requested: true, Granted: true } }))
+            .toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+    });
+
+    it("gives the resolution's reason when the model renders avatars but no face resolved, never the driver's status", () => {
+        const granted = { Requested: true, Granted: true };
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'no-binding' }, ModelSupportsAvatarOutput: true, DriverStatus: granted }))
+            .toEqual({ Requested: true, Granted: false, Reason: 'no-binding' });
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'unknown-avatar' }, ModelSupportsAvatarOutput: true }))
+            .toEqual({ Requested: true, Granted: false, Reason: 'unknown-avatar' });
+    });
+
+    it("passes the driver's decision through when a face resolved on a model that renders avatars", () => {
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Avatar: BEN }, ModelSupportsAvatarOutput: true, DriverStatus: { Requested: true, Granted: true } }))
+            .toEqual({ Requested: true, Granted: true });
+        expect(ResolveRealtimeAvatarStatus({
+            Resolution: { Avatar: { ...BEN, Kind: 'custom' } },
+            ModelSupportsAvatarOutput: true,
+            DriverStatus: { Requested: true, Granted: false, Reason: 'custom-disabled' },
+        })).toEqual({ Requested: true, Granted: false, Reason: 'custom-disabled' });
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Avatar: BEN }, ModelSupportsAvatarOutput: true })).toBeUndefined();
+    });
+
+    it('says phone for a phone call before the model or the face could say anything', () => {
+        const phone = { Requested: true, Granted: false, Reason: 'phone' };
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'phone' }, ModelSupportsAvatarOutput: false })).toEqual(phone);
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'phone', Voice: 'Puck' }, ModelSupportsAvatarOutput: true, DriverStatus: { Requested: true, Granted: true } })).toEqual(phone);
+    });
+});
+
+describe('A phone call asks for no avatar (WithoutUnseenAvatar)', () => {
+    const BEN_REQUEST = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' as const };
+
+    it('names phone as the reason nobody would see an avatar, and nothing for any other session', () => {
+        expect(ResolveAvatarUnseenReason({ PhoneCall: true })).toBe('phone');
+        expect(ResolveAvatarUnseenReason({ PhoneCall: false })).toBeUndefined();
+        expect(ResolveAvatarUnseenReason({})).toBeUndefined();
+    });
+
+    it("drops a phone call's request and keeps the persona's voice, so the agent sounds the same", () => {
+        expect(WithoutUnseenAvatar({ Avatar: BEN_REQUEST, Voice: 'Puck' }, { PhoneCall: true })).toEqual({ Voice: 'Puck', Reason: 'phone' });
+        expect(WithoutUnseenAvatar({ Avatar: BEN_REQUEST }, { PhoneCall: true })).toEqual({ Reason: 'phone' });
+    });
+
+    it("says phone over any other reason: no model or face could show the caller an avatar", () => {
+        expect(WithoutUnseenAvatar({ Reason: 'endpoint' }, { PhoneCall: true })).toEqual({ Reason: 'phone' });
+        expect(WithoutUnseenAvatar({ Reason: 'no-binding' }, { PhoneCall: true })).toEqual({ Reason: 'phone' });
+    });
+
+    it("leaves a call whose agent asked for no avatar (video setting off) without a reason, so it gets no notice", () => {
+        expect(WithoutUnseenAvatar({}, { PhoneCall: true })).toEqual({});
+    });
+
+    it('leaves every other session as resolved', () => {
+        const resolved = { Avatar: BEN_REQUEST, Voice: 'Puck' };
+        expect(WithoutUnseenAvatar(resolved, {})).toBe(resolved);
+        expect(WithoutUnseenAvatar(resolved, { PhoneCall: false })).toBe(resolved);
+    });
+});
+
+describe('An app that shows no agent video asks for no avatar (host)', () => {
+    const BEN_REQUEST = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' as const };
+
+    it("names host for an app that said it shows no agent video, and phone for a phone call whatever the app", () => {
+        expect(ResolveAvatarUnseenReason({ ShowsAgentVideo: false })).toBe('host');
+        expect(ResolveAvatarUnseenReason({ ShowsAgentVideo: true })).toBeUndefined();
+        expect(ResolveAvatarUnseenReason({ PhoneCall: true, ShowsAgentVideo: false })).toBe('phone');
+    });
+
+    it("drops the request and keeps the persona's voice", () => {
+        expect(WithoutUnseenAvatar({ Avatar: BEN_REQUEST, Voice: 'Puck' }, { ShowsAgentVideo: false })).toEqual({ Voice: 'Puck', Reason: 'host' });
+        expect(WithoutUnseenAvatar({ Reason: 'no-binding' }, { ShowsAgentVideo: false })).toEqual({ Reason: 'host' });
+        expect(WithoutUnseenAvatar({}, { ShowsAgentVideo: false })).toEqual({});
+    });
+
+    it("says host before the model's or the face's reason, at the mint", () => {
+        const host = { Requested: true, Granted: false, Reason: 'host' };
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'host' }, ModelSupportsAvatarOutput: false })).toEqual(host);
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'host', Voice: 'Puck' }, ModelSupportsAvatarOutput: true })).toEqual(host);
+    });
+});
+
+describe("A server-side (bridged) session's avatar status (ResolveBridgedAvatarStatus)", () => {
+    const BEN_REQUEST = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' as const };
+    const audioOnly = (reason: RealtimeAvatarUnavailableReason) => ({ Requested: true, Granted: false, Reason: reason });
+
+    /** A meeting session whose host publishes the avatar, on a model that shows avatars, whose driver reported nothing. */
+    function meeting(resolution: RealtimeAvatarResolution | undefined, overrides: Partial<RealtimeBridgedAvatarStatusInput> = {}) {
+        return ResolveBridgedAvatarStatus({ Resolution: resolution, RoomDelivery: true, ModelShowsAvatar: () => true, DriverStatus: undefined, ...overrides });
+    }
+
+    it("says why when the prep asked the driver for no avatar: no face for the vendor, an unknown avatar, video turned off (#5319)", () => {
+        expect(meeting({ Reason: 'no-binding' })).toEqual(audioOnly('no-binding'));
+        expect(meeting({ Reason: 'unknown-avatar' })).toEqual(audioOnly('unknown-avatar'));
+        expect(meeting({ Reason: 'endpoint' }, { ModelShowsAvatar: () => false })).toEqual(audioOnly('endpoint'));
+    });
+
+    it('says the voice model shows none before the face reasons, as a browser call does', () => {
+        expect(meeting({ Reason: 'no-binding' }, { ModelShowsAvatar: () => false })).toEqual(audioOnly('endpoint'));
+        expect(meeting({ Reason: 'unknown-avatar' }, { ModelShowsAvatar: () => false })).toEqual(audioOnly('endpoint'));
+    });
+
+    it('says bridged when the host publishes no avatar into a room, as a driver asked there does, before the model or the face', () => {
+        const model = vi.fn(() => false);
+        for (const reason of ['no-binding', 'unknown-avatar', 'endpoint'] as const) {
+            expect(meeting({ Reason: reason }, { RoomDelivery: false, ModelShowsAvatar: model })).toEqual(audioOnly('bridged'));
+        }
+        expect(model).not.toHaveBeenCalled();
+    });
+
+    it("says phone on a phone call before anything else, and asks nothing about the model", () => {
+        const model = vi.fn(() => false);
+        expect(meeting({ Voice: 'Puck', Reason: 'phone' }, { ModelShowsAvatar: model })).toEqual(audioOnly('phone'));
+        expect(meeting({ Reason: 'phone' }, { RoomDelivery: false, ModelShowsAvatar: model })).toEqual(audioOnly('phone'));
+        expect(model).not.toHaveBeenCalled();
+    });
+
+    it("keeps the driver's status when the prep asked it for an avatar: a grant stays a grant, whatever the model says", () => {
+        const granted = { Requested: true, Granted: true };
+        expect(meeting({ Avatar: BEN_REQUEST, Voice: 'Puck' }, { DriverStatus: granted, ModelShowsAvatar: () => false })).toBe(granted);
+        const bridged = audioOnly('bridged');
+        expect(meeting({ Avatar: BEN_REQUEST }, { RoomDelivery: false, DriverStatus: bridged })).toBe(bridged);
+        expect(meeting({ Avatar: BEN_REQUEST })).toBeUndefined();
+    });
+
+    it('says nothing when the agent asked for no avatar (its video setting is off) or there was no prep', () => {
+        expect(meeting({})).toBeUndefined();
+        expect(meeting({ Voice: 'Puck' })).toBeUndefined();
+        expect(meeting(undefined, { RoomDelivery: false, ModelShowsAvatar: () => false })).toBeUndefined();
+    });
+
+    describe('when the driver was asked for the avatar and reported nothing, as a driver that renders none does (#5429)', () => {
+        it('says the voice model shows none, as a browser call does', () => {
+            const model = vi.fn(() => false);
+            expect(meeting({ Avatar: BEN_REQUEST, Voice: 'Puck' }, { ModelShowsAvatar: model })).toEqual(audioOnly('endpoint'));
+            expect(model).toHaveBeenCalledTimes(1);
+        });
+
+        it('says bridged when the host publishes no avatar into a room, as a driver asked there does, and asks nothing about the model', () => {
+            const model = vi.fn(() => false);
+            expect(meeting({ Avatar: BEN_REQUEST }, { RoomDelivery: false, ModelShowsAvatar: model })).toEqual(audioOnly('bridged'));
+            expect(model).not.toHaveBeenCalled();
+        });
+
+        it("says nothing on a model that shows avatars: the driver's silence names no reason", () => {
+            const model = vi.fn(() => true);
+            expect(meeting({ Avatar: BEN_REQUEST }, { ModelShowsAvatar: model })).toBeUndefined();
+            expect(model).toHaveBeenCalledTimes(1);
+        });
+
+        it("keeps every status a driver did report, whatever the model says, and asks nothing about the model", () => {
+            const model = vi.fn(() => false);
+            for (const reported of [{ Requested: true, Granted: true }, audioOnly('custom-disabled'), audioOnly('endpoint'), audioOnly('bridged')]) {
+                expect(meeting({ Avatar: BEN_REQUEST }, { DriverStatus: reported, ModelShowsAvatar: model })).toBe(reported);
+            }
+            expect(model).not.toHaveBeenCalled();
+        });
+    });
+});

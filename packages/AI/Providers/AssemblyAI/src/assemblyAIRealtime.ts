@@ -3,6 +3,7 @@
 // MemberJunction AI core contract
 import {
     BaseRealtimeModel,
+    RealtimeDroppedInputReporter,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -14,6 +15,7 @@ import {
     type JSONObject,
     type JSONValue,
     type RealtimeVoiceOption,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -462,6 +464,9 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
      */
     private currentToolsFingerprint = AssemblyAIRealtime.ToolSetFingerprint([]);
 
+    /** Reports the frames {@link SendInput} drops, once per kind and type. */
+    private readonly droppedInput = new RealtimeDroppedInputReporter('AssemblyAIRealtime', 'this session sends audio only');
+
     constructor(sessionObject: JSONObject) {
         this.sessionObject = sessionObject;
         this.basePrompt = typeof sessionObject['system_prompt'] === 'string' ? sessionObject['system_prompt'] : '';
@@ -499,9 +504,19 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
         return this.readyPromise;
     }
 
-    /** @inheritdoc — streams one PCM16 (24 kHz mono) frame as a base64 `input.audio` chunk. */
-    public SendInput(chunk: ArrayBuffer): void {
-        this.sendFrame({ type: 'input.audio', audio: Buffer.from(new Uint8Array(chunk)).toString('base64') });
+    /**
+     * @inheritdoc
+     *
+     * Streams one PCM16 (24 kHz mono) audio frame as a base64 `input.audio` chunk. The session sends audio only, so a
+     * frame of another kind (a camera or screen frame) is dropped, never sent as audio, and reported once per kind and
+     * type.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this.droppedInput.Report(frame);
+            return;
+        }
+        this.sendFrame({ type: 'input.audio', audio: Buffer.from(new Uint8Array(frame.Data)).toString('base64') });
     }
 
     /**

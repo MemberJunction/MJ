@@ -10,6 +10,7 @@ import {
     RealtimeUsageModalityDetail,
 } from '@memberjunction/ai';
 import { IRealtimeAudioMeter, REALTIME_AUDIO_BIN_COUNT } from '../audio/audioMeter';
+import type { MediaVideoSource } from '../media/model';
 
 /**
  * Session-config key under which the realtime runtime hands a driver the tracks to negotiate
@@ -117,7 +118,9 @@ export interface RealtimeClientToolCall {
  * simply never emit):
  * - **OpenAI** — emits per-response deltas from the GA `response.done` frame's `usage` payload.
  * - **Gemini** — emits per-turn deltas from `LiveServerMessage.usageMetadata`
- *   (`promptTokenCount` / `responseTokenCount` are per-response counts, not cumulative).
+ *   (`promptTokenCount` / `responseTokenCount` are per-response counts, not cumulative), and,
+ *   in an avatar session, the seconds of avatar video each turn generated, in updates of their
+ *   own that carry only `OutputTokenDetails.VideoSeconds`.
  * - **ElevenLabs** — the Conversational AI socket exposes no usage events; never emits.
  * - **AssemblyAI** — the streaming STT socket exposes no token-usage events; never emits.
  */
@@ -133,7 +136,10 @@ export interface RealtimeClientUsage {
     DurationSeconds?: number;
     /** Per-modality breakdown of input tokens (text, audio, image/video). */
     InputTokenDetails?: RealtimeUsageModalityDetail;
-    /** Per-modality breakdown of output tokens (text, audio). */
+    /**
+     * Per-modality breakdown of output tokens (text, audio, video), and the seconds of avatar video
+     * generated since the last update (`VideoSeconds`, an amount like the tokens).
+     */
     OutputTokenDetails?: RealtimeUsageModalityDetail;
     /** Cumulative video frames processed or sent across inbound video tracks. */
     VideoFrames?: number;
@@ -248,6 +254,32 @@ export interface RealtimeClientError {
  *    client-owned-audio drivers, the remote WebRTC stream on peer-connection drivers.
  *    Meters must be released on disconnect ({@link closeAudioMeters}). A driver with no
  *    tappable plane simply attaches nothing — hosts fall back to turn-state animation.
+ * 10. **Follow a replaced microphone track, when the transport can.** A device switch or a
+ *    lost device swaps the track inside the mic stream, and anything bound to the old track (a
+ *    WebRTC sender, a Web Audio source node, the input meter's clone) goes silent. A driver
+ *    implements {@link BaseRealtimeClient.ReplaceMicrophone} to rebind them: `replaceTrack` on
+ *    its senders, or `IPcmMicCapture.Rebind` on its PCM capture, and a new input meter.
+ * 11. **Refuse a transport you don't speak.** A session minted to run through MJAPI's realtime
+ *    relay (`ClientRealtimeSessionConfig.Transport` `'relay'`) has no provider token, only a relay
+ *    URL. Every driver calls {@link BaseRealtimeClient.AssertTransportSupported} first in
+ *    {@link BaseRealtimeClient.Connect}, so a driver that connects only to its provider refuses
+ *    such a session with a clear error instead of failing at the provider. A driver that speaks
+ *    its provider's protocol through the relay opts in by overriding
+ *    {@link BaseRealtimeClient.SupportsRelayTransport}.
+ * 12. **The agent's video keeps the voice's rules.** A driver whose model sends the agent's video
+ *    hands it over through {@link emitRemoteVideo} once per session, and only while its outbound
+ *    video track is live; an audio-only session hands over nothing and never plays a video part as
+ *    audio. Its player gets each frame as the model sent it (a `RealtimeVideoFrame`, in order).
+ *    Barge-in flushes the video with the voice (obligation #3) and the cut turn's late media never
+ *    plays; a turn's end lets its video play out; a video that carries the voice never plays it
+ *    twice; each second of generated video is reported once (`OutputTokenDetails.VideoSeconds`); the
+ *    video a model streams between answers (Vertex AI's avatar does) plays, but is not the agent
+ *    speaking: it reports no `'speaking'`, leaves {@link IsBusy} as it was, and does not keep
+ *    {@link IsAudioPlaying} true once the answer's media has played; a resumed session keeps its
+ *    video; `Disconnect` releases it. A driver whose voice and video share a media timeline queues
+ *    its PCM at its media times and gives the player its voice playback as the clock
+ *    (`VideoPlayoutOptions.Clock`). The video conformance kit
+ *    (`@memberjunction/ai-realtime-client/testing`) checks each rule.
  */
 export abstract class BaseRealtimeClient {
     // ── Registered handlers (single-handler style, like IRealtimeSession) ─────
@@ -257,7 +289,7 @@ export abstract class BaseRealtimeClient {
     private errorHandler?: (error: RealtimeClientError) => void;
     private interruptionHandler?: () => void;
     private usageHandler?: (usage: RealtimeClientUsage) => void;
-    private remoteVideoHandler?: (stream: MediaStream) => void;
+    private remoteVideoHandler?: (video: MediaVideoSource) => void;
     private trackHandler?: (track: RealtimeTrack) => void;
 
     // ── Media-track state and negotiation ──────────────────────────────────────
@@ -280,6 +312,12 @@ export abstract class BaseRealtimeClient {
 
     /** The model's declared inbound video stream ceiling, recorded by {@link negotiateTracks}; `undefined` until a driver declares one. */
     private inboundVideoStreamLimit: number | undefined;
+
+    /** What the driver supports, recorded by {@link negotiateTracks} so {@link AddTrack} can resolve against it later. */
+    private supportedTracks: readonly RealtimeTrackDescriptor[] | null = null;
+
+    /** The index the next added track's id takes, so an added track never reuses an id. */
+    private nextTrackIndex = 0;
 
     /**
      * How many concurrent inbound video streams the model accepts: the ceiling the driver declared when it
@@ -306,6 +344,15 @@ export abstract class BaseRealtimeClient {
         );
         const rate = track?.Descriptor.Rate;
         return typeof rate === 'number' && rate > 0 ? rate : undefined;
+    }
+
+    /**
+     * Whether the model takes inbound video on this session: the driver declared an inbound video track it supports when it
+     * negotiated tracks, and a stream limit above zero. No video track need be live; one is added when a capture starts
+     * ({@link AddTrack}). `false` before tracks are negotiated, and for a driver that does not negotiate them.
+     */
+    public get SupportsInboundVideo(): boolean {
+        return (this.inboundVideoStreamLimit ?? 1) > 0 && (this.supportedTracks ?? []).some(isInboundVideo);
     }
 
     /**
@@ -353,10 +400,70 @@ export abstract class BaseRealtimeClient {
             ...t,
             State: t.State === 'requested' ? 'live' : t.State,
         }));
+        this.supportedTracks = effectiveSupported;
+        this.nextTrackIndex = this.tracks.length;
         for (const track of this.tracks) {
             this.emitTrackStateChange(track);
         }
         return this.tracks;
+    }
+
+    /**
+     * Adds a track to a running session, such as inbound video when the user starts their camera, resolved against
+     * what the driver supported when it negotiated at connect. The new track is `'live'`, or `'unsupported'` with the
+     * reason (the model takes no such track, or no more inbound video streams). A live track with the same
+     * direction, modality and source is returned as it is. Other tracks keep their ids.
+     *
+     * The base re-negotiates locally, which is all a driver needs when its provider accepts the media without a
+     * setup change (Gemini Live takes video frames at any time). A driver whose wire must change overrides this and
+     * calls it.
+     *
+     * @returns The track, or `null` when the session has not negotiated tracks: before it connects, or with a driver
+     *   that does not negotiate them (only the Gemini driver does today).
+     */
+    public AddTrack(descriptor: RealtimeTrackDescriptor): RealtimeTrack | null {
+        if (!this.supportedTracks) {
+            return null;
+        }
+        const key = RealtimeTrackKey(descriptor);
+        const existing = this.tracks.find((t) => t.State === 'live' && RealtimeTrackKey(t.Descriptor) === key);
+        if (existing) {
+            return existing;
+        }
+        // Resolve after the live inbound video streams, so the stream cap and its reason count them.
+        const liveVideo = this.tracks.filter((t) => t.State === 'live' && isInboundVideo(t.Descriptor)).map((t) => t.Descriptor);
+        const index = this.nextTrackIndex++;
+        const resolved = ResolveRequestedTracks(
+            [...liveVideo, descriptor],
+            this.supportedTracks,
+            (d) => `${d.Direction}:${String(d.Modality)}:${index}`,
+            { MaxInboundVideoStreams: this.inboundVideoStreamLimit }
+        );
+        const added = resolved[resolved.length - 1];
+        const track: RealtimeTrack = { ...added, State: added.State === 'requested' ? 'live' : added.State };
+        this.tracks = [...this.tracks.filter((t) => RealtimeTrackKey(t.Descriptor) !== key), track];
+        this.emitTrackStateChange(track);
+        return track;
+    }
+
+    /**
+     * Ends a track on a running session, such as inbound video when the user stops their camera: the track is
+     * reported `'ended'` and leaves {@link AllTracks}. Audio, the session's floor, cannot be removed.
+     *
+     * @returns Whether a track was ended.
+     */
+    public RemoveTrack(descriptor: Pick<RealtimeTrackDescriptor, 'Modality' | 'Direction' | 'SourceID'>): boolean {
+        if (String(descriptor.Modality).trim().toLowerCase() === 'audio') {
+            return false;
+        }
+        const key = RealtimeTrackKey(descriptor);
+        const track = this.tracks.find((t) => RealtimeTrackKey(t.Descriptor) === key);
+        if (!track) {
+            return false;
+        }
+        this.tracks = this.tracks.filter((t) => t !== track);
+        this.emitTrackStateChange({ ...track, State: 'ended' });
+        return true;
     }
 
     // ── Audio-activity metering (capability surface — see driver obligation #9) ─
@@ -408,7 +515,8 @@ export abstract class BaseRealtimeClient {
      * private pact between this driver and the same-keyed server driver that minted it (see
      * driver obligation #8); how it is applied is entirely driver-specific.
      *
-     * @param config The server-minted client session config (provider, model, ephemeral token, session config).
+     * @param config The server-minted client session config (provider, model, ephemeral token or relay transport,
+     *   session config). A driver refuses a transport it does not speak first (see {@link AssertTransportSupported}).
      * @param micStream The user's microphone capture stream. The caller acquires it (so IT owns
      *   the permission prompt UX); the client attaches it to the transport and stops its tracks
      *   on {@link Disconnect}.
@@ -418,6 +526,32 @@ export abstract class BaseRealtimeClient {
      *   {@link OnRemoteVideo}.
      */
     public abstract Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream, cameraStream?: MediaStream): Promise<void>;
+
+    /**
+     * Whether this driver can open a relay session (`ClientRealtimeSessionConfig.Transport` `'relay'`): connect to
+     * MJAPI's realtime relay at the session's `RelayUrl` rather than to its provider. `false` here; a driver that speaks
+     * its provider's protocol through the relay opts in by overriding it (the Gemini Enterprise client does).
+     */
+    protected get SupportsRelayTransport(): boolean {
+        return false;
+    }
+
+    /**
+     * Refuses a session this driver cannot open: a relay session, unless the driver opts in through
+     * {@link SupportsRelayTransport}. Every driver calls this first in {@link Connect}, before it touches the session's
+     * media or opens a connection (driver obligation #11). The message names the provider key and never quotes the
+     * relay URL, which carries the relay's ticket.
+     *
+     * @param config The session the host asked this driver to open.
+     * @throws When the session runs through the relay and this driver does not support it.
+     */
+    protected AssertTransportSupported(config: ClientRealtimeSessionConfig): void {
+        if (config.Transport === 'relay' && !this.SupportsRelayTransport) {
+            throw new Error(
+                `The '${config.Provider}' realtime client cannot open a session through MJAPI's relay (Transport 'relay'); it connects only to its provider.`
+            );
+        }
+    }
 
     // ── Remote (agent) audio slot ──────────────────────────────────────────────
     // Lives here, not in each driver, so every driver that owns a tappable agent-audio plane
@@ -562,6 +696,25 @@ export abstract class BaseRealtimeClient {
     public abstract SetMuted(muted: boolean): void;
 
     /**
+     * Moves a connected session onto the microphone stream's current audio track: call it after the
+     * track changes (a device switch, or a lost device replaced by the default) or to use another
+     * stream. The connection stays up and the provider hears the new track. The driver now owns this
+     * stream as it owned the one given to {@link Connect}; the previous stream's tracks are the
+     * caller's to stop.
+     *
+     * Mute follows the track: the new track's `enabled` flag decides it, so a caller replacing a
+     * muted track carries `enabled` over (the `LocalMediaController` does).
+     *
+     * **Optional capability** (driver obligation #10): a driver that can't rebind its transport
+     * leaves it undefined. Does nothing when the session isn't connected.
+     *
+     * @param micStream The stream to follow, usually the one given to {@link Connect} after the
+     *   controller swapped its track.
+     * @throws (rejects) When the stream has no audio track; the session keeps its current microphone.
+     */
+    public ReplaceMicrophone?(micStream: MediaStream): Promise<void>;
+
+    /**
      * Tears down the provider connection and all client-held resources (control channel,
      * transport, mic tracks, audio sink) and emits a final `'closed'` state (unless the
      * session already ended in `'error'`). Safe to call more than once.
@@ -653,17 +806,21 @@ export abstract class BaseRealtimeClient {
     }
 
     /**
-     * Registers the (single) remote-VIDEO handler — the model/avatar's video track for a VIDEO session
-     * (a talking-head the host renders, e.g. as the agent's tile). Invoked once the provider publishes
-     * its video track.
+     * Registers the (single) remote-VIDEO handler — the model/avatar's video for a VIDEO session (a talking-head
+     * the host renders, e.g. as the agent's tile). Invoked once the provider's video is available.
+     *
+     * The video is a {@link MediaVideoSource}: a live stream (a WebRTC track), or a player that must own the
+     * `<video>` element (MSE or WebCodecs playout of encoded avatar video). Hosts show either with
+     * `AttachVideoSource`.
      *
      * **Optional capability:** audio-only drivers (the default) never emit — registering is always safe,
-     * but hosts must not assume a video track arrives. Video-capable drivers
-     * ({@link BaseRealtimeModel.SupportsVideo}) call {@link emitRemoteVideo} when the track is live.
+     * but hosts must not assume video arrives. A driver whose model sends video (the server driver declares an
+     * outbound video track in its session's `Capabilities.SupportedOutboundTracks`, or renders an avatar,
+     * `BaseRealtimeModel.SupportsAvatarOutput`) calls {@link emitRemoteVideo} when it is live.
      *
-     * @param handler Invoked with the remote video `MediaStream` when it becomes available.
+     * @param handler Invoked with the remote video when it becomes available.
      */
-    public OnRemoteVideo(handler: (stream: MediaStream) => void): void {
+    public OnRemoteVideo(handler: (video: MediaVideoSource) => void): void {
         this.remoteVideoHandler = handler;
     }
 
@@ -725,8 +882,16 @@ export abstract class BaseRealtimeClient {
         this.usageHandler?.(usage);
     }
 
-    /** Emits the model/avatar's remote video stream to the registered handler (video drivers only). */
-    protected emitRemoteVideo(stream: MediaStream): void {
-        this.remoteVideoHandler?.(stream);
+    /**
+     * Emits the model/avatar's remote video to the registered handler (video drivers only). A driver with a plain
+     * `MediaStream` passes it as it is; it is handed on as a `'stream'` source.
+     */
+    protected emitRemoteVideo(video: MediaVideoSource | MediaStream): void {
+        this.remoteVideoHandler?.('Kind' in video ? video : { Kind: 'stream', Stream: video });
     }
+}
+
+/** Whether a descriptor is an inbound video track. */
+function isInboundVideo(descriptor: RealtimeTrackDescriptor): boolean {
+    return descriptor.Direction === 'inbound' && String(descriptor.Modality).trim().toLowerCase() === 'video';
 }

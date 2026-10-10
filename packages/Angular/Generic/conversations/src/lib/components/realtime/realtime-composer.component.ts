@@ -1,6 +1,9 @@
 import { Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MediaControlsComponent, type MediaSharePanel, type MediaShareRequest } from '@memberjunction/ng-realtime-media';
+import type { MediaDevice, MediaDeviceSelection } from '@memberjunction/ai-realtime-client/media';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 
 /**
@@ -14,10 +17,16 @@ import { RealtimeSessionService } from '../../services/realtime-session.service'
  *    Activity/Whiteboard panels on demand), the Type control, and End call. There's no visible
  *    composer yet — the Type control opens it, and so does simply starting to type (the overlay
  *    captures the first printable keystroke and seeds it via {@link AppendAndFocus}).
- *  - **Level 2+ (the dock)** — mute/captions shrink to compact minis and the in-call text
+ *  - **Level 2+ (the dock)** — mute/captions shrink to small circles and the in-call text
  *    input docks beside them (one bottom bar, per Redesign A's fused composer+controls).
  *    Submit calls {@link RealtimeSessionService.SendText}, which injects the text as a user
  *    turn into the SAME live voice call.
+ *
+ * The controls are the design system's: the microphone, the camera and Share are `mj-media-controls` (the call controls
+ * the LiveKit room uses too) and every other control an `mjButton` circle, sized per shape (52, 44 or 32 px). The camera
+ * and Share show only when the overlay says the call offers them; the camera is optional here, so it is neutral while off.
+ * In the strip and the lean dock the microphone carries the device chevron, whose menu picks the microphone and, while the
+ * camera is open, the camera ({@link Devices}); the fused dock, short of room, leaves it out, as it does the Share arrow.
  *
  * Mute talks to the session service directly (pure local toggle); captions / Details /
  * End are emitted up so the overlay shell owns that state and lifecycle.
@@ -25,7 +34,7 @@ import { RealtimeSessionService } from '../../services/realtime-session.service'
 @Component({
   standalone: true,
   selector: 'mj-realtime-composer',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MJButtonDirective, MediaControlsComponent],
   templateUrl: './realtime-composer.component.html',
   styleUrl: './realtime-composer.component.css'
 })
@@ -73,6 +82,48 @@ export class RealtimeComposerComponent {
   /** Current draft text in the dock's composer input. */
   public Draft = '';
 
+  /** Show the camera button: the call offers the camera (the runtime's `CaptureOffers$`). */
+  @Input() ShowCamera = false;
+
+  /** Show the Share button: the call offers a screen share. */
+  @Input() ShowShare = false;
+
+  /** Whether the camera is on (or starting). */
+  @Input() CameraOn = false;
+
+  /** Whether the user is sharing (or choosing what to share). */
+  @Input() Sharing = false;
+
+  /**
+   * The panels of the page the Share menu offers under "This panel" (the overlay's on-screen panels). The typed-input
+   * dock, whose Share button has no menu, leaves them out.
+   */
+  @Input() SharePanels: readonly MediaSharePanel[] = [];
+
+  /**
+   * The microphones and cameras the device menu offers: the call's microphones, and its cameras while the camera is
+   * open. With none there is no device chevron. The typed-input dock leaves the chevron out.
+   */
+  @Input() Devices: readonly MediaDevice[] = [];
+
+  /** The microphone the device menu shows as picked. */
+  @Input() SelectedMicrophoneID: string | null = null;
+
+  /** The camera the device menu shows as picked. */
+  @Input() SelectedCameraID: string | null = null;
+
+  /** The user asked to turn the camera on (`true`) or off (`false`). The overlay starts or stops it. */
+  @Output() CameraToggled = new EventEmitter<boolean>();
+
+  /** The user asked to share a screen, window or tab, or one of {@link SharePanels}. */
+  @Output() ShareRequested = new EventEmitter<MediaShareRequest>();
+
+  /** The user asked to stop sharing. */
+  @Output() StopShareRequested = new EventEmitter<void>();
+
+  /** The user picked a microphone or a camera in the device menu. The overlay switches to it. */
+  @Output() DeviceSelected = new EventEmitter<MediaDeviceSelection>();
+
   /**
    * The mic mute state. A two-way reflection: the overlay may push it down (e.g. its
    * `SetMuted()` / focus-pill toggle) so all mute affordances stay in sync, and this
@@ -83,6 +134,11 @@ export class RealtimeComposerComponent {
   @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement | HTMLTextAreaElement>;
 
   private realtime = inject(RealtimeSessionService);
+
+  /** The captions control's tooltip: what a click does. */
+  public get CaptionsTitle(): string {
+    return this.CaptionsOn ? 'Voice-first — back to the orb' : 'Show the conversation as text';
+  }
 
   /** True when there's non-whitespace text to send. */
   public get CanSend(): boolean {

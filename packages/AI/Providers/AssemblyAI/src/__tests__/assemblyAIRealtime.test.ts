@@ -445,11 +445,33 @@ describe('AssemblyAIRealtime server-bridged session (StartSession)', () => {
 
         it('streams client audio as base64 input.audio frames', () => {
             const bytes = new Uint8Array([9, 8, 7]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
             expect(driver.Socket.SentFrames().at(-1)).toEqual({
                 type: 'input.audio',
                 audio: Buffer.from(bytes).toString('base64'),
             });
+        });
+
+        it('drops a video frame instead of sending it as audio, reports it once, and still sends audio (#5091)', () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const framesBefore = driver.Socket.Sent.length;
+                const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+
+                expect(driver.Socket.Sent.length).toBe(framesBefore);
+                const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[AssemblyAIRealtime] Dropped video input of type image/jpeg'));
+                expect(drops).toHaveLength(1);
+
+                const audio = new Uint8Array([9, 8, 7]);
+                session.SendInput({ Data: audio.buffer, Kind: 'audio' });
+                expect(driver.Socket.SentFrames().slice(framesBefore)).toEqual([
+                    { type: 'input.audio', audio: Buffer.from(audio).toString('base64') },
+                ]);
+            } finally {
+                warn.mockRestore();
+            }
         });
 
         it('completes the tool round-trip: tool.call → tool.result with the JSON-string result', async () => {
@@ -661,6 +683,6 @@ describe('AssemblyAIRealtime token mint (production seam)', () => {
 describe('AssemblyAIRealtimeSession guard rails', () => {
     it('throws on sends when no socket was ever attached', () => {
         const session = new AssemblyAIRealtimeSession({ system_prompt: 'p' });
-        expect(() => session.SendInput(new Uint8Array([1]).buffer)).toThrow('not open');
+        expect(() => session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' })).toThrow('not open');
     });
 });

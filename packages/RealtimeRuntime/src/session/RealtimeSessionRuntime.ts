@@ -1,10 +1,10 @@
 import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import { Metadata, IMetadataProvider } from '@memberjunction/core';
-import { UserInfoEngine } from '@memberjunction/core-entities';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { UserInfoEngine, type MJAIAgentChannelEntity, type MJAIAgentChannelEntity_IChannelUIConfig } from '@memberjunction/core-entities';
+import { AddRealtimeUsageRecord, AIEngineBase, HasRealtimeUsage, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, ParseRealtimeAvatarStatus, ParseRealtimeClientTransport, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import {
   AppContextSnapshot,
   CompareExposure,
@@ -24,8 +24,12 @@ import {
 } from '@memberjunction/ai-core-plus';
 import {
   BaseRealtimeClient,
+  type ILocalMediaController,
+  type LocalMediaFailure,
+  type LocalMediaState,
   LoadAssemblyAIRealtimeClient,
   LoadElevenLabsRealtimeClient,
+  LoadGeminiEnterpriseRealtimeClient,
   LoadGeminiRealtimeClient,
   LoadHuggingFaceRealtimeClient,
   LoadOpenAIRealtimeClient,
@@ -37,15 +41,30 @@ import {
   RealtimeClientTranscript,
   RealtimeClientUsage,
   VideoSourceArbiter,
+  type DisplayCaptureOptions,
+  type MediaVideoSource,
   type VideoSourceState,
   REQUESTED_TRACKS_SESSION_KEY
 } from '@memberjunction/ai-realtime-client';
-import { DefaultRealtimeSessionLauncher, type IRealtimeSessionLauncher } from './session-launcher';
+import { DefaultRealtimeSessionLauncher, HasClientCredential, type IRealtimeSessionLauncher } from './session-launcher';
+import { RequestsAgentVideo, ResolveAvatarNotice, type RealtimeAvatarNotice } from './avatar-notice';
 import { ClientSessionDeadline } from './client-session-deadline';
+import {
+  RealtimeCaptures,
+  REALTIME_CAPTURES_OFF,
+  REALTIME_CAPTURE_OFFERS_NONE,
+  type RealtimeCaptureAdmission,
+  type RealtimeCaptureOffers,
+  type RealtimeCaptureKind,
+  type RealtimeCaptureState,
+  type RealtimeCaptureStates,
+} from './realtime-captures';
+import { REALTIME_MICROPHONE_NONE, ReadMicrophoneState, SameMicrophoneState, type RealtimeMicrophoneState } from './realtime-microphone';
 import { RealtimeSessionEventHub, type IRealtimeSessionEventSource, type RealtimeSessionStreamEvent } from './session-event-hub';
 import { BuildNarrationInstructions } from '../narration/narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
-import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient, ChannelVideoSourceID, RealtimeChannelContext } from '../channels/base-realtime-channel-client';
+import { DEFAULT_CHANNEL_SURFACE_PLACEMENT, ReadChannelSurfacePlacement, type ChannelSurfacePlacement } from '../channels/channel-surface-placement';
 import { IRealtimeMediaHost, IRealtimeSessionRecorder } from '../hosts/IRealtimeMediaHost';
 import { ChannelActionDispatcher, type DispatchableChannel } from '../channels/channel-action-dispatcher';
 import { BuildChannelCatalogNote, type ChannelCatalogEntry } from '../channels/channel-catalog-note';
@@ -56,6 +75,7 @@ import {
   BuildChannelCandidate,
   FindPreparedChannel,
   MergeToolMetadata,
+  PreparedChannelsShowAgentVideo,
   ReconcileChannelsWithPolicy,
   ResolveLocalChannelScope,
   ToolsByChannelKey,
@@ -72,6 +92,16 @@ import {
  */
 export const REALTIME_RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
 
+/**
+ * Relays usage onto the co-agent prompt run: token deltas, and the per-modality detail blocks as a
+ * JSON record (sent only when there are any; see `RelayRealtimeUsage` in MJServer).
+ */
+const RELAY_REALTIME_USAGE_MUTATION = `
+  mutation RelayRealtimeUsage($agentSessionId: String!, $inputTokens: Int!, $outputTokens: Int!, $usageDetailsJson: String) {
+    RelayRealtimeUsage(agentSessionId: $agentSessionId, inputTokens: $inputTokens, outputTokens: $outputTokens, usageDetailsJson: $usageDetailsJson)
+  }
+`;
+
 // Tree-shaking prevention: the OpenAI client is resolved dynamically through the
 // ClassFactory (by the server-reported Provider key), so this static call is what keeps
 // its @RegisterClass side effect from being eliminated by the bundler.
@@ -81,6 +111,7 @@ export const REALTIME_RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent
 // and this service stays component-free (it must stay importable in plain-node tests).
 LoadOpenAIRealtimeClient();
 LoadGeminiRealtimeClient();
+LoadGeminiEnterpriseRealtimeClient();
 LoadElevenLabsRealtimeClient();
 LoadAssemblyAIRealtimeClient();
 LoadxAIRealtimeClient();
@@ -187,7 +218,38 @@ interface RealtimeChannelDefinitionRow {
   Name: string;
   ClientPluginClass: string;
   IsActive: boolean;
+  /** Where the channel's surface shows and may move, from the row's `UIConfig`. */
+  SurfacePlacement: ChannelSurfacePlacement;
 }
+
+/**
+ * A registry row's surface placement. A row whose `UIConfig` is not valid JSON places its surface as a row without one
+ * does, so one bad row never costs the session its other channels.
+ */
+function readRowSurfacePlacement(row: MJAIAgentChannelEntity): ChannelSurfacePlacement {
+  try {
+    return ReadChannelSurfacePlacement(row.UIConfigObject);
+  } catch {
+    console.warn(`[RealtimeSession] Channel '${row.Name}' has a UIConfig that is not valid JSON; its surface starts on its tab.`);
+    return DEFAULT_CHANNEL_SURFACE_PLACEMENT;
+  }
+}
+
+/** The same, for a row read over GraphQL, whose `UIConfig` arrives as the column's JSON text. */
+function readUIConfigTextSurfacePlacement(name: string, uiConfig: string | null | undefined): ChannelSurfacePlacement {
+  if (!uiConfig) {
+    return ReadChannelSurfacePlacement(null);
+  }
+  try {
+    return ReadChannelSurfacePlacement(JSON.parse(uiConfig) as MJAIAgentChannelEntity_IChannelUIConfig);
+  } catch {
+    console.warn(`[RealtimeSession] Channel '${name}' has a UIConfig that is not valid JSON; its surface starts on its tab.`);
+    return DEFAULT_CHANNEL_SURFACE_PLACEMENT;
+  }
+}
+
+/** A registry row as the connect-only path's dynamic view returns it. */
+type ChannelRegistryViewRow = Pick<RealtimeChannelDefinitionRow, 'ID' | 'Name' | 'ClientPluginClass'> & { IsActive?: boolean; UIConfig?: string | null };
 
 /**
  * One EPHEMERAL spoken narration of delegated-run progress, emitted on
@@ -240,6 +302,42 @@ function trackKeyFromJSON(raw: JSONValue): string | null {
     return null;
   }
   return `${direction}:${modality}`;
+}
+
+/**
+ * The `DOMException` name for each way the controller can fail to start the microphone, so a host that
+ * tells a denied microphone apart (`error.name === 'NotAllowedError'`) works the same with or without one.
+ */
+const MICROPHONE_ERROR_NAMES: Record<LocalMediaFailure, string> = {
+  denied: 'NotAllowedError',
+  'not-found': 'NotFoundError',
+  'in-use': 'NotReadableError',
+  unsupported: 'NotSupportedError',
+  error: 'Error',
+};
+
+/** What the user is told when the call's policy refuses a capture. */
+const CAPTURE_WORDING: Record<RealtimeCaptureKind, { NotInCall: string; NotAllowed: string }> = {
+  camera: { NotInCall: 'The camera is not part of this call.', NotAllowed: 'This call cannot show the agent your camera' },
+  screen: { NotInCall: 'Screen sharing is not part of this call.', NotAllowed: 'This call cannot show the agent your screen' },
+};
+
+/** The error a failed microphone start reports, named as `getUserMedia` would have named it. */
+function microphoneStartError(reason: LocalMediaFailure, message: string): Error {
+  const error = new Error(message);
+  error.name = MICROPHONE_ERROR_NAMES[reason];
+  return error;
+}
+
+/** The microphone a session start opened, or why it could not. */
+type OpenedMicrophone = { Stream: MediaStream; Error: null } | { Stream: null; Error: Error };
+
+/**
+ * One start's opening of the host's microphone, from asking for it until {@link IRealtimeMediaHost.ReleaseMicrophone}
+ * hands it back. `Opening` stays true until the opening returns, whether it opened the microphone or failed.
+ */
+interface MicrophoneLease {
+  Opening: boolean;
 }
 
 /**
@@ -320,6 +418,7 @@ export interface StartRealtimeClientSessionResult {
   ConversationId: string | null;
   Provider: string;
   Model: string;
+  /** The provider credential the client driver presents. Empty on a relay session, which has {@link RelayUrl} instead. */
   EphemeralToken: string;
   ExpiresAt: string;
   /** JSON.stringify of the provider session config (instructions + tools) to apply at connect. */
@@ -348,6 +447,23 @@ export interface StartRealtimeClientSessionResult {
    * own proxy; the runtime then resolves the scope locally from code defaults and host declarations.
    */
   ClientPolicyJson?: string | null;
+  /**
+   * OPTIONAL — the session's live-avatar status (`RealtimeAvatarStatus` from `@memberjunction/ai`) as JSON: whether the
+   * voiced agent asked for an avatar, whether the model renders it, and why not. The runtime reads it after connecting
+   * to publish {@link RealtimeSessionRuntime.AvatarNotice$}. Absent from a server that predates it, when the agent asked
+   * for no avatar, and from a host that mints for itself and does not pass it on; the call then shows no notice.
+   */
+  AvatarStatusJson?: string | null;
+  /**
+   * OPTIONAL — how the browser reaches the provider: `'direct'` or `'relay'` (`RealtimeClientTransport` from
+   * `@memberjunction/ai`). Absent, null or unknown means direct: a direct session, or a server that predates it.
+   */
+  Transport?: string | null;
+  /**
+   * OPTIONAL — where a relay session's client driver connects (MJAPI's realtime relay). It carries the session's ticket,
+   * so it is a credential: never log it. A host that mints for itself must pass it on for a relay session.
+   */
+  RelayUrl?: string | null;
 }
 
 /**
@@ -422,6 +538,7 @@ export class RealtimeSessionRuntime {
 
   // ── Reactive UI state ──────────────────────────────────────────────────────
   private _connectionState$ = new BehaviorSubject<RealtimeConnectionState>('closed');
+  private readonly _resuming$ = new BehaviorSubject<boolean>(false);
   private _captions$ = new BehaviorSubject<RealtimeCaption[]>([]);
   private _active$ = new BehaviorSubject<boolean>(false);
   private _delegationProgress$ = new Subject<RealtimeDelegationProgress>();
@@ -445,6 +562,16 @@ export class RealtimeSessionRuntime {
 
   /** Current connection / turn state. */
   public readonly ConnectionState$: Observable<RealtimeConnectionState> = this._connectionState$.asObservable();
+  /**
+   * Whether the call is resuming: moving to a new connection with its provider mid-call. `true` from a `'connecting'` the
+   * driver reports while the call is live, until the call is live again (`'listening'`, `'speaking'` or `'thinking'`),
+   * fails (`'error'`) or ends (`'closed'`). A call's first connect is not a resume, so it is `false` until the call has
+   * been live, and outside a call. Gemini Live resumes when Google ends a connection (`goAway`) and after a dropped
+   * socket, and the agent's video can stop for a few seconds meanwhile: a host can show that as a pause rather than as
+   * the agent leaving. It changes before {@link ConnectionState$} does, so a resume's `'connecting'` arrives with it
+   * already `true`.
+   */
+  public readonly Resuming$: Observable<boolean> = this._resuming$.asObservable();
   /** Live captions for both sides of the conversation. */
   public readonly Captions$: Observable<RealtimeCaption[]> = this._captions$.asObservable();
   /** True while a session is open (mic button active, overlay shown). */
@@ -499,6 +626,60 @@ export class RealtimeSessionRuntime {
    * toggle one with {@link SetVideoSourceEnabled}.
    */
   public readonly VideoSources$: Observable<readonly VideoSourceState[]> = this._videoSources$.asObservable();
+
+  private readonly _captures$ = new BehaviorSubject<RealtimeCaptureStates>(REALTIME_CAPTURES_OFF);
+  /**
+   * The user's camera and screen share: off, starting, on (with the stream to show the user) or failed (with the
+   * reason). Both off outside a session. Start and stop them with {@link StartCamera}, {@link StartScreenShare},
+   * {@link StopCamera} and {@link StopScreenShare}; while one is on, it is also a source on {@link VideoSources$}.
+   */
+  public readonly Captures$: Observable<RealtimeCaptureStates> = this._captures$.asObservable();
+
+  private readonly _captureOffers$ = new BehaviorSubject<RealtimeCaptureOffers>(REALTIME_CAPTURE_OFFERS_NONE);
+
+  /**
+   * Which captures the call offers, now and on every change. A capture is offered while the call is connected, the model
+   * takes inbound video, the host can open it (a camera controller; screen sharing) and the call's policy admits it (its
+   * channel is in the call and may show the agent pixels). A host shows its Camera and Share controls from this. Neither
+   * is offered outside a call.
+   */
+  public readonly CaptureOffers$: Observable<RealtimeCaptureOffers> = this._captureOffers$.asObservable();
+
+  private readonly _microphone$ = new BehaviorSubject<RealtimeMicrophoneState>(REALTIME_MICROPHONE_NONE);
+  /**
+   * The call's microphone, now and on every change: the one in use and the ones the user can move it to with
+   * {@link SwitchMicrophone}, as the host's camera-and-microphone controller lists them. Offered from the moment the call
+   * connects until it ends, and kept current as devices come and go. When the call loses its microphone (the one in use
+   * fails and so does the fallback to the default, or the last one goes away), its `Failure` says why: the agent hears
+   * nothing until the user picks a microphone, which opens it again. {@link REALTIME_MICROPHONE_NONE} outside a call and
+   * on a host without a controller, which opens the microphone itself (`IRealtimeMediaHost.AcquireMicrophone`).
+   */
+  public readonly Microphone$: Observable<RealtimeMicrophoneState> = this._microphone$.asObservable();
+
+  private readonly _agentVideo$ = new BehaviorSubject<MediaVideoSource | null>(null);
+  /**
+   * The agent's video (an avatar) while the model sends it: a live stream, or a player that owns the `<video>` element.
+   * `null` until the video arrives, for a model that sends none, and outside a call. The driver hands it over once it is
+   * live, and a newer one replaces it. A host shows it with `AttachVideoSource`; a channel that sinks outbound video
+   * follows it through its context, and counts as used once it arrives, so the host shows that channel's surface.
+   */
+  public readonly AgentVideo$: Observable<MediaVideoSource | null> = this._agentVideo$.asObservable();
+
+  private readonly _avatarNotice$ = new BehaviorSubject<RealtimeAvatarNotice | null>(null);
+  /**
+   * Why the call shows no avatar the agent asked for: set once per call, after it connects, when the model renders none,
+   * the persona has no face for it, the app shows no agent video (`host`) or the browser can't play it (`browser`); with
+   * no `Reason` when the mint gave one this version doesn't know, such as a newer server's. `null` when there is nothing
+   * to say (no avatar asked for, the avatar shows, or the mint reported no status) and after the call ends. A provider
+   * resume inside the call does not set it again. A host turns the reason into words once, for example "Audio only: this
+   * voice model can't show an avatar".
+   */
+  public readonly AvatarNotice$: Observable<RealtimeAvatarNotice | null> = this._avatarNotice$.asObservable();
+
+  /** Synchronous access to {@link AvatarNotice$}'s current value. */
+  public get CurrentAvatarNotice(): RealtimeAvatarNotice | null {
+    return this._avatarNotice$.value;
+  }
 
   /**
    * Channel requests to enter / leave the FOCUS layout (see
@@ -618,8 +799,28 @@ export class RealtimeSessionRuntime {
   // ── Session internals ──────────────────────────────────────────────────────
   /** The provider-direct realtime client driving the live session (ClassFactory-resolved). */
   private client: BaseRealtimeClient | null = null;
-  /** The mic capture stream — acquired here (permission UX) and handed to the client. */
+  /**
+   * The mic capture stream — acquired here (permission UX) and handed to the client. A microphone the controller opens
+   * again after the call lost one replaces it.
+   */
   private localStream: MediaStream | null = null;
+  /**
+   * Whether the user muted the call's microphone, as {@link ToggleMute} last reported it. While the call has no microphone
+   * track there is nothing to mute, and a microphone opened again after the call lost one starts this way.
+   */
+  private microphoneMuted = false;
+  /** The host's camera-and-microphone controller for this session, when the host offers one. */
+  private localMedia: ILocalMediaController | null = null;
+  /** Follows the controller's microphone, so a swapped-in track or a reopened microphone reaches the driver and the recorder. */
+  private localMediaSubscription: Subscription | null = null;
+  /**
+   * Whether the call offers its microphone for switching ({@link Microphone$}, {@link SwitchMicrophone}): from the moment
+   * the client is connected until the call ends. Not before: a driver still connecting may have bound the old track.
+   */
+  private microphoneOffered = false;
+  /** The live session's camera and screen share; created once the client is connected. */
+  private captures: RealtimeCaptures | null = null;
+  private capturesSubscription: Subscription | null = null;
   private agentSessionId: string | null = null;
   /**
    * The application the active session runs in (sources the server-side app config cascade +
@@ -750,6 +951,11 @@ export class RealtimeSessionRuntime {
   private pendingUsageInput = 0;
   /** Accumulated output-token delta since the last flush. */
   private pendingUsageOutput = 0;
+  /**
+   * Accumulated per-modality usage since the last flush (input and output detail blocks, avatar
+   * video seconds included), relayed in full; `null` when no update carried any.
+   */
+  private pendingUsageDetails: RealtimeUsageRecord | null = null;
   /** Pending debounced usage flush; also force-flushed at teardown. */
   private usageFlushTimer: ReturnType<typeof setTimeout> | null = null;
   /** Active push-status subscription that feeds delegation progress; cleared on teardown. */
@@ -796,7 +1002,21 @@ export class RealtimeSessionRuntime {
   private teardownInFlight: Promise<void> | null = null;
 
   /**
-   * Why the last session start failed, or `null` when none has.
+   * The latest start's opening of the host's microphone, until {@link IRealtimeMediaHost.ReleaseMicrophone} hands it
+   * back; `null` when no opening is owed a release, so a session that ends before asking for the microphone releases
+   * nothing.
+   *
+   * The host gets one release per opening, after the opening returns. A release while the microphone is still
+   * opening undoes nothing: the React Native host puts iOS into the call audio category inside `AcquireMicrophone`,
+   * after the permission prompt. So {@link runTeardown} releases an opening that has returned and leaves one still
+   * opening to its start, which releases it once it returns ({@link unwindAbandonedStart}), unless a newer start has
+   * opened the microphone since; that start's own end releases it. Whoever releases clears this first, so no
+   * opening is released twice.
+   */
+  private microphoneLease: MicrophoneLease | null = null;
+
+  /**
+   * Why the latest session start failed, or `null` when it has not. Each start clears it ({@link beginSessionStart}).
    *
    * The runtime reports failure as `'error'` on {@link ConnectionState$}, which is enough to show
    * *that* something went wrong but not *what* — and the difference matters at exactly one point:
@@ -1070,7 +1290,7 @@ export class RealtimeSessionRuntime {
       // server needs the candidates to scope them. Nothing is initialized until the policy is known.
       const scope = await this.prepareChannelScope(options?.HostChannels);
       const allClientTools = [...(clientTools ?? []), ...scope.NativeTools];
-      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext, scope.CandidatesJson);
+      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext, scope.CandidatesJson, scope.ShowsAgentVideo);
     } catch (error) {
       await this.failSessionStart(error);
       return;
@@ -1081,7 +1301,7 @@ export class RealtimeSessionRuntime {
       return;
     }
 
-    await this.runMintedSession(session, conversationId ?? null, consent);
+    await this.runMintedSession(session, conversationId ?? null, consent, options?.CameraCheck === true);
   }
 
   /**
@@ -1120,7 +1340,7 @@ export class RealtimeSessionRuntime {
     // published them on ActiveChannels$; skipping teardown would leave them undisposed, their tool
     // handlers registered, and their subscriptions live until the next start replaced them.
     this.agentSessionId = session.AgentSessionId ?? this.agentSessionId;
-    this._connectionState$.next('error');
+    this.setConnectionState('error');
     await this.teardown(true);
   }
 
@@ -1140,7 +1360,8 @@ export class RealtimeSessionRuntime {
    * owns that half too.
    *
    * @param result The minted session — the same ten fields the `StartRealtimeClientSession`
-   *   mutation returns. `EphemeralToken` and `Provider` are what actually open the call.
+   *   mutation returns. `EphemeralToken` and `Provider` are what actually open the call; a relay
+   *   session opens with its `Transport` and `RelayUrl` instead, so a host must pass those on.
    * @param options Host-side inputs the result cannot carry; see {@link RealtimeSessionRunOptions}.
    *   Every field defaults exactly as its {@link StartRealtimeSession} counterpart does.
    */
@@ -1158,17 +1379,21 @@ export class RealtimeSessionRuntime {
       return;
     }
     const consent = this.beginSessionStart(effectiveOptions);
-    await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent);
+    await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent, false);
   }
 
   /**
-   * Start prologue shared by both entry points: bind the app layer, publish the agent name, reset
-   * per-session state, and flip the session live (which is ALSO what makes the `IsActive` guard
-   * suppress duplicate starts while the mint is still in flight — hence it runs before minting, not
-   * after). Returns the resolved recording consent, which the mint half reports to the server and
-   * the run half uses to decide whether to record.
+   * Start prologue shared by both entry points: clear the last start's failure, bind the app layer,
+   * publish the agent name, reset per-session state, and flip the session live (which is ALSO what
+   * makes the `IsActive` guard suppress duplicate starts while the mint is still in flight — hence it
+   * runs before minting, not after). Returns the resolved recording consent, which the mint half
+   * reports to the server and the run half uses to decide whether to record.
    */
   private beginSessionStart(options: RealtimeSessionRunOptions): boolean {
+    // Before this start publishes anything: hosts read LastStartError as this start's states arrive,
+    // so from the first of them it must describe this start, not an earlier one.
+    this.lastStartError = null;
+
     // App awareness (Move 1/3/4): the application the session runs in (sources the app config
     // cascade + RelevantAgents → allowed-agent union) and the live app-context snapshot injected
     // into the companion prompt at mint. Stored so the ClientContextChannel can stream subsequent
@@ -1187,7 +1412,7 @@ export class RealtimeSessionRuntime {
     }
     this.resetState();
     this._active$.next(true);
-    this._connectionState$.next('connecting');
+    this.setConnectionState('connecting');
 
     // Resolve recording consent for this session: explicit value wins, else the per-user
     // persisted preference. Computed before mint so it can be reported to the server.
@@ -1199,12 +1424,14 @@ export class RealtimeSessionRuntime {
   /**
    * The RUN half of a session start, shared by both entry points: consume the minted result, open
    * the provider connection, and go live. `inputConversationId` is the conversation the START asked
-   * for (null ⇒ "server, make me one") — the result alone can't distinguish the two.
+   * for (null ⇒ "server, make me one") — the result alone can't distinguish the two. `cameraCheck` is
+   * whether the host shows a camera check ({@link RealtimeSessionStartOptions.CameraCheck}).
    */
   private async runMintedSession(
     session: StartRealtimeClientSessionResult,
     inputConversationId: string | null,
-    consent: boolean
+    consent: boolean,
+    cameraCheck: boolean
   ): Promise<void> {
     // Captured up front: every await below is a window in which the host can end the session.
     const generation = this.startGeneration;
@@ -1233,19 +1460,37 @@ export class RealtimeSessionRuntime {
       this.wireClientHandlers(client);
 
       // Everything past here awaits on hardware and the network, during which the host may end the
-      // session. Each await is followed by a staleness check so an abandoned start releases what it
-      // just acquired instead of leaving a live microphone and a live call behind it.
-      this.localStream = await this.mediaHost.AcquireMicrophone();
+      // session. Each await is followed by a staleness check, before any failure is reported, so an
+      // abandoned start releases what it just acquired instead of leaving a live microphone and a live
+      // call behind it, and reports nothing to a host that has ended the call.
+      const lease: MicrophoneLease = { Opening: true };
+      this.microphoneLease = lease;
+      const microphone = await this.openMicrophone().finally(() => {
+        lease.Opening = false;
+      });
+      this.localStream = microphone.Stream;
       if (this.startGeneration !== generation) {
-        await this.unwindAbandonedStart(session, client);
+        await this.unwindAbandonedStart(session, client, lease);
         return;
+      }
+      if (microphone.Error) {
+        throw microphone.Error;
       }
 
-      await client.Connect(this.BuildClientConfig(session), this.localStream);
+      const clientConfig = this.BuildClientConfig(session);
+      const connectError = await this.connectClient(client, clientConfig, microphone.Stream);
       if (this.startGeneration !== generation) {
-        await this.unwindAbandonedStart(session, client);
+        await this.unwindAbandonedStart(session, client, lease);
         return;
       }
+      if (connectError) {
+        throw connectError;
+      }
+      // Tracks are negotiated now, so a capture can tell whether the model takes video, and the call whether it shows
+      // the avatar its agent asked for. The driver holds the microphone now, so the user may switch it.
+      this.openCaptures(client, cameraCheck);
+      this.offerMicrophone();
+      this.publishAvatarNotice(session, clientConfig, client);
 
       // Notify active channels that the session client is connected and tracks are established
       for (const channel of this._activeChannels$.value) {
@@ -1302,20 +1547,50 @@ export class RealtimeSessionRuntime {
   }
 
   /**
+   * Tells the host, once per call, why it shows no avatar ({@link AvatarNotice$}): from the mint's status, whether this
+   * session asked for the agent's video, and whether that track is live now that the call is connected.
+   */
+  private publishAvatarNotice(session: StartRealtimeClientSessionResult, config: ClientRealtimeSessionConfig, client: BaseRealtimeClient): void {
+    const notice = ResolveAvatarNotice(
+      ParseRealtimeAvatarStatus(session.AvatarStatusJson),
+      RequestsAgentVideo(config),
+      client.IsTrackEstablished('video', 'outbound')
+    );
+    if (notice) {
+      this._avatarNotice$.next(notice);
+    }
+  }
+
+  /**
    * Releases everything a start acquired after the host had already ended the session.
    *
    * Reached only when {@link teardown} ran while this start was awaiting the microphone or the
-   * provider connection. Teardown found nothing to release because nothing existed yet, so this
-   * start owns the cleanup: stop the microphone, close the provider connection, and close the
-   * server-side session row that the mint created.
+   * provider connection, whether that wait then succeeded or failed: the host has ended the call,
+   * so a failure there is not reported. Teardown could not release what did not exist yet, so this
+   * start owns the cleanup: stop the microphone, hand it back to the host when teardown left that
+   * to it ({@link microphoneLease}), close the provider connection, and close the server-side
+   * session row that the mint created when no teardown has closed it or is closing it.
+   *
+   * @param lease This start's opening of the microphone.
    */
   private async unwindAbandonedStart(
     session: StartRealtimeClientSessionResult,
-    client: BaseRealtimeClient
+    client: BaseRealtimeClient,
+    lease: MicrophoneLease
   ): Promise<void> {
     console.warn('[RealtimeSession] Session was ended while starting — releasing the partial session.');
+    this.closeCaptures();
+    this.closeLocalMedia();
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
+    this.microphoneMuted = false;
+    // Teardown left the release to this start when the microphone was still opening. A cleared or
+    // replaced lease means teardown already released it, or a newer start has opened the microphone
+    // since and its own end releases it.
+    if (this.microphoneLease === lease) {
+      this.microphoneLease = null;
+      await this.releaseMicrophone();
+    }
     try {
       await client.Disconnect();
     } catch (error) {
@@ -1325,24 +1600,321 @@ export class RealtimeSessionRuntime {
     // already have replaced them.
     if (this.client === client) {
       this.unwatchVideoSources();
+      this.clearAgentVideo();
       this.client = null;
     }
-    // Close the server session only if teardown has NOT already done so. It nulls `agentSessionId`
-    // after closing, so a still-matching id means this attempt still owns the row; a cleared one
-    // means the teardown that invalidated this start already closed it, and closing again would
-    // send a second `CloseAgentSession` for one session.
-    if (session.AgentSessionId && this.agentSessionId === session.AgentSessionId) {
+    // Close the server session only if no teardown has closed it or is closing it. Teardown nulls
+    // `agentSessionId` after closing, so a cleared id means the teardown that invalidated this start
+    // already closed it. A teardown still running closes it itself and then reports the end on
+    // `SessionEnded$`: closing it here as well would send a second `CloseAgentSession` for one
+    // session, and clearing the id would leave that teardown no session to report.
+    if (session.AgentSessionId && this.agentSessionId === session.AgentSessionId && !this.teardownInFlight) {
       this.agentSessionId = null;
       await this.closeServerSession(session.AgentSessionId);
     }
   }
 
   /**
-   * Why the last session start failed, or `null` when the last start succeeded or none has run.
+   * Opens the user's microphone: through the host's controller when it offers one, otherwise through
+   * {@link IRealtimeMediaHost.AcquireMicrophone}. A failure is returned rather than thrown, so the caller can
+   * first check whether the start was abandoned meanwhile (a teardown disposes the controller, which fails a
+   * start still in flight) and unwind quietly instead of reporting an error nobody is waiting for.
+   */
+  private async openMicrophone(): Promise<OpenedMicrophone> {
+    const controller = this.mediaHost.CreateLocalMediaController?.() ?? null;
+    if (!controller) {
+      try {
+        return { Stream: await this.mediaHost.AcquireMicrophone(), Error: null };
+      } catch (error) {
+        return { Stream: null, Error: error instanceof Error ? error : new Error(String(error)) };
+      }
+    }
+    this.localMedia = controller;
+    const started = await controller.Start('microphone');
+    if (started.Status === 'failed') {
+      return { Stream: null, Error: microphoneStartError(started.Reason, started.Message) };
+    }
+    this.followMicrophone(controller, started.Stream);
+    return { Stream: started.Stream, Error: null };
+  }
+
+  /**
+   * Opens the provider connection. As with {@link openMicrophone}, a failure is returned rather than thrown, so the
+   * caller can first check whether the start was abandoned meanwhile and unwind quietly instead of reporting an error
+   * nobody is waiting for: a teardown disconnects the client, which with most drivers fails a connection still opening.
+   */
+  private async connectClient(
+    client: BaseRealtimeClient,
+    config: ClientRealtimeSessionConfig,
+    microphone: MediaStream
+  ): Promise<Error | null> {
+    try {
+      await client.Connect(config, microphone);
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  /**
+   * Moves the driver and the recorder onto the call's microphone whenever the controller gives it a new track. A device
+   * switch, or a lost device replaced by the default, swaps a track into the same stream, and the controller carries the
+   * old track's mute over. A microphone opened again after the call lost one comes in a new stream: its track takes the
+   * call's mute, and the stream becomes the one {@link ToggleMute} and the teardown act on. Mid-swap the stream holds no
+   * track, so only a finished swap is followed. Every report also keeps {@link Microphone$} current once the call offers
+   * it.
+   */
+  private followMicrophone(controller: ILocalMediaController, stream: MediaStream): void {
+    let followedStream = stream;
+    let followedTrack = stream.getAudioTracks()[0] ?? null;
+    this.localMediaSubscription = controller.State$.subscribe((media) => {
+      const current = controller.GetStream('microphone') ?? followedStream;
+      const track = current.getAudioTracks()[0] ?? null;
+      if (track && track !== followedTrack) {
+        if (current !== followedStream) {
+          track.enabled = !this.microphoneMuted;
+          this.localStream = current;
+          followedStream = current;
+        }
+        followedTrack = track;
+        this.recorder?.ReplaceMicrophone?.(current);
+        this.client?.ReplaceMicrophone?.(current)?.catch((error: unknown) => {
+          console.error('[RealtimeSession] The realtime driver could not move to the new microphone:', error);
+        });
+      }
+      this.publishMicrophone(media);
+    });
+  }
+
+  /** The client is connected: the call offers its microphone on {@link Microphone$}, and {@link SwitchMicrophone} moves it. */
+  private offerMicrophone(): void {
+    if (!this.localMedia) {
+      return;
+    }
+    this.microphoneOffered = true;
+    this.publishMicrophone(this.localMedia.State);
+  }
+
+  /** Publishes the call's microphone from the controller's state while the call offers it, when it names a change. */
+  private publishMicrophone(media: LocalMediaState): void {
+    if (!this.microphoneOffered) {
+      return;
+    }
+    const current = this._microphone$.value;
+    const next = ReadMicrophoneState(media, current);
+    if (!SameMicrophoneState(next, current)) {
+      this._microphone$.next(next);
+    }
+  }
+
+  /** Stops following the controller and disposes it, which releases its devices; the call no longer offers a microphone. */
+  private closeLocalMedia(): void {
+    this.localMediaSubscription?.unsubscribe();
+    this.localMediaSubscription = null;
+    this.localMedia?.Dispose();
+    this.localMedia = null;
+    this.microphoneOffered = false;
+    if (this._microphone$.value !== REALTIME_MICROPHONE_NONE) {
+      this._microphone$.next(REALTIME_MICROPHONE_NONE);
+    }
+  }
+
+  /**
+   * Creates the session's camera and screen share and mirrors their state on {@link Captures$}. With `cameraCheck`, the
+   * call's first camera start waits for {@link ConfirmCamera}.
+   */
+  private openCaptures(client: BaseRealtimeClient, cameraCheck: boolean): void {
+    this.closeCaptures();
+    const captures = new RealtimeCaptures({
+      Client: client,
+      LocalMedia: this.localMedia,
+      Host: this.mediaHost,
+      Admit: (kind) => this.admitCapture(kind),
+      CameraCheck: cameraCheck,
+    });
+    this.captures = captures;
+    this.capturesSubscription = captures.States$.subscribe((states) => this._captures$.next(states));
+    this.refreshCaptureOffers();
+  }
+
+  /** Stops the camera and screen share, if any, and reports both off. */
+  private closeCaptures(): void {
+    this.capturesSubscription?.unsubscribe();
+    this.capturesSubscription = null;
+    this.captures?.Dispose();
+    this.captures = null;
+    if (this._captures$.value !== REALTIME_CAPTURES_OFF) {
+      this._captures$.next(REALTIME_CAPTURES_OFF);
+    }
+    this.refreshCaptureOffers();
+  }
+
+  /** Works out which captures the call offers ({@link CaptureOffers$}) and publishes a change. */
+  private refreshCaptureOffers(): void {
+    const offers: RealtimeCaptureOffers =
+      this.captures && this.client?.SupportsInboundVideo ? { Camera: this.canOffer('camera'), Screen: this.canOffer('screen') } : REALTIME_CAPTURE_OFFERS_NONE;
+    const current = this._captureOffers$.value;
+    if (offers.Camera !== current.Camera || offers.Screen !== current.Screen) {
+      this._captureOffers$.next(offers);
+    }
+  }
+
+  /** Whether the host can open a capture and the call's policy admits it. */
+  private canOffer(kind: RealtimeCaptureKind): boolean {
+    const hostCanOpen = kind === 'camera' ? this.localMedia !== null : typeof this.mediaHost.RequestDisplayCapture === 'function';
+    return hostCanOpen && this.admitCapture(kind).Admitted;
+  }
+
+  /** What a capture reports when there is no live session to show it to. */
+  private noSessionCapture(): RealtimeCaptureState {
+    return { Status: 'failed', Failure: 'no-session', Message: 'There is no call to share with.' };
+  }
+
+  /**
+   * The session's policy for a capture. The channel that fronts it (its `CaptureKind`) must be in the session, open or
+   * advertised, and the server's policy must let the agent see pixels through it (the agent's configuration and any
+   * zero-data-retention rule). The user's own "agent can see" choice for the channel does not refuse a start: it decides
+   * whether the frames reach the model.
+   */
+  private admitCapture(kind: RealtimeCaptureKind): RealtimeCaptureAdmission {
+    const channel = this.findCaptureChannel(kind)?.Plugin;
+    if (!channel) {
+      return { Admitted: false, Message: CAPTURE_WORDING[kind].NotInCall };
+    }
+    const resolved = this.GetResolvedChannel(channel.ChannelName);
+    const allowed = resolved?.Exposure ?? resolved?.MaxExposure ?? channel.GetDescriptor().MaxExposure;
+    if (allowed !== 'pixels') {
+      const reasons = (resolved?.ExposureLimits ?? []).map((limit) => limit.Reason);
+      return { Admitted: false, Message: reasons.length > 0 ? `${CAPTURE_WORDING[kind].NotAllowed}: ${reasons.join('; ')}.` : `${CAPTURE_WORDING[kind].NotAllowed}.` };
+    }
+    return { Admitted: true, ChannelKey: channel.ChannelName, VisibleToAgent: channel.Exposure === 'pixels' };
+  }
+
+  /** The channel in the session, open or advertised, that fronts a capture. */
+  private findCaptureChannel(kind: RealtimeCaptureKind): DispatchableChannel | null {
+    const open = this._activeChannels$.value.find((c) => c.CaptureKind === kind);
+    if (open) {
+      return { Plugin: open, IsOpen: true };
+    }
+    const advertised = this.advertisedChannels.find((p) => p.Plugin.CaptureKind === kind);
+    return advertised ? { Plugin: advertised.Plugin, IsOpen: false } : null;
+  }
+
+  /**
+   * Brings up the channel that fronts a capture once the capture is starting, so the host shows its surface: an advertised
+   * channel is opened (and announces itself to the agent), an open one counts as used.
+   */
+  private async revealCaptureChannel(kind: RealtimeCaptureKind): Promise<void> {
+    const state = kind === 'camera' ? this.captures?.States.Camera : this.captures?.States.Screen;
+    const channel = state?.Status === 'starting' ? this.findCaptureChannel(kind) : null;
+    if (!channel) {
+      return;
+    }
+    if (channel.IsOpen) {
+      this.noteChannelActivity(channel.Plugin);
+      return;
+    }
+    const opened = await this.OpenChannel(channel.Plugin.ChannelName);
+    if (!opened.Success) {
+      console.warn(`[RealtimeSession] Could not open channel '${channel.Plugin.ChannelName}' for the ${kind}: ${opened.ErrorMessage ?? opened.ErrorCode}`);
+    }
+  }
+
+  /**
+   * Starts the user's camera and shows it to the agent. Call it from the user's click: it may ask for camera
+   * permission. Resolves with the camera's state; a failure (no session, a model that takes no video, a refused
+   * permission) is a state with a message, never a throw. While the camera is on, it is a source on
+   * {@link VideoSources$}, and it stops by itself if the device goes away.
+   *
+   * When the host shows a camera check ({@link RealtimeSessionStartOptions.CameraCheck}), the call's first start
+   * resolves still starting, with `Checking` set and the stream for the host to preview. The agent sees the camera
+   * once the host calls {@link ConfirmCamera}; {@link StopCamera} is the user's "not now".
+   *
+   * @param deviceId The camera to open; the system default when absent.
+   */
+  public async StartCamera(deviceId?: string): Promise<RealtimeCaptureState> {
+    if (!this.captures) {
+      return this.noSessionCapture();
+    }
+    const started = this.captures.Start('camera', { DeviceID: deviceId });
+    await this.revealCaptureChannel('camera');
+    return started;
+  }
+
+  /** Stops the user's camera. Safe to call when it is off. */
+  public StopCamera(): void {
+    this.captures?.Stop('camera');
+  }
+
+  /**
+   * Moves the user's camera to another device while it is open (being checked or on): one of the camera's `Devices` on
+   * {@link Captures$}. The stream stays the same. Resolves with the camera's state; nothing changes while the camera is
+   * off.
+   *
+   * @param deviceId The camera to move to.
+   */
+  public async SwitchCamera(deviceId: string): Promise<RealtimeCaptureState> {
+    return this.captures ? this.captures.SwitchCamera(deviceId) : this.noSessionCapture();
+  }
+
+  /**
+   * Moves the call's microphone to another device: one of the `Devices` on {@link Microphone$}. The host's controller
+   * swaps the new track into the same stream and carries the mute over, and the driver and the call's recording move to
+   * it, so the agent keeps hearing the user. When the new microphone cannot open, the controller goes back to the one in
+   * use. While the call has no microphone open (it lost the one in use and the default, or the last one went away), the
+   * pick opens one again: the driver and the recording move to it, and it keeps the call's mute. Resolves with the
+   * microphone's state once the switch is over. Nothing changes outside a call or on a host without a controller.
+   *
+   * @param deviceId The microphone to move to.
+   */
+  public async SwitchMicrophone(deviceId: string): Promise<RealtimeMicrophoneState> {
+    const controller = this.localMedia;
+    if (controller && this.microphoneOffered) {
+      const status = controller.State.Microphone.Status;
+      const live = status === 'on' || status === 'starting';
+      await (live ? controller.SwitchDevice('microphone', deviceId) : controller.Start('microphone', deviceId));
+    }
+    return this._microphone$.value;
+  }
+
+  /**
+   * The user checked the camera and turned it on: the agent sees it from now on, and later camera starts in this call
+   * skip the check. Returns the camera's state; unless the camera is waiting for its check (see {@link StartCamera}),
+   * nothing changes.
+   */
+  public ConfirmCamera(): RealtimeCaptureState {
+    return this.captures ? this.captures.ConfirmCamera() : this.noSessionCapture();
+  }
+
+  /**
+   * Asks the user for a screen, window or browser tab (or one panel of the page) and shows it to the agent. Call it
+   * from the user's click: the browser's picker needs one. Resolves with the share's state; a failure (no session,
+   * a model that takes no video, a closed picker, a host that cannot share) is a state with a message. The share
+   * also stops when the user ends it from the browser's own bar.
+   *
+   * @param options What the picker offers first, or the panel to share and its name (`PanelLabel`), which the share's
+   *   state carries and the agent sees as "<name> (shared panel)".
+   */
+  public async StartScreenShare(options?: DisplayCaptureOptions): Promise<RealtimeCaptureState> {
+    if (!this.captures) {
+      return this.noSessionCapture();
+    }
+    const started = this.captures.Start('screen', options);
+    await this.revealCaptureChannel('screen');
+    return started;
+  }
+
+  /** Stops the user's screen share. Safe to call when nothing is shared. */
+  public StopScreenShare(): void {
+    this.captures?.Stop('screen');
+  }
+
+  /**
+   * Why the latest session start failed, or `null` when it has not failed or none has run.
    *
    * Read it when {@link ConnectionState$} reports `'error'`, to tell a denied microphone apart from
-   * a provider or backend failure and show copy the user can act on. Cleared at the start of every
-   * session.
+   * a provider or backend failure and show copy the user can act on. Each start clears it before it
+   * reports `'connecting'`, so it never describes an earlier start.
    */
   public get LastStartError(): Error | null {
     return this.lastStartError;
@@ -1355,7 +1927,7 @@ export class RealtimeSessionRuntime {
   private async failSessionStart(error: unknown): Promise<void> {
     console.error('[RealtimeSession] Failed to start session:', error);
     this.lastStartError = error instanceof Error ? error : new Error(String(error));
-    this._connectionState$.next('error');
+    this.setConnectionState('error');
     await this.teardown(false);
   }
 
@@ -1397,14 +1969,19 @@ export class RealtimeSessionRuntime {
     void this.onUserTranscript(trimmed);
   }
 
-  /** Mute / unmute the local microphone track. Returns the new muted state. */
+  /**
+   * Mute / unmute the local microphone track. Returns the new muted state. While the call has no microphone track (a
+   * switch is putting a new one in, or the call lost its microphone) there is nothing to mute: nothing changes, and it
+   * returns the call's mute, which the next microphone keeps. Outside a call it returns `false`.
+   */
   public ToggleMute(): boolean {
     const tracks = this.localStream?.getAudioTracks() ?? [];
     if (tracks.length === 0) {
-      return false;
+      return this.microphoneMuted;
     }
     const muted = tracks[0].enabled; // currently enabled → becomes muted
     this.client?.SetMuted(muted);
+    this.microphoneMuted = muted;
     return muted;
   }
 
@@ -1482,7 +2059,12 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Relays a video frame to the underlying realtime client if active.
+   * Relays a video frame straight to the underlying realtime client, if a session is live.
+   *
+   * It bypasses the session's {@link VideoSourceArbiter}: the frame overrides the source the arbiter picked, and the
+   * model is not told what it is looking at. Channels no longer send through it (their context's `SendVideoFrame` goes
+   * through the arbiter); a host that shows the model something registers a source there instead, as
+   * `ChannelInboundVideoBridge` does.
    */
   public SendVideoFrame(base64Image: string, mimeType?: string): void {
     if (!this.client || !this.isSessionLive()) {
@@ -1832,6 +2414,53 @@ export class RealtimeSessionRuntime {
       reasons.push(UserExposureReason(user));
     }
     plugin.ApplyExposure({ Policy: resolved?.Exposure, User: user, Reasons: reasons });
+    // A capture this channel fronts follows it: the agent sees its frames only while the channel's exposure allows pixels.
+    const kind = plugin.CaptureKind;
+    if (kind) {
+      this.captures?.SetVisibleToAgent(kind, plugin.Exposure === 'pixels');
+    }
+    this.syncChannelVideoSource(plugin);
+  }
+
+  /**
+   * Sends a frame from a channel's context ({@link RealtimeChannelContext.SendVideoFrame}, deprecated) through the
+   * session's {@link VideoSourceArbiter}, as the channel's own source: it reaches the model only while the arbiter picks
+   * that source, and the arbiter tells the model when it switches. The source registers with the first frame, under the
+   * id the channel's own frame bridge uses, switched on only while the channel's exposure allows pixels.
+   */
+  private sendChannelVideoFrame(plugin: BaseRealtimeChannelClient, base64Image: string, mimeType?: string): void {
+    const client = this.client;
+    if (!client || !this.isSessionLive() || !client.IsTrackEstablished('video', 'inbound')) {
+      return;
+    }
+    const arbiter = VideoSourceArbiter.ForSink(client);
+    const descriptor = plugin.GetDescriptor();
+    const sourceId = ChannelVideoSourceID(descriptor.Key, plugin.InstanceId);
+    if (!arbiter.HasSource(sourceId)) {
+      arbiter.RegisterSource({
+        SourceID: sourceId,
+        Label: descriptor.DisplayName,
+        Kind: 'surface',
+        ChannelKey: descriptor.Key,
+        Enabled: plugin.Exposure === 'pixels',
+      });
+    }
+    arbiter.PushFrame(sourceId, base64Image, mimeType);
+  }
+
+  /**
+   * Keeps a channel's video source at the arbiter, when it has one, in step with the channel's exposure: on while the
+   * agent may see its pixels, off otherwise. Quiet, because the channel tells the model about its own exposure change.
+   */
+  private syncChannelVideoSource(plugin: BaseRealtimeChannelClient): void {
+    if (!this.client) {
+      return;
+    }
+    const arbiter = VideoSourceArbiter.ForSink(this.client);
+    const sourceId = ChannelVideoSourceID(plugin.GetDescriptor().Key, plugin.InstanceId);
+    if (arbiter.HasSource(sourceId)) {
+      arbiter.SetSourceEnabled(sourceId, plugin.Exposure === 'pixels', false);
+    }
   }
 
   /** Follows the session client's video-source arbiter so {@link VideoSources$} reflects it. */
@@ -1900,6 +2529,19 @@ export class RealtimeSessionRuntime {
   }
 
   /**
+   * Picks the video source the agent sees: what the "agent can see" control calls when more sources are on than the
+   * model takes. The pick beats every other rule (a camera or screen share the user started, the surface the user is
+   * looking at) until it is cleared, or its source is turned off or leaves. The pick shows on {@link VideoSources$}
+   * (`Picked`), and the model is told when what it sees changes.
+   *
+   * @param sourceId The source's id (from {@link VideoSources$}), or `null` to let the call decide again.
+   * @returns `false` with no live session, or for a source that is not there or is turned off.
+   */
+  public SelectVideoSource(sourceId: string | null): boolean {
+    return this.client ? VideoSourceArbiter.ForSink(this.client).SelectSource(sourceId) : false;
+  }
+
+  /**
    * The `on-demand` channels that are in the session but not open yet — what the agent can open
    * through `ContextTool`. A fresh array; empty before a session starts and after teardown.
    */
@@ -1926,12 +2568,13 @@ export class RealtimeSessionRuntime {
    * the native tools to declare and the candidates to report. Starts nothing.
    *
    * @param hostChannels Channels the host brings to this session.
-   * @returns The native tools to declare at mint, and the candidates as JSON (`null` when there are none,
-   *   so a channel-less session sends exactly the mint it always did).
+   * @returns The native tools to declare at mint, the candidates as JSON (`null` when there are none,
+   *   so a channel-less session sends exactly the mint it always did), and whether the host could show the agent's
+   *   video ({@link PreparedChannelsShowAgentVideo}).
    */
   private async prepareChannelScope(
     hostChannels?: RealtimeHostChannelDeclaration[]
-  ): Promise<{ NativeTools: RealtimeToolDefinition[]; CandidatesJson: string | null }> {
+  ): Promise<{ NativeTools: RealtimeToolDefinition[]; CandidatesJson: string | null; ShowsAgentVideo: boolean }> {
     this.discardUnmountedChannels();
     const prepared = await this.prepareChannels(hostChannels);
     this.preparedChannels = prepared;
@@ -1944,7 +2587,7 @@ export class RealtimeSessionRuntime {
     const nativeTools = SelectNativeChannelTools(local.Channels, ToolsByChannelKey(candidates));
     // `Registry` is the browser's own view and never goes over the wire: the server reads the registry itself.
     const wire = candidates.map(({ Registry: _registry, ...candidate }) => candidate);
-    return { NativeTools: nativeTools, CandidatesJson: wire.length > 0 ? JSON.stringify(wire) : null };
+    return { NativeTools: nativeTools, CandidatesJson: wire.length > 0 ? JSON.stringify(wire) : null, ShowsAgentVideo: PreparedChannelsShowAgentVideo(prepared) };
   }
 
   /**
@@ -1959,6 +2602,7 @@ export class RealtimeSessionRuntime {
     for (const row of rows) {
       const plugin = this.resolveChannelPlugin(row);
       if (plugin) {
+        plugin.ApplySurfacePlacement(row.SurfacePlacement);
         prepared.push({ Plugin: plugin, Key: plugin.ChannelName, Registry: row.IsActive ? 'active' : 'inactive' });
       }
     }
@@ -1970,7 +2614,8 @@ export class RealtimeSessionRuntime {
       const existing = FindPreparedChannel(prepared, plugin.ChannelName);
       if (existing) {
         // The host's instance replaces the registry's (it may carry the host's collaborators); the
-        // registry row's state — notably the kill switch — still applies.
+        // registry row's state — notably the kill switch, and where its surface shows — still applies.
+        plugin.ApplySurfacePlacement(existing.Plugin.SurfacePlacement);
         existing.Plugin = plugin;
         existing.HostDeclaration = declaration;
       } else {
@@ -2029,7 +2674,7 @@ export class RealtimeSessionRuntime {
       console.warn('[RealtimeSession] A host-declared channel names neither ClientPluginClass nor Create — ignoring it.');
       return null;
     }
-    return this.resolveChannelPlugin({ ID: key, Name: key, ClientPluginClass: key, IsActive: true });
+    return this.resolveChannelPlugin({ Name: key, ClientPluginClass: key, IsActive: true });
   }
 
   /**
@@ -2105,8 +2750,13 @@ export class RealtimeSessionRuntime {
     try {
       const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.Provider, AIEngineBase) as AIEngineBase;
       await engine.Config(false, undefined, this.Provider);
-      return (engine.AgentChannels ?? [])
-        .map<RealtimeChannelDefinitionRow>(c => ({ ID: c.ID, Name: c.Name, ClientPluginClass: c.ClientPluginClass, IsActive: c.IsActive }));
+      return (engine.AgentChannels ?? []).map<RealtimeChannelDefinitionRow>((c) => ({
+        ID: c.ID,
+        Name: c.Name,
+        ClientPluginClass: c.ClientPluginClass,
+        IsActive: c.IsActive,
+        SurfacePlacement: readRowSurfacePlacement(c),
+      }));
     } catch (error) {
       console.warn('[RealtimeSession] Channel registry unavailable — starting with no channels:', error);
       return [];
@@ -2125,7 +2775,7 @@ export class RealtimeSessionRuntime {
     }`;
     try {
       const result = (await this.gql().ExecuteGQL(query, {
-        input: { EntityName: 'MJ: AI Agent Channels', Fields: ['ID', 'Name', 'ClientPluginClass', 'IsActive'] },
+        input: { EntityName: 'MJ: AI Agent Channels', Fields: ['ID', 'Name', 'ClientPluginClass', 'IsActive', 'UIConfig'] },
       })) as { RunDynamicView?: { Success: boolean; ErrorMessage?: string; Results?: { Data: string }[] } } | null;
       const view = result?.RunDynamicView;
       if (!view?.Success) {
@@ -2133,8 +2783,14 @@ export class RealtimeSessionRuntime {
         return [];
       }
       return (view.Results ?? [])
-        .map((r) => JSON.parse(r.Data) as Partial<RealtimeChannelDefinitionRow> & Pick<RealtimeChannelDefinitionRow, 'ID' | 'Name' | 'ClientPluginClass'>)
-        .map<RealtimeChannelDefinitionRow>((row) => ({ ID: row.ID, Name: row.Name, ClientPluginClass: row.ClientPluginClass, IsActive: row.IsActive === true }));
+        .map((r) => JSON.parse(r.Data) as ChannelRegistryViewRow)
+        .map<RealtimeChannelDefinitionRow>((row) => ({
+          ID: row.ID,
+          Name: row.Name,
+          ClientPluginClass: row.ClientPluginClass,
+          IsActive: row.IsActive === true,
+          SurfacePlacement: readUIConfigTextSurfacePlacement(row.Name, row.UIConfig),
+        }));
     } catch (error) {
       console.warn('[RealtimeSession] Channel registry unavailable — starting with no channels:', error instanceof Error ? error.message : String(error));
       return [];
@@ -2149,7 +2805,7 @@ export class RealtimeSessionRuntime {
    * An inactive row is resolved quietly: it only needs to be named, and a missing plugin for a
    * channel nobody wants is not worth a warning.
    */
-  private resolveChannelPlugin(row: RealtimeChannelDefinitionRow): BaseRealtimeChannelClient | null {
+  private resolveChannelPlugin(row: Pick<RealtimeChannelDefinitionRow, 'Name' | 'ClientPluginClass' | 'IsActive'>): BaseRealtimeChannelClient | null {
     const key = row.ClientPluginClass?.trim();
     const quiet = !row.IsActive;
     if (!key) {
@@ -2370,8 +3026,19 @@ export class RealtimeSessionRuntime {
       get Client(): BaseRealtimeClient | null {
         return service.client;
       },
-      SendVideoFrame: (base64Image: string, mimeType?: string) => this.SendVideoFrame(base64Image, mimeType),
-      IsTrackEstablished: (modality: string, direction: RealtimeTrackDirection) => this.IsTrackEstablished(modality, direction)
+      // Through the arbiter, as this channel's source (deprecated: channels use a ChannelInboundVideoBridge).
+      SendVideoFrame: (base64Image: string, mimeType?: string) => this.sendChannelVideoFrame(plugin, base64Image, mimeType),
+      IsTrackEstablished: (modality: string, direction: RealtimeTrackDirection) => this.IsTrackEstablished(modality, direction),
+      // The camera and screen share, for a channel that fronts one: their state, and the user's clicks on its surface.
+      Captures$: this.Captures$,
+      StartCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StartCamera() : this.StartScreenShare()),
+      StopCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StopCamera() : this.StopScreenShare()),
+      // The video sources and which of them the model is sent, so a capture's channel says the agent sees it only then.
+      VideoSources$: this.VideoSources$,
+      // The agent's video, the call's state and its resumes, for a channel that shows the agent.
+      AgentVideo$: this.AgentVideo$,
+      ConnectionState$: this.ConnectionState$,
+      Resuming$: this.Resuming$
     };
   }
 
@@ -2664,12 +3331,14 @@ export class RealtimeSessionRuntime {
 
   /**
    * Builds the client-direct session config the realtime client connects with.
-   * Aggregates tracks sourced by active channels under {@link REQUESTED_TRACKS_SESSION_KEY} so the driver
-   * can negotiate them (e.g., establishing inbound video streaming for Whiteboard / RemoteBrowser).
+   * Aggregates the tracks active channels source and sink under {@link REQUESTED_TRACKS_SESSION_KEY} so the
+   * driver can negotiate them (e.g., inbound video for Whiteboard / RemoteBrowser, outbound video for a
+   * channel that shows the agent's video). A track the model does not support resolves to `'unsupported'`.
+   * The session's transport and relay URL go to the driver as minted (an unknown transport is left out: direct).
    */
   public BuildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
     const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
-    const channelTracks = this._activeChannels$.value.flatMap((c) => c.GetSourcedTracks());
+    const channelTracks = this._activeChannels$.value.flatMap((c) => [...c.GetSourcedTracks(), ...c.GetSunkTracks()]);
     if (channelTracks.length > 0) {
       // The requested tracks cross a JSON boundary — the driver reads them back out of the session
       // config bag (`GeminiRealtimeClient.parseSessionConfig`). A `RealtimeTrackDescriptor` is NOT
@@ -2694,11 +3363,14 @@ export class RealtimeSessionRuntime {
       }
       sessionConfig[REQUESTED_TRACKS_SESSION_KEY] = Array.from(trackMap.values());
     }
+    const transport = ParseRealtimeClientTransport(session.Transport);
     return {
       Provider: session.Provider,
       Model: session.Model,
       EphemeralToken: session.EphemeralToken,
       ExpiresAt: session.ExpiresAt,
+      ...(transport ? { Transport: transport } : {}),
+      ...(session.RelayUrl ? { RelayUrl: session.RelayUrl } : {}),
       SessionConfig: sessionConfig
     };
   }
@@ -2752,13 +3424,38 @@ export class RealtimeSessionRuntime {
     client.OnInterruption(() => {
       this.cancelPendingNarration();
     });
+    client.OnRemoteVideo((video: MediaVideoSource) => this.onAgentVideo(client, video));
+  }
+
+  /**
+   * The model's video arrived: publish it on {@link AgentVideo$}, and mark each channel that shows it (one that sinks
+   * outbound video) as used, so the host shows its surface. A client the session has already let go of is ignored, so a
+   * late frame cannot bring the video back after the call.
+   */
+  private onAgentVideo(client: BaseRealtimeClient, video: MediaVideoSource): void {
+    if (this.client !== client) {
+      return;
+    }
+    this._agentVideo$.next(video);
+    for (const channel of this._activeChannels$.value) {
+      if (channel.ShowsAgentVideo) {
+        this.noteChannelActivity(channel);
+      }
+    }
+  }
+
+  /** Clears {@link AgentVideo$} when the call's client goes. */
+  private clearAgentVideo(): void {
+    if (this._agentVideo$.value !== null) {
+      this._agentVideo$.next(null);
+    }
   }
 
   /** Maps a client state event onto the UI connection state. */
   private onClientStateChange(state: RealtimeClientState): void {
     const mapped = this.mapClientState(state);
     if (mapped) {
-      this._connectionState$.next(mapped);
+      this.setConnectionState(mapped);
       this.flushChannelCatalogNote();
     }
   }
@@ -2789,6 +3486,18 @@ export class RealtimeSessionRuntime {
   private isSessionLive(): boolean {
     const state = this._connectionState$.value;
     return state === 'listening' || state === 'speaking' || state === 'thinking';
+  }
+
+  /**
+   * Moves {@link ConnectionState$} to `state`, and {@link Resuming$} first: a `'connecting'` while the call is live, or
+   * already resuming, is a resume; any other state ends one. Every state change goes through here.
+   */
+  private setConnectionState(state: RealtimeConnectionState): void {
+    const resuming = state === 'connecting' && (this._resuming$.value || this.isSessionLive());
+    if (resuming !== this._resuming$.value) {
+      this._resuming$.next(resuming);
+    }
+    this._connectionState$.next(state);
   }
 
   // ── Transcript policy ──────────────────────────────────────────────────────
@@ -2980,7 +3689,7 @@ export class RealtimeSessionRuntime {
       void this.relayToolTurn(call.ToolName, call.ArgumentsJson, resultJson);
       return;
     }
-    this._connectionState$.next('thinking');
+    this.setConnectionState('thinking');
     if (this.inFlightCallIds.size === 0) {
       // A fresh delegation burst: anchor the first-update delay and clear the digest
       // buffer. Deliberately NOT reset: lastDelegationNarrationAt (the 8s spacing floor
@@ -3214,7 +3923,8 @@ export class RealtimeSessionRuntime {
 
   /**
    * Mints a session through the installed {@link Launcher} — by default the stock
-   * `StartRealtimeClientSession` mutation (see {@link DefaultRealtimeSessionLauncher}).
+   * `StartRealtimeClientSession` mutation (see {@link DefaultRealtimeSessionLauncher}). `showsAgentVideo` is whether
+   * one of the session's channels could show the agent's video; without one the server asks the model for no avatar.
    */
   private async mintSession(
     targetAgentId: string,
@@ -3229,7 +3939,8 @@ export class RealtimeSessionRuntime {
     mediaCollectionId?: string | null,
     applicationId?: string | null,
     appContext?: AppContextSnapshot | null,
-    channelCandidatesJson?: string | null
+    channelCandidatesJson?: string | null,
+    showsAgentVideo?: boolean
   ): Promise<StartRealtimeClientSessionResult> {
     const result = await this._launcher.Launch(
       {
@@ -3245,12 +3956,13 @@ export class RealtimeSessionRuntime {
         MediaCollectionId: mediaCollectionId ?? null,
         ApplicationId: applicationId ?? null,
         AppContext: appContext ?? null,
-        ChannelCandidatesJson: channelCandidatesJson ?? null
+        ChannelCandidatesJson: channelCandidatesJson ?? null,
+        ...(showsAgentVideo === undefined ? {} : { ShowsAgentVideo: showsAgentVideo })
       },
       { Provider: this.Provider }
     );
-    if (!result?.EphemeralToken) {
-      throw new Error('The session launcher returned no ephemeral token');
+    if (!HasClientCredential(result)) {
+      throw new Error('The session launcher returned no ephemeral token (or, for a relay session, no relay URL)');
     }
     return result;
   }
@@ -3395,16 +4107,29 @@ export class RealtimeSessionRuntime {
   /**
    * Accumulates one usage DELTA from the realtime client (per-response token counts —
    * the `OnUsage` contract shape) and schedules the debounced relay. Negative / non-finite
-   * values are clamped to 0; an all-zero delta is dropped without arming the timer.
+   * values are clamped to 0; an all-zero delta is dropped without arming the timer. The
+   * update's input and output detail blocks add into the pending details by the record's
+   * rules (amounts add up, inbound video running totals keep the larger value), so an update
+   * that carries only avatar video seconds still counts.
    */
   private onUsageDelta(usage: RealtimeClientUsage): void {
     const input = this.clampUsageDelta(usage.InputTokens);
     const output = this.clampUsageDelta(usage.OutputTokens);
-    if (input === 0 && output === 0) {
+    const details = AddRealtimeUsageRecord(null, { Input: usage.InputTokenDetails, Output: usage.OutputTokenDetails });
+    const hasDetails = HasRealtimeUsage(details);
+    if (input === 0 && output === 0 && !hasDetails) {
       return;
     }
     this.pendingUsageInput += input;
     this.pendingUsageOutput += output;
+    if (hasDetails) {
+      this.pendingUsageDetails = AddRealtimeUsageRecord(this.pendingUsageDetails, details);
+    }
+    this.armUsageFlush();
+  }
+
+  /** Schedules the debounced usage relay unless one is already pending. */
+  private armUsageFlush(): void {
     if (!this.usageFlushTimer) {
       this.usageFlushTimer = setTimeout(() => {
         this.usageFlushTimer = null;
@@ -3431,23 +4156,25 @@ export class RealtimeSessionRuntime {
     const sessionId = agentSessionId ?? this.agentSessionId;
     const input = this.pendingUsageInput;
     const output = this.pendingUsageOutput;
-    if (!sessionId || (input === 0 && output === 0)) {
+    const details = this.pendingUsageDetails;
+    if (!sessionId || (input === 0 && output === 0 && !details)) {
       return;
     }
     this.pendingUsageInput = 0;
     this.pendingUsageOutput = 0;
+    this.pendingUsageDetails = null;
     try {
-      const mutation = `
-        mutation RelayRealtimeUsage($agentSessionId: String!, $inputTokens: Int!, $outputTokens: Int!) {
-          RelayRealtimeUsage(agentSessionId: $agentSessionId, inputTokens: $inputTokens, outputTokens: $outputTokens)
-        }
-      `;
-      await this.gql().ExecuteGQL(mutation, { agentSessionId: sessionId, inputTokens: input, outputTokens: output });
+      // The details argument is sent only when there are details, so a token-only relay is unchanged.
+      const variables = { agentSessionId: sessionId, inputTokens: input, outputTokens: output, ...(details ? { usageDetailsJson: JSON.stringify(details) } : {}) };
+      await this.gql().ExecuteGQL(RELAY_REALTIME_USAGE_MUTATION, variables);
     } catch (error) {
       console.error('[RealtimeSession] Failed to relay usage telemetry:', error);
       // Re-accumulate so a later debounce / the teardown flush retries the same deltas.
       this.pendingUsageInput += input;
       this.pendingUsageOutput += output;
+      if (details) {
+        this.pendingUsageDetails = AddRealtimeUsageRecord(this.pendingUsageDetails, details);
+      }
     }
   }
 
@@ -3459,6 +4186,7 @@ export class RealtimeSessionRuntime {
     }
     this.pendingUsageInput = 0;
     this.pendingUsageOutput = 0;
+    this.pendingUsageDetails = null;
   }
 
   // ── Delegated-run progress streaming ───────────────────────────────────────
@@ -3782,24 +4510,30 @@ export class RealtimeSessionRuntime {
     this.flushAllChannelSaves();
     this.disposeChannels();
 
+    // The camera and screen share go first: the camera runs on the controller closed next.
+    this.closeCaptures();
     // Defensive: stop the mic even when Connect never ran (the client also stops the
     // tracks it was handed — track.stop() is idempotent).
+    this.closeLocalMedia();
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
+    this.microphoneMuted = false;
 
-    // Hand the platform back whatever acquiring the microphone changed. Stopping the tracks is not
+    // Hand the platform back whatever opening the microphone changed. Stopping the tracks is not
     // the same thing: iOS, for instance, is put into a record-and-play audio category for the call,
     // and leaving it there changes the route and volume behaviour of every sound the app makes
-    // afterwards. Best-effort by contract — a failure here must never block ending a call.
-    try {
-      await this.mediaHost.ReleaseMicrophone?.();
-    } catch (error) {
-      console.error('[RealtimeSession] Media host failed to release the microphone:', error);
+    // afterwards. A microphone still opening is left to its start, which releases it once the
+    // opening returns ({@link microphoneLease}).
+    const lease = this.microphoneLease;
+    if (lease && !lease.Opening) {
+      this.microphoneLease = null;
+      await this.releaseMicrophone();
     }
 
     if (this.client) {
       await this.client.Disconnect();
       this.unwatchVideoSources();
+      this.clearAgentVideo();
       this.client = null;
     }
 
@@ -3830,10 +4564,13 @@ export class RealtimeSessionRuntime {
     this.narrationTemplate = null;
     this.clientToolHandlers.clear();
     this._modelName$.next(null);
+    if (this._avatarNotice$.value !== null) {
+      this._avatarNotice$.next(null);
+    }
     this.SetMinimized(false);
     this._active$.next(false);
     if (this._connectionState$.value !== 'error') {
-      this._connectionState$.next('closed');
+      this.setConnectionState('closed');
     }
 
     // Surface generic session-ended for the conversations runtime bridge.
@@ -3844,6 +4581,18 @@ export class RealtimeSessionRuntime {
         sessionId: closedSessionId,
         reason: closeServerSession ? 'explicit' : 'error',
       });
+    }
+  }
+
+  /**
+   * Calls the host's {@link IRealtimeMediaHost.ReleaseMicrophone}. Best-effort by contract: a failure
+   * is logged and never thrown, because it must never block ending a call.
+   */
+  private async releaseMicrophone(): Promise<void> {
+    try {
+      await this.mediaHost.ReleaseMicrophone?.();
+    } catch (error) {
+      console.error('[RealtimeSession] Media host failed to release the microphone:', error);
     }
   }
 
@@ -3881,6 +4630,7 @@ export class RealtimeSessionRuntime {
     this.currentTurnStartMs = null;
     this.turnAudioStartCaptured = false;
     this.usedChannelNames.clear();
+    this.microphoneMuted = false;
   }
 
   /** The GraphQL provider used for relay mutations. */

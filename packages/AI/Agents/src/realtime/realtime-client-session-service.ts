@@ -32,7 +32,7 @@
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView, DatabaseProviderBase } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
-import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
+import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
 import {
@@ -47,6 +47,7 @@ import {
     IRealtimeSession,
     IsZeroDataRetention,
     JSONObject,
+    RealtimeAvatarStatus,
     RealtimeSessionParams,
     RealtimeToolCall,
     RealtimeToolDefinition
@@ -72,12 +73,22 @@ import {
     type RealtimeSessionClientTools
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import {
+    ResolveAvatarUnseenReason,
+    ResolveBridgedAvatarStatus,
+    ResolveRealtimeAvatar,
+    ResolveRealtimeAvatarStatus,
+    WithoutUnseenAvatar,
+    type RealtimeAvatarResolution,
+} from './realtime-avatar-resolution';
+import { ReadRealtimeVideoOutputRow, RealtimeModelShowsAvatar } from './realtime-video-output-gate';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
 import { AgentRunner } from '../AgentRunner';
 import { AgentRunWatchdog } from '../agent-run-watchdog';
 import { DelegationNarrator } from './realtime-delegation-narrator';
 import { FilterAllowedAgentsByCanRun } from './realtime-coagent-resolution';
+import { BridgeRealtimeUsageRecorder } from './bridge-realtime-usage-recorder';
 import {
     RealtimeToolBroker,
     RealtimeToolBrokerDeps,
@@ -99,11 +110,13 @@ import {
     BuildVoiceMannerSection,
     BuildAppRealtimeOverridesJson,
     DeepMergeConfigs,
+    FindDeprecatedRealtimeVideoKeys,
     GetModelCatalogSessionSettings,
     GetDisclosureForTarget,
     GetNarrationPaceMs,
     GetProviderVoiceSettings,
     GetSessionTuningSettings,
+    GetWatchesMeetingVideo,
     JSONObjectLike,
     RealtimeAllowedAgent,
     RealtimeCoAgentConfig,
@@ -113,9 +126,36 @@ import {
     GetDirectActionsConfig,
     IsActionAllowedForDirectInvocation
 } from './realtime-coagent-config';
-import { SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtime-vendor-resolution';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { ListRealtimeVendorsForModel, SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtime-vendor-resolution';
+import { AIEngineBase, MergeRealtimeUsageRecord, type RealtimeUsageMergeResult, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import { BuildSessionChannelPolicy, type RealtimeChannelRegistryRow } from './realtime-channel-policy';
+
+/**
+ * How many seconds of avatar video a run may store beyond its elapsed time: usage is client-reported, so the stored
+ * output video seconds are capped at the run's elapsed time plus this grace (relays land a few seconds late).
+ */
+const VIDEO_SECONDS_GRACE = 30;
+
+/**
+ * How long closing a bridged (server-held) session waits for its model session to close before the session's runs are
+ * finalized anyway, in milliseconds. A model session reports its last usage while it closes (a Gemini avatar session,
+ * the seconds of video it has not reported yet), and the runs are priced from what was stored when they are finalized.
+ */
+export const BRIDGE_SESSION_CLOSE_WAIT_MS = 5_000;
+
+/**
+ * The co-agent and target pairs already named in the deprecated `realtime.video` keys line, so the line is logged once
+ * per pair per process rather than on every session.
+ */
+const deprecatedVideoKeysLogged = new Set<string>();
+
+/**
+ * How many output video tokens one second of avatar video counts: Gemini counts 258 tokens a frame at 24 frames a
+ * second, the rate the per-minute avatar price is derived from. The stored output video tokens are capped at the
+ * seconds cap at this rate, because pricing uses them: they leave the cost row's output bucket, and a per-token avatar
+ * price prices them. Raise it for a model that counts more.
+ */
+const VIDEO_TOKENS_PER_SECOND = 6192;
 
 /**
  * Context passed to {@link PrepareClientSessionInput.ResolveHostTools} describing the
@@ -264,6 +304,34 @@ export interface PrepareClientSessionInput {
      */
     SelfNames?: string[];
     /**
+     * `'room'` for a server-side (bridged) session whose host publishes the agent's avatar into a meeting room: the
+     * avatar request resolved for the voiced agent carries it (`RealtimeAvatarSettings.Delivery`), so a driver may
+     * render it there. Absent: a server-side session asks for no video (the driver logs `bridged`), and its avatar
+     * status says `bridged` also when the prep asked the driver for none, or the driver reported nothing. Ignored on a
+     * {@link PhoneCall}.
+     */
+    AvatarDelivery?: 'room';
+    /**
+     * `true` for a server-side session (a bridged meeting or a phone call), which can show the agent's avatar only when its
+     * host publishes it into a room ({@link AvatarDelivery} `'room'`). Without that, the default model walk's video
+     * preference skips the session: no model would bring it an avatar. Absent: a browser (client-direct) session.
+     */
+    ServerSide?: boolean;
+    /**
+     * `true` when the session is a phone call: a carrier call (Twilio, Vonage, RingCentral), or a call that reaches a
+     * LiveKit room through SIP. The caller hears the agent and sees nothing, so the session asks the driver for no avatar,
+     * even in a room that could show one, and reports why (`phone`); the avatar persona's voice is kept, and the default
+     * model walk prefers no avatar model. Absent: not a phone call.
+     */
+    PhoneCall?: boolean;
+    /**
+     * `false` when the app showing a browser session shows no agent video: none of its channels shows it (the embeddable
+     * widgets and the mobile app today; the mint's `showsAgentVideo` argument). The session then asks the driver for no
+     * avatar and reports why (`host`), the avatar persona's voice is kept, and the default model walk prefers no avatar
+     * model. Absent or `true`: the app may show it, and the browser decides at connect (`host` or `browser` then).
+     */
+    ShowsAgentVideo?: boolean;
+    /**
      * Optional server-authoritative hard ceiling on the session's wall-clock duration, in seconds.
      * Threaded into {@link RealtimeSessionParams.MaxSessionSeconds} so a driver can bound the
      * provider session/token, and surfaced so the transport layer (the MJServer resolver) can stamp
@@ -360,6 +428,12 @@ export interface RealtimeClientSessionPrepResult {
      * `RealtimeSessionRunnerDeps.NarrationPaceMs`.
      */
     NarrationPaceMs?: number;
+    /**
+     * The live avatar the session asked for and whether it shows: granted, or audio only and why
+     * ({@link ResolveRealtimeAvatarStatus}). Absent when the voiced agent asked for no avatar (its video setting is
+     * off). The transport layer returns it in the mint result, so the call can say why it shows no avatar.
+     */
+    AvatarStatus?: RealtimeAvatarStatus;
 }
 
 /**
@@ -479,23 +553,41 @@ export interface RealtimeSessionParamsPrep {
     SessionParams?: RealtimeSessionParams;
     /** The resolved channel scope + client-tool tiers, when the input carried channel candidates. */
     ClientPolicy?: RealtimeSessionClientPolicy;
+    /**
+     * The avatar the session asks for, or why there is none; empty when the voiced agent asked for none. The session
+     * params carry the request itself (`SessionParams.Avatar`); this keeps the reason for the call's avatar status.
+     */
+    AvatarResolution?: RealtimeAvatarResolution;
 }
 
 /**
  * The runtime handle returned by {@link RealtimeClientSessionService.WireBridgeRealtimeSession} — the
  * server long-lived (bridged) counterpart to what `PrepareClientSession` returns for the browser. The
  * bridge holds this for the life of the session: the observability run ids (for nesting + correlation)
- * and an **idempotent** {@link Finalize} the bridge MUST call on teardown so the co-agent run + prompt
- * run don't dangle in `Running`. Finalize also runs automatically when the session's `Close()` is invoked
- * or the connection drops — calling it again is a safe no-op.
+ * and an **idempotent** {@link Finalize} that keeps the co-agent run + prompt run from dangling in
+ * `Running`. It runs when the session's `Close()` is invoked, once the model session has closed, and when
+ * the connection drops; whichever comes first runs it, and a later call waits for that run.
  */
 export interface BridgeRealtimeRuntime {
     /** The `MJ: AI Agent Runs` row id created for this voice session (delegated runs nest under it). */
     CoAgentRunID?: string;
     /** The `MJ: AI Prompt Runs` row id for the session's system prompt. */
     PromptRunID?: string;
-    /** Finalizes the co-agent + prompt run. Idempotent; safe to call from multiple teardown paths. */
-    Finalize: (success: boolean) => Promise<void>;
+    /**
+     * Writes the session's last usage, then finalizes the co-agent + prompt run; usage reported afterwards is not
+     * stored. Closing the session runs it after the model session closed, so what the session reports while closing
+     * is kept; calling it before `Close()` would drop that report. Idempotent, so every teardown path may call it: it
+     * runs once, and every call returns the first call's promise and resolves only once the runs are finalized. The
+     * first call decides the outcome: its `success` and `errorMessage` stand.
+     *
+     * The session's `Close()` finalizes with `success` true, so a host whose bridge start failed calls
+     * `Finalize(false, error)` BEFORE it closes the session: the run, its prompt run and its step then read `Failed`
+     * with the start's error, and the close finalizes nothing more.
+     *
+     * @param success `true` → `Completed`, `false` → `Failed`.
+     * @param errorMessage Why the session failed, stamped on the failed run, prompt run and step. Ignored on success.
+     */
+    Finalize: (success: boolean, errorMessage?: string) => Promise<void>;
     /**
      * Aborts every delegated run currently in flight for this session (and drops pending narration). This is the
      * EXPLICIT cancel — on a phone it backs the `cancel_pending_work` tool — and is deliberately NOT what a
@@ -514,6 +606,12 @@ export interface BridgeRealtimeRuntime {
      * {@link BridgeLocalToolHandler.Handles} is executed by the host instead of the shared delegation path.
      */
     SetLocalToolHandler: (handler: BridgeLocalToolHandler | undefined) => void;
+    /**
+     * Whether the agent watches LiveKit meetings (`realtime.video.watchMeetings` in its effective configuration, which
+     * includes the voiced agent's own). The room coordinator reads it, with whether the session takes video, to decide
+     * whether the bot reads the cameras and screens people allow.
+     */
+    WatchesMeetingVideo: boolean;
 }
 
 /**
@@ -531,6 +629,27 @@ export interface BridgeLocalToolHandler {
 /** Runtime handles by their realtime session, so the layer that only holds the session can reach its runtime. */
 const bridgeRuntimes = new WeakMap<IRealtimeSession, BridgeRealtimeRuntime>();
 
+/** The ids of a voice session's co-agent observability rows (see `createCoAgentObservabilityRun`). */
+interface CoAgentObservabilityRunIds {
+    CoAgentRunID: string;
+    PromptRunID?: string;
+    CoAgentRunStepID?: string;
+}
+
+/** What `wireBridgeToolCalls` needs from a bridged session's wiring. */
+interface BridgeToolCallWiring {
+    Input: PrepareClientSessionInput;
+    Prep: RealtimeSessionParamsPrep;
+    /** The co-agent run delegated runs nest under. */
+    ParentRunID?: string;
+    AllowedAgents: ExecuteRelayedToolInput['AllowedAgents'];
+    Narrator: DelegationNarrator;
+    /** Reads the host's local tool handler at call time (it is installed after wiring). */
+    LocalToolHandler: () => BridgeLocalToolHandler | undefined;
+    ContextUser: UserInfo;
+    Provider: IMetadataProvider;
+}
+
 /**
  * Returns the runtime wired onto a bridged realtime session by
  * {@link RealtimeClientSessionService.WireBridgeRealtimeSession}, or `undefined` for a session that was never
@@ -539,6 +658,38 @@ const bridgeRuntimes = new WeakMap<IRealtimeSession, BridgeRealtimeRuntime>();
  */
 export function GetBridgeRealtimeRuntime(session: IRealtimeSession): BridgeRealtimeRuntime | undefined {
     return bridgeRuntimes.get(session);
+}
+
+/**
+ * Closes a bridged model session, waiting for it up to `waitMs`. Resolves when the close finishes or the wait runs out;
+ * rejects when the close fails within the wait. A close still running when the wait runs out is logged (what the
+ * session reports from then on is not stored), and so is its failure, should it fail later.
+ *
+ * @param close The session's own `Close()`.
+ * @param waitMs How long to wait for it.
+ * @param label Names the session in the log lines (its co-agent prompt run).
+ */
+async function closeBridgedSessionWithin(close: () => Promise<void>, waitMs: number, label: string): Promise<void> {
+    const closing = Promise.resolve(close());
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const waitRanOut = new Promise<true>((resolve) => {
+        timer = setTimeout(() => resolve(true), waitMs);
+        timer.unref?.();
+    });
+    try {
+        const ranOut = await Promise.race([closing.then(() => false), waitRanOut]);
+        if (ranOut) {
+            LogError(
+                `[Bridged usage] ${label}: the model session took more than ${waitMs} ms to close; its runs are finalized ` +
+                    `without waiting, so usage it reports while closing is not stored.`,
+            );
+            closing.catch((error: unknown) =>
+                LogError(`[Bridged usage] ${label}: closing the model session failed: ${error instanceof Error ? error.message : String(error)}`),
+            );
+        }
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 /**
@@ -798,6 +949,7 @@ export class RealtimeClientSessionService {
             const message = error instanceof Error ? error.message : String(error);
             return { Success: false, ErrorMessage: `Failed to mint client realtime session: ${message}` };
         }
+        const avatarStatus = this.resolveMintedAvatarStatus(prep, clientConfig);
 
         // Best-effort observability: create a server-side co-agent run (+ prompt run) so the voice
         // session is visible in the agent-run timeline and delegated runs can nest under it. A
@@ -823,7 +975,28 @@ export class RealtimeClientSessionService {
             EffectiveConfig: effectiveConfig,
             ClientPolicy: clientPolicy,
             NarrationPaceMs: GetNarrationPaceMs(effectiveConfig) ?? undefined,
+            ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
         };
+    }
+
+    /**
+     * The call's avatar status once the driver has minted the session (see {@link ResolveRealtimeAvatarStatus}), with one
+     * log line saying whether the avatar shows. `undefined`, and no line, when the session asked for no avatar.
+     */
+    private resolveMintedAvatarStatus(prep: RealtimeSessionParamsPrep, clientConfig: ClientRealtimeSessionConfig): RealtimeAvatarStatus | undefined {
+        const resolution = prep.Resolution;
+        const apiName = resolution?.APIName ?? clientConfig.Model;
+        const status = ResolveRealtimeAvatarStatus({
+            Resolution: prep.AvatarResolution ?? {},
+            ModelSupportsAvatarOutput: resolution
+                ? RealtimeModelShowsAvatar({ ModelID: resolution.ModelID, APIName: apiName, Model: resolution.Model }, AIEngine.Instance)
+                : false,
+            DriverStatus: clientConfig.AvatarStatus,
+        });
+        if (status) {
+            console.log(`[RealtimeCoAgent] mint avatar model=${apiName} shown=${status.Granted} reason=${status.Reason ?? 'none'}`);
+        }
+        return status;
     }
 
     /**
@@ -836,12 +1009,22 @@ export class RealtimeClientSessionService {
      * under the co-agent run, supports barge-in cancel + paused-run resume — all of it, for free).
      *
      * Responsibilities, in order:
+     * 0. Report the avatar status the driver had nothing to say about: a prep that asked the driver for no avatar (a
+     *    phone call, no face for the model's vendor, an unknown avatar, a Video/Output row that turns video off) leaves
+     *    the driver nothing to report, and a driver that renders no avatar ignores a request, so the session's
+     *    `AvatarStatus` says why instead of saying nothing ({@link ResolveBridgedAvatarStatus}).
      * 1. Create the co-agent observability run (+ prompt run + step) so the voice session shows up in the
      *    agent-run timeline and delegated runs nest under it (best-effort; a failure just omits the ids).
-     * 2. Wire `session.OnToolCall` → `ExecuteRelayedTool` → `session.SendToolResult`.
-     * 3. Guarantee finalize-once: wrap `session.Close()` and listen for an unexpected drop (`OnClose`), both
+     * 2. Record the session's usage on the co-agent prompt run, as client-direct calls do: `session.OnUsage` →
+     *    {@link BridgeRealtimeUsageRecorder} → {@link AccumulatePromptRunUsage}, every 10 s and once more at finalize.
+     * 3. Wire `session.OnToolCall` → `ExecuteRelayedTool` → `session.SendToolResult`.
+     * 4. Guarantee finalize-once: wrap `session.Close()` and listen for an unexpected drop (`OnClose`), both
      *    routed through one idempotent finalizer. The bridge teardown calls `Close()`, so the run finalizes
-     *    on graceful end; a dropped socket finalizes via `OnClose`.
+     *    on graceful end; a dropped socket finalizes via `OnClose`, and a `Close()` after it waits for that
+     *    finalize. The wrapped `Close()` closes the model session first (waiting up to
+     *    {@link BRIDGE_SESSION_CLOSE_WAIT_MS}), so the usage it reports while closing is recorded; the
+     *    finalizer then writes the session's last usage before it finalizes the runs, so the prompt run is
+     *    priced from its final counts.
      *
      * @param session The live realtime session the bridge owns (from `model.StartSession`).
      * @param input The same prep input used to build the session (carries AgentSessionID, TargetAgentID, …).
@@ -857,6 +1040,7 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<BridgeRealtimeRuntime> {
+        this.reportBridgedAvatarStatus(session, input, prep);
         const coAgent = prep.CoAgent;
         const resolution = prep.Resolution;
         if (!coAgent || !resolution) {
@@ -881,53 +1065,20 @@ export class RealtimeClientSessionService {
             input.UserID || contextUser?.ID, input.AgentSessionID,
             contextUser, provider, input.ConversationID,
         );
+        const usage = this.wireBridgeUsage(session, obs?.PromptRunID, contextUser, provider);
+        const finalize = this.createBridgeFinalizer(obs, usage, contextUser, provider);
 
-        let finalized = false;
-        const finalize = async (success: boolean): Promise<void> => {
-            if (finalized) {
-                return;
-            }
-            finalized = true;
-            await this.FinalizeCoAgentRun(
-                obs?.CoAgentRunID ?? null, obs?.PromptRunID ?? null,
-                contextUser, provider, success, obs?.CoAgentRunStepID ?? null,
-            );
-        };
-
-        // Tool calls → the shared delegation entry point, then hand the serialized result back to the model.
-        session.OnToolCall(async (call) => {
-            try {
-                const resultJson = localToolHandler?.Handles(call.ToolName)
-                    ? await localToolHandler.Execute(call)
-                    : (await narrator.Track(() => this.ExecuteRelayedTool(
-                        {
-                            AgentSessionID: input.AgentSessionID,
-                            ParentRunID: obs?.CoAgentRunID,
-                            TargetAgentID: input.TargetAgentID,
-                            AllowedAgents: allowedAgents,
-                            DirectActions: prep.EffectiveConfig?.realtime?.directActions,
-                            OnProgress: (progress) => narrator.HandleProgress(progress),
-                            Call: call,
-                        },
-                        contextUser, provider,
-                    ))).ResultJson;
-                await session.SendToolResult(call.CallID, resultJson);
-            } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
-                LogError(`WireBridgeRealtimeSession: tool '${call.ToolName}' failed: ${message}`);
-                await session.SendToolResult(call.CallID, JSON.stringify({ success: false, error: message }));
-            }
+        this.wireBridgeToolCalls(session, {
+            Input: input,
+            Prep: prep,
+            ParentRunID: obs?.CoAgentRunID,
+            AllowedAgents: allowedAgents,
+            Narrator: narrator,
+            LocalToolHandler: () => localToolHandler,
+            ContextUser: contextUser,
+            Provider: provider,
         });
-
-        // Finalize on graceful teardown (the bridge calls Close()) and on an unexpected drop. Both routed
-        // through the idempotent finalizer, so double-fire is harmless.
-        const originalClose = session.Close.bind(session);
-        session.Close = async (): Promise<void> => {
-            narrator.Cancel();
-            await finalize(true);
-            await originalClose();
-        };
-        session.OnClose?.(() => { void finalize(true); });
+        this.finalizeOnBridgeClose(session, narrator, finalize, obs?.PromptRunID);
 
         const runtime: BridgeRealtimeRuntime = {
             CoAgentRunID: obs?.CoAgentRunID,
@@ -939,9 +1090,146 @@ export class RealtimeClientSessionService {
             },
             CancelPendingNarration: () => narrator.Cancel(),
             SetLocalToolHandler: (handler) => { localToolHandler = handler; },
+            WatchesMeetingVideo: GetWatchesMeetingVideo(prep.EffectiveConfig),
         };
         bridgeRuntimes.set(session, runtime);
         return runtime;
+    }
+
+    /**
+     * Gives a bridged session the avatar status its driver had nothing to say about ({@link ResolveBridgedAvatarStatus}),
+     * with one log line: a prep that asked the driver for no avatar (a phone call, no face for the model's vendor, an
+     * unknown avatar, a Video/Output row that turns video off) leaves the driver nothing to report, and a driver that
+     * renders no avatar ignores a request and reports nothing. A host reads it like any driver's status (the LiveKit room
+     * puts it on the agent's bot, so the room shows its notice). A status the driver reported stands.
+     */
+    private reportBridgedAvatarStatus(session: IRealtimeSession, input: PrepareClientSessionInput, prep: RealtimeSessionParamsPrep): void {
+        const model = prep.Resolution;
+        const status = ResolveBridgedAvatarStatus({
+            Resolution: prep.AvatarResolution,
+            RoomDelivery: input.AvatarDelivery === 'room',
+            ModelShowsAvatar: () => (model ? RealtimeModelShowsAvatar(model, AIEngine.Instance) : false),
+            DriverStatus: session.AvatarStatus,
+        });
+        if (!status || status === session.AvatarStatus) {
+            return;
+        }
+        session.AvatarStatus = status;
+        const asked = prep.AvatarResolution?.Reason ? 'the driver was asked for none' : 'the driver was asked for one and reported nothing';
+        LogStatus(`[RealtimeCoAgent] bridged session avatar: audio only (${status.Reason}); ${asked}.`);
+    }
+
+    /**
+     * Records a bridged session's usage on its co-agent prompt run. The recorder is the session's only `OnUsage`
+     * subscriber: drivers keep one usage handler. Without a prompt run there is nowhere to record, so nothing subscribes
+     * and one line is logged, as the client-direct relay logs a dropped delta.
+     */
+    private wireBridgeUsage(
+        session: IRealtimeSession,
+        promptRunID: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): BridgeRealtimeUsageRecorder | undefined {
+        if (!promptRunID) {
+            LogStatus('WireBridgeRealtimeSession: the session has no co-agent prompt run, so its usage is not recorded.');
+            return undefined;
+        }
+        const recorder = new BridgeRealtimeUsageRecorder(
+            (write) => this.AccumulatePromptRunUsage(promptRunID, write.InputTokens, write.OutputTokens, contextUser, provider, write.Details),
+            `prompt run ${promptRunID}`,
+        );
+        session.OnUsage((usage) => recorder.Add(usage));
+        return recorder;
+    }
+
+    /**
+     * The bridged session's finalizer. It closes the usage recorder first (no more updates; the unwritten usage is
+     * written), so the prompt run's cost, computed when finalize stamps `CompletedAt`, covers the whole session. On a
+     * graceful close it runs after the model session closed (see `finalizeOnBridgeClose`).
+     *
+     * It runs once, and every call returns the first call's promise: whichever path calls second (a `Close()` after a
+     * dropped connection's `OnClose` started the finalize) resolves only once the runs are finalized and priced. The
+     * first call decides the outcome (see {@link BridgeRealtimeRuntime.Finalize}).
+     */
+    private createBridgeFinalizer(
+        obs: CoAgentObservabilityRunIds | null,
+        usage: BridgeRealtimeUsageRecorder | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): (success: boolean, errorMessage?: string) => Promise<void> {
+        let finalizing: Promise<void> | undefined;
+        const finalizeRuns = async (success: boolean, errorMessage?: string): Promise<void> => {
+            await usage?.Close();
+            await this.FinalizeCoAgentRun(
+                obs?.CoAgentRunID ?? null, obs?.PromptRunID ?? null,
+                contextUser, provider, success, obs?.CoAgentRunStepID ?? null, errorMessage,
+            );
+        };
+        return (success: boolean, errorMessage?: string): Promise<void> => {
+            finalizing ??= finalizeRuns(success, errorMessage);
+            return finalizing;
+        };
+    }
+
+    /** Tool calls → the host's local handler or the shared delegation entry point, then the result back to the model. */
+    private wireBridgeToolCalls(session: IRealtimeSession, wiring: BridgeToolCallWiring): void {
+        session.OnToolCall(async (call) => {
+            try {
+                const localHandler = wiring.LocalToolHandler();
+                const resultJson = localHandler?.Handles(call.ToolName)
+                    ? await localHandler.Execute(call)
+                    : (await wiring.Narrator.Track(() => this.ExecuteRelayedTool(
+                        {
+                            AgentSessionID: wiring.Input.AgentSessionID,
+                            ParentRunID: wiring.ParentRunID,
+                            TargetAgentID: wiring.Input.TargetAgentID,
+                            AllowedAgents: wiring.AllowedAgents,
+                            DirectActions: wiring.Prep.EffectiveConfig?.realtime?.directActions,
+                            OnProgress: (progress) => wiring.Narrator.HandleProgress(progress),
+                            Call: call,
+                        },
+                        wiring.ContextUser, wiring.Provider,
+                    ))).ResultJson;
+                await session.SendToolResult(call.CallID, resultJson);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                LogError(`WireBridgeRealtimeSession: tool '${call.ToolName}' failed: ${message}`);
+                await session.SendToolResult(call.CallID, JSON.stringify({ success: false, error: message }));
+            }
+        });
+    }
+
+    /**
+     * Finalizes on graceful teardown (the bridge calls `Close()`) and on an unexpected drop. Both go through the one
+     * finalizer, which runs once: a double fire finalizes once, and a `Close()` after a drop waits for the finalize the
+     * drop started, so it resolves only once the runs are finalized. Both finalize as completed: a host whose bridge
+     * start failed calls {@link BridgeRealtimeRuntime.Finalize} with `false` and the start's error before it closes the
+     * session.
+     *
+     * `Close()` closes the model session before it finalizes: a session reports its last usage while it closes (a
+     * Gemini avatar session, the seconds of video not reported yet), and the finalizer stores only what was reported
+     * before it ran. The close is waited for up to {@link BRIDGE_SESSION_CLOSE_WAIT_MS}. The runs are finalized whether
+     * the close finished, failed or is still running; a failed close still rejects, after the finalize.
+     *
+     * @param promptRunID The session's co-agent prompt run, which names the session in a log line.
+     */
+    private finalizeOnBridgeClose(
+        session: IRealtimeSession,
+        narrator: DelegationNarrator,
+        finalize: (success: boolean) => Promise<void>,
+        promptRunID: string | undefined,
+    ): void {
+        const originalClose = session.Close.bind(session);
+        const label = promptRunID ? `prompt run ${promptRunID}` : 'a session with no co-agent prompt run';
+        session.Close = async (): Promise<void> => {
+            narrator.Cancel(); // nothing more is spoken on a session that is closing
+            try {
+                await closeBridgedSessionWithin(originalClose, BRIDGE_SESSION_CLOSE_WAIT_MS, label);
+            } finally {
+                await finalize(true);
+            }
+        };
+        session.OnClose?.(() => { void finalize(true); });
     }
 
     /**
@@ -961,6 +1249,7 @@ export class RealtimeClientSessionService {
             CancelInFlightDelegations: () => 0,
             CancelPendingNarration: () => { /* nothing is narrated */ },
             SetLocalToolHandler: () => { /* no tool path to extend */ },
+            WatchesMeetingVideo: false,
         };
         bridgeRuntimes.set(session, runtime);
         return runtime;
@@ -1004,6 +1293,7 @@ export class RealtimeClientSessionService {
         const targetAgent = this.resolveTargetAgent(input.TargetAgentID);
         const appSettingsJson = await this.resolveAppRealtimeOverrides(input.ApplicationID, contextUser, provider);
         const effectiveConfig = this.resolveEffectiveConfig(coAgent, input.ConfigOverridesJson, targetAgent, appSettingsJson);
+        this.logDeprecatedVideoKeys(effectiveConfig, coAgent, targetAgent);
 
         const outcome = await this.resolveModelForSession(input, coAgent, effectiveConfig);
         if (!outcome.Resolution) {
@@ -1024,18 +1314,30 @@ export class RealtimeClientSessionService {
         }
 
         const effectiveInput = hostTools !== input.HostTools ? { ...input, HostTools: hostTools } : input;
+        // One answer for the whole session: it lowers channel exposure here and keeps the driver from
+        // turning on provider features that store session data (Gemini session resumption).
+        const zeroDataRetention = this.modelHasZeroDataRetention(resolution.ModelID, resolution.ModelVendorID);
         // Channel scoping + client-tool tiers: narrows the declared tools to the scope's decision and
         // folds the app tier into the capability manifest the prompt renders. The scoped input is what
         // the prompt/tool builders see, so a vetoed channel is absent from the framing as well as the tools.
-        const scoped = await this.scopeSessionInput(effectiveInput, effectiveConfig, contextUser, provider, this.modelHasZeroDataRetention(resolution.ModelID, resolution.ModelVendorID));
-        const sessionParams = await this.buildSessionParams(
-            scoped.Input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
-            resolution.ModelID, resolution.ModelVendorID,
+        const scoped = await this.scopeSessionInput(effectiveInput, effectiveConfig, contextUser, provider, zeroDataRetention);
+        // A session nobody would see an avatar in (a phone call, an app without agent video) asks the driver for none
+        // and keeps the persona's voice.
+        const avatar = WithoutUnseenAvatar(
+            this.ResolveSessionAvatar(scoped.Input, coAgent, effectiveConfig, resolution.ModelID, resolution.ModelVendorID),
+            scoped.Input,
         );
+        const sessionParams: RealtimeSessionParams = {
+            ...(await this.buildSessionParams(
+                scoped.Input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
+                resolution.ModelID, resolution.ModelVendorID, avatar,
+            )),
+            ZeroDataRetention: zeroDataRetention,
+        };
 
         return {
             Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams,
-            ClientPolicy: scoped.ClientPolicy,
+            ClientPolicy: scoped.ClientPolicy, AvatarResolution: avatar,
         };
     }
 
@@ -1197,6 +1499,30 @@ export class RealtimeClientSessionService {
             overridesJson ?? null,
             targetAgent?.TypeConfiguration ?? null,
             appSettingsJson ?? null
+        );
+    }
+
+    /**
+     * Logs one line, once per co-agent and target pair per process, when the effective configuration sets
+     * `realtime.video.provider` or `realtime.video.providers`. Both are deprecated and nothing reads them, so an author
+     * who set them would otherwise get nothing and no word of it.
+     *
+     * @param config The effective configuration.
+     * @param coAgent The co-agent.
+     * @param targetAgent The voiced agent, when there is one.
+     */
+    private logDeprecatedVideoKeys(config: RealtimeCoAgentConfig, coAgent: MJAIAgentEntityExtended, targetAgent: MJAIAgentEntityExtended | null): void {
+        const keys = FindDeprecatedRealtimeVideoKeys(config);
+        const pair = `${NormalizeUUID(coAgent.ID)}|${NormalizeUUID(targetAgent?.ID)}`;
+        if (keys.length === 0 || deprecatedVideoKeysLogged.has(pair)) {
+            return;
+        }
+        deprecatedVideoKeysLogged.add(pair);
+        const voiced = targetAgent && !UUIDsEqual(targetAgent.ID, coAgent.ID) ? `'${targetAgent.Name}' (co-agent '${coAgent.Name}')` : `'${coAgent.Name}'`;
+        const what = keys.length === 1 ? `${keys[0]}, which is deprecated and does nothing` : `${keys.join(' and ')}, which are deprecated and do nothing`;
+        LogStatus(
+            `[RealtimeCoAgent] The realtime configuration for ${voiced} sets ${what}. Choose the model with ` +
+                "realtime.modelPreference, and set an avatar's settings on its persona's Video binding (VendorSettings.Avatar).",
         );
     }
 
@@ -1474,6 +1800,8 @@ export class RealtimeClientSessionService {
      * @param provider The request-scoped metadata provider.
      * @param success Whether the session ended successfully (controls Completed vs Failed).
      * @param coAgentRunStepID The co-agent run's single `MJ: AI Agent Run Steps` row id, or `null` to skip.
+     * @param errorMessage Why the session failed (for example the bridge start's error), stamped as `ErrorMessage` on each
+     *   record it fails. Ignored when `success` is true. Without it the step gets a generic line and the runs none.
      */
     public async FinalizeCoAgentRun(
         coAgentRunID: string | null,
@@ -1482,11 +1810,13 @@ export class RealtimeClientSessionService {
         provider: IMetadataProvider,
         success: boolean = true,
         coAgentRunStepID: string | null = null,
+        errorMessage?: string,
     ): Promise<void> {
+        const failure = success ? undefined : errorMessage?.trim() || undefined;
         try {
-            await this.finalizeAgentRun(coAgentRunID, contextUser, provider, success);
-            await this.finalizePromptRun(promptRunID, contextUser, provider, success);
-            await this.finalizeRunStep(coAgentRunStepID, contextUser, provider, success);
+            await this.finalizeAgentRun(coAgentRunID, contextUser, provider, success, failure);
+            await this.finalizePromptRun(promptRunID, contextUser, provider, success, failure);
+            await this.finalizeRunStep(coAgentRunStepID, contextUser, provider, success, failure);
         } finally {
             // Even when a finalize step throws, the run still owes its cost, and the watchdog must stop
             // treating it as alive — or a run stuck at Running would be kept fresh indefinitely.
@@ -1634,12 +1964,16 @@ export class RealtimeClientSessionService {
         return { PromptRunID: promptRuns.Results[0]?.ID ?? null, StepID: stepID };
     }
 
-    /** Loads + finalizes the co-agent `AIAgentRun` if still `Running`. Tolerant: logs, never throws. */
+    /**
+     * Loads + finalizes the co-agent `AIAgentRun` if still `Running`, with `failure` as its `ErrorMessage` when it fails.
+     * Tolerant: logs, never throws.
+     */
     private async finalizeAgentRun(
         coAgentRunID: string | null,
         contextUser: UserInfo,
         provider: IMetadataProvider,
         success: boolean,
+        failure?: string,
     ): Promise<void> {
         if (!coAgentRunID) {
             return;
@@ -1651,6 +1985,9 @@ export class RealtimeClientSessionService {
         run.Status = success ? 'Completed' : 'Failed';
         run.CompletedAt = new Date();
         run.Success = success;
+        if (failure) {
+            run.ErrorMessage = failure;
+        }
         if (!(await run.Save())) {
             LogError(`RealtimeClientSessionService.finalizeAgentRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
@@ -1658,14 +1995,16 @@ export class RealtimeClientSessionService {
 
     /**
      * Loads + finalizes the co-agent run's single system-prompt `MJ: AI Agent Run Steps` row if
-     * still `Running` (Status `Completed`/`Failed`, `CompletedAt`, `Success`). Tolerant: a
-     * missing/already-finalized step is a no-op; a load/save failure is logged, never thrown.
+     * still `Running` (Status `Completed`/`Failed`, `CompletedAt`, `Success`; a failed step's `ErrorMessage` is
+     * `failure`, or a generic line without one). Tolerant: a missing/already-finalized step is a no-op; a
+     * load/save failure is logged, never thrown.
      */
     private async finalizeRunStep(
         coAgentRunStepID: string | null,
         contextUser: UserInfo,
         provider: IMetadataProvider,
         success: boolean,
+        failure?: string,
     ): Promise<void> {
         if (!coAgentRunStepID) {
             return;
@@ -1679,7 +2018,7 @@ export class RealtimeClientSessionService {
             step.CompletedAt = new Date();
             step.Success = success;
             if (!success) {
-                step.ErrorMessage = 'The realtime session ended in an error state.';
+                step.ErrorMessage = failure ?? 'The realtime session ended in an error state.';
             }
             if (!(await step.Save())) {
                 LogError(`RealtimeClientSessionService.finalizeRunStep save failed: ${step.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -1689,12 +2028,16 @@ export class RealtimeClientSessionService {
         }
     }
 
-    /** Loads + finalizes the co-agent `AIPromptRun` if still `Running`. Tolerant: logs, never throws. */
+    /**
+     * Loads + finalizes the co-agent `AIPromptRun` if still `Running`, with `failure` as its `ErrorMessage` when it fails.
+     * Tolerant: logs, never throws.
+     */
     private async finalizePromptRun(
         promptRunID: string | null,
         contextUser: UserInfo,
         provider: IMetadataProvider,
         success: boolean,
+        failure?: string,
     ): Promise<void> {
         if (!promptRunID) {
             return;
@@ -1709,6 +2052,9 @@ export class RealtimeClientSessionService {
             run.Status = success ? 'Completed' : 'Failed';
             run.CompletedAt = new Date();
             run.Success = success;
+            if (failure) {
+                run.ErrorMessage = failure;
+            }
             if (!(await run.Save())) {
                 LogError(`RealtimeClientSessionService.finalizePromptRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
@@ -1779,9 +2125,16 @@ export class RealtimeClientSessionService {
      * high-frequency usage checkpoint never overwrites freshly-appended transcript turns (and vice-versa).
      * Best-effort: load/save failures log and return `false`, never throw.
      *
+     * The per-modality details add into the usage record the run keeps in `ModelSpecificResponseDetails`
+     * (`RealtimeUsage.Input` / `.Output`, which pricing reads at finalize); every other key there is kept. The
+     * stored output video seconds never exceed the run's elapsed time plus 30 seconds, and the stored output video
+     * tokens never exceed 6,192 a second of that: usage is client-reported, and avatar video carries a price, per
+     * minute or per token.
+     *
      * @param promptRunID The co-agent observability prompt run.
      * @param inputDelta Input-token delta to add (caller clamps to >= 0).
      * @param outputDelta Output-token delta to add (caller clamps to >= 0).
+     * @param details Per-modality usage to add (input and output blocks, avatar video seconds included).
      * @returns `true` when the accumulated usage was persisted.
      */
     public async AccumulatePromptRunUsage(
@@ -1790,6 +2143,7 @@ export class RealtimeClientSessionService {
         outputDelta: number,
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        details?: RealtimeUsageRecord,
     ): Promise<boolean> {
         return this.serializePromptRunWrite(promptRunID, async () => {
             try {
@@ -1801,6 +2155,9 @@ export class RealtimeClientSessionService {
                 promptRun.TokensPrompt = (promptRun.TokensPrompt ?? 0) + inputDelta;
                 promptRun.TokensCompletion = (promptRun.TokensCompletion ?? 0) + outputDelta;
                 promptRun.TokensUsed = (promptRun.TokensPrompt ?? 0) + (promptRun.TokensCompletion ?? 0);
+                if (details) {
+                    this.mergeUsageDetails(promptRun, details);
+                }
                 if (!(await promptRun.Save())) {
                     LogError(`AccumulatePromptRunUsage: prompt run ${promptRunID} save failed: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                     return false;
@@ -1811,6 +2168,43 @@ export class RealtimeClientSessionService {
                 return false;
             }
         });
+    }
+
+    /**
+     * Adds relayed per-modality usage into the run's usage record, with the output video seconds capped at the run's
+     * elapsed time plus {@link VIDEO_SECONDS_GRACE}, and the output video tokens at that many seconds of
+     * {@link VIDEO_TOKENS_PER_SECOND}. Details that are not a JSON object are left alone (logged).
+     */
+    private mergeUsageDetails(promptRun: MJAIPromptRunEntityExtended, details: RealtimeUsageRecord): void {
+        const runAt = promptRun.RunAt ? new Date(promptRun.RunAt).getTime() : Number.NaN;
+        const elapsedSeconds = Math.max(0, (Date.now() - runAt) / 1000);
+        const maxVideoSeconds = Number.isFinite(elapsedSeconds) ? elapsedSeconds + VIDEO_SECONDS_GRACE : undefined;
+        const merged = MergeRealtimeUsageRecord(promptRun.ModelSpecificResponseDetails, details, {
+            MaxOutputVideoSeconds: maxVideoSeconds,
+            MaxOutputVideoTokens: maxVideoSeconds === undefined ? undefined : maxVideoSeconds * VIDEO_TOKENS_PER_SECOND,
+        });
+        if (!merged) {
+            LogError(`AccumulatePromptRunUsage: prompt run ${promptRun.ID} has details that are not a JSON object — usage details dropped.`);
+            return;
+        }
+        this.logClampedVideo(promptRun.ID, merged);
+        promptRun.ModelSpecificResponseDetails = merged.Details;
+    }
+
+    /** One log line for each output video quantity the merge capped. */
+    private logClampedVideo(promptRunID: string, merged: RealtimeUsageMergeResult): void {
+        if (merged.ClampedVideoSeconds > 0) {
+            LogStatus(
+                `AccumulatePromptRunUsage: prompt run ${promptRunID} reported ${merged.ClampedVideoSeconds} s more avatar video than ` +
+                    `the run's elapsed time plus ${VIDEO_SECONDS_GRACE} s allows; the stored seconds are capped.`,
+            );
+        }
+        if (merged.ClampedVideoTokens > 0) {
+            LogStatus(
+                `AccumulatePromptRunUsage: prompt run ${promptRunID} reported ${merged.ClampedVideoTokens} more avatar video tokens than ` +
+                    `${VIDEO_TOKENS_PER_SECOND} a second of the run's elapsed time plus ${VIDEO_SECONDS_GRACE} s allows; the stored tokens are capped.`,
+            );
+        }
     }
 
     /** Parses the prompt run's `Messages` JSON into a mutable chat-message array (tolerant: `[]` on empty/malformed). */
@@ -1985,12 +2379,15 @@ export class RealtimeClientSessionService {
      *   {@link resolveConfiguredModelPreference}. METADATA preferences degrade gracefully — an
      *   unsatisfiable preference logs and FALLS THROUGH to the default (mirroring the co-agent
      *   resolution chain's tolerant metadata steps), it never breaks calls.
-     * - Without either: the existing default behavior via {@link resolveRealtimeModel}
-     *   (highest-PowerRank active Realtime model), with the generic {@link noModelMessage} on failure.
+     * - Without either: the default walk ({@link resolveDefaultRealtimeModel}): for a co-agent with video on, in a session
+     *   that could show an avatar (a browser session, or a server-side one with {@link PrepareClientSessionInput.AvatarDelivery}
+     *   `'room'`), the first candidate that shows one ({@link ResolveAvatarRealtimeModel}); else the existing default via
+     *   {@link resolveRealtimeModel} (highest-PowerRank active Realtime model), with the generic
+     *   {@link noModelMessage} on failure. The two explicit choices above win over the video preference.
      *
      * @param input The prepare-session input (carries the optional preferred model id).
      * @param coAgent The resolved co-agent (threaded to the default-resolution seam).
-     * @param effectiveConfig The resolved effective configuration (carries `modelPreference`).
+     * @param effectiveConfig The resolved effective configuration (carries `modelPreference` and the video setting).
      * @returns The resolution outcome (resolution or failure reason).
      */
     protected async resolveModelForSession(
@@ -2013,8 +2410,74 @@ export class RealtimeClientSessionService {
         if (fromConfig) {
             return { Resolution: fromConfig };
         }
-        const resolution = await this.resolveRealtimeModel(coAgent, resolveRunKey, scope);
+        const preferAvatar = effectiveConfig?.realtime?.video?.enabled === true && this.sessionCanShowAvatar(input);
+        const resolution = await this.resolveDefaultRealtimeModel(coAgent, preferAvatar, resolveRunKey, scope);
         return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage() };
+    }
+
+    /**
+     * Whether the session could show an avatar at all: a browser session whose app may show agent video, or a server-side
+     * one whose host publishes the avatar into a room. A phone call or an app without agent video
+     * ({@link ResolveAvatarUnseenReason}), or a meeting whose host can't publish video, can't.
+     */
+    private sessionCanShowAvatar(input: PrepareClientSessionInput): boolean {
+        if (ResolveAvatarUnseenReason(input)) {
+            return false;
+        }
+        return input.ServerSide !== true || input.AvatarDelivery === 'room';
+    }
+
+    /**
+     * The default walk. With `preferAvatar` (the co-agent's video setting is on and the session could show an avatar),
+     * it takes the first candidate that shows one ({@link ResolveAvatarRealtimeModel}). When none does, or without it, it
+     * takes {@link resolveRealtimeModel}'s choice; when one was preferred, one log line says the call stays audio only.
+     */
+    private async resolveDefaultRealtimeModel(
+        coAgent: MJAIAgentEntityExtended,
+        preferAvatar: boolean,
+        resolve: AIAPIKeyResolver,
+        credentialScope: AICredentialScope,
+    ): Promise<RealtimeModelResolution | null> {
+        const withAvatar = preferAvatar ? this.ResolveAvatarRealtimeModel(coAgent, resolve, credentialScope) : null;
+        if (withAvatar) {
+            return withAvatar;
+        }
+        const resolution = await this.resolveRealtimeModel(coAgent, resolve, credentialScope);
+        if (preferAvatar && resolution) {
+            LogStatus(
+                '[RealtimeCoAgent] Video is on, but no realtime model with a usable key shows an avatar (its Video/Output row ' +
+                    `and its endpoint): using '${resolution.ModelName ?? resolution.APIName}' on ${resolution.DriverClass ?? 'its driver'}, audio only.`,
+            );
+        }
+        return resolution;
+    }
+
+    /**
+     * For a co-agent with video on: the first candidate that shows an avatar and supports client-direct sessions, in the
+     * default walk's order (highest PowerRank first; a model's Active vendor rows by Priority, each with a usable key).
+     * A candidate shows an avatar when its model's Video/Output row allows video or it has none, and its driver renders
+     * avatars for the vendor's API name on its endpoint ({@link RealtimeModelShowsAvatar}). Every keyed vendor of a model
+     * is tried, not only the first. **Overridable seam.**
+     *
+     * @param coAgent The co-agent (reserved for future per-agent model preference).
+     * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
+     * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
+     * @returns The resolution, or `null` when no candidate shows an avatar.
+     */
+    protected ResolveAvatarRealtimeModel(coAgent: MJAIAgentEntityExtended, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolution | null {
+        const resolveKey = this.buildKeyChain(resolve, credentialScope);
+        for (const model of this.selectRealtimeModelCandidates(coAgent)) {
+            if (ReadRealtimeVideoOutputRow(model.ID, AIEngine.Instance) === 'unsupported') {
+                continue;
+            }
+            for (const vendor of ListRealtimeVendorsForModel(model.ID)) {
+                const resolution = this.instantiateRealtimeVendor(model, vendor, resolveKey);
+                if (resolution?.Model.SupportsClientDirect && RealtimeModelShowsAvatar(resolution, AIEngine.Instance)) {
+                    return resolution;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -2188,17 +2651,25 @@ export class RealtimeClientSessionService {
      * @returns The full resolution, or `null` when no vendor/key/driver can be satisfied.
      */
     protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolution | null {
-        // The run's keys first, then this service's own seam (which subclasses and tests override) —
-        // so a run-scoped credential wins without taking that seam away from anyone who replaced it.
-        // A scope that rules out the environment has no second step: the seam's default is the platform key.
-        const resolveKey: AIAPIKeyResolver = CredentialScopeAllows(credentialScope, 'Environment')
+        const resolveKey = this.buildKeyChain(resolve, credentialScope);
+        const vendor = this.selectRealtimeVendor(model.ID, resolveKey);
+        return vendor ? this.instantiateRealtimeVendor(model, vendor, resolveKey) : null;
+    }
+
+    /**
+     * The session's complete key chain for vendor selection and the mint (see {@link resolveVendorAndInstantiate}): the
+     * run's keys first, then this service's own seam (which subclasses and tests override), so a run-scoped credential
+     * wins without taking that seam away from anyone who replaced it. A scope that rules out the environment has no second
+     * step: the seam's default is the platform key.
+     */
+    private buildKeyChain(resolve: AIAPIKeyResolver | undefined, credentialScope: AICredentialScope): AIAPIKeyResolver {
+        return CredentialScopeAllows(credentialScope, 'Environment')
             ? (driverClass) => resolve?.(driverClass) ?? this.getAPIKeyForDriver(driverClass)
             : (driverClass) => resolve?.(driverClass);
-        const vendor = this.selectRealtimeVendor(model.ID, resolveKey);
-        if (!vendor) {
-            return null;
-        }
+    }
 
+    /** Instantiates a vendor's realtime driver with its key from the chain; `null` when the key or the driver is missing. */
+    private instantiateRealtimeVendor(model: MJAIModelEntityExtended, vendor: RealtimeVendorSelection, resolveKey: AIAPIKeyResolver): RealtimeModelResolution | null {
         const apiKey = resolveKey(vendor.DriverClass);
         if (!apiKey) {
             return null;
@@ -2248,7 +2719,9 @@ export class RealtimeClientSessionService {
 
     /**
      * The active models of AIModelType `Realtime`, sorted highest-PowerRank first — the candidate
-     * list {@link resolveRealtimeModel} walks until one yields a usable client-direct driver.
+     * list {@link resolveRealtimeModel} walks until one yields a usable client-direct driver, and
+     * {@link ResolveAvatarRealtimeModel} walks first for a co-agent with video on. Equal PowerRanks
+     * keep the engine's cached order (a stable sort).
      * Returns ALL candidates (not just the top pick) so a keyless or non-client-direct top model
      * falls through to the next usable one instead of dead-ending the whole resolution.
      *
@@ -2302,6 +2775,7 @@ export class RealtimeClientSessionService {
      * @param driverClass The resolved vendor's DriverClass — matches per-provider voice settings.
      * @param modelID The resolved `MJ: AI Models` id — keys the model-catalog `ModelConfiguration` cascade.
      * @param modelVendorID The resolved `MJ: AI Model Vendors` ROW id — the cascade's most-specific layer.
+     * @param resolvedAvatar The session's avatar resolution, when the caller already made it; resolved here otherwise.
      * @returns The assembled session params.
      */
     protected async buildSessionParams(
@@ -2313,7 +2787,8 @@ export class RealtimeClientSessionService {
         effectiveConfig?: RealtimeCoAgentConfig,
         driverClass?: string,
         modelID?: string,
-        modelVendorID?: string
+        modelVendorID?: string,
+        resolvedAvatar?: RealtimeAvatarResolution
     ): Promise<RealtimeSessionParams> {
         const directTools = this.BuildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass, input.AgentSessionID);
         const hasDirectTools = directTools.length > 0 || (input.ExtraTools != null && input.ExtraTools.length > 0);
@@ -2324,8 +2799,11 @@ export class RealtimeClientSessionService {
             : input.ExtraTools;
         const tools = this.appendHostTools(this.buildStableToolSet(combinedExtra), input.HostTools);
         // Hoisted (rather than built inline at the return) so the mint log below can report the voice
-        // that ACTUALLY reached the driver — see the `voice=` field. Same bag, built once.
-        const configBag = this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID);
+        // that ACTUALLY reached the driver — see the `voice=` field. Same bag, built once. A phone call, or
+        // an app without agent video, carries no avatar request whoever resolved it (WithoutUnseenAvatar is
+        // idempotent).
+        const avatar = WithoutUnseenAvatar(resolvedAvatar ?? this.ResolveSessionAvatar(input, coAgent, effectiveConfig, modelID, modelVendorID), input);
+        const configBag = this.withAvatarVoice(this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID), avatar, input);
         WarnOnUnmatchedProviderVoice(effectiveConfig, driverClass, 'RealtimeClientSessionService');
 
         // One line per mint: confirms which tools + whether the channel-direct framing actually reach
@@ -2336,6 +2814,7 @@ export class RealtimeClientSessionService {
         console.log(
             `[RealtimeCoAgent] mint model=${modelApiName} driver=${driverClass ?? 'unknown'} ` +
             `voice=${typeof configBag?.['voice'] === 'string' ? configBag['voice'] : 'none'} ` +
+            `avatar=${avatar.Avatar ? avatar.Avatar.AvatarID : avatar.Reason ? `none(${avatar.Reason})` : 'none'} ` +
             `tools=[${tools.map(t => t.Name).join(', ')}] ` +
             `channelExceptionInPrompt=${systemPrompt.includes('interactive-surface')}`,
         );
@@ -2352,7 +2831,58 @@ export class RealtimeClientSessionService {
             MaxSessionSeconds: input.MaxSessionSeconds,
             UserID: contextUser?.ID,
             HasToolFraming: true,
+            ...(avatar.Avatar ? { Avatar: input.AvatarDelivery ? { ...avatar.Avatar, Delivery: input.AvatarDelivery } : avatar.Avatar } : {}),
         };
+    }
+
+    /**
+     * The live avatar this session asks for, if any: from the voiced agent's persona, or `realtime.video.avatarId`,
+     * when the agent's video setting is on (see `ResolveRealtimeAvatar`). A model whose `MJ: AI Model Modalities`
+     * Video/Output row turns video off asks for none (reason `endpoint`, one log line); otherwise whether the session can
+     * render it is the driver's call. A seam so tests can supply a resolution without the engine's persona metadata.
+     *
+     * @param input The prepare-session input (the voiced agent).
+     * @param coAgent The co-agent.
+     * @param effectiveConfig The effective configuration.
+     * @param modelID The resolved model.
+     * @param modelVendorID The resolved model-vendor row; its vendor scopes the persona bindings.
+     */
+    protected ResolveSessionAvatar(
+        input: PrepareClientSessionInput,
+        coAgent: MJAIAgentEntityExtended,
+        effectiveConfig: RealtimeCoAgentConfig | undefined,
+        modelID: string | undefined,
+        modelVendorID: string | undefined,
+    ): RealtimeAvatarResolution {
+        if (!modelID || effectiveConfig?.realtime?.video?.enabled !== true) {
+            return {};
+        }
+        const vendorID = modelVendorID ? AIEngine.Instance.ModelVendors.find((mv) => UUIDsEqual(mv.ID, modelVendorID))?.VendorID : undefined;
+        const videoOutputRow = ReadRealtimeVideoOutputRow(modelID, AIEngine.Instance);
+        if (videoOutputRow === 'unsupported') {
+            LogStatus(
+                `[RealtimeCoAgent] No avatar asked for: the Video/Output modality row of '${this.findModelByID(modelID)?.Name ?? modelID}' ` +
+                    'turns video off (IsSupported false). The call is audio only. Reason: endpoint.',
+            );
+        }
+        return ResolveRealtimeAvatar(
+            { EffectiveConfig: effectiveConfig, TargetAgentID: input.TargetAgentID, CoAgentID: coAgent.ID, ModelID: modelID, VendorID: vendorID, VideoOutputRow: videoOutputRow },
+            AIEngine.Instance,
+        );
+    }
+
+    /**
+     * The config bag with the avatar persona's voice, so the face and the voice match, unless a voice was picked in this
+     * call (a runtime override's `realtime.voice.default.voice`), which wins. A session nobody would see the avatar in (a
+     * phone call, an app without agent video) keeps the voice without the face, so the agent sounds the same as in a call
+     * that shows it.
+     */
+    private withAvatarVoice(bag: JSONObject | undefined, avatar: RealtimeAvatarResolution, input: PrepareClientSessionInput): JSONObject | undefined {
+        if (!avatar.Voice) {
+            return bag;
+        }
+        const picked = ResolveEffectiveRealtimeConfig(null, null, input.ConfigOverridesJson).realtime?.voice?.default?.voice;
+        return picked ? bag : { ...(bag ?? {}), voice: avatar.Voice };
     }
 
     /**

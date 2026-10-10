@@ -11,6 +11,7 @@ import {
   ParseTurnMode,
   TURN_ADDRESSING_OPTIONS,
   TURN_MODE_OPTIONS,
+  type MJLiveKitConnectionMode,
   type TurnAddressingChoice,
   type TurnModeChoice,
 } from '@memberjunction/ng-mj-livekit-room';
@@ -103,8 +104,9 @@ interface InviteeChoice {
                 <label class="mj-lk-prejoin__label" for="mj-lk-voice">Voice <span class="mj-lk-prejoin__dev">dev</span></label>
                 <select id="mj-lk-voice" class="mj-input mj-lk-prejoin__select" (change)="onVoiceChange($event)">
                   <option value="">Default voice</option>
-                  @for (v of selectedModelVoices; track v.ID) {
-                    <option [value]="v.ID" [selected]="v.ID === selectedVoice">{{ v.Name }}</option>
+                  <!-- One option per persona: two personas can share a voice id (a voice, and the same voice with a face). -->
+                  @for (v of selectedModelVoices; track v.PersonaID ?? v.ID) {
+                    <option [value]="v.ID" [selected]="v === SelectedVoiceOption">{{ v.Name }}</option>
                   }
                 </select>
               }
@@ -151,6 +153,15 @@ interface InviteeChoice {
                 <span class="mj-lk-card__t">History</span>
                 <span class="mj-lk-card__d">Read transcripts of past meetings.</span>
               </button>
+              @if (CanOpenPreviewRoom) {
+                <button type="button" class="mj-lk-card mj-lk-card--preview" (click)="OpenPreviewRoom()">
+                  <i class="fa-solid fa-flask"></i>
+                  <span class="mj-lk-card__text">
+                    <span class="mj-lk-card__t">Preview room<span class="mj-lk-prejoin__dev">dev</span></span>
+                    <span class="mj-lk-card__d">Try the room with your camera and simulated people. No server needed.</span>
+                  </span>
+                </button>
+              }
             </div>
           </div>
         </div>
@@ -437,6 +448,15 @@ interface InviteeChoice {
       .mj-lk-card > i { font-size: 1.4rem; color: var(--mj-brand-primary); }
       .mj-lk-card__t { font-weight: 600; color: var(--mj-text-primary); font-size: 0.9rem; }
       .mj-lk-card__d { color: var(--mj-text-muted); font-size: 0.78rem; line-height: 1.3; }
+      /* The preview room: a dev tool, so a slim row under the three main choices. */
+      .mj-lk-card--preview {
+        grid-column: 1 / -1;
+        flex-direction: row;
+        gap: 12px;
+        padding: 0.75rem 1rem;
+        text-align: left;
+      }
+      .mj-lk-card__text { display: flex; flex-direction: column; gap: 2px; }
       .mj-lk-list {
         display: flex;
         flex-direction: column;
@@ -703,15 +723,18 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
     this.LoadingTranscript = value;
   }
 
-  /** `'agent'` to start/voice an agent (the default), or `'join'` when opened from an invite link. */
-  public RoomMode: 'agent' | 'join' = 'agent';
+  /**
+   * `'agent'` to start/voice an agent (the default), `'join'` when opened from an invite link, or `'preview'` for the
+   * preview room.
+   */
+  public RoomMode: MJLiveKitConnectionMode = 'agent';
 
   /** @deprecated Use {@link RoomMode}. */
-  public get roomMode(): 'agent' | 'join' {
+  public get roomMode(): MJLiveKitConnectionMode {
     return this.RoomMode;
   }
   /** @deprecated Use {@link RoomMode}. */
-  public set roomMode(value: 'agent' | 'join') {
+  public set roomMode(value: MJLiveKitConnectionMode) {
     this.RoomMode = value;
   }
 
@@ -799,6 +822,10 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
   public set canPickModelVoice(value) {
     this.CanPickModelVoice = value;
   }
+  /** Whether the current user may open the preview room: the authorization the dev pickers need. */
+  public get CanOpenPreviewRoom(): boolean {
+    return this.CanPickModelVoice;
+  }
   /** Active Realtime models + their voices (loaded once when the user can override). */
   public RealtimeModels: RealtimeModelVoices[] = [];
 
@@ -833,6 +860,12 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
     this.SelectedVoice = value;
   }
 
+  /**
+   * The voice option picked in the pre-join picker (one of {@link SelectedModelVoices}), or null. Kept beside
+   * {@link SelectedVoice} because two personas can share a voice id: the option, not the id, says which one shows picked.
+   */
+  public SelectedVoiceOption: RealtimeVoiceOption | null = null;
+
   /** Voices for the model chosen in the pre-join picker. */
   public get SelectedModelVoices(): RealtimeVoiceOption[] {
     return this.RealtimeModels.find((m) => UUIDsEqual(m.ModelID, this.SelectedModelId))?.Voices ?? [];
@@ -847,6 +880,7 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
   public OnModelChange(event: Event): void {
     this.SelectedModelId = (event.target as HTMLSelectElement).value || null;
     this.SelectedVoice = null;
+    this.SelectedVoiceOption = null;
   }
 
   /** @deprecated Use {@link OnModelChange}. */
@@ -854,9 +888,13 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
     return this.OnModelChange(event);
   }
 
-  /** Records the pre-join VOICE choice. */
+  /**
+   * Records the pre-join VOICE choice: the picked option, found by its position (two personas can share a voice id, so
+   * the value can't tell them apart; option 0 is "Default voice"), and its voice id.
+   */
   public OnVoiceChange(event: Event): void {
-    this.SelectedVoice = (event.target as HTMLSelectElement).value || null;
+    this.SelectedVoiceOption = this.SelectedModelVoices[(event.target as HTMLSelectElement).selectedIndex - 1] ?? null;
+    this.SelectedVoice = this.SelectedVoiceOption?.ID ?? null;
   }
 
   /** @deprecated Use {@link OnVoiceChange}. */
@@ -1060,8 +1098,8 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
     }
     this.AgentId = coAgent.ID;
 
-    // Dev model/voice override: gate on the `Realtime: Advanced Session Controls` authorization and, when
-    // held, load the active models + their voices for the pickers (here and the in-room add-agent control).
+    // Dev model/voice override and the preview room: gate on the `Realtime: Advanced Session Controls` authorization
+    // and, when held, load the active models + their voices for the pickers (here and the in-room add-agent control).
     this.CanPickModelVoice = UserHoldsAuthorization(
       this.ProviderToUse?.CurrentUser, REALTIME_ADVANCED_SESSION_CONTROLS, this.ProviderToUse,
     );
@@ -1108,6 +1146,16 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
   /** @deprecated Use {@link OnRoomLeft}. */
   public onRoomLeft(): void {
     return this.OnRoomLeft();
+  }
+
+  /**
+   * Opens the preview room: the meeting room with your camera and microphone and simulated people, and no server.
+   * Leaving it returns to the landing.
+   */
+  public OpenPreviewRoom(): void {
+    this.RoomMode = 'preview';
+    this.JoinRoomName = null;
+    this.Phase = 'live';
   }
 
   /** Go to the "start a new room" picker. */

@@ -7,8 +7,8 @@
  *
  * Distinct from the channel's `ConfigSchema` column, which validates the *per-session*
  * `AIAgentSessionChannel.Config` state-of-record. This bag is the channel-definition's
- * own UI chrome, read in-memory by the host when rendering channel tabs. Extensible with
- * no DB change — add future chrome fields here.
+ * own UI chrome, read in-memory by the host when rendering channel tabs and placing the
+ * channel's surface. Extensible with no DB change — add future chrome fields here.
  */
 export interface IChannelUIConfig {
     /** Human label for the tab/chrome. Null → fall back to the channel's Name. */
@@ -21,4 +21,15 @@ export interface IChannelUIConfig {
     Icon?: string | null;
     /** Display order within a group/list. */
     SortOrder?: number | null;
+    /**
+     * Where the channel's surface shows when a call starts: "stage" fills the call, "pip" floats in a
+     * picture-in-picture box over it, "tab" sits on its tab in the side panel, "hidden" shows nowhere until
+     * the user moves it. Null → "tab". The user's own move wins over this, when AllowedPlacements allows it.
+     */
+    Placement?: 'stage' | 'pip' | 'tab' | 'hidden' | null;
+    /**
+     * Where the user may move the channel's surface. Null or empty → anywhere. A Placement missing from
+     * this list is replaced by the first placement listed here.
+     */
+    AllowedPlacements?: Array<'stage' | 'pip' | 'tab' | 'hidden'> | null;
 }

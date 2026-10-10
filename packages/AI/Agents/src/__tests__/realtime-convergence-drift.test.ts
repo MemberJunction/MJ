@@ -140,6 +140,27 @@ describe('Realtime convergence — drift protection', () => {
         it('returns null when nothing is overridden (cascade stays at its lower layers)', () => {
             expect(BuildRealtimeOverridesJson(null, null)).toBeNull();
             expect(BuildRealtimeOverridesJson('  ', '  ')).toBeNull();
+            expect(BuildRealtimeOverridesJson('  ', '  ', '  ')).toBeNull();
+        });
+
+        it('carries a picked avatar as realtime.video, with video turned on (the same literal the client pins)', () => {
+            // Pinned byte for byte in ng-conversations' realtime-pairing.test.ts: the two builders must not drift.
+            expect(BuildRealtimeOverridesJson('m', 'Puck', ' Ben ')).toBe(
+                '{"realtime":{"modelPreference":"m","voice":{"default":{"voice":"Puck"}},"video":{"enabled":true,"avatarId":"Ben"}}}',
+            );
+            expect(JSON.parse(BuildRealtimeOverridesJson(null, null, 'Ben')!)).toEqual({
+                realtime: { video: { enabled: true, avatarId: 'Ben' } },
+            });
+            // No avatar, no video block: a voice pick alone leaves the agent's own video setting alone.
+            expect(JSON.parse(BuildRealtimeOverridesJson('m', 'Puck', '  ')!)).toEqual({
+                realtime: { modelPreference: 'm', voice: { default: { voice: 'Puck' } } },
+            });
+        });
+
+        it('a picked avatar beats the agents’ video settings in the cascade, and keeps their other video keys', () => {
+            const target = JSON.stringify({ realtime: { video: { enabled: false, avatarId: 'Other', watchMeetings: true } } });
+            const eff = ResolveEffectiveRealtimeConfig(null, null, BuildRealtimeOverridesJson(null, 'Puck', 'Ben'), target);
+            expect(eff.realtime?.video).toEqual({ enabled: true, avatarId: 'Ben', watchMeetings: true });
         });
 
         it('round-trips through the cascade as the highest-precedence layer', () => {

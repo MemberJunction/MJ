@@ -11,7 +11,8 @@ import {
     ASSEMBLYAI_AGENT_WS_URL,
     ASSEMBLYAI_PCM_SAMPLE_RATE,
 } from '../drivers/assemblyAIRealtimeClient';
-import { collect, FakeMediaStream, FakeTrack } from './helpers/realtime-fakes';
+import { collect, FakeMediaStream, FakeMicCapture, FakeTrack } from './helpers/realtime-fakes';
+import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
@@ -85,14 +86,6 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
-    }
-}
-
-/** Fake mic capture handle. */
-class FakeMicCapture implements IPcmMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
     }
 }
 
@@ -884,3 +877,12 @@ describe('session.resume reconnect window', () => {
         expect(frames.some((f) => f.type === 'input.audio')).toBe(true);
     });
 });
+
+DescribePcmMicrophoneReplacement(
+    async () => {
+        const client = new TestAssemblyAIClient();
+        const track = await connect(client);
+        return { Client: client, Track: track, Capture: client.Capture };
+    },
+    () => new TestAssemblyAIClient()
+);

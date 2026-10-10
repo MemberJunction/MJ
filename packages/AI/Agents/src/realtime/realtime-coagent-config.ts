@@ -134,33 +134,48 @@ export interface RealtimeNarrationConfig {
 }
 
 /**
- * Video configuration: whether the realtime session carries a synced VIDEO track (a talking-head /
- * avatar out, and the camera in) alongside audio. Absent / `enabled !== true` ⇒ audio-only (today's
- * behavior). The video track reuses the entire realtime contract — this just opts a co-agent into it
- * and names the avatar to use.
+ * Video configuration: whether the agent asks for a live avatar, which one, and whether it watches LiveKit meetings.
+ * Absent / `enabled !== true` ⇒ the agent asks for no avatar. The user's camera and screen share do not depend on it;
+ * they start only when the user turns them on.
  */
 export interface RealtimeVideoConfig {
     /**
-     * Whether the session should carry video. Default (absent / non-boolean): `false`. When `true`,
-     * resolution prefers a video-capable model and the client captures the camera + renders the
-     * model/avatar video; degrades to audio-only when no video-capable model resolves.
+     * Whether the agent asks for a live avatar. Default (absent / non-boolean): `false`. When `true`, and the call can
+     * show an avatar (a browser call, or a meeting whose host publishes it into the room), a session with no explicit
+     * model (no `preferredModelId` and no {@link RealtimeConfigSection.modelPreference}) takes the first realtime model
+     * that shows one; when none does, it keeps its default model, audio only. The avatar is the one {@link avatarId}
+     * names when it is set; otherwise the voiced agent's persona's, else the co-agent's.
+     *
+     * It does not turn on the camera: capture starts only when the user turns the camera or a screen share on.
      */
     enabled?: boolean;
     /**
-     * Preferred video model/avatar provider — an `MJ: AI Models` Name OR ID of a video-capable realtime
-     * model (e.g. a Runway avatar). Optional; absent ⇒ the default video-capable model is resolved.
+     * @deprecated Nothing reads it. Choose the model with {@link RealtimeConfigSection.modelPreference}; with
+     * {@link enabled} on and no model chosen, the session takes the first model that shows an avatar. A session whose
+     * configuration sets it logs one line naming the agent.
      */
     provider?: string;
     /**
-     * Provider-specific avatar/character identifier (e.g. a Runway preset or custom avatar id). OPAQUE
-     * — passed through to the matching video driver (its shape is a private pact with that driver).
+     * The avatar to show instead of the one the agents' personas give: the `APIName` of one of the model's Active Video
+     * persona bindings (`MJ: AI Persona Vendors`) on the session's vendor, matched without regard to case, such as
+     * Google's preset `Ben`. Read only when {@link enabled} is `true` (the call's avatar picker sets both). A name with
+     * no such binding gives the call no avatar (reason `unknown-avatar`). The avatar's settings (`Kind`, `Resolution`,
+     * `Background`) are that binding's `VendorSettings.Avatar`.
      */
     avatarId?: string;
     /**
-     * Per-provider native video settings keyed by provider, merged into the matching driver's open
-     * config bag — an OPAQUE private pact with that driver (mirrors {@link RealtimeVoiceConfig.providers}).
+     * @deprecated Nothing reads it. An avatar's settings (`Kind`, `Resolution`, `Background`) are its persona binding's
+     * `VendorSettings.Avatar` (`MJ: AI Persona Vendors`, Video modality), which each driver maps onto its vendor. A
+     * session whose configuration sets it logs one line naming the agent.
      */
     providers?: Record<string, JSONObjectLike>;
+    /**
+     * Whether this agent watches LiveKit meetings: its bot reads the cameras and shared screens of the people who let
+     * agents see them, and the room offers everyone that choice. Default (absent / non-boolean): `false`. Set it on the
+     * VOICED agent (the Realtime type's schema does not allow `video` on the co-agent). Needs a model that takes video
+     * (Gemini 3.8 Live); on an audio-only model it does nothing.
+     */
+    watchMeetings?: boolean;  // case-violation-ok-legacy-back-compat: an authored JSON key, camelCase like the block's other keys
 }
 
 /**
@@ -1240,6 +1255,9 @@ function normalizeVideo(raw: unknown): RealtimeVideoConfig | null {
     if (typeof raw['avatarId'] === 'string' && raw['avatarId'].trim().length > 0) {
         video.avatarId = raw['avatarId'].trim();
     }
+    if (typeof raw['watchMeetings'] === 'boolean') {
+        video.watchMeetings = raw['watchMeetings'];
+    }
 
     const rawProviders = raw['providers'];
     if (isPlainObject(rawProviders)) {
@@ -1498,32 +1516,41 @@ export function BuildVoiceMannerSection(config: RealtimeCoAgentConfig | null | u
  * two are kept in lockstep by `realtime-convergence-drift.test.ts`); the
  * server-bridged hosts (LiveKit, Zoom/Teams) build it here so both funnel into the one override slot.
  *
- * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}}}}`.
+ * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}},"video":{"enabled":true,"avatarId":"<a>"}}}`.
  *
  * The voice is filed PROVIDER-AGNOSTICALLY, which is what lets a host carry a voice at all: the vendor
  * is not known here (and on the default-model path is not known to the caller at any point before the
  * session is prepared), so naming one would be a guess. {@link GetProviderVoiceSettings} files this onto
  * whichever driver the framework resolves. See issue #3530.
  *
+ * A picked avatar also turns the session's video on (`enabled: true`): picking a face is asking for one, whatever the
+ * agent's own video setting. The session still accepts it only when it names a Video binding on the resolved vendor.
+ *
  * @param modelId The `MJ: AI Models` Name or ID to prefer, or null/empty for none.
  * @param voice The provider-native voice id (e.g. `echo`), or null/empty for none.
+ * @param avatarId The avatar to ask for (a Video binding's `APIName`), or null/empty for none.
  * @returns The JSON string, or `null` when nothing was overridden (keeps the cascade at its lower layers).
  */
 export function BuildRealtimeOverridesJson(
     modelId?: string | null,
-    voice?: string | null
+    voice?: string | null,
+    avatarId?: string | null
 ): string | null {
     const m = modelId?.trim() ?? '';
     const v = voice?.trim() ?? '';
-    if (m.length === 0 && v.length === 0) {
+    const a = avatarId?.trim() ?? '';
+    if (m.length === 0 && v.length === 0 && a.length === 0) {
         return null;
     }
-    const realtime: { modelPreference?: string; voice?: { default: { voice: string } } } = {};
+    const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { enabled: true; avatarId: string } } = {};
     if (m.length > 0) {
         realtime.modelPreference = m;
     }
     if (v.length > 0) {
         realtime.voice = { default: { voice: v } };
+    }
+    if (a.length > 0) {
+        realtime.video = { enabled: true, avatarId: a };
     }
     return JSON.stringify({ realtime });
 }
@@ -1537,6 +1564,36 @@ export function BuildRealtimeOverridesJson(
  */
 export function GetNarrationPaceMs(config: RealtimeCoAgentConfig | null | undefined): number | null {
     return config?.realtime?.narration?.paceMs ?? null;
+}
+
+/**
+ * Whether the effective configuration says the agent watches LiveKit meetings (`realtime.video.watchMeetings`). Only
+ * an explicit `true` counts; normalization already dropped any non-boolean value.
+ *
+ * @param config The effective configuration.
+ * @returns `true` only when the setting is on.
+ */
+export function GetWatchesMeetingVideo(config: RealtimeCoAgentConfig | null | undefined): boolean {
+    return config?.realtime?.video?.watchMeetings === true;
+}
+
+/** The deprecated `realtime.video` keys, which still parse but which nothing reads. */
+const DEPRECATED_VIDEO_KEYS: readonly ('provider' | 'providers')[] = ['provider', 'providers'];
+
+/**
+ * The deprecated `realtime.video` keys a resolved configuration sets ({@link RealtimeVideoConfig.provider},
+ * {@link RealtimeVideoConfig.providers}), as dotted paths, so a host can say they do nothing. The module stays pure:
+ * it reports them as data and the caller logs.
+ *
+ * @param config The normalized effective configuration.
+ * @returns The paths set, such as `realtime.video.provider`; empty when it sets neither.
+ */
+export function FindDeprecatedRealtimeVideoKeys(config: RealtimeCoAgentConfig | null | undefined): readonly string[] {
+    const video = config?.realtime?.video;
+    if (!video) {
+        return [];
+    }
+    return DEPRECATED_VIDEO_KEYS.filter((key) => video[key] !== undefined).map((key) => `realtime.video.${key}`);
 }
 
 /**

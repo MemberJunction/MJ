@@ -164,8 +164,8 @@ export class TelephonyCallSessionStarter {
 
     /**
      * Starts the call's agent session. On ANY failure the lease is released, the agent-session row closed and the
-     * model session closed before the error is rethrown; on success {@link TelephonyCallStartArgs.Lease} is
-     * released when the session ends.
+     * model session closed before the error is rethrown, its co-agent run finalized as failed with the start's error;
+     * on success {@link TelephonyCallStartArgs.Lease} is released when the session ends.
      */
     public async Start(args: TelephonyCallStartArgs): Promise<StartedTelephonyCall> {
         let agentSession: MJAIAgentSessionEntity | undefined;
@@ -202,7 +202,7 @@ export class TelephonyCallSessionStarter {
             return await this.startWithSession(args, carrier, coAgentID, agentSession, ref, interaction?.ID);
         } catch (e) {
             args.Lease.Release();
-            await this.closeQuietly(ref.Initial);
+            await this.closeFailedStartSession(ref.Initial, e);
             if (agentSession) {
                 await this.closeAgentSession(agentSession.ID, 'Error', args.ContextUser, args.MetadataProvider);
             }
@@ -234,6 +234,8 @@ export class TelephonyCallSessionStarter {
 
         const openModelSession = async (priorTranscript?: string): Promise<IRealtimeSession> => {
             const session = await this.deps.SessionFactory({
+                // The caller sees no video: the session asks the model for no avatar and reports `phone`.
+                PhoneCall: true,
                 AgentID: coAgentID,
                 TargetAgentID: args.Identity.AgentID,
                 ContextUser: args.ContextUser,
@@ -386,9 +388,22 @@ export class TelephonyCallSessionStarter {
         await CloseAgentSessionRow(agentSessionID, reason, user, provider);
     }
 
-    private async closeQuietly(session: IRealtimeSession | undefined): Promise<void> {
+    /**
+     * Closes the model session of a call whose start failed (when one was opened), after finalizing its co-agent run as
+     * failed with the start's error: the close alone would finalize that run as completed. Neither step throws; a failure
+     * is logged, so the caller still sees why the start failed.
+     */
+    private async closeFailedStartSession(session: IRealtimeSession | undefined, startError: unknown): Promise<void> {
+        if (!session) {
+            return;
+        }
         try {
-            await session?.Close();
+            await GetBridgeRealtimeRuntime(session)?.Finalize(false, startError instanceof Error ? startError.message : String(startError));
+        } catch (e) {
+            LogError(`[Telephony] recording a failed start on the call's agent run failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        try {
+            await session.Close();
         } catch (e) {
             LogError(`[Telephony] closing the model session after a failed start failed: ${e instanceof Error ? e.message : String(e)}`);
         }

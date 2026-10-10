@@ -1364,6 +1364,17 @@
           "primaryKey": {
             "ID": "3DA009D7-6777-438C-B45A-66BE07808056"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT110 - LiveKit Room Agent Vision Consent",
+            "Sequence": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "84E2D287-9A54-49AC-859C-D796DA5E6182"
+          }
         }
       ]
     },

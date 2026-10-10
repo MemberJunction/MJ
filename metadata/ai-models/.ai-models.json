@@ -25634,6 +25634,46 @@
             "lastModified": "2026-09-16T01:46:08.462Z",
             "checksum": "dd069eb4871bed14cdbceb9ce69965f0b21537fa59061b6aaa1e2390d206505b"
           }
+        },
+        {
+          "_comments": [
+            "Realtime.TurnDetection.Coverage is audioActivityOnly on this row, unlike the model's and the Google row's: Gemini Enterprise refuses TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO at session setup (1007, invalid value at setup.realtime_input_config.turn_coverage; found against Vertex AI on 2026-10-09). The Gemini Enterprise driver sends only activity there whatever is configured."
+          ],
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiEnterpriseRealtime",
+            "APIName": "gemini-3.8-live",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "Realtime": {
+                "IdleSignal": "turnComplete",
+                "Tooling": {
+                  "SupportsBlockingExecution": true,
+                  "SupportsScheduling": true
+                },
+                "TurnDetection": {
+                  "Coverage": "audioActivityOnly"
+                },
+                "FullDuplex": true,
+                "Pricing": {
+                  "AvatarVideoOutput": {
+                    "Price": 0.37152,
+                    "Unit": "Per Minute",
+                    "Currency": "USD"
+                  }
+                }
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "F1530B5B-DF16-4A9F-9B86-CE5515A16C3C"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -25683,6 +25723,25 @@
           "sync": {
             "lastModified": "2026-09-16T01:46:08.522Z",
             "checksum": "3309f8854e907cea481f6e2381b9fc1cc2487f8e17e8750cec56ea9c75186d56"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-10-08T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "InputPricePerUnit": 0.75,
+            "OutputPricePerUnit": 4.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.8 Live on Vertex AI (Gemini Enterprise) text token pricing: $0.75 / 1M input tokens, $4.50 / 1M output tokens. Mirrors the Gemini Developer API list price; VERIFY against the Vertex AI price list. Avatar video output is priced separately, by ModelConfiguration.Realtime.Pricing.AvatarVideoOutput on the Vertex AI model-vendor row: $0.37152 / min ($1.00 / 1M tokens at 6,192 tokens per second; VERIFY).",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "DAE66EEC-FC6D-4F23-B3F4-C83E30C2A8E1"
           }
         }
       ],
@@ -25776,6 +25835,17 @@
             "lastModified": "2026-09-16T01:46:08.653Z",
             "checksum": "16dd2415bd0f49e0bd34d574f77c77aa96912cbdf9218f57d322995db6f5574a"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+            "Direction": "Output",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "3DE5F368-BF5E-4806-8043-8B09BE7CEAE9"
+          }
         }
       ]
     },
@@ -25808,6 +25878,9 @@
             "IncludeThoughtSummaries": true,
             "Level": "medium"
           },
+          "TurnDetection": {
+            "Coverage": "audioActivityAndAllVideo"
+          },
           "FullDuplex": true
         }
       }
@@ -25836,6 +25909,9 @@
                 "Reasoning": {
                   "IncludeThoughtSummaries": true,
                   "Level": "medium"
+                },
+                "TurnDetection": {
+                  "Coverage": "audioActivityAndAllVideo"
                 },
                 "FullDuplex": true
               }

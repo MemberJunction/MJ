@@ -65,6 +65,13 @@ export interface RealtimeHostChannelDeclaration {
 export interface RealtimeSessionStartOptions {
     /** Channels the host brings to this session (see {@link RealtimeHostChannelDeclaration}). */
     HostChannels?: RealtimeHostChannelDeclaration[];
+    /**
+     * Have the user check the camera before the agent sees it. The call's first camera start opens the camera for the
+     * user only: the camera's state is `starting` with `Checking` set and the stream to preview, and nothing reaches the
+     * agent until the host calls `ConfirmCamera`. Later starts in the same call skip the check. Set it only when the host
+     * shows the check; otherwise the camera waits for a confirmation that never comes.
+     */
+    CameraCheck?: boolean;
 }
 
 /** A resolved-but-not-yet-initialized channel plugin, with what the scope decision needs to know about it. */
@@ -83,6 +90,18 @@ export interface PreparedChannel {
 export function FindPreparedChannel(prepared: ReadonlyArray<PreparedChannel>, key: string): PreparedChannel | undefined {
     const id = NormalizeChannelKey(key);
     return prepared.find((p) => NormalizeChannelKey(p.Key) === id);
+}
+
+/**
+ * Whether a session with these prepared channels could show the agent's video: one of them shows it (it sinks outbound
+ * video, as the Avatar channel does) and is not switched off in the registry. A policy can only select among the
+ * prepared plugins, so with none the session never asks for the agent's video at connect, whatever the server scopes:
+ * the mint can then ask the model for no avatar (`showsAgentVideo: false`).
+ *
+ * @param prepared The channels prepared for the session.
+ */
+export function PreparedChannelsShowAgentVideo(prepared: ReadonlyArray<PreparedChannel>): boolean {
+    return prepared.some((p) => p.Registry !== 'inactive' && p.Plugin.ShowsAgentVideo);
 }
 
 /**

@@ -25,6 +25,7 @@
  */
 
 import { BaseSingleton } from '@memberjunction/global';
+import type { RealtimeSessionCapabilities } from './baseRealtime';
 
 /**
  * Which way samples flow on a track, relative to the model.
@@ -137,6 +138,15 @@ export function RealtimeTrackKey(descriptor: Pick<RealtimeTrackDescriptor, 'Moda
 }
 
 /**
+ * Whether a MIME type names raw PCM audio: `audio/pcm`, with or without parameters such as
+ * `;rate=24000`. Realtime drivers use it to route the parts a provider streams back: PCM goes to
+ * audio playback, and anything else (for example `video/mp4` avatar frames) must not.
+ */
+export function IsPcmAudioMimeType(mimeType: string): boolean {
+    return /^audio\/pcm\s*(;.*)?$/i.test(mimeType.trim());
+}
+
+/**
  * How many concurrent inbound video streams a model accepts, given its declared capability.
  *
  * `0` when the model does not accept inbound video at all; otherwise the declared maximum, defaulting
@@ -154,6 +164,37 @@ export function ResolveMaxInboundVideoStreams(supportsInboundVideo: boolean, dec
         return 0;
     }
     return typeof declaredMax === 'number' && Number.isInteger(declaredMax) && declaredMax > 0 ? declaredMax : 1;
+}
+
+/**
+ * How many inbound video streams a **live session** accepts, read from its declared capabilities: `0` when it declares
+ * no inbound video track, and when it declares no capabilities at all (an undeclared session is treated as audio only,
+ * as {@link import('./baseRealtime').IRealtimeSession.Capabilities} prescribes). Otherwise its declared stream ceiling,
+ * resolved by {@link ResolveMaxInboundVideoStreams}.
+ *
+ * A host checks this before streaming video frames: a driver without inbound video would otherwise treat an image as
+ * audio.
+ *
+ * @param capabilities The session's declared capabilities, if any.
+ */
+export function InboundVideoStreamsOf(capabilities?: RealtimeSessionCapabilities | null): number {
+    const declaresVideo = capabilities?.SupportedInboundTracks?.some((t) => t.Modality === 'video') ?? false;
+    return ResolveMaxInboundVideoStreams(declaresVideo, capabilities?.MaxInboundVideoStreams);
+}
+
+/**
+ * The frame rate (frames per second) a **live session** takes on inbound video, read from its declared capabilities:
+ * the `Rate` of its inbound video track. `undefined` when it declares no inbound video track, no rate, or a rate that is
+ * not a positive finite number; a sender then paces at the default rate (see `RealtimeVideoFrameIntervalMs`).
+ *
+ * A host that sends video from somewhere other than the browser (a meeting bot) reads the rate here, so the rate always
+ * comes from the model rather than from a constant in the sender.
+ *
+ * @param capabilities The session's declared capabilities, if any.
+ */
+export function InboundVideoRateOf(capabilities?: RealtimeSessionCapabilities | null): number | undefined {
+    const rate = capabilities?.SupportedInboundTracks?.find((t) => t.Modality === 'video')?.Rate;
+    return typeof rate === 'number' && Number.isFinite(rate) && rate > 0 ? rate : undefined;
 }
 
 /**

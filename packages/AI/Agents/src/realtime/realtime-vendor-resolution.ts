@@ -63,14 +63,25 @@ export function SelectRealtimeVendorForModel(
     modelID: string,
     resolveAPIKey: RealtimeAPIKeyResolver = defaultAPIKeyResolver
 ): RealtimeVendorSelection | null {
-    const vendors = AIEngine.Instance.ModelVendors
-        .filter(mv => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
-        .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
-
-    for (const v of vendors) {
-        if (resolveAPIKey(v.DriverClass!)) {
-            return { VendorID: v.VendorID ?? '', ModelVendorID: v.ID, DriverClass: v.DriverClass!, APIName: v.APIName ?? '' };
+    for (const v of ListRealtimeVendorsForModel(modelID)) {
+        if (resolveAPIKey(v.DriverClass)) {
+            return v;
         }
     }
     return null;
+}
+
+/**
+ * The vendors that can run a realtime model, in the order {@link SelectRealtimeVendorForModel} tries them: the model's
+ * **Active** `MJ: AI Model Vendors` rows that carry a `DriverClass`, highest `Priority` first. Keys are not checked here.
+ * A co-agent with video on walks them all for one whose endpoint shows an avatar, not only the first with a key.
+ *
+ * @param modelID The `MJ: AI Models` row id.
+ * @returns The vendor identifiers, best first (empty when the model has none).
+ */
+export function ListRealtimeVendorsForModel(modelID: string): RealtimeVendorSelection[] {
+    return AIEngine.Instance.ModelVendors
+        .filter(mv => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
+        .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0))
+        .map(v => ({ VendorID: v.VendorID ?? '', ModelVendorID: v.ID, DriverClass: v.DriverClass!, APIName: v.APIName ?? '' }));
 }

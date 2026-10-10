@@ -14,6 +14,12 @@
  * SSR) the factories return `null` and callers degrade to "no metering" — the call UI then
  * keeps its turn-state-driven animations. The DSP math ({@link ComputeRmsLevel},
  * {@link BucketizeFrequencyData}) is exported pure so it unit-tests without Web Audio.
+ *
+ * The second half of the file is the SMOOTHING every meter display shares, also pure: a noise gate
+ * ({@link GateAudioLevel}), the attack/decay step ({@link SmoothAudioLevel}, {@link SmoothAudioBars}),
+ * bars synthesized from a level for sources with no spectrum ({@link SynthesizeAudioBars}), and
+ * {@link AudioLevelSmoother}, which puts them together for one source. Each display passes its own attack
+ * and decay, so unifying the code changed nothing on screen.
  */
 
 /** The number of frequency bins the call UI's EQ renders (and meters therefore produce). */
@@ -216,5 +222,119 @@ export class RealtimeAudioMeter implements IRealtimeAudioMeter {
         if (this.ownedContext) {
             void this.ownedContext.close();
         }
+    }
+}
+
+// ── Smoothing: the pure math every meter display shares ─────────────────────────────────────
+
+/** Attack the call overlay uses: how far a rising level moves toward its target in one step. */
+export const DEFAULT_AUDIO_ATTACK = 0.5;
+
+/** Decay the call overlay uses: how far a falling level moves toward its target in one step. */
+export const DEFAULT_AUDIO_DECAY = 0.12;
+
+/**
+ * Soft-knee noise gate: a level at or below `gate` is silence (0); above it, the rest of the range rescales
+ * to 0..1, so the gate never visibly clips the bottom off real speech. Pure.
+ */
+export function GateAudioLevel(level: number, gate: number): number {
+    if (!Number.isFinite(level) || level <= gate) {
+        return 0;
+    }
+    return Math.min(1, (level - gate) / (1 - gate));
+}
+
+/**
+ * One smoothing step from `previous` toward `next`: by `attack` while rising, so speech onset reads at once,
+ * and by `decay` while falling, so the level rings down instead of snapping shut. Clamped to 0..1. Pure.
+ */
+export function SmoothAudioLevel(previous: number, next: number, attack: number = DEFAULT_AUDIO_ATTACK, decay: number = DEFAULT_AUDIO_DECAY): number {
+    const factor = next > previous ? attack : decay;
+    return Math.min(1, Math.max(0, previous + (next - previous) * factor));
+}
+
+/**
+ * One smoothing step for every bar: toward its target, or toward silence when there is no target. Pure.
+ *
+ * @param previous The bars now.
+ * @param target The bars to move toward (a missing entry counts as 0), or `null` to fall toward silence.
+ */
+export function SmoothAudioBars(
+    previous: readonly number[],
+    target: readonly number[] | null,
+    attack: number = DEFAULT_AUDIO_ATTACK,
+    decay: number = DEFAULT_AUDIO_DECAY
+): number[] {
+    return previous.map((bar, i) => SmoothAudioLevel(bar, target?.[i] ?? 0, attack, decay));
+}
+
+/**
+ * Bars for a source that reports only a level, such as a LiveKit participant: center bars taller than the
+ * edges, with a little per-bar variation so they don't move in lockstep. Pure.
+ */
+export function SynthesizeAudioBars(level: number, count: number): number[] {
+    const center = (count - 1) / 2;
+    return Array.from({ length: count }, (_, i) => {
+        const distance = center > 0 ? Math.abs(i - center) / center : 0;
+        const shape = 1 - distance * 0.55;
+        const variation = 0.85 + 0.15 * Math.sin(i * 1.7 + level * 6);
+        return level * shape * variation;
+    });
+}
+
+export interface AudioLevelSmootherOptions {
+    /** How many bars each frame carries. */
+    BarCount: number;
+    /** See {@link SmoothAudioLevel}. Defaults to {@link DEFAULT_AUDIO_ATTACK}. */
+    Attack?: number;
+    /** See {@link SmoothAudioLevel}. Defaults to {@link DEFAULT_AUDIO_DECAY}. */
+    Decay?: number;
+    /** A smoothed level below this reads as silence: the frame's level is 0 and the bars fall. Defaults to 0. */
+    SilenceFloor?: number;
+}
+
+/** One smoothed frame for a level display. */
+export interface AudioLevelFrame {
+    /** The smoothed level, 0..1; 0 while silent. */
+    Level: number;
+    /** The smoothed bars, each 0..1. */
+    Bars: number[];
+    /** Whether the smoothed level is under the silence floor. */
+    IsSilent: boolean;
+}
+
+/**
+ * Smooths one audio source for display. Feed it the latest level (0..1) each animation frame, with the
+ * source's spectrum bars when it has them (an analyser tap); without them, bars are synthesized from the
+ * level ({@link SynthesizeAudioBars}). Pure: no Web Audio, no clock.
+ */
+export class AudioLevelSmoother {
+    private level = 0;
+    private bars: number[];
+
+    constructor(private readonly options: AudioLevelSmootherOptions) {
+        this.bars = new Array<number>(options.BarCount).fill(0);
+    }
+
+    /**
+     * Folds in the latest level, and the source's spectrum bars when it has them.
+     *
+     * @param level The latest raw level, 0..1 (clamped).
+     * @param spectrum The source's current spectrum bars, or nothing to synthesize bars from the level.
+     */
+    public Next(level: number, spectrum?: readonly number[] | null): AudioLevelFrame {
+        const attack = this.options.Attack ?? DEFAULT_AUDIO_ATTACK;
+        const decay = this.options.Decay ?? DEFAULT_AUDIO_DECAY;
+        this.level = SmoothAudioLevel(this.level, Math.max(0, Math.min(1, level)), attack, decay);
+        const isSilent = this.level < (this.options.SilenceFloor ?? 0);
+        const target = isSilent ? null : (spectrum ?? SynthesizeAudioBars(this.level, this.options.BarCount));
+        this.bars = SmoothAudioBars(this.bars, target, attack, decay);
+        return { Level: isSilent ? 0 : this.level, Bars: [...this.bars], IsSilent: isSilent };
+    }
+
+    /** Returns to silence. */
+    public Reset(): void {
+        this.level = 0;
+        this.bars = new Array<number>(this.options.BarCount).fill(0);
     }
 }

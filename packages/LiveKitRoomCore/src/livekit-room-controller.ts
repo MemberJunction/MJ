@@ -25,17 +25,31 @@ import {
   RoomEvent,
   Track,
   type LocalAudioTrack,
+  type LocalParticipant,
+  type LocalTrackPublication,
   type LocalVideoTrack,
   type RoomOptions,
 } from 'livekit-client';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { AllowsAgentVision, IsAgentWatching } from '@memberjunction/ai';
+import {
+  CapturedSurfaceOf,
+  RequestDisplayCapture,
+  type DisplayCaptureOptions,
+  type DisplayCaptureResult,
+  type DisplayCaptureSurface,
+} from '@memberjunction/ai-realtime-client/media';
+import { ReadAvatarAudioOnly } from './agent-avatar';
 import { LiveKitRoomEventBus } from './events';
 import { ApplyBackgroundEffect, ApplyNoiseFilter } from './livekit-effects';
+import { LiveKitScreenShare } from './livekit-screen-share';
+import { ToMediaDeviceKind } from './media-adapters';
 import {
   LiveKitBackgroundEffect,
   LiveKitConnectionStatus,
   LiveKitDevice,
   LiveKitDisconnectReason,
+  LiveKitErrorDevice,
   LiveKitLocalMediaState,
   LiveKitParticipantRole,
   LiveKitParticipantView,
@@ -91,6 +105,72 @@ export interface LiveKitRoomControllerOptions {
   RoleResolver?: LiveKitRoleResolver;
   /** Supply a shared event bus (e.g. so a host can subscribe before the controller connects). */
   EventBus?: LiveKitRoomEventBus;
+  /**
+   * Opens the browser's share picker for a screen share. Defaults to `/media`'s `RequestDisplayCapture`, as in the
+   * preview room; a test passes its own.
+   */
+  RequestScreenShare?: (options: DisplayCaptureOptions) => Promise<DisplayCaptureResult>;
+}
+
+/**
+ * What a meeting room UI drives: the connection, the local microphone, camera and screen share, the data channel,
+ * effects, devices, and the room's state and events. {@link LiveKitRoomController} is the LiveKit implementation;
+ * another implementation (a test fake, a simulated room) runs the same UI without a LiveKit server.
+ */
+export interface ILiveKitRoomController {
+  /** The room's cancelable event bus (Before-events + notifications). */
+  readonly Events: LiveKitRoomEventBus;
+  /** The room-state snapshot: the current value on subscribe, then every change. */
+  readonly State$: Observable<LiveKitRoomState>;
+  /** The current room-state snapshot. */
+  readonly State: LiveKitRoomState;
+  /** The current connection status. */
+  readonly Status: LiveKitConnectionStatus;
+  /**
+   * Joins the room and brings the local participant online with the requested media. Only a failed connection fails
+   * the join; a microphone or camera that fails to start is left off and reported as a `device` error.
+   */
+  Connect(serverUrl: string, token: string, options?: LiveKitRoomConnectOptions): Promise<void>;
+  /** Leaves the room. Resolves `false` when a `beforeDisconnect` handler canceled it. */
+  Disconnect(userInitiated?: boolean): Promise<boolean>;
+  /** Leaves the room and releases everything; the controller is not used again. */
+  Dispose(): void;
+  /** Turns the local microphone on or off. */
+  SetMicrophoneEnabled(enabled: boolean): Promise<void>;
+  /** Turns the local camera on or off. */
+  SetCameraEnabled(enabled: boolean): Promise<void>;
+  /**
+   * Starts or stops sharing. `request` is the kind of surface the browser's picker offers first, or the share's
+   * `/media` options: a surface preference, or one panel of the page to share alone (`Panel`) with its name
+   * (`PanelLabel`).
+   */
+  SetScreenShareEnabled(enabled: boolean, request?: DisplayCaptureSurface | DisplayCaptureOptions): Promise<void>;
+  /** Toggles the microphone and resolves the new state. */
+  ToggleMicrophone(): Promise<boolean>;
+  /** Toggles the camera and resolves the new state. */
+  ToggleCamera(): Promise<boolean>;
+  /** Toggles screen sharing and resolves the new state. */
+  ToggleScreenShare(): Promise<boolean>;
+  /** Shares something else: stops the current share, then asks the browser's picker again, with `request` as above. */
+  ChangeScreenShare(request?: DisplayCaptureSurface | DisplayCaptureOptions): Promise<void>;
+  /**
+   * Sends a text message to the room on the data channel. Resolves `true` when the message went out, and `false` when it
+   * did not: no room, a `beforeSendData` handler canceled it, or the send failed (also raised as an `error` of kind
+   * `data`).
+   */
+  SendData(text: string, topic?: string): Promise<boolean>;
+  /** Resumes audio playback after a browser autoplay block (call from a user gesture). */
+  StartAudio(): Promise<void>;
+  /** Turns the noise filter on or off; resolves `false` when it cannot be applied. */
+  SetNoiseFilterEnabled(enabled: boolean): Promise<boolean>;
+  /** Applies a camera background effect; resolves `false` when it cannot be applied. */
+  SetBackgroundEffect(effect: LiveKitBackgroundEffect): Promise<boolean>;
+  /** Lists the devices of a kind. */
+  ListDevices(kind: LiveKitDevice['Kind']): Promise<LiveKitDevice[]>;
+  /** The device in use for a kind, or `null` when unknown or not connected. */
+  GetActiveDeviceId(kind: LiveKitDevice['Kind']): string | null;
+  /** Moves a kind to another device. */
+  SwitchDevice(kind: LiveKitDevice['Kind'], deviceId: string): Promise<void>;
 }
 
 /**
@@ -115,7 +195,7 @@ export const DEFAULT_SPEECH_ROOM_OPTIONS: RoomOptions = {
  * Controls a single LiveKit room: connect/disconnect, local-media toggles, data messages, device
  * switching, and a normalized observable state snapshot. One controller == one room connection.
  */
-export class LiveKitRoomController {
+export class LiveKitRoomController implements ILiveKitRoomController {
   private room: Room | null = null;
   private readonly roomFactory: LiveKitRoomFactory;
   private readonly roleResolver: LiveKitRoleResolver;
@@ -123,6 +203,8 @@ export class LiveKitRoomController {
   private backgroundEffect: LiveKitBackgroundEffect = { Kind: 'none' };
   private e2eeEnabled = false;
   private e2eeKeyProvider: ExternalE2EEKeyProvider | null = null;
+  /** The local screen share, through `/media` display capture. */
+  private readonly screenShare: LiveKitScreenShare;
 
   private readonly stateSubject: BehaviorSubject<LiveKitRoomState>;
   private readonly textDecoder = new TextDecoder();
@@ -152,6 +234,7 @@ export class LiveKitRoomController {
     this.roomFactory = options.RoomFactory ?? DefaultRoomFactory;
     this.roleResolver = options.RoleResolver ?? DefaultRoleResolver;
     this.Events = options.EventBus ?? new LiveKitRoomEventBus();
+    this.screenShare = new LiveKitScreenShare(options.RequestScreenShare ?? RequestDisplayCapture, () => this.onScreenShareEnded());
     this.stateSubject = new BehaviorSubject<LiveKitRoomState>(this.initialState());
   }
 
@@ -177,6 +260,12 @@ export class LiveKitRoomController {
   /**
    * Connects to a LiveKit room and brings the local participant online with the requested media.
    *
+   * Only the connection can fail the join: then it rejects, the status is `'error'` and a `connect` error is emitted.
+   * The microphone and camera are turned on once connected, each on its own; one that fails (the browser refused it,
+   * or it is in use) is left off and reported as a `device` error, and the join goes on, so the user is in the room
+   * and can turn it on again. If the user leaves while a device starts (the browser's permission prompt can stay open
+   * a while), no other device starts and no `connected` is emitted.
+   *
    * @param serverUrl The LiveKit server URL (e.g. `wss://livekit.myorg.com`).
    * @param token The signed access token authorizing this participant to join a specific room.
    * @param options Initial media + display-name options.
@@ -201,15 +290,18 @@ export class LiveKitRoomController {
       if (before.Options.DisplayName) {
         await room.localParticipant.setName(before.Options.DisplayName);
       }
-      await this.applyInitialMedia(room, before.Options);
-      await this.applyInitialEffects(before.Options);
-      this.rebuildState();
-      this.Events.Emit('connected', { State: this.stateSubject.value });
     } catch (err) {
       this.emitError('connect', 'Failed to connect to the room.', err);
       this.patchState({ Status: 'error' });
       throw err;
     }
+    await this.applyInitialMedia(room, before.Options);
+    if (this.room !== room) {
+      return; // left while the devices were starting
+    }
+    await this.applyInitialEffects(before.Options);
+    this.rebuildState();
+    this.Events.Emit('connected', { State: this.stateSubject.value });
   }
 
   /**
@@ -229,6 +321,8 @@ export class LiveKitRoomController {
     const room = this.room;
     this.room = null;
     this.resetEffectState();
+    // Leaving drops every publication; the share's capture is ours to release (and a picker still open, to cancel).
+    await this.screenShare.Stop(null);
     if (room) {
       try {
         await room.disconnect();
@@ -271,9 +365,15 @@ export class LiveKitRoomController {
     await this.toggleLocalMedia('camera', enabled);
   }
 
-  /** Starts or stops local screen sharing. */
-  public async SetScreenShareEnabled(enabled: boolean): Promise<void> {
-    await this.toggleLocalMedia('screen', enabled);
+  /**
+   * Starts or stops local screen sharing, through `/media` display capture published as this participant's screen
+   * share (capped at 1080p and 30 fps, as LiveKit's own capture is). `request` is the kind of surface the browser's
+   * picker offers first (Chromium reads it; the user can still pick another kind), or the share's options: one panel
+   * of the page to share alone (`Panel`, Chrome and Edge), with its name (`PanelLabel`). A picker the user closes
+   * shares nothing and is no error; a share the browser refuses is a `device` error.
+   */
+  public async SetScreenShareEnabled(enabled: boolean, request?: DisplayCaptureSurface | DisplayCaptureOptions): Promise<void> {
+    await this.toggleLocalMedia('screen', enabled, request);
   }
 
   /** Toggles the microphone and returns the new state. */
@@ -297,6 +397,18 @@ export class LiveKitRoomController {
     return next;
   }
 
+  /**
+   * Shares something else: stops the current share, then asks the browser's picker again, with `request` as for
+   * {@link SetScreenShareEnabled}. Others see the share end and start again; a user who cancels the picker is left not
+   * sharing. With no share running, it just starts one.
+   */
+  public async ChangeScreenShare(request?: DisplayCaptureSurface | DisplayCaptureOptions): Promise<void> {
+    if (this.stateSubject.value.LocalMedia.ScreenShareEnabled) {
+      await this.SetScreenShareEnabled(false);
+    }
+    await this.SetScreenShareEnabled(true, request);
+  }
+
   // ── Data channel ────────────────────────────────────────────────────────────────
 
   /**
@@ -304,20 +416,25 @@ export class LiveKitRoomController {
    *
    * @param text The message text.
    * @param topic Optional topic to publish under (for routing on the receiving side).
+   * @returns `true` once LiveKit sent the message (while LiveKit reconnects, it holds the message and sends it when the
+   *   session resumes); `false` when it was not sent: no room, a `beforeSendData` handler canceled it, or the publish
+   *   failed, which is also raised as an `error` of kind `data`.
    */
-  public async SendData(text: string, topic?: string): Promise<void> {
+  public async SendData(text: string, topic?: string): Promise<boolean> {
     if (!this.room) {
-      return;
+      return false;
     }
     const before = this.Events.Emit('beforeSendData', { Text: text, Topic: topic, Cancel: false });
     if (before.Cancel) {
-      return;
+      return false;
     }
     try {
       const payload = this.textEncoder.encode(before.Text);
       await this.room.localParticipant.publishData(payload, { reliable: true, topic: before.Topic });
+      return true;
     } catch (err) {
       this.emitError('data', 'Failed to send data message.', err);
+      return false;
     }
   }
 
@@ -335,7 +452,7 @@ export class LiveKitRoomController {
       await this.room.startAudio();
       this.patchState({ AudioPlaybackBlocked: !this.room.canPlaybackAudio });
     } catch (err) {
-      this.emitError('device', 'Failed to start audio playback.', err);
+      this.emitError('device', 'Failed to start audio playback.', err, { Media: 'speaker', Change: 'on' });
     }
   }
 
@@ -429,7 +546,8 @@ export class LiveKitRoomController {
     try {
       await this.room.switchActiveDevice(kind, before.DeviceId);
     } catch (err) {
-      this.emitError('device', `Failed to switch ${kind} device.`, err);
+      const device: LiveKitErrorDevice = { Media: ToMediaDeviceKind(kind), Change: 'switch' };
+      this.emitError('device', `Failed to switch ${kind} device.`, err, device);
     }
   }
 
@@ -449,6 +567,7 @@ export class LiveKitRoomController {
       .on(RoomEvent.TrackMuted, rebuild)
       .on(RoomEvent.TrackUnmuted, rebuild)
       .on(RoomEvent.ConnectionQualityChanged, rebuild)
+      .on(RoomEvent.ParticipantAttributesChanged, rebuild)
       .on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => this.handleActiveSpeakers(speakers))
       .on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => this.handleConnectionState(state))
       .on(RoomEvent.Reconnecting, () => {
@@ -463,7 +582,9 @@ export class LiveKitRoomController {
         this.handleData(payload, participant, topic),
       )
       .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => this.handleDisconnected(reason))
-      .on(RoomEvent.MediaDevicesError, (err: Error) => this.emitError('device', err.message, err))
+      .on(RoomEvent.MediaDevicesError, (err: Error, kind?: LiveKitDevice['Kind']) =>
+        this.emitError('device', err.message, err, kind ? { Media: ToMediaDeviceKind(kind) } : undefined),
+      )
       .on(RoomEvent.AudioPlaybackStatusChanged, () => this.handleAudioPlayback());
   }
 
@@ -562,22 +683,30 @@ export class LiveKitRoomController {
       NoiseFilterEnabled: this.noiseFilterEnabled,
       BackgroundEffect: this.backgroundEffect,
       E2EEEnabled: this.e2eeEnabled,
+      AgentWatching: agentWatchesIn(room),
     });
   }
 
-  /** Maps a livekit-client participant onto the normalized {@link LiveKitParticipantView}. */
+  /**
+   * Maps a livekit-client participant onto the normalized {@link LiveKitParticipantView}. An agent whose bot says the
+   * meeting can't show its avatar carries why ({@link LiveKitParticipantView.AvatarAudioOnly}).
+   */
   private buildView(participant: Participant): LiveKitParticipantView {
+    const role = this.roleResolver(participant);
+    const avatarAudioOnly = role === 'agent' ? ReadAvatarAudioOnly(participant.attributes) : undefined;
     return {
       Identity: participant.identity,
       DisplayName: participant.name && participant.name.length > 0 ? participant.name : participant.identity,
       IsLocal: this.room?.localParticipant === participant,
-      Role: this.roleResolver(participant),
+      Role: role,
       IsSpeaking: this.computeIsSpeaking(participant),
       AudioLevel: participant.audioLevel ?? 0,
       HasAudio: this.hasLiveTrack(participant, Track.Source.Microphone),
       HasVideo: this.hasLiveTrack(participant, Track.Source.Camera),
       IsScreenSharing: this.hasLiveTrack(participant, Track.Source.ScreenShare),
       ConnectionQuality: this.mapConnectionQuality(participant.connectionQuality),
+      AgentCanSee: AllowsAgentVision(participant.attributes) && this.room !== null && agentWatchesIn(this.room),
+      ...(avatarAudioOnly ? { AvatarAudioOnly: avatarAudioOnly } : {}),
       Raw: participant,
     };
   }
@@ -621,18 +750,35 @@ export class LiveKitRoomController {
     return pub != null && !pub.isMuted;
   }
 
-  /** Reads the local-media toggle state from the room's local participant. */
+  /**
+   * Reads the local-media toggle state from the room's local participant, with what is shared while sharing: the kind
+   * of surface, and a shared panel's name while the published screen track is that panel's.
+   */
   private readLocalMedia(room: Room): LiveKitLocalMediaState {
     const lp = room.localParticipant;
+    const screen = lp?.getTrackPublication(Track.Source.ScreenShare)?.track?.mediaStreamTrack;
+    const capture = this.screenShare.Capture;
+    const panelLabel = capture && capture.Track === screen ? capture.PanelLabel : undefined;
     return {
       MicrophoneEnabled: lp ? lp.isMicrophoneEnabled : false,
       CameraEnabled: lp ? lp.isCameraEnabled : false,
       ScreenShareEnabled: lp ? lp.isScreenShareEnabled : false,
+      ...(screen ? { ScreenShareSurface: CapturedSurfaceOf(screen) } : {}),
+      ...(panelLabel ? { ScreenSharePanelLabel: panelLabel } : {}),
+      AgentVisionOn: lp ? AllowsAgentVision(lp.attributes) : false,
     };
   }
 
-  /** Toggles a local-media kind via the local participant, surfacing failures as device errors. */
-  private async toggleLocalMedia(kind: 'microphone' | 'camera' | 'screen', enabled: boolean): Promise<void> {
+  /**
+   * Toggles a local-media kind via the local participant, surfacing failures as device errors that name the kind and
+   * whether it was being turned on or off. `screenRequest` is what a screen share that starts asks the browser's picker
+   * for.
+   */
+  private async toggleLocalMedia(
+    kind: 'microphone' | 'camera' | 'screen',
+    enabled: boolean,
+    screenRequest?: DisplayCaptureSurface | DisplayCaptureOptions,
+  ): Promise<void> {
     if (!this.room) {
       return;
     }
@@ -647,24 +793,67 @@ export class LiveKitRoomController {
       } else if (kind === 'camera') {
         await lp.setCameraEnabled(enabled);
       } else {
-        await lp.setScreenShareEnabled(enabled);
+        await this.setScreenShare(lp, enabled, screenRequest);
       }
       this.rebuildState();
       this.Events.Emit('localMediaChanged', this.stateSubject.value.LocalMedia);
     } catch (err) {
-      this.emitError('device', `Failed to ${enabled ? 'enable' : 'disable'} ${kind}.`, err);
+      const device: LiveKitErrorDevice = { Media: kind, Change: enabled ? 'on' : 'off' };
+      this.emitError('device', `Failed to ${enabled ? 'enable' : 'disable'} ${kind}.`, err, device);
     }
   }
 
-  /** Applies the requested initial media (mic on by default, camera off — voice-first), honoring device ids. */
-  private async applyInitialMedia(room: Room, options: LiveKitRoomConnectOptions): Promise<void> {
-    const wantMic = options.EnableMicrophone ?? true;
-    const wantCam = options.EnableCamera ?? false;
-    if (wantMic) {
-      await room.localParticipant.setMicrophoneEnabled(true, options.MicrophoneDeviceId ? { deviceId: options.MicrophoneDeviceId } : undefined);
+  /** Starts sharing through `/media` display capture, or stops. A share the browser refuses throws, with its reason. */
+  private async setScreenShare(
+    lp: LocalParticipant,
+    enabled: boolean,
+    request?: DisplayCaptureSurface | DisplayCaptureOptions,
+  ): Promise<void> {
+    if (!enabled) {
+      await this.screenShare.Stop(lp);
+      return;
     }
-    if (wantCam) {
-      await room.localParticipant.setCameraEnabled(true, options.CameraDeviceId ? { deviceId: options.CameraDeviceId } : undefined);
+    const outcome = await this.screenShare.Start(lp, request);
+    if (outcome.Status === 'failed') {
+      throw new Error(outcome.Message);
+    }
+  }
+
+  /** The browser ended the local share ("Stop sharing", or the shared surface closed): the room stops showing it. */
+  private onScreenShareEnded(): void {
+    if (!this.room) {
+      return;
+    }
+    this.rebuildState();
+    this.Events.Emit('localMediaChanged', this.stateSubject.value.LocalMedia);
+  }
+
+  /**
+   * Turns on the requested initial media (mic on by default, camera off — voice-first), honoring device ids. Each
+   * device is turned on by itself: one that fails is left off and reported, and the other still starts. The camera is
+   * not started once the user has left.
+   */
+  private async applyInitialMedia(room: Room, options: LiveKitRoomConnectOptions): Promise<void> {
+    const lp = room.localParticipant;
+    if (options.EnableMicrophone ?? true) {
+      const device = options.MicrophoneDeviceId ? { deviceId: options.MicrophoneDeviceId } : undefined;
+      await this.startInitialDevice('microphone', () => lp.setMicrophoneEnabled(true, device));
+    }
+    if ((options.EnableCamera ?? false) && this.room === room) {
+      const device = options.CameraDeviceId ? { deviceId: options.CameraDeviceId } : undefined;
+      await this.startInitialDevice('camera', () => lp.setCameraEnabled(true, device));
+    }
+  }
+
+  /**
+   * Turns on one device while joining. A failure is a `device` error that names the device being turned on, as when
+   * the user turns it on later (LiveKit reports it first, as its own `MediaDevicesError`); the device stays off.
+   */
+  private async startInitialDevice(kind: 'microphone' | 'camera', start: () => Promise<LocalTrackPublication | undefined>): Promise<void> {
+    try {
+      await start();
+    } catch (err) {
+      this.emitError('device', `Failed to enable ${kind}.`, err, { Media: kind, Change: 'on' });
     }
   }
 
@@ -774,15 +963,21 @@ export class LiveKitRoomController {
     this.Events.Emit('stateChanged', next);
   }
 
-  /** Emits a normalized error via the `error` event. */
-  private emitError(kind: LiveKitRoomError['Kind'], message: string, cause?: unknown): void {
-    this.Events.Emit('error', { Kind: kind, Message: message, Cause: cause });
+  /** Emits a normalized error via the `error` event; a device error about one device names it (`Device`). */
+  private emitError(kind: LiveKitRoomError['Kind'], message: string, cause?: unknown, device?: LiveKitErrorDevice): void {
+    this.Events.Emit('error', { Kind: kind, Message: message, Cause: cause, ...(device ? { Device: device } : {}) });
   }
 
-  /** The initial / reset room state. */
-  private initialState(): LiveKitRoomState {
+  /**
+   * The room state before joining, which a leave or a disconnect merges back over the current state: nobody in the
+   * room, the user included, and no room name. It sets every field ({@link LiveKitRoomResetState}), since a field left
+   * out would keep its value through the merge.
+   */
+  private initialState(): LiveKitRoomResetState {
     return {
       Status: 'idle',
+      RoomName: undefined,
+      Local: undefined,
       Remote: [],
       ActiveSpeakerIdentities: [],
       LocalMedia: { MicrophoneEnabled: false, CameraEnabled: false, ScreenShareEnabled: false },
@@ -790,6 +985,21 @@ export class LiveKitRoomController {
       NoiseFilterEnabled: false,
       BackgroundEffect: { Kind: 'none' },
       E2EEEnabled: false,
+      AgentWatching: false,
     };
   }
+}
+
+/**
+ * The state the controller's reset merges over the current one. Every field of {@link LiveKitRoomState} is required
+ * here, the optional ones too (`undefined` clears one), so the compiler catches a field the reset leaves out; mapping
+ * over the key union rather than `keyof` keeps `undefined` in an optional field's type. `DisconnectReason` is the
+ * exception: it must outlast the reset, since during `Disconnect` LiveKit reports the disconnect and its reason first
+ * (`handleDisconnected` resets with the reason), and `Disconnect` resets again after it.
+ */
+type LiveKitRoomResetState = { [K in Exclude<keyof LiveKitRoomState, 'DisconnectReason'>]: LiveKitRoomState[K] };
+
+/** Whether an agent in the room watches the cameras and screens people let it see (its bot's attributes say so). */
+function agentWatchesIn(room: Room): boolean {
+  return Array.from(room.remoteParticipants.values()).some((p) => IsAgentWatching(p.attributes));
 }

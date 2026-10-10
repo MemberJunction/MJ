@@ -39,6 +39,31 @@
         (CloseRequested)="OnReviewClose()">
       </mj-realtime-agent-banner>
 
+      <!-- No microphone works: the call lost its microphone, so the agent hears nothing until the user picks one in the
+           device menu. It stays for as long as that lasts, with no dismiss button, and goes once a microphone is on.
+           Never in review. -->
+      @if (MicrophoneNotice; as message) {
+        <mj-alert class="call-microphone-notice"
+                  Variant="warning"
+                  Size="sm"
+                  Icon="fa-solid fa-microphone-slash"
+                  [Message]="message">
+        </mj-alert>
+      }
+
+      <!-- Why the call shows no avatar its agent asked for: once per call, from the moment it connects, until the user
+           dismisses it or it hides itself after 10 s. Never in review. -->
+      @if (AvatarNotice) {
+        <mj-alert class="call-avatar-notice"
+                  Variant="info"
+                  Size="sm"
+                  Icon="fa-solid fa-video-slash"
+                  [Message]="AvatarNoticeMessage"
+                  Dismissible
+                  (Dismissed)="OnAvatarNoticeDismissed()">
+        </mj-alert>
+      }
+
       <!-- Ephemeral narration with no active working card to anchor to → under the banner -->
       @if (!IsReviewing && State.Narration && !State.ActiveCallId && Disclosure.ShowThread) {
         <div class="banner-live-note" role="status" aria-live="polite">
@@ -47,27 +72,55 @@
         </div>
       }
 
-      <div class="call-body" [class.call-body--hero]="ShowHero && state !== 'connecting'">
-        @if (!IsReviewing && state === 'connecting') {
+      <!-- The agent's place above the thread in the console: the agent's video (the Avatar) lies over it while it presents.
+           Outside the scrolling body, so it stays in view as the conversation grows. -->
+      @if (!ShowHero) {
+        <div class="call-presenter" [class.call-presenter--on]="PresenterOnStage" #presenterSlot></div>
+      }
+
+      <!-- While the call connects, the connecting screen takes the body, except from a hero the agent's video presents in:
+           a resume on a new connection keeps that hero, so the video keeps its place and its last frame. -->
+      <div class="call-body" [class.call-body--hero]="ShowHero && !ShowConnectingScreen(state)">
+        @if (ShowConnectingScreen(state)) {
           <div class="call-connecting">
             <mj-loading text="Connecting to the live session…" size="medium"></mj-loading>
           </div>
         } @else if (ShowHero) {
           <!-- PURE-AUDIO HERO (level 0): the orb IS the interface — it breathes with the
                audio inside expanding sound-wave rings; nothing to read, nothing to configure. -->
-          <div class="hero" [attr.data-state]="state" role="status" aria-live="polite">
-            <div class="hero__stage">
-              <span class="hero__ring" aria-hidden="true"></span>
-              <span class="hero__ring hero__ring--2" aria-hidden="true"></span>
-              <span class="hero__ring hero__ring--3" aria-hidden="true"></span>
-              <div class="hero__orb" [attr.data-state]="HeroOrbState(state)" aria-hidden="true"></div>
+          <div class="hero" [class.hero--presenting]="PresenterOnStage" [attr.data-state]="state" role="status" aria-live="polite">
+            @if (!PresenterOnStage) {
+              <mj-realtime-agent-orb class="hero__orb" [State]="HeroOrbState(state)"></mj-realtime-agent-orb>
+              <div class="hero__eq" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span>
+              </div>
+            }
+            <!-- The agent's place in the hero: the agent's video (the Avatar) lies over it while it presents. With
+                 captions on, the newest caption runs over the video's lower third, as subtitles do. Hidden from
+                 assistive technology: the conversation, a click away, is the accessible transcript, and this live
+                 region would read every word as it arrives. -->
+            <div class="hero__presenter" [class.hero__presenter--on]="PresenterOnStage" #presenterSlot>
+              @if (ShowAvatarCaptions && AvatarCaption; as caption) {
+                <p class="hero__caption" aria-hidden="true">
+                  <span class="hero__caption-window">
+                    <span class="hero__caption-lines">
+                      @if (caption.Speaker) {
+                        <span class="hero__caption-speaker">{{ caption.Speaker }}:</span>
+                      }
+                      {{ caption.Text }}
+                    </span>
+                  </span>
+                </p>
+              }
             </div>
-            <div class="hero__eq" aria-hidden="true">
-              <span></span><span></span><span></span><span></span><span></span>
-              <span></span><span></span><span></span><span></span>
-            </div>
-            <div class="hero__name">{{ AgentName }}</div>
-            <div class="hero__sub">{{ HeroStateLabel(state) }}</div>
+            @if (!PresenterOnStage) {
+              <div class="hero__name">{{ AgentName }}</div>
+              <div class="hero__sub">{{ HeroStateLabel(state) }}</div>
+            } @else {
+              <!-- The agent's tile names it and says what it is doing; this live region still says it for screen readers. -->
+              <span class="hero__sr">{{ HeroStateLabel(state) }}</span>
+            }
             <button type="button" class="hero__reveal" (click)="OnTextReveal()"
                     title="Show the conversation as text">
               <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
@@ -88,35 +141,52 @@
         }
       </div>
 
-      @if (!IsReviewing) {
-        <!-- "Agent can see": what the agent is looking at, with a switch per source. Always shown while any
-             video source exists (a privacy indicator is never gated behind the disclosure ladder). -->
-        <mj-realtime-perception-chip [Sources]="VideoSources"
-                                     (SourceToggled)="OnVideoSourceToggled($event)">
-        </mj-realtime-perception-chip>
+      <!-- The call's controls along the foot of the column. The stage starts its picture-in-picture boxes clear of
+           them, so a camera or a shared screen never opens over End call (#5408). Empty, so with no size, in review. -->
+      <div class="call-controls" #callControls>
+        @if (!IsReviewing) {
+          <!-- "Agent can see": what the agent is looking at, with a switch per source. Always shown while any
+               video source exists (a privacy indicator is never gated behind the disclosure ladder). -->
+          <mj-realtime-perception-chip [Sources]="VideoSources"
+                                       (SourceToggled)="OnVideoSourceToggled($event)"
+                                       (SourcePicked)="OnVideoSourcePicked($event)">
+          </mj-realtime-perception-chip>
 
-        <!-- Active channels (earned with the console at level 2+, host-gated via [ShowChannels]).
-             The strip component self-hides when there are no active channels. -->
-        @if (ChannelStripVisible) {
-          <mj-realtime-channel-strip></mj-realtime-channel-strip>
+          <!-- Active channels (earned with the console at level 2+, host-gated via [ShowChannels]).
+               The strip component self-hides when there are no active channels. -->
+          @if (ChannelStripVisible) {
+            <mj-realtime-channel-strip></mj-realtime-channel-strip>
+          }
+
+          <!-- The BOTTOM DOCK: phone-call strip ⇄ fused minis+composer — the user's own
+               two-way toggle (Type opens, hide closes), never level-forced. -->
+          <mj-realtime-composer
+            [Open]="ComposerOpen"
+            [Compact]="Ui.compact && Ui.chrome === 'orb'"
+            (OpenChanged)="OnComposerOpenChanged($event)"
+            [CaptionsOn]="ShowCaptions"
+            [IsMuted]="Muted"
+            [ShowCamera]="CaptureOffers.Camera"
+            [ShowShare]="CaptureOffers.Screen"
+            [CameraOn]="CameraOn"
+            [Sharing]="Sharing"
+            [SharePanels]="SharePanels"
+            [Devices]="CallDevices"
+            [SelectedMicrophoneID]="SelectedMicrophoneID"
+            [SelectedCameraID]="SelectedCameraID"
+            (CameraToggled)="OnCameraToggled($event)"
+            (ShareRequested)="OnShareRequested($event)"
+            (StopShareRequested)="OnStopShareRequested()"
+            (DeviceSelected)="OnDeviceSelected($event)"
+            [ShowDetails]="ShowDetailsControl"
+            [DetailsOn]="DetailsPeek"
+            (CaptionsToggled)="OnCaptionsToggled($event)"
+            (DetailsToggled)="OnDetailsToggled()"
+            (MuteChanged)="OnComposerMuteChanged($event)"
+            (EndRequested)="OnEndCall()">
+          </mj-realtime-composer>
         }
-
-        <!-- The BOTTOM DOCK: phone-call strip ⇄ fused minis+composer — the user's own
-             two-way toggle (Type opens, hide closes), never level-forced. -->
-        <mj-realtime-composer
-          [Open]="ComposerOpen"
-          [Compact]="Ui.compact && Ui.chrome === 'orb'"
-          (OpenChanged)="OnComposerOpenChanged($event)"
-          [CaptionsOn]="ShowCaptions"
-          [IsMuted]="Muted"
-          [ShowDetails]="ShowDetailsControl"
-          [DetailsOn]="DetailsPeek"
-          (CaptionsToggled)="OnCaptionsToggled($event)"
-          (DetailsToggled)="OnDetailsToggled()"
-          (MuteChanged)="OnComposerMuteChanged($event)"
-          (EndRequested)="OnEndCall()">
-        </mj-realtime-composer>
-      }
+      </div>
     </div>
 
     <!-- RIGHT: TABBED SURFACE PANEL — disclosure-gated: it EXISTS once earned (level 2+,
@@ -135,7 +205,7 @@
              (dblclick)="OnPanelResizeReset()"></div>
       }
 
-      <div class="call-panel" [style.width.px]="ChannelFocusMode ? null : PanelAreaSize">
+      <div class="call-panel" [style.width.px]="PanelAreaSize">
         <mj-realtime-surface-tabs
           [State]="State"
           [DevMode]="DevMode"
@@ -143,14 +213,71 @@
           [EnvironmentID]="EnvironmentID"
           [ShowActivityTab]="ShowActivityTab"
           [ExtraArtifacts]="ReviewArtifacts"
-          [Fill]="ChannelFocusMode"
           (OpenRunRequested)="OnOpenRunRequested($event)"
+          [Collapsed]="PanelCollapsed"
           (CollapsedChange)="OnPanelCollapsedChange($event)"
           (WideChanged)="OnPanelWideChanged($event)"
-          (ActiveChannelChange)="OnActiveChannelChange($event)">
+          (ActiveChannelChange)="OnActiveChannelChange($event)"
+          (ChannelSlotChange)="OnChannelSlotChange($event)"
+          [SurfacePlacements]="SurfaceStage.Placements"
+          [AllowedPlacements]="SurfaceStage.AllowedPlacements"
+          (MoveRequested)="OnMoveRequested($event)"
+          (ResetLayoutRequested)="OnResetLayout()">
         </mj-realtime-surface-tabs>
       </div>
     }
+
+    <!-- THE STAGE: every channel surface lives here, in one layer over the overlay. A surface
+         is created the first time it is seen, lies over its tab's slot while that tab is
+         active, fills the overlay while its channel holds focus (or, for the agent's video,
+         lies in the agent's place in the call), and otherwise waits out of sight — so
+         collapsing the panel, switching tabs or entering focus never reloads it.
+         The pane tells each channel when its surface goes out of sight, so it can pause.
+         A channel that opts in (SurfaceShareable, such as the whiteboard) marks its frame as a panel the Share menu
+         offers under "This panel" while it is on screen. A picture-in-picture box the user has not moved starts
+         clear of the call's controls. -->
+    <mj-media-stage class="call-stage"
+                    [Surfaces]="SurfaceStage.Surfaces"
+                    [TabSlot]="StageSlot?.Element ?? null"
+                    [StageSlot]="StageSurfaceSlot"
+                    [ActiveTabKey]="StageSlot?.Key ?? null"
+                    [PipRects]="PipRects"
+                    [PipKeepClear]="callControls"
+                    (PipRectChange)="OnPipRectChange($event)">
+      <ng-template mjMediaStageSurface let-key let-visible="Visible" let-placement="Placement">
+        @if (SurfaceStage.PluginFor(key); as plugin) {
+          <div class="stage-frame" role="region" [attr.aria-label]="plugin.TabTitle"
+               [mjSharePanel]="plugin.SurfaceShareable ? plugin.TabTitle : null" [mjSharePanelIcon]="plugin.TabIcon">
+            <mj-realtime-channel-pane [Plugin]="plugin" [Visible]="visible" [Placement]="placement"></mj-realtime-channel-pane>
+            <!-- A surface presenting the agent has no focus pill, so its "Move to…" menu rides on it. -->
+            @if (placement === 'stage' && plugin.ShowsAgentVideo) {
+              <mj-media-move-menu
+                class="stage-presenter-move"
+                [Key]="key"
+                [Title]="plugin.TabTitle"
+                Placement="stage"
+                [Allowed]="SurfaceStage.AllowedFor(key)"
+                (MoveRequested)="OnMoveRequested($event)"
+                (ResetLayoutRequested)="OnResetLayout()">
+              </mj-media-move-menu>
+            }
+          </div>
+        }
+      </ng-template>
+      <!-- A picture-in-picture box's bar carries the same "Move to…" menu. -->
+      <ng-template mjMediaStagePipActions let-key>
+        @if (SurfaceStage.PluginFor(key); as plugin) {
+          <mj-media-move-menu
+            [Key]="key"
+            [Title]="plugin.TabTitle"
+            Placement="pip"
+            [Allowed]="SurfaceStage.AllowedFor(key)"
+            (MoveRequested)="OnMoveRequested($event)"
+            (ResetLayoutRequested)="OnResetLayout()">
+          </mj-media-move-menu>
+        }
+      </ng-template>
+    </mj-media-stage>
 
     <!-- FOCUS floating call pill: the main column is hidden, so the live call's
          identity + state + mute / show-thread / end controls ride over the surface. -->
@@ -175,12 +302,34 @@
                 title="Show thread" aria-label="Show the conversation thread">
           <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
         </button>
+        @if (StagePlugin; as stagePlugin) {
+          <mj-media-move-menu
+            [Key]="stagePlugin.ChannelName"
+            [Title]="stagePlugin.TabTitle"
+            Placement="stage"
+            [Allowed]="SurfaceStage.AllowedFor(stagePlugin.ChannelName)"
+            (MoveRequested)="OnMoveRequested($event)"
+            (ResetLayoutRequested)="OnResetLayout()">
+          </mj-media-move-menu>
+        }
         <button type="button" class="board-focus-pill__btn board-focus-pill__btn--end"
                 (click)="OnFocusPillEnd()"
                 title="End call" aria-label="End the call">
           <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
         </button>
       </div>
+    }
+
+    <!-- THE CAMERA CHECK: the first time the user turns the camera on in a call, they see it, and can pick another
+         camera, before the agent does. Until they choose, the camera's own box says it is waiting. -->
+    @if (CameraCheck; as camera) {
+      <mj-realtime-camera-check-card
+        [Camera]="camera"
+        [AgentName]="AgentName"
+        [Switch]="SwitchCheckedCamera"
+        (Confirmed)="OnCameraCheckConfirmed()"
+        (Declined)="OnCameraCheckDeclined()">
+      </mj-realtime-camera-check-card>
     }
 
   </div>

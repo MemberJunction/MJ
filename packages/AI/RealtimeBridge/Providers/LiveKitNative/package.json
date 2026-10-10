@@ -2,7 +2,7 @@
   "name": "@memberjunction/ai-bridge-livekit-native",
   "type": "module",
   "version": "6.2.0-edge.3",
-  "description": "MemberJunction: the REAL native LiveKit room-client module for the LiveKit Realtime Bridge. Wraps @livekit/rtc-node (the Node WebRTC participant) behind the NativeRoomModule contract that @memberjunction/ai-bridge-livekit's LiveKitNativeMeetingSdk expects — joins a room as a bot, publishes the agent's voice on an audio track, and subscribes to per-participant audio for diarized hearing. Point LiveKitNativeSdkConfig.NativeModuleSpecifier at this package to make the agent talk in a LiveKit room.",
+  "description": "MemberJunction: the REAL native LiveKit room-client module for the LiveKit Realtime Bridge. Wraps @livekit/rtc-node (the Node WebRTC participant) behind the NativeRoomModule contract that @memberjunction/ai-bridge-livekit's LiveKitNativeMeetingSdk expects \u2014 joins a room as a bot, publishes the agent's voice on an audio track, and subscribes to per-participant audio for diarized hearing. Point LiveKitNativeSdkConfig.NativeModuleSpecifier at this package to make the agent talk in a LiveKit room.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -18,11 +18,14 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
+    "@memberjunction/ai": "6.2.0-edge.3",
+    "@memberjunction/ai-bridge-livekit": "6.2.0-edge.3",
     "@memberjunction/core": "6.2.0-edge.3",
-    "@memberjunction/ai-bridge-livekit": "6.2.0-edge.3"
+    "@memberjunction/global": "6.2.0-edge.3",
+    "jpeg-js": "^0.4.4"
   },
   "optionalDependencies": {
-    "@livekit/rtc-node": "^0.13.0"
+    "@livekit/rtc-node": "^0.13.29"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

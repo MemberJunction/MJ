@@ -12,10 +12,11 @@
  * native-invite**. What Discord *does* offer first-class: **per-user audio** (excellent diarization via
  * the speaking user id), **video / screen ("Go Live")**, and a **text channel** for chat.
  *
- * ## Discord capability coverage (per the §8 seed row)
- * On-demand join, inbound routing, audio in/out, directional video/screen flags, a diarized roster
- * (`SpeakerDiarization`) with member mute (via the Meeting Controls channel), and text-channel chat (via
- * {@link DiscordBridge.PostChatMessage}).
+ * ## Discord capability coverage (per the seed row)
+ * On-demand join, inbound routing, audio in/out, a diarized roster (`SpeakerDiarization`) with member
+ * mute (via the Meeting Controls channel), and text-channel chat (via {@link DiscordBridge.PostChatMessage}).
+ * No video or screen ("Go Live") in either direction yet: the {@link IDiscordVoiceSdk} seam carries audio
+ * only, so the seed row claims none of the video and screen flags.
  *
  * **No hand-raise (➖)**: like Google Meet, Discord voice channels surface no hand-raise signal, so —
  * unlike `ZoomBridge` — there is no `onHandRaise` wiring. The Meeting Controls source still satisfies the
@@ -208,8 +209,8 @@ export class DiscordBridge extends BaseRealtimeBridge {
 
     /**
      * Sends an outbound media frame into the voice channel. Audio is fed to the SDK's audio-player path;
-     * video/screen frames are gated by the directional capability flags (the transport carries them, and
-     * the SDK send is a deployment-time binding TODO — today the models emit audio).
+     * `video-out` and `screen-out` frames are dropped: the SDK seam has no video or screen ("Go Live")
+     * send, so the provider row claims neither `VideoOut` nor `ScreenOut`.
      *
      * @param track The outbound track the frame targets.
      * @param frame The media frame to send.
@@ -228,8 +229,8 @@ export class DiscordBridge extends BaseRealtimeBridge {
             }
             case 'video-out':
             case 'screen-out':
-                // Directional video/screen ("Go Live") capability is declared; the SDK send binding lands
-                // with the first realtime model that emits these tracks (TODO at deployment). No-op for now.
+                // Dropped: the SDK seam has no video or screen ("Go Live") send yet, and the provider row claims
+                // neither flag. Carrying one takes a seam method, its real binding, and the flag on the provider row.
                 break;
             default:
                 // An inbound track was passed to SendMedia — ignore (defensive).

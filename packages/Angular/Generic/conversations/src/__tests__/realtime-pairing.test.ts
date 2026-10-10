@@ -264,5 +264,18 @@ describe('BuildRealtimeConfigOverridesJson', () => {
 
   it('returns null when only blank values are supplied', () => {
     expect(BuildRealtimeConfigOverridesJson('  ', '  ')).toBeNull();
+    expect(BuildRealtimeConfigOverridesJson('  ', '  ', '  ')).toBeNull();
+  });
+
+  it('carries the avatar that comes with a picked voice as realtime.video, with video turned on', () => {
+    // The same literal realtime-convergence-drift.test.ts pins for the server-side BuildRealtimeOverridesJson.
+    expect(BuildRealtimeConfigOverridesJson('m', 'Puck', ' Ben ')).toBe(
+      '{"realtime":{"modelPreference":"m","voice":{"default":{"voice":"Puck"}},"video":{"enabled":true,"avatarId":"Ben"}}}',
+    );
+    expect(JSON.parse(BuildRealtimeConfigOverridesJson(null, null, 'Ben') as string))
+      .toEqual({ realtime: { video: { enabled: true, avatarId: 'Ben' } } });
+    // A voice without an avatar sends no video block, so the agent's own video setting stands.
+    expect(JSON.parse(BuildRealtimeConfigOverridesJson('m', 'Puck', null) as string))
+      .toEqual({ realtime: { modelPreference: 'm', voice: { default: { voice: 'Puck' } } } });
   });
 });

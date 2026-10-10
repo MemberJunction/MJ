@@ -1366,6 +1366,14 @@ export * from './geminiImage';
 
 // Export realtime (Gemini Live) driver
 export * from './geminiRealtime';
+export { GEMINI_LIVE_MODEL_ALIASES_ENV, type GeminiLiveEndpoint } from './geminiLiveProfiles';
+
+// Export the avatar video bitrate setting (MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS)
+export { GEMINI_AVATAR_VIDEO_BITRATE_ENV, GEMINI_AVATAR_VIDEO_BITRATE_BPS_DEFAULT, ResolveGeminiAvatarVideoBitrateBps } from './geminiAvatarVideoBitrate';
+
+// Export the Gemini Live setup writer and the relay policy (MJAPI's realtime relay)
+export { BuildGeminiLiveSetup, BuildGeminiLiveModelPath, type GeminiLiveSetupTarget } from './geminiLiveSetup';
+export { GeminiLiveRelayPolicy, type GeminiLiveRelayPolicyOptions } from './geminiLiveRelayPolicy';
 
 // Export multimodal embeddings
 export * from './geminiEmbedding';

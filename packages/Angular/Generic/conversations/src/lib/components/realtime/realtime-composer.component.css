@@ -1,5 +1,7 @@
 :host {
   display: block;
+  /* The fused dock reflows by its own width, not the window's (the call column narrows when the panel opens). */
+  container-type: inline-size;
 }
 
 /* ---------- Levels 0–1: phone-call strip (big round controls, centered) ---------- */
@@ -19,52 +21,34 @@
   align-items: center;
 }
 
-.ctrl {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--mj-border-strong);
-  background: var(--mj-bg-surface-card);
-  color: var(--mj-text-primary);
-  cursor: pointer;
-  font-size: 18px;
-  transition: all 150ms ease;
-}
-.ctrl:hover {
-  background: var(--mj-bg-surface-hover);
-}
-.ctrl--on {
-  background: var(--mj-brand-primary);
-  border-color: var(--mj-brand-primary);
-  color: var(--mj-text-inverse, #fff);
-}
-.ctrl--muted {
-  background: var(--mj-status-warning-bg);
-  border-color: var(--mj-status-warning);
-  color: var(--mj-status-warning);
-}
-.ctrl--end {
-  width: 60px;
-  height: 60px;
-  background: var(--mj-status-error);
-  border-color: var(--mj-status-error);
-  color: var(--mj-text-inverse, #fff);
-  font-size: 20px;
-  box-shadow: 0 6px 20px color-mix(in srgb, var(--mj-status-error) 40%, transparent);
-}
-.ctrl--end:hover {
-  background: var(--mj-status-error);
-  filter: brightness(0.92);
-}
 
+/* Matches mj-media-controls' own labels, so every control in the strip is named alike. */
 .ctrl-label {
-  font-size: 11px;
+  font-size: var(--mj-text-xs);
   color: var(--mj-text-muted);
   text-align: center;
-  margin-top: 6px;
+  margin-top: var(--mj-space-1-5);
   font-weight: 500;
+}
+
+/* The call's media controls sit in the strip like its other groups. */
+.strip__media {
+  align-items: flex-start;
+  gap: 22px;
+}
+
+/* A narrow strip tightens its gaps, then wraps onto a second row, rather than cutting off its first and last controls. */
+@container (max-width: 600px) {
+  .strip,
+  .strip__media {
+    gap: 12px;
+  }
+}
+@container (max-width: 480px) {
+  .strip {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
 }
 .ctrl-label--end {
   color: var(--mj-status-error);
@@ -90,35 +74,11 @@
   gap: 7px;
   flex-shrink: 0;
 }
-.mini {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  font-size: 13.5px;
-  border: 1px solid var(--mj-border-strong);
-  background: var(--mj-bg-surface-card);
-  color: var(--mj-text-primary);
-  transition: all 140ms ease;
-}
-.mini:hover {
-  background: var(--mj-bg-surface-hover);
-}
-.mini--on {
-  background: color-mix(in srgb, var(--mj-brand-primary) 16%, transparent);
-  border-color: var(--mj-brand-primary);
-  color: var(--mj-brand-accent, var(--mj-brand-primary));
-}
-.mini--muted {
-  background: var(--mj-status-warning-bg);
-  border-color: var(--mj-status-warning);
-  color: var(--mj-status-warning);
-}
 
+/* min-width: 0 lets the box (and its text) give way to the controls on a narrow dock instead of pushing End out. */
 .dock__box {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: flex-end;
   gap: 9px;
@@ -128,6 +88,18 @@
   background: var(--mj-bg-surface-card);
   transition: border-color 140ms ease, box-shadow 140ms ease, border-radius 140ms ease;
 }
+/* On a narrow dock the text box takes a row of its own under the controls, so neither is squeezed. */
+@container (max-width: 520px) {
+  .dock {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .dock__box {
+    order: 1;
+    flex-basis: 100%;
+  }
+}
+
 .dock__box:focus-within {
   border-color: var(--mj-brand-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
@@ -184,85 +156,37 @@
   cursor: not-allowed;
 }
 
-/* The dock's hide control — typing is a two-way door, never permanent chrome. */
-.dock__hide {
-  border-style: dashed;
-  color: var(--mj-text-muted);
-  flex-shrink: 0;
-}
-.dock__hide:hover {
-  color: var(--mj-text-primary);
-}
 
-.mini--end {
-  background: var(--mj-status-error);
-  border-color: var(--mj-status-error);
-  color: var(--mj-text-inverse, #fff);
-  flex-shrink: 0;
-}
-.mini--end:hover {
-  background: var(--mj-status-error);
-  filter: brightness(0.92);
-}
 
 /* ============================================================= COMPACT (Calm Orb · overlay)
-   The lean dock — Mute + End + a "•••" that blooms a small sheet (Captions / Details / Type).
-   Round controls, red End — matches the mockup. No 5-button bar, no overlapping hint. */
+   The lean dock — a "•••" that blooms a small sheet (Details / Type), Captions, the microphone and a red End.
+   Design-system circles. No 5-button bar, no overlapping hint. */
 .dock-lean {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 14px;
+  row-gap: 10px;
   padding: 16px 18px 20px;
   background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--mj-bg-page) 35%, transparent));
 }
 
-.lean-ctrl {
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px solid var(--mj-border-strong);
-  background: var(--mj-bg-surface-card);
-  color: var(--mj-text-primary);
-  cursor: pointer;
-  transition: all 150ms ease;
+/* A narrow lean dock (the call column is at least 420px wide) tightens its gaps, so the microphone's device chevron and
+   the Share arrow fit beside the other controls; where even that is not enough (larger touch targets), it wraps onto a
+   second row rather than cutting off its first and last controls. */
+@container (max-width: 490px) {
+  .dock-lean {
+    gap: 6px;
+    row-gap: 10px;
+    padding-inline: 12px;
+  }
+  .lean__media {
+    gap: 4px;
+  }
 }
-.lean-ctrl:hover {
-  background: var(--mj-bg-surface-hover);
-  transform: translateY(-1px);
-}
-.lean-ctrl--lg {
-  width: 58px;
-  height: 58px;
-  font-size: 19px;
-}
-.lean-ctrl--more {
-  width: 46px;
-  height: 46px;
-  font-size: 16px;
-}
-.lean-ctrl--on {
-  background: var(--mj-brand-primary);
-  border-color: var(--mj-brand-primary);
-  color: var(--mj-text-inverse, #fff);
-}
-.lean-ctrl--muted {
-  background: var(--mj-status-warning-bg);
-  border-color: var(--mj-status-warning);
-  color: var(--mj-status-warning);
-}
-.lean-ctrl--end {
-  background: var(--mj-status-error);
-  border-color: var(--mj-status-error);
-  color: var(--mj-text-inverse, #fff);
-  font-size: 20px;
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--mj-status-error) 40%, transparent);
-}
-.lean-ctrl--end:hover {
-  background: var(--mj-status-error);
-  filter: brightness(0.94);
-}
+
 
 /* The "•••" overflow + its blooming sheet. */
 .lean-more {

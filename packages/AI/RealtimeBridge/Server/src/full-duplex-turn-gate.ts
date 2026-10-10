@@ -101,10 +101,20 @@ export class FullDuplexTurnGate {
      * @returns Whether to forward, drop, or cut — and whether this chunk took the floor.
      */
     public OnOutputAudio(byteLength: number): OutputGateResult {
+        return this.OnOutputDuration((byteLength / 2 / this.sampleRateHz) * 1000);
+    }
+
+    /**
+     * Decides what to do with one chunk of the model's outbound speech, given how long it plays: an avatar's media piece
+     * counts by its audio track's duration (a piece with video only counts 0 ms, and follows the burst it belongs to).
+     *
+     * @param chunkMs How long the chunk's speech plays, in milliseconds.
+     * @returns Whether to forward, drop, or cut — and whether this chunk took the floor.
+     */
+    public OnOutputDuration(chunkMs: number): OutputGateResult {
         const now = this.now();
         this.endStaleBurst(now);
         this.lastChunkAtMs = now;
-        const chunkMs = (byteLength / 2 / this.sampleRateHz) * 1000;
         switch (this.phase) {
             case 'Idle':
                 return this.startBurst(chunkMs);

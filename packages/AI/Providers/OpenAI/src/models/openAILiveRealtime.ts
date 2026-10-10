@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
     RealtimeDiagLog,
+    RealtimeDroppedInputReporter,
     IRealtimeSession,
     RealtimeSessionCapabilities,
     RealtimeSessionParams,
@@ -18,7 +19,9 @@ import {
     RealtimeVoiceOption,
     RealtimeProxyRegistry,
     REALTIME_SDP_EXCHANGE_PATH,
+    ResolveRealtimeProxyBaseHttpUrl,
     RealtimeToolBatchBarrier,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { MapUsageModalityDetail } from './openAIRealtime.js';
 
@@ -203,6 +206,9 @@ export class OpenAILiveSession implements IRealtimeSession {
     private _countedResponseIds = new Set<string>();
     private _currentTaskRevision = 0;
     private _toolBatchBarrier = new RealtimeToolBatchBarrier();
+
+    /** Reports the frames {@link SendInput} drops, once per kind and type. */
+    private readonly _droppedInput = new RealtimeDroppedInputReporter('OpenAILiveRealtime', 'this session sends audio only');
 
     private _outputHandlers: Array<(chunk: ArrayBuffer) => void> = [];
     private _transcriptHandlers: Array<(t: RealtimeTranscript) => void> = [];
@@ -700,10 +706,19 @@ export class OpenAILiveSession implements IRealtimeSession {
 
     // ─── IRealtimeSession Implementation ──────────────────────────────────────────
 
-    public SendInput(chunk: ArrayBuffer, kind?: 'audio' | 'video'): void {
-        if (kind === 'video') {
-            return; // Audio-only driver ignores video frames
+    /**
+     * @inheritdoc
+     *
+     * Appends an audio frame to the session's input audio (`session.input_audio.append`). The session sends audio only,
+     * so a frame of another kind (a camera or screen frame) is dropped, never appended as audio, and reported once per
+     * kind and type.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this._droppedInput.Report(frame);
+            return;
         }
+        const chunk = frame.Data;
         if (this._closed) {
             return;
         }
@@ -1182,19 +1197,20 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
     }
 
     /**
-     * Resolves the browser-facing HTTP(S) broker URL for the OpenAI Live WebRTC SDP exchange.
+     * Resolves the browser-facing URL of MJAPI's WebRTC SDP broker for one ticket:
+     * `<MJAPI origin>/realtime/sdp-exchange?ticket=<id>`.
+     *
+     * The origin comes from the shared {@link ResolveRealtimeProxyBaseHttpUrl} (`@memberjunction/ai`), so this driver
+     * finds MJAPI the way the relay and proxy drivers do: an explicit `Config.proxyBaseUrl`, else this driver's own
+     * `Config.brokerBaseUrl`, then `MJAPI_PUBLIC_URL`, then `GRAPHQL_BASE_URL` + `GRAPHQL_PORT`. With nothing set
+     * that is `http://localhost:4000`, MJAPI's default port. Only the origin is kept, because MJAPI serves the broker
+     * at its root, not under the GraphQL path.
      */
     protected resolveBrokerUrl(params: RealtimeSessionParams, ticketId: string): string {
-        const override = params.Config?.['proxyBaseUrl'] ?? params.Config?.['brokerBaseUrl'];
-        const source =
-            (typeof override === 'string' && override.trim().length > 0 ? override.trim() : '') ||
-            process.env['MJAPI_PUBLIC_URL'] ||
-            `${process.env['GRAPHQL_BASE_URL'] ?? 'http://localhost'}:${process.env['GRAPHQL_PORT'] ?? '4103'}`;
-        let end = source.length;
-        while (end > 0 && source.charCodeAt(end - 1) === 47 /* '/' */) {
-            end--;
-        }
-        const baseUrl = source.slice(0, end);
+        const override = [params.Config?.['proxyBaseUrl'], params.Config?.['brokerBaseUrl']].find(
+            (value) => typeof value === 'string' && value.trim().length > 0
+        );
+        const baseUrl = ResolveRealtimeProxyBaseHttpUrl({ Config: override === undefined ? {} : { proxyBaseUrl: override } });
         return `${baseUrl}${REALTIME_SDP_EXCHANGE_PATH}?ticket=${encodeURIComponent(ticketId)}`;
     }
 

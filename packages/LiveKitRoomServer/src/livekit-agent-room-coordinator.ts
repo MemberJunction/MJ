@@ -1,10 +1,12 @@
 /**
  * @fileoverview {@link LiveKitAgentRoomCoordinator} — the server-side **session-start harness** for the
  * MJ-native LiveKit room (§1 of the realtime-bridge buildout plan). Given an agent + a room, it:
- *   1. mints the agent bot's scoped LiveKit token ({@link LiveKitTokenService}),
- *   2. opens the realtime model session via an injectable {@link RealtimeSessionFactory} seam, and
+ *   1. opens the realtime model session via an injectable {@link RealtimeSessionFactory} seam,
+ *   2. mints the agent bot's scoped LiveKit token ({@link LiveKitTokenService}), whose attributes depend on the session, and
  *   3. bridges that session into the room through {@link AIBridgeEngine.StartBridgeSession} (which wires
  *      the transport seam + turn-taking automatically).
+ * A start that fails after step 1 closes the model session before the error propagates, recording the failure on the
+ * agent's co-agent run first ({@link FailedStartRecorder}).
  *
  * The realtime-session factory is a seam (mirroring `LiveKitBridge.SetSdkFactory`): production binds it to
  * the real model-resolution path (`@memberjunction/ai-agents`), and tests/de-risk inject a stub session.
@@ -15,7 +17,17 @@
 
 import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { ResolveIsModelFullDuplex, type IRealtimeSession, type RealtimeToolDefinition } from '@memberjunction/ai';
+import {
+  AgentAvatarAttributes,
+  AgentParticipantIdentity,
+  AgentWatchesAttributes,
+  InboundVideoStreamsOf,
+  ResolveIsModelFullDuplex,
+  type IRealtimeSession,
+  type RealtimeAvatarStatus,
+  type RealtimeToolDefinition,
+} from '@memberjunction/ai';
+import { DefaultNativeLoader, type NativeAvatarVideoSupport } from '@memberjunction/ai-bridge-livekit';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
   AlwaysAddressedMatcher,
@@ -27,11 +39,12 @@ import {
 } from '@memberjunction/ai-bridge-base';
 import {
   AIBridgeEngine,
+  type ActiveBridgeSession,
   type BridgeTranscriptSink,
   type BridgeTurnTakingToolHandler,
   type RoomTurnSnapshot,
 } from '@memberjunction/ai-bridge-server';
-import { LiveKitTokenService } from './livekit-token-service';
+import { LiveKitTokenService, type MintedToken } from './livekit-token-service';
 import { ResolveLiveKitNativeModuleSpecifier } from './livekit-native-module';
 
 /**
@@ -60,6 +73,15 @@ export type BridgeOps = Pick<AIBridgeEngine, 'Config' | 'ProviderByDriverClass' 
 
 /** The `DriverClass` the LiveKit bridge registers under (must match the `MJ: AI Bridge Providers` row). */
 export const LIVEKIT_BRIDGE_DRIVER_CLASS = 'LiveKitBridge';
+
+/**
+ * Whether an agent's avatar can be shown in the room: the native module's answer, or, on a phone call, no without asking
+ * (`phone`: the caller sees no video).
+ */
+type RoomAvatarVideo = NativeAvatarVideoSupport | { Supported: false; Reason: 'phone'; Detail?: string };
+
+/** The answer for a phone call: the module is not asked. */
+const PHONE_CALL_AVATAR_VIDEO: RoomAvatarVideo = { Supported: false, Reason: 'phone' };
 
 /** Context passed to the realtime-session factory when starting an agent room session. */
 export interface RealtimeSessionStartContext {
@@ -101,12 +123,24 @@ export interface RealtimeSessionStartContext {
   PriorTranscript?: string;
   /** The `MJ: Conversations` row the session writes to — stamped on the co-agent observability run. */
   ConversationID?: string;
+  /**
+   * `'room'` when this host's bot can publish the agent's avatar into the room (the native module answered
+   * `describeAvatarVideo` with support): the session may then ask the model to render it. Absent: audio only, as before.
+   */
+  AvatarDelivery?: 'room';
+  /**
+   * `true` when the agent is answering a phone call in the room ({@link AgentRoomHostOptions.Channel} `'phone'`): the
+   * caller sees no video, so the session asks the model for no avatar and reports `phone`. Never set with
+   * {@link AvatarDelivery}.
+   */
+  PhoneCall?: boolean;
 }
 
 /**
  * What a HOST that owns the call (a phone call arriving in a room, a web room with handoff tools) adds to an agent's
  * room session beyond the plain "join the room" the coordinator does for the Meet UI. All optional: a session started
- * without it behaves exactly as before.
+ * without it behaves exactly as before. A start that created the agent session for this agent alone (a Meet room, a
+ * scheduled meeting) passes only {@link AgentRoomHostOptions.OnSessionEnded}, to close that session when the agent leaves.
  */
 export interface AgentRoomHostOptions {
   /** Tools the host executes itself. */
@@ -126,12 +160,22 @@ export interface AgentRoomHostOptions {
   OnBargeIn?: () => void;
   /** Re-open the model session once, with the conversation so far, if it drops mid-call. */
   RecoverModelSession?: boolean;
-  /** Called once when the session has fully ended, for the host's own bookkeeping. */
+  /**
+   * Called once when the session has fully ended, for whatever reason (a stop, an emptied room, a lost model session),
+   * for the host's own bookkeeping: closing the agent session it created, freeing a capacity slot.
+   */
   OnSessionEnded?: (reason: BridgeDisconnectReason) => void | Promise<void>;
   /** How the agent got into the room. Default `'OnDemand'`. */
   JoinMethod?: 'InboundRoute' | 'OnDemand' | 'Invite';
   /** Whether the agent was called into the room or placed the call. Default: not stated. */
   Direction?: 'Inbound' | 'Outbound';
+  /**
+   * How the person the agent serves reached the room: `'phone'`, a phone call through SIP (they hear the agent and see
+   * nothing), or `'web'`, a browser. On a phone call the coordinator never asks for the avatar: no room delivery, and the
+   * session asks the model for none (`phone`), even when people in the room could see it. Default: not stated, which
+   * is treated like `'web'`.
+   */
+  Channel?: 'phone' | 'web';
 }
 
 /**
@@ -140,6 +184,21 @@ export interface AgentRoomHostOptions {
  * (`@memberjunction/ai-agents`); a test binds a spy.
  */
 export type TurnToolBinder = (session: IRealtimeSession, handler: BridgeTurnTakingToolHandler) => void;
+
+/**
+ * Says whether the agent behind a model session watches meetings (its `realtime.video.watchMeetings` setting) — the
+ * seam that keeps this package free of the agent runtime, like {@link TurnToolBinder}. Production binds it to the
+ * session's bridged runtime (`@memberjunction/ai-agents`); unbound, no agent watches.
+ */
+export type AgentVisionResolver = (session: IRealtimeSession) => boolean;
+
+/**
+ * Records a failed start on the co-agent run of the model session the start opened, with the start's error — the seam
+ * that keeps this package free of the agent runtime, like {@link TurnToolBinder}. Production binds it to the session's
+ * bridged runtime (`Finalize(false, error)`, `@memberjunction/ai-agents`). The coordinator calls it before it closes that
+ * session, because the close alone finalizes the run as completed, which is what happens when nothing is bound.
+ */
+export type FailedStartRecorder = (session: IRealtimeSession, error: string) => Promise<void>;
 
 /**
  * Opens a realtime model session for the agent. Production binds this to the real model-resolution path;
@@ -182,7 +241,10 @@ export interface StartAgentRoomSessionParams {
   ContextUser?: UserInfo;
   /** The metadata provider for the session. */
   MetadataProvider?: IMetadataProvider;
-  /** What a host that owns the call adds (tools, framing, transcript, recovery). Absent for a plain Meet room. */
+  /**
+   * What a host that owns the call adds (tools, framing, transcript, recovery). A plain Meet room passes at most its
+   * end-of-session hook, to close the agent session it created.
+   */
   Host?: AgentRoomHostOptions;
 }
 
@@ -225,6 +287,8 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
   private roomRosters = new Map<string, RoomAgentEntry[]>();
   private bridgeOps: BridgeOps = AIBridgeEngine.Instance;
   private turnToolBinder?: TurnToolBinder;
+  private agentVisionResolver?: AgentVisionResolver;
+  private failedStartRecorder?: FailedStartRecorder;
   private turnStateSource: (roomKey: string) => RoomTurnSnapshot | null = (roomKey) => AIBridgeEngine.Instance.GetRoomTurnSnapshot(roomKey);
   private sessionFactory: RealtimeSessionFactory = () => {
     throw new Error(
@@ -262,6 +326,26 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
    */
   public SetTurnToolBinder(binder: TurnToolBinder | undefined): void {
     this.turnToolBinder = binder;
+  }
+
+  /**
+   * Binds the seam that says whether the agent behind a model session watches meetings. Without it no agent watches:
+   * the bot reads nobody's camera or screen and the room never offers people the choice.
+   *
+   * @param resolver The resolver, or `undefined` to clear it.
+   */
+  public SetAgentVisionResolver(resolver: AgentVisionResolver | undefined): void {
+    this.agentVisionResolver = resolver;
+  }
+
+  /**
+   * Binds the seam that records a failed start on the agent's co-agent run. Without it, the run of an agent whose start
+   * failed reads as completed: closing its model session finalizes the run that way.
+   *
+   * @param recorder The recorder, or `undefined` to clear it.
+   */
+  public SetFailedStartRecorder(recorder: FailedStartRecorder | undefined): void {
+    this.failedStartRecorder = recorder;
   }
 
   /**
@@ -305,12 +389,18 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
   }
 
   /**
-   * Starts the agent's presence in a LiveKit room: mints the bot token, opens the realtime session, and
-   * bridges it into the room.
+   * Starts the agent's presence in a LiveKit room: opens the realtime session, mints the bot token, and
+   * bridges the session into the room.
+   *
+   * A start that fails once the model session is open (the bot token can't be minted, the bridge doesn't start) closes
+   * that session before the error propagates, after recording the failure, with the start's error, on the session's
+   * co-agent run ({@link SetFailedStartRecorder}), which would otherwise read as completed. The agent session it runs under
+   * (`AgentSessionID`) is the caller's: a caller that created one for this start closes it.
    *
    * @param params The session parameters.
    * @returns The active session handles.
-   * @throws {Error} when the LiveKit provider is not configured/registered or the session factory is unbound.
+   * @throws {Error} when the LiveKit provider is not configured/registered, the session factory is unbound or fails,
+   *   the bot token can't be minted, or the bridge doesn't start.
    */
   public async StartAgentRoomSession(params: StartAgentRoomSessionParams): Promise<AgentRoomSession> {
     await this.bridgeOps.Config(false, params.ContextUser, params.MetadataProvider);
@@ -323,8 +413,11 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     }
 
     const botName = params.AgentName ?? 'Agent';
-    const botIdentity = `agent-${params.AgentSessionID}`;
-    const botToken = await this.tokenService.MintBotToken(params.RoomName, botIdentity, botName);
+    // `agent-<agent session id>`: the identity the bridge, the engine and other agents' bots read as an agent's.
+    const botIdentity = AgentParticipantIdentity(params.AgentSessionID);
+    // Fail before opening a model session when LiveKit isn't configured. The bot's token itself is minted once the
+    // session is open, because whether the bot watches depends on the session (see agentWatches).
+    this.tokenService.AssertConfigured();
 
     // Multi-agent MEETING detection: if the room already holds an agent, THIS agent joins as a meeting
     // participant — auto-response OFF, speaks only when addressed by name. When a room becomes multi-agent
@@ -355,10 +448,19 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
         : undefined;
     };
 
+    // Whether this host's bot can publish the agent's avatar is asked BEFORE the model session opens, so a host that
+    // can't never asks the model for it (and is never billed for video nobody sees). Cleared if the avatar is taken down.
+    // A phone call is never asked about: the caller sees no video, so the session asks for no avatar at all.
+    const phoneCall = host?.Channel === 'phone';
+    const avatarVideo: RoomAvatarVideo = phoneCall ? PHONE_CALL_AVATAR_VIDEO : await this.DescribeAvatarVideo();
+    let avatarDelivery: 'room' | undefined = avatarVideo.Supported === true ? 'room' : undefined;
+
     let activeTurnHandler: BridgeTurnTakingToolHandler | undefined = undefined;
     const openModelSession = async (priorTranscript?: string): Promise<IRealtimeSession> => {
       const initialTools = buildToolsForFullDuplex(resolvedFullDuplex ?? false);
       const opened = await this.sessionFactory({
+        AvatarDelivery: avatarDelivery,
+        PhoneCall: phoneCall || undefined,
         AgentID: params.AgentID,
         AgentName: params.AgentName,
         TargetAgentID: params.TargetAgentID,
@@ -440,54 +542,80 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     // The bridge id is known only after the engine starts the session, but the end-of-session hook is registered at start,
     // so it reaches the id through this holder.
     const started: { SessionBridgeID?: string } = {};
-    const active = await this.bridgeOps.StartBridgeSession({
-      AgentSessionID: params.AgentSessionID,
-      AgentID: params.AgentID,
-      Provider: provider,
-      RealtimeSession: session,
-      FullDuplex: finalFullDuplex,
-      Address: botToken.ServerUrl,
-      JoinMethod: host?.JoinMethod ?? 'OnDemand',
-      Direction: host?.Direction,
-      TurnMode: params.TurnMode ?? 'Passive',
-      TurnAddressing: addressing,
-      // Meeting: gate speech to ADDRESSED turns (RegexAddressedMatcher on the agent's names) AND tell the
-      // engine the model's auto-response is off so the bridge becomes the sole trigger. Solo 1:1: respond to
-      // ALL the user's speech (AlwaysAddressedMatcher) with the model's own auto-response — Passive's
-      // name-match would otherwise leave a single agent silent unless you said its name each turn.
-      TurnMatcher: isMeeting ? new RegexAddressedMatcher(selfNames) : new AlwaysAddressedMatcher(),
-      DisableAutoResponse: isMeeting || undefined,
-      // Roster info for the room turn moderator (the LLM router, when one is wired via SetTurnModerator):
-      // the names it answers to + its participation style. `'proactive'` (default) lets the moderator bring
-      // it in unaddressed when relevant; per-agent `'addressed-only'` resolution from config is a follow-up.
-      AgentNames: selfNames,
-      ParticipationMode: 'proactive',
-      // The voiced TARGET agent (e.g. Sage) — the moderator resolves its role + per-agent turnTaking.mode.
-      TargetAgentID: params.TargetAgentID,
-      // NativeModuleSpecifier tells LiveKitNativeMeetingSdk which native room-client wrapper to load — the
-      // @livekit/rtc-node-backed @memberjunction/ai-bridge-livekit-native by default, overridable via env
-      // (e.g. a one-line module setting Gemini's 16 kHz inbound rate). AccessToken is the pre-signed bot
-      // join token; the room ws URL arrives as `Address`.
-      Configuration: {
-        AccessToken: botToken.Token,
-        BotDisplayName: botName,
-        RoomName: params.RoomName,
-        NativeModuleSpecifier: this.resolveNativeModuleSpecifier(),
-      },
-      ContextUser: params.ContextUser,
-      MetadataProvider: params.MetadataProvider,
-      // Host-owned call: its own transcript, barge-in policy, model recovery and end-of-session bookkeeping.
-      TranscriptSink: host?.TranscriptSink,
-      OnBargeIn: host?.OnBargeIn,
-      RecoverRealtimeSession: host?.RecoverModelSession ? (request) => openModelSession(request.PriorTranscript) : undefined,
-      OnSessionEnded: async (reason) => {
-        // An agent that leaves on its own (every human gone, the model lost, a handoff) must drop off the room's roster too.
-        if (started.SessionBridgeID) {
-          this.removeFromRoster(started.SessionBridgeID);
-        }
-        await host?.OnSessionEnded?.(reason);
-      },
-    });
+    // Until the bridge engine holds the model session (StartBridgeSession resolves), the session is this start's to close:
+    // when the bot's token can't be minted or the bridge doesn't start, it is closed before the error propagates, so a
+    // failed start leaves no model connection open (#5308), and its co-agent run reads as failed, with the start's error.
+    // From then on the engine closes it when the bridge ends.
+    let botToken: MintedToken;
+    let active: ActiveBridgeSession;
+    try {
+      const watches = this.agentWatches(session);
+      const avatar = this.avatarStatusFor(session, avatarVideo, botName);
+      const botAttributes = { ...(watches ? AgentWatchesAttributes(true) : {}), ...AgentAvatarAttributes(avatar) };
+      botToken = await this.mintBotToken(params.RoomName, botIdentity, botName, botAttributes);
+
+      active = await this.bridgeOps.StartBridgeSession({
+        AgentSessionID: params.AgentSessionID,
+        AgentID: params.AgentID,
+        Provider: provider,
+        RealtimeSession: session,
+        FullDuplex: finalFullDuplex,
+        Address: botToken.ServerUrl,
+        JoinMethod: host?.JoinMethod ?? 'OnDemand',
+        Direction: host?.Direction,
+        TurnMode: params.TurnMode ?? 'Passive',
+        TurnAddressing: addressing,
+        // Meeting: gate speech to ADDRESSED turns (RegexAddressedMatcher on the agent's names) AND tell the
+        // engine the model's auto-response is off so the bridge becomes the sole trigger. Solo 1:1: respond to
+        // ALL the user's speech (AlwaysAddressedMatcher) with the model's own auto-response — Passive's
+        // name-match would otherwise leave a single agent silent unless you said its name each turn.
+        TurnMatcher: isMeeting ? new RegexAddressedMatcher(selfNames) : new AlwaysAddressedMatcher(),
+        DisableAutoResponse: isMeeting || undefined,
+        // Roster info for the room turn moderator (the LLM router, when one is wired via SetTurnModerator):
+        // the names it answers to + its participation style. `'proactive'` (default) lets the moderator bring
+        // it in unaddressed when relevant; per-agent `'addressed-only'` resolution from config is a follow-up.
+        AgentNames: selfNames,
+        ParticipationMode: 'proactive',
+        // The voiced TARGET agent (e.g. Sage) — the moderator resolves its role + per-agent turnTaking.mode.
+        TargetAgentID: params.TargetAgentID,
+        // NativeModuleSpecifier tells LiveKitNativeMeetingSdk which native room-client wrapper to load — the
+        // @livekit/rtc-node-backed @memberjunction/ai-bridge-livekit-native by default, overridable via env
+        // (e.g. a one-line module setting Gemini's 16 kHz inbound rate). AccessToken is the pre-signed bot
+        // join token; the room ws URL arrives as `Address`.
+        Configuration: {
+          AccessToken: botToken.Token,
+          BotDisplayName: botName,
+          RoomName: params.RoomName,
+          NativeModuleSpecifier: this.resolveNativeModuleSpecifier(),
+          // The bot reads the cameras and screens of people who allow it, only when this agent watches.
+          AgentVision: watches,
+        },
+        ContextUser: params.ContextUser,
+        MetadataProvider: params.MetadataProvider,
+        // Host-owned call: its own transcript, barge-in policy, model recovery and end-of-session bookkeeping.
+        TranscriptSink: host?.TranscriptSink,
+        OnBargeIn: host?.OnBargeIn,
+        RecoverRealtimeSession: host?.RecoverModelSession ? (request) => openModelSession(request.PriorTranscript) : undefined,
+        // The bot took the avatar down mid-meeting: the model session is replaced by one that renders none (and re-opened
+        // without it from then on), so the model stops generating video nobody sees.
+        RecoverRealtimeSessionWithoutAvatar: avatar?.Granted
+          ? (request) => {
+              avatarDelivery = undefined;
+              return openModelSession(request.PriorTranscript);
+            }
+          : undefined,
+        OnSessionEnded: async (reason) => {
+          // An agent that leaves on its own (every human gone, the model lost, a handoff) must drop off the room's roster too.
+          if (started.SessionBridgeID) {
+            this.removeFromRoster(started.SessionBridgeID);
+          }
+          await host?.OnSessionEnded?.(reason);
+        },
+      });
+    } catch (err) {
+      await this.closeModelSessionOfFailedStart(session, err);
+      throw err;
+    }
     started.SessionBridgeID = active.SessionBridgeID;
 
     this.addToRoster(roomKey, { AgentSessionID: params.AgentSessionID, SessionBridgeID: active.SessionBridgeID, Names: selfNames });
@@ -509,6 +637,83 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
         `(bridge ${active.SessionBridgeID}, ${isMeeting ? 'MEETING — addressed-only' : 'solo 1:1'})`,
     );
     return { SessionBridgeID: active.SessionBridgeID, RoomName: params.RoomName, ServerUrl: botToken.ServerUrl };
+  }
+
+  /**
+   * Whether the agent behind this model session watches the meeting: its setting is on (through the bound
+   * {@link AgentVisionResolver}) AND its session takes inbound video. Watching on an audio-only model would offer people
+   * a choice no frame could honour, so it is logged and treated as off.
+   */
+  private agentWatches(session: IRealtimeSession): boolean {
+    const settingOn = this.agentVisionResolver?.(session) === true;
+    if (settingOn && InboundVideoStreamsOf(session.Capabilities) === 0) {
+      LogStatus('[LiveKitAgentRoomCoordinator] The agent is set to watch meetings, but its realtime model takes no video; it will not watch.');
+      return false;
+    }
+    return settingOn;
+  }
+
+  /**
+   * Whether this host's bots can publish an agent's avatar, from the native room module the bots join with (`ffmpeg`
+   * with the H.264 and AAC decoders, and a room SDK that publishes video). Asked before every agent's model session
+   * opens; the module probes once and remembers. A module that cannot be loaded, or that predates avatars, means no.
+   */
+  public async DescribeAvatarVideo(): Promise<NativeAvatarVideoSupport> {
+    try {
+      const nativeModule = await DefaultNativeLoader(this.resolveNativeModuleSpecifier());
+      if (!nativeModule.describeAvatarVideo) {
+        return { Supported: false, Reason: 'bridged', Detail: 'the native room module publishes no avatars' };
+      }
+      return await nativeModule.describeAvatarVideo();
+    } catch (err) {
+      return { Supported: false, Reason: 'bridged', Detail: `the native room module could not be asked: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  /**
+   * What became of the agent's avatar request: the session's own status, except that a session which asked for an
+   * avatar and stayed audio only because this host could not publish it carries the host's reason (`decoder-missing`
+   * when there is no usable ffmpeg, `phone` on a phone call whose session factory still asked). Logged once per join when
+   * an avatar was asked for.
+   */
+  private avatarStatusFor(session: IRealtimeSession, avatarVideo: RoomAvatarVideo, botName: string): RealtimeAvatarStatus | undefined {
+    const status = session.AvatarStatus;
+    if (!status?.Requested) {
+      return status;
+    }
+    const resolved: RealtimeAvatarStatus =
+      !status.Granted && status.Reason === 'bridged' && avatarVideo.Supported === false ? { ...status, Reason: avatarVideo.Reason } : status;
+    const detail = avatarVideo.Supported === false && avatarVideo.Detail ? ` (${avatarVideo.Detail})` : '';
+    LogStatus(`[LiveKitAgentRoomCoordinator] ${botName}'s avatar: ${resolved.Granted ? 'on' : `audio only, ${resolved.Reason ?? 'bridged'}${detail}`}`);
+    return resolved;
+  }
+
+  /**
+   * Mints the bot's join token with its attributes: `mj.agentWatches` when the agent watches, so the room offers people
+   * the choice from the moment the bot joins, and `mj.agentAvatar` when the agent asked for an avatar. Minted once the
+   * model session is open; when it fails, the start closes that session (see {@link StartAgentRoomSession}).
+   */
+  private async mintBotToken(roomName: string, botIdentity: string, botName: string, attributes: Record<string, string>): Promise<MintedToken> {
+    return this.tokenService.MintBotToken(roomName, botIdentity, botName, Object.keys(attributes).length > 0 ? attributes : undefined);
+  }
+
+  /**
+   * Closes the model session of a start that failed before the bridge engine took it: the bot's token could not be minted,
+   * or the bridge did not start (its row could not be saved, the driver could not connect). The failure is recorded on the
+   * session's co-agent run first ({@link FailedStartRecorder}), since the close alone would finalize that run as completed.
+   * Neither step throws: a failure is logged, so the caller sees why the start failed and the session is still closed.
+   */
+  private async closeModelSessionOfFailedStart(session: IRealtimeSession, startError: unknown): Promise<void> {
+    try {
+      await this.failedStartRecorder?.(session, startError instanceof Error ? startError.message : String(startError));
+    } catch (err) {
+      LogError(`[LiveKitAgentRoomCoordinator] recording a failed start on the agent's run failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    try {
+      await session.Close();
+    } catch (err) {
+      LogError(`[LiveKitAgentRoomCoordinator] closing the model session of a failed start failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   /** Installs the engine's turn-taking tool handler on the model session, when the session has one (a turn-based model in a room). */

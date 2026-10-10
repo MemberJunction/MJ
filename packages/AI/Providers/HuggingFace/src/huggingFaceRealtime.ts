@@ -16,8 +16,10 @@
 
 import {
     BaseRealtimeModel,
+    HttpOriginToWs as CoreHttpOriginToWs,
     RealtimeProxyRegistry,
     REALTIME_PROXY_PATH,
+    ResolveRealtimeProxyBaseWsUrl,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -329,34 +331,22 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
     private static readonly NO_AUTH_SENTINELS: ReadonlySet<string> = new Set(['none', 'self-hosted', 'local', 'n/a']);
 
     /**
-     * Resolves the browser-facing proxy ORIGIN as a `ws(s)://host[:port]` string. Precedence:
+     * Resolves the browser-facing proxy ORIGIN as a `ws(s)://host[:port]` string through the shared
+     * {@link ResolveRealtimeProxyBaseWsUrl} (`@memberjunction/ai`), which the relay drivers use too. Precedence:
      * `params.Config.proxyBaseUrl` override → `MJAPI_PUBLIC_URL` → `GRAPHQL_BASE_URL` + `GRAPHQL_PORT`
      * (the same env vars MJAPI derives its public URL from). Any path on the source URL is dropped — only
      * the origin is used, and {@link REALTIME_PROXY_PATH} is appended by the caller.
      */
     protected resolveProxyBaseWsUrl(params: RealtimeSessionParams): string {
-        const override = params.Config?.['proxyBaseUrl'];
-        const source =
-            (typeof override === 'string' && override.trim().length > 0 ? override.trim() : '') ||
-            HuggingFaceRealtime.readEnv('MJAPI_PUBLIC_URL') ||
-            `${HuggingFaceRealtime.readEnv('GRAPHQL_BASE_URL') ?? 'http://localhost'}:${HuggingFaceRealtime.readEnv('GRAPHQL_PORT') ?? '4000'}`;
-        return HuggingFaceRealtime.HttpOriginToWs(source);
+        return ResolveRealtimeProxyBaseWsUrl(params);
     }
 
-    /** Converts an http(s) URL (or origin) into a `ws(s)://host[:port]` origin, dropping any path. */
+    /**
+     * Converts an http(s) URL (or origin) into a `ws(s)://host[:port]` origin, dropping any path. Delegates to the
+     * shared `HttpOriginToWs` in `@memberjunction/ai`.
+     */
     public static HttpOriginToWs(source: string): string {
-        try {
-            const url = new URL(source);
-            const wsScheme = url.protocol === 'https:' || url.protocol === 'wss:' ? 'wss' : 'ws';
-            return `${wsScheme}://${url.host}`;
-        } catch {
-            // Not a parseable absolute URL — best-effort scheme swap, strip any trailing slash.
-            const trimmed = source.replace(/\/+$/, '');
-            if (trimmed.startsWith('wss://') || trimmed.startsWith('ws://')) {
-                return trimmed;
-            }
-            return trimmed.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
-        }
+        return CoreHttpOriginToWs(source);
     }
 
     /** Reads a process env var (indirected so tests can stub it and non-Node runtimes don't throw). */

@@ -31,6 +31,8 @@ export {
 
 export { LiveKitEgressService, WsToHttpUrl, wsToHttpUrl, type EgressClientLike, type StartRecordingParams, type RecordingInfo } from './livekit-egress-service';
 
+export { LiveKitParticipantService, type ParticipantUpdateClientLike, type ParticipantUpdateResult } from './livekit-participant-service';
+
 export {
   LiveKitSipService,
   LIVEKIT_PARTICIPANT_KIND_SIP,

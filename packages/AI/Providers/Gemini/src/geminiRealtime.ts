@@ -9,11 +9,13 @@ import {
     type LiveServerMessage,
     type LiveServerContent,
     type LiveConnectConfig,
+    type ContextWindowCompressionConfig,
     type SpeechConfig,
     type FunctionDeclaration,
     type FunctionCall,
     type FunctionResponse,
     type Content,
+    type Part,
     type Blob as GeminiBlob,
     type ActivityStart,
     type ActivityEnd,
@@ -25,6 +27,7 @@ import {
 import {
     BaseRealtimeModel,
     RealtimeDiagLog,
+    RealtimeDroppedInputReporter,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -41,15 +44,31 @@ import {
     type RealtimeUsageModalityDetail,
     REALTIME_SHARED_CONFIG_KEYS,
     ExtractToolSchedulingHint,
+    ParseDurationToMs,
+    IsPcmAudioMimeType,
+    RealtimeConnectionSetup,
+    RealtimeSessionResumption,
+    type RealtimeInputFrame,
+    type RealtimeResumeAttempt,
+    type RealtimeAvatarSettings,
+    type RealtimeAvatarStatus,
+    type RealtimeAvatarUnavailableReason,
+    type RealtimeVideoFrame,
+    type RealtimeTurnCoverage,
 } from '@memberjunction/ai';
 import {
     ResolveGeminiLiveProfile,
     ResolveGeminiMaxInboundVideoStreams,
     ResolveGeminiThinkingLevel,
+    ResolveGeminiTurnCoverage,
     GEMINI_LIVE_FALLBACK_PROFILE,
     type GeminiThinkingLevel,
     type GeminiLiveModelProfile,
+    type GeminiLiveEndpoint,
+    type GeminiLiveResolvedProfile,
 } from './geminiLiveProfiles';
+import { GeminiBridgedAvatarOutput } from './geminiBridgedAvatar';
+import { ResolveGeminiAvatarVideoBitrateBps } from './geminiAvatarVideoBitrate';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
@@ -59,8 +78,35 @@ import { RegisterClass } from '@memberjunction/global';
  */
 const GEMINI_INPUT_AUDIO_MIME_TYPE = 'audio/pcm;rate=16000';
 
+/** Image types Gemini Live accepts as video input frames. */
+const GEMINI_VIDEO_INPUT_MIME_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png']);
+
+/** The endpoints' names in log lines. */
+const GEMINI_ENDPOINT_NAMES: Readonly<Record<GeminiLiveEndpoint, string>> = { developer: 'the Gemini Developer API', enterprise: 'Gemini Enterprise' };
+
+/** The value the driver reads from a shared config key it applies after the merge: an object, or a named effort (a string). */
+type GeminiSharedKeyShape = 'object' | 'named effort';
+
+/**
+ * The keys in `REALTIME_SHARED_CONFIG_KEYS` that this driver applies after the config-bag merge, reading them from the
+ * original bag in `applyModelLegality`, with the value each must hold: `turnDetection` (its `Coverage` sets the turn
+ * coverage), `reasoning` (the thinking level and thought summaries), and `effortLevel` or `reasoningEffort` (a named
+ * thinking level). The scrub in `BuildConnectConfig` keeps them out of the merge without calling them non-Gemini
+ * (#5334). The other shared keys the driver applies (`voice`, `disableAutoResponse`, `tooling`, `toolBehavior`) are
+ * consumed before the scrub.
+ */
+const GEMINI_SHARED_KEYS_APPLIED_AFTER_MERGE: ReadonlyMap<string, GeminiSharedKeyShape> = new Map<string, GeminiSharedKeyShape>([
+    ['turnDetection', 'object'],
+    ['reasoning', 'object'],
+    ['effortLevel', 'named effort'],
+    ['reasoningEffort', 'named effort'],
+]);
+
 /** Meeting-mode watchdog: how long to wait for a turn after `activityEnd` before clearing a latched `responseActive` (shorter than the bridge's floor safety timer). */
 const GEMINI_MEETING_RESPONSE_WATCHDOG_MS = 5000;
+
+/** The most input audio held while a session moves to a new connection: 2 s of 16-bit mono PCM at the 16 kHz input rate. */
+const MAX_HELD_INPUT_AUDIO_BYTES = 16000 * 2 * 2;
 
 /**
  * Window (ms) within which a client-direct browser must OPEN its Live session using a minted
@@ -90,6 +136,8 @@ export interface GeminiLiveSession {
      */
     sendRealtimeInput(params: {
         audio?: GeminiBlob;
+        /** One video frame: an encoded image (JPEG or PNG). */
+        video?: GeminiBlob;
         media?: GeminiBlob;
         text?: string;
         /** Manual activity markers — used in MEETING mode (automatic activity detection disabled). */
@@ -120,6 +168,37 @@ export interface GeminiConnectArgs {
     OnError?: (event: ErrorEvent) => void;
     /** Invoked when the websocket closes. Optional. */
     OnClose?: (event: CloseEvent) => void;
+}
+
+/** The callbacks a {@link GeminiRealtimeSession} hands its connector for one connection. */
+type GeminiConnectionCallbacks = Pick<GeminiConnectArgs, 'OnMessage' | 'OnError' | 'OnClose'>;
+
+/** A usage report's per-modality token counts (`promptTokensDetails`, `responseTokensDetails`). */
+type GeminiModalityTokenCounts = NonNullable<LiveServerMessage['usageMetadata']>['promptTokensDetails'];
+
+/**
+ * The detail field each Gemini usage modality's token count goes into (the browser client keeps the same table); other
+ * modalities are not kept.
+ */
+const GEMINI_MODALITY_TOKEN_FIELDS: Partial<Record<string, 'TextTokens' | 'AudioTokens' | 'ImageTokens' | 'VideoTokens'>> = {
+    TEXT: 'TextTokens',
+    AUDIO: 'AudioTokens',
+    IMAGE: 'ImageTokens',
+    VIDEO: 'VideoTokens',
+};
+
+/**
+ * Opens one Live connection for a session, resuming an earlier one when `handle` is given. Built by
+ * {@link GeminiRealtime.StartSession} around {@link GeminiRealtime.connectLiveSession}.
+ */
+type GeminiSessionConnector = (handle: string | undefined, callbacks: GeminiConnectionCallbacks) => Promise<GeminiLiveSession>;
+
+/** A connection a {@link GeminiRealtimeSession} opened, with the number that marks it as current. */
+interface GeminiOpenedConnection {
+    Live: GeminiLiveSession;
+    ConnectionNumber: number;
+    /** Google's confirmation of the connection's setup (`setupComplete`); the connection is put to use only after it. */
+    Setup: RealtimeConnectionSetup;
 }
 
 /**
@@ -191,20 +270,23 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * provider's frames and the MemberJunction realtime contract.
      */
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
-        const profile = ResolveGeminiLiveProfile(params.Model);
+        const profile = ResolveGeminiLiveProfile(params.Model, this.Endpoint);
         const session = new GeminiRealtimeSession(profile);
         session.SetConnectTimeTools(params.Tools ?? []);
-        const config = this.buildConnectConfig(params);
+        const config = this.BuildConnectConfig(this.withoutAvatarOnServer(params));
+        session.SetAvatar(this.serverAvatarStatus(params, config), profile.AvatarOutputEncoding);
         // Meeting mode (auto activity detection disabled) → the session must drive turns manually.
         session.SetMeetingMode(config.realtimeInputConfig?.automaticActivityDetection?.disabled === true);
-        const live = await this.connectLiveSession({
-            Model: params.Model,
-            Config: config,
-            OnMessage: (message) => session.HandleServerMessage(message),
-            OnError: (event) => session.HandleTransportError(event?.message ?? 'Gemini Live websocket error'),
-            OnClose: (event) => session.HandleTransportClose(event?.code, event?.reason),
-        });
-        session.AttachLiveSession(live);
+        // The session opens its own connections through this seam, so it can resume on a new one
+        // with Google's handle when a connection ends (goAway) or drops.
+        session.SetConnector((handle, callbacks) =>
+            this.connectLiveSession({
+                Model: params.Model,
+                Config: handle ? { ...config, sessionResumption: { ...config.sessionResumption, handle } } : config,
+                ...callbacks,
+            })
+        );
+        await session.Open();
         // If the caller provided initial context, seed it as client content (without completing the
         // turn) so the model starts with the same history a loop agent would assemble.
         if (params.InitialContext && params.InitialContext.trim().length > 0) {
@@ -224,6 +306,25 @@ export class GeminiRealtime extends BaseRealtimeModel {
     }
 
     /**
+     * The Gemini endpoint this driver talks to. The Developer API here; the Gemini Enterprise driver (Vertex AI)
+     * overrides it. Every profile lookup passes it, because what a model renders depends on the endpoint (live avatars
+     * are Enterprise only).
+     */
+    protected get Endpoint(): GeminiLiveEndpoint {
+        return 'developer';
+    }
+
+    /**
+     * Whether the model renders a live avatar on this driver's endpoint, from its Live profile: never on the Developer
+     * API; on Gemini Enterprise for the models whose profile says so.
+     *
+     * @param model The model's API name.
+     */
+    public override SupportsAvatarOutput(model: string): boolean {
+        return ResolveGeminiLiveProfile(model, this.Endpoint).SupportsAvatarOutput;
+    }
+
+    /**
      * Gemini Live sessions accept dynamically-defined tools at connect/mint time.
      */
     public static override readonly SupportsDynamicToolSet = true;
@@ -232,7 +333,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * Mints an ephemeral, server-scoped Live credential for a **client-direct** session.
      *
      * The connect config is built EXACTLY as {@link StartSession} builds it (same
-     * {@link buildConnectConfig}: audio modality, input+output transcription, system instruction,
+     * {@link BuildConnectConfig}: audio modality, input+output transcription, system instruction,
      * mapped tools) and is **locked into the token** via `liveConnectConstraints` +
      * `lockAdditionalFields: []` — so the API ignores any attempt by the browser to change the
      * locked fields. The same config is ALSO carried in `SessionConfig` (as `{ model, config }`)
@@ -247,7 +348,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * @returns The minted {@link ClientRealtimeSessionConfig} the browser authenticates + applies.
      */
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
-        const config = this.buildConnectConfig(params);
+        const config = this.BuildConnectConfig(params);
         const now = Date.now();
         const expireTime = new Date(now + GEMINI_CLIENT_TOKEN_EXPIRY_MS).toISOString();
         const newSessionExpireTime = new Date(now + GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS).toISOString();
@@ -272,33 +373,50 @@ export class GeminiRealtime extends BaseRealtimeModel {
         if (!token.name) {
             throw new Error('Gemini auth-token mint returned no token name');
         }
-        const profile = ResolveGeminiLiveProfile(params.Model);
+        const avatarStatus = this.AvatarStatusFor(params, config);
         return {
             Provider: 'gemini',
             Model: params.Model,
             EphemeralToken: token.name,
             ExpiresAt: expireTime,
-            // Plain-JSON copy of what the browser passes to live.connect (model + config). The
-            // token lock above makes these values authoritative even if a client tampers.
-            SessionConfig: JSON.parse(
-                JSON.stringify({
-                    model: params.Model,
-                    config,
-                    idleSignal: profile.IdleSignal,
-                    supportsScheduling: profile.Tooling.SupportsScheduling,
-                    supportsBlocking: profile.Tooling.SupportsBlockingExecution,
-                    // Per-model video legality travels with the mint so the browser driver never
-                    // has to infer it from the model id. The client cannot import this profile
-                    // table (@memberjunction/ai-realtime-client does not depend on the provider
-                    // package, by design), so the mint is the seam that carries it.
-                    supportsInboundVideo: profile.SupportsInboundVideo,
-                    maxInboundVideoRate: profile.MaxInboundVideoRate,
-                    // How many concurrent inbound video streams the model accepts (0 without video support).
-                    // The browser's source arbiter maps live sources onto this many streams.
-                    maxInboundVideoStreams: ResolveGeminiMaxInboundVideoStreams(profile),
-                })
-            ) as JSONObject,
+            // The browser passes the full config to live.connect; the token lock above makes its
+            // values authoritative even if a client tampers.
+            SessionConfig: this.SessionPactFor(params.Model, config),
+            ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
         };
+    }
+
+    /**
+     * The minted session config, the private pact with the browser driver: a plain-JSON copy of the model and the config
+     * the browser passes to `live.connect`, plus the model's facts on this driver's endpoint (idle signal, tooling, inbound
+     * video limits, and the `avatar` block when the session renders one).
+     *
+     * @param model The model id.
+     * @param config The session's connect config, as {@link BuildConnectConfig} built it. It decides the avatar block.
+     * @param browserConfig The config the browser passes to `live.connect`: the full config here; a driver whose sessions
+     *   go through MJAPI's relay, which writes the setup, passes a smaller one.
+     */
+    protected SessionPactFor(model: string, config: LiveConnectConfig, browserConfig: LiveConnectConfig = config): JSONObject {
+        const profile = ResolveGeminiLiveProfile(model, this.Endpoint);
+        return JSON.parse(
+            JSON.stringify({
+                model,
+                config: browserConfig,
+                idleSignal: profile.IdleSignal,
+                supportsScheduling: profile.Tooling.SupportsScheduling,
+                supportsBlocking: profile.Tooling.SupportsBlockingExecution,
+                // Per-model video legality travels with the mint so the browser driver never
+                // has to infer it from the model id. The client cannot import this profile
+                // table (@memberjunction/ai-realtime-client does not depend on the provider
+                // package, by design), so the mint is the seam that carries it.
+                supportsInboundVideo: profile.SupportsInboundVideo,
+                maxInboundVideoRate: profile.MaxInboundVideoRate,
+                // How many concurrent inbound video streams the model accepts (0 without video support).
+                // The browser's source arbiter maps live sources onto this many streams.
+                maxInboundVideoStreams: ResolveGeminiMaxInboundVideoStreams(profile),
+                ...this.AvatarPactFor(config, profile),
+            })
+        ) as JSONObject;
     }
 
     /**
@@ -364,6 +482,13 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * there — `systemInstruction`, `tools`, and the transcription configs are NOT, and their
      * presence 400s the entire mint. Only defined fields are copied (an absent key must stay
      * absent so it doesn't enter the mask).
+     *
+     * `contextWindowCompression` is left out on purpose. No test or doc shows the mask accepts
+     * it, and a rejected mask would fail every client-direct session. The browser applies it from
+     * `SessionConfig`, like the other server-built keys the token cannot lock.
+     *
+     * `sessionResumption: {}` is locked as in Google's ephemeral-token example. The browser adds
+     * the handle when it resumes, and Google accepts the same token for that until `expireTime`.
      */
     public static BuildConstraintConfig(config: LiveConnectConfig): LiveConnectConfig {
         const constraint: LiveConnectConfig = {};
@@ -444,24 +569,102 @@ export class GeminiRealtime extends BaseRealtimeModel {
         };
     }
 
+    /**
+     * Deletes every key in {@link REALTIME_SHARED_CONFIG_KEYS} from the copy of the config bag that is merged into the
+     * connect config, so none reaches the Live SDK raw, and logs what the session will not apply:
+     *
+     * - the keys Gemini Live has no use for, in one line;
+     * - a key the driver applies after the merge ({@link GEMINI_SHARED_KEYS_APPLIED_AFTER_MERGE}) whose value is of a
+     *   type it cannot read, one line each. `null` reads as unset, the way a config layer clears an inherited value.
+     *
+     * A key the driver applies, with a value it can read, gets no line here: `applyModelLegality` applies it and logs a
+     * value the model or endpoint doesn't accept (a turn coverage, a thinking level).
+     *
+     * @param cfg The copy of the session config bag that is merged into the connect config. The keys are deleted from it.
+     */
+    private static scrubSharedKeys(cfg: Record<string, unknown>): void {
+        const notApplied: string[] = [];
+        for (const key of REALTIME_SHARED_CONFIG_KEYS) {
+            if (!(key in cfg)) {
+                continue;
+            }
+            const value = cfg[key];
+            delete cfg[key];
+            const shape = GEMINI_SHARED_KEYS_APPLIED_AFTER_MERGE.get(key);
+            if (shape === undefined) {
+                notApplied.push(key);
+                continue;
+            }
+            const unset = value === null || value === undefined;
+            const readable = shape === 'object' ? GeminiRealtime.readObject(value) !== undefined : typeof value === 'string';
+            if (!unset && !readable) {
+                const expected = shape === 'object' ? 'an object' : 'a named effort such as "medium"';
+                console.warn(`[GeminiRealtime] Ignored the session config bag's \`${key}\` because it is not ${expected} (got ${Array.isArray(value) ? 'array' : typeof value}).`);
+            }
+        }
+        if (notApplied.length > 0) {
+            console.warn(`[GeminiRealtime] Scrubbed non-Gemini config key(s) from the session bag: ${notApplied.join(', ')} — other realtime drivers use these; Gemini Live does not apply them.`);
+        }
+    }
+
+    /**
+     * Keeps a config-bag `contextWindowCompression` only when it is an object. The bag is untyped
+     * JSON, so a string, array or null would otherwise reach the wire and fail the session at
+     * connect. A malformed value is replaced by the default and reported; a well-formed one wins
+     * over the default, like every other bag key.
+     */
+    private static ensureContextWindowCompression(config: LiveConnectConfig): void {
+        const compression: unknown = config.contextWindowCompression;
+        if (GeminiRealtime.readObject(compression)) {
+            return;
+        }
+        const got = compression === null ? 'null' : Array.isArray(compression) ? 'array' : typeof compression;
+        console.warn(`[GeminiRealtime] Ignored the session config bag's \`contextWindowCompression\` because it is not an object (got ${got}); using the default sliding window.`);
+        config.contextWindowCompression = GeminiRealtime.DefaultContextWindowCompression();
+    }
+
     /** Narrows an unenforced config-bag value to a real object — not a string, array, or null. */
     private static isPlainObject(value: unknown): value is SpeechConfig {
         return typeof value === 'object' && value !== null && !Array.isArray(value);
     }
 
     /**
-     * Builds the {@link LiveConnectConfig} from the Core session params: audio response modality,
-     * input/output transcription, system instruction, mapped tools, the neutral `voice` key mapped
-     * via {@link GeminiRealtime.buildSpeechConfig}, plus any provider-specific overrides from the
-     * open config bag.
+     * The context-window compression every Gemini Live session gets unless the config bag sets
+     * its own: a server-side sliding window with Google's default trigger and target sizes.
+     *
+     * Without compression, Google ends a session when its context fills: about 15 minutes for
+     * audio only and about 2 minutes for audio plus video (Google's Live API session-management
+     * docs). With compression the server drops the oldest turns and the session continues.
+     * Session resumption handles a different limit (a single connection lasts about 10 minutes)
+     * and does not lift this one.
+     *
+     * Returns a new object on each call so no session shares mutable config with another.
      */
-    private buildConnectConfig(params: RealtimeSessionParams): LiveConnectConfig {
+    public static DefaultContextWindowCompression(): ContextWindowCompressionConfig {
+        return { slidingWindow: {} };
+    }
+
+    /**
+     * Builds the {@link LiveConnectConfig} from the Core session params: audio response modality,
+     * input/output transcription, system instruction, sliding-window context compression
+     * ({@link GeminiRealtime.DefaultContextWindowCompression}), session resumption (unless the
+     * session is zero-data-retention), mapped tools, the neutral `voice` key mapped via
+     * {@link GeminiRealtime.buildSpeechConfig}, plus any provider-specific overrides from the open
+     * config bag.
+     */
+    protected BuildConnectConfig(params: RealtimeSessionParams): LiveConnectConfig {
         const config: LiveConnectConfig = {
             responseModalities: [Modality.AUDIO],
             inputAudioTranscription: {},
             outputAudioTranscription: {},
             systemInstruction: params.SystemPrompt,
+            contextWindowCompression: GeminiRealtime.DefaultContextWindowCompression(),
         };
+        // Resumption handles let a session continue across Gemini's ~10-minute connection limit.
+        // Zero-data-retention sessions never get them; see applyZeroDataRetention.
+        if (!params.ZeroDataRetention) {
+            config.sessionResumption = {};
+        }
         if (params.Tools && params.Tools.length > 0) {
             const bag: Record<string, unknown> = (params.Config as Record<string, unknown> | undefined) ?? {};
             const tooling = GeminiRealtime.readObject(bag['tooling']);
@@ -503,14 +706,15 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 const reason = typeof rawVoice === 'string' ? 'blank' : `not a string (got ${typeof rawVoice})`;
                 console.warn(`[GeminiRealtime] Ignored the session config bag's \`voice\` because it is ${reason} — expected a Gemini prebuilt voice name.`);
             }
-            // Scrub the MJ-side keys shared across the realtime driver family (OpenAI-protocol
-            // feature knobs + transport settings). They are NOT Gemini config keys — a co-agent
-            // config carrying e.g. `effortLevel` or `mcpTools` must be SAFE on a Gemini session,
-            // not spread raw into the Live SDK where strictness varies by version. Scrubbed keys
-            // are diag-logged so config typos / cross-provider keys stop being silent.
-            // The two keys Gemini translates natively (`disableAutoResponse`, `voice`) were already
-            // consumed and deleted above, so the loop only ever sees keys with no Gemini mapping —
-            // no per-key exemption needed here.
+            // Scrub the MJ-side keys shared across the realtime driver family. None is a Live config
+            // field — a co-agent config carrying e.g. `effortLevel` or `mcpTools` must not break a
+            // Gemini session by being spread raw into the Live SDK, where strictness varies by version.
+            // The keys this driver applies after the merge (`turnDetection`, `reasoning`,
+            // `effortLevel`, `reasoningEffort`) are read from params.Config by applyModelLegality, so
+            // the scrub reports one only when its value is of a type the driver cannot read; the
+            // rest are diag-logged so config typos and cross-provider keys stop being silent. The
+            // keys consumed above (`disableAutoResponse`, `voice`, `tooling`, `toolBehavior`) never
+            // reach it.
             //
             // This scrub NARROWS the silent-drop class of #3721; it does not close it. The list is an
             // allowlist of MJ-SHARED keys, not of non-Gemini keys, so anything outside it still rides
@@ -519,17 +723,9 @@ export class GeminiRealtime extends BaseRealtimeModel {
             // deprecated but deliberately kept authorable in the agent-type ConfigSchema. Closing the
             // class means inverting this check to warn on any key that is not a known
             // `LiveConnectConfig` field — tracked separately rather than widened here.
-            const scrubbed: string[] = [];
-            for (const key of REALTIME_SHARED_CONFIG_KEYS) {
-                if (key in cfg) {
-                    delete cfg[key];
-                    scrubbed.push(key);
-                }
-            }
-            if (scrubbed.length > 0) {
-                console.warn(`[GeminiRealtime] Scrubbed non-Gemini config key(s) from the session bag: ${scrubbed.join(', ')} — these are OpenAI-protocol/transport keys and do not apply to Gemini Live.`);
-            }
+            GeminiRealtime.scrubSharedKeys(cfg);
             Object.assign(config, cfg as Partial<LiveConnectConfig>);
+            GeminiRealtime.ensureContextWindowCompression(config);
             // Captured BEFORE the mapping below replaces or deletes it, so the warning can report the
             // type that was actually rejected rather than the type that replaced it.
             const rawSpeechConfig: unknown = config.speechConfig;
@@ -563,12 +759,156 @@ export class GeminiRealtime extends BaseRealtimeModel {
         // config bag must not be able to reintroduce a key the target model has retired. Anything the
         // merge above put back is removed here.
         this.applyModelLegality(config, params);
+        GeminiRealtime.applyZeroDataRetention(config, params);
+        this.applyAvatarOutput(config, params);
         return config;
     }
 
     /**
-     * Enforces what the TARGET model actually accepts, and states what MJ wants rather than
-     * inheriting a provider default.
+     * Renders the requested avatar when the model can on this endpoint: video output and the avatar's name, at the
+     * bitrate the deployment asks for (`MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS`, 2 Mbps by default; `0` leaves the field out).
+     * Otherwise the session stays audio-only and one line says why. Either way a VIDEO modality or an `avatarConfig` from
+     * the config bag is removed: an avatar comes only from the session's avatar request. Applied last, like the legality
+     * rules. Every session's setup comes from here: the browser mint, the relay's setup and server-side sessions.
+     */
+    private applyAvatarOutput(config: LiveConnectConfig, params: RealtimeSessionParams): void {
+        const request = params.Avatar;
+        const reason = request ? this.avatarUnavailableReason(request, params.Model) : undefined;
+        if (request && !reason) {
+            const videoBitrateBps = ResolveGeminiAvatarVideoBitrateBps();
+            config.responseModalities = [Modality.VIDEO];
+            config.avatarConfig = videoBitrateBps === null ? { avatarName: request.AvatarID.trim() } : { avatarName: request.AvatarID.trim(), videoBitrateBps };
+            return;
+        }
+        GeminiRealtime.removeVideoOutput(config, params.Model);
+        if (request && reason) {
+            console.warn(this.avatarUnavailableMessage(request, params.Model, reason));
+        }
+    }
+
+    /** Why this session can't render the requested avatar, or `undefined` when it can. */
+    private avatarUnavailableReason(request: RealtimeAvatarSettings, model: string): RealtimeAvatarUnavailableReason | undefined {
+        if ((request.Kind ?? 'preset') === 'custom') {
+            return 'custom-disabled';
+        }
+        if (!ResolveGeminiLiveProfile(model, this.Endpoint).SupportsAvatarOutput) {
+            return 'endpoint';
+        }
+        return request.AvatarID?.trim() ? undefined : 'unknown-avatar';
+    }
+
+    /** The one log line for an avatar the session asked for and won't render. */
+    private avatarUnavailableMessage(request: RealtimeAvatarSettings, model: string, reason: RealtimeAvatarUnavailableReason): string {
+        const why: Record<RealtimeAvatarUnavailableReason, string> = {
+            endpoint: `${model} on ${GEMINI_ENDPOINT_NAMES[this.Endpoint]} renders no avatar`,
+            bridged: "a session on the server whose host can't publish video into a room",
+            phone: 'a phone caller sees no video',
+            'custom-disabled': 'custom avatars are not enabled',
+            'unknown-avatar': 'the request names no avatar',
+            'no-binding': 'the persona has no avatar on this vendor',
+            host: 'the app showing the call asks for no agent video',
+            browser: 'the browser cannot play the avatar',
+            'decoder-missing': 'the meeting host has no usable video decoder',
+            'decoder-failed': "the meeting bot's decoders kept failing",
+            'publish-failed': 'the meeting room refused the video track',
+        };
+        const persona = request.PersonaName ? ` (persona ${request.PersonaName})` : '';
+        return `[GeminiRealtime] Avatar "${request.AvatarID}"${persona} not used: ${why[reason]}. The call is audio only. Reason: ${reason}.`;
+    }
+
+    /** Removes a VIDEO response modality and any `avatarConfig` that came from somewhere other than an avatar request. */
+    private static removeVideoOutput(config: LiveConnectConfig, model: string): void {
+        if (config.avatarConfig !== undefined) {
+            delete config.avatarConfig;
+            console.warn(`[GeminiRealtime] Dropped \`avatarConfig\` from the session config for ${model}: an avatar comes only from the session's avatar request.`);
+        }
+        const modalities = config.responseModalities ?? [];
+        if (modalities.includes(Modality.VIDEO)) {
+            const rest = modalities.filter((m) => m !== Modality.VIDEO);
+            config.responseModalities = rest.length > 0 ? rest : [Modality.AUDIO];
+            console.warn(`[GeminiRealtime] Dropped the VIDEO response modality for ${model}: video output comes only from an avatar request the model can render.`);
+        }
+    }
+
+    /**
+     * A server-side session (a meeting bot) asks for an avatar only when its host publishes the video into a room
+     * (`Delivery: 'room'`, a bot that decodes it). Anywhere else nothing on the server can show it: returns the params
+     * without the request, logging the reason once. A phone call never gets here with a request: its session prep asks
+     * for none (`'phone'`).
+     */
+    private withoutAvatarOnServer(params: RealtimeSessionParams): RealtimeSessionParams {
+        if (!params.Avatar || params.Avatar.Delivery === 'room') {
+            return params;
+        }
+        console.warn(this.avatarUnavailableMessage(params.Avatar, params.Model, 'bridged'));
+        return { ...params, Avatar: undefined };
+    }
+
+    /**
+     * What the mint tells the call about the avatar the session asked for: granted, or audio only and why. `undefined` when
+     * it asked for none. Read from the connect config {@link BuildConnectConfig} built, so it says what the session does:
+     * an `avatarConfig` there is the grant. Every Gemini driver returns it on its minted config.
+     *
+     * @param params The session parameters (the avatar request).
+     * @param config The connect config the session was built with.
+     */
+    protected AvatarStatusFor(params: RealtimeSessionParams, config: LiveConnectConfig): RealtimeAvatarStatus | undefined {
+        const request = params.Avatar;
+        if (!request) {
+            return undefined;
+        }
+        if (config.avatarConfig) {
+            return { Requested: true, Granted: true };
+        }
+        const reason = this.avatarUnavailableReason(request, params.Model);
+        return reason ? { Requested: true, Granted: false, Reason: reason } : { Requested: true, Granted: false };
+    }
+
+    /**
+     * What became of a server-side session's avatar request: {@link AvatarStatusFor}, except that a session whose host
+     * can't publish the avatar (no `Delivery: 'room'`) is audio only as `bridged`. `undefined` without a request.
+     *
+     * @param params The session parameters as the host passed them (the avatar request included).
+     * @param config The connect config the session was built with.
+     */
+    private serverAvatarStatus(params: RealtimeSessionParams, config: LiveConnectConfig): RealtimeAvatarStatus | undefined {
+        const status = this.AvatarStatusFor(params, config);
+        if (!status || status.Granted || params.Avatar?.Delivery === 'room') {
+            return status;
+        }
+        return { ...status, Reason: 'bridged' };
+    }
+
+    /**
+     * The minted session config's avatar block: present only when this session renders an avatar, so the browser driver
+     * knows to expect video parts, their encoding, and whether they carry the voice.
+     *
+     * @param config The connect config the session was built with.
+     * @param profile The model's profile on this driver's endpoint.
+     */
+    protected AvatarPactFor(config: LiveConnectConfig, profile: GeminiLiveResolvedProfile): JSONObject {
+        if (!config.avatarConfig) {
+            return {};
+        }
+        return { avatar: { output: true, encoding: profile.AvatarOutputEncoding ?? null, audioMuxed: profile.AvatarAudioMuxed ?? true } };
+    }
+
+    /**
+     * Keeps session resumption off a zero-data-retention session, even when the config bag asks
+     * for it: Google stores resumable session state, which such a model promises not to do.
+     * Applied after the bag merge, like the legality rules, so the bag cannot turn it back on.
+     */
+    private static applyZeroDataRetention(config: LiveConnectConfig, params: RealtimeSessionParams): void {
+        if (!params.ZeroDataRetention || config.sessionResumption === undefined) {
+            return;
+        }
+        delete config.sessionResumption;
+        console.warn(`[GeminiRealtime] Dropped \`sessionResumption\` for ${params.Model}: the model is served under zero data retention, and resumption stores session data on Google's side.`);
+    }
+
+    /**
+     * Enforces what the TARGET model, on the session's endpoint, actually accepts, and states what MJ
+     * wants rather than inheriting a provider default.
      *
      * Every rule here fails at SESSION MINT if broken — upstream of all UI code, the same failure
      * class as an illegal tool name — so none of it can be left to discover at connect time. Facts
@@ -576,10 +916,12 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * `plans/realtime/gemini-3-8-live.md` §3 for their sourcing.
      */
     private applyModelLegality(config: LiveConnectConfig, params: RealtimeSessionParams): void {
-        const profile = ResolveGeminiLiveProfile(params.Model);
+        const profile = ResolveGeminiLiveProfile(params.Model, this.Endpoint);
         // The catalog's ModelConfiguration.Realtime reaches a driver folded into the session Config
         // BAG as neutral keys (the same route `turnDetection` already travels), not as a field on
-        // RealtimeSessionParams — so read it from there.
+        // RealtimeSessionParams — so read it from there. A shared key read here belongs in
+        // GEMINI_SHARED_KEYS_APPLIED_AFTER_MERGE; otherwise the scrub logs it as a key Gemini Live
+        // does not apply.
         const bag: Record<string, unknown> = (params.Config as Record<string, unknown> | undefined) ?? {};
         const reasoning = GeminiRealtime.readObject(bag['reasoning']);
         const turnDetection = GeminiRealtime.readObject(bag['turnDetection']);
@@ -640,19 +982,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
             delete config.thinkingConfig;
         }
 
-        // C4 — turn coverage is STATED, never inherited. The SDK's enum doc says coverage defaults to
-        // TURN_INCLUDES_ONLY_ACTIVITY while the 3.8 model page says the default includes all video;
-        // sending it explicitly makes that contradiction irrelevant. Absent config means audio-only,
-        // because video frames are billed and consume context, so the expensive option must be asked
-        // for rather than inherited.
-        const coverage = coverageSetting ?? 'audioActivityOnly';
-        config.realtimeInputConfig = {
-            ...(config.realtimeInputConfig ?? {}),
-            turnCoverage:
-                coverage === 'audioActivityAndAllVideo'
-                    ? TurnCoverage.TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO
-                    : TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
-        };
+        GeminiRealtime.applyTurnCoverage(config, coverageSetting, profile, params.Model);
 
         // C5 / C5a / C5b — state behavior on every declaration, whatever its origin.
         // Drops the !SupportsBlockingExecution gate so 3.8-live bag tools are stated too.
@@ -693,6 +1023,42 @@ export class GeminiRealtime extends BaseRealtimeModel {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * C4 — turn coverage is STATED, never inherited. The SDK's enum doc says coverage defaults to
+     * TURN_INCLUDES_ONLY_ACTIVITY while the 3.8 model page says the default includes all video; sending it explicitly
+     * makes that contradiction irrelevant. Absent config means audio only, because video frames are billed and consume
+     * context, so the expensive option must be asked for rather than inherited. Only a coverage the session's endpoint
+     * accepts is sent ({@link ResolveGeminiTurnCoverage}): Gemini Enterprise closes the setup on
+     * TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO, so a session there that asks for it gets audio only, and one line names
+     * what was asked for and what was sent. The setup the relay writes and a bridged session's both come from here.
+     *
+     * @param config The connect config being built.
+     * @param requested The bag's `turnDetection.Coverage`, if any.
+     * @param profile The model's profile on the session's endpoint.
+     * @param model The model id, for the log line.
+     */
+    private static applyTurnCoverage(config: LiveConnectConfig, requested: string | undefined, profile: GeminiLiveResolvedProfile, model: string): void {
+        const coverage = ResolveGeminiTurnCoverage(requested, profile);
+        const wire = GeminiRealtime.mapTurnCoverage(coverage.Coverage);
+        if (coverage.Refused !== undefined) {
+            console.warn(
+                `[GeminiRealtime] Turn coverage ${JSON.stringify(coverage.Refused)} is not one ${GEMINI_ENDPOINT_NAMES[profile.Endpoint]} ` +
+                    `accepts for ${model} (it accepts ${profile.AcceptedTurnCoverages.join(', ')}); sent "${coverage.Coverage}" (${wire}) instead.`
+            );
+        }
+        config.realtimeInputConfig = { ...(config.realtimeInputConfig ?? {}), turnCoverage: wire };
+    }
+
+    /** Maps MJ's turn coverage onto the SDK's {@link TurnCoverage} wire value. */
+    private static mapTurnCoverage(coverage: RealtimeTurnCoverage): TurnCoverage {
+        switch (coverage) {
+            case 'audioActivityOnly':
+                return TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY;
+            case 'audioActivityAndAllVideo':
+                return TurnCoverage.TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO;
         }
     }
 
@@ -842,6 +1208,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;
+    private videoFrameHandler: ((frame: RealtimeVideoFrame) => void) | null = null;
     private transcriptHandler: ((t: RealtimeTranscript) => void) | null = null;
     private toolCallHandler: ((call: RealtimeToolCall) => void) | null = null;
     private interruptionHandler: (() => void) | null = null;
@@ -861,6 +1228,12 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** Accumulates in-flight thought text deltas until finalized on turn completion. */
     private pendingThoughtText = '';
 
+    /** MIME types of model output this session dropped, so each is reported once. */
+    private droppedOutputTypes = new Set<string>();
+
+    /** Reports the input frames {@link SendInput} drops, once per kind and type. */
+    private readonly droppedInput = new RealtimeDroppedInputReporter('GeminiRealtime', 'Gemini Live takes PCM audio and JPEG or PNG video frames');
+
     /**
      * Fingerprint of the tool set bound at connect time (set via {@link SetConnectTimeTools});
      * {@link RegisterTools} compares against it to no-op identical re-registrations.
@@ -871,11 +1244,13 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /**
      * Whether a model turn is currently being generated. Minimal turn tracking mirroring the
      * client driver: set when model output arrives (Gemini has no `response.created`-style frame,
-     * so the first `modelTurn` content is the signal) and eagerly when this session itself sends a
-     * turn-triggering client content; cleared on `turnComplete`, `interrupted`, and a tool-call
-     * frame (the model yields the floor pending the result). Consumed by {@link enqueueOrRun}:
-     * on Gemini Live ANY client content sent mid-turn INTERRUPTS the in-flight generation, so
-     * interim-update sends are deferred rather than sent into an active turn.
+     * so the first `modelTurn` content is the signal; an avatar's video sets it only while the
+     * model's answer is under way, since Vertex AI streams it between answers too) and eagerly
+     * when this session itself sends a turn-triggering client content; cleared on `turnComplete`,
+     * `interrupted`, and a tool-call frame (the model yields the floor pending the result).
+     * Consumed by {@link enqueueOrRun}: on Gemini Live ANY client content sent mid-turn
+     * INTERRUPTS the in-flight generation, so interim-update sends are deferred rather than sent
+     * into an active turn.
      */
     private responseActive = false;
 
@@ -900,11 +1275,124 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** Meeting-mode watchdog: clears a latched {@link responseActive} if an `activityEnd` elicits no turn. */
     private meetingResponseWatchdog?: ReturnType<typeof setTimeout>;
 
+    /** Opens this session's Live connections; set by the driver before {@link Open}. */
+    private connector: GeminiSessionConnector | null = null;
+
     /**
-     * Binds the underlying live session. Called by the driver once `connect` resolves.
+     * Routes model parts, turn boundaries and avatar usage when the driver granted an avatar to a host that publishes it
+     * into a room; null on every other session, whose output is PCM only.
      */
-    public AttachLiveSession(live: GeminiLiveSession): void {
-        this.live = live;
+    private avatarOutput: GeminiBridgedAvatarOutput | null = null;
+
+    /** The MSE type of a granted avatar's pieces, from the model's profile; declared on the outbound video track. */
+    private avatarEncoding?: string;
+
+    /** What became of the session's avatar request (see {@link IRealtimeSession.AvatarStatus}); set by the driver. */
+    public AvatarStatus?: RealtimeAvatarStatus;
+
+    /**
+     * Moves the session to a new connection with Google's resumption handle: when Google announces
+     * the connection is ending (`goAway`, with the time left; on Vertex AI it came about 9 minutes
+     * into a connection, with 30 s left) and after an unexpected drop. A planned move waits until
+     * no turn is in progress ({@link IsTurnOpen}). Created by {@link Open}.
+     */
+    private resumption: RealtimeSessionResumption | null = null;
+
+    /**
+     * Whether the session is moving to a new connection: from the start of a move until Google
+     * confirms the new connection's setup (`setupComplete`). Input waits meanwhile, in
+     * {@link queuedSends} and {@link heldAudio}: the connection being replaced resumes from a handle
+     * issued before the move, so what it receives never reaches the new one, and Google drops input
+     * that reaches the new one before its setup completes. The first connection needs no flag:
+     * {@link Open} returns only once its setup is confirmed.
+     */
+    private moving = false;
+
+    /** Input audio that came during a move, sent on the new connection once it is ready. */
+    private heldAudio: RealtimeInputFrame[] = [];
+
+    /** Bytes in {@link heldAudio}, kept under {@link MAX_HELD_INPUT_AUDIO_BYTES}. */
+    private heldAudioBytes = 0;
+
+    /** See {@link IsTurnOpen}. */
+    private turnOpen = false;
+
+    /** A turn's `turnComplete` came while a tool call was pending: the turn ends once the last pending call's result goes out. */
+    private turnEndAwaitsToolResults = false;
+
+    /** Last connection number handed out by {@link openConnection}. */
+    private issuedConnections = 0;
+
+    /**
+     * Number of the connection in use. Callbacks from any other connection (one that was replaced,
+     * closed, or is still opening) are ignored, so a replaced socket's close can't end the session
+     * that replaced it. `0` while no connection is in use.
+     */
+    private currentConnection = 0;
+
+    /** Sets how this session opens its Live connections. Called by the driver before {@link Open}. */
+    public SetConnector(connector: GeminiSessionConnector): void {
+        this.connector = connector;
+    }
+
+    /**
+     * Records what became of the session's avatar request. A granted one (a server-side session whose host publishes the
+     * avatar into a room) sends the model's MP4 pieces as frames to {@link OnVideoFrame}, keeps PCM to turns without
+     * video, marks the model generating for its answer's media only, and reports the avatar's video seconds through
+     * {@link OnUsage}. Called by the driver before {@link Open}.
+     *
+     * @param status The avatar status, or `undefined` when the session asked for no avatar.
+     * @param encoding The avatar's MSE type from the model's profile.
+     */
+    public SetAvatar(status: RealtimeAvatarStatus | undefined, encoding: string | undefined): void {
+        this.AvatarStatus = status;
+        this.avatarEncoding = encoding;
+        this.avatarOutput = status?.Granted
+            ? new GeminiBridgedAvatarOutput({
+                  OnVideoFrame: (frame) => this.videoFrameHandler?.(frame),
+                  OnPcm: (pcm) => this.outputHandler?.(pcm),
+                  OnVideoSeconds: (seconds) => this.usageHandler?.({ InputTokens: 0, OutputTokens: 0, OutputTokenDetails: { VideoSeconds: seconds } }),
+                  OnAnswer: () => this.markAnswering(),
+                  Report: (message) => console.warn(message),
+              })
+            : null;
+    }
+
+    /**
+     * Opens the first connection and puts it to use once Google confirms its setup (`setupComplete`): input sent before
+     * that is dropped, so nothing (the initial context, the first audio) goes out until then. Called by the driver once
+     * the session is configured.
+     *
+     * @throws When the connection closes or fails before Google confirms its setup, or no confirmation comes in time.
+     */
+    public async Open(): Promise<void> {
+        this.resumption = new RealtimeSessionResumption({
+            Reconnect: (handle, attempt) => this.resume(handle, attempt),
+            OnReconnecting: (reason) => {
+                RealtimeDiagLog(`[GeminiRealtime] Resuming the session on a new connection (${reason})`);
+                // From the moment a move starts, input waits for the new connection.
+                this.moving = true;
+            },
+            OnReconnected: () => this.handleResumed(),
+            OnReconnectFailed: (error) => this.handleResumeFailed(error),
+            Log: (message) => RealtimeDiagLog(message),
+        });
+        const opened = await this.openConnection(undefined);
+        await GeminiRealtimeSession.awaitSetup(opened);
+        this.useConnection(opened);
+    }
+
+    /**
+     * Whether a turn is in progress. A turn opens at its first sign: the user's first transcribed words (outside meeting
+     * mode, where room speech is no turn until the bridge commits one), a spoken update this session sends, or the
+     * model's output (a transcription delta, a thought, a tool call, or an audio part, which in an avatar session must
+     * play as the voice; the video an avatar streams between turns never opens one). It closes at the turn's
+     * `turnComplete` once no tool call is pending, or when the last pending call's result goes out after that; at a
+     * meeting-mode commit that produced no turn; and at a resume. The session moves to a new connection only between
+     * turns.
+     */
+    public get IsTurnOpen(): boolean {
+        return this.turnOpen;
     }
 
     /** Sets MEETING mode (manual turn-taking). Called by the driver from the connect config at start. */
@@ -925,10 +1413,16 @@ class GeminiRealtimeSession implements IRealtimeSession {
                 Modality: 'video',
                 Direction: 'inbound',
                 Encoding: 'image/jpeg',
-                Rate: 1,
+                // The model's own ceiling from the profile table; a bridged host paces frames to it.
+                Rate: this.profile.MaxInboundVideoRate,
                 UsageBasis: ['tokens', 'frames'] as const,
                 RequiresConsent: true,
             });
+        }
+        const outbound: RealtimeTrackDescriptor[] = [{ Modality: 'audio', Direction: 'outbound' }];
+        if (this.avatarOutput) {
+            // A granted avatar: its MP4 pieces reach the host as frames through OnVideoFrame.
+            outbound.push({ Modality: 'video', Direction: 'outbound', ...(this.avatarEncoding ? { Encoding: this.avatarEncoding } : {}) });
         }
         return {
             CanReconfigureTurnMode: false,
@@ -938,7 +1432,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
             SupportsDynamicToolSet: GeminiRealtime.SupportsDynamicToolSet,
             SupportedInboundTracks: inbound,
             MaxInboundVideoStreams: ResolveGeminiMaxInboundVideoStreams(this.profile),
-            SupportedOutboundTracks: [{ Modality: 'audio', Direction: 'outbound' }],
+            SupportedOutboundTracks: outbound,
             ProvidesThoughtSummaries: this.profile.SupportsThoughtSummaries,
             SupportsAsynchronousReasoning: !this.profile.Tooling.SupportsBlockingExecution,
             UsageBases: this.profile.SupportsInboundVideo ? ['tokens', 'seconds', 'frames'] : ['tokens', 'seconds'],
@@ -954,22 +1448,78 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.requireLive().sendClientContent({ turns, turnComplete: false });
     }
 
-    /** @inheritdoc */
-    public SendInput(chunk: ArrayBuffer): void {
+    /**
+     * @inheritdoc
+     *
+     * Audio goes out as `audio` in the frame's PCM format (16 kHz PCM when the frame names none).
+     * Video goes out as `video` when the frame is a JPEG or PNG image, the types Gemini Live accepts.
+     * Anything else is dropped and reported once per type, never sent as the wrong kind.
+     *
+     * While the session moves to a new connection, audio is held (the latest 2 s) and goes out on
+     * the new connection once it is ready; a video frame is dropped, as the next one follows.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind === 'video') {
+            if (!this.moving) {
+                this.sendVideoInput(frame);
+            }
+            return;
+        }
+        if (this.moving) {
+            this.holdAudio(frame);
+            return;
+        }
+        this.sendAudioInput(frame);
+    }
+
+    /**
+     * Holds an audio frame during a move, keeping the latest {@link MAX_HELD_INPUT_AUDIO_BYTES}; older audio goes first.
+     * The bytes are copied, so a host that reuses its buffers can't change what is held.
+     */
+    private holdAudio(frame: RealtimeInputFrame): void {
+        this.heldAudio.push({ ...frame, Data: frame.Data.slice(0) });
+        this.heldAudioBytes += frame.Data.byteLength;
+        while (this.heldAudioBytes > MAX_HELD_INPUT_AUDIO_BYTES && this.heldAudio.length > 1) {
+            this.heldAudioBytes -= this.heldAudio.shift()?.Data.byteLength ?? 0;
+        }
+    }
+
+    /** Sends the audio held during a move on the connection now in use, oldest first. */
+    private sendHeldAudio(): void {
+        const held = this.heldAudio;
+        this.heldAudio = [];
+        this.heldAudioBytes = 0;
+        for (const frame of held) {
+            this.sendAudioInput(frame);
+        }
+    }
+
+    private sendAudioInput(frame: RealtimeInputFrame): void {
+        const mimeType = frame.MimeType ?? GEMINI_INPUT_AUDIO_MIME_TYPE;
+        if (!IsPcmAudioMimeType(mimeType)) {
+            this.droppedInput.Report(frame);
+            return;
+        }
         const live = this.requireLive();
         // Meeting mode: automatic activity detection is OFF, so audio is only processed inside an explicit
         // activity window. Open one lazily on the first audio after the last turn was committed — the window
         // stays open (accumulating what the agent hears) until RequestSpokenUpdate sends `activityEnd`.
+        // Only audio opens it: a video frame is not speech.
         if (this.meetingMode && !this.manualActivityOpen) {
             live.sendRealtimeInput({ activityStart: {} });
             this.manualActivityOpen = true;
             RealtimeDiagLog('[GeminiRealtime][diag] meeting: activityStart — opened input window on first audio (now accumulating room audio)');
         }
-        const audio: GeminiBlob = {
-            data: GeminiRealtimeSession.arrayBufferToBase64(chunk),
-            mimeType: GEMINI_INPUT_AUDIO_MIME_TYPE,
-        };
-        live.sendRealtimeInput({ audio });
+        live.sendRealtimeInput({ audio: { data: GeminiRealtimeSession.arrayBufferToBase64(frame.Data), mimeType } });
+    }
+
+    private sendVideoInput(frame: RealtimeInputFrame): void {
+        const mimeType = frame.MimeType?.trim().toLowerCase();
+        if (!mimeType || !GEMINI_VIDEO_INPUT_MIME_TYPES.has(mimeType)) {
+            this.droppedInput.Report(frame);
+            return;
+        }
+        this.requireLive().sendRealtimeInput({ video: { data: GeminiRealtimeSession.arrayBufferToBase64(frame.Data), mimeType } });
     }
 
     /**
@@ -1018,6 +1568,11 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     /** @inheritdoc */
+    public OnVideoFrame(handler: (frame: RealtimeVideoFrame) => void): void {
+        this.videoFrameHandler = handler;
+    }
+
+    /** @inheritdoc */
     public OnTranscript(handler: (t: RealtimeTranscript) => void): void {
         this.transcriptHandler = handler;
     }
@@ -1044,22 +1599,147 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /**
      * Surfaces a websocket-level failure as a FATAL session error — the transport is gone,
      * so the consumer (e.g. the session runner) should finalize cleanly instead of idling.
+     * When the session can be resumed, the error is only logged: a websocket `error` is always
+     * followed by a `close`, and {@link HandleTransportClose} resumes from there.
      */
     public HandleTransportError(message: string): void {
+        if (this.resumption?.Handle) {
+            RealtimeDiagLog(`[GeminiRealtime] Transport error, resuming on close: ${message}`);
+            return;
+        }
         this.errorHandler?.({ Message: message, Fatal: true });
     }
 
     /**
-     * Surfaces an UNEXPECTED socket close as a fatal error (expected closes — the consumer
-     * called {@link Close} — are silent). Gemini hard-closes at token expiry, so this is
-     * also how credential death reaches the consumer.
+     * Handles a close of the current connection that the consumer did not ask for. When Google
+     * issued a resumption handle, the session reconnects with it; otherwise the close surfaces as a
+     * fatal error, as before (expected closes, after {@link Close}, stay silent).
      */
     public HandleTransportClose(code?: number, reason?: string): void {
         if (this.closedByConsumer) {
             return;
         }
+        if (this.resumption?.ConnectionLost()) {
+            return;
+        }
         const detail = [code != null ? `code ${code}` : null, reason || null].filter(Boolean).join(' — ');
         this.errorHandler?.({ Message: `Gemini Live session closed unexpectedly${detail ? ` (${detail})` : ''}`, Fatal: true });
+    }
+
+    /**
+     * Opens a connection through the driver's connector. Its callbacks act only while it is the
+     * connection in use, so events from one that was replaced, closed, or is still opening are
+     * dropped; its `setupComplete`, and a close or error before it, settle its
+     * {@link GeminiOpenedConnection.Setup} whether or not it is in use yet. It becomes the
+     * connection in use through {@link useConnection}, which lets the old connection keep
+     * delivering events while a planned move is in progress.
+     */
+    private async openConnection(handle: string | undefined): Promise<GeminiOpenedConnection> {
+        if (!this.connector) {
+            throw new Error('Gemini realtime session has no connector; the driver must call SetConnector before Open.');
+        }
+        const number = ++this.issuedConnections;
+        const isCurrent = (): boolean => number === this.currentConnection;
+        const setup = new RealtimeConnectionSetup();
+        const live = await this.connector(handle, {
+            OnMessage: (message) => {
+                if (message.setupComplete) {
+                    setup.Confirm();
+                }
+                if (isCurrent()) {
+                    this.HandleServerMessage(message);
+                }
+            },
+            OnError: (event) => {
+                setup.Fail(new Error(`Gemini Live connection failed before confirming its setup: ${event?.message ?? 'websocket error'}`));
+                if (isCurrent()) {
+                    this.HandleTransportError(event?.message ?? 'Gemini Live websocket error');
+                }
+            },
+            OnClose: (event) => {
+                setup.Fail(new Error(`Gemini Live closed the connection before confirming its setup (${event?.code}): ${event?.reason || 'no reason given'}`));
+                if (isCurrent()) {
+                    this.HandleTransportClose(event?.code, event?.reason);
+                }
+            },
+        });
+        return { Live: live, ConnectionNumber: number, Setup: setup };
+    }
+
+    /** Waits for Google to confirm a new connection's setup. On failure the connection is closed and the error rethrown. */
+    private static async awaitSetup(opened: GeminiOpenedConnection): Promise<void> {
+        try {
+            await opened.Setup.Wait();
+        } catch (error) {
+            GeminiRealtimeSession.closeQuietly(opened.Live);
+            throw error;
+        }
+    }
+
+    /** Makes an opened connection the one in use. */
+    private useConnection(opened: GeminiOpenedConnection): void {
+        this.live = opened.Live;
+        this.currentConnection = opened.ConnectionNumber;
+    }
+
+    /**
+     * Opens a replacement connection that resumes the session from `handle`, switches to it once
+     * Google confirms its setup, and closes the old one. Until then the old connection stays in
+     * use, so what it still sends (the rest of a turn the deadline cut, its usage) is handled.
+     * Rejects when the connection can't be opened or its setup fails, so
+     * {@link RealtimeSessionResumption} can retry. A connection that opens after the attempt was
+     * abandoned (timeout, or {@link Close}) is closed instead of used.
+     */
+    private async resume(handle: string, attempt: RealtimeResumeAttempt): Promise<void> {
+        const opened = await this.openConnection(handle);
+        await GeminiRealtimeSession.awaitSetup(opened);
+        if (attempt.Abandoned || this.closedByConsumer) {
+            GeminiRealtimeSession.closeQuietly(opened.Live);
+            return;
+        }
+        const previous = this.live;
+        this.useConnection(opened);
+        if (previous) {
+            GeminiRealtimeSession.closeQuietly(previous);
+        }
+    }
+
+    /**
+     * The session continues on a new connection, whose setup Google has confirmed. It has no open
+     * meeting-mode activity window, and a turn cut off by a drop or the deadline never completes
+     * there, so the turn is ended the way `turnComplete` ends one: thought text emitted, the busy
+     * flag cleared. The audio held during the move goes out, then the queued sends.
+     */
+    private handleResumed(): void {
+        this.manualActivityOpen = false;
+        this.avatarOutput?.Resumed();
+        this.endTurn();
+        this.moving = false;
+        this.sendHeldAudio();
+        this.completeTurn();
+    }
+
+    /**
+     * Every resume attempt failed: the session ends with a fatal error. Input no longer waits for a new connection; the
+     * audio held for one is dropped.
+     */
+    private handleResumeFailed(error: Error): void {
+        this.moving = false;
+        this.heldAudio = [];
+        this.heldAudioBytes = 0;
+        if (this.closedByConsumer) {
+            return;
+        }
+        this.errorHandler?.({ Message: `Gemini Live connection was lost and could not be resumed: ${error.message}`, Fatal: true });
+    }
+
+    /** Closes a connection the session no longer uses; it may already be closed. */
+    private static closeQuietly(live: GeminiLiveSession): void {
+        try {
+            live.close();
+        } catch (err) {
+            RealtimeDiagLog(`[GeminiRealtime] Closing a replaced connection failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /**
@@ -1069,7 +1749,8 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * *name*, which the Core contract does not pass — so the name is looked up from the
      * {@link pendingToolCallNames} cache populated when the originating tool call arrived. The
      * `output` JSON string is parsed into the structured response object Gemini expects, and the
-     * cache entry is cleared once the response is sent.
+     * cache entry is cleared once the response is sent. While the session moves to a new
+     * connection, the result waits and goes out on the new one.
      *
      * @param callID The originating tool call's id.
      * @param output The tool's result as a JSON-stringified string.
@@ -1089,8 +1770,16 @@ class GeminiRealtimeSession implements IRealtimeSession {
             ...(sched ? { scheduling: sched } : {}),
         };
 
-        this.requireLive().sendToolResponse({ functionResponses: [functionResponse] });
-        this.pendingToolCallNames.delete(callID);
+        const send = (): void => {
+            this.requireLive().sendToolResponse({ functionResponses: [functionResponse] });
+            this.pendingToolCallNames.delete(callID);
+            this.endTurnIfToolResultsIn();
+        };
+        if (this.moving) {
+            this.queuedSends.push(send);
+            return;
+        }
+        send();
     }
 
     /**
@@ -1160,8 +1849,11 @@ class GeminiRealtimeSession implements IRealtimeSession {
             return false;
         }
         let committed = false;
+        // During a move the update waits for the new connection and commits there, so it counts as committed.
+        const waitsForConnection = this.moving;
         this.enqueueOrRun(() => {
             this.responseActive = true;
+            this.markTurnOpen();
             const live = this.requireLive();
             if (this.meetingMode) {
                 // MEETING mode: the agent has been heard accumulating audio inside the open activity window
@@ -1188,7 +1880,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         });
         // Meeting mode: report whether we actually committed a turn (so the bridge can release the floor if
         // not). Non-meeting (narration) always reports sent — it queues rather than wedges a floor.
-        return this.meetingMode ? committed : true;
+        return this.meetingMode ? committed || waitsForConnection : true;
     }
 
     /**
@@ -1205,6 +1897,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
             this.meetingResponseWatchdog = undefined;
             if (this.responseActive) {
                 RealtimeDiagLog('[GeminiRealtime][diag] meeting WATCHDOG fired — no turn produced after activityEnd; clearing responseActive so the agent isn’t stuck silent');
+                this.endTurnUnlessToolCallPending();
                 this.completeTurn();
             }
         }, GEMINI_MEETING_RESPONSE_WATCHDOG_MS);
@@ -1214,11 +1907,12 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * Runs a client-content send immediately when no turn is in flight; otherwise queues it for
      * the next turn boundary. Gemini-specific collision rule: ANY client content interrupts
      * in-flight generation on the Live API, so deferral (not skipping) is the safe default.
+     * A send also waits while the session moves to a new connection, and goes out on the new one.
      */
     private enqueueOrRun(send: () => void): void {
-        if (this.responseActive) {
+        if (this.responseActive || this.moving) {
             this.queuedSends.push(send);
-            RealtimeDiagLog(`[GeminiRealtime][diag] send QUEUED behind in-flight turn (responseActive=true, queueLen=${this.queuedSends.length}) — will not fire until a turn boundary clears the flag`);
+            RealtimeDiagLog(`[GeminiRealtime][diag] send QUEUED (responseActive=${this.responseActive}, moving=${this.moving}, queueLen=${this.queuedSends.length}) — will not fire until a turn boundary clears the flag or the new connection is ready`);
             return;
         }
         send();
@@ -1227,7 +1921,8 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /**
      * Turn boundary (`turnComplete` or `interrupted`): releases the busy flag and drains queued
      * sends in order, stopping at the first send that itself starts a new turn (a queued
-     * {@link RequestSpokenUpdate} re-sets {@link responseActive}).
+     * {@link RequestSpokenUpdate} re-sets {@link responseActive}). Nothing drains during a move:
+     * {@link handleResumed} drains onto the new connection.
      */
     private completeTurn(): void {
         if (this.meetingResponseWatchdog) {
@@ -1247,17 +1942,91 @@ class GeminiRealtimeSession implements IRealtimeSession {
         }
         RealtimeDiagLog(`[GeminiRealtime][diag] turn boundary — clearing responseActive (was ${this.responseActive}), draining ${this.queuedSends.length} queued send(s)`);
         this.responseActive = false;
-        while (!this.responseActive && this.queuedSends.length > 0) {
+        while (!this.responseActive && !this.moving && this.queuedSends.length > 0) {
             const send = this.queuedSends.shift();
             send?.();
         }
     }
 
+    // ── Turn tracking (see IsTurnOpen) ─────────────────────────────────────────
+
+    /**
+     * Whether a server content frame is a sign of a turn: the user's transcribed words (outside
+     * meeting mode), the model's transcribed words, a thought, or (in a session without an avatar)
+     * the model's audio. An avatar's video never is: Vertex AI streams it between turns too.
+     */
+    private contentOpensTurn(content: LiveServerContent): boolean {
+        if (!this.meetingMode && GeminiRealtimeSession.hasText(content.inputTranscription?.text)) {
+            return true;
+        }
+        if (GeminiRealtimeSession.hasText(content.outputTranscription?.text)) {
+            return true;
+        }
+        return (content.modelTurn?.parts ?? []).some((part) => this.partOpensTurn(part));
+    }
+
+    /**
+     * Whether a model part is a sign of a turn: a thought, or audio (as this session plays it) in a session without an
+     * avatar. In an avatar session, a voice part opens the turn once it plays (the avatar output's `OnAnswer`).
+     */
+    private partOpensTurn(part: Part): boolean {
+        if (part.thought) {
+            return GeminiRealtimeSession.hasText(part.text);
+        }
+        const inline = part.inlineData;
+        return !this.avatarOutput && !!inline?.data && (!inline.mimeType || IsPcmAudioMimeType(inline.mimeType));
+    }
+
+    /** Whether a transcription or thought carries words (whitespace alone does not count). */
+    private static hasText(text: string | undefined): boolean {
+        return (text?.trim().length ?? 0) > 0;
+    }
+
+    /** A turn started or continued: a planned move waits until it ends. */
+    private markTurnOpen(): void {
+        this.turnOpen = true;
+        this.turnEndAwaitsToolResults = false;
+        this.resumption?.TurnStarted();
+    }
+
+    /** The turn's `turnComplete`: it ends now, or once the results of the tool calls still pending go out. */
+    private endTurnUnlessToolCallPending(): void {
+        if (this.pendingToolCallNames.size > 0) {
+            this.turnEndAwaitsToolResults = this.turnOpen;
+            return;
+        }
+        this.endTurn();
+    }
+
+    /** A tool result went out: a turn whose `turnComplete` waited on the pending calls ends once none is left. */
+    private endTurnIfToolResultsIn(): void {
+        if (this.turnEndAwaitsToolResults && this.pendingToolCallNames.size === 0) {
+            this.endTurn();
+        }
+    }
+
+    /** The turn is over: a planned move happens at the next resumable handle Google issues. */
+    private endTurn(): void {
+        this.turnOpen = false;
+        this.turnEndAwaitsToolResults = false;
+        this.resumption?.TurnEnded();
+    }
+
     /** @inheritdoc */
     public async Close(): Promise<void> {
         this.closedByConsumer = true;
+        // Stop resuming before the socket closes, and drop events still in flight from it.
+        this.resumption?.Dispose();
+        this.currentConnection = 0;
+        // A closed session's sends fail as before (no live connection), rather than wait for a move.
+        this.moving = false;
+        this.heldAudio = [];
+        this.heldAudioBytes = 0;
+        this.turnOpen = false;
+        this.turnEndAwaitsToolResults = false;
         this.live?.close();
         this.live = null;
+        this.avatarOutput?.Close(); // reports the avatar seconds generated and not yet reported, while the handler is set
         this.clearHandlers();
     }
 
@@ -1266,6 +2035,15 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * per-concern handlers so each translation unit stays small and testable.
      */
     public HandleServerMessage(message: LiveServerMessage): void {
+        // Session continuity. `resumable: false` (mid-turn, mid-tool-call) arrives with no handle;
+        // an update without the flag is treated as resumable.
+        if (message.sessionResumptionUpdate) {
+            const update = message.sessionResumptionUpdate;
+            this.resumption?.RecordHandle(update.newHandle, update.resumable !== false);
+        }
+        if (message.goAway) {
+            this.resumption?.ConnectionEnding(ParseDurationToMs(message.goAway.timeLeft));
+        }
         if (message.serverContent) {
             this.handleServerContent(message.serverContent);
         }
@@ -1279,24 +2057,39 @@ class GeminiRealtimeSession implements IRealtimeSession {
 
     /**
      * Translates a {@link LiveServerContent} frame: model audio output, input/output transcription,
-     * and interruption.
+     * and interruption. What the frame carries opens the turn before its `turnComplete` ends it.
      */
     private handleServerContent(content: LiveServerContent): void {
+        if (this.contentOpensTurn(content)) {
+            this.markTurnOpen();
+        }
+        if (this.avatarOutput && GeminiRealtimeSession.hasText(content.outputTranscription?.text)) {
+            // The model speaks: the avatar's video is its answer's from here, this message's parts included.
+            this.avatarOutput.AnswerStarted();
+        }
         if (content.interrupted) {
+            this.avatarOutput?.Interrupted(); // before the parts of this message: the turn's late media is dropped
             this.interruptionHandler?.();
             this.completeTurn();
         }
         if (content.modelTurn) {
             // First model output of a turn marks generation in flight (Gemini emits no explicit
-            // "response started" frame), so interim-update sends defer instead of interrupting.
-            if (!this.responseActive) {
-                RealtimeDiagLog('[GeminiRealtime][diag] modelTurn — model is GENERATING output (the activityEnd worked)');
+            // "response started" frame), so interim-update sends defer instead of interrupting. In an
+            // avatar session the avatar output marks it for the answer's media (OnAnswer): the video
+            // Vertex AI streams between answers is not generation.
+            if (!this.avatarOutput || GeminiRealtimeSession.carriesMoreThanMedia(content.modelTurn)) {
+                this.markGenerating();
             }
-            this.responseActive = true;
-            this.emitAudioOutput(content.modelTurn);
+            this.emitModelMedia(content.modelTurn);
             this.emitThoughtOutput(content.modelTurn);
         }
+        if (content.generationComplete) {
+            this.avatarOutput?.GenerationComplete();
+        }
         if (content.turnComplete) {
+            this.avatarOutput?.TurnComplete();
+            // Before the drain: a queued send that starts a new turn opens it again.
+            this.endTurnUnlessToolCallPending();
             this.completeTurn();
         }
         if (content.inputTranscription) {
@@ -1307,24 +2100,71 @@ class GeminiRealtimeSession implements IRealtimeSession {
         }
     }
 
-    /**
-     * Extracts inline audio parts from the model turn and forwards each as a raw `ArrayBuffer`.
-     * Thought parts (`part.thought === true`) are skipped — thoughts are reasoning summaries,
-     * not synthesized audio.
-     */
-    private emitAudioOutput(modelTurn: Content): void {
-        if (!this.outputHandler || !modelTurn.parts) {
-            return;
+    /** The model is generating: sends wait for the turn's boundary instead of interrupting it. */
+    private markGenerating(): void {
+        if (!this.responseActive) {
+            RealtimeDiagLog('[GeminiRealtime][diag] modelTurn — model is GENERATING output (the activityEnd worked)');
         }
-        for (const part of modelTurn.parts) {
-            if (part.thought) {
+        this.responseActive = true;
+    }
+
+    /** A part of the avatar session's answer is about to reach the host: the turn is open and the model generating. */
+    private markAnswering(): void {
+        this.markTurnOpen();
+        this.markGenerating();
+    }
+
+    /**
+     * Whether a model turn carries something besides media parts (a thought, a part without inline data) or nothing at
+     * all: generation in an avatar session, whatever its media turn out to be.
+     */
+    private static carriesMoreThanMedia(modelTurn: Content): boolean {
+        const parts = modelTurn.parts ?? [];
+        return parts.length === 0 || parts.some((part) => part.thought || !part.inlineData?.data);
+    }
+
+    /**
+     * Forwards the model turn's inline media parts. Thought parts (`part.thought === true`) are skipped — thoughts are
+     * reasoning summaries, not synthesized media. A session with a granted avatar routes each part through its avatar
+     * output (MP4 pieces to the host, PCM only before the turn's video; the answer's parts mark the model generating);
+     * every other session plays PCM only.
+     */
+    private emitModelMedia(modelTurn: Content): void {
+        for (const part of modelTurn.parts ?? []) {
+            const inline = part.inlineData;
+            if (part.thought || !inline?.data) {
                 continue;
             }
-            const data = part.inlineData?.data;
-            if (data) {
-                this.outputHandler(GeminiRealtimeSession.base64ToArrayBuffer(data));
+            if (this.avatarOutput) {
+                this.avatarOutput.Accept(inline.mimeType, GeminiRealtimeSession.base64ToArrayBuffer(inline.data));
+            } else {
+                this.emitAudioOutput(inline.mimeType, inline.data);
             }
         }
+    }
+
+    /**
+     * Forwards one inline part as raw PCM. A part that names a non-PCM type (e.g. video/mp4 avatar frames) must never
+     * reach the audio output, where it would play as noise. A part with no type plays, as it always has.
+     */
+    private emitAudioOutput(mimeType: string | undefined, data: string): void {
+        if (!this.outputHandler) {
+            return;
+        }
+        if (mimeType && !IsPcmAudioMimeType(mimeType)) {
+            this.reportDroppedOutput(mimeType);
+            return;
+        }
+        this.outputHandler(GeminiRealtimeSession.base64ToArrayBuffer(data));
+    }
+
+    /** Reports each MIME type of dropped model output once per session, not once per part. */
+    private reportDroppedOutput(mimeType: string): void {
+        if (this.droppedOutputTypes.has(mimeType)) {
+            return;
+        }
+        this.droppedOutputTypes.add(mimeType);
+        console.warn(`[GeminiRealtime] Dropped model output of type ${mimeType}: only PCM audio is played on this session.`);
     }
 
     /**
@@ -1380,7 +2220,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
         // draining the queue; queued sends flush at the next real turn boundary) so the eventual
         // SendToolResult and any fresh context note are not deferred behind a turn that will not
         // complete until after the result is sent. Mirrors the client driver's deadlock guard.
+        // The answer stops at the call: the avatar's video until the model speaks again is idle.
         this.responseActive = false;
+        this.avatarOutput?.ToolCalled();
         for (const call of functionCalls) {
             const callID = call.id ?? '';
             const toolName = call.name ?? '';
@@ -1388,6 +2230,8 @@ class GeminiRealtimeSession implements IRealtimeSession {
             // SendToolResult can supply it to Gemini's sendToolResponse, which requires the function
             // name the Core contract does not carry.
             this.pendingToolCallNames.set(callID, toolName);
+            // A pending call keeps its turn open until its result goes out (see IsTurnOpen).
+            this.markTurnOpen();
             this.toolCallHandler?.({
                 CallID: callID,
                 ToolName: toolName,
@@ -1397,39 +2241,47 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     /**
-     * Emits an incremental usage update, defaulting missing token counts to zero,
-     * and attributing modality breakdown (text, audio, image/video) when reported.
+     * Emits an incremental usage update, defaulting missing token counts to zero, with the per-modality breakdown
+     * (text, audio, image, video) of the prompt and of the response when Google reports one. A generated avatar's tokens
+     * arrive as the response's VIDEO.
      */
     private handleUsage(usageMetadata: LiveServerMessage['usageMetadata']): void {
         if (!usageMetadata) {
             return;
         }
-        let inputDetails: RealtimeUsageModalityDetail | undefined;
-        if (usageMetadata.promptTokensDetails && Array.isArray(usageMetadata.promptTokensDetails)) {
-            for (const detail of usageMetadata.promptTokensDetails) {
-                if (typeof detail.tokenCount === 'number') {
-                    inputDetails = inputDetails ?? {};
-                    const mod = String(detail.modality ?? '').toUpperCase();
-                    if (mod === 'AUDIO') {
-                        inputDetails.AudioTokens = (inputDetails.AudioTokens ?? 0) + detail.tokenCount;
-                    } else if (mod === 'TEXT') {
-                        inputDetails.TextTokens = (inputDetails.TextTokens ?? 0) + detail.tokenCount;
-                    } else if (mod === 'IMAGE') {
-                        inputDetails.ImageTokens = (inputDetails.ImageTokens ?? 0) + detail.tokenCount;
-                    }
-                }
-            }
-        }
+        const inputDetails = this.modalityTokenDetails(usageMetadata.promptTokensDetails);
+        const outputDetails = this.modalityTokenDetails(usageMetadata.responseTokensDetails);
         this.usageHandler?.({
             InputTokens: usageMetadata.promptTokenCount ?? 0,
             OutputTokens: usageMetadata.responseTokenCount ?? 0,
             ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+            ...(outputDetails ? { OutputTokenDetails: outputDetails } : {}),
         });
+    }
+
+    /**
+     * Sums a usage report's per-modality token counts into the fields {@link GEMINI_MODALITY_TOKEN_FIELDS} names.
+     * `undefined` when the report has no count for a modality the table names.
+     */
+    private modalityTokenDetails(counts: GeminiModalityTokenCounts): RealtimeUsageModalityDetail | undefined {
+        if (!Array.isArray(counts)) {
+            return undefined;
+        }
+        let details: RealtimeUsageModalityDetail | undefined;
+        for (const count of counts) {
+            const field = GEMINI_MODALITY_TOKEN_FIELDS[String(count.modality ?? '').toUpperCase()];
+            if (field && typeof count.tokenCount === 'number') {
+                details = details ?? {};
+                details[field] = (details[field] ?? 0) + count.tokenCount;
+            }
+        }
+        return details;
     }
 
     /** Drops all registered handlers so a closed session can't fire stale callbacks. */
     private clearHandlers(): void {
         this.outputHandler = null;
+        this.videoFrameHandler = null;
         this.transcriptHandler = null;
         this.toolCallHandler = null;
         this.interruptionHandler = null;

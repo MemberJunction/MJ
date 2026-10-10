@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { IMetadataProvider } from '@memberjunction/core';
+import type { MJAIAgentChannelEntity_IChannelUIConfig } from '@memberjunction/core-entities';
 import type { JSONObject } from '@memberjunction/ai';
 import type { RealtimeSessionClientPolicy } from '@memberjunction/ai-core-plus';
 import {
@@ -119,7 +120,16 @@ class MintProvider {
     }
 }
 
-function stubRegistry(rows: Array<{ ID: string; Name: string; ClientPluginClass: string; IsActive: boolean }>): void {
+/** A registry row as the runtime reads it from the engine's cached `MJ: AI Agent Channels` entities. */
+interface StubRow {
+    ID: string;
+    Name: string;
+    ClientPluginClass: string;
+    IsActive: boolean;
+    UIConfigObject?: MJAIAgentChannelEntity_IChannelUIConfig | null;
+}
+
+function stubRegistry(rows: StubRow[]): void {
     vi.spyOn(AIEngineBase, 'GetProviderInstance').mockReturnValue({
         Config: async () => undefined,
         AgentChannels: rows,
@@ -384,6 +394,63 @@ describe('RealtimeSessionRuntime — the kill switch and host-declared channels'
         expect(runtime.IsActive).toBe(true);
         expect(runtime.ActiveChannels).toEqual([]);
         err.mockRestore();
+        await runtime.EndRealtimeSession();
+    });
+});
+
+describe("RealtimeSessionRuntime — where a channel's surface shows (UIConfig placement)", () => {
+    beforeEach(() => {
+        ScopedFakeClient.Notes = [];
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    it("gives each channel the placement its registry row's UIConfig sets", async () => {
+        stubRegistry([{ ...ECHO_ROW, UIConfigObject: { DisplayName: 'Echo', Placement: 'pip', AllowedPlacements: ['pip', 'tab'] } }]);
+        const { runtime } = build();
+        await start(runtime);
+        expect(runtime.ActiveChannels[0].SurfacePlacement).toEqual({ Default: 'pip', Allowed: ['pip', 'tab'] });
+        await runtime.EndRealtimeSession();
+    });
+
+    it('puts the surface of a row with no UIConfig on its tab, movable anywhere', async () => {
+        stubRegistry([ECHO_ROW]);
+        const { runtime } = build();
+        await start(runtime);
+        expect(runtime.ActiveChannels[0].SurfacePlacement).toEqual({ Default: 'tab', Allowed: ['stage', 'pip', 'tab', 'hidden'] });
+        await runtime.EndRealtimeSession();
+    });
+
+    it('a row whose UIConfig is not valid JSON keeps its channel, on its tab, and says why', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const broken: StubRow = {
+            ...ECHO_ROW,
+            get UIConfigObject(): MJAIAgentChannelEntity_IChannelUIConfig | null {
+                throw new SyntaxError('Unexpected token } in JSON');
+            },
+        };
+        stubRegistry([broken]);
+        const { runtime } = build();
+        await start(runtime);
+        expect(runtime.ActiveChannels.map((c) => c.ChannelName)).toEqual(['Echo']);
+        expect(runtime.ActiveChannels[0].SurfacePlacement.Default).toBe('tab');
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining("Channel 'Echo' has a UIConfig that is not valid JSON"));
+        await runtime.EndRealtimeSession();
+    });
+
+    it("the host's instance of a registry channel keeps the row's placement", async () => {
+        stubRegistry([{ ...ECHO_ROW, UIConfigObject: { Placement: 'stage' } }]);
+        const { runtime } = build();
+        const mine = new RegisteredEcho();
+        await start(runtime, { HostChannels: [{ Create: () => mine }] });
+        expect(runtime.ActiveChannels).toEqual([mine]);
+        expect(mine.SurfacePlacement.Default).toBe('stage');
+        await runtime.EndRealtimeSession();
+    });
+
+    it('a channel only the host declares (no registry row) starts on its tab', async () => {
+        const { runtime } = build(new MintProvider([]));
+        await start(runtime, { HostChannels: [{ ClientPluginClass: 'ScopedEchoChannel' }] });
+        expect(runtime.ActiveChannels[0].SurfacePlacement).toEqual({ Default: 'tab', Allowed: ['stage', 'pip', 'tab', 'hidden'] });
         await runtime.EndRealtimeSession();
     });
 });

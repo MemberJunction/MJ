@@ -33,6 +33,12 @@
   overflow: hidden;
 }
 
+/* The call's controls at the foot of the column: the "Agent can see" chip, the channel strip and the composer. The
+   stage starts its picture-in-picture boxes above this box, so it is never squeezed below its content's height. */
+.call-controls {
+  flex: none;
+}
+
 .call-body {
   flex: 1;
   overflow-y: auto;
@@ -78,63 +84,9 @@
   from { opacity: 0; transform: scale(0.94); }
   to { opacity: 1; transform: scale(1); }
 }
-.hero__stage {
-  position: relative;
-  width: 220px;
-  height: 220px;
-  display: grid;
-  place-items: center;
-  margin-bottom: 4px;
-}
-/* The hero orb mirrors the app-bar orb's visual language at stage scale. */
+/* The orb (mj-realtime-agent-orb) at hero scale. */
 .hero__orb {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  position: relative;
-  background: radial-gradient(circle at 35% 30%,
-    var(--mj-brand-accent, var(--mj-brand-primary)),
-    var(--mj-brand-primary) 60%,
-    var(--mj-brand-primary-active, var(--mj-brand-primary)));
-  box-shadow:
-    0 0 0 8px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent),
-    0 0 48px color-mix(in srgb, var(--mj-brand-primary) 45%, transparent);
-}
-.hero__orb[data-state='speaking'] {
-  animation: hero-orb-bob 0.9s ease-in-out infinite;
-}
-.hero__orb[data-state='listening'] {
-  box-shadow:
-    0 0 0 8px color-mix(in srgb, var(--mj-status-success) 16%, transparent),
-    0 0 48px color-mix(in srgb, var(--mj-status-success) 40%, transparent);
-  background: radial-gradient(circle at 35% 30%,
-    color-mix(in srgb, var(--mj-status-success) 60%, white), var(--mj-brand-primary) 65%);
-}
-.hero__orb[data-state='thinking'] {
-  box-shadow:
-    0 0 0 8px color-mix(in srgb, var(--mj-status-warning) 14%, transparent),
-    0 0 40px color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
-}
-@keyframes hero-orb-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
-}
-/* Expanding sound-wave rings (staggered). */
-.hero__ring {
-  position: absolute;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 55%, transparent);
-  opacity: 0;
-  animation: hero-wave 2.7s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
-}
-.hero__ring--2 { animation-delay: 0.9s; }
-.hero__ring--3 { animation-delay: 1.8s; }
-@keyframes hero-wave {
-  0% { transform: scale(1); opacity: 0.5; }
-  70% { opacity: 0.1; }
-  100% { transform: scale(1.85); opacity: 0; }
+  margin-bottom: 4px;
 }
 /* Voice equalizer: lively while the agent speaks, near-still otherwise. */
 .hero__eq {
@@ -167,6 +119,77 @@
   0%, 100% { height: 7px; opacity: 0.6; }
   50% { height: 28px; opacity: 1; }
 }
+/* ---------- the agent's place while its video presents (the Avatar) ----------
+   The stage lays the agent's video over these boxes; each has a size only while the video presents. Portrait, as
+   avatar video is (Google's samples are 704x1280). */
+.hero--presenting {
+  height: 100%;
+  min-height: 0;
+}
+.hero__presenter,
+.call-presenter {
+  display: none;
+}
+.hero__presenter--on {
+  display: block;
+  position: relative;
+  container-type: size;
+  flex: 1 1 auto;
+  min-height: 160px;
+  max-height: 520px;
+  aspect-ratio: 3 / 4;
+  margin-bottom: 8px;
+}
+/* Captions over the agent's video, as subtitles: the newest two lines, over the lower third and clear of the tile's
+   footer. Above the stage (z-index 1), where the video is. Light on a dark band in both themes, like the tile's chips. */
+.hero__caption {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 16%;
+  z-index: 2;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--mj-radius-md);
+  background: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  text-align: center;
+}
+/* Two lines, the newest: older ones leave through the top. The window clips, not the padded band, so nothing of an
+   older line shows in the padding. */
+.hero__caption-window {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: 2.8em;
+  overflow: hidden;
+}
+.hero__caption-speaker {
+  font-weight: 600;
+}
+/* A small tile (a short window): one smaller line, so the video still shows. */
+@container (max-height: 240px) {
+  .hero__caption {
+    bottom: 22%;
+    padding: 3px 6px;
+    font-size: 0.75rem;
+  }
+  .hero__caption-window {
+    max-height: 1.4em;
+  }
+}
+/* In the console it sits above the scrolling thread, so it stays in view as the conversation grows. Wide enough for
+   the tile's "AI-generated video" label on one line. */
+.call-presenter--on {
+  display: block;
+  flex: none;
+  align-self: center;
+  height: 200px;
+  aspect-ratio: 4 / 5;
+  margin-top: 12px;
+}
 .hero__name {
   font-size: 19px;
   font-weight: 800;
@@ -177,31 +200,24 @@
   font-size: 12.5px;
   color: var(--mj-text-muted);
 }
+/* The hero's state for screen readers only, while the agent's tile shows it. */
+.hero__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 /* ---------- AUDIO-REACTIVE MODE (data-audio-live, set by the rAF meter loop) ----------
-   With real audio metering the orb stops acting and starts REACTING: scale + glow follow
-   the smoothed output envelope (--voice-out) like a speaker cone, the EQ renders the true
-   spectrum (--eq-1..9), and [data-voice-dir] colors the visuals by who is speaking
-   (agent = brand, user = green). Without metering (driver attached no meters) the
-   attribute stays 'false' and the turn-state keyframe animations above stay in charge. */
-.call-overlay[data-audio-live='true'] .hero__orb {
-  animation: none;
-  transform: scale(calc(1 + var(--voice-out, 0) * 0.18));
-  transition: transform 70ms linear;
-}
-.call-overlay[data-audio-live='true'] .hero__ring {
-  opacity: calc(var(--voice-out, 0) * 0.55);
-  animation-duration: 2.1s;
-}
-.call-overlay[data-audio-live='true'][data-voice-dir='user'] .hero__orb {
-  box-shadow:
-    0 0 0 8px color-mix(in srgb, var(--mj-status-success) 16%, transparent),
-    0 0 48px color-mix(in srgb, var(--mj-status-success) 45%, transparent);
-  background: radial-gradient(circle at 35% 30%,
-    color-mix(in srgb, var(--mj-status-success) 60%, white), var(--mj-brand-primary) 65%);
-}
-.call-overlay[data-audio-live='true'][data-voice-dir='user'] .hero__ring {
-  border-color: color-mix(in srgb, var(--mj-status-success) 55%, transparent);
-}
+   With real audio metering the visuals stop acting and start REACTING: the EQ renders the
+   true spectrum (--eq-1..9), and [data-voice-dir] colors it by who is speaking (agent =
+   brand, user = green). The orb (mj-realtime-agent-orb) reads the same attributes and the
+   smoothed output envelope (--voice-out) itself. Without metering (driver attached no
+   meters) the attribute stays 'false' and the turn-state keyframe animations stay in charge. */
 /* True-spectrum EQ: per-bar heights from the meter's bins. */
 .call-overlay[data-audio-live='true'] .hero__eq span {
   animation: none;
@@ -267,15 +283,47 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* The call's notices under the banner (no microphone works; no avatar): mj-alert brings its own tint, border and text
+   colours; this only places them. */
+.call-microphone-notice,
+.call-avatar-notice {
+  flex-shrink: 0;
+  margin: var(--mj-space-2) var(--mj-space-5) 0;
+}
+
 /* ---------- FOCUS-BOARD mode (whiteboard "Focus board" toggle) ----------
-   The main call column collapses away entirely and the surface panel (whiteboard tab)
-   fills the overlay; a compact floating call pill keeps the live call reachable. */
+   The main call column collapses away entirely and the focused channel's surface fills
+   the stage; a compact floating call pill keeps the live call reachable. */
 .call-overlay.board-focus .call-main {
   display: none;
 }
-.call-overlay.board-focus mj-realtime-surface-tabs {
+
+/* ---------- the stage (every channel surface, in one layer) ----------
+   mj-media-stage covers the overlay and places each surface itself. Above the panel it
+   lays surfaces over, and above the call's controls, so its picture-in-picture boxes
+   start clear of them (.call-controls); below the onboarding card (5), the menus of the
+   dock and the chip (5) and the focus pill (60). */
+.call-stage {
+  z-index: 1;
+}
+/* A surface's frame: fills the box the stage gives it. The surface component is created
+   beside the pane host inside it, and sizes itself to it (height: 100%). */
+.stage-frame {
+  position: relative;
   flex: 1;
-  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* The "Move to…" menu on a surface that presents the agent, backed so it reads over video. Bottom right, in the
+   tile's footer, which holds nothing there for the agent, so it never covers the tile's labels. */
+.stage-presenter-move {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  z-index: 1;
+  border-radius: var(--mj-radius-full);
+  background: color-mix(in srgb, var(--mj-bg-surface) 85%, transparent);
 }
 
 /* Floating call pill: orb + state + mute / show-thread / end (per the whiteboard mockup). */
@@ -427,8 +475,4 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
-}
-/* Board-focus fill: the panel owns the whole overlay (the main column is hidden). */
-.call-overlay.board-focus .call-panel {
-  flex: 1;
 }

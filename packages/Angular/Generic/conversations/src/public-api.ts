@@ -145,11 +145,14 @@ export * from './lib/components/realtime/realtime-agent-picker.component';
 export * from './lib/components/realtime/realtime-session-overlay.component';
 export * from './lib/components/realtime/realtime-session-state';
 export * from './lib/components/realtime/realtime-agent-banner.component';
+export * from './lib/components/realtime/realtime-agent-orb.component';
 export * from './lib/components/realtime/realtime-session-thread.component';
 export * from './lib/components/realtime/realtime-delegation-card.component';
 export * from './lib/components/realtime/realtime-activity-rail.component';
 export * from './lib/components/realtime/realtime-surface-tabs.component';
 export * from './lib/components/realtime/realtime-surface-tabs.model';
+export * from './lib/components/realtime/realtime-surface-stage.model';
+export * from './lib/components/realtime/realtime-surface-placement-prefs';
 export * from './lib/components/realtime/realtime-surface-panel-prefs';
 export * from './lib/components/realtime/realtime-disclosure';
 export * from './lib/components/realtime/realtime-audio-visuals';
@@ -181,6 +184,13 @@ export * from './lib/components/realtime/media/realtime-media-surface.component'
 export * from './lib/components/realtime/identity-verification/identity-verification-channel';
 export * from './lib/components/realtime/identity-verification/identity-verification-model';
 export * from './lib/components/realtime/identity-verification/identity-verification-surface.component';
+// Camera and Screen Share channels (opt-in, on demand): the agent asks, the user turns the capture on. State + surface.
+export * from './lib/components/realtime/capture/realtime-capture-channel';
+export * from './lib/components/realtime/capture/realtime-capture-model';
+export * from './lib/components/realtime/capture/realtime-capture-surface.component';
+// The Avatar channel (in every call, inert without video): the agent's video on its surface.
+export * from './lib/components/realtime/avatar/realtime-avatar-channel';
+export * from './lib/components/realtime/avatar/realtime-avatar-surface.component';
 
 // Interactive Component channel: hosts any component artifact (mj-react-component) next to the call, with a
 // contract derived from the component's own spec. The pure parts (spec -> contract, config, data-state bounding,

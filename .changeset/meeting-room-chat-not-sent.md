@@ -1,0 +1,6 @@
+---
+"@memberjunction/livekit-room-core": patch
+"@memberjunction/ng-livekit-room": patch
+---
+
+The meeting room's chat marks a message that fails to send "Not sent", with a Retry. Before, `<mj-livekit-room>` showed the user's message at once and kept showing it as sent when it never went out; the failure reached only `ErrorOccurred`, which nothing in the room showed. The message still shows at once. When it does not go out (the send failed, a `BeforeSendData` handler canceled it, or there is no room), a "Not sent" line with a Retry button appears under it; Retry removes it and sends the text again as a new message at the end of the chat, where the others will see it. If the chat panel was closed by then, the chat button's unread badge counts the failure. A message that goes out looks as before. `ChatMessage` now reports the user's own message once it has gone out, and not at all when it does not. `LiveKitChatMessage.NotSent` marks such a message, and the chat panel has a `Retry` output. In `livekit-room-core`, `ILiveKitRoomController.SendData` resolves `true` when the message went out and `false` when it did not; `LiveKitRoomController` still raises a failed publish as an `error` of kind `data`, and the preview room resolves `false` only for a canceled message or outside the room.

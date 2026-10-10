@@ -2,7 +2,7 @@
  * Tests for `LiveKitNativeMeetingSdk` — the **two-way** native LiveKit Node room SDK binding. Exercises
  * the adapter against a **fake native module** (no SDK, no network): the pure native→seam mappings, the
  * connect/auth path, BOTH audio directions (the subscribe→`LiveKitAudioFrame` path AND the real
- * `publishAudioFrame`→native publish path), video/screen publish, roster + participant join/leave +
+ * `publishAudioFrame`→native publish path), the avatar as the only video out, roster + participant join/leave +
  * room-disconnected signals, the data-channel chat reaching the native client, the `BindLiveKitNative`
  * factory, `readNativeConfig` extraction, and the actionable errors (no specifier / module absent).
  */
@@ -23,8 +23,17 @@ import {
     NativeRoomAudioFrame,
     NativeRoomParticipant,
     NativeConnectArgs,
+    NativeRoomClientOptions,
+    NativeRoomVideoFrame,
+    NativeRoomVideoSourceEnd,
+    NativeVideoOptionsFor,
+    NativeAvatarMediaChunk,
+    NativeAvatarStatus,
+    MapNativeAvatarStatus,
 } from '../livekit-native-sdk';
-import { LiveKitAudioFrame, LiveKitConnectArgs, LiveKitParticipant } from '../livekit-sdk';
+import { LiveKitAudioFrame, LiveKitAvatarStatus, LiveKitConnectArgs, LiveKitParticipant, LiveKitVideoFrame, LiveKitVideoSourceEnd } from '../livekit-sdk';
+import { LiveKitBridge } from '../livekit-bridge';
+import type { BridgeMediaFrame } from '@memberjunction/ai-bridge-base';
 
 /** An in-memory {@link NativeRoomClient} with drive helpers + capture sinks (no SDK, no network). */
 class FakeNativeClient implements NativeRoomClient {
@@ -33,10 +42,14 @@ class FakeNativeClient implements NativeRoomClient {
     public publishedAudio: ArrayBuffer[] = [];
     public publishedVideo: ArrayBuffer[] = [];
     public publishedScreen: ArrayBuffer[] = [];
+    public publishedAvatar: NativeAvatarMediaChunk[] = [];
     public data: string[] = [];
+    private avatarStatusCb?: (status: NativeAvatarStatus) => void;
     public roster: NativeRoomParticipant[] = [];
 
     private audioCb?: (frame: NativeRoomAudioFrame) => void;
+    private videoCb?: (frame: NativeRoomVideoFrame) => void;
+    private videoEndCb?: (source: NativeRoomVideoSourceEnd) => void;
     private joinCb?: (p: NativeRoomParticipant) => void;
     private leaveCb?: (id: string) => void;
     private disconnectedCb?: (reason?: string) => void;
@@ -51,11 +64,25 @@ class FakeNativeClient implements NativeRoomClient {
     publishAudio(pcm: ArrayBuffer) {
         this.publishedAudio.push(pcm);
     }
+    flushOutbound() {
+        /* not driven here */
+    }
+    /** Not on the native seam any more (the avatar is the bot's only video out): kept here to catch any call to it. */
     publishVideo(frame: ArrayBuffer) {
         this.publishedVideo.push(frame);
     }
+    /** Not on the native seam any more (the bot shares no screen): kept here to catch any call to it. */
     publishScreen(frame: ArrayBuffer) {
         this.publishedScreen.push(frame);
+    }
+    publishAvatarMedia(chunk: NativeAvatarMediaChunk) {
+        this.publishedAvatar.push(chunk);
+    }
+    onAvatarStatus(cb: (status: NativeAvatarStatus) => void) {
+        this.avatarStatusCb = cb;
+    }
+    driveAvatarStatus(status: NativeAvatarStatus) {
+        this.avatarStatusCb?.(status);
     }
     onAudioFrame(cb: (frame: NativeRoomAudioFrame) => void) {
         this.audioCb = cb;
@@ -75,8 +102,20 @@ class FakeNativeClient implements NativeRoomClient {
     onDisconnected(cb: (reason?: string) => void) {
         this.disconnectedCb = cb;
     }
+    onVideoFrame(cb: (frame: NativeRoomVideoFrame) => void) {
+        this.videoCb = cb;
+    }
+    onVideoSourceEnded(cb: (source: NativeRoomVideoSourceEnd) => void) {
+        this.videoEndCb = cb;
+    }
 
     // ── drive helpers (the "LiveKit" side) ──
+    driveVideo(frame: NativeRoomVideoFrame) {
+        this.videoCb?.(frame);
+    }
+    driveVideoEnded(source: NativeRoomVideoSourceEnd) {
+        this.videoEndCb?.(source);
+    }
     driveAudio(frame: NativeRoomAudioFrame) {
         this.audioCb?.(frame);
     }
@@ -161,16 +200,21 @@ describe('LiveKitNativeMeetingSdk — connect + two-way audio', () => {
         expect(client.publishedAudio[0]).toBe(pcm);
     });
 
-    it('publishVideoFrame + publishScreenFrame forward to the native publish path', async () => {
+    it('has no raw video or screen publish: through every operation, only the avatar reaches the native client as video', async () => {
+        expect('publishVideoFrame' in LiveKitNativeMeetingSdk.prototype).toBe(false);
+        expect('publishScreenFrame' in LiveKitNativeMeetingSdk.prototype).toBe(false);
         const client = new FakeNativeClient();
         const sdk = new LiveKitNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.connect(baseArgs);
-        const vid = new Uint8Array([1]).buffer;
-        const scr = new Uint8Array([2]).buffer;
-        sdk.publishVideoFrame(vid);
-        sdk.publishScreenFrame(scr);
-        expect(client.publishedVideo).toEqual([vid]);
-        expect(client.publishedScreen).toEqual([scr]);
+        const piece = new Uint8Array([0, 0, 0, 8]).buffer;
+        sdk.publishAudioFrame(new Uint8Array([5]).buffer);
+        sdk.publishAvatarMedia({ Bytes: piece, MimeType: 'video/mp4' });
+        sdk.flushOutboundAudio();
+        await sdk.sendDataMessage('hello');
+        await sdk.disconnect();
+        expect(client.publishedVideo).toEqual([]);
+        expect(client.publishedScreen).toEqual([]);
+        expect(client.publishedAvatar).toEqual([{ data: piece, mimeType: 'video/mp4' }]);
     });
 
     it('publishAudioFrame before connect is a safe no-op (no throw)', () => {
@@ -188,6 +232,125 @@ describe('LiveKitNativeMeetingSdk — connect + two-way audio', () => {
         expect(heard).toHaveLength(1);
         expect(heard[0].ParticipantIdentity).toBe('u-3');
         expect(heard[0].DisplayName).toBe('Sam');
+    });
+});
+
+describe('LiveKitNativeMeetingSdk — video in (what the agent sees)', () => {
+    const watching = { AgentVision: true, InboundVideoStreams: 1, InboundVideoRate: 1, VideoIn: true, ScreenIn: true };
+
+    it('asks the room client to watch only when the agent watches, its session takes video and the provider allows a kind', () => {
+        expect(NativeVideoOptionsFor(watching)).toEqual({
+            Streams: 1,
+            Rate: 1,
+            Cameras: true,
+            Screens: true,
+            CameraMaxDimension: undefined,
+            ScreenMaxDimension: undefined,
+            JpegQuality: undefined,
+            SpeakerOnsetMs: undefined,
+            SpeakerHoldMs: undefined,
+        });
+        expect(NativeVideoOptionsFor({ ...watching, AgentVision: false })).toBeUndefined();
+        expect(NativeVideoOptionsFor({ ...watching, AgentVision: undefined })).toBeUndefined();
+        expect(NativeVideoOptionsFor({ ...watching, InboundVideoStreams: undefined })).toBeUndefined();
+        expect(NativeVideoOptionsFor({ ...watching, VideoIn: false, ScreenIn: false })).toBeUndefined();
+        expect(NativeVideoOptionsFor({ ...watching, ScreenIn: false })).toMatchObject({ Cameras: true, Screens: false });
+    });
+
+    it('passes the size and quality overrides through', () => {
+        expect(NativeVideoOptionsFor({ ...watching, VideoCameraMaxDimension: 480, VideoScreenMaxDimension: 960, VideoJpegQuality: 70 })).toMatchObject({
+            CameraMaxDimension: 480,
+            ScreenMaxDimension: 960,
+            JpegQuality: 70,
+        });
+    });
+
+    it('passes the hold overrides through: how long a speaker leads before their camera is shown, and how long a camera stays', () => {
+        expect(NativeVideoOptionsFor({ ...watching, VideoSpeakerOnsetMs: 2000, VideoSpeakerHoldMs: 6000 })).toMatchObject({
+            SpeakerOnsetMs: 2000,
+            SpeakerHoldMs: 6000,
+        });
+    });
+
+    it('reads the hold keys from Configuration: only positive numbers count', () => {
+        expect(ReadNativeConfig({ VideoSpeakerOnsetMs: 2000, VideoSpeakerHoldMs: 6000 })).toMatchObject({ VideoSpeakerOnsetMs: 2000, VideoSpeakerHoldMs: 6000 });
+        const loose = ReadNativeConfig({ VideoSpeakerOnsetMs: '2000', VideoSpeakerHoldMs: 0 });
+        expect(loose.VideoSpeakerOnsetMs).toBeUndefined();
+        expect(loose.VideoSpeakerHoldMs).toBeUndefined();
+    });
+
+    it('gives the room client the Video options at connect when watching, and none otherwise', async () => {
+        const seenOptions: NativeRoomClientOptions[] = [];
+        const recordingModule = (client: FakeNativeClient): NativeRoomModule => ({
+            createRoomClient: (options) => {
+                seenOptions.push(options);
+                return client;
+            },
+        });
+        await new LiveKitNativeMeetingSdk({ ...cfg, ...watching }, async () => recordingModule(new FakeNativeClient())).connect(baseArgs);
+        await new LiveKitNativeMeetingSdk(cfg, async () => recordingModule(new FakeNativeClient())).connect(baseArgs);
+        expect(seenOptions[0].Video).toMatchObject({ Streams: 1, Cameras: true, Screens: true });
+        expect(seenOptions[1].Video).toBeUndefined();
+    });
+
+    it("maps the client's sampled frames and ended sources onto the seam", async () => {
+        const client = new FakeNativeClient();
+        const sdk = new LiveKitNativeMeetingSdk({ ...cfg, ...watching }, async () => fakeModule(client));
+        const frames: LiveKitVideoFrame[] = [];
+        const ended: LiveKitVideoSourceEnd[] = [];
+        sdk.onVideoTrack((f) => frames.push(f));
+        sdk.onVideoSourceEnded((s) => ended.push(s));
+        await sdk.connect(baseArgs);
+
+        const jpeg = new Uint8Array([0xff, 0xd8]).buffer;
+        client.driveVideo({ data: jpeg, mimeType: 'image/jpeg', participantIdentity: 'p-ada', name: 'Ada', source: 'screen', width: 1280, height: 720, timestampMs: 5 });
+        client.driveVideoEnded({ participantIdentity: 'p-ada', name: 'Ada', source: 'screen' });
+
+        expect(frames).toEqual([
+            { Bytes: jpeg, MimeType: 'image/jpeg', ParticipantIdentity: 'p-ada', DisplayName: 'Ada', Source: 'screen', Width: 1280, Height: 720, TimestampMs: 5 },
+        ]);
+        expect(ended).toEqual([{ ParticipantIdentity: 'p-ada', DisplayName: 'Ada', Source: 'screen' }]);
+    });
+
+    it("gives the bridge's frame the room client's image size, as a key frame", async () => {
+        const client = new FakeNativeClient();
+        const bridge = new LiveKitBridge();
+        bridge.SetSdkFactory(BindLiveKitNative(async () => fakeModule(client)));
+        const seen: BridgeMediaFrame[] = [];
+        bridge.OnMedia((f) => seen.push(f));
+        await bridge.Connect({
+            Features: { AudioIn: true, AudioOut: true, VideoIn: true, ScreenIn: true },
+            ProviderName: 'LiveKit',
+            Address: 'wss://livekit.myorg.com',
+            Configuration: { ...cfg, ...watching },
+        });
+
+        const jpeg = new Uint8Array([0xff, 0xd8]).buffer;
+        client.driveVideo({ data: jpeg, mimeType: 'image/jpeg', participantIdentity: 'p-ada', name: 'Ada', source: 'camera', width: 480, height: 640, timestampMs: 7 });
+
+        expect(seen).toEqual([
+            {
+                Track: 'video-in',
+                Bytes: jpeg,
+                MimeType: 'image/jpeg',
+                Width: 480,
+                Height: 640,
+                KeyFrame: true,
+                SourceID: 'participant:p-ada:camera',
+                SourceLabel: "Ada's camera",
+                TimestampMs: 7,
+            },
+        ]);
+    });
+
+    it('reads the agent-vision keys from Configuration: only real booleans and positive numbers count', () => {
+        expect(ReadNativeConfig({ ...watching, VideoJpegQuality: 70 })).toMatchObject({ ...watching, VideoJpegQuality: 70 });
+        const loose = ReadNativeConfig({ AgentVision: 'true', InboundVideoStreams: 0, InboundVideoRate: -1, VideoIn: 1, ScreenIn: 'yes' });
+        expect(loose.AgentVision).toBeUndefined();
+        expect(loose.InboundVideoStreams).toBeUndefined();
+        expect(loose.InboundVideoRate).toBeUndefined();
+        expect(loose.VideoIn).toBeUndefined();
+        expect(loose.ScreenIn).toBeUndefined();
     });
 });
 
@@ -307,5 +470,43 @@ describe('LiveKitNativeMeetingSdk — config + errors', () => {
         const sdk = factory(cfg);
         const result = await sdk.connect(baseArgs);
         expect(result.BotIdentity).toBe('bot-1');
+    });
+});
+
+describe('LiveKitNativeMeetingSdk — the agent\'s avatar', () => {
+    it('hands an avatar piece to the native client in its own vocabulary', async () => {
+        const client = new FakeNativeClient();
+        const sdk = new LiveKitNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
+        await sdk.connect(baseArgs);
+        const piece = new Uint8Array([0, 0, 0, 8]).buffer;
+        sdk.publishAvatarMedia({ Bytes: piece, MimeType: 'video/mp4' });
+        expect(client.publishedAvatar).toEqual([{ data: piece, mimeType: 'video/mp4' }]);
+        expect(client.publishedAvatar[0].data).toBe(piece);
+    });
+
+    it('drops an avatar piece before connect, and with a wrapper that publishes no avatars', async () => {
+        const sdk = new LiveKitNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
+        expect(() => sdk.publishAvatarMedia({ Bytes: new ArrayBuffer(1), MimeType: 'video/mp4' })).not.toThrow();
+        const plain = new FakeNativeClient() as Partial<FakeNativeClient>;
+        delete plain.publishAvatarMedia;
+        const withoutAvatars = new LiveKitNativeMeetingSdk(ReadNativeConfig(cfg), async () => ({ createRoomClient: () => plain as NativeRoomClient }));
+        await withoutAvatars.connect(baseArgs);
+        expect(() => withoutAvatars.publishAvatarMedia({ Bytes: new ArrayBuffer(1), MimeType: 'video/mp4' })).not.toThrow();
+    });
+
+    it('maps the native client\'s avatar status to the seam', async () => {
+        const client = new FakeNativeClient();
+        const sdk = new LiveKitNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
+        const seen: LiveKitAvatarStatus[] = [];
+        sdk.onAvatarStatus((s) => seen.push(s));
+        await sdk.connect(baseArgs);
+        client.driveAvatarStatus({ state: 'on' });
+        client.driveAvatarStatus({ state: 'audio-only', reason: 'decoder-failed' });
+        expect(seen).toEqual([{ State: 'on' }, { State: 'audio-only', Reason: 'decoder-failed' }]);
+    });
+
+    it('MapNativeAvatarStatus keeps the reason only when there is one', () => {
+        expect(MapNativeAvatarStatus({ state: 'on' })).toEqual({ State: 'on' });
+        expect(MapNativeAvatarStatus({ state: 'audio-only', reason: 'publish-failed' })).toEqual({ State: 'audio-only', Reason: 'publish-failed' });
     });
 });

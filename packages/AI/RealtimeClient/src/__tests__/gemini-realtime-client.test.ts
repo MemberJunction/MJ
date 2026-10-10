@@ -17,6 +17,8 @@ import {
     IGeminiAudioPlayback,
     IGeminiMicCapture,
 } from '../drivers/geminiRealtimeClient';
+import { ConfirmGeminiSetup, FakeMicCapture } from './helpers/realtime-fakes';
+import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
@@ -60,14 +62,6 @@ class FakePlayback implements IGeminiAudioPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
-    }
-}
-
-/** Fake mic capture handle. */
-class FakeMicCapture implements IGeminiMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
     }
 }
 
@@ -150,6 +144,7 @@ class TestGeminiClient extends GeminiRealtimeClient {
 
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         this.LastConnectArgs = args;
+        ConfirmGeminiSetup(args);
         return this.Fake;
     }
     protected override async createMicCapture(
@@ -835,6 +830,7 @@ describe('GeminiRealtimeClient', () => {
                     this.ArgsPerSession.push(args);
                     const session = new FakeGeminiSession();
                     this.Sessions.push(session);
+                    ConfirmGeminiSetup(args);
                     return session;
                 }
             }
@@ -887,6 +883,15 @@ describe('GeminiRealtimeClient', () => {
         });
     });
 });
+
+DescribePcmMicrophoneReplacement(
+    async () => {
+        const client = new TestGeminiClient();
+        const track = await connect(client);
+        return { Client: client, Track: track, Capture: client.Capture };
+    },
+    () => new TestGeminiClient()
+);
 
 describe('GeminiRealtimeClient remote media stream (issue #5153)', () => {
     /** Playback fake that exposes an output stream, like the production Web Audio engine. */

@@ -2,7 +2,27 @@ import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket as WsClient, WebSocketServer, type RawData } from 'ws';
 import { BaseSingleton, ShutdownRegistry, type IShutdownable } from '@memberjunction/global';
-import { RealtimeProxyRegistry, REALTIME_PROXY_PATH, type RealtimeProxyTicketEntry } from '@memberjunction/ai';
+import {
+    RealtimeProxyRegistry,
+    REALTIME_PROXY_PATH,
+    REALTIME_RELAY_PATH,
+    type IRealtimeRelayPolicy,
+    type RealtimeProxyTicketEntry,
+} from '@memberjunction/ai';
+import {
+    RealtimeRelayTunnel,
+    RelayTicketPrefix,
+    REALTIME_RELAY_LIMITS,
+    REALTIME_RELAY_MAX_CLIENT_FRAME_BYTES,
+    type RealtimeRelayLimits,
+    type RealtimeRelayTunnelHost,
+} from './RealtimeRelayTunnel.js';
+
+/** The optional Origin allowlist both paths apply: comma-separated origins. */
+const ALLOWED_ORIGINS_ENV = 'MJ_REALTIME_PROXY_ALLOWED_ORIGINS';
+
+/** The longest part of a refused Origin header a log line quotes. */
+const MAX_LOGGED_ORIGIN_CHARS = 200;
 
 /**
  * MJAPI's realtime websocket **proxy** — the transport half of the self-hosted realtime provider story.
@@ -18,6 +38,11 @@ import { RealtimeProxyRegistry, REALTIME_PROXY_PATH, type RealtimeProxyTicketEnt
  * wire vocabulary) and knows nothing about any specific provider — it is a pure authenticated byte tunnel,
  * reusable by any future self-hosted realtime provider that mints a ticket.
  *
+ * It also serves the realtime **relay** at `{REALTIME_RELAY_PATH}/<ticket>/…` (any suffix: a provider's
+ * browser SDK appends its own path): one ticket per realtime session, a frame policy from the provider driver
+ * between the legs (see {@link RealtimeRelayTunnel}), one live upstream per session (a resume replaces the
+ * older connection). The Origin allowlist applies to both paths.
+ *
  * A {@link BaseSingleton} + {@link IShutdownable}: it tracks live tunnels and closes them on graceful
  * shutdown (drained by MJServer's `ShutdownRegistry` before `httpServer.close()`).
  */
@@ -27,8 +52,22 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
     /** `noServer` so THIS server never binds its own upgrade listener — MJServer routes upgrades to it by path. */
     private readonly wss = new WebSocketServer({ noServer: true });
 
+    /** The relay's upgrade server: the same routing, plus the client frame cap, enforced while a frame is read. */
+    private readonly relayWss = new WebSocketServer({ noServer: true, maxPayload: REALTIME_RELAY_MAX_CLIENT_FRAME_BYTES });
+
     /** Live browser↔upstream tunnels, tracked for shutdown teardown. */
     private readonly tunnels = new Set<RealtimeProxyTunnel>();
+
+    /** Live relay connections, tracked for shutdown teardown. */
+    private readonly relays = new Set<RealtimeRelayTunnel>();
+
+    /** The granted connection each relay session uses now: one live upstream per session. */
+    private readonly liveRelays = new Map<string, RealtimeRelayTunnel>();
+
+    private readonly relayHost: RealtimeRelayTunnelHost = {
+        OnGranted: (tunnel) => this.relayGranted(tunnel),
+        OnClosed: (tunnel) => this.relayClosed(tunnel),
+    };
 
     private registered = false;
 
@@ -41,32 +80,107 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
         return super.getInstance<RealtimeProxyServer>();
     }
 
+    /** The relay's deadlines, ping interval and pre-open buffer ({@link REALTIME_RELAY_LIMITS}); a subclass may tune them. */
+    protected get RelayLimits(): RealtimeRelayLimits {
+        return REALTIME_RELAY_LIMITS;
+    }
+
     /**
-     * Routes an HTTP `upgrade` for {@link REALTIME_PROXY_PATH} to the proxy. Returns `true` when it OWNS
-     * (handled/rejected) the request, `false` when the path is not the proxy's — so the caller leaves the
-     * socket for the GraphQL websocket server's own upgrade listener. NEVER destroys a socket it doesn't own.
+     * Routes an HTTP `upgrade` for {@link REALTIME_PROXY_PATH} (ticket in the query) or {@link REALTIME_RELAY_PATH}
+     * (ticket in the path, any suffix). Returns `true` when it OWNS (handled/rejected) the request, `false` when
+     * the path is neither — so the caller leaves the socket for the GraphQL websocket server's own upgrade
+     * listener. NEVER destroys a socket it doesn't own.
      */
     public TryHandleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer): boolean {
         const url = RealtimeProxyServer.parseUrl(request.url);
-        if (!url || url.pathname !== REALTIME_PROXY_PATH) {
-            return false; // not ours — leave it for the GraphQL WS server
+        if (url?.pathname === REALTIME_PROXY_PATH) {
+            this.handleProxyUpgrade(request, socket, head, url);
+            return true;
         }
+        if (url && RealtimeProxyServer.isRelayPath(url.pathname)) {
+            this.handleRelayUpgrade(request, socket, head, url.pathname);
+            return true;
+        }
+        return false; // not ours — leave it for the GraphQL WS server
+    }
+
+    /** `/realtime-proxy?ticket=<id>`: consumes the single-use ticket and opens a byte tunnel. */
+    private handleProxyUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer, url: URL): void {
         this.ensureRegistered();
         // Optional Origin allowlist (MJ_REALTIME_PROXY_ALLOWED_ORIGINS: comma-separated origins).
         // Unset ⇒ prior behavior (the single-use short-TTL ticket remains the primary guard);
         // set ⇒ a browser page on a foreign origin cannot ride a leaked ticket id.
         if (!RealtimeProxyServer.originAllowed(request.headers?.origin)) {
-            RealtimeProxyServer.rejectUpgrade(socket, 403, 'Forbidden');
-            return true;
+            RealtimeProxyServer.refuseOrigin(socket, '[RealtimeProxy]', request.headers?.origin);
+            return;
         }
         const ticketId = url.searchParams.get('ticket') ?? '';
         const entry = RealtimeProxyRegistry.Instance.Consume(ticketId);
         if (!entry) {
             RealtimeProxyServer.rejectUpgrade(socket, 401, 'Unauthorized');
-            return true;
+            return;
         }
         this.wss.handleUpgrade(request, socket, head, (browserWs) => this.openTunnel(browserWs, entry));
-        return true;
+    }
+
+    /**
+     * `/realtime/relay/<ticket>/…`: the same Origin allowlist (403, logged with the origin), then 401 unless the relay
+     * session can still take a connection. Whether it opens fresh or resumes is decided on the connection's first frame.
+     * A query string is ignored: the ticket is read from the path only.
+     */
+    private handleRelayUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer, pathname: string): void {
+        this.ensureRegistered();
+        if (!RealtimeProxyServer.originAllowed(request.headers?.origin)) {
+            RealtimeProxyServer.refuseOrigin(socket, '[RealtimeRelay]', request.headers?.origin);
+            return;
+        }
+        const sessionId = RealtimeProxyServer.relayTicketFrom(pathname);
+        const session = sessionId ? RealtimeProxyRegistry.Instance.FindRelaySession(sessionId) : null;
+        if (!session) {
+            console.warn(`[RealtimeRelay] relay ${RelayTicketPrefix(sessionId)}: upgrade refused (unknown, ended or used up)`);
+            RealtimeProxyServer.rejectUpgrade(socket, 401, 'Unauthorized');
+            return;
+        }
+        this.relayWss.handleUpgrade(request, socket, head, (browserWs) => this.openRelay(browserWs, sessionId, session.Policy));
+    }
+
+    /** Whether a path is the relay's: `/realtime/relay` itself or anything below it. */
+    private static isRelayPath(pathname: string): boolean {
+        return pathname === REALTIME_RELAY_PATH || pathname.startsWith(`${REALTIME_RELAY_PATH}/`);
+    }
+
+    /** The ticket id in a relay path: the segment right after `/realtime/relay/`; whatever follows is the SDK's. */
+    private static relayTicketFrom(pathname: string): string {
+        const segment = pathname.slice(REALTIME_RELAY_PATH.length + 1).split('/')[0] ?? '';
+        try {
+            return decodeURIComponent(segment);
+        } catch {
+            return ''; // malformed escape — no ticket
+        }
+    }
+
+    /** Starts one relay connection; the session's policy reads its first frame. */
+    private openRelay(browserWs: WsClient, sessionId: string, policy: IRealtimeRelayPolicy): void {
+        const tunnel = new RealtimeRelayTunnel(browserWs, sessionId, policy, this.RelayLimits, this.relayHost);
+        this.relays.add(tunnel);
+        tunnel.Start();
+    }
+
+    /** A relay connection was granted: it becomes the session's live one, and the older one closes. */
+    private relayGranted(tunnel: RealtimeRelayTunnel): void {
+        const previous = this.liveRelays.get(tunnel.SessionID);
+        this.liveRelays.set(tunnel.SessionID, tunnel);
+        if (previous && previous !== tunnel) {
+            previous.Close(1000, 'Replaced by a resumed connection');
+        }
+    }
+
+    /** A relay connection closed: forget it, and the session's live slot when it held it. */
+    private relayClosed(tunnel: RealtimeRelayTunnel): void {
+        this.relays.delete(tunnel);
+        if (this.liveRelays.get(tunnel.SessionID) === tunnel) {
+            this.liveRelays.delete(tunnel.SessionID);
+        }
     }
 
     /**
@@ -79,7 +193,7 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
      * @returns True when allowed (or no allowlist is configured).
      */
     private static originAllowed(origin: string | undefined): boolean {
-        const raw = process.env['MJ_REALTIME_PROXY_ALLOWED_ORIGINS'];
+        const raw = process.env[ALLOWED_ORIGINS_ENV];
         if (!raw || raw.trim().length === 0) {
             return true; // no allowlist configured — prior behavior
         }
@@ -106,16 +220,23 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
         }
     }
 
-    /** Closes every live tunnel and the proxy server. Idempotent; never throws. */
+    /** Closes every live tunnel and relay connection (1001), and both upgrade servers. Idempotent; never throws. */
     public Shutdown(): void {
         for (const tunnel of [...this.tunnels]) {
             tunnel.Close();
         }
         this.tunnels.clear();
-        try {
-            this.wss.close();
-        } catch {
-            /* already closing */
+        for (const relay of [...this.relays]) {
+            relay.Close(1001, 'Server shutting down');
+        }
+        this.relays.clear();
+        this.liveRelays.clear();
+        for (const server of [this.wss, this.relayWss]) {
+            try {
+                server.close();
+            } catch {
+                /* already closing */
+            }
         }
     }
 
@@ -129,6 +250,17 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Refuses an upgrade whose Origin is not on the allowlist: 403, and one log line naming the origin (printable
+     * characters only, shortened), so a browser page on an origin the allowlist lacks shows in MJAPI's log. The line
+     * never quotes the request's path or query: they carry the ticket.
+     */
+    private static refuseOrigin(socket: Duplex, logPrefix: string, origin: string | undefined): void {
+        const shown = (origin ?? '').replace(/[^\x20-\x7E]/g, '?').slice(0, MAX_LOGGED_ORIGIN_CHARS);
+        console.warn(`${logPrefix} upgrade refused (403): origin "${shown}" is not in ${ALLOWED_ORIGINS_ENV}`);
+        RealtimeProxyServer.rejectUpgrade(socket, 403, 'Forbidden');
     }
 
     /** Writes a minimal HTTP error response and destroys the socket (used for a rejected upgrade). */

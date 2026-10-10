@@ -1,6 +1,7 @@
 import { BaseModel } from "./baseModel";
 import type { RealtimeReasoningPlane } from "./modelConfiguration";
 import type { RealtimeTrackDescriptor, RealtimeTrackUsageBasis } from "./realtimeTracks";
+import type { RealtimeVideoFrame } from "./realtimeVideoOutput";
 
 /**
  * A JSON-serializable value. Used to type open configuration bags and JSON-schema
@@ -174,20 +175,32 @@ export abstract class BaseRealtimeModel extends BaseModel {
     }
 
     /**
-     * Whether this driver's sessions carry a **video** track in addition to audio — i.e. the model
-     * accepts video input (it can "see" the user's camera) and/or emits video output (a talking-head
-     * avatar / generated video), in sync with audio.
+     * Whether this driver's sessions carry a **video** track in addition to audio.
      *
-     * Defaults to `false` (audio-only — today's realtime models). Video-capable drivers (a native
-     * multimodal realtime model, or an avatar provider) override this to `true`. The session's media
-     * plane is media-tagged ({@link IRealtimeSession.SendInput} takes a {@link RealtimeMediaKind};
-     * {@link IRealtimeSession.OnVideoOutput} delivers video-out), so a video session reuses the entire
-     * realtime contract — only the media frames gain a `video` kind. Resolution prefers a video-capable
-     * model when an agent requests video, and degrades to audio-only otherwise.
+     * @deprecated Nothing reads it, and no driver overrides it: it is `false` for Gemini Live, which takes camera video
+     * and renders avatars. What a session does with video is declared on its {@link IRealtimeSession.Capabilities}:
+     * {@link RealtimeSessionCapabilities.SupportedInboundTracks} for video in and
+     * {@link RealtimeSessionCapabilities.SupportedOutboundTracks} for video out, each track with its encoding. Whether a
+     * model renders a live avatar is {@link SupportsAvatarOutput}. A driver declares video there, not here.
      *
-     * @returns `true` if sessions can carry video; `false` (audio-only) otherwise.
+     * @returns `false` in every MJ driver.
      */
     public get SupportsVideo(): boolean {
+        return false;
+    }
+
+    /**
+     * Whether this driver's sessions can render a live avatar for the model, on the endpoint the driver serves.
+     *
+     * Defaults to `false`: a driver whose models render no avatar says nothing more, and may ignore an avatar request. A
+     * driver that renders one for some models (Gemini Enterprise) overrides it. The client-session service reads it to
+     * tell a call or a meeting that asked for an avatar "this voice model can't show an avatar"
+     * ({@link RealtimeAvatarUnavailableReason} `'endpoint'`), whichever driver serves it.
+     *
+     * @param _model The provider's API name for the model.
+     * @returns `true` when sessions on this model can render a live avatar; `false` otherwise.
+     */
+    public SupportsAvatarOutput(_model: string): boolean {
         return false;
     }
 
@@ -233,6 +246,10 @@ export abstract class BaseRealtimeModel extends BaseModel {
  * and tools with it. So any key added to the neutral vocabulary belongs in this list at the same
  * time, and the OpenAI family's own scrub in `ExtractRealtimeFeatures` must delete it too — that
  * function enumerates its deletes explicitly and does NOT read this list.
+ *
+ * A setting only one driver reads belongs here too: a co-agent's `realtime.voice.providers.<key>`
+ * bag is matched to drivers by class-name prefix, so a bag keyed `openai` that sets OpenAI Live's
+ * `brokerBaseUrl` (its SDP broker origin) also reaches OpenAI Realtime.
  */
 export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'effortLevel',
@@ -248,6 +265,7 @@ export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'endpoint',
     'sampleRate',
     'proxyBaseUrl',
+    'brokerBaseUrl',
     'tooling',
     'toolBehavior',
 ] as const;
@@ -268,18 +286,58 @@ export interface RealtimeVoiceOption {
 export type RealtimeMediaKind = 'audio' | 'video';
 
 /**
+ * One frame of media a host streams into a realtime session through {@link IRealtimeSession.SendInput}.
+ */
+export interface RealtimeInputFrame {
+    /** The frame's bytes: raw audio samples, or one encoded video frame (for example a JPEG image). */
+    Data: ArrayBuffer;
+    /** The media plane the frame belongs to. */
+    Kind: RealtimeMediaKind;
+    /**
+     * The frame's format, for example `'audio/pcm;rate=16000'` or `'image/jpeg'`. When absent, an
+     * audio frame is in the session's declared input format ({@link IRealtimeSession.AudioFormat}); a
+     * video frame with no type cannot be sent by a driver that needs one, and is dropped.
+     */
+    MimeType?: string;
+    /** Epoch-millisecond capture time, when the host knows it. */
+    TimestampMs?: number;
+}
+
+/**
+ * How a client-direct session's browser reaches the provider ({@link ClientRealtimeSessionConfig.Transport}):
+ * - `'direct'`: the browser opens the provider's socket itself, authenticated with
+ *   {@link ClientRealtimeSessionConfig.EphemeralToken};
+ * - `'relay'`: the browser connects to MJAPI's realtime relay at {@link ClientRealtimeSessionConfig.RelayUrl}, and
+ *   MJAPI holds the provider credential and opens the provider's socket.
+ */
+export type RealtimeClientTransport = 'direct' | 'relay';
+
+/**
+ * Reads a {@link RealtimeClientTransport} from untyped data, such as the mint result's `Transport` field.
+ *
+ * @param value The value to read.
+ * @returns The transport, or `undefined` when the value is absent or not a known transport (read as direct).
+ */
+export function ParseRealtimeClientTransport(value: unknown): RealtimeClientTransport | undefined {
+    return value === 'direct' || value === 'relay' ? value : undefined;
+}
+
+/**
  * The server-minted configuration a browser needs to open a **client-direct** realtime session.
  *
  * Returned by {@link BaseRealtimeModel.CreateClientSession}. The browser authenticates to the
- * provider with {@link ClientRealtimeSessionConfig.EphemeralToken} and hands
- * {@link ClientRealtimeSessionConfig.SessionConfig} to the matching client driver — so the server
- * retains control of the prompt and tool set even though the browser owns the socket.
+ * provider with {@link ClientRealtimeSessionConfig.EphemeralToken} (or, on a relay session, connects to
+ * {@link ClientRealtimeSessionConfig.RelayUrl}) and hands {@link ClientRealtimeSessionConfig.SessionConfig}
+ * to the matching client driver — so the server retains control of the prompt and tool set even though the
+ * browser owns the socket.
  *
  * **`SessionConfig` is a private pact between same-keyed driver halves.** The server driver that
  * minted it (selected by {@link ClientRealtimeSessionConfig.Provider}) and the client driver
  * registered under the same key are the ONLY parties that understand its shape. Hosts and any
  * transport in between must treat it as an opaque, serializable blob — never inspect, edit, or
- * depend on its fields.
+ * depend on its fields. {@link ClientRealtimeSessionConfig.Transport} and
+ * {@link ClientRealtimeSessionConfig.RelayUrl} are not part of the pact: hosts carry them to the client
+ * driver as they are.
  */
 export interface ClientRealtimeSessionConfig {
     /**
@@ -296,13 +354,29 @@ export interface ClientRealtimeSessionConfig {
     /**
      * The short-lived client secret the browser presents to the provider to authenticate its
      * direct session. Server-scoped and expiring (see {@link ClientRealtimeSessionConfig.ExpiresAt}).
+     * Empty on a relay session ({@link ClientRealtimeSessionConfig.Transport} `'relay'`): the browser
+     * holds no provider credential, and {@link ClientRealtimeSessionConfig.RelayUrl} carries the relay's ticket.
      */
     EphemeralToken: string;
 
     /**
-     * ISO-8601 timestamp at which {@link ClientRealtimeSessionConfig.EphemeralToken} expires.
+     * ISO-8601 timestamp at which {@link ClientRealtimeSessionConfig.EphemeralToken} (or a relay
+     * session's ticket) expires.
      */
     ExpiresAt: string;
+
+    /**
+     * How the browser reaches the provider (see {@link RealtimeClientTransport}). Absent means `'direct'`,
+     * as for every session minted before this field existed.
+     */
+    Transport?: RealtimeClientTransport;
+
+    /**
+     * Where a relay session's browser connects: MJAPI's realtime relay, `wss://<mjapi>/realtime/relay/<ticket>`.
+     * Present only when {@link ClientRealtimeSessionConfig.Transport} is `'relay'`. The URL carries the
+     * session's ticket, so it is a credential: never log it or put it in an error message.
+     */
+    RelayUrl?: string;
 
     /**
      * The provider-native session config the matching client driver applies when it opens its
@@ -313,6 +387,13 @@ export interface ClientRealtimeSessionConfig {
      * opaquely and never read or rewrite its fields.
      */
     SessionConfig: JSONObject;
+
+    /**
+     * The driver's decision at mint about the live avatar the session asked for: granted, or audio only and why. Unlike
+     * {@link SessionConfig} it is not part of the driver pact, so the server can merge it with its own reasons and hand
+     * it to the call. Absent when the session asked for no avatar, and from drivers that render none.
+     */
+    AvatarStatus?: RealtimeAvatarStatus;
 }
 
 /**
@@ -454,8 +535,9 @@ export interface RealtimeSessionCapabilities {
     /**
      * Media tracks this model can EMIT (model -> user). Absent or empty is read as "outbound audio
      * only". Non-audio outbound tracks (avatar video, haptics) are admitted by the contract because
-     * direction is a property of a track rather than part of its type; no provider in play emits one
-     * yet.
+     * direction is a property of a track rather than part of its type. A session that emits video
+     * through {@link IRealtimeSession.OnVideoFrame} declares an outbound video track whose `Encoding`
+     * names its frames' type, such as `'video/mp4; codecs="avc1.42c01f, mp4a.40.2"'` for a Gemini avatar.
      */
     SupportedOutboundTracks?: readonly RealtimeTrackDescriptor[];
 }
@@ -497,16 +579,16 @@ export interface IRealtimeSession {
     /**
      * Sends a client media frame to the model.
      *
-     * Fire-and-forget: frames are streamed straight to the provider with no JSON intermediation. The
-     * optional `kind` tags the media plane — `'audio'` (default, back-compatible: existing callers and
-     * audio-only drivers need not pass or read it) or `'video'` for a camera frame to a video-capable
-     * model (one that {@link BaseRealtimeModel.SupportsVideo}). Audio-only drivers ignore `'video'`
-     * frames.
+     * Fire-and-forget: frames are streamed straight to the provider with no JSON intermediation.
+     * {@link RealtimeInputFrame.Kind} tags the media plane: `'audio'`, or `'video'` for a camera or
+     * screen frame to a model that takes video (its session declares an inbound video track in
+     * {@link RealtimeSessionCapabilities.SupportedInboundTracks}).
+     * {@link RealtimeInputFrame.MimeType} says what format the frame is in. A driver drops a frame
+     * it cannot send rather than sending it as something else.
      *
-     * @param chunk A raw media frame as an `ArrayBuffer`.
-     * @param kind The media plane the frame belongs to. Defaults to `'audio'`.
+     * @param frame The media frame, with its kind and (when known) its format.
      */
-    SendInput(chunk: ArrayBuffer, kind?: RealtimeMediaKind): void;
+    SendInput(frame: RealtimeInputFrame): void;
 
     /**
      * Registers the set of tools the model may call, translating them into the provider's
@@ -542,17 +624,43 @@ export interface IRealtimeSession {
     OnOutput(handler: (chunk: ArrayBuffer) => void): void;
 
     /**
-     * Registers a handler for model **video** output frames — the talking-head avatar / generated
-     * video a video-capable model emits, in sync with {@link IRealtimeSession.OnOutput}'s audio.
+     * Registers a handler for the model's **video** output as typed frames ({@link RealtimeVideoFrame}): pieces of
+     * fragmented MP4, encoded chunks or images, in the order the model sent them. A driver that emits them declares an
+     * outbound video track in {@link RealtimeSessionCapabilities.SupportedOutboundTracks} whose `Encoding` names the
+     * frames' type. A Gemini Live session whose avatar was granted for a host that publishes it
+     * ({@link RealtimeAvatarSettings.Delivery} `'room'`) sends the avatar's MP4 pieces here.
      *
-     * Optional: audio-only drivers (the default) don't implement it, and consumers must call it
-     * null-safely (`session.OnVideoOutput?.(...)`). A video-capable driver
-     * ({@link BaseRealtimeModel.SupportsVideo}) implements it; the consumer (bridge / client) maps these
-     * frames onto its `video-out` track exactly as it maps audio.
+     * An fMP4 piece may carry the voice on its audio track; while it does, the voice does not also come through
+     * {@link OnOutput}. After {@link OnInterruption} the host drops video not yet shown, and the driver drops the
+     * interrupted turn's late frames. The seconds of video the model generated reach {@link OnUsage}
+     * (`OutputTokenDetails.VideoSeconds`).
      *
-     * @param handler Invoked with each output video frame as an `ArrayBuffer`.
+     * Optional: audio-only drivers don't implement it; call it null-safely (`session.OnVideoFrame?.(...)`).
+     *
+     * @param handler Invoked with each frame, in the order the model sent them.
+     */
+    OnVideoFrame?(handler: (frame: RealtimeVideoFrame) => void): void;
+
+    /**
+     * Registers a handler for the model's video output as untyped bytes. A driver implements this or
+     * {@link OnVideoFrame}, not both.
+     *
+     * @deprecated Use {@link OnVideoFrame}, whose frames say what they are: a host can't tell an MP4 piece from an encoded
+     * chunk or an image by its bytes. Hosts still forward it. Removed in the next major version.
+     *
+     * @param handler Invoked with each output video chunk as an `ArrayBuffer`.
      */
     OnVideoOutput?(handler: (chunk: ArrayBuffer) => void): void;
+
+    /**
+     * What became of the session's avatar request, as decided when the session opened. Its driver decides, except when
+     * the driver has nothing to report: the session prep asked it for no avatar, or it renders no avatar and ignored the
+     * request. The agent runtime then says why: a phone call (`'phone'`), no face for the model's vendor
+     * (`'no-binding'`), an unknown avatar (`'unknown-avatar'`), a model that shows none (`'endpoint'`), or a host that
+     * publishes no avatar into a room (`'bridged'`). Absent when the session asked for no avatar (the voiced agent's video
+     * setting is off), or its driver reported nothing about one on a model that shows avatars.
+     */
+    AvatarStatus?: RealtimeAvatarStatus;
 
     /**
      * Registers a handler for transcript events (the text stream).
@@ -798,6 +906,95 @@ export interface RealtimeSessionParams {
      * to heuristic substring sniffing or default policy compilation.
      */
     HasToolFraming?: boolean;
+
+    /**
+     * Whether the session model is served under zero data retention: its effective catalog
+     * configuration declares `Privacy.ZeroDataRetention: true`. Drivers must not turn on provider
+     * features that store session content when this is `true`. Gemini Live session resumption keeps
+     * resumable session state on Google's side, so the Gemini driver leaves it off and such a
+     * session ends at the provider's connection limit instead. Absent or `false` means "not declared".
+     */
+    ZeroDataRetention?: boolean;
+
+    /**
+     * A live avatar the session asks the model to render. A driver renders it only where its model and endpoint can;
+     * anywhere else the session runs audio-only and the driver logs why ({@link RealtimeAvatarUnavailableReason}). Absent
+     * means no avatar.
+     */
+    Avatar?: RealtimeAvatarSettings;
+}
+
+/**
+ * A live avatar a session asks for. The tuning members carry the same names as a persona's avatar settings
+ * (`IAIPersonaVendorSettings.Avatar`), which is where a request usually comes from.
+ */
+export interface RealtimeAvatarSettings {
+    /** The vendor's avatar id: a preset name (for example Gemini's "Ben"), or a custom avatar's id. */
+    AvatarID: string;
+    /** `'preset'` (default): an avatar from the vendor's catalog. `'custom'`: one made from a reference image. */
+    Kind?: 'preset' | 'custom';
+    /** The MJ Storage file id of the reference image, when {@link Kind} is `'custom'`. */
+    ReferenceImageFileID?: string;
+    /** The preferred video resolution; a driver uses the nearest its vendor offers. */
+    Resolution?: 'low' | 'standard' | 'high';
+    /** What shows behind the avatar, when the vendor can change it: a named treatment, or an image from MJ Storage. */
+    Background?: 'default' | 'transparent' | 'blur' | { ImageFileID: string };
+    /** The persona the avatar belongs to, for logs. */
+    PersonaName?: string;
+    /** Where the request came from: the voiced agent's persona, or an explicit override. */
+    Source?: 'persona' | 'override';
+    /**
+     * Who shows the avatar's video. `'room'`: a server-side session whose host publishes it into a meeting room (the
+     * meeting bot decodes it and publishes a camera track), so the driver may render it there. `'client'` or absent: the
+     * browser that opened the session shows it; a server-side session without `'room'` stays audio only (reason
+     * `'bridged'`). A phone call never carries a request (reason `'phone'`).
+     */
+    Delivery?: 'client' | 'room';
+}
+
+/**
+ * Why a session that asked for an avatar runs audio-only:
+ * - `'endpoint'`: the model, on the endpoint serving it, renders no avatar;
+ * - `'bridged'`: the session runs on the server (a meeting bot) and its host can't publish video into the room;
+ * - `'phone'`: the session is a phone call (a carrier call, or one that reaches a meeting room through SIP): the caller
+ *   hears the agent and sees no video, so the session asks the model for no avatar;
+ * - `'custom-disabled'`: custom avatars are not enabled;
+ * - `'unknown-avatar'`: the request names no avatar the vendor knows;
+ * - `'no-binding'`: the persona has no avatar on this vendor;
+ * - `'host'`: the app showing the call shows no agent video: it told the mint so (the embeddable widgets and the mobile
+ *   app have no channel that shows it), so the session asked the model for none, or the avatar was granted and the app
+ *   asked for no agent video when it connected;
+ * - `'browser'`: the avatar was granted and the app asked for it, but the browser could not play it;
+ * - `'decoder-missing'`: the meeting host has no usable decoder (no ffmpeg, one too old, or one without the H.264 and
+ *   AAC decoders), so the meeting session asked for audio;
+ * - `'decoder-failed'`: the meeting bot's decoders kept failing, so the avatar was taken down mid-meeting;
+ * - `'publish-failed'`: the meeting room refused the bot's video track.
+ */
+export type RealtimeAvatarUnavailableReason =
+    | 'endpoint'
+    | 'bridged'
+    | 'phone'
+    | 'custom-disabled'
+    | 'unknown-avatar'
+    | 'no-binding'
+    | 'host'
+    | 'browser'
+    | 'decoder-missing'
+    | 'decoder-failed'
+    | 'publish-failed';
+
+/**
+ * Whether a session asked for a live avatar and got one, and why not when it didn't. The mint returns it
+ * ({@link ClientRealtimeSessionConfig.AvatarStatus}) and a server-side session reports it
+ * ({@link IRealtimeSession.AvatarStatus}), so a call or a meeting that shows no avatar can say why.
+ */
+export interface RealtimeAvatarStatus {
+    /** Whether the session asked for an avatar: the voiced agent's video setting is on. */
+    Requested: boolean;
+    /** Whether the model renders the avatar in this session. */
+    Granted: boolean;
+    /** Why the session runs audio-only, when it asked for an avatar and was not granted one. */
+    Reason?: RealtimeAvatarUnavailableReason;
 }
 
 /**
@@ -920,15 +1117,21 @@ export interface RealtimeUsage {
     InputTokenDetails?: RealtimeUsageModalityDetail;
 
     /**
-     * Per-modality breakdown of the output tokens, when the provider reports one.
-     * See {@link RealtimeUsage.InputTokenDetails}.
+     * Per-modality breakdown of the output tokens, when the provider reports one, and the seconds of
+     * avatar video generated since the last update (`VideoSeconds`). An update may carry only those
+     * seconds, with both token totals 0. See {@link RealtimeUsage.InputTokenDetails}.
      */
     OutputTokenDetails?: RealtimeUsageModalityDetail;
 }
 
 /**
  * Per-modality token counts inside a {@link RealtimeUsage} update. All fields optional — providers
- * report different subsets (OpenAI GA: text/audio/cached on input, text/audio on output).
+ * report different subsets (OpenAI GA: text/audio/cached on input, text/audio on output; Gemini Live:
+ * text/audio/image on input, text/audio/video on output).
+ *
+ * Every token field is an amount for this update, like the totals. The video fields differ by
+ * direction: inbound they are the session's running totals (snapshots), outbound `VideoSeconds` is
+ * an amount for this update.
  */
 export interface RealtimeUsageModalityDetail {
     /** Text-modality tokens. */
@@ -941,18 +1144,27 @@ export interface RealtimeUsageModalityDetail {
      * inbound video frames under promptTokensDetails.IMAGE).
      */
     ImageTokens?: number;
+    /**
+     * Video-modality tokens, as the provider reports them (Gemini Live: `responseTokensDetails` VIDEO for
+     * a generated avatar's video). Part of the update's output total when the provider counts them there.
+     */
+    VideoTokens?: number;
     /** Tokens served from the provider's prompt cache (billed at the cached rate). */
     CachedTokens?: number;
     /**
-     * Cumulative inbound video frames processed on video tracks (usage basis 'frames').
-     * Client-side telemetry signal providing fine-grained frame counting and rate attribution.
-     * Comparing VideoFrames against ImageTokens enables operational drift detection for dropped frames.
+     * Inbound only: the video frames sent so far on the session's video tracks (usage basis 'frames'),
+     * a running total rather than an amount for this update. Client-side telemetry; comparing it
+     * against ImageTokens surfaces dropped frames.
      */
     VideoFrames?: number;
     /**
-     * Cumulative inbound or outbound video duration in seconds (usage basis 'seconds').
-     * Represents the wall-clock span between first and last sent frames (span-not-sum) for stream telemetry.
-     * Provider-reported ImageTokens remains the authoritative financial billing basis.
+     * Seconds of video (usage basis 'seconds'). The two directions mean different things:
+     * - **Inbound** (`InputTokenDetails`): the wall-clock span between the first and last frame sent so
+     *   far (span-not-sum), a running total for telemetry. Provider-reported ImageTokens remain the
+     *   billing basis.
+     * - **Outbound** (`OutputTokenDetails`): the seconds of video the model generated since the last
+     *   update (an avatar's video, from its fragment durations), an amount like the token fields.
+     *   Consumers add the updates up.
      */
     VideoSeconds?: number;
 }

@@ -310,6 +310,7 @@ describe('RealtimeSessionService — OnUsage wiring through wireClientHandlers',
     OnToolCall(): void { /* not exercised */ }
     OnError(): void { /* not exercised */ }
     OnInterruption(): void { /* not exercised */ }
+    OnRemoteVideo(): void { /* not exercised */ }
     OnUsage(handler: (u: RealtimeClientUsage) => void): void {
       this.UsageHandler = handler;
     }

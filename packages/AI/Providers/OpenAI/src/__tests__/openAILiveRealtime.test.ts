@@ -1,18 +1,22 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
+    JSONObject,
+    RealtimeProxyRegistry,
     RealtimeSessionParams,
     RealtimeTranscript,
     RealtimeToolCall,
     RealtimeUsage,
     RealtimeSessionError,
 } from '@memberjunction/ai';
+import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
 import {
     OpenAILiveRealtime,
     OpenAILiveSession,
     ILiveWebSocketLike,
 } from '../models/openAILiveRealtime';
+import { OpenAIRealtime } from '../models/openAIRealtime';
 
 class MockLiveWebSocket implements ILiveWebSocketLike {
     public sentFrames: string[] = [];
@@ -60,6 +64,16 @@ class TestableOpenAILiveRealtime extends OpenAILiveRealtime {
         const mock = new MockLiveWebSocket();
         this.lastMockSocket = mock;
         return mock;
+    }
+}
+
+/** OpenAI Realtime with its client-secret mint captured instead of sent to OpenAI. */
+class MintCapturingOpenAIRealtime extends OpenAIRealtime {
+    public MintBody: ClientSecretCreateParams | null = null;
+
+    protected override async mintClientSecret(body: ClientSecretCreateParams): Promise<ClientSecretCreateResponse> {
+        this.MintBody = body;
+        return { value: 'ephemeral-secret', expires_at: 1893456000, session: { type: 'realtime' } as ClientSecretCreateResponse['session'] };
     }
 }
 
@@ -130,7 +144,7 @@ describe('OpenAILiveRealtime Driver & Session', () => {
 
         // Send 3 bytes (odd) -> sends 2 bytes, buffers 1 byte
         const oddChunk1 = new Uint8Array([1, 2, 3]).buffer;
-        session.SendInput(oddChunk1);
+        session.SendInput({ Data: oddChunk1, Kind: 'audio' });
         expect(mockSocket.sentFrames.length).toBe(1);
         const frame1 = JSON.parse(mockSocket.sentFrames[0]);
         expect(frame1.type).toBe('session.input_audio.append');
@@ -140,12 +154,43 @@ describe('OpenAILiveRealtime Driver & Session', () => {
 
         // Send 3 bytes again -> merges buffered byte (1) + 3 bytes = 4 bytes (even) -> sends all 4 bytes
         const oddChunk2 = new Uint8Array([4, 5, 6]).buffer;
-        session.SendInput(oddChunk2);
+        session.SendInput({ Data: oddChunk2, Kind: 'audio' });
         expect(mockSocket.sentFrames.length).toBe(2);
         const frame2 = JSON.parse(mockSocket.sentFrames[1]);
         const decoded2 = Buffer.from(frame2.audio, 'base64');
         expect(decoded2.length).toBe(4);
         expect(Array.from(decoded2)).toEqual([3, 4, 5, 6]);
+    });
+
+    it('SendInput drops a video frame instead of appending it as audio, reports it once, and still appends audio', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const mockSocket = new MockLiveWebSocket();
+            const session = new OpenAILiveSession(mockSocket, {
+                Model: 'gpt-live-1',
+                SystemPrompt: 'Prompt',
+            });
+            mockSocket.triggerOpen();
+            mockSocket.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-1' }));
+            await session.WaitForStarted();
+            mockSocket.sentFrames = [];
+
+            const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer;
+            session.SendInput({ Data: jpeg, Kind: 'video', MimeType: 'image/jpeg' });
+            session.SendInput({ Data: jpeg, Kind: 'video', MimeType: 'image/jpeg' });
+
+            expect(mockSocket.sentFrames).toEqual([]);
+            const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[OpenAILiveRealtime] Dropped'));
+            expect(drops).toEqual([['[OpenAILiveRealtime] Dropped video input of type image/jpeg: this session sends audio only.']]);
+
+            session.SendInput({ Data: new Uint8Array([1, 2, 3, 4]).buffer, Kind: 'audio' });
+            expect(mockSocket.sentFrames).toHaveLength(1);
+            const append = JSON.parse(mockSocket.sentFrames[0]);
+            expect(append.type).toBe('session.input_audio.append');
+            expect(Array.from(Buffer.from(append.audio, 'base64'))).toEqual([1, 2, 3, 4]);
+        } finally {
+            warn.mockRestore();
+        }
     });
 
     it('handles audio, transcripts, and usage telemetry deltas', async () => {
@@ -539,7 +584,7 @@ describe('OpenAILiveRealtime Driver & Session', () => {
 
         // Send an odd number of bytes (e.g. 3 bytes of G.711 μ-law audio)
         const g711Chunk = new Uint8Array([0x55, 0xaa, 0x7f]).buffer;
-        session.SendInput(g711Chunk);
+        session.SendInput({ Data: g711Chunk, Kind: 'audio' });
 
         expect(socket.sentFrames.length).toBe(1);
         const appendFrame = JSON.parse(socket.sentFrames[0]);
@@ -962,5 +1007,104 @@ describe('OpenAILiveRealtime Driver & Session', () => {
 
         expect(instructions).toContain('Delegation policy:');
         expect(instructions).toContain('Backend tools:');
+    });
+});
+
+describe('OpenAILiveRealtime SDP broker URL', () => {
+    const ENV_KEYS = ['MJAPI_PUBLIC_URL', 'GRAPHQL_BASE_URL', 'GRAPHQL_PORT'];
+    const saved: Record<string, string | undefined> = {};
+    beforeEach(() => {
+        for (const key of ENV_KEYS) {
+            saved[key] = process.env[key];
+            delete process.env[key];
+        }
+    });
+    afterEach(() => {
+        for (const key of ENV_KEYS) {
+            if (saved[key] === undefined) delete process.env[key];
+            else process.env[key] = saved[key];
+        }
+    });
+
+    /** Mints a client session and returns the broker URL the browser is handed (`EphemeralToken`). */
+    async function mintBrokerUrl(config?: JSONObject): Promise<string> {
+        const driver = new OpenAILiveRealtime('test-key');
+        const clientConfig = await driver.CreateClientSession({ Model: 'gpt-live-1', SystemPrompt: 'Hello', Config: config });
+        return clientConfig.EphemeralToken;
+    }
+
+    /** The ticket id a broker URL carries. */
+    function ticketOf(brokerUrl: string): string {
+        return new URL(brokerUrl, 'http://relative.invalid').searchParams.get('ticket') ?? '';
+    }
+
+    it("with no MJAPI URL configured, points the browser at MJAPI's default port 4000", async () => {
+        const brokerUrl = await mintBrokerUrl();
+        const ticket = ticketOf(brokerUrl);
+
+        expect(brokerUrl).toBe(`http://localhost:4000/realtime/sdp-exchange?ticket=${ticket}`);
+        // The URL carries the ticket the mint issued, for the broker to consume.
+        expect(RealtimeProxyRegistry.Instance.Consume(ticket)?.DriverClass).toBe('OpenAILiveRealtime');
+    });
+
+    it("follows MJAPI's port and base URL settings (GRAPHQL_PORT, GRAPHQL_BASE_URL)", async () => {
+        process.env['GRAPHQL_PORT'] = '4100';
+        expect((await mintBrokerUrl()).startsWith('http://localhost:4100/realtime/sdp-exchange?ticket=')).toBe(true);
+
+        process.env['GRAPHQL_BASE_URL'] = 'https://api.example.com';
+        process.env['GRAPHQL_PORT'] = '8443';
+        expect((await mintBrokerUrl()).startsWith('https://api.example.com:8443/realtime/sdp-exchange?ticket=')).toBe(true);
+    });
+
+    it('uses the origin of MJAPI_PUBLIC_URL: MJAPI serves the broker at its root, not under a GraphQL path', async () => {
+        process.env['MJAPI_PUBLIC_URL'] = 'https://abc123.ngrok.io/graphql';
+        process.env['GRAPHQL_PORT'] = '4100';
+
+        const brokerUrl = await mintBrokerUrl();
+        expect(brokerUrl).toBe(`https://abc123.ngrok.io/realtime/sdp-exchange?ticket=${ticketOf(brokerUrl)}`);
+    });
+
+    it('an explicit brokerBaseUrl or proxyBaseUrl still wins over the environment, proxyBaseUrl first', async () => {
+        process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+
+        expect((await mintBrokerUrl({ brokerBaseUrl: 'https://edge.example.com' })).startsWith('https://edge.example.com/realtime/sdp-exchange?ticket=')).toBe(true);
+        expect((await mintBrokerUrl({ proxyBaseUrl: 'https://proxy.example.com' })).startsWith('https://proxy.example.com/realtime/sdp-exchange?ticket=')).toBe(true);
+        expect(
+            (await mintBrokerUrl({ proxyBaseUrl: 'https://proxy.example.com', brokerBaseUrl: 'https://edge.example.com' })).startsWith(
+                'https://proxy.example.com/realtime/sdp-exchange?ticket='
+            )
+        ).toBe(true);
+    });
+
+    it('a blank proxyBaseUrl does not hide brokerBaseUrl', async () => {
+        process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+
+        const brokerUrl = await mintBrokerUrl({ proxyBaseUrl: '  ', brokerBaseUrl: 'https://edge.example.com' });
+        expect(brokerUrl.startsWith('https://edge.example.com/realtime/sdp-exchange?ticket=')).toBe(true);
+    });
+
+    it('a relative brokerBaseUrl stays relative, for a page served from the same origin as MJAPI', async () => {
+        process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+
+        const brokerUrl = await mintBrokerUrl({ brokerBaseUrl: '/' });
+        expect(brokerUrl).toBe(`/realtime/sdp-exchange?ticket=${ticketOf(brokerUrl)}`);
+    });
+
+    it("a config with brokerBaseUrl reaches OpenAI Live's broker URL and not the session OpenAI Realtime sends", async () => {
+        // A co-agent config's `realtime.voice.providers.openai` bag is filed onto both OpenAI drivers (both class
+        // names start with "openai"), so the bag that sets OpenAI Live's broker origin reaches OpenAI Realtime too
+        // when the session resolves to a gpt-realtime model.
+        const config: JSONObject = { voice: 'marin', brokerBaseUrl: 'https://edge.example.com' };
+
+        const live = await new OpenAILiveRealtime('test-key').CreateClientSession({ Model: 'gpt-live-1', SystemPrompt: 'Hello', Config: config });
+        expect(live.EphemeralToken.startsWith('https://edge.example.com/realtime/sdp-exchange?ticket=')).toBe(true);
+        expect(live.SessionConfig).not.toHaveProperty('brokerBaseUrl');
+
+        const realtime = new MintCapturingOpenAIRealtime('test-key');
+        const minted = await realtime.CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'Hello', Config: config });
+        expect(realtime.MintBody?.session).not.toHaveProperty('brokerBaseUrl');
+        expect(minted.SessionConfig).not.toHaveProperty('brokerBaseUrl');
+        // The rest of the bag still applies.
+        expect((minted.SessionConfig as { audio?: { output?: { voice?: string } } }).audio?.output?.voice).toBe('marin');
     });
 });

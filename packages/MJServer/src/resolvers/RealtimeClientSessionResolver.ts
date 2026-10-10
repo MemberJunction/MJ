@@ -38,7 +38,7 @@ import {
     MJConversationDetailEntity,
 } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIAgentPermissionHelper, AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIAgentPermissionHelper, AIEngineBase, HasRealtimeUsage, ParseRealtimeUsageRecord, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import {
     RealtimeClientSessionService,
     DelegatedRunArtifact,
@@ -83,6 +83,12 @@ import { ParseConfigObject } from '../realtimeSessions/verificationCore.js';
  * noise is dropped so the model only narrates meaningful work.
  */
 const SIGNIFICANT_PROGRESS_STEPS = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
+
+/**
+ * The longest `usageDetailsJson` a usage relay may carry. Every field of both detail blocks fits in a few hundred
+ * characters, so anything longer is not a relay the browser runtime sends.
+ */
+const MAX_USAGE_DETAILS_JSON_LENGTH = 4096;
 
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -223,13 +229,31 @@ export class StartRealtimeClientSessionResult {
     @Field(() => String)
     Model: string;
 
-    /** The short-lived client secret the browser presents to the provider to authenticate. */
+    /**
+     * The short-lived client secret the browser presents to the provider to authenticate. Empty on a relay session
+     * ({@link StartRealtimeClientSessionResult.Transport} `relay`), whose {@link StartRealtimeClientSessionResult.RelayUrl}
+     * carries the relay's ticket instead.
+     */
     @Field(() => String)
     EphemeralToken: string;
 
-    /** ISO-8601 timestamp at which {@link StartRealtimeClientSessionResult.EphemeralToken} expires. */
+    /** ISO-8601 timestamp at which {@link StartRealtimeClientSessionResult.EphemeralToken} (or a relay session's ticket) expires. */
     @Field(() => String)
     ExpiresAt: string;
+
+    /**
+     * How the browser reaches the provider: `direct` (with the ephemeral token) or `relay` (through MJAPI's realtime
+     * relay at {@link StartRealtimeClientSessionResult.RelayUrl}). Null means direct.
+     */
+    @Field(() => String, { nullable: true })
+    Transport?: string;
+
+    /**
+     * Where a relay session's browser connects (MJAPI's realtime relay). Null on a direct session. The URL carries the
+     * session's ticket, so it is a credential and is never logged.
+     */
+    @Field(() => String, { nullable: true })
+    RelayUrl?: string;
 
     /** JSON string of the provider-native session config the browser applies verbatim. */
     @Field(() => String)
@@ -297,6 +321,15 @@ export class StartRealtimeClientSessionResult {
      */
     @Field(() => String, { nullable: true })
     ClientPolicyJson?: string;
+
+    /**
+     * JSON of the session's live-avatar status (`RealtimeAvatarStatus` from `@memberjunction/ai`): whether the voiced
+     * agent asked for an avatar, whether the model renders it, and why not. The browser reads it after connecting and
+     * tells the user once when the call is audio only. Null when the agent asked for no avatar (its video setting is
+     * off).
+     */
+    @Field(() => String, { nullable: true })
+    AvatarStatusJson?: string;
 }
 
 /**
@@ -452,6 +485,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      *   `TypeConfiguration` ← this). **Authorization-gated**: requires the
      *   `Realtime: Advanced Session Controls` authorization — unauthorized callers receive a
      *   structured rejection (never a silent ignore). Must be a JSON object.
+     * @param showsAgentVideo `false` from an app that shows no agent video (no channel of it shows it: the embeddable
+     *   widgets, the mobile app): the session asks the model for no avatar, and `AvatarStatusJson` says `host`. Absent or
+     *   `true`: the app may show it. It only ever turns video off, so it needs no authorization.
      *
      * @returns The ephemeral config + session linkage the browser needs to open its socket.
      */
@@ -471,6 +507,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('applicationId', () => String, { nullable: true }) applicationId?: string,
         @Arg('appContextJson', () => String, { nullable: true }) appContextJson?: string,
         @Arg('channelCandidatesJson', () => String, { nullable: true }) channelCandidatesJson?: string,
+        @Arg('showsAgentVideo', () => Boolean, { nullable: true }) showsAgentVideo?: boolean,
     ): Promise<StartRealtimeClientSessionResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
 
@@ -544,7 +581,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const result = await this.prepareClientSessionOrClose(
             session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, prior?.Text,
             configOverridesJson, maxSessionSeconds, applicationId, this.parseAppContext(appContextJson), conversationMessages,
-            channelCandidates,
+            channelCandidates, showsAgentVideo,
         );
         await this.stampVerificationPolicy(session, result.EffectiveConfigJson, lastSessionId, contextUser, provider);
         // Best-effort restore of the PRIOR session's persisted channel states (e.g. the whiteboard
@@ -1072,8 +1109,15 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * (observability creation was skipped), a failed load, or a failed save all log and return
      * `false` — usage relay must never break a live call.
      *
+     * The optional details are the per-modality usage since the last relay: input and output
+     * blocks shaped like Core's `RealtimeUsageModalityDetail`, avatar video seconds included. They
+     * add into the usage record on the run's `ModelSpecificResponseDetails`, which prices the avatar
+     * video at finalize. Only the fields a block defines, with values that are finite numbers of at
+     * least 0, are kept; a relay that carries only details (avatar seconds, no tokens) is stored.
+     *
      * @param inputTokens Input-token DELTA to add (negative/non-finite values are clamped to 0).
      * @param outputTokens Output-token DELTA to add (negative/non-finite values are clamped to 0).
+     * @param usageDetailsJson The per-modality usage since the last relay, as JSON (`{ Input, Output }`).
      * @returns `true` when the accumulated usage was persisted; `false` on any tolerated failure.
      */
     @Mutation(() => Boolean)
@@ -1082,13 +1126,15 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('inputTokens', () => Int) inputTokens: number,
         @Arg('outputTokens', () => Int) outputTokens: number,
         @Ctx() { userPayload, providers }: AppContext,
+        @Arg('usageDetailsJson', () => String, { nullable: true }) usageDetailsJson?: string,
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
 
         const inputDelta = this.clampTokenDelta(inputTokens);
         const outputDelta = this.clampTokenDelta(outputTokens);
-        if (inputDelta === 0 && outputDelta === 0) {
+        const details = this.readUsageDetails(usageDetailsJson);
+        if (inputDelta === 0 && outputDelta === 0 && !details) {
             return true; // nothing to add — a no-op flush is a success, not a failure
         }
 
@@ -1100,13 +1146,30 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // appends — otherwise the frequent usage save clobbers freshly-appended Messages (and vice-versa).
         // Runs as the scoped-anonymous elevated user (issue #3371) — the caller's role holds no prompt-run grants.
         return this.clientSessionService.AccumulatePromptRunUsage(
-            promptRunID, inputDelta, outputDelta, ResolveScopedAnonymousRunUser(contextUser), provider,
+            promptRunID, inputDelta, outputDelta, ResolveScopedAnonymousRunUser(contextUser), provider, details ?? undefined,
         );
     }
 
     /** Clamps a relayed token delta: negative / non-finite values become 0. */
     private clampTokenDelta(value: number): number {
         return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    }
+
+    /**
+     * Reads the relayed per-modality usage, or `null` when there is none worth storing: absent,
+     * malformed, longer than a relay ever needs (a client cannot make the server parse an
+     * arbitrarily large string), or holding no amount above 0.
+     */
+    private readUsageDetails(usageDetailsJson: string | undefined): RealtimeUsageRecord | null {
+        if (typeof usageDetailsJson !== 'string') {
+            return null;
+        }
+        if (usageDetailsJson.length > MAX_USAGE_DETAILS_JSON_LENGTH) {
+            LogError(`RelayRealtimeUsage: usage details of ${usageDetailsJson.length} characters exceed ${MAX_USAGE_DETAILS_JSON_LENGTH} — details dropped.`);
+            return null;
+        }
+        const details = ParseRealtimeUsageRecord(usageDetailsJson);
+        return HasRealtimeUsage(details) ? details : null;
     }
 
     /**
@@ -1573,6 +1636,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      *   resumed session remembers the previous leg(s).
      * @param conversationMessages Optional capped history of the TEXT conversation this session is
      *   starting from (from {@link loadConversationHistory}) — framed as "Conversation so far".
+     * @param showsAgentVideo `false` when the app shows no agent video: the session asks for no avatar (`host`).
      */
     private async prepareClientSessionOrClose(
         session: MJAIAgentSessionEntity,
@@ -1589,6 +1653,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         appContext?: AppContextSnapshot,
         conversationMessages?: ChatMessage[],
         channelCandidates?: RealtimeChannelCandidate[],
+        showsAgentVideo?: boolean,
     ): Promise<StartRealtimeClientSessionResult> {
         const prep = await this.clientSessionService.PrepareClientSession(
             {
@@ -1619,6 +1684,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 // The channels the browser could mount: scoped here (registry + cascade) and handed back
                 // as the resolved policy; the declared tools are narrowed to match.
                 ChannelCandidates: channelCandidates,
+                // An app with no channel that shows the agent's video: no avatar is asked for (reason `host`).
+                ShowsAgentVideo: showsAgentVideo ?? undefined,
             },
             // SCOPED-ANONYMOUS ELEVATION (issue #3371): the prepare creates the co-agent
             // observability AIAgentRun/AIPromptRun/run-step, which a scoped anonymous caller's role
@@ -1651,6 +1718,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             Model: cfg.Model,
             EphemeralToken: cfg.EphemeralToken,
             ExpiresAt: cfg.ExpiresAt,
+            Transport: cfg.Transport,
+            RelayUrl: cfg.RelayUrl,
             SessionConfigJson: JSON.stringify(cfg.SessionConfig),
             ModelName: prep.ModelName,
             DriverClass: prep.DriverClass,
@@ -1658,6 +1727,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             NarrationPaceMs: prep.NarrationPaceMs,
             EffectiveConfigJson: prep.EffectiveConfig ? JSON.stringify(prep.EffectiveConfig) : undefined,
             ClientPolicyJson: prep.ClientPolicy ? JSON.stringify(prep.ClientPolicy) : undefined,
+            AvatarStatusJson: prep.AvatarStatus ? JSON.stringify(prep.AvatarStatus) : undefined,
         };
     }
 

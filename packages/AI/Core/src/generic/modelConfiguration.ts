@@ -25,8 +25,10 @@
  * **Lockstep contract**: these interfaces mirror
  * `metadata/entities/JSONType-interfaces/IAIConfiguration.ts`, which is pushed into
  * `EntityField.JSONTypeDefinition` and drives the CodeGen-generated `ModelConfigurationObject` /
- * `PromptConfigurationObject` accessors on the five entities. Keep the two in step when adding a section
- * or property — the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * `PromptConfigurationObject` / `ConfigurationObject` accessors on the six entities. Keep the two in
+ * step when adding a section or property — the same pact `IAgentSettings` follows with
+ * `@memberjunction/ai-core-plus`. The JSONType source carries its own copy of the track types this
+ * file imports from `realtimeTracks.ts`. `modelConfiguration.test.ts` fails when the two differ.
  *
  * **Boundary rule** (also documented on the metadata interface): anything the engine filters,
  * sorts, or joins on stays a COLUMN (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot
@@ -99,6 +101,12 @@ export type RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVid
 export type RealtimeReasoningPlane = 'local' | 'remote';
 
 /**
+ * A reasoning effort in MJ's neutral vocabulary. Each provider profile maps the values its model
+ * accepts (Gemini: `low` / `medium` / `high` on Extended Thinking) and warns on the rest.
+ */
+export type RealtimeReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/**
  * Configuration for remote reasoning delegation.
  */
 export interface RealtimeRemoteReasoning {
@@ -107,7 +115,7 @@ export interface RealtimeRemoteReasoning {
     /** 'gpt-5.6-terra' | 'anthropic/claude-sonnet-4-6' | 'MJ Realtime Co-Agent'. */
     Ref?: string;
     /** Reasoning effort level for supported models. */
-    Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+    Effort?: RealtimeReasoningEffort;
     /** Maximum output tokens for the remote reasoning pass. */
     MaxOutputTokens?: number;
 }
@@ -122,6 +130,14 @@ export interface RealtimeReasoningSettings {
     Remote?: RealtimeRemoteReasoning;
 
     /**
+     * How hard the model itself reasons (Gemini `thinkingConfig.thinkingLevel`), as the catalog
+     * seeds it for Gemini 3.8 Live Extended Thinking. A profile that cannot honour the value logs a
+     * warning and uses its own default; the Gemini driver reads `Remote.Effort` first when both are
+     * set.
+     */
+    Level?: RealtimeReasoningEffort;
+
+    /**
      * Ask the model to emit human-readable summaries of its own reasoning as it works
      * (Gemini `thinkingConfig.includeThoughts`).
      *
@@ -130,6 +146,46 @@ export interface RealtimeReasoningSettings {
      * off; a profile with no mapping ignores it.
      */
     IncludeThoughtSummaries?: boolean;
+}
+
+/**
+ * One price for a quantity a realtime session produces, in one currency. It applies only when all
+ * three fields are set; a partial price, or a unit or currency the reader does not handle, counts
+ * as no price.
+ *
+ * Mirrors the JSONType source member for member, including the `| null`s, so a CodeGen-generated
+ * copy assigns into this type.
+ */
+export interface RealtimeUnitPrice {
+    /** The amount charged per {@link RealtimeUnitPrice.Unit}. Never negative. */
+    Price?: number | null;
+    /**
+     * The billing unit, named as in `MJ: AI Model Price Unit Types`. `'Per Minute'`: one minute.
+     * `'Per 1M Tokens'`: one million tokens.
+     */
+    Unit?: 'Per Minute' | 'Per 1M Tokens' | null;
+    /** ISO 4217 currency code, uppercase (e.g. `USD`), as on `MJ: AI Model Costs`. */
+    Currency?: string | null;
+}
+
+/**
+ * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own; the cost rows stay the authority for token prices. A price belongs to the host that
+ * charges it, so set this on the model-vendor row: a price on the model or the model type would
+ * reach every vendor that serves the model.
+ */
+export interface RealtimePricingSettings {
+    /**
+     * The price of avatar video output, charged on top of the session's token cost. `'Per Minute'`
+     * prices the seconds of avatar video the model generates; `'Per 1M Tokens'` prices the output
+     * tokens the provider counts as video. Set the price and its unit together: the cascade merges
+     * per key, so a layer that sets only one of them keeps the other from the layer below.
+     *
+     * Unverified until checked against Google's bill (#5312): Gemini 3.8 Live on Vertex AI is
+     * seeded at $0.37152 per minute, derived from Google's $1.00 per 1M avatar video output tokens
+     * at 6,192 tokens per second.
+     */
+    AvatarVideoOutput?: RealtimeUnitPrice | null;
 }
 
 /** The `Realtime` section — knobs the realtime drivers consume. */
@@ -184,6 +240,12 @@ export interface RealtimeConfigurationSettings {
      * work at the wrong moment; those models report `'interactionStatus'` instead.
      */
     IdleSignal?: RealtimeIdleSignal;
+
+    /**
+     * Prices for output the token cost rows do not cover, such as avatar video. Set it on the
+     * model-vendor row.
+     */
+    Pricing?: RealtimePricingSettings | null;
 }
 
 /**

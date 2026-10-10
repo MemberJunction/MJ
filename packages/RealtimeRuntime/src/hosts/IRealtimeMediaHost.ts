@@ -19,7 +19,8 @@
  *
  * ## Implementations
  *
- * - **Browser** — `getUserMedia({ audio: true })` and the global `RTCPeerConnection`.
+ * - **Browser** — a `LocalMediaController` (from `@memberjunction/ai-realtime-client/media`) that opens
+ *   the microphone and follows device changes, and the global `RTCPeerConnection`.
  * - **React Native** — the `react-native-webrtc` equivalents, which polyfill both APIs natively
  *   and additionally give the platform's acoustic echo cancellation, noise suppression and jitter
  *   buffering for free.
@@ -33,6 +34,8 @@
  * runtime never *constructs* one; it only receives it from the host and hands it to the realtime
  * client driver, whose `Connect()` already takes exactly this type.
  */
+
+import type { DisplayCaptureOptions, DisplayCaptureResult, ILocalMediaController } from '@memberjunction/ai-realtime-client';
 
 /**
  * The platform capabilities the realtime session runtime needs but cannot provide itself.
@@ -65,11 +68,36 @@ export interface IRealtimeMediaHost {
      * route, and that setting outlives the call — every later sound in the app plays through the
      * call route, at call volume, until something puts it back.
      *
-     * Called by the runtime on teardown, after the microphone tracks are stopped, on every exit
-     * path including a failed start. Best-effort: a rejection is logged and swallowed, because
-     * restoring audio state is never worth failing the end of a call over.
+     * Called by the runtime once each time it asks for the microphone (through
+     * {@link AcquireMicrophone} or the session's controller), after the request returns, opened or
+     * failed, and the microphone tracks are stopped: when the session ends, on every exit path
+     * including a failed start, or, when the session ended while the request was pending, once the
+     * request returns, so the call undoes what the request did. When a newer session has asked for
+     * the microphone by then, that session's end makes the call instead. A session that ends before
+     * asking for the microphone gets no call. Best-effort: a rejection is logged and swallowed,
+     * because restoring audio state is never worth failing the end of a call over.
      */
     ReleaseMicrophone?(): Promise<void> | void;
+
+    /**
+     * OPTIONAL: creates a controller for the user's camera and microphone, once per session.
+     *
+     * When a host offers one, the runtime starts the microphone through it instead of
+     * {@link AcquireMicrophone}. The call then follows a device switch and survives a lost device:
+     * the controller swaps the new track into the same stream (falling back to the system default
+     * when a device goes away), and the runtime moves the driver and the recorder onto it. The
+     * runtime disposes the controller at teardown. Hosts without one keep {@link AcquireMicrophone}.
+     */
+    CreateLocalMediaController?(): ILocalMediaController;
+
+    /**
+     * OPTIONAL: asks the user for a screen, window or browser tab to share (or one panel of the page), for the
+     * session's screen share. Always resolves: a cancelled picker or a refusal is a result.
+     *
+     * A browser host passes it to `RequestDisplayCapture` from `@memberjunction/ai-realtime-client/media`. A host
+     * without it cannot share a screen; the runtime reports that instead of asking.
+     */
+    RequestDisplayCapture?(options?: DisplayCaptureOptions): Promise<DisplayCaptureResult>;
 
     /**
      * OPTIONAL: creates a recorder for this session's audio, when the platform can record and the
@@ -119,6 +147,13 @@ export interface IRealtimeSessionRecorder {
 
     /** Mixes the agent's audio in once its track arrives, so the recording carries both sides. */
     AttachRemoteStream(stream: MediaStream): void;
+
+    /**
+     * OPTIONAL: records the microphone stream's current track from now on, after its track was
+     * replaced (a device switch, or a lost device replaced by the default). A recorder bound to the
+     * old track would otherwise record silence. A recorder without it keeps its original binding.
+     */
+    ReplaceMicrophone?(micStream: MediaStream): void;
 
     /** Milliseconds into the recording, used to stamp per-turn cue offsets into a seekable file. */
     NowOffsetMs(): number;

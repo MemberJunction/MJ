@@ -7,7 +7,7 @@ This is the developer guide for the whole stack: the model primitive, the `Realt
 **Companion documents:**
 
 - [`plans/ai-agent-sessions.md`](../plans/ai-agent-sessions.md) — the original architecture plan (Part I: realtime capability, Part II: session/channel infrastructure). This guide documents what actually shipped; the plan retains the rationale and the deferred tracks.
-- [`packages/AI/RealtimeClient/README.md`](../packages/AI/RealtimeClient/README.md) — the browser-side driver package (`BaseRealtimeClient` + the OpenAI / Gemini / ElevenLabs / AssemblyAI client drivers and the shared PCM audio plane).
+- [`packages/AI/RealtimeClient/README.md`](../packages/AI/RealtimeClient/README.md) — the browser-side driver package (`BaseRealtimeClient` + the OpenAI / Gemini / ElevenLabs / AssemblyAI client drivers and the shared PCM audio plane), its `/media` entry (capture, video playout, the media stage) and its `/testing` entry (the video conformance kit).
 - [`packages/AI/Agents/README.md`](../packages/AI/Agents/README.md) — the agent framework, including how `RealtimeAgentType` sits beside Loop and Flow.
 - [`packages/Angular/Generic/whiteboard/README.md`](../packages/Angular/Generic/whiteboard/README.md) — `@memberjunction/ng-whiteboard`, the extracted generic whiteboard package (state engine, agent tool API, components, exports). The conversations package consumes it as a thin channel plugin.
 - [`guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md`](TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md) — the engine → resolver → client layering the realtime resolvers follow.
@@ -27,6 +27,7 @@ This is the developer guide for the whole stack: the model primitive, the `Realt
 9. [Security Model](#9-security-model)
 10. [Known Gaps & Deferred Work](#10-known-gaps--deferred-work)
 11. [Audio-Reactive Call Visuals](#11-audio-reactive-call-visuals-audio-activity-metering)
+12. [Adding a Video-Capable Realtime Provider](#12-adding-a-video-capable-realtime-provider)
 
 ---
 
@@ -73,12 +74,12 @@ Realtime is pluggable along **three independent axes**, all resolved through `MJ
 
 | Registry | Base class | ClassFactory key comes from | Shipped implementations |
 |---|---|---|---|
-| **Server model drivers** | `BaseRealtimeModel` (`packages/AI/Core/src/generic/baseRealtime.ts`) | `MJ: AI Model Vendors.DriverClass` on a model of `AIModelType = 'Realtime'` | `OpenAIRealtime` (`packages/AI/Providers/OpenAI/src/models/openAIRealtime.ts`), `GeminiRealtime` (`packages/AI/Providers/Gemini/src/geminiRealtime.ts`), `ElevenLabsRealtime` (`packages/AI/Providers/ElevenLabs/src/elevenLabsRealtime.ts`), `AssemblyAIRealtime` (`packages/AI/Providers/AssemblyAI/src/assemblyAIRealtime.ts`), `xAIRealtime` (`packages/AI/Providers/xAI/src/models/xAIRealtime.ts`), `HuggingFaceRealtime` (`packages/AI/Providers/HuggingFace/src/huggingFaceRealtime.ts`) |
-| **Client model drivers** | `BaseRealtimeClient` (`packages/AI/RealtimeClient/src/generic/baseRealtimeClient.ts`) | `ClientRealtimeSessionConfig.Provider` — the string the server driver stamps when it mints (`'openai'`, `'gemini'`, `'elevenlabs'`, `'assemblyai'`, `'xai'`, `'huggingface'`) | `OpenAIRealtimeClient`, `GeminiRealtimeClient`, `ElevenLabsRealtimeClient`, `AssemblyAIRealtimeClient`, `xAIRealtimeClient`, `HuggingFaceRealtimeClient` (same package) |
+| **Server model drivers** | `BaseRealtimeModel` (`packages/AI/Core/src/generic/baseRealtime.ts`) | `MJ: AI Model Vendors.DriverClass` on a model of `AIModelType = 'Realtime'` | `OpenAIRealtime` (`packages/AI/Providers/OpenAI/src/models/openAIRealtime.ts`), `GeminiRealtime` (`packages/AI/Providers/Gemini/src/geminiRealtime.ts`), `ElevenLabsRealtime` (`packages/AI/Providers/ElevenLabs/src/elevenLabsRealtime.ts`), `AssemblyAIRealtime` (`packages/AI/Providers/AssemblyAI/src/assemblyAIRealtime.ts`), `xAIRealtime` (`packages/AI/Providers/xAI/src/models/xAIRealtime.ts`), `HuggingFaceRealtime` (`packages/AI/Providers/HuggingFace/src/huggingFaceRealtime.ts`), `GeminiEnterpriseRealtime` (`packages/AI/Providers/Vertex/src/models/geminiEnterpriseRealtime.ts`, Gemini Live on Gemini Enterprise) |
+| **Client model drivers** | `BaseRealtimeClient` (`packages/AI/RealtimeClient/src/generic/baseRealtimeClient.ts`) | `ClientRealtimeSessionConfig.Provider` — the string the server driver stamps when it mints (`'openai'`, `'gemini'`, `'gemini-enterprise'`, `'elevenlabs'`, `'assemblyai'`, `'xai'`, `'huggingface'`) | `OpenAIRealtimeClient`, `GeminiRealtimeClient`, `GeminiEnterpriseRealtimeClient` (relay sessions only), `ElevenLabsRealtimeClient`, `AssemblyAIRealtimeClient`, `xAIRealtimeClient`, `HuggingFaceRealtimeClient` (same package) |
 | **Channel plugins — client half** | `BaseRealtimeChannelClient` (`packages/RealtimeRuntime/src/channels/base-realtime-channel-client.ts`) | `MJ: AI Agent Channels.ClientPluginClass` | `RealtimeWhiteboardChannel` (key `'RealtimeWhiteboardChannel'`) — a thin plugin over `@memberjunction/ng-whiteboard` |
 | **Channel plugins — server half** | `BaseRealtimeChannelServer` (`packages/AI/Core/src/generic/baseRealtimeChannelServer.ts`), resolved per session by `RealtimeChannelServerHost` (`packages/AI/Agents/src/realtime/realtime-channel-server-host.ts`) | `MJ: AI Agent Channels.ServerPluginClass` | `WhiteboardChannelServer` (key `'WhiteboardChannelServer'`, in `@memberjunction/ai-agents`) — validates/canonicalizes the board's persisted state of record |
 
-Server model drivers are resolved by `BaseAgent.resolveRealtimeModel()` (server-bridged) and `RealtimeClientSessionService.resolveVendorAndInstantiate()` (client-direct): highest-`PowerRank` active `Realtime` model → highest-`Priority` active vendor whose `DriverClass` has a resolvable API key (`GetAIAPIKey`, e.g. `AI_VENDOR_API_KEY__OpenAIRealtime`) → `ClassFactory.CreateInstance<BaseRealtimeModel>(BaseRealtimeModel, driverClass, apiKey)`. An explicit `preferredModelId` bypasses ranking and **fails with a specific reason** rather than silently falling back (`resolvePreferredRealtimeModel`).
+Server model drivers are resolved by `BaseAgent.resolveRealtimeModel()` (server-bridged) and `RealtimeClientSessionService.resolveVendorAndInstantiate()` (client-direct): highest-`PowerRank` active `Realtime` model → highest-`Priority` active vendor whose `DriverClass` has a resolvable API key (`GetAIAPIKey`, e.g. `AI_VENDOR_API_KEY__OpenAIRealtime`) → `ClassFactory.CreateInstance<BaseRealtimeModel>(BaseRealtimeModel, driverClass, apiKey)`. An explicit `preferredModelId` bypasses ranking and **fails with a specific reason** rather than silently falling back (`resolvePreferredRealtimeModel`). A co-agent with video on (`realtime.video.enabled`) and no explicit model first takes the highest-ranked candidate that shows an avatar (its Video/Output modality row and its driver's endpoint both allow it; see [§12](#12-adding-a-video-capable-realtime-provider)), and otherwise stays on the default model, audio only.
 
 Client model drivers are resolved in `VoiceSessionService.createRealtimeClient()` by the server-reported `Provider` key. Channel plugins are resolved in `VoiceSessionService.loadActiveChannels()` from the active `MJ: AI Agent Channels` rows.
 
@@ -104,12 +105,14 @@ The base contracts are deliberately tolerant of provider asymmetry: several memb
 | Server-side object to manage | None | None | **Managed agent** — `ensureAgent()`: find-by-name → create-if-missing → PATCH on tool-fingerprint drift / any missing per-session override enablement; cached per name + fingerprint | None — pure per-session config |
 | Can the agent **speak first**? | No — the neutral `firstMessage` key is ignored by the driver and scrubbed before the wire | No — same: ignored, and scrubbed before the SDK spread | **Yes** — `agent.first_message` override (enabled on the managed agent). Without it the agent produces NO audio until it hears the user, whatever the prompt says (#3557) | **Yes** — the `greeting` field of the session object (fed by the neutral `firstMessage` key; the legacy `greeting` config key still works) |
 | Audio format (client driver) | Provider-negotiated via WebRTC | PCM16 16 kHz up / 24 kHz down | PCM16 at rates **negotiated from the initiation metadata** (`pcm_<rate>`, default 16 kHz; non-PCM telephony formats degrade loudly) | PCM16 **fixed 24 kHz** both directions |
+| Inbound video (camera, screen) | None | JPEG frames at the model's rate, as the minted profile allows (Gemini 3.8 Live: one stream, 1 frame per second) | None | None |
+| Agent video (live avatar) | None | Gemini 3.8 Live on Gemini Enterprise only (`'gemini-enterprise'`, through MJAPI's relay): fragmented MP4 on the socket, carrying the voice. The Developer API returns audio | None | None |
 
 Two cross-cutting notes on the websocket-audio drivers (ElevenLabs, AssemblyAI): they share the browser audio plane in `packages/AI/RealtimeClient/src/audio/` (`createPcmMicCapture` worklet capture, `RealtimePcmPlayback` playhead-clock playout, `pcmUtils`) — `IsAudioPlaying` is computed from the locally-owned playout clock. And both must send `session.end`-style teardown correctly: AssemblyAI's `Close()` sends `session.end` before closing the socket, because skipping it leaves the session in a **billable 30-second resume hold**.
 
 ### Driver-author obligations (read before writing a driver)
 
-Both base classes carry an explicit **"DRIVER AUTHOR OBLIGATIONS"** block in their doc headers — `BaseRealtimeModel` (`packages/AI/Core/src/generic/baseRealtime.ts`) for server drivers, with the client-side mirror on `BaseRealtimeClient` (`packages/AI/RealtimeClient/src/generic/baseRealtimeClient.ts`). Those blocks are the authoritative list (8 numbered rules each, paid for in live debugging). Summarized:
+Both base classes carry an explicit **"DRIVER AUTHOR OBLIGATIONS"** block in their doc headers — `BaseRealtimeModel` (`packages/AI/Core/src/generic/baseRealtime.ts`) for server drivers, with the client-side mirror on `BaseRealtimeClient` (`packages/AI/RealtimeClient/src/generic/baseRealtimeClient.ts`). Those blocks are the authoritative list (8 numbered rules on the server, 12 on the client, paid for in live debugging). Summarized:
 
 1. **Silent exit from "speaking" on tool-call emission** — don't clobber the host's busy indicator with trailing turn frames.
 2. **Release the busy flag when a tool call is emitted** — otherwise `SendToolResult` deadlocks waiting on a turn boundary that never arrives.
@@ -119,6 +122,13 @@ Both base classes carry an explicit **"DRIVER AUTHOR OBLIGATIONS"** block in the
 6. **Credential expiry surfaces as a `Fatal: true` `OnError`** — never idle forever on a dead socket.
 7. **Report "ready/listening" only after the server-built session config has been applied** — early turns must not run against an unconfigured model.
 8. **`SessionConfig` is a private pact** between same-keyed server and client driver halves — hosts and intermediaries treat it as an opaque blob.
+
+The client block adds four:
+
+9. **Audio metering is a capability** — a driver that owns or can tap an audio plane attaches its meters, and releases them on disconnect (see [§11](#11-audio-reactive-call-visuals-audio-activity-metering)).
+10. **Follow a replaced microphone track** — a device switch swaps the track inside the mic stream; rebind what used the old one (`ReplaceMicrophone`: `replaceTrack` on WebRTC senders, `IPcmMicCapture.Rebind` on PCM capture, a new input meter).
+11. **Refuse a transport you don't speak** — call `AssertTransportSupported` first in `Connect`, so a relay session (`Transport: 'relay'`) fails clearly on a driver that only connects to its provider; a driver that speaks through MJAPI's relay overrides `SupportsRelayTransport`.
+12. **The agent's video keeps the voice's rules** — hand the video to the host once, only while the outbound video track is live; barge-in flushes it with the voice; a video that carries the voice never plays it twice; each generated second is reported once. See [§12](#12-adding-a-video-capable-realtime-provider), and run the conformance kit, which checks each rule.
 
 Additional contract points on `IRealtimeSession`: `RegisterTools` must be **idempotent** for a set identical to the connect-time set; `OnInterruption` fires on **true barge-in only** (user speech over *active* model output, not every utterance); `SendContextNote` / `RequestSpokenUpdate` / `OnClose` are **optional capability members** — callers feature-detect, and drivers whose provider can't support them omit them entirely.
 
@@ -131,6 +141,8 @@ Additional contract points on `IRealtimeSession`: `RegisterTools` must be **idem
 5. **API key.** `AI_VENDOR_API_KEY__<DriverClass>` (or the deployment's key-resolution path consumed by `GetAIAPIKey`). A session started from an agent run uses the run's `apiKeys` first; under the run's `CredentialScope: 'RuntimeOnly'` it uses them only, so a vendor the run has no key for is not selected.
 
 No host code changes: the resolver ranks the new model by `PowerRank`/`Priority`, and the browser resolves the client driver by the minted `Provider` string.
+
+A provider whose model sends video (a live avatar) also follows [§12, Adding a Video-Capable Realtime Provider](#12-adding-a-video-capable-realtime-provider), which ends with the conformance kit.
 
 #### Lessons from the ElevenLabs / AssemblyAI builds (read before driver #5)
 
@@ -165,8 +177,8 @@ The same tool-execution semantics run in two transport topologies. The shared pi
 
 | | **Client-direct** (shipped MVP, drives Explorer voice) | **Server-bridged** (`RealtimeSessionRunner`) |
 |---|---|---|
-| Provider socket lives | In the **browser** (OpenAI: WebRTC; Gemini: WebSocket via `@google/genai` Live; ElevenLabs / AssemblyAI: raw WebSocket + the shared PCM audio plane) | On the **server** |
-| Audio path | Browser ↔ provider directly — frames never transit MJ (lowest latency) | Server ↔ provider; **no client media transport is wired yet** (the plan's P5 media plane) |
+| Provider socket lives | In the **browser** (OpenAI: WebRTC; Gemini: WebSocket via `@google/genai` Live; ElevenLabs / AssemblyAI: raw WebSocket + the shared PCM audio plane). A relay session (Gemini Enterprise) is the exception: the browser's socket goes to MJAPI's relay, which opens the provider's | On the **server** |
+| Audio path | Browser ↔ provider directly — frames never transit MJ (lowest latency), except on a relay session, whose frames pass through MJAPI (the provider's frames unchanged, the browser's through the provider's frame policy) | Server ↔ provider; **no client media transport is wired yet** (the plan's P5 media plane) |
 | Prompt/tool authority | **Server** — it builds the session config; the browser applies it verbatim | Server (it owns the socket) |
 | Tool execution | Relayed: browser → `ExecuteRealtimeSessionTool` mutation → `RealtimeToolBroker` → result JSON → browser → `SendToolResult` | In-process: `RealtimeSessionRunner.handleToolCall` → broker → `IRealtimeSession.SendToolResult` |
 | Non-target tools | Channel/UI tools execute **locally in the browser** (never relayed); relayed unknown tools get a structured "not available" (`RealtimeClientSessionService.executeNonTargetTool` — action wiring is a later phase) | Agent **actions** execute via `BaseAgent.executeRealtimeTool` → `ExecuteSingleAction` |
@@ -177,7 +189,7 @@ The same tool-execution semantics run in two transport topologies. The shared pi
 
 ### 🚨 Single source of truth: ONE prep, the precedence cascade, the core↔host boundary
 
-Every realtime host — native chat, **LiveKit**, and future **Zoom/Teams/GoToMeeting/Webex** — must be the **same agent**: same identity, personality, model/voice, delegation, and session tracking. Only **media transport** and **host UX tools** vary. The full rationale + roadmap is in [`plans/realtime/realtime-core-host-convergence.md`](../plans/realtime/realtime-core-host-convergence.md).
+Every realtime host — native chat, **LiveKit**, and future **Zoom/Teams/GoToMeeting/Webex** — must be the **same agent**: same identity, personality, model/voice, delegation, and session tracking. Only **media transport** and **host UX tools** vary. The full rationale + roadmap is in [`plans/complete/realtime/realtime-core-host-convergence.md`](../plans/complete/realtime/realtime-core-host-convergence.md).
 
 **There is exactly ONE producer of realtime session prep:** `RealtimeClientSessionService.PrepareRealtimeSessionParams` (`packages/AI/Agents/src/realtime/realtime-client-session-service.ts`). It resolves the model, builds the **target-identity** system prompt (via the single `BuildRealtimeAgentFraming` in `realtime-tool-broker.ts` — first-person AS the target, never the co-agent), the stable tool set (always incl. `invoke-target-agent`), voice, and memory. **Do NOT build session prep in a host.** The LiveKit bridge (`BaseAgent.StartBridgeRealtimeSession`) *consumes* it and differs only in opening server-side (`StartSession`) vs the browser mint (`CreateClientSession`); a bridge re-implementing prep is exactly the drift this convergence removed (guarded by `__tests__/realtime-convergence-drift.test.ts`).
 
@@ -208,6 +220,7 @@ All four providers keep prompt/tool authority server-side in the client-direct t
 - **Gemini** (`GeminiRealtime.CreateClientSession`): the ephemeral-token API accepts only a **mask-safe subset** as `liveConnectConstraints.config` (`GeminiRealtime.BuildConstraintConfig`): `responseModalities`, `speechConfig`, `temperature`, `topP`, `maxOutputTokens`, `sessionResumption` — locked with `lockAdditionalFields: []`. **`systemInstruction`, `tools`, and the transcription configs cannot be locked** (their presence 400s the mint); they ride in `SessionConfig` and the matching client driver applies them verbatim. So on Gemini the token locks model + generation parameters, while prompt/tool integrity relies on the driver-applied config rather than a token-side lock. Token windows: ~10 minutes to *open* a new session, ~30 minutes total lifetime.
 - **ElevenLabs** (`ElevenLabsRealtime.CreateClientSession`): the **signed websocket URL is the credential** (agent-scoped, ~15-minute open window; an already-open conversation continues past it). It pins the *agent* — and the agent's server-side configuration carries the tool set (bound by the driver's managed-agent ensure flow, so tools are effectively server-fixed). The per-session **system prompt** rides the `conversation_initiation_client_data` override in `SessionConfig` (the managed agent's platform settings enable exactly that one field), applied by the client driver — so prompt integrity is driver-applied, tool integrity is agent-side.
 - **AssemblyAI** (`AssemblyAIRealtime.CreateClientSession`): a **one-time** temp token (`GET /v1/token`, 300-second connect window, single websocket open). The token locks nothing but auth; the entire session object (prompt, tools, voice, turn detection) rides `SessionConfig` and is applied by the client driver as the first `session.update` frame — the provider confirms with `session.ready` before the driver reports `'listening'`.
+- **Gemini Enterprise** (`GeminiEnterpriseRealtime.CreateClientSession`): no token at all. Gemini Enterprise has no browser-safe Live credential, so the mint issues a **relay session** (`Transport: 'relay'`, `RelayUrl`, an empty `EphemeralToken`): MJAPI holds the Google credential, sends the setup the server wrote (model, prompt, tools, voice, avatar) on every upstream connection, and forwards only realtime input, `user` turns and tool responses from the browser. The browser can't change the prompt or the tools at all; from its own setup the relay reads only a resumption handle and a request for audio only. See [§12](#12-adding-a-video-capable-realtime-provider).
 
 ### Server-bridged flow (wired, awaiting a media plane)
 
@@ -302,7 +315,7 @@ The pure implementation is `packages/AI/Agents/src/realtime/realtime-coagent-con
 
 **How each knob is applied at mint** (`RealtimeClientSessionService.PrepareClientSession`, mirrored on the server-bridged path in `BaseAgent`):
 
-- **`modelPreference`** (Name or ID) participates in realtime-model selection *between* the explicit runtime choice and the default: explicit `preferredModelId` (strict, fails loud, authorization-gated when deviating) → configured preference (**tolerant** — an unsatisfiable metadata preference logs and falls through, mirroring the chain's metadata steps) → highest-PowerRank default.
+- **`modelPreference`** (Name or ID) participates in realtime-model selection *between* the explicit runtime choice and the default: explicit `preferredModelId` (strict, fails loud, authorization-gated when deviating) → configured preference (**tolerant** — an unsatisfiable metadata preference logs and falls through, mirroring the chain's metadata steps) → highest-PowerRank default. With `realtime.video.enabled`, the default step first looks for a model that shows an avatar ([§12](#12-adding-a-video-capable-realtime-provider)); both explicit choices win over that preference.
 - **`voice.default` (tone / speakingStyle)** is appended to the server-built companion system prompt as a short **"Voice & manner"** section, right after the co-agent's own prompt. Note these two are PROMPT-level; their siblings `voice.default.voice` and `voice.default.firstMessage` below are WIRE-level and are never folded into the prompt.
 - **`voice.default.voice`** is the **provider-agnostic** voice id (#3530) — authored *without* naming a vendor and filed onto whichever driver the framework resolves, which is what lets a host carry a voice at all when it does not know (and on the default-model path cannot know) the vendor in advance. It **wins the `voice` key** over a matching `voice.providers.<key>` entry, while that bag still contributes its other settings. The value is still provider-native, so an `alloy` means nothing to ElevenLabs — and on Gemini a wrong id is now *reachable*, where it passes the token mint and then kills the session as the socket opens (close `1007`, `No matching speaker voice found`) rather than degrading quietly: author this OR per-vendor pins, not both. Reach today is agent metadata plus programmatic/bridge hosts — see the picker caveat in the open-items table.
 - **`voice.default.firstMessage`** is the **provider-agnostic opening utterance** (#3557) — what the agent says FIRST, verbatim, before the user has spoken. It resolves exactly like the agnostic voice (filed onto whichever driver the framework picks, winning the `firstMessage` key over a matching `voice.providers.<key>` entry). Authored here rather than in the persona prompt because conversation-start behaviour is **not instruction-following**: ElevenLabs with no `first_message` produces no audio at all until it receives user audio, no matter how the prompt is worded — which is why a co-agent could never greet a caller. Omit it and the agent waits for the user, as before. Honoured today by **ElevenLabs** (`agent.first_message` override) and **AssemblyAI** (`greeting`). Every other driver **scrubs** it and opens silently: it is registered in `REALTIME_SHARED_CONFIG_KEYS`, which is what makes a neutral key safe to file onto a vendor that has no use for it — unregistered, it survives each driver's residual-bag spread and reaches the provider as an unknown session field.
@@ -524,9 +537,11 @@ The channels are not silos — they converge on the one shared model context and
 ## 6. Future Channel Types (Envisioned)
 
 > [!NOTE]
-> **Everything in this section is forward-looking design discussion — none of it is implemented.** It is here because the channel plugin contract was explicitly shaped to make these tractable, and because "what would it take" is the best test of the abstraction. For each candidate: the perception feed shape, the mutation tool surface, transport considerations, and what the existing contract covers vs. what would need extending.
+> **This section is forward-looking design discussion.** Video and screen share have since shipped in a different form (see the note under each); the rest is not implemented. It is here because the channel plugin contract was explicitly shaped to make these tractable, and because "what would it take" is the best test of the abstraction. For each candidate: the perception feed shape, the mutation tool surface, transport considerations, and what the existing contract covers vs. what would need extending.
 
 ### Video (camera as perception)
+
+> **Shipped as the Camera channel.** The user's camera is a client-only channel (`Camera`, picture-in-picture by default) that the agent can ask to open; only the user turns the camera on. Its frames are sampled to JPEG and sent over the provider's own socket at the rate the model negotiated, not over WebRTC, and `VideoSourceArbiter` decides which source the model sees and tells it when that changes. The agent's own video (a live avatar) is the Avatar channel; see [§12](#12-adding-a-video-capable-realtime-provider) and the [Realtime Channels Guide](REALTIME_CHANNELS_GUIDE.md).
 
 - **Perception**: sampled camera frames (or provider-native video input — `BaseRealtimeModel` is deliberately modality-agnostic and `IRealtimeSession.SendInput` already takes raw media frames). Structured deltas don't apply; this is the one channel class where the *media plane itself* is the perception feed.
 - **Tools**: model-driven visual annotations over the video surface (`Video_Highlight(x,y,label)`, `Video_Snapshot()` → an artifact) rather than mutations of the feed itself.
@@ -534,6 +549,8 @@ The channels are not silos — they converge on the one shared model context and
 - **Contract fit**: surface/tab/focus-mode and the tool path carry over unchanged. The gap is the perception direction: `SendContextNote` is text-only, so native video input needs either provider video-modality support through the driver (extending `RealtimeSessionParams`/client `Connect`) or a frame-sampling serializer that describes frames textually (cheap, lossy interim).
 
 ### Screen-share (perceive the user's screen, guide and highlight)
+
+> **Shipped as the Screen Share channel**, the same way as the camera: the user shares a screen, a window, a browser tab or one panel of the page ("This panel", in Chrome and Edge), and sampled JPEG frames reach the model over its socket. The structured digest and the guidance tools below are not built.
 
 - **Perception**: like video, but the richer play is hybrid — periodic frames *plus* a structured accessibility/DOM digest for shared app windows ("dialog open: Save Changes; focused field: Name"). Structured digests are vastly cheaper than pixels and more reliable for guidance.
 - **Tools**: `Screen_Highlight(region|elementRef)`, `Screen_Annotate(text, anchor)` — guidance overlays rendered by the channel surface, never synthetic input into the user's apps (a deliberate security boundary).
@@ -641,6 +658,7 @@ Authorization is overwhelmingly reuse of existing primitives, plus a small numbe
 - **Tools execute under the session's `contextUser`** with the request-scoped provider — a realtime model calling a tool can do exactly what the user could do, no more. The provider owning the conversation is never an authorization bypass.
 - **Client-declared tools grant zero server capability.** `clientToolsJson` declarations (channel/UI tools) are *declared* to the model so it can call them, but the server never executes them — a relayed call for one of those names falls into the structured "not available" path. Declarations are still validated to stop config bloat: ≤16 tools, ≤64,000 chars total, per-tool shape checks (name ≤128 chars, description non-empty, schema a plain object); channel-state payloads cap at 2,000,000 chars (per state and accumulated on restore).
 - **Ephemeral, provider-scoped tokens** — the browser never sees a long-lived provider key. OpenAI bakes the full session config (instructions + tools) into the minted client secret; Gemini token-locks the mask-safe generation subset via `liveConnectConstraints` + `lockAdditionalFields: []` (system prompt/tools ride the driver-applied `SessionConfig`; see [§3](#what-an-ephemeral-token-can-lock--provider-differences)). Token expiry mid-session surfaces as a `Fatal` error so the session finalizes cleanly.
+- **Relay sessions hold no provider credential in the browser** — a provider with no browser-safe credential (Gemini Enterprise) runs through MJAPI's realtime relay (`/realtime/relay/<ticket>/…`). MJAPI keeps the Google credential and adds an unexpired OAuth token (or the key's API key) to each upstream connection; the provider's frame policy writes the setup and drops browser frames outside its allowlist, so a tampered client can't change the prompt, tools or avatar. The relay URL carries the session's ticket, so it is a credential: it is never logged or put in an error. A ticket allows one fresh connection within 5 minutes of the mint, then only resumes that present a resumption handle the relay forwarded to that session, at most 10 connections in all, for at most 30 minutes (or the session's `MaxSessionSeconds`). `MJ_REALTIME_PROXY_ALLOWED_ORIGINS` applies to the relay too. Relay sessions live in one MJAPI process's memory, so several instances need sticky routing for `/realtime/relay`. See [§12](#12-adding-a-video-capable-realtime-provider).
 - **XSS-safe exports** — every user/agent-authored string in whiteboard HTML/SVG exports is HTML-escaped before touching the document, and live widget HTML is never inlined in exports (no sandbox exists there).
 - **Sandboxed agent-authored HTML** — whiteboard HTML widgets run in `allow-scripts`-only iframes (opaque origin — no parent DOM, session, cookies, or storage); the only outbound channel is the validated, size-capped `MJWhiteboard.submit` postMessage bridge, gated on a tracked-frame source check. Markdown panels render through the sanitized shared markdown component. See the [ng-whiteboard README](../packages/Angular/Generic/whiteboard/README.md) for the full sandbox rationale.
 - **Ticket-gated WebRTC SDP broker router (`/realtime/sdp-exchange`)** — enabled by default in MJServer (`realtime.enabled: true`), the SDP proxy exchange router mounts out of the box for zero-friction realtime voice and audio interactions. It is guarded by single-use ticket consumption via `RealtimeProxyRegistry`: inbound WebRTC offers cannot establish sessions without an ephemeral ticket issued during authenticated session creation. Operators who run an API server strictly as a headless backend without realtime media capabilities can explicitly disable mounting the route via `MJ_REALTIME_ENABLED=false` or `realtime: { enabled: false }` in `mj.config.cjs`.
@@ -656,11 +674,11 @@ Honest ledger of what is *not* done on this branch, so nobody reads aspiration i
 |---|---|
 | Server-bridged client media plane (browser audio ↔ server socket, the plan's P5 / WebRTC transport) | **Not built** — client-direct is the shipped audio path; server-bridged runs are fully wired up to the provider socket but have no client media transport |
 | Transcript `Replaces` marker | **Shipped** — `RealtimeClientTranscript.ReplacesPrevious` is the machine-readable correction marker: the ElevenLabs driver stamps it on `agent_response_correction`, the overlay replaces the caption in place, and `RelayRealtimeTranscript(replacesPrevious)` UPDATES the persisted turn instead of appending (insert fallback when no prior turn exists). The server-bridged `RealtimeTranscript` type can adopt the same field when that path needs it |
-| Provider `session.resume` windows | **AssemblyAI shipped** — the client driver captures `session_id` from `session.ready` and, on an unexpected socket drop, makes ONE reattach inside the provider's 30-second window (`session.resume` first frame; `'connecting'` shown while reattaching; mic worklet + playout engine survive; a failed/second drop falls through to the pre-existing fatal path). Gemini's `sessionResumption` token remains unused — it needs server-mint participation (documented TODO); MJ's own chain resume (`LastSessionID`) is unchanged and complementary |
+| Provider `session.resume` windows | **AssemblyAI shipped** — the client driver captures `session_id` from `session.ready` and, on an unexpected socket drop, makes ONE reattach inside the provider's 30-second window (`session.resume` first frame; `'connecting'` shown while reattaching; mic worklet + playout engine survive; a failed/second drop falls through to the pre-existing fatal path). **Gemini shipped** — client and server sessions move to a new connection with Google's resumption handle when Google announces the connection is ending (`goAway`; on Vertex AI it came about 9 minutes into a connection, with 30 s left) and after an unexpected drop; a relay session resumes through the same relay URL, and an avatar call keeps its video element and last frame across the move (checked live on Gemini Enterprise). A separate limit is the context window (about 15 minutes for audio, about 2 for audio plus video): every Gemini session gets sliding-window context compression by default (`GeminiRealtime.DefaultContextWindowCompression`), which resumption does not replace. Zero-data-retention sessions get no resumption. MJ's own chain resume (`LastSessionID`) is unchanged and complementary |
 | Transcript-turn → co-agent-run linkage | **Deferred** (noted in `RelayRealtimeTranscript`'s doc comment) — turns are session-stamped but not linked to the observability runs |
 | *Chat* conversation-history hydration into the companion prompt | **MVP gap** — the resolver passes `ConversationMessages: []` (the service supports it). Distinct from the **shipped** prior-*session* transcript hydration on resume (§4) |
 | Unified session transport (`SessionEnvelope` / `ISessionTransport`) | **Independent track** per the plan — voice deliberately does not depend on it |
-| Video channel / video modality | **Deferred** — `BaseRealtimeModel`'s contract anticipates it |
+| Video channel / video modality | **Shipped** — user video in (the Camera and Screen Share channels, and channel surfaces, through `VideoSourceArbiter`) and the agent's video out (live avatars on Gemini Enterprise, in calls and LiveKit meetings; see [§12](#12-adding-a-video-capable-realtime-provider)). What is checked live and what isn't: [`plans/realtime/video-avatar-status.md`](../plans/realtime/video-avatar-status.md) |
 | Server-side channel plugin execution (`ServerPluginClass` consumption) | **Shipped with scope notes** — `BaseRealtimeChannelServer` (in `@memberjunction/ai`) is resolved per session by `RealtimeChannelServerHost` from the ACTIVE registry rows and wired into the durable lifecycle: session start (`SessionManager.CreateSession`), pre-persistence channel-state saves (`SaveSessionChannelState`), and session close from every provenance incl. the janitor (`SessionManager.CloseSession`); `WhiteboardChannelServer` ships as the reference (state-of-record validation/canonicalization). **Not** covered: socket/media members (deferred with the unified-transport track) and server-tool contribution to `RealtimeSessionRunner` (documented TODO — no code path gives the server-bridged runner per-session channel instances yet). See [§5](#5-channels--the-heart-of-the-system) |
 | Non-target server tools on the client-direct relay (action wiring through `executeNonTargetTool`) | **Later phase** — structured "not available" today; the server-bridged path already executes actions |
 | Channel-grained permissions, multi-party sessions, audio retention/consent | **Out of scope** for this iteration (see plan) |
@@ -724,6 +742,200 @@ attribute stays `false` and the original turn-state keyframe animations remain i
 
 ---
 
+## 12. Adding a Video-Capable Realtime Provider
+
+A realtime model that sends video (a live avatar, today Gemini 3.8 Live on Gemini Enterprise) uses the same contracts as voice: the video is one more track, and each layer has a few more rules. The UI and the runtime show the agent's video without knowing which provider sent it: the call through the Avatar channel, a meeting through the bot's camera track.
+
+The checklist:
+
+1. **An endpoint profile** says, per endpoint and model, whether the model renders an avatar, in what format, and whether the video carries the voice.
+2. **The server driver** grants or refuses the session's avatar request when it builds the connect config, reports the decision, and (on a server-side session) emits the video as typed frames.
+3. **The browser driver** plays the video through `VideoPlayout`, hands it to the host once, and follows driver obligations #3, #11 and #12.
+4. **Catalog rows**: a model-vendor row for the driver, the model's Video/Output modality row, a price for the video, and the avatars as persona Video bindings.
+5. **The conformance kit** passes (`@memberjunction/ai-realtime-client/testing`).
+
+The reference implementation is Gemini Enterprise: `GeminiEnterpriseRealtime` (`packages/AI/Providers/Vertex/src/models/geminiEnterpriseRealtime.ts`) on the server, which extends `GeminiRealtime`, and `GeminiEnterpriseRealtimeClient` (`'gemini-enterprise'`) in the browser, which extends `GeminiRealtimeClient`.
+
+How a request becomes video on screen:
+
+```
+voiced agent's persona (Video binding) ─► RealtimeSessionParams.Avatar (RealtimeAvatarSettings)
+  ─► server driver: grant (connect config + pact block) or refuse (one log line + AvatarStatus reason)
+  call:    mint ─► browser driver ─► VideoPlayout ─► emitRemoteVideo ─► runtime AgentVideo$ ─► Avatar channel tile
+  meeting: StartSession (Delivery 'room') ─► OnVideoFrame ─► bridge 'video-out' ─► bot decodes ─► 'agent-avatar' camera track
+```
+
+### Endpoint profile
+
+What a model renders depends on the endpoint serving it, not on the model alone: `gemini-3.8-live` renders an avatar on Gemini Enterprise and returns audio on the Gemini Developer API. Keep these facts in a data table in the provider's package, as Gemini does in `geminiLiveProfiles.ts`:
+
+- `ResolveGeminiLiveProfile(model, endpoint)` returns the model's row plus what it renders on that endpoint (`GEMINI_LIVE_ENDPOINT_OVERLAYS`): `SupportsAvatarOutput`, `AvatarOutputEncoding` (the MIME type with codecs, `'video/mp4; codecs="avc1.42c01f, mp4a.40.2"'` for Gemini) and `AvatarAudioMuxed` (the MP4 carries the voice). An overlay matches one model row exactly, so a longer model id (`gemini-3.8-live-extended-thinking`) never inherits a shorter one's avatar.
+- What the endpoint accepts whatever the model (`GEMINI_LIVE_ENDPOINT_PROFILES`): its `AcceptedTurnCoverages`. Gemini Enterprise refuses `TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO` at setup, so it accepts only `audioActivityOnly`; the Developer API accepts both. A configured value the endpoint refuses is sent as one it accepts, with one log line naming both. A catalog value never costs the user the session.
+- Override `BaseRealtimeModel.SupportsAvatarOutput(model)` from the profile. The model choice, the persona picker and the call's notice all read it.
+- `MJ_GEMINI_LIVE_MODEL_ALIASES` (`<model id>=<known model id>`, comma-separated) gives a model id the table doesn't know the profile of one it does, for when Google names a model differently from the table.
+
+### Server driver
+
+**The avatar request.** `RealtimeSessionParams.Avatar` (`RealtimeAvatarSettings`) carries `AvatarID` (the vendor's avatar id), `Kind` (`'preset'` or `'custom'`), `Resolution`, `Background`, `PersonaName`, `Source` and `Delivery`. Apply it last in the connect config, after the config bag, so the bag can't add or keep video on its own:
+
+- Grant it only where the profile says the model renders avatars. Gemini's `applyAvatarOutput` sets the VIDEO response modality and `avatarConfig.avatarName`, with `videoBitrateBps` from `MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS` (2,000,000 by default; `0` leaves the field out). A VIDEO modality or an `avatarConfig` that came from the config bag is removed.
+- Anywhere else the session runs audio only and logs one line with a `RealtimeAvatarUnavailableReason`: `endpoint` (the model renders none here), `bridged` (a server-side session whose host can't publish video), `custom-disabled` (custom likenesses are off), `unknown-avatar`. Never fail the mint over an avatar.
+- Report the decision as `RealtimeAvatarStatus` (`Requested`, `Granted`, `Reason`): on `ClientRealtimeSessionConfig.AvatarStatus` for a browser session, on `IRealtimeSession.AvatarStatus` for a server-side one. The server merges in its own reasons (`no-binding`, `unknown-avatar`, and `endpoint` when the model's Video/Output row turns video off) and the browser adds `host` and `browser`; the call and the meeting room turn the reason into one "Audio only" notice.
+- Tell the browser driver through the private pact. Gemini adds an `avatar` block (`output`, `encoding`, `audioMuxed`) to the minted `SessionConfig` only when the avatar is granted.
+
+**Server-side sessions** (meetings, phone calls) grant an avatar only when the host publishes video into a room (`Delivery: 'room'`); otherwise the reason is `bridged`. A granted session:
+
+- declares an outbound video track in `Capabilities.SupportedOutboundTracks` whose `Encoding` names its frames' type;
+- emits the video through `IRealtimeSession.OnVideoFrame` as `RealtimeVideoFrame`s, in the order the model sent them (the untyped `OnVideoOutput` is deprecated);
+- while the video carries the voice, sends no PCM for that turn through `OnOutput`;
+- after `OnInterruption`, drops the interrupted turn's late frames;
+- reports the seconds of video it generated through `OnUsage` (`OutputTokenDetails.VideoSeconds`, an amount for the update).
+
+**Frames.** `RealtimeVideoFrame` (`packages/AI/Core/src/generic/realtimeVideoOutput.ts`) has three kinds, each with `Data`, `MimeType`, and optional `PresentationTimeMs`, `KeyFrame`, `Width` and `Height`:
+
+| Kind | What it holds | Notes |
+|---|---|---|
+| `'fmp4'` | A piece of fragmented MP4: `Piece` is `'init'` (`ftyp` + `moov`) or `'fragment'` (`moof` + `mdat`) | May carry the voice on its audio track. `Fmp4PieceToVideoFrame(data, mimeType, init)` builds one from a model part, with the fragment's time and key-frame flag read from the boxes |
+| `'chunk'` | One encoded frame: H.264 in Annex B form (with the WebCodecs codec string in the MIME type's `codecs` parameter), VP8, VP9 or AV1 | `PresentationTimeMs` and `KeyFrame` are required. No voice |
+| `'image'` | One still picture: JPEG, PNG or WebP | Every image is a key frame. No voice |
+
+`PresentationTimeMs` is media time on the stream's own timeline, the same timeline as its voice, not wall-clock time. A new stream (an init segment, or a key frame whose time goes backwards) may restart it.
+
+### Browser driver
+
+Driver obligations #11 and #12 on `BaseRealtimeClient` are the browser half's rules; the conformance kit checks #12.
+
+- **Refuse a transport you don't speak (#11).** Call `AssertTransportSupported(config)` first in `Connect`. A driver that speaks its provider's protocol through MJAPI's relay overrides `SupportsRelayTransport` to `true`.
+- **Offer the video track only when it can play.** Add an outbound video track to the supported tracks when the pact grants an avatar and `VideoPlayout.IsSupported(encoding)` says this browser can play it. The host asks for the track: the runtime adds the tracks its channels sink to the session config's `requestedTracks`, and the Avatar channel sinks outbound video. When the track isn't live, connect audio only and log one line: `host` when the host asked for no agent video, `browser` when this browser can't play it.
+- **Create the player through an overridable seam.** Gemini calls `CreateVideoPlayout(options)`; tests and the kit replace it with a recorder. Hand the player's `Source` to the host once per session with `emitRemoteVideo`, at connect, so the tile is up before the agent speaks. `OnRemoteVideo` takes one handler, which the runtime owns (`RealtimeSessionRuntime.AgentVideo$`).
+- **Route model output by MIME type.** Video goes to the player as `RealtimeVideoFrame`s, in order (`VideoPlayout.Append`). Gemini also treats a part whose bytes open with an MP4 box as video, whatever type it names. PCM goes to the voice. Anything else is dropped and reported once: unknown data never plays as audio.
+- **Turns.** Call `EndOfTurn()` when the model has generated the whole turn (Gemini: `generationComplete`, with `turnComplete` as the fallback), so the video plays to its end and holds the last frame. On barge-in, `Flush()` the video with the voice (obligation #3) and drop the cut turn's late parts until its turn completes. After a resume, keep the same player and let a turn the drop cut off play out what arrived; the next connection's init segment appends to the same player.
+- **The voice.** When the video carries the voice, don't also play that turn's PCM: the turn's first video part flushes the PCM the turn queued, and later PCM in the turn is dropped. Route the player's element audio into the PCM playback's Web Audio graph (`VideoPlayoutOptions.OnElementAttached` → `RealtimePcmPlayback.ConnectMediaElement`), so the call's meter and recording carry it, and count the player's `IsPlaying` in `IsAudioPlaying`.
+- **Lip sync for chunks and images.** When the voice and the frames share a media timeline, queue each PCM chunk at its media time (`IRealtimePcmPlayback.Enqueue(pcm16, mediaTimeMs)`) and pass the playback as `VideoPlayoutOptions.Clock`; restart both timelines together. MSE needs no clock: an MP4 that carries the voice keeps face and voice together on its own timestamps.
+- **Usage.** Report each second of generated video once (`OutputTokenDetails.VideoSeconds` on `OnUsage`), counted from the video's own durations (`Fmp4VideoSeconds` for fMP4); Gemini sends them in updates of their own at each turn boundary. An interrupted turn counts what arrived before the interruption; video after the turn's generation ended (idle frames) does not count; a flush never subtracts.
+- **`Disconnect`** releases the player.
+
+**Playout.** `VideoPlayout` (in `/media`) plays any `RealtimeVideoFrame` into the host's `<video>` element through a decoder chosen per frame type from `VideoFrameDecoderRegistry`:
+
+| Decoder | Plays | How |
+|---|---|---|
+| `'mse-fmp4'` | `video/mp4` fragmented MP4 | Media Source Extensions (`ManagedMediaSource` on iOS Safari 17.1+); unmuted when the MP4 carries the voice |
+| `'webcodecs'` | `video/h264`, `video/vp8`, `video/vp9`, `video/av1` chunks | A WebCodecs `VideoDecoder`, drawn into a `MediaStream` the element shows |
+| `'image'` | `image/jpeg`, `image/png`, `image/webp` | `createImageBitmap`, drawn the same way |
+
+A frame type no decoder plays is dropped and reported once (`'no-decoder'`); a decoder that gives up (`Failed`) is replaced by the next that can play the type. Register another decoder with `VideoFrameDecoderRegistry.Instance.Register({ Name, Kind, Priority, CanPlay, Create })`; `CanPlay` must answer at once. With a clock, the chunk and image decoders show each frame when the voice reaches its `PresentationTimeMs`: a frame more than 500 ms behind the voice is dropped, one ahead waits, one more than 2 s ahead is dropped, and before the clock reads anything frames wait up to 500 ms for the voice, then go by their own times.
+
+### Browser auth: direct or relay
+
+A browser session reaches the provider one of two ways (`ClientRealtimeSessionConfig.Transport`):
+
+- **`'direct'`** (absent means direct): the browser opens the provider's socket with a short-lived credential in `EphemeralToken`, as on the Gemini Developer API.
+- **`'relay'`**: the provider has no browser-safe credential (Gemini Enterprise), so the browser connects to MJAPI's relay at `RelayUrl` and MJAPI holds the credential. The server driver issues a relay session (`RealtimeProxyRegistry.Instance.IssueRelaySession({ UpstreamUrl, Policy, UserID, DriverClass, MaxSessionSeconds })`) and returns `Transport: 'relay'`, the URL from `BuildRealtimeRelayUrl(ResolveRealtimeProxyBaseWsUrl(params), ticket.ID)` and an empty `EphemeralToken`. The ticket is in the URL's path, so the URL is a credential: never log it or put it in an error.
+
+A relay needs an `IRealtimeRelayPolicy` (in `@memberjunction/ai`) for the provider's protocol, kept in the provider's package. MJAPI owns the sockets and calls the policy at five points: `UpstreamHeaders` on every upstream open (so a short-lived OAuth token is current for each connection), `ReadOpenIntent` on the browser's first frame (a fresh open, or a resume with a handle, and whether it asks for audio only), `OpeningFrames` before anything else goes upstream, `FilterClientFrame` on each later client frame (client frames are text; binary ones are dropped first), and `ObserveServerFrame` to find resumption handles in server frames, which go to the browser unchanged. `GeminiLiveRelayPolicy` sends the setup the server wrote (`BuildGeminiLiveSetup`) on every connection, reads only a resumption handle and an audio-only request from the browser's setup, and forwards only realtime input, `user` turns and tool responses. Widening what passes lets a browser change the agent mid-session, so it is a security change.
+
+What MJAPI enforces for a relay session: one fresh connection within 5 minutes of the mint, then only resumes that present a handle the relay forwarded to that session; at most 10 connections; an end at 30 minutes or `MaxSessionSeconds`; the `MJ_REALTIME_PROXY_ALLOWED_ORIGINS` Origin allowlist, with refusals logged. Relay sessions live in one MJAPI process's memory, so a deployment with several instances needs sticky routing for `/realtime/relay`.
+
+### Usage and pricing
+
+- **Where usage lands.** A browser session's client driver reports `OnUsage`; the runtime relays it with `RelayRealtimeUsage`, whose `usageDetailsJson` carries the per-modality detail blocks, and the co-agent prompt run keeps them in `ModelSpecificResponseDetails.RealtimeUsage`. Stored output video seconds are capped at the run's elapsed time plus 30 s. A server-side session's `OnUsage` is recorded on its co-agent prompt run by `RealtimeClientSessionService.WireBridgeRealtimeSession` (every 10 s and once more before the run is finalized).
+- **Per-modality detail.** Report the provider's split (`InputTokenDetails`, `OutputTokenDetails`: text, audio, image and video tokens) and the generated video seconds. Gemini reports `usageMetadata` per turn, not as running totals, and MJ adds the updates up; a short avatar reply is about 20,000 to 25,000 response tokens, almost all VIDEO.
+- **The price.** Give the model-vendor row a per-minute video price in `ModelConfiguration.Realtime.Pricing.AvatarVideoOutput` (`{ Price, Unit: 'Per Minute', Currency }`). When the run is priced, the stored output video seconds become a line of their own, the output tokens the provider counted as video leave the cost row's output bucket, and the split is written under `CostLines` in `ModelSpecificResponseDetails`. Without a usable price the run prices as before. Gemini 3.8 Live on Vertex AI is seeded at $0.37152 per minute, which is not yet checked against what Google bills.
+
+### Catalog rows
+
+- **The model-vendor row.** Add an `MJ: AI Model Vendors` row with the server driver's `DriverClass` and the provider's `APIName`. Realtime vendor selection walks a model's Active vendor rows by Priority and takes the first whose driver has a key, so a row whose key is missing is skipped. Gemini 3.8 Live has two: Google (`GeminiRealtime`, Priority 0) and Vertex AI (`GeminiEnterpriseRealtime`, Priority 1, `Realtime.TurnDetection.Coverage` `audioActivityOnly`, and the video price). A deployment with `AI_VENDOR_API_KEY__GeminiEnterpriseRealtime` runs the model on Vertex AI.
+- **The Video/Output modality row.** A model shows an avatar only when its `MJ: AI Model Modalities` Video/Output row allows it and the driver's endpoint profile renders one (`RealtimeModelShowsAvatar` in `@memberjunction/ai-agents`). `IsSupported` false turns video off for the model on every vendor (reason `endpoint`); no row leaves it to the profile. Modality rows belong to a model, not to a model-vendor pair, which is why the endpoint stays the driver's fact.
+- **The video preference.** A co-agent with `realtime.video.enabled` and no explicit model (no `preferredModelId` and no `realtime.modelPreference`) takes the first candidate that shows an avatar: models by PowerRank, each model's keyed vendors by Priority, and only drivers that support client-direct sessions. When none does, it keeps the model it would have taken, audio only, with one log line. A phone call, or a meeting whose host can't publish video, skips the preference.
+- **Avatars are personas.** An avatar is an `MJ: AI Persona Vendors` row with `Modality=Video` on the vendor: `APIName` is the vendor's avatar id (Google's "Ben" preset for the example persona "Ben"), tuned by `VendorSettings.Avatar` (`Kind`, `Resolution`, `Background`). The persona's Audio binding on the same vendor is its voice. A model that lists its personas explicitly (Gemini 3.8 Live does) also needs an `MJ: AI Model Personas` row for each. A session's avatar resolves from `realtime.video.avatarId` (only when it names an Active Video binding on the vendor), else the voiced agent's personas (default first), else the co-agent's; never from the model's own persona. The avatar persona's voice becomes the session's voice unless the call picked one, and the voice picker marks a voice "Comes with an avatar" only when the model shows avatars. `Kind: 'custom'` is refused (`custom-disabled`) until custom likenesses have a governance design.
+
+### Meetings
+
+1. Before the model session opens, the LiveKit room coordinator asks the native room module whether this host's bot can publish an avatar (`describeAvatarVideo`: `@livekit/rtc-node`'s video classes, and ffmpeg 4.2 or later with the H.264 and AAC decoders, from `MJ_FFMPEG_PATH` or the `PATH`). Only then does the session's avatar request carry `Delivery: 'room'` (`PrepareClientSessionInput.AvatarDelivery`), so a host that can't show the avatar never asks the model for it.
+2. The server session emits `'fmp4'` frames through `OnVideoFrame`; the bridge engine sends them on `video-out` with their MIME type; `LiveKitBridge.SendMedia` passes `video/mp4` frames to the bot's avatar outlet (`publishAvatarMedia`).
+3. The bot reads the pieces with Core's fMP4 reader, decodes them in two ffmpeg child processes, plays the voice on its audio track and shows each frame on a camera track named `agent-avatar` when the voice reaches the frame's timestamp. The track is published at the first frame, and the last frame stays between turns and after a barge-in.
+4. A decoder that keeps failing, or a room that refuses the track, takes the avatar down: the bot unpublishes the camera, sets its `mj.agentAvatar` attribute to `audio-only:<reason>` (`decoder-missing`, `decoder-failed`, `publish-failed`), and the engine replaces the model session with an audio-only one. The room shows the `agent-avatar` track as the agent's tile, with the "AI-generated video" label, and one notice when the avatar can't be shown.
+
+Only fMP4 reaches a meeting today: any other `video-out` frame is dropped, with one log line per session. A raw-frame provider's avatar shows in calls, not in meetings, until the bot decodes chunks and images.
+
+### Run the conformance kit
+
+`@memberjunction/ai-realtime-client/testing` checks a client driver against the rules above. It needs no test framework, no provider SDK and no driver, so a provider in its own package runs it: `RunRealtimeVideoConformance(driverFactory)` resolves to one result per check, and `ListRealtimeVideoConformanceChecks(driverFactory)` gives a test runner one test per check.
+
+You write a harness (`IRealtimeVideoConformanceHarness`):
+
+- `Name` and `Traits` (below).
+- `Mint(grant)`: the `ClientRealtimeSessionConfig` your server mints, with or without an avatar. The kit adds the host's track request.
+- `CreateClient(media)`: your real client driver with a fake transport and its creation seams wired to the kit's recorders (`media.CreateVideoPlayer` for the video player, `media.Voice` for the PCM playback). Register no handlers on it. A second call starts over with a new client.
+- `Connect(client, config, microphone)`: connect, and open whatever the fake transport needs, until the session listens.
+- The model's side of the wire: `SendVideo(frame)` (a `RealtimeVideoFrame` of your kind, put on your wire as the provider would), `SendVoice(pcm16, mediaTimeMs?)`, `TurnComplete()`, `Interrupted()`; optionally `SendPart(mimeType, data)`, `GenerationComplete()`, `Resume()`, `RefusePlayback()`, `AskedProviderForVideo()` and `Dispose()`. A check that needs a method you don't have is skipped with the reason.
+
+Keep harness construction free of side effects: the factory is called once per check, and once more to read the traits.
+
+Then the test file:
+
+```ts
+import { ListRealtimeVideoConformanceChecks } from '@memberjunction/ai-realtime-client/testing';
+
+for (const check of ListRealtimeVideoConformanceChecks(() => new MyProviderHarness())) {
+    (check.SkipReason ? it.skip : it)(`${check.Id} ${check.Title}`, () => check.Run());
+}
+```
+
+**Traits** (`RealtimeVideoConformanceTraits`):
+
+| Trait | Values | Meaning |
+|---|---|---|
+| `AgentVideo` | `'playout'`, `'stream'`, `'none'` | The video plays through a player the driver creates (the kit records it), arrives as a live `MediaStream` (WebRTC), or never comes (audio only) |
+| `GrantsAvatar` | boolean | Whether the provider's server can grant an avatar at all |
+| `Voice` | `'pcm'`, `'transport'` | The driver plays PCM itself, or the transport plays the voice (WebRTC) |
+| `VideoCanCarryVoice` | boolean | The video can carry the voice, so the kit checks it never plays twice |
+| `VideoUsage` | boolean | The driver reports generated video seconds |
+| `VideoFrameKind` | `'fmp4'` (default), `'chunk'`, `'image'` | The form the model's video comes in |
+| `TimedVoice` | boolean (default `false`) | Voice and video share one media timeline, and the driver passes its playback as the player's clock |
+| `EnvironmentSkips` | `{ [checkId]: reason }` | Checks this test environment can't run faithfully; reported skipped |
+
+**The checks:**
+
+| Id | Check | Runs when |
+|---|---|---|
+| VC01 | An audio-only session hands over no agent video and still works | always |
+| VC02 | In an audio-only session, a video part never plays as audio | the harness has `SendPart` |
+| VC03 | A granted avatar is handed over once, and its track is live | agent video and a grant |
+| VC04 | A granted avatar the host doesn't show stays audio only | agent video and a grant |
+| VC05 | A granted avatar this browser can't play stays audio only | a player, a grant and `RefusePlayback` |
+| VC06 | The avatar's video goes to its player in order, never to the voice | a player and a grant |
+| VC07 | A part of an unknown type is dropped and reported once | a player, a grant and `SendPart` |
+| VC08 | Barge-in stops the video and the voice at once | a player and a grant |
+| VC09 | Media for an interrupted turn never plays | a player and a grant |
+| VC10 | A turn's end lets its video play out | a player and a grant |
+| VC11 | A video that carries the voice never plays it twice | a player, a grant, video that can carry the voice, and PCM voice |
+| VC12 | Generated video seconds are reported, each once | a player, a grant and video usage |
+| VC13 | An interrupted turn counts what arrived; idle video doesn't count | a player, a grant and video usage |
+| VC14 | A resumed session keeps its avatar | a player, a grant and `Resume` |
+| VC15 | Disconnect releases the video | a player and a grant |
+| VF01 | Frames reach the player typed, as the model sent them | a player and a grant |
+| VF02 | A timed voice drives the video's clock | a player, a grant and `TimedVoice` |
+
+The kit checks the driver's facts. The notice reasons `endpoint`, `host` and `browser` are decided by the server's mint and the runtime, and inbound video (camera and screen to the model) has its own tests. `src/__tests__/video-conformance/` runs the kit against Gemini on the Developer API and on Gemini Enterprise (through the real web SDK over a fake relay socket), OpenAI over WebRTC, and a synthetic raw-frame provider built only on the package's public API (`synthetic-video-client.ts`), which is the worked example for a new provider.
+
+**Which drivers send video.** `realtime-video-driver-audit.test.ts` keeps the client table true: it fails when a driver is registered without a row, or a row's video columns stop matching the code.
+
+| Client key | Class | Agent video | Inbound video |
+|---|---|---|---|
+| `'openai'` | `OpenAIRealtimeClient` | none | none |
+| `'openai-live'`, `'OpenAILiveRealtime'` | `OpenAILiveClient` | none | none |
+| `'gemini'` | `GeminiRealtimeClient` | when granted (the Developer API grants none) | per the minted profile |
+| `'gemini-enterprise'` | `GeminiEnterpriseRealtimeClient` | when granted | per the minted profile |
+| `'elevenlabs'` | `ElevenLabsRealtimeClient` | none | none |
+| `'assemblyai'` | `AssemblyAIRealtimeClient` | none | none |
+| `'xai'` | `xAIRealtimeClient` | none | none |
+| `'huggingface'` | `HuggingFaceRealtimeClient` | none | none |
+
+On the server, only the Gemini drivers declare outbound video, and only for a granted avatar: `GeminiRealtime` on the Developer API never renders one, and `GeminiEnterpriseRealtime` does for `gemini-3.8-live`. Every other server driver keeps `SupportsAvatarOutput` false and declares no outbound video track. The UI follows: the Avatar channel is open in every call but stays out of sight until video arrives, the "AI-generated video" label shows only while a tile shows an avatar, and an agent that asked for an avatar on an audio-only model gets one "Audio only" notice.
+
+---
+
 ## Reference Map
 
 | Concern | Where |
@@ -732,6 +944,11 @@ attribute stays `false` and the original turn-state keyframe animations remain i
 | Channel plugin contract — server half (+ host + reference impl) | `packages/AI/Core/src/generic/baseRealtimeChannelServer.ts`, `packages/AI/Agents/src/realtime/realtime-channel-server-host.ts`, `packages/AI/Agents/src/realtime/whiteboard-channel-server.ts` |
 | Server drivers | `packages/AI/Providers/OpenAI/src/models/openAIRealtime.ts`, `packages/AI/Providers/Gemini/src/geminiRealtime.ts`, `packages/AI/Providers/ElevenLabs/src/elevenLabsRealtime.ts`, `packages/AI/Providers/AssemblyAI/src/assemblyAIRealtime.ts` |
 | Browser drivers + shared PCM audio plane | `packages/AI/RealtimeClient/` ([README](../packages/AI/RealtimeClient/README.md)) — `src/drivers/*`, `src/audio/*` |
+| Realtime video: frames, fMP4 reader, avatar settings and status | `packages/AI/Core/src/generic/realtimeVideoOutput.ts`, `fmp4Reader.ts`, `baseRealtime.ts` (`RealtimeAvatarSettings`, `RealtimeAvatarStatus`) |
+| Browser media (capture, `VideoPlayout` and its decoders, the playback clock, the media stage) and the video conformance kit | `packages/AI/RealtimeClient/src/media/`, `src/testing/` |
+| Gemini Live profiles, setup writer and relay policy; Gemini Enterprise driver | `packages/AI/Providers/Gemini/src/geminiLiveProfiles.ts`, `geminiLiveSetup.ts`, `geminiLiveRelayPolicy.ts`; `packages/AI/Providers/Vertex/src/models/geminiEnterpriseRealtime.ts` |
+| MJAPI realtime relay | `packages/MJServer/src/realtimeProxy/` (`RealtimeProxyServer.ts`, `RealtimeRelayTunnel.ts`); sessions in `RealtimeProxyRegistry` (`packages/AI/Core/src/generic/realtimeProxyRegistry.ts`) |
+| Avatar choice and the video model preference | `packages/AI/Agents/src/realtime/realtime-avatar-resolution.ts`, `realtime-video-output-gate.ts`, `realtime-client-session-service.ts` |
 | Agent type / runner / broker / client-session service / shared narration / memory builder | `packages/AI/Agents/src/agent-types/realtime-agent-type.ts`, `src/realtime/*` (incl. `realtime-narration.ts`), `src/agent-memory-context-builder.ts` |
 | Session records, janitor, host identity | `packages/MJServer/src/agentSessions/` |
 | GraphQL resolvers | `packages/MJServer/src/resolvers/RealtimeClientSessionResolver.ts`, `AgentSessionResolver.ts` |
@@ -775,8 +992,10 @@ profile hard default
 
 The normalized shape is `{ Mode: 'default' | 'serverVad' | 'semanticVad' | 'native', Eagerness?, Threshold?, SilenceDurationMs? }`. Each OpenAI-protocol profile declares its `supportedTurnModes` and maps the vocabulary via `MapNormalizedTurnDetection`; an unsupported mode is **diag-logged and falls back to the profile default** — a shared catalog never rejects a session. `'native'` is the deliberate forward slot: when a provider documents a smarter full-duplex turn mode (e.g. for the Grok Voice Think Fast family), its profile adds `'native'` + the mapping once, and the catalog opts models in via metadata with no further driver changes. Meeting mode (`disableAutoResponse`) composes on top of whatever mode wins — `create_response`/`interrupt_response` always reflect the bridge's floor control, and a live `Reconfigure` rebuilds the session's actual mode (it no longer hardcodes `server_vad`). GPT Realtime 2.1 / 2.1-mini are seeded to `semanticVad` in `metadata/ai-models/.ai-models.json`; delete that seed to return to the provider default.
 
+**Turn coverage** is the same section's `Coverage`: what a turn carries as input, `audioActivityOnly` or `audioActivityAndAllVideo` (every video frame since the last turn; more input tokens). Gemini states it on every session rather than inherit a default, sending `audioActivityOnly` when nothing is configured. Gemini 3.8 Live and Extended Thinking ask for all video on the Gemini Developer API. Gemini Enterprise accepts only `audioActivityOnly`, so its Gemini 3.8 Live row asks for that, and the driver sends it, with one log line, for any session there that asks for all video.
+
 ### Multi-channel cost attribution
-`RealtimeUsage` now carries per-modality token detail (`InputTokenDetails`/`OutputTokenDetails`: text/audio/image/cached). The OpenAI driver maps the GA `response.done` detail blocks, the session runner accumulates them field-wise across turns, and the checkpoint persists the detail as JSON on the realtime `AIPromptRun.Result` — so audio-vs-text pricing (audio-in ~8× text-in on GPT Realtime 2.1) is attributable instead of blended.
+`RealtimeUsage` now carries per-modality token detail (`InputTokenDetails`/`OutputTokenDetails`: text/audio/image/video/cached, plus the seconds of video the model generated, `OutputTokenDetails.VideoSeconds`). The OpenAI driver maps the GA `response.done` detail blocks, the Gemini drivers map `usageMetadata`'s per-modality counts (VIDEO included), the session runner accumulates them field-wise across turns, and the checkpoint persists the detail as JSON on the realtime `AIPromptRun.Result` — so audio-vs-text pricing (audio-in ~8× text-in on GPT Realtime 2.1) is attributable instead of blended. A model-vendor row with an avatar video price (`ModelConfiguration.Realtime.Pricing.AvatarVideoOutput`) prices the generated video on a line of its own; see [§12](#12-adding-a-video-capable-realtime-provider).
 
 ### Resilience & lifecycle
 - **Connect/readiness deadlines everywhere** — client WS drivers reject an awaited `Connect` on a silent endpoint (15s, overridable), and the server session's `WaitForConfigApplied` has a matching readiness deadline; no path can hang forever.
@@ -784,4 +1003,4 @@ The normalized shape is `{ Mode: 'default' | 'serverVad' | 'semanticVad' | 'nati
 - **Bounded transport reconnect** — a fatal socket drop triggers up to `MaxTransportReconnects` (default 1) fresh-session reconnects with rewired handlers + a context note; usage/transcripts span the reconnect; exhausted budget finalizes.
 - **MCP approval** — with no approval UX yet, an `mcp_approval_request` is auto-DENIED (correct correlation id) so the model voices the refusal instead of dead-air blocking; declare servers `require_approval: 'never'` to skip the round-trip.
 - **Barge-in floor rule** — on a TRUE user barge-in, queued tool-result auto-triggers are dropped (the result item is already in the conversation; the user's next turn voices it) — the model never speaks over a user who just took the floor.
-- **Proxy hardening (HF client-direct)** — optional `MJ_REALTIME_PROXY_ALLOWED_ORIGINS` origin allowlist (403 before ticket consumption), 15s upstream-open deadline, bounded pre-open frame buffer. Multi-instance deployments need sticky routing for the in-memory ticket registry.
+- **Proxy hardening (HF client-direct)** — optional `MJ_REALTIME_PROXY_ALLOWED_ORIGINS` origin allowlist (403 before ticket consumption; the realtime relay applies the same list, and both log each refused origin), 15s upstream-open deadline, bounded pre-open frame buffer. Multi-instance deployments need sticky routing for the in-memory ticket registry.

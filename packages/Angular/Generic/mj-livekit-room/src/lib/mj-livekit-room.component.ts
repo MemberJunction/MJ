@@ -3,16 +3,24 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLLiveKitClient, LiveKitRoomTurnState, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
-import { LiveKitRoomComponent, LiveKitTurnStateComponent, SummarizeFloor, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
+import { LIVEKIT_ROOM_CONTROLLER_FACTORY, LiveKitRoomComponent, LiveKitTurnStateComponent, SummarizeFloor, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
+import { AvatarNoticeText, LOCAL_MEDIA_CONTROLLER_FACTORY, type AvatarNoticeOverrides } from '@memberjunction/ng-realtime-media';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
-import type {
-  LiveKitDataMessage,
-  LiveKitDisconnectedEvent,
-  LiveKitParticipantJoinedEvent,
-  LiveKitParticipantLeftEvent,
-  LiveKitRoomError,
-  LiveKitRoomState,
+import { MJAlertComponent } from '@memberjunction/ng-ui-components';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import { MediaLayoutPrefs, type MediaPipRect, type MediaPlacementMove } from '@memberjunction/ai-realtime-client/media';
+import {
+  LiveKitPreviewRoomController,
+  type ILiveKitRoomController,
+  type LiveKitDataMessage,
+  type LiveKitDisconnectedEvent,
+  type LiveKitParticipantJoinedEvent,
+  type LiveKitParticipantLeftEvent,
+  type LiveKitRoomError,
+  type LiveKitRoomState,
 } from '@memberjunction/livekit-room-core';
+import { AgentAvatarNotices, type AgentAvatarNotice } from './agent-avatar-notices';
+import { DeviceErrorNoticeText } from './device-error-notice';
 import { TURN_POLL_DEFAULT_INTERVAL_MS, TurnStatePoller } from './turn-state-poller';
 import {
   BuildRosterTurnBadge,
@@ -27,8 +35,35 @@ import {
 } from './turn-taking-options';
 import type { RoomOptions } from 'livekit-client';
 
-/** How the MJ binding obtains its room: start an agent in a room, or just join an existing room. */
-export type MJLiveKitConnectionMode = 'agent' | 'join';
+/**
+ * The `MJ: User Settings` keys under which the meeting room's layout is saved, per user and for every room: where the
+ * user moved participants' tiles, where they put picture-in-picture boxes, and whether they hid their self-view. The
+ * realtime call saves its own layout under `mj.realtime.*`.
+ */
+export const LIVEKIT_PLACEMENT_PREF_KEY = 'mj.livekit.placement.v1';
+export const LIVEKIT_PIP_PREF_KEY = 'mj.livekit.pip.v1';
+export const LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY = 'mj.livekit.selfView.hidden.v1';
+
+/**
+ * The keys the preview room saves its layout under: it remembers its layout as a meeting does, but apart, so moving the
+ * simulated people, hiding the self-view (or resetting the layout) there never changes what is saved for meetings.
+ */
+export const LIVEKIT_PREVIEW_PLACEMENT_PREF_KEY = 'mj.livekit.preview.placement.v1';
+export const LIVEKIT_PREVIEW_PIP_PREF_KEY = 'mj.livekit.preview.pip.v1';
+export const LIVEKIT_PREVIEW_SELF_VIEW_HIDDEN_PREF_KEY = 'mj.livekit.preview.selfView.hidden.v1';
+
+/**
+ * How the MJ binding obtains its room: start an agent in a room (`'agent'`), join an existing room (`'join'`), or open
+ * the preview room (`'preview'`): your camera and microphone with simulated people, and no server.
+ */
+export type MJLiveKitConnectionMode = 'agent' | 'join' | 'preview';
+
+/**
+ * What the room is given in preview mode, where nothing is minted: the room connects once both are set, and the preview
+ * controller ignores them.
+ */
+const PREVIEW_SERVER_URL = 'preview://local';
+const PREVIEW_TOKEN = 'preview';
 
 /** Emitted when an agent room session has been started server-side. */
 export interface MJLiveKitSessionStartedEvent {
@@ -62,7 +97,8 @@ export interface AgentInRoom {
   selector: 'mj-livekit-agent-room',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LiveKitRoomComponent, LiveKitTurnStateComponent, MJStorageMediaPlayerComponent],
+  imports: [LiveKitRoomComponent, LiveKitTurnStateComponent, MJStorageMediaPlayerComponent, MJAlertComponent],
+  providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useFactory: roomControllerFactory }],
   template: `
     @if (recordingFileId && showRecordingPanel) {
       <div class="mj-lk-recording">
@@ -113,22 +149,48 @@ export interface AgentInRoom {
         [ShowAgentState]="ShowAgentState"
         [ShowWhiteboard]="ShowWhiteboard"
         [ShowPreJoin]="ShowPreJoin"
-        [ShowRecordingControl]="EnableRecording"
+        [EnableAgentVisionControl]="EnableAgentVisionControl"
+        [ShowRecordingControl]="EnableRecording && Mode !== 'preview'"
         [IsRecording]="isRecording"
         [E2EEPassphrase]="E2EEPassphrase"
         [E2EEWorker]="E2EEWorker"
         [RoomOptions]="RoomOptions"
         [AgentAvatarUrl]="AgentAvatarUrl"
         [CanEndForAll]="EnableEndForAll && !!resolvedRoomName"
+        [TileMoves]="TileMoves"
+        [PipRects]="PipRects"
+        [SelfViewHidden]="SelfViewHidden"
+        (TileMovesChange)="OnTileMovesChange($event)"
+        (PipRectsChange)="OnPipRectsChange($event)"
+        (SelfViewHiddenChange)="OnSelfViewHiddenChange($event)"
+        (AgentVisionChange)="OnAgentVisionChange($event)"
         (Connected)="Connected.emit($event)"
-        (Disconnected)="Disconnected.emit($event)"
+        (Disconnected)="OnRoomDisconnected($event)"
+        (StateChanged)="OnRoomStateChanged($event)"
         (EndForAll)="EndMeeting()"
         (ParticipantJoined)="ParticipantJoined.emit($event)"
         (ParticipantLeft)="ParticipantLeft.emit($event)"
         (DataReceived)="DataReceived.emit($event)"
         (ToggleRecording)="onToggleRecording()"
-        (ErrorOccurred)="ErrorOccurred.emit($event)"
+        (BeforeMediaToggle)="OnDeviceChangeRequested()"
+        (BeforeDeviceSwitch)="OnDeviceChangeRequested()"
+        (ErrorOccurred)="OnRoomError($event)"
       ></mj-livekit-room>
+
+      @if (AgentVisionNotice || DeviceNotice || AvatarNotices.length > 0) {
+        <div class="mj-lk-notices">
+          @if (AgentVisionNotice) {
+            <mj-alert class="mj-lk-notice" Variant="error" Size="sm" [Message]="AgentVisionNotice" [Dismissible]="true" (Dismissed)="AgentVisionNotice = null"></mj-alert>
+          }
+          @if (DeviceNotice) {
+            <mj-alert class="mj-lk-notice mj-lk-notice--device" Variant="error" Size="sm" [Message]="DeviceNotice" [Dismissible]="true" (Dismissed)="DeviceNotice = null"></mj-alert>
+          }
+          @for (notice of AvatarNotices; track notice.Identity) {
+            <mj-alert class="mj-lk-notice mj-lk-notice--avatar" Variant="info" Size="sm" Icon="fa-solid fa-video-slash"
+              [Message]="AvatarNoticeLine(notice)" [Dismissible]="true" (Dismissed)="OnAvatarNoticeDismissed(notice.Identity)"></mj-alert>
+          }
+        </div>
+      }
 
       @if (Mode === 'agent' && EnableAgentManagement && resolvedRoomName) {
         <div class="mj-lk-agents">
@@ -172,8 +234,9 @@ export interface AgentInRoom {
                     @if (addVoices.length) {
                       <select class="mj-input mj-lk-agents__select mj-lk-agents__select--sm" (change)="onAddVoiceChange($event)" title="Voice (dev override)">
                         <option value="">Default voice</option>
-                        @for (v of addVoices; track v.ID) {
-                          <option [value]="v.ID" [selected]="v.ID === addVoice">{{ v.Name }}</option>
+                        <!-- One option per persona: two personas can share a voice id (a voice, and the same voice with a face). -->
+                        @for (v of addVoices; track v.PersonaID ?? v.ID) {
+                          <option [value]="v.ID" [selected]="v === AddVoiceOption">{{ v.Name }}</option>
                         }
                       </select>
                     }
@@ -283,6 +346,22 @@ export interface AgentInRoom {
         position: relative;
         width: 100%;
         height: 100%;
+      }
+      /* Over the room, under its header, clear of the agents panel at the bottom left: what the agent sees, what went
+         wrong with the user's devices, then one notice per agent whose avatar can't be shown. */
+      .mj-lk-notices {
+        position: absolute;
+        top: 64px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 41;
+        width: min(480px, calc(100% - 32px));
+        display: flex;
+        flex-direction: column;
+        gap: var(--mj-space-2);
+      }
+      .mj-lk-notice {
+        margin: 0;
       }
       .mj-lk-agents {
         position: absolute;
@@ -477,7 +556,10 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   private readonly cdr = inject(ChangeDetectorRef);
 
   // ── MJ connection inputs ───────────────────────────────────────────────────────
-  /** Whether to start an agent in the room (`'agent'`) or just join an existing room (`'join'`). */
+  /**
+   * Whether to start an agent in the room (`'agent'`), just join an existing room (`'join'`), or open the preview room
+   * (`'preview'`: no token, no agent session, no recording). Read when the room is created.
+   */
   @Input() public Mode: MJLiveKitConnectionMode = 'agent';
   /** The agent to voice (agent mode) — the Realtime Co-Agent / voice front-end. */
   @Input() public AgentID: string | null = null;
@@ -605,6 +687,11 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public set addVoice(value: string | null) {
     this.AddVoice = value;
   }
+  /**
+   * The voice option picked in the "Add an agent" picker (one of {@link AddVoices}), or null. Kept beside
+   * {@link AddVoice} because two personas can share a voice id: the option, not the id, says which one shows picked.
+   */
+  public AddVoiceOption: RealtimeVoiceOption | null = null;
   /** Exposed for template use — platform-safe UUID equality (SQL upper vs PG lower). */
   public UUIDsEqual = UUIDsEqual;
   /** True while an Add request is in flight. */
@@ -693,6 +780,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public OnAddModelChange(event: Event): void {
     this.AddModelId = (event.target as HTMLSelectElement).value || null;
     this.AddVoice = null;
+    this.AddVoiceOption = null;
   }
 
   /** @deprecated Use {@link OnAddModelChange}. */
@@ -700,9 +788,13 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     return this.OnAddModelChange(event);
   }
 
-  /** Records the add-agent VOICE choice. */
+  /**
+   * Records the add-agent VOICE choice: the picked option, found by its position (two personas can share a voice id,
+   * so the value can't tell them apart; option 0 is "Default voice"), and its voice id.
+   */
   public OnAddVoiceChange(event: Event): void {
-    this.AddVoice = (event.target as HTMLSelectElement).value || null;
+    this.AddVoiceOption = this.AddVoices[(event.target as HTMLSelectElement).selectedIndex - 1] ?? null;
+    this.AddVoice = this.AddVoiceOption?.ID ?? null;
   }
 
   /** @deprecated Use {@link OnAddVoiceChange}. */
@@ -753,6 +845,14 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public ShowWhiteboard = false;
   /** @see LiveKitRoomComponent.ShowPreJoin */
   @Input() public ShowPreJoin = false;
+  /** @see LiveKitRoomComponent.EnableAgentVisionControl */
+  @Input() public EnableAgentVisionControl = true;
+  /**
+   * The host's own words for why the room shows an agent without its avatar, per reason (for example its product's name
+   * for "this app"), shown as written; `{Agent}` stands for the agent's name. `unknown` words a reason the room doesn't
+   * know, such as a newer bot's. A reason it leaves out keeps the stock line, which names the agent.
+   */
+  @Input() public AvatarNoticeLabels: AvatarNoticeOverrides | null = null;
   /** Enable the server-authorized recording control (composite egress). */
   @Input() public EnableRecording = false;
   /** @see LiveKitRoomComponent.E2EEPassphrase */
@@ -831,8 +931,37 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public set resolvedDisplayName(value: string | null) {
     this.ResolvedDisplayName = value;
   }
-  /** The resolved room name (for recording calls). */
+  /** The resolved room name (for recording and agent-vision calls). */
   public ResolvedRoomName: string | null = null;
+
+  /**
+   * Why the server could not record the user's last choice of what the agent sees, shown over the room until they
+   * dismiss it or choose again; `null` when there is nothing to say.
+   */
+  public AgentVisionNotice: string | null = null;
+
+  /**
+   * What went wrong with the user's microphone, camera, speaker or share while the room was connected, such as a share
+   * the browser refused, shown over the room until they dismiss it, ask for another change to their devices, or leave;
+   * `null` when there is nothing to say. A share picker the user closed is no error, so it says nothing.
+   */
+  public DeviceNotice: string | null = null;
+
+  /** Which agents' notices show that the meeting can't show their avatar: once per agent per join. */
+  private readonly avatarNotices = new AgentAvatarNotices(() => this.cdr.markForCheck());
+
+  /**
+   * The notices over the room that an agent's avatar can't be shown, oldest first: one per agent per join, for everyone
+   * in the room, from the agent's bot. Each hides itself after a while or when dismissed.
+   */
+  public get AvatarNotices(): readonly AgentAvatarNotice[] {
+    return this.avatarNotices.Visible;
+  }
+
+  /** A notice's line, naming the agent, in the host's words when it gave some ({@link AvatarNoticeLabels}). */
+  public AvatarNoticeLine(notice: AgentAvatarNotice): string {
+    return AvatarNoticeText(notice.Reason ?? null, this.AvatarNoticeLabels, notice.AgentName, { NameAgent: true });
+  }
 
   /** @deprecated Use {@link ResolvedRoomName}. */
   public get resolvedRoomName(): string | null {
@@ -883,8 +1012,139 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.ShowRecordingPanel = value;
   }
 
+  /** Where the user moved participants' tiles, as saved for them; given to the room, and saved again as they change. */
+  public TileMoves: readonly MediaPlacementMove[] = [];
+  /** Where the user put picture-in-picture boxes, by participant identity, as saved for them. */
+  public PipRects: ReadonlyMap<string, MediaPipRect> = new Map();
+  /** Whether the user hid their self-view, as saved for them; given to the room, and saved again as they change it. */
+  public SelfViewHidden = false;
+
+  /** The user's meeting layout, saved per user under the room's keys in the provider's settings. */
+  private readonly meetingLayoutPrefs = new MediaLayoutPrefs(() => this.userInfoEngine(), {
+    Moves: LIVEKIT_PLACEMENT_PREF_KEY,
+    PipRects: LIVEKIT_PIP_PREF_KEY,
+    SelfViewHidden: LIVEKIT_SELF_VIEW_HIDDEN_PREF_KEY,
+  });
+  /** The preview room's layout, saved the same way under its own keys. */
+  private readonly previewLayoutPrefs = new MediaLayoutPrefs(() => this.userInfoEngine(), {
+    Moves: LIVEKIT_PREVIEW_PLACEMENT_PREF_KEY,
+    PipRects: LIVEKIT_PREVIEW_PIP_PREF_KEY,
+    SelfViewHidden: LIVEKIT_PREVIEW_SELF_VIEW_HIDDEN_PREF_KEY,
+  });
+
+  /** Where this room's layout is saved: the preview room's own keys in preview mode, the meeting room's otherwise. */
+  private get layoutPrefs(): MediaLayoutPrefs {
+    return this.Mode === 'preview' ? this.previewLayoutPrefs : this.meetingLayoutPrefs;
+  }
+
+  /** The user moved a tile or reset the layout: keep the room's moves and save them. */
+  public OnTileMovesChange(moves: readonly MediaPlacementMove[]): void {
+    this.TileMoves = moves;
+    this.layoutPrefs.SaveMoves(moves);
+  }
+
+  /** The user moved or resized a box, or reset the layout: keep the boxes and save them. */
+  public OnPipRectsChange(rects: ReadonlyMap<string, MediaPipRect>): void {
+    this.PipRects = rects;
+    this.layoutPrefs.SavePipRects(rects);
+  }
+
+  /**
+   * The user hid their self-view, showed it again, or reset the layout: keep it and save it. When saving fails, it still
+   * holds for this session.
+   */
+  public OnSelfViewHiddenChange(hidden: boolean): void {
+    this.SelfViewHidden = hidden;
+    this.layoutPrefs.SaveSelfViewHidden(hidden);
+  }
+
+  /**
+   * The user chose whether agents may see their camera and screen. The preview room records it at once. In a meeting,
+   * MJAPI records it, since a participant's token can't change its own attributes, and the room shows the change when
+   * LiveKit reports it; when MJAPI can't, a notice says why.
+   */
+  public OnAgentVisionChange(on: boolean): void {
+    const controller = this.roomComponent?.Controller;
+    if (controller instanceof LiveKitPreviewRoomController) {
+      controller.SetAgentVision(on);
+      return;
+    }
+    void this.recordAgentVision(on);
+  }
+
+  /** Asks MJAPI to record the user's choice for this room; when it can't, shows why and emits the error. */
+  private async recordAgentVision(on: boolean): Promise<void> {
+    if (!this.ResolvedRoomName) {
+      return;
+    }
+    this.AgentVisionNotice = null;
+    const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+    const result = await client.SetAgentVision(this.ResolvedRoomName, on);
+    if (!result.Success) {
+      this.AgentVisionNotice = `Couldn't change what the agent sees: ${result.ErrorMessage ?? 'unknown error'}`;
+      this.ErrorOccurred.emit({ Kind: 'agent-vision', Message: this.AgentVisionNotice });
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** The room's state changed: a notice shows for each agent whose bot newly says the meeting can't show its avatar. */
+  public OnRoomStateChanged(state: LiveKitRoomState): void {
+    this.avatarNotices.Update(state);
+  }
+
+  /** The room disconnected: its notices go, and joining again shows each agent's once more. */
+  public OnRoomDisconnected(event: LiveKitDisconnectedEvent): void {
+    this.avatarNotices.Reset();
+    this.DeviceNotice = null;
+    this.Disconnected.emit(event);
+  }
+
+  /**
+   * The room reported an error: the host hears it ({@link ErrorOccurred}), and a device error while the room is
+   * connected shows over the room ({@link DeviceNotice}), the latest in place of any earlier one. Until the room
+   * connects, it shows its own connection overlay, which says why a join failed.
+   */
+  public OnRoomError(error: LiveKitRoomError): void {
+    const line = this.roomComponent?.IsConnected ? DeviceErrorNoticeText(error) : null;
+    if (line) {
+      this.DeviceNotice = line;
+      this.cdr.markForCheck();
+    }
+    this.ErrorOccurred.emit(error);
+  }
+
+  /**
+   * The user asked for a change to their devices (turned the microphone, camera or share on or off, or switched a
+   * device): the device notice goes, since it was about an earlier request. Should this one fail too, its own shows.
+   */
+  public OnDeviceChangeRequested(): void {
+    if (this.DeviceNotice) {
+      this.DeviceNotice = null;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** The user dismissed an agent's avatar notice: it does not show again in this join. */
+  public OnAvatarNoticeDismissed(identity: string): void {
+    this.avatarNotices.Dismiss(identity);
+  }
+
+  /**
+   * The settings engine for this component's provider. A host that never ran startup (lazy startup) can hand back an
+   * engine that has not loaded the user's settings; the loaded global one is used then.
+   */
+  private userInfoEngine(): UserInfoEngine {
+    const provider = this.ProviderToUse;
+    const engine = provider ? (UserInfoEngine.GetProviderInstance<UserInfoEngine>(provider, UserInfoEngine) as UserInfoEngine) : UserInfoEngine.Instance;
+    return engine.Loaded ? engine : UserInfoEngine.Instance;
+  }
+
   public ngOnInit(): void {
+    this.TileMoves = this.layoutPrefs.LoadMoves();
+    this.PipRects = this.layoutPrefs.LoadPipRects();
+    this.SelfViewHidden = this.layoutPrefs.LoadSelfViewHidden();
     this.destroyRef.onDestroy(() => this.turnPoller?.Dispose());
+    this.destroyRef.onDestroy(() => this.avatarNotices.Dispose());
     if (this.AutoStart) {
       void this.Start();
     }
@@ -901,12 +1161,18 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
    */
   @Input() public ConnectTimeoutMs = 25000;
 
-  /** Resolves the connection (mints a token and, in agent mode, starts the agent session). */
+  /** Resolves the connection (mints a token and, in agent mode, starts the agent session). A new join, too. */
   public async Start(): Promise<void> {
     this.Loading = true;
     this.errorMessage = null;
+    this.avatarNotices.Reset();
+    this.DeviceNotice = null;
     this.cdr.markForCheck();
     try {
+      if (this.Mode === 'preview') {
+        this.openPreview();
+        return;
+      }
       const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
       this.ResolvedDisplayName = this.DisplayName;
       const connect = this.Mode === 'agent' ? this.startAgentSession(client) : this.joinRoom(client);
@@ -1027,6 +1293,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       this.AddTargetId = null;
       this.AddModelId = null;
       this.AddVoice = null;
+      this.AddVoiceOption = null;
       this.AddTurnMode = null;
       this.AddTurnAddressing = null;
       this.syncTurnPolling();
@@ -1122,6 +1389,16 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     } catch {
       // Clipboard blocked (insecure context / permissions) — leave the pill unchanged.
     }
+  }
+
+  /**
+   * Opens the preview room: nothing is minted and no agent session starts. You join as the signed-in user unless
+   * {@link DisplayName} names someone else.
+   */
+  private openPreview(): void {
+    this.ResolvedDisplayName = this.DisplayName ?? this.ProviderToUse?.CurrentUser?.Name ?? null;
+    this.ServerUrl = PREVIEW_SERVER_URL;
+    this.Token = PREVIEW_TOKEN;
   }
 
   /** Joins an existing room by minting a client token. */
@@ -1268,4 +1545,16 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.errorMessage = message;
     this.ErrorOccurred.emit({ Kind: 'connect', Message: message });
   }
+}
+
+/**
+ * The room's controller, by the host's mode: in `'preview'` mode the preview room's, on the camera and microphone that
+ * `LOCAL_MEDIA_CONTROLLER_FACTORY` provides; otherwise whatever is provided above the host (LiveKit's by default). The
+ * room calls it once, when it is created, after the host's inputs are set.
+ */
+function roomControllerFactory(): () => ILiveKitRoomController {
+  const host = inject(MJLiveKitRoomComponent);
+  const localMedia = inject(LOCAL_MEDIA_CONTROLLER_FACTORY);
+  const outer = inject(LIVEKIT_ROOM_CONTROLLER_FACTORY, { skipSelf: true });
+  return () => (host.Mode === 'preview' ? new LiveKitPreviewRoomController({ LocalMedia: localMedia }) : outer());
 }

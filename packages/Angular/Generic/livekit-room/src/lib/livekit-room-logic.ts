@@ -10,7 +10,13 @@
 import type { LiveKitParticipantView, LiveKitRoomState } from '@memberjunction/livekit-room-core';
 import type { LiveKitAgentVisualState } from './components/livekit-agent-state.component';
 
-/** The participants to render on the stage (local optionally included), local first. */
+/**
+ * The participants to render on the stage (local optionally included), local first.
+ *
+ * @deprecated The room lays out through the shared media stage: use `SelectDisplayParticipants`
+ * from `@memberjunction/ai-realtime-client/media`, with each view mapped by `ToMediaParticipant` from
+ * `@memberjunction/livekit-room-core`.
+ */
 export function SelectDisplayParticipants(state: LiveKitRoomState, showSelfView: boolean): LiveKitParticipantView[] {
   const list: LiveKitParticipantView[] = [];
   if (state.Local && showSelfView) {
@@ -38,6 +44,10 @@ export function selectAllParticipants(state: LiveKitRoomState): LiveKitParticipa
 /**
  * The spotlight participant: a pin wins (when pinning is enabled), then the active speaker, then the
  * agent, then the first remote, then local.
+ *
+ * @deprecated The room lays out through the shared media stage: use `LayoutMediaStage` (its `Stage`) or
+ * `SelectSpotlight` from `@memberjunction/ai-realtime-client/media`, with each view mapped by `ToMediaParticipant` from
+ * `@memberjunction/livekit-room-core`.
  */
 export function SelectSpotlight(state: LiveKitRoomState, pinnedIdentity: string | null, enablePinning: boolean): LiveKitParticipantView | null {
   if (enablePinning && pinnedIdentity) {
@@ -62,7 +72,13 @@ export function selectSpotlight(state: LiveKitRoomState, pinnedIdentity: string 
   return SelectSpotlight(state, pinnedIdentity, enablePinning);
 }
 
-/** The non-spotlight participants for the spotlight filmstrip. */
+/**
+ * The non-spotlight participants for the spotlight filmstrip.
+ *
+ * @deprecated The room lays out through the shared media stage: use `LayoutMediaStage` (its `Others`)
+ * from `@memberjunction/ai-realtime-client/media`, with each view mapped by `ToMediaParticipant` from
+ * `@memberjunction/livekit-room-core`.
+ */
 export function SelectFilmstrip(displayParticipants: LiveKitParticipantView[], spotlight: LiveKitParticipantView | null): LiveKitParticipantView[] {
   return displayParticipants.filter((p) => p.Identity !== spotlight?.Identity);
 }
@@ -72,7 +88,13 @@ export function selectFilmstrip(displayParticipants: LiveKitParticipantView[], s
   return SelectFilmstrip(displayParticipants, spotlight);
 }
 
-/** The participant currently sharing their screen (for split view), if any. */
+/**
+ * The participant currently sharing their screen (for split view), if any.
+ *
+ * @deprecated The room lays out through the shared media stage: use `SelectScreenSharer`
+ * from `@memberjunction/ai-realtime-client/media`, with each view mapped by `ToMediaParticipant` from
+ * `@memberjunction/livekit-room-core`.
+ */
 export function SelectScreenShare(allParticipants: LiveKitParticipantView[]): LiveKitParticipantView | null {
   return allParticipants.find((p) => p.IsScreenSharing) ?? null;
 }
@@ -82,7 +104,13 @@ export function selectScreenShare(allParticipants: LiveKitParticipantView[]): Li
   return SelectScreenShare(allParticipants);
 }
 
-/** The "speaker" pane for split view: active speaker (not the sharer) → agent → first non-sharer → local. */
+/**
+ * The "speaker" pane for split view: active speaker (not the sharer) → agent → first non-sharer → local.
+ *
+ * @deprecated The room lays out through the shared media stage: use `SelectSplitSpeaker`
+ * from `@memberjunction/ai-realtime-client/media`, with each view mapped by `ToMediaParticipant` from
+ * `@memberjunction/livekit-room-core`.
+ */
 export function SelectSplitSpeaker(state: LiveKitRoomState): LiveKitParticipantView | null {
   const screenId = SelectScreenShare(SelectAllParticipants(state))?.Identity;
   const speakingId = state.ActiveSpeakerIdentities.find((id) => id !== screenId);

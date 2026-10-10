@@ -1,8 +1,8 @@
 @if (StripMode && Compact) {
-  <!-- COMPACT (Calm Orb · overlay): the lean dock — Mute + End + a first-class Captions toggle
-       (kept out of the "•••" so text stays ONE TAP in the overlay, where the banner no longer
-       carries a duplicate CC) + a "•••" that blooms a small sheet with the remaining secondary
-       actions (Details / Type). Round controls, red End — matches the mockup. -->
+  <!-- COMPACT (Calm Orb · overlay): the lean dock — a "•••" that blooms a small sheet with the secondary actions
+       (Details / Type), a first-class Captions toggle (text stays ONE TAP in the overlay), the call's media controls
+       (the microphone with its device chevron, and the camera and Share when offered) and a red End. Circles from the
+       design system. -->
   <div class="dock-lean" role="group" aria-label="Call controls">
     <div class="lean-more" [class.lean-more--open]="MoreOpen">
       <div class="lean-sheet" (click)="$event.stopPropagation()" role="menu" aria-label="More call controls">
@@ -22,108 +22,134 @@
           <small>Type</small>
         </button>
       </div>
-      <button type="button" class="lean-ctrl lean-ctrl--more" [class.lean-ctrl--on]="MoreOpen"
-              (click)="ToggleMore($event)"
-              title="More controls" aria-label="More call controls"
-              [attr.aria-expanded]="MoreOpen">
+      <button type="button" mjButton Shape="circle" [Variant]="MoreOpen ? 'primary' : 'secondary'"
+              AriaLabel="More call controls" title="More controls"
+              [attr.aria-expanded]="MoreOpen"
+              (click)="ToggleMore($event)">
         <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
       </button>
     </div>
 
     <!-- Captions: first-class in the lean dock (the overlay's only text toggle now). -->
-    <button type="button" class="lean-ctrl lean-ctrl--more" [class.lean-ctrl--on]="CaptionsOn"
-            (click)="ToggleCaptions()"
-            [title]="CaptionsOn ? 'Voice-first — back to the orb' : 'Show the conversation as text'"
-            [attr.aria-pressed]="CaptionsOn">
+    <button type="button" mjButton Shape="circle" [Toggleable]="true" [Selected]="CaptionsOn"
+            AriaLabel="Captions" [title]="CaptionsTitle"
+            (click)="ToggleCaptions()">
       <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
     </button>
 
-    <button type="button" class="lean-ctrl lean-ctrl--lg" [class.lean-ctrl--muted]="IsMuted"
-            (click)="ToggleMute()"
-            [title]="IsMuted ? 'Unmute microphone' : 'Mute microphone'"
-            [attr.aria-pressed]="IsMuted">
-      <i class="fa-solid" [ngClass]="IsMuted ? 'fa-microphone-slash' : 'fa-microphone'" aria-hidden="true"></i>
-    </button>
+    <mj-media-controls class="lean__media"
+                       Size="lg"
+                       [MicrophoneOn]="!IsMuted"
+                       [ShowCamera]="ShowCamera"
+                       [ShowShare]="ShowShare"
+                       [CameraOn]="CameraOn"
+                       [Sharing]="Sharing"
+                       [SharePanels]="SharePanels"
+                       [CameraOptional]="true"
+                       [ShowDeviceMenu]="true"
+                       [Devices]="Devices"
+                       [SelectedMicrophoneID]="SelectedMicrophoneID"
+                       [SelectedCameraID]="SelectedCameraID"
+                       (MicrophoneToggled)="ToggleMute()"
+                       (CameraToggled)="CameraToggled.emit($event)"
+                       (ShareRequested)="ShareRequested.emit($event)"
+                       (StopShareRequested)="StopShareRequested.emit()"
+                       (DeviceSelected)="DeviceSelected.emit($event)"></mj-media-controls>
 
-    <button type="button" class="lean-ctrl lean-ctrl--lg lean-ctrl--end" (click)="EndRequested.emit()"
-            title="End call" aria-label="End call">
+    <button type="button" mjButton Shape="circle" Size="lg" Variant="danger"
+            AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
       <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
     </button>
   </div>
 } @else if (StripMode) {
-  <!-- Levels 0–1: phone-call strip — big round controls, nothing to configure.
-       Captions arrives at level 1 WITH the text it controls; Details peeks at the
-       surface panels on demand; End stays the deliberate rightmost action. -->
+  <!-- Levels 0–1: phone-call strip — big labelled circles: the call's media controls (the microphone with its device
+       chevron, and the camera and Share when the call offers them), Captions (level 1+, arriving WITH the text it
+       controls), the Details peek at the surface panels, Type, and End call, the deliberate rightmost action. -->
   <div class="strip" role="group" aria-label="Call controls">
-    <div class="ctrl-group">
-      <button type="button" class="ctrl" [class.ctrl--muted]="IsMuted"
-              (click)="ToggleMute()"
-              [title]="IsMuted ? 'Unmute microphone' : 'Mute microphone'"
-              [attr.aria-pressed]="IsMuted">
-        <i class="fa-solid" [ngClass]="IsMuted ? 'fa-microphone-slash' : 'fa-microphone'" aria-hidden="true"></i>
-      </button>
-      <span class="ctrl-label">{{ IsMuted ? 'Unmute' : 'Mute' }}</span>
-    </div>
+    <mj-media-controls class="strip__media"
+                       Size="lg"
+                       [ShowLabels]="true"
+                       [MicrophoneOn]="!IsMuted"
+                       [ShowCamera]="ShowCamera"
+                       [ShowShare]="ShowShare"
+                       [CameraOn]="CameraOn"
+                       [Sharing]="Sharing"
+                       [SharePanels]="SharePanels"
+                       [CameraOptional]="true"
+                       [ShowDeviceMenu]="true"
+                       [Devices]="Devices"
+                       [SelectedMicrophoneID]="SelectedMicrophoneID"
+                       [SelectedCameraID]="SelectedCameraID"
+                       (MicrophoneToggled)="ToggleMute()"
+                       (CameraToggled)="CameraToggled.emit($event)"
+                       (ShareRequested)="ShareRequested.emit($event)"
+                       (StopShareRequested)="StopShareRequested.emit()"
+                       (DeviceSelected)="DeviceSelected.emit($event)"></mj-media-controls>
 
     <div class="ctrl-group">
-      <button type="button" class="ctrl" [class.ctrl--on]="CaptionsOn"
-              (click)="ToggleCaptions()"
-              [title]="CaptionsOn ? 'Voice-first — back to the orb' : 'Show the conversation as text'"
-              [attr.aria-pressed]="CaptionsOn">
+      <button type="button" mjButton Shape="circle" Size="lg" [Toggleable]="true" [Selected]="CaptionsOn"
+              AriaLabel="Captions" [title]="CaptionsTitle"
+              (click)="ToggleCaptions()">
         <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
       </button>
-      <span class="ctrl-label">Captions</span>
+      <span class="ctrl-label" aria-hidden="true">Captions</span>
     </div>
 
     @if (ShowDetails) {
       <div class="ctrl-group">
-        <button type="button" class="ctrl" [class.ctrl--on]="DetailsOn"
-                (click)="DetailsToggled.emit()"
-                [title]="DetailsOn ? 'Hide the session panels' : 'Peek at the session panels'"
-                [attr.aria-pressed]="DetailsOn">
+        <button type="button" mjButton Shape="circle" Size="lg" [Toggleable]="true" [Selected]="DetailsOn"
+                AriaLabel="Details" [title]="DetailsOn ? 'Hide the session panels' : 'Peek at the session panels'"
+                (click)="DetailsToggled.emit()">
           <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
         </button>
-        <span class="ctrl-label">Details</span>
+        <span class="ctrl-label" aria-hidden="true">Details</span>
       </div>
     }
 
     <div class="ctrl-group">
-      <button type="button" class="ctrl" (click)="OpenChanged.emit(true)"
-              title="Type into the live session" aria-label="Open the typed-input composer">
+      <button type="button" mjButton Shape="circle" Size="lg"
+              AriaLabel="Open the typed-input composer" title="Type into the live session"
+              (click)="OpenChanged.emit(true)">
         <i class="fa-regular fa-keyboard" aria-hidden="true"></i>
       </button>
-      <span class="ctrl-label">Type</span>
+      <span class="ctrl-label" aria-hidden="true">Type</span>
     </div>
 
     <div class="ctrl-group">
-      <button type="button" class="ctrl ctrl--end" (click)="EndRequested.emit()"
-              title="End call" aria-label="End call">
+      <button type="button" mjButton Shape="circle" Size="lg" Variant="danger"
+              AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
         <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
       </button>
-      <span class="ctrl-label ctrl-label--end">End call</span>
+      <span class="ctrl-label ctrl-label--end" aria-hidden="true">End call</span>
     </div>
   </div>
 } @else {
-  <!-- Level 2+: the fused dock — compact minis + the in-call composer in ONE bottom bar. -->
+  <!-- Level 2+: the fused dock — small circles and the in-call composer in ONE bottom bar. -->
   <div class="dock">
     <div class="dock__minis">
-      <button type="button" class="mini" [class.mini--muted]="IsMuted"
-              (click)="ToggleMute()"
-              [title]="IsMuted ? 'Unmute microphone' : 'Mute microphone'"
-              [attr.aria-pressed]="IsMuted">
-        <i class="fa-solid" [ngClass]="IsMuted ? 'fa-microphone-slash' : 'fa-microphone'" aria-hidden="true"></i>
-      </button>
-      <button type="button" class="mini" [class.mini--on]="CaptionsOn"
-              (click)="ToggleCaptions()"
-              [title]="CaptionsOn ? 'Voice-first — back to the orb' : 'Show the conversation as text'"
-              [attr.aria-pressed]="CaptionsOn">
+      <!-- No Share arrow and no device chevron in the dock, which is short of room: the browser's picker still offers
+           every kind of surface, and Hide brings back the strip, which has the device menu. -->
+      <mj-media-controls Size="sm"
+                         [MicrophoneOn]="!IsMuted"
+                         [ShowCamera]="ShowCamera"
+                         [ShowShare]="ShowShare"
+                         [ShowShareMenu]="false"
+                         [CameraOn]="CameraOn"
+                         [Sharing]="Sharing"
+                         [CameraOptional]="true"
+                         (MicrophoneToggled)="ToggleMute()"
+                         (CameraToggled)="CameraToggled.emit($event)"
+                         (ShareRequested)="ShareRequested.emit($event)"
+                         (StopShareRequested)="StopShareRequested.emit()"></mj-media-controls>
+      <button type="button" mjButton Shape="circle" Size="sm" [Toggleable]="true" [Selected]="CaptionsOn"
+              AriaLabel="Captions" [title]="CaptionsTitle"
+              (click)="ToggleCaptions()">
         <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
       </button>
       @if (ShowDetails) {
-        <button type="button" class="mini" [class.mini--on]="DetailsOn"
-                (click)="DetailsToggled.emit()"
-                [title]="DetailsOn ? 'Hide the session panels' : 'Show the session panels'"
-                [attr.aria-pressed]="DetailsOn">
+        <button type="button" mjButton Shape="circle" Size="sm" [Toggleable]="true" [Selected]="DetailsOn"
+                AriaLabel="Details" [title]="DetailsOn ? 'Hide the session panels' : 'Show the session panels'"
+                (click)="DetailsToggled.emit()">
           <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
         </button>
       }
@@ -149,13 +175,13 @@
         <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
       </button>
     </div>
-    <button type="button" class="mini dock__hide" (click)="OpenChanged.emit(false)"
-            title="Hide typing — back to the voice controls"
-            aria-label="Close the typed-input composer">
+    <button type="button" mjButton Shape="circle" Size="sm" class="dock__hide"
+            AriaLabel="Close the typed-input composer" title="Hide typing — back to the voice controls"
+            (click)="OpenChanged.emit(false)">
       <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
     </button>
-    <button type="button" class="mini mini--end" (click)="EndRequested.emit()"
-            title="End call" aria-label="End call">
+    <button type="button" mjButton Shape="circle" Size="sm" Variant="danger"
+            AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
       <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
     </button>
   </div>

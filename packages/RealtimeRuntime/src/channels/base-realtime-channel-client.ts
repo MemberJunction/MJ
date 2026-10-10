@@ -4,7 +4,14 @@ import { IsPlainObject } from '@memberjunction/global';
 import {
   CHANNEL_INBOUND_VIDEO_TRACK, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection
 } from '@memberjunction/ai';
-import { ChannelInboundVideoBridge, type BaseRealtimeClient, type IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
+import {
+  ChannelInboundVideoBridge,
+  type BaseRealtimeClient,
+  type IChannelFrameProvider,
+  type MediaPlacement,
+  type MediaVideoSource,
+  type VideoSourceState
+} from '@memberjunction/ai-realtime-client';
 import {
   CompareExposure,
   DescribeExposureLimit,
@@ -31,6 +38,9 @@ import { SynthesizeChannelDescriptor } from './channel-descriptor-synthesis';
 import { ChannelPerceptionCoalescer, DEFAULT_CHANNEL_PERCEPTION_OPTIONS, type ChannelPerceptionOptions } from './channel-perception';
 import { FormatChannelNote } from './channel-state-delta';
 import { VisualPerceptionPump, type VisualFrameReason } from './channel-visual-pump';
+import { DEFAULT_CHANNEL_SURFACE_PLACEMENT, type ChannelSurfacePlacement } from './channel-surface-placement';
+import type { RealtimeCaptureKind, RealtimeCaptureState, RealtimeCaptureStates } from '../session/realtime-captures';
+import type { RealtimeConnectionState } from '../session/RealtimeSessionRuntime';
 import type { ParsedDelegationArtifact } from '../session/delegation-result-parser';
 
 /**
@@ -98,7 +108,7 @@ export interface RealtimeChannelContext {
 
   /**
    * Requests (or releases) the FOCUS layout for this channel's surface: the overlay
-   * collapses the main call column so the surface owns the screen, with a compact floating
+   * collapses the main call column and fills its stage with the surface, with a compact floating
    * call pill keeping mute / thread / end reachable. Any channel may request it; the host
    * tracks which channel holds focus and routes the pill's "exit" back to it via
    * {@link BaseRealtimeChannelClient.RequestFocusExit}.
@@ -214,10 +224,17 @@ export interface RealtimeChannelContext {
   SessionEvents$?: Observable<RealtimeSessionStreamEvent>;
 
   /**
-   * OPTIONAL — sends a visual frame into the live session's inbound video track
-   * (e.g. from Whiteboard or Remote Browser video bridges). No-op when the session
-   * has not established an inbound video track or is not live.
+   * OPTIONAL — sends a visual frame into the live session's inbound video track, as this channel's source at the
+   * session's `VideoSourceArbiter` (the id its own frame bridge uses, {@link ChannelVideoSourceID}). The frame reaches
+   * the model only while the arbiter picks this channel, and the model is told when that changes; nothing is sent while
+   * the channel's exposure is below `pixels`. No-op when the session has not established an inbound video track or is
+   * not live.
    *
+   * @deprecated Use a `ChannelInboundVideoBridge` (`@memberjunction/ai-realtime-client`), or
+   *   {@link BaseRealtimeChannelClient.EnableVisualPerception}, which runs one for the channel: the bridge lists the
+   *   source before its first frame, removes it when stopped, and says whether each frame was sent. The context's
+   *   {@link Client} still bypasses the arbiter: a frame sent with its own `SendVideoFrame` overrides the source the
+   *   arbiter picked, and the model is not told.
    * @param base64Image The image data (base64-encoded JPEG/PNG).
    * @param mimeType The image MIME type (defaults to 'image/jpeg').
    */
@@ -229,9 +246,55 @@ export interface RealtimeChannelContext {
   IsTrackEstablished?(modality: string, direction: RealtimeTrackDirection): boolean;
 
   /**
-   * OPTIONAL — the underlying {@link BaseRealtimeClient} driving the media and transport planes.
+   * OPTIONAL — the underlying {@link BaseRealtimeClient} driving the media and transport planes. Send video through a
+   * `ChannelInboundVideoBridge` over it, not through its own `SendVideoFrame`, which bypasses the session's
+   * `VideoSourceArbiter`.
    */
   Client?: BaseRealtimeClient | null;
+
+  /**
+   * OPTIONAL — the session's camera and screen share, now and on every change (the runtime's `Captures$`). A channel that
+   * fronts a capture ({@link BaseRealtimeChannelClient.CaptureKind}) follows it here.
+   */
+  Captures$?: Observable<RealtimeCaptureStates>;
+
+  /**
+   * OPTIONAL — starts the camera or a screen share for the user's click on the channel's surface: the runtime's
+   * `StartCamera` or `StartScreenShare`, under the same policy. Resolves with the capture's state; a failure is a state,
+   * never a throw.
+   */
+  StartCapture?(kind: RealtimeCaptureKind): Promise<RealtimeCaptureState>;
+
+  /** OPTIONAL — stops the camera or the screen share (the runtime's `StopCamera` / `StopScreenShare`). */
+  StopCapture?(kind: RealtimeCaptureKind): void;
+
+  /**
+   * OPTIONAL — the session's video sources, now and on every change (the runtime's `VideoSources$`): each source the
+   * video source arbiter knows, whether it is on (`Enabled`) and whether the model is being sent its frames (`Active`).
+   * On a model that takes one video stream, a capture that is on can still be one the model is not sent. A channel that
+   * fronts a capture finds its source by `REALTIME_CAPTURE_SOURCE_IDS`, and says the agent sees the capture only while
+   * that source is both.
+   */
+  VideoSources$?: Observable<readonly VideoSourceState[]>;
+
+  /**
+   * OPTIONAL — the agent's video while the model sends it, `null` otherwise (the runtime's `AgentVideo$`). A channel that
+   * shows the agent, one that sinks outbound video ({@link BaseRealtimeChannelClient.GetSunkTracks}), follows it here.
+   */
+  AgentVideo$?: Observable<MediaVideoSource | null>;
+
+  /**
+   * OPTIONAL — the call's state, now and on every change (the runtime's `ConnectionState$`): connecting, listening,
+   * speaking, thinking, an error, or closed. A channel that shows the agent follows the agent's turn here.
+   */
+  ConnectionState$?: Observable<RealtimeConnectionState>;
+
+  /**
+   * OPTIONAL — whether the call is resuming on a new provider connection mid-call, now and on every change (the runtime's
+   * `Resuming$`). The agent's video can stop for a few seconds while it does, so a channel that shows the agent holds the
+   * last frame through the gap rather than showing that the video has stalled.
+   */
+  Resuming$?: Observable<boolean>;
 }
 
 /**
@@ -288,10 +351,13 @@ export interface ChannelOnboardingDetails {
  *
  * ### Lifecycle — ONE INSTANCE PER SESSION (not a singleton)
  * `ClassFactory.CreateInstance` → {@link Initialize}(ctx) → zero or more
- * {@link BindSurface}/{@link UnbindSurface} cycles (the surface pane is created/destroyed
- * with the overlay's tab panel, e.g. collapse/expand) → {@link Dispose} at teardown.
+ * {@link BindSurface}/{@link UnbindSurface} cycles (the Angular overlay creates the surface the
+ * first time it is shown and keeps it until the channel leaves the session; another host may
+ * recreate it), each telling the plugin when its surface goes in and out of sight
+ * ({@link OnSurfaceVisibilityChange}) and where it is placed ({@link OnSurfacePlacementChange})
+ * → {@link Dispose} at teardown.
  * {@link ApplyAgentTool} MUST work with NO surface bound (apply to the state engine
- * directly; skip the UI garnish) — tool calls can arrive while the panel is collapsed.
+ * directly; skip the UI garnish) — tool calls can arrive before the surface is first shown.
  *
  * @typeParam TSurface The plugin's Angular surface component type. The host only ever
  *   sees the default (`object`) — the typed parameter exists so concrete plugins get a
@@ -360,8 +426,8 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    * Executes ONE agent tool call locally (the ACTION direction) and returns the result
    * JSON string fed back to the model as the `tool_response`. Called for every tool whose
    * name starts with {@link ToolNamePrefix}. Must work both WITH a bound surface (apply +
-   * UI garnish) and WITHOUT one (apply to the state engine directly — the tab pane may not
-   * exist, e.g. the surface panel is collapsed). Should not throw: return a
+   * UI garnish) and WITHOUT one (apply to the state engine directly — the surface may not
+   * exist yet, e.g. it has not been shown). Should not throw: return a
    * `{ success: false, error }` payload so the model can narrate the failure (the host
    * additionally wraps anything thrown).
    *
@@ -434,20 +500,80 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    * The plugin — which knows its own component type — sets inputs (state engine, agent
    * name, …) and subscribes outputs here, wiring perception/garnish flows back through
    * {@link Context}. May be called again with a NEW instance after an
-   * {@link UnbindSurface} (the pane is destroyed/recreated with the tab panel).
+   * {@link UnbindSurface} (the host recreated the surface).
    */
   public BindSurface(_instance: TSurface): void {
     // default: a channel with no surface has nothing to bind
   }
 
   /**
-   * Called by the host when the surface component is being destroyed (tab panel
-   * collapsed / overlay torn down). Drop the instance reference and unsubscribe any
+   * Called by the host when the surface component is being destroyed (the channel left
+   * the session / the overlay was torn down). Drop the instance reference and unsubscribe any
    * output subscriptions — after this, {@link ApplyAgentTool} runs in its no-surface
    * mode. Default: no-op.
    */
   public UnbindSurface(): void {
     // default: nothing to release
+  }
+
+  /**
+   * Called by the host when the bound surface comes into sight or goes out of it (the panel collapsed or hidden,
+   * another tab active, the call minimized). The surface stays bound and keeps its state; a channel can pause work
+   * nobody sees, such as a screenshot poll, and resume it when the surface is shown again. The host calls it right
+   * after {@link BindSurface} with the surface's current visibility, then on every change, and not after
+   * {@link UnbindSurface}. Default: no-op, so a surface keeps running out of sight.
+   */
+  public OnSurfaceVisibilityChange(_visible: boolean): void {
+    // default: nothing to pause
+  }
+
+  /**
+   * Called by the host when the bound surface moves: to the stage (it fills the call), to its tab, or out of sight
+   * because the user hid it. A channel can adapt its own chrome, such as a "Move to stage" button that has nothing to
+   * do once the surface is on the stage. Called right after {@link BindSurface} with the current placement, then on
+   * every move, and not after {@link UnbindSurface}. Default: no-op.
+   */
+  public OnSurfacePlacementChange(_placement: MediaPlacement): void {
+    // default: a surface looks the same wherever it is placed
+  }
+
+  private surfacePlacement: ChannelSurfacePlacement = DEFAULT_CHANNEL_SURFACE_PLACEMENT;
+
+  /**
+   * Where this channel's surface shows when a call starts, and where the user may move it: from the channel's registry
+   * row (`UIConfig.Placement` and `UIConfig.AllowedPlacements`). A channel without a row, or whose row says nothing,
+   * starts on its tab and can go anywhere.
+   */
+  public get SurfacePlacement(): ChannelSurfacePlacement {
+    return this.surfacePlacement;
+  }
+
+  /**
+   * Sets {@link SurfacePlacement}. The runtime calls it with the registry row's placement when it builds the channel, before
+   * the channel mounts, as it applies exposure policy with {@link ApplyExposure}.
+   */
+  public ApplySurfacePlacement(placement: ChannelSurfacePlacement): void {
+    this.surfacePlacement = placement;
+  }
+
+  /**
+   * Whether the user may share this channel's surface on its own: a host that offers it lists the surface, named by
+   * {@link TabTitle} with {@link TabIcon}, under "This panel" in its Share menu while the surface is on screen, and the
+   * share then shows only that surface. Default `false`, so a channel opts in with this getter. A surface that shows the
+   * agent its own call (the camera, the screen share, the agent's video) never should.
+   */
+  public get SurfaceShareable(): boolean {
+    return false;
+  }
+
+  /**
+   * The runtime capture this channel fronts (`'camera'` or `'screen'`), or `null`. Such a channel is the capture's policy:
+   * the runtime starts the capture only while the channel is in the session and the session's policy lets the agent see
+   * pixels through it, and the user's "agent can see" choice for the channel decides whether the capture's frames reach
+   * the model. Default `null`.
+   */
+  public get CaptureKind(): RealtimeCaptureKind | null {
+    return null;
   }
 
   /**
@@ -574,9 +700,22 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
   /**
    * Media tracks this client channel can SINK — samples flowing from the model OUT.
    * Default `[]`.
+   *
+   * The session requests them when it connects, so the driver establishes the ones the model supports. A channel that
+   * sinks outbound video shows the agent's video: it follows {@link RealtimeChannelContext.AgentVideo$}, and counts as
+   * used once the video arrives, so the host shows its surface.
    */
   public GetSunkTracks(): readonly RealtimeTrackDescriptor[] {
     return [];
+  }
+
+  /**
+   * Whether this channel shows the agent's video: it sinks outbound video ({@link GetSunkTracks}). The runtime marks it
+   * as used when the video arrives, and a host presents its surface as the agent (the call overlay puts it in the agent's
+   * place in the call rather than in the focus layout).
+   */
+  public get ShowsAgentVideo(): boolean {
+    return this.GetSunkTracks().some((t) => t.Direction === 'outbound' && String(t.Modality).trim().toLowerCase() === 'video');
   }
 
   // ── Contract v2: descriptor, state, verbs, events, open/complete ───────────
@@ -1173,7 +1312,7 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
       // which one the model sees and tells it. The id and label are how the "agent can see" UI names it.
       const descriptor = this.GetDescriptor();
       this.VisualVideoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this.visualFrameProvider, {
-        SourceID: `${descriptor.Key}#${this.InstanceId}`,
+        SourceID: ChannelVideoSourceID(descriptor.Key, this.InstanceId),
         Label: descriptor.DisplayName,
         Kind: 'surface',
         ChannelKey: descriptor.Key,
@@ -1264,6 +1403,18 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
 
 /** The primary instance id of a single-instance channel. */
 const PRIMARY_CHANNEL_INSTANCE_ID = '1';
+
+/**
+ * The id of a channel's video source at the session's `VideoSourceArbiter`: `<channel key>#<instance id>`. The channel's
+ * own frame bridge and the runtime's {@link RealtimeChannelContext.SendVideoFrame} register under it, so a channel is
+ * one source however it sends, and the "agent can see" control lists it once.
+ *
+ * @param channelKey The channel's descriptor key.
+ * @param instanceId The channel instance.
+ */
+export function ChannelVideoSourceID(channelKey: string, instanceId: string): string {
+  return `${channelKey}#${instanceId}`;
+}
 
 /**
  * Settings for {@link BaseRealtimeChannelClient.ApplyExposure}.

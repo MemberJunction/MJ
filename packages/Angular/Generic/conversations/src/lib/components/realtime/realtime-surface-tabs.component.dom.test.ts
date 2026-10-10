@@ -1,7 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
-import { renderComponentFixture } from '@memberjunction/ng-test-utils';
-import { RealtimeSurfaceTabsComponent } from './realtime-surface-tabs.component';
+import type { RealtimeToolDefinition } from '@memberjunction/ai';
+import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
+import { renderComponentFixture, query, queryAll, click, capture, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
+import { RealtimeSurfaceTabsComponent, type RealtimeChannelSlot } from './realtime-surface-tabs.component';
+import type { MediaMoveRequest } from '@memberjunction/ng-realtime-media';
 import { RealtimeSurfaceTabsModel } from './realtime-surface-tabs.model';
 import type { RealtimeSessionState } from './realtime-session-state';
 
@@ -86,5 +89,197 @@ describe('RealtimeSurfaceTabsComponent: ActiveChannelChange (DOM)', () => {
     f.componentInstance.Model.SetShowActivityTab(true);
     await settle(f);
     expect(seen).not.toHaveBeenCalled();
+  });
+});
+
+/** A channel plugin with a name and nothing else (no surface is created here: the overlay's stage creates it). */
+class TestChannel extends BaseRealtimeChannelClient {
+  public constructor(private readonly name: string) {
+    super();
+  }
+  public get ChannelName(): string { return this.name; }
+  public get ToolNamePrefix(): string { return `${this.name}_`; }
+  public get TabTitle(): string { return this.name; }
+  public get TabIcon(): string { return 'fa-solid fa-cube'; }
+  public GetToolDefinitions(): RealtimeToolDefinition[] { return []; }
+  public ApplyAgentTool(): string { return '{}'; }
+}
+
+/**
+ * DOM spec for the slot a plugin channel's pane keeps for its surface, which lives on the overlay's stage: the panel
+ * reports the active channel tab's slot (`ChannelSlotChange`) so the stage can lay the surface over it. Real template;
+ * only plugin channel tabs are registered, so the Activity rail and artifact viewers never render.
+ */
+describe('RealtimeSurfaceTabsComponent: ChannelSlotChange (DOM)', () => {
+  const render = () => renderComponentFixture(RealtimeSurfaceTabsComponent, { inputs: { State: {} as RealtimeSessionState } });
+
+  /** Lets the deferred tab registration land, renders, then lets the deferred slot report land. */
+  const settle = async (f: ReturnType<typeof render>): Promise<void> => {
+    await f.whenStable();
+    f.detectChanges();
+    await Promise.resolve();
+  };
+
+  const watch = (f: ReturnType<typeof render>): Array<RealtimeChannelSlot | null> => {
+    const reported: Array<RealtimeChannelSlot | null> = [];
+    f.componentInstance.ChannelSlotChange.subscribe((slot) => reported.push(slot));
+    return reported;
+  };
+
+  const register = (f: ReturnType<typeof render>, name: string, focus = false) =>
+    f.componentInstance.RegisterChannelTab({ Key: name, Title: name, Icon: 'fa-solid fa-cube', Focus: focus, Plugin: new TestChannel(name) });
+
+  it("reports the active channel tab's slot, inside its displayed pane, and null when another tab takes focus", async () => {
+    const f = render();
+    const reported = watch(f);
+    register(f, 'Whiteboard', true);
+    f.componentInstance.RegisterChannelTab({ Key: 'Recording', Title: 'Recording', Icon: 'fa-solid fa-play' });
+    await settle(f);
+    expect(reported.map((slot) => slot?.Key ?? null)).toEqual(['Whiteboard']);
+    const slot = reported[0];
+    expect(slot?.Element).toBe(query(f, '.s-pane__slot[data-channel-key="Whiteboard"]'));
+    expect(slot?.Element.closest('.s-pane')?.classList.contains('s-pane--active')).toBe(true);
+
+    f.componentInstance.Model.Focus('Recording');
+    await settle(f);
+    expect(reported.map((s) => s?.Key ?? null)).toEqual(['Whiteboard', null]);
+  });
+
+  it('follows focus from one channel to another, reporting each slot once', async () => {
+    const f = render();
+    const reported = watch(f);
+    register(f, 'Whiteboard', true);
+    register(f, 'Media');
+    await settle(f);
+    f.componentInstance.Model.Focus('Media');
+    await settle(f);
+    expect(reported.map((s) => s?.Key ?? null)).toEqual(['Whiteboard', 'Media']);
+    expect(reported[1]?.Element).toBe(query(f, '.s-pane__slot[data-channel-key="Media"]'));
+  });
+
+  it('reports null while the panel is collapsed, and a fresh slot when it expands again', async () => {
+    const f = render();
+    const reported = watch(f);
+    register(f, 'Whiteboard', true);
+    await settle(f);
+    const before = reported[0]?.Element;
+    click(f, '.surface__toggle');
+    await settle(f);
+    expect(reported[1]).toBeNull();
+    click(f, '.surface__toggle');
+    await settle(f);
+    expect(reported.map((s) => s?.Key ?? null)).toEqual(['Whiteboard', null, 'Whiteboard']);
+    expect(reported[2]?.Element).not.toBe(before);
+    expect(reported[2]?.Element.isConnected).toBe(true);
+  });
+
+  it('keeps no slot for a channel tab without a plugin', async () => {
+    const f = render();
+    const reported = watch(f);
+    f.componentInstance.RegisterChannelTab({ Key: 'Recording', Title: 'Recording', Icon: 'fa-solid fa-play', Focus: true });
+    await settle(f);
+    expect(query(f, '.s-pane__slot')).toBeNull();
+    expect(reported).toEqual([]);
+  });
+});
+
+/**
+ * DOM spec for moving a channel's surface from the panel: "Move to…" sits beside the active channel tab, and a channel
+ * whose surface is elsewhere says where in its pane and offers it back. Real template; only plugin channel tabs.
+ */
+describe('RealtimeSurfaceTabsComponent: moving surfaces (DOM)', () => {
+  afterEach(() => clearOverlayContainers());
+
+  type Placement = 'stage' | 'pip' | 'tab' | 'hidden';
+  const render = (placements: ReadonlyMap<string, Placement> = new Map(), allowed: ReadonlyMap<string, readonly Placement[]> = new Map()) =>
+    renderComponentFixture(RealtimeSurfaceTabsComponent, {
+      inputs: { State: {} as RealtimeSessionState, SurfacePlacements: placements, AllowedPlacements: allowed },
+    });
+
+  const settle = async (f: ReturnType<typeof render>): Promise<void> => {
+    await f.whenStable();
+    f.detectChanges();
+    await Promise.resolve();
+  };
+
+  const register = (f: ReturnType<typeof render>, name: string, focus = false) =>
+    f.componentInstance.RegisterChannelTab({ Key: name, Title: name, Icon: 'fa-solid fa-cube', Focus: focus, Plugin: new TestChannel(name) });
+
+  it('offers "Move to…" beside the active channel tab only', async () => {
+    const f = render();
+    register(f, 'Whiteboard', true);
+    register(f, 'Media');
+    await settle(f);
+    expect(queryAll(f, 'mj-media-move-menu')).toHaveLength(1);
+    expect(query(f, '.s-tab--active + mj-media-move-menu')).not.toBeNull();
+    f.componentInstance.Model.Focus('Media');
+    await settle(f);
+    expect(query(f, '.s-tab--active + mj-media-move-menu button')?.getAttribute('aria-label')).toBe('Move Media');
+  });
+
+  it('passes on the move chosen in the menu', async () => {
+    const f = render();
+    const moves: MediaMoveRequest[] = capture(f.componentInstance.MoveRequested);
+    register(f, 'Whiteboard', true);
+    await settle(f);
+    (query(f, 'mj-media-move-menu button') as HTMLButtonElement).click();
+    f.detectChanges();
+    (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((item) => item.textContent?.trim() === 'Hide')?.click();
+    expect(moves).toEqual([{ Key: 'Whiteboard', Placement: 'hidden' }]);
+  });
+
+  it('says where a moved surface is, keeps no slot for it, and brings it back', async () => {
+    const f = render(new Map([['Whiteboard', 'hidden']]));
+    const moves: MediaMoveRequest[] = capture(f.componentInstance.MoveRequested);
+    const slots: Array<RealtimeChannelSlot | null> = capture(f.componentInstance.ChannelSlotChange);
+    register(f, 'Whiteboard', true);
+    await settle(f);
+    expect(query(f, '.s-pane__away span')?.textContent?.trim()).toBe('Whiteboard is hidden.');
+    expect(query(f, '.s-pane__slot')).toBeNull();
+    expect(slots).toEqual([]);
+    click(f, '.s-pane__away button');
+    expect(moves).toEqual([{ Key: 'Whiteboard', Placement: 'tab' }]);
+  });
+
+  it('offers only the placements the channel allows: no "Bring it here" without the tab, and a menu without it', async () => {
+    const f = render(new Map([['Camera', 'pip']]), new Map([['Camera', ['pip', 'hidden'] as const]]));
+    register(f, 'Camera', true);
+    await settle(f);
+    expect(query(f, '.s-pane__away span')?.textContent?.trim()).toBe('Camera is in picture-in-picture.');
+    expect(query(f, '.s-pane__away button')).toBeNull();
+    (query(f, 'mj-media-move-menu button') as HTMLButtonElement).click();
+    f.detectChanges();
+    const items = (overlayQueryAll('mj-menu-item') as HTMLElement[]).map((item) => item.textContent?.trim());
+    expect(items).toEqual(['Picture-in-picture', 'Hide', 'Reset layout']);
+  });
+});
+
+/**
+ * DOM spec for the panel's collapsed state as its host binds it (#5433): a host that creates the panel again starts it
+ * as the user left the one before, and hears only what the user changes. Real template; a channel tab with no plugin.
+ */
+describe('RealtimeSurfaceTabsComponent: Collapsed (DOM)', () => {
+  const render = (collapsed: boolean) =>
+    renderComponentFixture(RealtimeSurfaceTabsComponent, { inputs: { State: {} as RealtimeSessionState, Collapsed: collapsed } });
+
+  const settle = async (f: ReturnType<typeof render>): Promise<void> => {
+    await f.whenStable();
+    f.detectChanges();
+  };
+
+  it('starts collapsed to its strip when its host says so, then reports the user expanding it, wide on its channel tab', async () => {
+    const f = render(true);
+    const collapsedChanges: boolean[] = capture(f.componentInstance.CollapsedChange);
+    const wideChanges: boolean[] = capture(f.componentInstance.WideChanged);
+    f.componentInstance.RegisterChannelTab({ Key: 'Whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard', Focus: true });
+    await settle(f);
+    expect(query(f, '.surface__strip')).not.toBeNull();
+    expect(query(f, '.surface-tabs')).toBeNull();
+    expect([collapsedChanges, wideChanges]).toEqual([[], []]);
+
+    click(f, '.surface__toggle');
+    await settle(f);
+    expect(query(f, '.surface-tabs .s-tab--active')?.getAttribute('title')).toBe('Whiteboard');
+    expect([collapsedChanges, wideChanges]).toEqual([[false], [true]]);
   });
 });

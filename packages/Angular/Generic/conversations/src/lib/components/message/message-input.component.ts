@@ -48,6 +48,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeAgentPick } from '../realtime/realtime-agent-picker.component';
+import { ConversationCallStartOptions } from '../realtime/capture/realtime-capture-channel';
 import {
   BuildRealtimeConfigOverridesJson,
   FilterRealtimeCoAgents,
@@ -1444,7 +1445,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.ShowRealtimeAgentPicker = true;
   }
 
-  /** User confirmed an agent (+ optional co-agent / voice model) in the voice picker — start the call. */
+  /** User confirmed an agent (+ optional co-agent / voice model / voice and its avatar) in the voice picker — start the call. */
   public async OnRealtimeAgentPicked(pick: RealtimeAgentPick): Promise<void> {
     this.ShowRealtimeAgentPicker = false;
     this.persistCoAgentChoice(pick.CoAgentId);
@@ -1453,7 +1454,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       pick.Agent.Name || this.resolveRealtimeAgentName(),
       pick.PreferredModelId,
       pick.CoAgentId,
-      BuildRealtimeConfigOverridesJson(pick.PreferredModelId, pick.PreferredVoice),
+      BuildRealtimeConfigOverridesJson(pick.PreferredModelId, pick.PreferredVoice, pick.PreferredAvatarId),
       pick.RecordingConsent
     );
   }
@@ -1564,7 +1565,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // user is, what they see, capability manifest) — drives the server-side app cascade + the
         // mint-time prompt injection, and seeds the ClientContextChannel's streaming.
         this.ApplicationId,
-        this.AppContext as AppContextSnapshot | null
+        this.AppContext as AppContextSnapshot | null,
+        // The channels this UI brings to its calls (the camera and screen share).
+        ConversationCallStartOptions()
       );
     } catch (error) {
       console.error('Failed to start voice session:', error);

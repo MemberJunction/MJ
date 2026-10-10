@@ -9,10 +9,23 @@ import {
     RegisterForStartup,
 } from '@memberjunction/core';
 import { performance } from 'node:perf_hooks';
+import { hostname } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { BaseSingleton, MJGlobal, EscapeSQLString } from '@memberjunction/global';
 import {
+    Fmp4AudioSeconds,
+    InboundVideoRateOf,
+    InboundVideoStreamsOf,
     IRealtimeSession,
+    IsAgentParticipantIdentity,
+    ReadFmp4Init,
+    RealtimeMediaKind,
     RealtimeTranscript,
+    UnnamedVideoSourceLabel,
+    VideoSourceEndedNote,
+    VideoSourceSeenNote,
+    type Fmp4Init,
+    type RealtimeVideoFrame,
 } from '@memberjunction/ai';
 import {
     MJAIBridgeProviderEntity,
@@ -26,10 +39,12 @@ import {
     AIBridgeEngineBase,
     BaseRealtimeBridge,
     BaseTelephonyBridge,
+    BridgeAvatarFailure,
     BridgeMediaFrame,
     BridgeMediaTrackKind,
     BridgeParticipantInfo,
     BridgeDisconnectReason,
+    BridgeVideoSourceEnd,
     RealtimeBridgeContext,
     TurnTakingPolicy,
     TurnTakingPolicyConfig,
@@ -52,7 +67,7 @@ import {
     TurnAddressingMode,
 } from '@memberjunction/ai-bridge-base';
 import { MultiAgentRoomCoordinator, RoomCoordinatorLimits, RoomFloorState } from './multi-agent-room-coordinator';
-import { FullDuplexTurnGate, HumanSpeechDetector, OutputVerdict } from './full-duplex-turn-gate';
+import { FullDuplexTurnGate, HumanSpeechDetector, OutputGateResult, OutputVerdict } from './full-duplex-turn-gate';
 import { DtmfCoalescer } from './dtmf-coalescer';
 import { AppendTranscriptTurn, BridgeTranscriptTurn, BuildPriorTranscript } from './bridge-prior-transcript';
 
@@ -241,38 +256,57 @@ export interface TurnModeratorContext {
  */
 export type TurnModerator = (ctx: TurnModeratorContext) => Promise<string[]>;
 
+/** What follows an instance's prefix in a `HostInstanceID`: a process id, then a boot id. */
+const PID_AND_BOOT_ID = /^\d+:[^:]+$/;
+
 /**
- * The host-instance identity provider the engine uses to stamp `HostInstanceID` for node affinity
- * and orphan reconciliation. Mirrors `@memberjunction/server`'s `HostInstance` helper but is
- * **injected** so this server-tier engine has no hard dependency on MJServer (which would create a
- * layering inversion) and so tests can supply a deterministic identity.
+ * The identity of the server instance that hosts this engine, and of its current boot. The engine stamps
+ * {@link IHostInstanceIdentity.GetHostInstanceID} into the `HostInstanceID` of every `MJ: AI Agent Session Bridges`
+ * row it creates, and its orphan reconcile ({@link AIBridgeEngine.ReconcileOrphans}) closes the rows that
+ * {@link IHostInstanceIdentity.IsPriorBoot} says an earlier boot of this instance left.
+ *
+ * An instance must be something only one live process can be at a time, so that a row stamped by another boot of it
+ * was left by a process that has ended. MJServer's instance is a host and the port it serves on; it injects the
+ * identity its `MJ: AI Agent Sessions` rows carry (`hostname:port:pid:bootId`). The identity is **injected**
+ * ({@link AIBridgeEngine.SetHostInstanceIdentity}) so this server-tier engine has no dependency on MJServer (a
+ * layering inversion) and tests can supply a fixed one; a {@link DefaultHostInstanceIdentity} applies until then.
  *
  * @see `/plans/realtime/realtime-bridges-architecture.md` §10 (host affinity + janitor).
  */
 export interface IHostInstanceIdentity {
-    /** Returns this process's stable host-instance identity (`hostname:pid:bootId`). */
+    /** This boot's id, stamped into the `HostInstanceID` of the bridge rows it creates. */
     GetHostInstanceID(): string;
 
-    /** Returns the host-name prefix (`hostname:`) matching ANY boot of this OS host. */
-    GetHostNamePrefix(): string;
+    /**
+     * The prefix every boot of this instance stamps and no other instance's id starts with. The reconcile reads the
+     * open bridge rows under it (a SQL `LIKE`), then asks {@link IHostInstanceIdentity.IsPriorBoot} about each one.
+     */
+    GetInstancePrefix(): string;
+
+    /**
+     * Whether a `HostInstanceID` was stamped by another boot of this instance, a process that has ended. False for
+     * this boot's id, for any other instance's, and for null. The reconcile closes a row only when this is true, so
+     * the check must be exact: a SQL `LIKE` reads a `_` in a host name as any character.
+     *
+     * @param hostInstanceID A bridge row's `HostInstanceID`.
+     */
+    IsPriorBoot(hostInstanceID: string | null | undefined): boolean;
 }
 
 /**
- * A default {@link IHostInstanceIdentity} for standalone use (and a sane fallback when the host
- * application does not inject one). Generates a stable `unknown-host:pid:bootId` identity at module
- * load. Production hosts (MJServer) inject the real `HostInstance` helper so the janitor's host
- * affinity matches across the whole deployment.
+ * The {@link IHostInstanceIdentity} the engine uses until the host injects one: this process alone, on this host.
+ * Its id is `hostname:pid-<pid>:<pid>:<bootId>`, the shape MJServer gives a process that serves no port, so
+ * {@link DefaultHostInstanceIdentity.IsPriorBoot} matches only an earlier process that had this pid on this host,
+ * which has ended. It never matches another live process's bridges. A host whose instance outlives a restart (MJServer:
+ * a host and a port) injects its own identity, so that its reconcile closes what an earlier boot left.
  */
 export class DefaultHostInstanceIdentity implements IHostInstanceIdentity {
-    private readonly hostName: string;
+    private readonly instancePrefix: string;
     private readonly instanceId: string;
 
     constructor() {
-        const pid = typeof process !== 'undefined' && process.pid ? process.pid : 0;
-        // A cheap, dependency-free random boot id; good enough for the fallback path.
-        const bootId = Math.random().toString(36).slice(2) + Date.now().toString(36);
-        this.hostName = 'unknown-host';
-        this.instanceId = `${this.hostName}:${pid}:${bootId}`;
+        this.instancePrefix = `${hostname()}:pid-${process.pid}:`;
+        this.instanceId = `${this.instancePrefix}${process.pid}:${randomUUID()}`;
     }
 
     /** @inheritdoc */
@@ -281,8 +315,17 @@ export class DefaultHostInstanceIdentity implements IHostInstanceIdentity {
     }
 
     /** @inheritdoc */
-    public GetHostNamePrefix(): string {
-        return `${this.hostName}:`;
+    public GetInstancePrefix(): string {
+        return this.instancePrefix;
+    }
+
+    /** @inheritdoc */
+    public IsPriorBoot(hostInstanceID: string | null | undefined): boolean {
+        if (!hostInstanceID || hostInstanceID === this.instanceId) {
+            return false;
+        }
+        const prefix = this.instancePrefix;
+        return hostInstanceID.startsWith(prefix) && PID_AND_BOOT_ID.test(hostInstanceID.slice(prefix.length));
     }
 }
 
@@ -450,6 +493,15 @@ export interface StartBridgeSessionParams {
      * the returned session MUST use the same audio sample rates as the one it replaces.
      */
     RecoverRealtimeSession?: BridgeRealtimeSessionRecovery;
+
+    /**
+     * Re-opens the model session WITHOUT its avatar, seeded with the conversation so far, when the bridge reports it can
+     * no longer show the avatar ({@link BaseRealtimeBridge.OnAvatarUnavailable}: its decoders kept failing, or the room
+     * refused the video track). The replacement renders audio only, so the model stops generating video nobody sees.
+     * Called at most once per session, apart from {@link RecoverRealtimeSession}'s attempts. When absent, the session goes
+     * on as it is (audio still plays; the avatar's video is generated and not shown).
+     */
+    RecoverRealtimeSessionWithoutAvatar?: BridgeRealtimeSessionRecovery;
 
     /**
      * Called once at the end of {@link AIBridgeEngine.StopBridgeSession} for this session, after the bridge row is
@@ -623,6 +675,14 @@ export interface ActiveBridgeSession {
      */
     LastInboundSpeaker?: string;
 
+    /**
+     * The camera and screen sources whose frames reached the current model session (`SourceID` → the label the model was
+     * given). A source not in it is new to the model, which is told what it can now see before its first frame; when one
+     * in it ends, the model is told, by that label, that it can no longer see it (and only about sources it actually saw).
+     * Cleared when a recovered session replaces the model.
+     */
+    SeenVideoSources: Map<string, string>;
+
     /** This agent's participation style for the room moderator (`'proactive'` | `'addressed-only'`). */
     ParticipationMode: 'proactive' | 'addressed-only';
 
@@ -676,6 +736,18 @@ export interface ActiveBridgeSession {
     /** Model-session recovery factory (see {@link StartBridgeSessionParams.RecoverRealtimeSession}). */
     RecoverRealtimeSession?: BridgeRealtimeSessionRecovery;
 
+    /** The audio-only replacement factory (see {@link StartBridgeSessionParams.RecoverRealtimeSessionWithoutAvatar}). */
+    RecoverRealtimeSessionWithoutAvatar?: BridgeRealtimeSessionRecovery;
+
+    /** Whether the model session was already replaced because its avatar could not be shown (once per session). */
+    AvatarReplaced?: boolean;
+
+    /**
+     * The avatar stream's latest init segment, read: its audio track's timescale lets the floor gate count an avatar
+     * piece's speaking time. Every stream (a turn, a resumed or replaced model session) opens with its own init.
+     */
+    AvatarInit?: Fmp4Init | null;
+
     /** End-of-session hook (see {@link StartBridgeSessionParams.OnSessionEnded}). */
     OnSessionEnded?: (reason: BridgeDisconnectReason) => void | Promise<void>;
 
@@ -724,8 +796,8 @@ export interface ActiveBridgeSession {
  *   `AIAgentSessionBridgeParticipant` rows.
  * - **Turn-taking integration** — holds a {@link TurnTakingPolicy} per session and feeds diarized
  *   transcript segments through it, acting on the decision (Speak / PostToChat / Silent).
- * - **Janitor scaffold** — {@link ReconcileOrphans} force-closes Connected bridges left by a dead
- *   host, following the `SessionJanitor` shape.
+ * - **Janitor scaffold** — {@link ReconcileOrphans} force-closes Connected bridges left by an earlier
+ *   boot of this instance (see {@link IHostInstanceIdentity}), following the `SessionJanitor` shape.
  *
  * The engine never constructs the realtime model: the {@link IRealtimeSession} is injected via
  * {@link StartBridgeSessionParams}, keeping the only coupling the transport seam itself and making
@@ -759,9 +831,13 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
     /** roomKey (lowercased) → the bridge id of that room's current transcript scribe. Election dedup. */
     private readonly roomScribes = new Map<string, string>();
-    /** Diagnostic: session ids that have already logged their first inbound / outbound media frame. */
-    private diagInbound = new Set<string>();
-    private diagOutbound = new Set<string>();
+    /**
+     * Diagnostic: the bridges (by `SessionBridgeID`) that have logged their first inbound media frame. An ending bridge
+     * adds no id, and {@link StopBridgeSession} drops its id, so a long-running host keeps only its live bridges.
+     */
+    private readonly diagInbound = new Set<string>();
+    /** Diagnostic: the bridges that have logged the agent's first outbound audio, kept the same way as {@link diagInbound}. */
+    private readonly diagOutbound = new Set<string>();
     /** In-memory registry of bridged sessions this process currently hosts, keyed by bridge id (lowercased). */
     private activeSessions = new Map<string, ActiveBridgeSession>();
 
@@ -822,7 +898,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     /**
      * Deferred-startup entry point (per {@link IStartupSink}). Warms the ONE composed base cache by
      * delegating to {@link AIBridgeEngineBase.Config}; mirrors `AIEngine.HandleStartup`. No double
-     * load — there is only the base's cache to warm.
+     * load — there is only the base's cache to warm. Then starts the same-process stale-session sweep.
+     *
+     * It does not start the orphan reconcile. The host starts that ({@link StartOrphanReconciliation}) once it owns
+     * its instance: the deferred startup can run before MJServer listens on its port, while another live MJAPI may
+     * still hold that port, and a reconcile then would close that MJAPI's bridges as this instance's orphans.
      *
      * @param contextUser The boot/system user context.
      * @param provider Optional metadata provider override (multi-provider scenarios).
@@ -832,10 +912,6 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // Begin reaping stale live sessions (idle / over-duration) — the same-process backstop to the
         // occupancy auto-leave + the prior-boot orphan reconcile. Idempotent.
         this.StartStaleSessionSweep();
-        // Reconcile prior-boot orphans now and periodically. Needs a user + provider for the writes.
-        if (contextUser && provider) {
-            this.StartOrphanReconciliation(contextUser, provider);
-        }
     }
 
     /**
@@ -956,11 +1032,12 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     /**
-     * Injects the host-instance identity provider used for `HostInstanceID` stamping and janitor
-     * affinity. Production hosts (MJServer) call this once at boot with the real `HostInstance`
-     * helper; standalone callers can rely on the {@link DefaultHostInstanceIdentity}.
+     * Injects the identity of the server instance hosting this engine ({@link IHostInstanceIdentity}): the engine
+     * stamps it into every bridge row it creates and reconciles orphans by it. Call it once at boot, before anything
+     * can start a bridge. MJServer's `Serve` passes the identity its agent-session rows carry, right after it sets its
+     * port. Until then the engine uses a {@link DefaultHostInstanceIdentity}.
      *
-     * @param identity The identity provider to use.
+     * @param identity The identity to use.
      */
     public SetHostInstanceIdentity(identity: IHostInstanceIdentity): void {
         this.hostIdentity = identity;
@@ -1098,12 +1175,14 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 TranscriptSink: params.TranscriptSink,
                 OnBargeIn: params.OnBargeIn,
                 RecoverRealtimeSession: params.RecoverRealtimeSession,
+                RecoverRealtimeSessionWithoutAvatar: params.RecoverRealtimeSessionWithoutAvatar,
                 OnSessionEnded: params.OnSessionEnded,
                 TranscriptTail: [],
                 ModelRecoveryAttempts: 0,
                 ModelRecovering: false,
                 Ending: false,
                 LastSessionHeartbeatMs: Date.now(),
+                SeenVideoSources: new Map<string, string>(),
             };
 
             this.electTranscriptScribe(active);
@@ -1155,6 +1234,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             active.Ending = true; // ignore model-loss signals that race the teardown
             await this.disconnectDriver(active, reason);
             this.activeSessions.delete(key);
+            // Forget its first-frame diagnostics. A frame that arrives after this can't add the id back: an ending bridge
+            // records none.
+            this.diagInbound.delete(active.SessionBridgeID);
+            this.diagOutbound.delete(active.SessionBridgeID);
             const done = await this.markBridgeDisconnected(
                 sessionBridgeID,
                 reason,
@@ -1189,9 +1272,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * that pipe.
      *
      * Two hooks, one per direction:
-     * - **Inbound** (`bridge.OnMedia` → `session.SendInput`): what the agent HEARS. Each inbound
-     *   {@link BridgeMediaFrame} from the endpoint is unwrapped to its raw `ArrayBuffer` payload and
-     *   streamed straight to the model.
+     * - **Inbound** (`bridge.OnMedia` → `session.SendInput`): what the agent HEARS (and, for a video model, SEES).
+     *   Each inbound {@link BridgeMediaFrame} from the endpoint is unwrapped to its raw `ArrayBuffer` payload and
+     *   streamed straight to the model. Camera and screen frames go only to a session that declares inbound video; the
+     *   first frame of a source new to the model session is preceded by a note naming it, and the end of a source the
+     *   model saw is followed by one (see {@link VideoSourceSeenNote}, {@link VideoSourceEndedNote}).
      * - **Outbound** (`session.OnOutput` → `bridge.SendMedia`): what the agent SAYS. Each model
      *   output `ArrayBuffer` is wrapped in an outbound audio {@link BridgeMediaFrame} and sent into
      *   the meeting/call.
@@ -1210,9 +1295,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             return;
         }
 
-        // Inbound: endpoint media → the agent hears (and, for a video model, SEES) it. The frame's
-        // Track tags the plane, so a human's camera (`video-in`) reaches the model as a `video` frame.
-        // Always read `active.RealtimeSession` — a recovered session replaces it mid-call.
+        // Inbound: endpoint media → the agent hears (and, for a video model, SEES) it. The frame's Track tags the
+        // plane: a camera (`video-in`) or a shared screen (`screen-in`) reaches the model as a `video` frame. Only a
+        // session that declares inbound video gets one; any other driver would read the image as audio. Always read
+        // `active.RealtimeSession` — a recovered session replaces it mid-call.
+        let videoDropNoted = false;
         Bridge.OnMedia((frame: BridgeMediaFrame) => {
             active.LastActivityMs = Date.now();
             // DIARIZATION: the inbound frame carries the speaking participant's identity (when the provider
@@ -1222,16 +1309,72 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             if (frame.Track === 'audio-in' && frame.SpeakerLabel) {
                 active.LastInboundSpeaker = frame.SpeakerLabel;
             }
+            const kind = mediaKindOf(frame.Track);
+            if (kind === 'video' && InboundVideoStreamsOf(active.RealtimeSession.Capabilities) === 0) {
+                if (!videoDropNoted) {
+                    videoDropNoted = true;
+                    LogStatusEx({ message: `[AIBridgeEngine] ${frame.Track} frames are not sent to bridge ${active.SessionBridgeID}: its realtime session does not take inbound video.`, verboseOnly: true });
+                }
+                return;
+            }
             const chunk = this.frameToArrayBuffer(frame);
             this.observeInboundHumanSpeech(active, frame, chunk);
             if (chunk && !active.ModelRecovering) {
-                if (!this.diagInbound.has(active.SessionBridgeID)) {
+                if (!active.Ending && !this.diagInbound.has(active.SessionBridgeID)) {
                     this.diagInbound.add(active.SessionBridgeID);
-                    LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). The agent is HEARING you.`, verboseOnly: true });
+                    LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). ${firstInboundFrameMeaning(frame.Track)}`, verboseOnly: true });
                 }
-                active.RealtimeSession.SendInput(chunk, frame.Track === 'video-in' ? 'video' : 'audio');
+                if (kind === 'video') {
+                    this.tellModelVideoSourceSeen(active, frame);
+                }
+                active.RealtimeSession.SendInput({
+                    Data: chunk,
+                    Kind: kind,
+                    MimeType: frame.MimeType,
+                    TimestampMs: frame.TimestampMs,
+                });
             }
         });
+        Bridge.OnVideoSourceEnded((source: BridgeVideoSourceEnd) => this.tellModelVideoSourceEnded(active, source));
+        Bridge.OnAvatarUnavailable((reason: BridgeAvatarFailure) => void this.replaceModelSessionWithoutAvatar(active, reason));
+    }
+
+    /**
+     * Tells the model what it can now see, right before the first frame of a camera or screen new to the current model
+     * session: the first source, the next one after a switch, a source seen again after it ended, or a replacement
+     * session's first frame. Records the source, so its end is reported. A frame without a `SourceID` is not tracked.
+     * Reads `active.RealtimeSession` each time: a recovered session replaces it.
+     *
+     * @param active The live bridged session.
+     * @param frame The camera or screen frame about to be sent.
+     */
+    private tellModelVideoSourceSeen(active: ActiveBridgeSession, frame: BridgeMediaFrame): void {
+        if (!frame.SourceID || active.SeenVideoSources.has(frame.SourceID)) {
+            return;
+        }
+        const label = frame.SourceLabel ?? fallbackVideoSourceLabel(frame.Track);
+        active.SeenVideoSources.set(frame.SourceID, label);
+        active.RealtimeSession.SendContextNote?.(VideoSourceSeenNote(label));
+    }
+
+    /**
+     * Tells the model it can no longer see a camera or screen whose frames reached it (the person stopped letting agents
+     * see them, left, stopped sharing or turned the camera off, or the view moved to another source), so it stops
+     * describing the last frame as current. The note names the source as the model was told with its first frame, not by
+     * the label the driver reports at the end: the two differ when the person was renamed in between, or had no name when
+     * that first frame was read. A source the model never saw is ignored. Reads `active.RealtimeSession` each time: a
+     * recovered session replaces it.
+     *
+     * @param active The live bridged session.
+     * @param source The source that ended, as the driver reported it.
+     */
+    private tellModelVideoSourceEnded(active: ActiveBridgeSession, source: BridgeVideoSourceEnd): void {
+        const seenLabel = active.SeenVideoSources.get(source.SourceID);
+        if (seenLabel === undefined) {
+            return;
+        }
+        active.SeenVideoSources.delete(source.SourceID);
+        active.RealtimeSession.SendContextNote?.(VideoSourceEndedNote(seenLabel));
     }
 
     /**
@@ -1244,6 +1387,8 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     private wireModelSession(active: ActiveBridgeSession): void {
         const { Bridge } = active;
         const session = active.RealtimeSession;
+        // A replacement model session has seen no frames yet; the sources it sees are recorded afresh as they arrive.
+        active.SeenVideoSources.clear();
 
         // Barge-in: on a TRUE interruption (the user speaks over the agent), the model stops generating —
         // but the driver may still hold queued outbound audio that would keep playing. Flush it so the
@@ -1269,7 +1414,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                     verboseOnly: true,
                 });
             }
-            if (!this.diagOutbound.has(active.SessionBridgeID)) {
+            if (!active.Ending && !this.diagOutbound.has(active.SessionBridgeID)) {
                 this.diagOutbound.add(active.SessionBridgeID);
                 LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST outbound audio from the agent (bridge ${active.SessionBridgeID}). The agent is SPEAKING into the room.`, verboseOnly: true });
             }
@@ -1284,9 +1429,12 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
 
-        // Outbound VIDEO: a video-capable session ALSO emits a synced avatar/video track. Optional —
-        // audio-only sessions don't implement OnVideoOutput, so call it null-safely. The bridge driver
-        // gates the actual publish on its `VideoOut` capability.
+        // Outbound VIDEO: a video-capable session also emits typed frames (a live avatar's fragmented MP4, encoded
+        // chunks, images). Optional: audio-only sessions don't implement OnVideoFrame, so call it null-safely. The
+        // bridge driver gates the actual publish on its `VideoOut` capability.
+        session.OnVideoFrame?.((frame: RealtimeVideoFrame) => this.forwardVideoFrame(active, session, frame));
+
+        // The deprecated untyped video output, still forwarded as it was (bytes without a MIME type).
         session.OnVideoOutput?.((chunk: ArrayBuffer) => {
             if (active.RealtimeSession !== session) {
                 return;
@@ -1295,6 +1443,50 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             const track: BridgeMediaTrackKind = 'video-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
+    }
+
+    /**
+     * Sends one frame of the agent's video to the bridge on `video-out`, with its MIME type so the driver can publish it
+     * (a fragmented MP4 piece as an avatar), and what the frame says about its video (see {@link frameVideoFacts}). In a
+     * full-duplex multi-agent room the frame passes the floor gate first.
+     */
+    private forwardVideoFrame(active: ActiveBridgeSession, session: IRealtimeSession, frame: RealtimeVideoFrame): void {
+        if (active.RealtimeSession !== session) {
+            return; // a stale (replaced) session
+        }
+        active.LastActivityMs = Date.now();
+        const verdict = this.gateVideoFrame(active, frame);
+        if (verdict !== 'Forward') {
+            if (verdict === 'Cut') {
+                active.Bridge.FlushOutboundMedia(); // the burst was just refused — drop what is queued for it, voice and face
+            }
+            return;
+        }
+        active.Bridge.SendMedia('video-out', {
+            Track: 'video-out',
+            Bytes: frame.Data,
+            MimeType: frame.MimeType,
+            TimestampMs: Date.now(),
+            ...frameVideoFacts(frame, active.AvatarInit),
+        });
+    }
+
+    /**
+     * The floor gate's verdict on one video frame. An fMP4 piece carries the voice on its audio track, so a fragment is
+     * counted by its audio's duration: that is how long the agent speaks. An init segment carries no speech: it is
+     * remembered (its audio track's timescale times the fragments) and passes. An encoded chunk or an image carries no
+     * voice (that comes through `OnOutput`, which is gated) and passes.
+     */
+    private gateVideoFrame(active: ActiveBridgeSession, frame: RealtimeVideoFrame): OutputVerdict {
+        if (frame.Kind !== 'fmp4') {
+            return 'Forward';
+        }
+        if (frame.Piece === 'init') {
+            active.AvatarInit = ReadFmp4Init(frame.Data) ?? active.AvatarInit;
+            return 'Forward';
+        }
+        const speechSeconds = active.AvatarInit ? (Fmp4AudioSeconds(frame.Data, active.AvatarInit) ?? 0) : 0;
+        return this.gateOutputDuration(active, speechSeconds * 1000);
     }
 
     /** A true barge-in: flush queued audio, drop stale room moderator state, free the floor, tell the host. */
@@ -1489,7 +1681,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     /** Swaps a recovered model session in for the lost one, or refuses it when it cannot carry the call's audio. */
-    private async adoptRecoveredSession(active: ActiveBridgeSession, lost: IRealtimeSession, fresh: IRealtimeSession): Promise<void> {
+    private async adoptRecoveredSession(active: ActiveBridgeSession, lost: IRealtimeSession, fresh: IRealtimeSession, note = `attempt ${active.ModelRecoveryAttempts}`): Promise<void> {
         const sameRates = (fresh.InputSampleRate ?? 24000) === (lost.InputSampleRate ?? 24000) && (fresh.OutputSampleRate ?? 24000) === (lost.OutputSampleRate ?? 24000);
         if (active.Ending || !sameRates) {
             await this.closeQuietly(fresh);
@@ -1499,8 +1691,34 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         this.wireModelSession(active);
         this.wireTurnTaking(active);
         active.ModelRecovering = false;
-        LogStatus(`[AIBridgeEngine] model session re-opened for bridge ${active.SessionBridgeID} (attempt ${active.ModelRecoveryAttempts}).`);
+        LogStatus(`[AIBridgeEngine] model session re-opened for bridge ${active.SessionBridgeID} (${note}).`);
         await this.closeQuietly(lost); // releases the dead socket and finalizes its observability run
+    }
+
+    /**
+     * The bridge can no longer show the agent's avatar: replace the model session, once, with one that renders no avatar
+     * (through the host's {@link StartBridgeSessionParams.RecoverRealtimeSessionWithoutAvatar}), seeded with what was said,
+     * so the model stops generating video nobody sees and, if the voice decoder was the one that failed, the voice comes
+     * back as PCM. Inbound audio is held back while the replacement opens, as in a recovery. If it fails, the session goes
+     * on as it was.
+     */
+    private async replaceModelSessionWithoutAvatar(active: ActiveBridgeSession, reason: BridgeAvatarFailure): Promise<void> {
+        const replace = active.RecoverRealtimeSessionWithoutAvatar;
+        if (active.Ending || active.ModelRecovering || active.AvatarReplaced || !replace) {
+            LogStatus(`[AIBridgeEngine] bridge ${active.SessionBridgeID} lost its avatar (${reason}); its model session is not replaced${replace ? ' (busy, ending or already replaced)' : ' (the host gave no audio-only replacement)'}.`);
+            return;
+        }
+        active.AvatarReplaced = true;
+        active.ModelRecovering = true;
+        const lost = active.RealtimeSession;
+        LogStatus(`[AIBridgeEngine] bridge ${active.SessionBridgeID} lost its avatar (${reason}); replacing its model session with an audio-only one.`);
+        try {
+            const fresh = await replace({ PriorTranscript: BuildPriorTranscript(active.TranscriptTail), Attempt: 1, Reason: `the avatar could not be shown (${reason})` });
+            await this.adoptRecoveredSession(active, lost, fresh, `audio only, after the avatar's ${reason}`);
+        } catch (err) {
+            LogError(`[AIBridgeEngine] the audio-only replacement for bridge ${active.SessionBridgeID} failed; the session goes on as it was: ${err instanceof Error ? err.message : String(err)}`);
+            active.ModelRecovering = false;
+        }
     }
 
     /** Ends a call whose model session cannot be recovered: a spoken goodbye at the carrier (telephony), then a clean stop. */
@@ -1732,9 +1950,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // Only a REAL human turn counts as presence. In a multi-agent room every agent transcribes its peers'
         // speech as a 'user' turn (it has no other role to assign overheard audio); if those counted as a human,
         // an agents-only room would keep cancelling its own auto-leave and babble forever after the humans left —
-        // burning realtime tokens at full cost. The diarized inbound speaker tells us: an `agent-…` identity is a
-        // peer agent, NOT a human, so it must NOT keep the room alive.
-        const overheardAgent = source.LastInboundSpeaker?.toLowerCase().startsWith('agent-') === true;
+        // burning realtime tokens at full cost. The diarized inbound speaker tells us: an agent's identity
+        // (`agent-…`, IsAgentParticipantIdentity) is a peer agent, NOT a human, so it must NOT keep the room alive.
+        const overheardAgent = IsAgentParticipantIdentity(source.LastInboundSpeaker);
         if (!overheardAgent) {
             // A real human just spoke → definitive presence for EVERY agent in the room. Cancel any pending
             // empty-room auto-leave + reset the consecutive-agent-only counter.
@@ -1834,7 +2052,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             if (!active.IsTranscriptScribe) {
                 return; // only the scribe records human turns (avoids one copy per transcribing agent)
             }
-            if (active.LastInboundSpeaker?.toLowerCase().startsWith('agent-')) {
+            if (IsAgentParticipantIdentity(active.LastInboundSpeaker)) {
                 return; // the scribe is overhearing another agent — that agent's own bridge records it
             }
         }
@@ -2107,11 +2325,27 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @returns Whether to forward the chunk, drop it, or cut the burst (drop + flush queued audio).
      */
     private gateOutput(active: ActiveBridgeSession, byteLength: number): OutputVerdict {
+        return this.applyTurnGate(active, (gate) => gate.OnOutputAudio(byteLength));
+    }
+
+    /**
+     * Runs one chunk of a full-duplex model's outbound speech through its floor gate by how long it plays (an avatar
+     * piece). Sessions without a gate, and rooms with a single agent, are never gated.
+     *
+     * @param active The speaking session.
+     * @param durationMs How long the chunk's speech plays.
+     */
+    private gateOutputDuration(active: ActiveBridgeSession, durationMs: number): OutputVerdict {
+        return this.applyTurnGate(active, (gate) => gate.OnOutputDuration(durationMs));
+    }
+
+    /** Asks the session's floor gate about one chunk (when it is gated at all) and acts on the floor it took or lost. */
+    private applyTurnGate(active: ActiveBridgeSession, decide: (gate: FullDuplexTurnGate) => OutputGateResult): OutputVerdict {
         const gate = active.TurnGate;
         if (!gate || !active.RoomKey || !this.roomCoordinator.IsMultiAgentRoom(active.RoomKey)) {
             return 'Forward';
         }
-        const result = gate.OnOutputAudio(byteLength);
+        const result = decide(gate);
         if (result.TookFloor) {
             this.armFloorHold(active);
         }
@@ -2123,7 +2357,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
     /** Whether an inbound speaker label belongs to a human (diarized, and not a peer `agent-…` bot). */
     private isHumanSpeaker(label: string | undefined): boolean {
-        return label !== undefined && label.length > 0 && !label.toLowerCase().startsWith('agent-');
+        return label !== undefined && label.length > 0 && !IsAgentParticipantIdentity(label);
     }
 
     /**
@@ -2714,8 +2948,12 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * Reconciles prior-boot orphans ({@link ReconcileOrphans}) once now and then every
      * {@link ORPHAN_RECONCILE_INTERVAL_MS}. Idempotent — a no-op while already scheduled. The timer is `unref`'d.
      *
+     * The host calls it once it owns its instance, so that no other live process can be that instance: MJServer calls
+     * it after the server listens on its port. {@link HandleStartup} does not start it.
+     *
      * @param contextUser The user the reconciliation writes run as.
      * @param provider The metadata provider for the reads/writes.
+     * @param intervalMs How often to reconcile after the first pass.
      */
     public StartOrphanReconciliation(contextUser: UserInfo, provider: IMetadataProvider, intervalMs: number = ORPHAN_RECONCILE_INTERVAL_MS): void {
         if (this.orphanReconcileTimer) {
@@ -2748,22 +2986,26 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     /**
-     * Force-closes `Connected`/`Connecting` bridges left behind by a **previous boot of this host**
-     * (matching hostname prefix, differing instance id), stamping `CloseReason = 'Janitor'`. Mirrors
-     * `SessionJanitor.RunStartupRecovery`: a crash/redeploy vaporizes the in-memory driver sockets
-     * but leaves the durable rows reading `Connected` forever; this reconciles them.
+     * Force-closes the `Connected`/`Connecting` bridges an **earlier boot of this instance** left, stamping
+     * `CloseReason = 'Janitor'` and finalizing each one's co-agent run. Mirrors `SessionJanitor.RunStartupRecovery`:
+     * a crash/redeploy vaporizes the in-memory driver sockets but leaves the durable rows reading `Connected`
+     * forever; this reconciles them.
      *
-     * The actual *scheduling* (run once at boot + periodic sweep) is intentionally left to the host
-     * application (MJServer's startup + janitor timer) so this engine package carries no timer/IO of
-     * its own; call this method from that scheduler.
+     * Ownership comes from the injected {@link IHostInstanceIdentity}: the read is narrowed to the rows under its
+     * instance prefix other than this boot's, and a row is closed only when
+     * {@link IHostInstanceIdentity.IsPriorBoot} says another boot of this instance stamped it. Another instance's
+     * bridges (another MJAPI on this host, or on another host) are never touched, live or not.
+     *
+     * Run it only once this process owns its instance; {@link StartOrphanReconciliation} schedules it.
      *
      * @param contextUser The system user the reconciliation writes run as.
      * @param provider The metadata provider for the reconciliation reads/writes.
      * @returns The number of orphaned bridges closed.
      */
     public async ReconcileOrphans(contextUser: UserInfo, provider: IMetadataProvider): Promise<number> {
-        const prefix = EscapeSQLString(this.hostIdentity.GetHostNamePrefix());
-        const current = EscapeSQLString(this.hostIdentity.GetHostInstanceID());
+        const identity = this.hostIdentity;
+        const prefix = EscapeSQLString(identity.GetInstancePrefix());
+        const current = EscapeSQLString(identity.GetHostInstanceID());
         const filter =
             `Status IN ('Connecting','Connected') ` +
             `AND HostInstanceID LIKE '${prefix}%' ` +
@@ -2772,18 +3014,25 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         const rows = await this.loadOrphanRows(filter, contextUser, provider);
         let closed = 0;
         for (const row of rows) {
+            // The LIKE narrows the read; the identity decides, since LIKE reads a `_` in a host name as any character.
+            if (!identity.IsPriorBoot(row.HostInstanceID)) {
+                continue;
+            }
             const ok = await this.markBridgeDisconnected(row.ID, 'Janitor', contextUser, provider);
             if (ok) {
                 closed++;
             }
         }
         if (closed > 0) {
-            LogStatus(`[AIBridgeEngine] Janitor reconciled ${closed} orphaned bridge(s) from a prior boot of this host`);
+            LogStatus(
+                `[AIBridgeEngine] Janitor reconciled ${closed} orphaned bridge(s) from an earlier boot of this instance ` +
+                    `(${identity.GetInstancePrefix()})`,
+            );
         }
         return closed;
     }
 
-    /** Loads the orphaned bridge rows matching the janitor filter. */
+    /** Loads the bridge rows the janitor filter matches: the candidates {@link ReconcileOrphans} checks one by one. */
     private async loadOrphanRows(
         filter: string,
         contextUser: UserInfo,
@@ -2880,6 +3129,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 ...params.Configuration,
                 InboundSampleRate: params.RealtimeSession.InputSampleRate ?? 24000,
                 OutboundSampleRate: params.RealtimeSession.OutputSampleRate ?? 24000,
+                // The model's video facts, for a driver that sends camera or screen frames: how many sources it may send
+                // at once and how often. Read from the session, so the rate always comes from the model.
+                InboundVideoStreams: InboundVideoStreamsOf(params.RealtimeSession.Capabilities),
+                InboundVideoRate: InboundVideoRateOf(params.RealtimeSession.Capabilities),
             },
             ContextUser: params.ContextUser,
         };
@@ -3068,4 +3321,63 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
         return saved;
     }
+}
+
+/** The realtime media plane a bridge track feeds: cameras and shared screens are both video to the model. */
+function mediaKindOf(track: BridgeMediaTrackKind): RealtimeMediaKind {
+    return track === 'video-in' || track === 'screen-in' ? 'video' : 'audio';
+}
+
+/**
+ * The name a camera or screen gets in a note when its driver gave none, never its `SourceID`: the name for an unnamed
+ * source in `@memberjunction/ai` ({@link UnnamedVideoSourceLabel}), which the LiveKit bridge also gives a person with no
+ * display name.
+ */
+function fallbackVideoSourceLabel(track: BridgeMediaTrackKind): string {
+    return UnnamedVideoSourceLabel(track === 'screen-in' ? 'screen' : 'camera');
+}
+
+/**
+ * What a bridge's first inbound frame tells the diagnostic log: a camera or screen frame means the agent can see it, and
+ * any other frame means the agent hears the room.
+ */
+function firstInboundFrameMeaning(track: BridgeMediaTrackKind): string {
+    switch (track) {
+        case 'video-in':
+            return 'The agent can SEE your camera.';
+        case 'screen-in':
+            return 'The agent can SEE your screen.';
+        default:
+            return 'The agent is HEARING you.';
+    }
+}
+
+/**
+ * What a frame of the agent's video says about its video, for the bridge frame that carries it (`Width`, `Height`,
+ * `KeyFrame`; absent means unknown), copied from the frame. An image always stands alone: a key frame. A chunk says
+ * whether it is a key frame. An fMP4 init segment carries its own size (read from the piece itself, never from an earlier
+ * stream) and no key frame: it holds no frame. An fMP4 fragment with video carries whether its first video frame is a key
+ * frame and the size the stream's init segment gives the video track; an audio-only fragment, a fragment before any init,
+ * or one the driver couldn't read carries nothing.
+ *
+ * @param frame The frame.
+ * @param streamInit The init segment of the stream an fMP4 fragment belongs to, read.
+ */
+function frameVideoFacts(frame: RealtimeVideoFrame, streamInit: Fmp4Init | null | undefined): Pick<BridgeMediaFrame, 'Width' | 'Height' | 'KeyFrame'> {
+    const ownSize = frame.Width && frame.Height ? { Width: frame.Width, Height: frame.Height } : {};
+    if (frame.Kind === 'image') {
+        return { ...ownSize, KeyFrame: true };
+    }
+    if (frame.Kind === 'chunk') {
+        return { ...ownSize, KeyFrame: frame.KeyFrame };
+    }
+    if (frame.Piece === 'init') {
+        return ownSize;
+    }
+    if (frame.KeyFrame === undefined) {
+        return {};
+    }
+    const video = streamInit?.Tracks.find((track) => track.Handler === 'vide');
+    const streamSize = video?.Width && video.Height ? { Width: video.Width, Height: video.Height } : {};
+    return { ...streamSize, KeyFrame: frame.KeyFrame };
 }

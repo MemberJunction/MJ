@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { RealtimeProxyRegistry, type JSONObject, type RealtimeSessionParams, type RealtimeTranscript, type RealtimeToolCall } from '@memberjunction/ai';
 import type { IOpenAIRealtimeConnection } from '@memberjunction/ai-openai';
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
@@ -212,6 +212,13 @@ describe('HuggingFaceRealtime', () => {
             expect(pact['sampleRate']).toBe(HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE);
         });
 
+        it('takes the proxy origin from Config.proxyBaseUrl before MJAPI_PUBLIC_URL', async () => {
+            const driver = new TestHuggingFaceRealtime('secret-key');
+            process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+            const config = await driver.CreateClientSession(makeParams({ Config: { proxyBaseUrl: 'https://edge.example.com/some/path' } }));
+            expect(config.EphemeralToken.startsWith('wss://edge.example.com/realtime-proxy?ticket=')).toBe(true);
+        });
+
         it('registers the ticket so the proxy can consume the internal endpoint + auth once', async () => {
             const driver = new TestHuggingFaceRealtime('secret-key');
             process.env['MJAPI_PUBLIC_URL'] = 'http://localhost:4000';
@@ -404,6 +411,30 @@ describe('HuggingFaceRealtime', () => {
                 expect(frames[0].item).toMatchObject({ type: 'function_call_output', call_id: 'c1', output: '{"ok":true}' });
             }
             expect(frames[1].type).toBe('response.create');
+        });
+
+        it('drops a video frame instead of appending it as audio, reports it once, and still appends audio (#5091)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const driver = new TestHuggingFaceRealtime('');
+                const session = await startSession(driver, makeParams());
+                const beforeCount = driver.Fake.Sent.length;
+                const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+
+                expect(driver.Fake.Sent.length).toBe(beforeCount);
+                const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[huggingfaceRealtime] Dropped video input of type image/jpeg'));
+                expect(drops).toHaveLength(1);
+
+                const audio = new Uint8Array([1, 2, 3, 4]);
+                session.SendInput({ Data: audio.buffer, Kind: 'audio' });
+                expect(driver.Fake.Sent.slice(beforeCount)).toEqual([
+                    { type: 'input_audio_buffer.append', audio: Buffer.from(audio).toString('base64') },
+                ]);
+            } finally {
+                warn.mockRestore();
+            }
         });
 
         it('skips RequestSpokenUpdate while a response is active', async () => {

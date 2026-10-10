@@ -1,6 +1,6 @@
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import type { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
+import { ParseRealtimeClientTransport, type JSONValue, type RealtimeToolDefinition } from '@memberjunction/ai';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import type { StartRealtimeClientSessionResult } from './RealtimeSessionRuntime';
 
@@ -46,6 +46,13 @@ export interface RealtimeSessionLaunchRequest {
    * configuration and answers with the resolved policy. `null` when the host brings none.
    */
   ChannelCandidatesJson: string | null;
+  /**
+   * Whether this host can show the agent's video: one of its channels shows it (the Avatar channel). `false` for a host
+   * with none (the embeddable widget, the mobile app): the server then asks the model for no avatar, so a video model is
+   * not chosen for a face nobody would see, and says why (`host`). A launcher that mints through its own endpoint should
+   * pass a `false` on. Absent: not stated, and the server assumes the host may show it.
+   */
+  ShowsAgentVideo?: boolean;
 }
 
 /** What the runtime hands a launcher besides the request: the provider the session runs on. */
@@ -67,8 +74,8 @@ export interface RealtimeSessionLaunchContext {
  * context the stock one cannot — without proxying the runtime's provider or re-implementing the run
  * half. Install one with {@link RealtimeSessionRuntime.Launcher}.
  *
- * A launcher must either resolve a usable result (one carrying an ephemeral token) or throw; the runtime
- * turns a throw into a failed start with the error on `LastStartError`.
+ * A launcher must either resolve a usable result (one carrying an ephemeral token, or a relay session's relay URL) or
+ * throw; the runtime turns a throw into a failed start with the error on `LastStartError`.
  */
 export interface IRealtimeSessionLauncher {
   /**
@@ -76,20 +83,73 @@ export interface IRealtimeSessionLauncher {
    *
    * @param request The inputs the runtime resolved for this start.
    * @param context The provider the session runs on.
-   * @returns The minted session, including `ClientPolicyJson` when the launcher's mint scoped channels.
+   * @returns The minted session, including `ClientPolicyJson` when the launcher's mint scoped channels,
+   *   `AvatarStatusJson` when the server reports the session's avatar status, and `Transport` and `RelayUrl` for a
+   *   session that runs through MJAPI's realtime relay.
    */
   Launch(request: RealtimeSessionLaunchRequest, context: RealtimeSessionLaunchContext): Promise<StartRealtimeClientSessionResult>;
 }
 
 /**
- * Whether a mint failure is a GraphQL validation rejection of the channel-scoping extension — the
- * signature of a server that predates it ("Unknown argument "channelCandidatesJson"…", "Cannot query
- * field "ClientPolicyJson"…"). Only that exact case is recoverable; any other failure is a real mint
- * failure and must surface.
+ * Whether a minted session carries what its client driver connects with: an ephemeral token, or, for a relay session
+ * (`Transport` `'relay'`), its relay URL.
+ *
+ * @param result The minted session, or nothing.
  */
-function isUnsupportedChannelScopingError(error: unknown): boolean {
+export function HasClientCredential(result: Pick<StartRealtimeClientSessionResult, 'EphemeralToken' | 'Transport' | 'RelayUrl'> | null | undefined): boolean {
+  if (!result) {
+    return false;
+  }
+  return !!result.EphemeralToken || (ParseRealtimeClientTransport(result.Transport) === 'relay' && !!result.RelayUrl);
+}
+
+/**
+ * The optional extensions of the stock mint. A server that predates one rejects it at validation; the launcher then
+ * mints without that one alone, so each extension falls back, and is remembered, on its own.
+ */
+interface MintExtensions {
+  /** Scope the session's channels: the `channelCandidatesJson` argument and the `ClientPolicyJson` field. */
+  ChannelScoping: boolean;
+  /** The session's live-avatar status: the `AvatarStatusJson` field. */
+  AvatarStatus: boolean;
+  /** How the browser reaches the provider: the `Transport` and `RelayUrl` fields of a relay session. */
+  RelayTransport: boolean;
+  /** That this host shows no agent video: the `showsAgentVideo` argument, sent only as `false`. */
+  NoAgentVideo: boolean;
+}
+
+/** What the launcher says, once, when the server rejects an extension of the mint. */
+const UNSUPPORTED_EXTENSION_WARNINGS: Readonly<Record<keyof MintExtensions, string>> = {
+  ChannelScoping: '[RealtimeSession] The server does not support channel scoping — minting without it and resolving channels locally.',
+  AvatarStatus: '[RealtimeSession] The server does not report the avatar status — minting without it; the call shows no avatar notice.',
+  RelayTransport: '[RealtimeSession] The server does not report the session transport — minting without it; every session connects directly.',
+  NoAgentVideo:
+    "[RealtimeSession] The server does not take showsAgentVideo — minting without it; it may ask for an avatar this app can't show (the call stays audio only).",
+};
+
+/**
+ * The extension a mint failure rejects, when the failure is a GraphQL validation rejection of one the mint asked for —
+ * the signature of a server that predates it ("Unknown argument "channelCandidatesJson"…", "Cannot query field
+ * "ClientPolicyJson"…", "Cannot query field "AvatarStatusJson"…", "Cannot query field "Transport"…", "Unknown argument
+ * "showsAgentVideo"…"). Only that case is recoverable; any other failure is a real mint failure and must surface. A
+ * rejection names one field at a time, so a server that predates several extensions is found out one step at a time.
+ */
+function unsupportedExtension(error: unknown, asked: MintExtensions): keyof MintExtensions | null {
   const message = error instanceof Error ? error.message : String(error);
-  return message.includes('channelCandidatesJson') || message.includes('ClientPolicyJson');
+  if (asked.NoAgentVideo && message.includes('showsAgentVideo')) {
+    return 'NoAgentVideo';
+  }
+  if (asked.AvatarStatus && message.includes('AvatarStatusJson')) {
+    return 'AvatarStatus';
+  }
+  // The quoted field name, not the bare word: "Transport" alone could be any transport error.
+  if (asked.RelayTransport && (message.includes('field "Transport"') || message.includes('RelayUrl'))) {
+    return 'RelayTransport';
+  }
+  if (asked.ChannelScoping && (message.includes('channelCandidatesJson') || message.includes('ClientPolicyJson'))) {
+    return 'ChannelScoping';
+  }
+  return null;
 }
 
 /**
@@ -97,23 +157,27 @@ function isUnsupportedChannelScopingError(error: unknown): boolean {
  * provider. This is what every host gets unless it installs another.
  *
  * When the session has channel candidates it asks the server to scope them (`channelCandidatesJson`)
- * and to return the resolved policy (`ClientPolicyJson`). A server that predates channel scoping rejects
- * that argument/field at validation, in which case the launcher mints with the original mutation instead
- * and the runtime resolves the scope locally — a new client must keep working against an older server,
- * and a failed mint over an optional extension would be the worst way to find out they differ. The
- * fallback is remembered per launcher instance so a long-lived runtime asks once.
+ * and to return the resolved policy (`ClientPolicyJson`). It also asks for the session's live-avatar status
+ * (`AvatarStatusJson`), which the call reads to say why it shows no avatar, and for how the browser reaches the
+ * provider (`Transport` and `RelayUrl`), which a relay session's client driver connects with. A host that shows no agent
+ * video ({@link RealtimeSessionLaunchRequest.ShowsAgentVideo} `false`) says so (`showsAgentVideo: false`), so the
+ * server asks the model for no avatar. A server that predates an extension rejects it at validation, in which case the
+ * launcher mints without that extension alone (the runtime then resolves the channel scope locally, shows no avatar
+ * notice, treats every session as direct, or leaves the avatar to the browser's audio-only fallback at connect) — a new
+ * client must keep working against an older server, and a failed mint over an optional extension would be the worst way
+ * to find out they differ. Each fallback is remembered per launcher instance so a long-lived runtime asks once.
  */
 export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher {
-  /** Whether the server rejected the channel-scoping extension of the mint; set once and kept. */
-  private serverLacksChannelScoping = false;
+  /** The extensions of the mint the server rejected; each is added once and kept. */
+  private readonly serverLacks = new Set<keyof MintExtensions>();
 
   public async Launch(request: RealtimeSessionLaunchRequest, context: RealtimeSessionLaunchContext): Promise<StartRealtimeClientSessionResult> {
     // The session's provider is the GraphQL one in every shipped host; this is the same narrowing the runtime applies for its relay mutations.
     const transport = context.Provider as GraphQLDataProvider;
-    const result = await this.executeMintMutation(transport, this.buildVariables(request), request.ChannelCandidatesJson);
+    const result = await this.executeMintMutation(transport, this.buildVariables(request), request.ChannelCandidatesJson, request.ShowsAgentVideo === false);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
-    if (!payload?.EphemeralToken) {
-      throw new Error('StartRealtimeClientSession returned no ephemeral token');
+    if (!payload || !HasClientCredential(payload)) {
+      throw new Error('StartRealtimeClientSession returned no ephemeral token (or, for a relay session, no relay URL)');
     }
     return payload;
   }
@@ -136,31 +200,61 @@ export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher 
     };
   }
 
+  /**
+   * Runs the mint with every extension this server has not rejected, dropping one at a time when the server rejects it
+   * at validation. Each retry asks for one extension fewer, so the loop ends.
+   */
   private async executeMintMutation(
     transport: GraphQLDataProvider,
     variables: Record<string, JSONValue>,
-    channelCandidatesJson: string | null
+    channelCandidatesJson: string | null,
+    noAgentVideo: boolean
   ): Promise<{ StartRealtimeClientSession?: StartRealtimeClientSessionResult } | undefined> {
-    if (channelCandidatesJson === null || this.serverLacksChannelScoping) {
-      return transport.ExecuteGQL(this.buildMintMutation(false), variables);
-    }
-    try {
-      return await transport.ExecuteGQL(this.buildMintMutation(true), { ...variables, channelCandidatesJson });
-    } catch (error) {
-      if (!isUnsupportedChannelScopingError(error)) {
-        throw error;
+    let asked: MintExtensions = {
+      ChannelScoping: channelCandidatesJson !== null && !this.serverLacks.has('ChannelScoping'),
+      AvatarStatus: !this.serverLacks.has('AvatarStatus'),
+      RelayTransport: !this.serverLacks.has('RelayTransport'),
+      NoAgentVideo: noAgentVideo && !this.serverLacks.has('NoAgentVideo'),
+    };
+    for (;;) {
+      try {
+        const mintVariables: Record<string, JSONValue> = {
+          ...variables,
+          ...(asked.ChannelScoping ? { channelCandidatesJson } : {}),
+          ...(asked.NoAgentVideo ? { showsAgentVideo: false } : {}),
+        };
+        return await transport.ExecuteGQL(this.buildMintMutation(asked), mintVariables);
+      } catch (error) {
+        const unsupported = unsupportedExtension(error, asked);
+        if (!unsupported) {
+          throw error;
+        }
+        this.rememberUnsupported(unsupported);
+        asked = { ...asked, [unsupported]: false };
       }
-      console.warn('[RealtimeSession] The server does not support channel scoping — minting without it and resolving channels locally.');
-      this.serverLacksChannelScoping = true;
-      return transport.ExecuteGQL(this.buildMintMutation(false), variables);
     }
   }
 
-  /** The `StartRealtimeClientSession` document, with or without the channel-scoping extension. */
-  private buildMintMutation(withChannelScoping: boolean): string {
-    const extraVariable = withChannelScoping ? ', $channelCandidatesJson: String' : '';
-    const extraArgument = withChannelScoping ? ', channelCandidatesJson: $channelCandidatesJson' : '';
-    const extraField = withChannelScoping ? '\n          ClientPolicyJson' : '';
+  /** Remembers that the server lacks an extension of the mint, and says so once. */
+  private rememberUnsupported(extension: keyof MintExtensions): void {
+    console.warn(UNSUPPORTED_EXTENSION_WARNINGS[extension]);
+    this.serverLacks.add(extension);
+  }
+
+  /** The `StartRealtimeClientSession` document, with the extensions asked for. */
+  private buildMintMutation(asked: MintExtensions): string {
+    const extraVariable = (asked.ChannelScoping ? ', $channelCandidatesJson: String' : '') + (asked.NoAgentVideo ? ', $showsAgentVideo: Boolean' : '');
+    const extraArgument =
+      (asked.ChannelScoping ? ', channelCandidatesJson: $channelCandidatesJson' : '') + (asked.NoAgentVideo ? ', showsAgentVideo: $showsAgentVideo' : '');
+    const extraField = [
+      asked.ChannelScoping ? 'ClientPolicyJson' : '',
+      asked.AvatarStatus ? 'AvatarStatusJson' : '',
+      asked.RelayTransport ? 'Transport' : '',
+      asked.RelayTransport ? 'RelayUrl' : '',
+    ]
+      .filter((field) => field.length > 0)
+      .map((field) => `\n          ${field}`)
+      .join('');
     return `
       mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String, $mediaCollectionId: String, $applicationId: String, $appContextJson: String${extraVariable}) {
         StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt, mediaCollectionId: $mediaCollectionId, applicationId: $applicationId, appContextJson: $appContextJson${extraArgument}) {

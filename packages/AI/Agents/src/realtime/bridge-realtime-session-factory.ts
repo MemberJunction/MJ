@@ -21,10 +21,12 @@ import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, 
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
+import type { ResolvedModelPersona } from '@memberjunction/ai-engine-base';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
 import { RealtimeClientSessionService, RealtimeHostToolsResolver } from './realtime-client-session-service';
 import { SelectRealtimeVendorForModel } from './realtime-vendor-resolution';
+import { RealtimeModelShowsAvatar } from './realtime-video-output-gate';
 
 /**
  * The context a bridge passes to {@link CreateBridgeRealtimeSession}. Structurally compatible with the
@@ -95,6 +97,17 @@ export interface BridgeRealtimeSessionContext {
     ConversationMessages?: ChatMessage[];
     /** The `MJ: Conversations` row the session writes to — stamped on the co-agent observability run. */
     ConversationID?: string;
+    /**
+     * `'room'` when the bridge's bot can publish the agent's avatar into the room (the LiveKit coordinator asks its native
+     * module first). Flows to the session's avatar request, so the driver may render it. Absent: audio only.
+     */
+    AvatarDelivery?: 'room';
+    /**
+     * `true` when the session is a phone call (a carrier call, or a SIP call in a LiveKit room). Flows to
+     * `params.data.realtimePhoneCall`: the session then asks the driver for no avatar (the caller sees no video) and
+     * reports `phone` as its avatar status.
+     */
+    PhoneCall?: boolean;
 }
 
 /**
@@ -227,6 +240,12 @@ function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, un
     if (ctx.SelfNames && ctx.SelfNames.length > 0) {
         data.realtimeSelfNames = ctx.SelfNames;
     }
+    if (ctx.AvatarDelivery === 'room') {
+        data.realtimeAvatarDelivery = 'room';
+    }
+    if (ctx.PhoneCall === true) {
+        data.realtimePhoneCall = true;
+    }
     return Object.keys(data).length > 0 ? data : undefined;
 }
 
@@ -254,14 +273,34 @@ export async function FinalizeBridgeCoAgentRuns(
     await new RealtimeClientSessionService().FinalizeCoAgentRunsBySession(agentSessionID, success, contextUser, provider);
 }
 
+/**
+ * A voice the dev model/voice picker offers: one per persona, or one per voice only the driver declares. Two personas can
+ * share a voice `ID` (a voice, and the same voice with a face), so {@link PersonaID} tells them apart. A persona voice also
+ * carries the avatar that comes with it and the persona's preview image; a voice only the driver declares carries none of
+ * the three.
+ */
+export interface RealtimeModelVoiceOption extends RealtimeVoiceOption {
+    /** The persona this voice belongs to (`MJ: AI Personas.ID`). Absent for a voice only the driver declares. */
+    PersonaID?: string;
+    /**
+     * The avatar that comes with this voice: the `APIName` of the persona's preset Video binding on the model's vendor,
+     * which is what `realtime.video.avatarId` takes. Absent when the persona has no such binding there, or only a custom
+     * one (custom avatars are not supported), and on a model that shows no avatar there (its Video/Output row turns
+     * video off, or its driver renders none on that vendor's endpoint).
+     */
+    AvatarID?: string;
+    /** The persona's preview image (`MJ: AI Personas.PreviewImageURL`), when it has one. */
+    PreviewImageURL?: string;
+}
+
 /** An active Realtime model paired with the voices its driver supports — for the dev model/voice picker. */
 export interface RealtimeModelVoices {
     /** The `MJ: AI Models` row id. */
     ModelID: string;
     /** The model's display name. */
     ModelName: string;
-    /** The provider-native voices the model's driver declares (empty when it declares none). */
-    Voices: RealtimeVoiceOption[];
+    /** The model's persona voices on its vendor, then the driver's other voices (empty when there are none). */
+    Voices: RealtimeModelVoiceOption[];
 }
 
 /**
@@ -269,6 +308,12 @@ export interface RealtimeModelVoices {
  * model/voice picker. Only models with an Active vendor + resolvable API key + ClassFactory driver are
  * returned (a model you can't actually run isn't worth offering). Voices come from the driver
  * ({@link BaseRealtimeModel.SupportedVoices}) — the near-term, driver-owned source of truth.
+ * A persona voice whose persona also has a preset Video binding on the same vendor names that avatar
+ * ({@link RealtimeModelVoiceOption.AvatarID}), when the model shows avatars on that vendor
+ * ({@link RealtimeModelShowsAvatar}: its Video/Output row allows video or it has none, and the driver
+ * renders avatars on its endpoint); driver voices never do. So the picker marks a voice "Comes with an
+ * avatar" only where a call can show one. A persona with a face doesn't stand in for its plain voice, so
+ * the plain voice is listed too.
  *
  * @param contextUser The user the engine config runs as (server-side).
  * @param provider The request-scoped metadata provider (multi-provider safe).
@@ -297,36 +342,69 @@ export async function GetRealtimeModelVoices(
             continue; // no active vendor with a resolvable key — not runnable, so omit
         }
 
-        // 1. Consult metadata first (Personas & PersonaVendors carry curated names/descriptions)
-        const modelPersonas = AIEngine.Instance.GetModelPersonas(model.ID, 'Audio', selection.VendorID);
-        const voices: RealtimeVoiceOption[] = modelPersonas.map((rp) => ({
-            ID: rp.PersonaVendor.APIName,
-            Name: rp.Persona.Name,
-        }));
-
-        // Collect explicitly excluded voice IDs (IsSupported === false) for this model and vendor
-        const excludedVoiceApiNames = new Set(
-            AIEngine.Instance.GetModelPersonaExclusions(model.ID, 'Audio', selection.VendorID)
-                .map((name) => name.toLowerCase())
-        );
-
-        // 2. Union with driver SupportedVoices: append any driver voices not already present or explicitly excluded
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
             BaseRealtimeModel, driverClass, resolveAPIKey(driverClass),
         );
-        for (const dv of instance?.SupportedVoices ?? []) {
-            const dvIdLower = dv.ID.toLowerCase();
-            if (excludedVoiceApiNames.has(dvIdLower)) {
-                continue;
-            }
-            if (!voices.some((v) => v.ID.toLowerCase() === dvIdLower)) {
-                voices.push(dv);
-            }
-        }
+
+        // 1. Consult metadata first (Personas & PersonaVendors carry curated names/descriptions, and avatars where the
+        //    model shows them on this vendor)
+        const showsAvatar = instance ? RealtimeModelShowsAvatar({ ModelID: model.ID, APIName: selection.APIName, Model: instance }, AIEngine.Instance) : false;
+        const voices = personaVoiceOptions(model.ID, selection.VendorID, showsAvatar);
+
+        // 2. Union with driver SupportedVoices: append the driver voices no persona offers plainly, unless excluded
+        appendDriverVoices(voices, instance?.SupportedVoices ?? [], model.ID, selection.VendorID);
 
         out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: voices });
     }
     return out;
+}
+
+/**
+ * Appends the driver's voices that no persona already offers as a plain voice (without a face), skipping the ones the
+ * model explicitly excludes (`IsSupported === false`). A persona with a face doesn't stand in for its plain voice, so the
+ * voice stays pickable without the face. Driver voices have no persona: no avatar, no image.
+ */
+function appendDriverVoices(voices: RealtimeModelVoiceOption[], driverVoices: RealtimeVoiceOption[], modelID: string, vendorID: string): void {
+    const excluded = new Set(
+        AIEngine.Instance.GetModelPersonaExclusions(modelID, 'Audio', vendorID).map((name) => name.toLowerCase())
+    );
+    for (const dv of driverVoices) {
+        const id = dv.ID.toLowerCase();
+        if (!excluded.has(id) && !voices.some((v) => !v.AvatarID && v.ID.toLowerCase() === id)) {
+            voices.push({ ID: dv.ID, Name: dv.Name });
+        }
+    }
+}
+
+/**
+ * The model's persona voices on a vendor, one per persona, in persona order. On a model that shows avatars there, a
+ * persona whose preset Video binding on the same vendor the model supports carries that binding's `APIName` as its avatar
+ * (the face the session asks for when the voice is picked); a binding on any other vendor doesn't count, nor does a custom
+ * one, and with no vendor there is nothing to match. On a model that shows none, no voice comes with an avatar.
+ *
+ * @param showsAvatar Whether the model shows avatars on this vendor ({@link RealtimeModelShowsAvatar}).
+ */
+function personaVoiceOptions(modelID: string, vendorID: string, showsAvatar: boolean): RealtimeModelVoiceOption[] {
+    const faces = vendorID && showsAvatar ? AIEngine.Instance.GetModelPersonas(modelID, 'Video', vendorID).filter(isPresetFace) : [];
+    return AIEngine.Instance.GetModelPersonas(modelID, 'Audio', vendorID).map((voice) => {
+        const face = faces.find((f) => UUIDsEqual(f.Persona.ID, voice.Persona.ID));
+        const image = voice.Persona.PreviewImageURL?.trim();
+        return {
+            ID: voice.PersonaVendor.APIName,
+            Name: voice.Persona.Name,
+            PersonaID: voice.Persona.ID,
+            ...(face ? { AvatarID: face.PersonaVendor.APIName.trim() } : {}),
+            ...(image ? { PreviewImageURL: image } : {}),
+        };
+    });
+}
+
+/**
+ * Whether a Video binding is a face a picked voice can bring: a preset (`Avatar.Kind` absent or `'preset'`). Custom avatars
+ * are not supported, so a session asking for one would stay audio only.
+ */
+function isPresetFace(face: ResolvedModelPersona): boolean {
+    return (face.PersonaVendor.VendorSettingsObject?.Avatar?.Kind ?? 'preset') !== 'custom';
 }
 
 /** Resolves the agent entity from the engine cache by id (preferred), then by case-insensitive name. */

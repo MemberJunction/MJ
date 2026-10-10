@@ -7,6 +7,7 @@ import {
 } from '@memberjunction/core-entities';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
+import type { BridgeDisconnectReason } from '@memberjunction/ai-bridge-base';
 import { GetHostInstanceID } from './HostInstance.js';
 import { WriteReturningVisitorRecap } from './ReturningVisitorRecap.js';
 import { ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
@@ -53,6 +54,24 @@ export interface CreateSessionInput {
  * closed before this column existed.
  */
 export type SessionCloseReason = 'Explicit' | 'Janitor' | 'Shutdown' | 'Error';
+
+/**
+ * The {@link SessionCloseReason} for a session whose bridged agent has left (see
+ * {@link SessionManager.CloseSessionForEndedBridge}). The bridge's reason carries over where the session has the same one;
+ * `HostEnded` (everyone left the room, the call hung up) closes it as `Explicit`, people ending it, as phone calls close
+ * theirs.
+ */
+function sessionCloseReasonForBridgeEnd(reason: BridgeDisconnectReason): SessionCloseReason {
+    switch (reason) {
+        case 'Error':
+        case 'Janitor':
+        case 'Shutdown':
+            return reason;
+        case 'Explicit':
+        case 'HostEnded':
+            return 'Explicit';
+    }
+}
 
 /**
  * Thrown by {@link SessionManager.CreateSession} when the caller lacks `CanRun` on the target
@@ -209,6 +228,68 @@ export class SessionManager {
         // Best-effort + no-op for non-returning-visitor conversations; never blocks teardown.
         await WriteReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
         return true;
+    }
+
+    /**
+     * Closes a session that was created for one bridged agent (a bot in a meeting room) once that agent's bridge has
+     * ended, whatever ended it: the agent was stopped, the meeting was ended, everyone left, the model session was lost.
+     * Without this the session stays `Active` until the janitor's staleness sweep closes it, 15 minutes or more later.
+     *
+     * The close is {@link CloseSession}, the one the janitor runs, with the bridge's reason: `Explicit` for a stop, an
+     * ended meeting or an emptied room (`HostEnded`), otherwise the bridge's own (`Error`, `Janitor`, `Shutdown`). A
+     * session already closed (by the janitor, or by its user) keeps its reason.
+     *
+     * Never throws: it runs as the bridge's end-of-session bookkeeping. A failure is logged and leaves the session to the
+     * janitor, as before.
+     *
+     * @param agentSessionID The session created for the bridged agent.
+     * @param reason Why the bridge ended.
+     * @param contextUser The user the session was created for.
+     * @param provider The metadata provider the session was created through.
+     * @returns `true` when the session is (or already was) closed.
+     */
+    public async CloseSessionForEndedBridge(
+        agentSessionID: string,
+        reason: BridgeDisconnectReason,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        try {
+            return await this.CloseSession(agentSessionID, contextUser, provider, sessionCloseReasonForBridgeEnd(reason));
+        } catch (e) {
+            LogError(
+                `SessionManager.CloseSessionForEndedBridge could not close agent session ${agentSessionID} after its bridge ended ` +
+                    `(${reason}); the janitor will: ${e instanceof Error ? e.message : String(e)}`,
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Closes a session that was created for one agent's time in a room when that agent failed to start: its model session
+     * could not open, the bot's token could not be minted, the bridge did not start. The agent never joined, so no
+     * end-of-session hook will close the session; without this it stays `Active` until the janitor's staleness sweep.
+     *
+     * The close is {@link CloseSession} with reason `Error`. A session already closed keeps its reason.
+     *
+     * Never throws: it runs while the caller handles the failed start, whose error is the one the caller reports. A failure
+     * is logged and leaves the session to the janitor.
+     *
+     * @param agentSessionID The session created for the agent.
+     * @param contextUser The user the session was created for.
+     * @param provider The metadata provider the session was created through.
+     * @returns `true` when the session is (or already was) closed.
+     */
+    public async CloseSessionForFailedStart(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<boolean> {
+        try {
+            return await this.CloseSession(agentSessionID, contextUser, provider, 'Error');
+        } catch (e) {
+            LogError(
+                `SessionManager.CloseSessionForFailedStart could not close agent session ${agentSessionID} after its agent failed ` +
+                    `to start; the janitor will: ${e instanceof Error ? e.message : String(e)}`,
+            );
+            return false;
+        }
     }
 
     /**

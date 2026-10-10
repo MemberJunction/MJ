@@ -1,0 +1,39 @@
+:host {
+  /* The device menu opens above the controls, placed against them. */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-2-5);
+}
+
+/* One control: its button and, with labels on, its label beneath. */
+.control {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.control__label {
+  margin-top: var(--mj-space-1-5);
+  font-size: var(--mj-text-xs);
+  font-weight: 500;
+  color: var(--mj-text-muted);
+  text-align: center;
+}
+
+/* The Share button and its arrow read as one control, as the microphone and its device chevron do. */
+.share,
+.microphone {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-0-5);
+}
+
+/* The device menu: above the controls and centered on them, over what lies behind (a call's stage). */
+.devices {
+  position: absolute;
+  bottom: calc(100% + var(--mj-space-3));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+}

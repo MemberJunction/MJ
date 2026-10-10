@@ -25,10 +25,15 @@ export interface IRealtimeDataChannel {
     close(): void;
 }
 
+/** The subset of `RTCRtpSender` this client uses: moving a sender to another microphone track. */
+export interface IRealtimeRtpSender {
+    replaceTrack(track: MediaStreamTrack | null): Promise<void>; // case-violation-ok-legacy-back-compat: the platform's RTCRtpSender name, so a real sender satisfies this interface
+}
+
 /** The subset of `RTCPeerConnection` this client uses. */
 export interface IRealtimePeerConnection {
     ontrack: ((event: RTCTrackEvent) => void) | null;
-    addTrack(track: MediaStreamTrack, stream: MediaStream): void;
+    addTrack(track: MediaStreamTrack, stream: MediaStream): IRealtimeRtpSender;
     createDataChannel(label: string): IRealtimeDataChannel;
     createOffer(): Promise<RTCSessionDescriptionInit>;
     setLocalDescription(description: RTCSessionDescriptionInit): Promise<void>;
@@ -65,6 +70,8 @@ export interface IRealtimeAudioSink {
 export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
     // ── Transport ──────────────────────────────────────────────────────────────
     private peerConnection: IRealtimePeerConnection | null = null;
+    /** The senders carrying the mic tracks, kept so {@link ReplaceMicrophone} can move them to a new track. */
+    private micSenders: IRealtimeRtpSender[] = [];
     /** Protected so test subclasses can inspect/inject; production code treats it as private. */
     protected dataChannel: IRealtimeDataChannel | null = null;
     private remoteAudioEl: IRealtimeAudioSink | null = null;
@@ -89,6 +96,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
      * data channel opens; the client reports `'listening'` at that point.
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
+        this.AssertTransportSupported(config);
         this.sessionConfig = config.SessionConfig;
         this.micStream = micStream;
         this.setState('connecting');
@@ -108,6 +116,23 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
     }
 
     /**
+     * Moves the mic senders and the input meter to the stream's current tracks (obligation #10).
+     * `replaceTrack` needs no renegotiation, so the call carries on.
+     */
+    public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
+        if (this.micSenders.length === 0) {
+            return;
+        }
+        const tracks = micStream.getAudioTracks();
+        if (tracks.length === 0) {
+            throw new Error('The microphone stream has no audio track.');
+        }
+        await Promise.all(this.micSenders.map((sender, index) => sender.replaceTrack(tracks[index] ?? null)));
+        this.micStream = micStream;
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
+    }
+
+    /**
      * Tears down the channel, peer connection, mic tracks, and audio sink, resets the
      * response state machine, and emits a final `'closed'` (unless already `'error'`).
      */
@@ -115,6 +140,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         this.closeAudioMeters();
         this.micStream?.getTracks().forEach((t) => t.stop());
         this.micStream = null;
+        this.micSenders = [];
 
         if (this.dataChannel) {
             try { this.dataChannel.close(); } catch { /* already closing */ }
@@ -232,11 +258,9 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
 
     // ── Connection internals ───────────────────────────────────────────────────
 
-    /** Streams the mic tracks to the provider. */
+    /** Streams the mic tracks to the provider, keeping their senders. */
     private attachMicrophone(pc: IRealtimePeerConnection, micStream: MediaStream): void {
-        for (const track of micStream.getAudioTracks()) {
-            pc.addTrack(track, micStream);
-        }
+        this.micSenders = micStream.getAudioTracks().map((track) => pc.addTrack(track, micStream));
     }
 
     /** Routes the provider's audio track into the hidden `<audio>` sink. */

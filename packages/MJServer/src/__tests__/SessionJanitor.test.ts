@@ -19,8 +19,20 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 import { SessionJanitor } from '../agentSessions/SessionJanitor.js';
-import { GetHostInstanceID, GetHostNamePrefix } from '../agentSessions/HostInstance.js';
+import {
+    GetCurrentHostInstance,
+    GetHostInstanceID,
+    HostInstanceIdentity,
+    SetHostInstancePort,
+} from '../agentSessions/HostInstance.js';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
+
+/** The port this test process "serves" on, set the way `Serve` sets it, before anything reads the identity. */
+const OUR_PORT = 4000;
+/** The port of a second MJAPI on the same host. */
+const OTHER_PORT = 4100;
+SetHostInstancePort(OUR_PORT);
 
 interface FakeSession {
     ID: string;
@@ -105,29 +117,129 @@ beforeEach(() => {
     SessionJanitor.Instance.Stop();
 });
 
-describe('SessionJanitor.RunStartupRecovery', () => {
-    it('closes prior-boot orphans of this host but not current-host or other-host sessions', async () => {
-        // The sweep SQL filters by host prefix + "<> current"; here we emulate the DB by having
-        // runViewMock return only the rows that filter WOULD match (prior-boot orphans). We assert
-        // (a) the filter is correct and (b) the returned orphans get closed.
-        const orphan = { ID: 'orphan-1', Status: 'Active' };
-        sessionPages = [{ Success: true, Results: [orphan] }];
+type SessionStatus = MJAIAgentSessionEntity['Status'];
 
-        const store = new Map<string, 'Active' | 'Idle' | 'Closed'>([['orphan-1', 'Active']]);
+/** A session row as the recovery sweep reads it. */
+interface SessionRow {
+    ID: string;
+    Status: SessionStatus;
+    HostInstanceID: string;
+}
+
+/**
+ * Answer the session sweep's reads from `rows` the way the database answers the recovery filter: rows still open in
+ * `store` whose `HostInstanceID` starts with the filter's `LIKE` prefix and isn't the id it excludes. Channel reads
+ * return nothing.
+ */
+function serveSessionReadsFrom(rows: SessionRow[], store: Map<string, SessionStatus>): void {
+    runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter: string }) => {
+        if (params.EntityName !== 'MJ: AI Agent Sessions') {
+            return { Success: true, Results: [] };
+        }
+        const likePrefix = /HostInstanceID LIKE '(.*?)%'/.exec(params.ExtraFilter)?.[1] ?? '';
+        const excluded = /HostInstanceID <> '(.*?)'/.exec(params.ExtraFilter)?.[1];
+        const results = rows
+            .filter((r) => store.get(r.ID) !== 'Closed')
+            .filter((r) => r.HostInstanceID.startsWith(likePrefix) && r.HostInstanceID !== excluded)
+            .map((r) => ({ ...r, Status: store.get(r.ID) }));
+        return { Success: true, Results: results };
+    });
+}
+
+/** The status map a provider from {@link makeProvider} loads and saves through, built from `rows`. */
+function storeOf(rows: SessionRow[]): Map<string, SessionStatus> {
+    return new Map(rows.map((r) => [r.ID, r.Status]));
+}
+
+describe('SessionJanitor.RunStartupRecovery', () => {
+    const ours = GetCurrentHostInstance();
+
+    it('closes the sessions an earlier boot of this instance left, and nothing else (one MJAPI, as before)', async () => {
+        const rows: SessionRow[] = [
+            { ID: 'before-restart', Status: 'Active', HostInstanceID: `${ours.GetInstancePrefix()}31337:boot-before` },
+            // The OS gave the restarted process the same pid; the boot id still differs.
+            { ID: 'before-restart-same-pid', Status: 'Idle', HostInstanceID: `${ours.GetInstancePrefix()}${ours.ProcessID}:boot-before` },
+            { ID: 'this-boot', Status: 'Active', HostInstanceID: ours.GetHostInstanceID() },
+            { ID: 'other-host', Status: 'Active', HostInstanceID: `other-host:${OUR_PORT}:31337:boot-other` },
+        ];
+        const store = storeOf(rows);
+        serveSessionReadsFrom(rows, store);
         const { provider, closedIds, closedReasons } = makeProvider(store);
 
         const count = await SessionJanitor.Instance.RunStartupRecovery(provider, makeUser());
 
-        expect(count).toBe(1);
-        expect(closedIds).toContain('orphan-1');
-        // Orphan recovery stamps the janitor close cause.
-        expect(closedReasons.get('orphan-1')).toBe('Janitor');
+        expect(count).toBe(2);
+        expect([...closedIds].sort()).toEqual(['before-restart', 'before-restart-same-pid']);
+        expect(closedReasons.get('before-restart')).toBe('Janitor');
+        expect(store.get('this-boot')).toBe('Active');
+        expect(store.get('other-host')).toBe('Active');
 
-        // Assert the recovery filter targets this host's *other* boots, never the current instance.
+        // The read is narrowed to this instance's other boots: its host and port, never this boot.
         const filter = sessionSweepCalls()[0][0].ExtraFilter as string;
         expect(filter).toContain("Status IN ('Active','Idle')");
-        expect(filter).toContain(`HostInstanceID LIKE '${GetHostNamePrefix()}%'`);
+        expect(filter).toContain(`HostInstanceID LIKE '${ours.GetInstancePrefix()}%'`);
         expect(filter).toContain(`HostInstanceID <> '${GetHostInstanceID()}'`);
+        expect(ours.GetInstancePrefix()).toContain(`:${OUR_PORT}:`);
+    });
+
+    it('leaves rows stamped before the port was added (hostname:pid:bootId) to the staleness sweep', async () => {
+        // Its pid happens to equal our port, so the LIKE prefix reads it; the row check rejects it (it has no port).
+        const rows: SessionRow[] = [
+            { ID: 'pre-upgrade', Status: 'Active', HostInstanceID: `${ours.HostName}:${OUR_PORT}:boot-before-upgrade` },
+        ];
+        const store = storeOf(rows);
+        serveSessionReadsFrom(rows, store);
+        const { provider, closedIds } = makeProvider(store);
+
+        const count = await SessionJanitor.Instance.RunStartupRecovery(provider, makeUser());
+
+        expect(count).toBe(0);
+        expect(closedIds).toEqual([]);
+    });
+});
+
+describe('SessionJanitor.RunStartupRecovery with two MJAPIs on one host (#5309)', () => {
+    const ours = GetCurrentHostInstance();
+    const theirs = new HostInstanceIdentity(ours.HostName, String(OTHER_PORT), 40404, 'boot-theirs');
+
+    /** Both instances' live sessions, and one each left by an earlier boot. */
+    function sharedTable(): SessionRow[] {
+        return [
+            { ID: 'ours-live', Status: 'Active', HostInstanceID: ours.GetHostInstanceID() },
+            { ID: 'ours-stale', Status: 'Idle', HostInstanceID: `${ours.GetInstancePrefix()}31337:boot-ours-before` },
+            { ID: 'theirs-live', Status: 'Active', HostInstanceID: theirs.GetHostInstanceID() },
+            { ID: 'theirs-stale', Status: 'Active', HostInstanceID: `${theirs.GetInstancePrefix()}27182:boot-theirs-before` },
+        ];
+    }
+
+    it("closes its own stale sessions and leaves the other MJAPI's live sessions open", async () => {
+        const rows = sharedTable();
+        const store = storeOf(rows);
+        serveSessionReadsFrom(rows, store);
+        const { provider, closedIds } = makeProvider(store);
+
+        const count = await SessionJanitor.Instance.RunStartupRecovery(provider, makeUser());
+
+        expect(count).toBe(1);
+        expect(closedIds).toEqual(['ours-stale']);
+        expect(store.get('theirs-live')).toBe('Active');
+        expect(store.get('theirs-stale')).toBe('Active');
+        expect(store.get('ours-live')).toBe('Active');
+    });
+
+    it("the other MJAPI's recovery closes its stale sessions and leaves this one's live sessions open", async () => {
+        const rows = sharedTable();
+        const store = storeOf(rows);
+        serveSessionReadsFrom(rows, store);
+        const { provider, closedIds } = makeProvider(store);
+
+        const count = await SessionJanitor.Instance.RunStartupRecovery(provider, makeUser(), theirs);
+
+        expect(count).toBe(1);
+        expect(closedIds).toEqual(['theirs-stale']);
+        expect(store.get('ours-live')).toBe('Active');
+        expect(store.get('ours-stale')).toBe('Idle');
+        expect(store.get('theirs-live')).toBe('Active');
     });
 });
 

@@ -162,8 +162,9 @@ import {
     SiliconFlowLLM,
 } from '@memberjunction/ai-siliconflow';
 
-// @memberjunction/ai-vertex (1 classes)
+// @memberjunction/ai-vertex (2 classes)
 import {
+    GeminiEnterpriseRealtime,
     VertexLLM,
 } from '@memberjunction/ai-vertex';
 
@@ -1702,6 +1703,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenRouterDecision,
     OpenRouterLLM,
     SiliconFlowLLM,
+    GeminiEnterpriseRealtime,
     VertexLLM,
     xAILLM,
     xAIRealtime,
@@ -1858,11 +1860,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCommunicationProviderEntity,
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
-    MJCompanyEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
@@ -2062,11 +2064,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
-    MJRecordCloneLogItemEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
@@ -2266,11 +2268,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetSurveyMonkeyResponsesAction,
     GetSurveyMonkeyStatisticsAction,
     GetTypeformAction,
-    GetTypeformFileContentAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetTypeformFileContentAction,
     GetTypeformFormsAction,
     GetTypeformResponsesAction,
     GetTypeformStatisticsAction,
@@ -2470,11 +2472,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
-    FlowAgentType,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    FlowAgentType,
     GenericBinaryToolLibrary,
     IdentityVerificationChannelServer,
     InteractiveComponentChannelServer,
@@ -2674,11 +2676,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CopyObjectAction,
     CreateDirectoryAction,
     CreateDocumentAction,
-    CreateEmployeeAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CreateEmployeeAction,
     CreateFormContributionAction,
     CreateInteractiveFormAction,
     CreateListAction,
@@ -2846,7 +2848,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1151;
+export const CLASS_REGISTRATIONS_COUNT = 1152;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

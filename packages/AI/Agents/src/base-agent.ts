@@ -2659,6 +2659,12 @@ export class BaseAgent {
             UserID: params.contextUser?.ID,
             DisableAutoResponse: meetingMode || undefined,
             SelfNames: selfNames,
+            // The bridge's bot can publish the agent's avatar into the room (set by the room coordinator after it asked).
+            AvatarDelivery: params.data?.realtimeAvatarDelivery === 'room' ? 'room' : undefined,
+            // A server-side session: without room delivery it can't show an avatar, so the model choice prefers none.
+            ServerSide: true,
+            // A phone call (set by the telephony hosts): the caller sees no video, so the session asks for no avatar.
+            PhoneCall: params.data?.realtimePhoneCall === true || undefined,
             // App awareness (Move 1/3/4): the app the session runs in (sources the app cascade layer +
             // RelevantAgents → allowed-agent union) and the live app-context snapshot injected at mint.
             // Both ride params.data, the same conduit async agents use for appContext.

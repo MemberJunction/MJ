@@ -200,35 +200,44 @@ export function BuildRealtimeModelOptions(models: ReadonlyArray<VoiceModelCandid
 
 /**
  * Builds the `configOverridesJson` payload for the `StartRealtimeClientSession` mint from
- * what the (authorization-gated) pickers chose — an explicit realtime model preference and/or a
- * voice. The envelope (`{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}}}}`)
+ * what the (authorization-gated) pickers chose — an explicit realtime model preference, a
+ * voice, and the avatar that comes with that voice. The envelope
+ * (`{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}},"video":{"enabled":true,"avatarId":"<a>"}}}`)
  * is the pinned server contract, merged into the effective config server-side (highest precedence).
  *
  * The voice is filed PROVIDER-AGNOSTICALLY: the browser has a model id, never a vendor `DriverClass`
  * (`GetRealtimeModelVoices` does not return one), so naming a provider here would be a guess that
  * silently voided the setting for every non-OpenAI vendor. The server files it onto whichever driver
- * it resolves. Kept in lockstep with the server-side `BuildRealtimeOverridesJson` in
- * `@memberjunction/ai-agents` by `realtime-convergence-drift.test.ts`. See issue #3530.
+ * it resolves. A picked avatar also turns the session's video on (`enabled: true`); the server accepts
+ * it only when it names a Video binding on the vendor it resolves. Kept in lockstep with the server-side
+ * `BuildRealtimeOverridesJson` in `@memberjunction/ai-agents` by `realtime-convergence-drift.test.ts`.
+ * See issue #3530.
  *
  * @param preferredModelId The explicit `MJ: AI Models` id, or null/empty for none.
  * @param preferredVoice The provider-native voice id (e.g. `echo`), or null/empty for none.
+ * @param preferredAvatarId The avatar that comes with the picked voice (`RealtimeVoiceOption.AvatarID`), or null/empty for none.
  * @returns The JSON string, or `null` when nothing was overridden (keeps the mint identical to default).
  */
 export function BuildRealtimeConfigOverridesJson(
   preferredModelId: string | null | undefined,
   preferredVoice?: string | null | undefined,
+  preferredAvatarId?: string | null | undefined,
 ): string | null {
   const modelId = preferredModelId?.trim() ?? '';
   const voice = preferredVoice?.trim() ?? '';
-  if (modelId.length === 0 && voice.length === 0) {
+  const avatarId = preferredAvatarId?.trim() ?? '';
+  if (modelId.length === 0 && voice.length === 0 && avatarId.length === 0) {
     return null;
   }
-  const realtime: { modelPreference?: string; voice?: { default: { voice: string } } } = {};
+  const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { enabled: true; avatarId: string } } = {};
   if (modelId.length > 0) {
     realtime.modelPreference = modelId;
   }
   if (voice.length > 0) {
     realtime.voice = { default: { voice } };
+  }
+  if (avatarId.length > 0) {
+    realtime.video = { enabled: true, avatarId };
   }
   return JSON.stringify({ realtime });
 }
