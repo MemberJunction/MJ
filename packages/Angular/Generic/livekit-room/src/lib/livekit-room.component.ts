@@ -352,7 +352,11 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   @Output() public StateChanged = new EventEmitter<LiveKitRoomState>();
   /** Fired when a room error occurs. */
   @Output() public ErrorOccurred = new EventEmitter<LiveKitRoomError>();
-  /** Fired when a chat message (chat-topic data) is received or sent locally. */
+  /**
+   * Fired when a chat message (chat-topic data) is received, and when the user's own message has gone out. A message
+   * that does not go out is not reported here: the chat marks it not sent, and the controller's failure, if any, comes
+   * through {@link ErrorOccurred}.
+   */
   @Output() public ChatMessage = new EventEmitter<LiveKitChatMessage>();
   /** Fired when the user toggles recording (the host performs the server-side egress call). */
   @Output() public ToggleRecording = new EventEmitter<void>();
@@ -969,16 +973,35 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   public onSplitDragEnd(): void {
     return this.OnSplitDragEnd();
   }
-  /** Sends a chat message on the chat topic and optimistically renders it locally. */
+  /**
+   * Sends a chat message on the chat topic and shows it in the chat at once. Once it has gone out it is reported on
+   * {@link ChatMessage}; one that does not go out is marked not sent ({@link LiveKitChatMessage.NotSent}), with a Retry
+   * ({@link OnRetryChat}).
+   */
   public OnSendChat(text: string): void {
-    void this.controller.SendData(text, LIVEKIT_CHAT_TOPIC);
-    this.addChatMessage({
+    const message: LiveKitChatMessage = {
       Sender: this.DisplayName ?? 'You',
       SenderIdentity: this.State.Local?.Identity,
       Text: text,
       Timestamp: Date.now(),
       IsLocal: true,
-    });
+    };
+    this.ChatMessages = [...this.ChatMessages, message];
+    this.cdr.markForCheck();
+    void this.sendChatMessage(message);
+  }
+
+  /**
+   * Sends a message marked not sent again, from its Retry: the marked message goes, and the text is sent as a new
+   * message at the end of the chat, where the others will see it. Does nothing for a message that is not marked not
+   * sent or is no longer in the chat.
+   */
+  public OnRetryChat(message: LiveKitChatMessage): void {
+    if (!message.NotSent || !this.ChatMessages.includes(message)) {
+      return;
+    }
+    this.ChatMessages = this.ChatMessages.filter((m) => m !== message);
+    this.OnSendChat(message.Text);
   }
 
   /** @deprecated Use {@link OnSendChat}. */
@@ -1234,10 +1257,43 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     });
   }
 
-  /** Appends a chat message, bumps the unread count when the panel is closed, and emits {@link ChatMessage}. */
+  /**
+   * Publishes the user's chat message, then reports it on {@link ChatMessage}, or marks it not sent when it did not go
+   * out (a controller that throws instead of resolving `false` included).
+   */
+  private async sendChatMessage(message: LiveKitChatMessage): Promise<void> {
+    let sent = false;
+    try {
+      sent = await this.controller.SendData(message.Text, LIVEKIT_CHAT_TOPIC);
+    } finally {
+      this.runInZone(() => {
+        if (sent) {
+          this.ChatMessage.emit(message);
+        } else {
+          this.markChatMessageNotSent(message);
+        }
+      });
+    }
+  }
+
+  /**
+   * Marks the user's message not sent, where it is in the chat. With the chat panel closed, the chat button's badge counts
+   * it, so the failure shows without the panel.
+   */
+  private markChatMessageNotSent(message: LiveKitChatMessage): void {
+    if (!this.ChatMessages.includes(message)) {
+      return;
+    }
+    this.ChatMessages = this.ChatMessages.map((m) => (m === message ? { ...m, NotSent: true } : m));
+    if (this.SidePanel !== 'chat') {
+      this.UnreadChatCount++;
+    }
+  }
+
+  /** Appends a received chat message, bumps the unread count when the panel is closed, and emits {@link ChatMessage}. */
   private addChatMessage(message: LiveKitChatMessage): void {
     this.ChatMessages = [...this.ChatMessages, message];
-    if (!message.IsLocal && this.SidePanel !== 'chat') {
+    if (this.SidePanel !== 'chat') {
       this.UnreadChatCount++;
     }
     this.ChatMessage.emit(message);

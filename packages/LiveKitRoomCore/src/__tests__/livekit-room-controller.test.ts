@@ -679,20 +679,37 @@ describe('LiveKitRoomController', () => {
       await controller.Connect('wss://x', 'token');
     });
 
-    it('sends data and allows beforeSendData to rewrite the text', async () => {
+    it('sends data, allows beforeSendData to rewrite the text, and resolves true once it went out', async () => {
       controller.Events.On('beforeSendData', (e) => {
         e.Text = `[prefixed] ${e.Text}`;
       });
-      await controller.SendData('hello');
+      expect(await controller.SendData('hello')).toBe(true);
       const decoded = new TextDecoder().decode(room.localParticipant.publishData.mock.calls[0][0]);
       expect(decoded).toBe('[prefixed] hello');
     });
 
-    it('does not send when beforeSendData is canceled', async () => {
+    it('does not send when beforeSendData is canceled, and resolves false', async () => {
       controller.Events.On('beforeSendData', (e) => {
         e.Cancel = true;
       });
-      await controller.SendData('blocked');
+      expect(await controller.SendData('blocked')).toBe(false);
+      expect(room.localParticipant.publishData).not.toHaveBeenCalled();
+    });
+
+    it('resolves false when the publish fails, and reports it as a data error', async () => {
+      const errors: LiveKitRoomError[] = [];
+      controller.Events.On('error', (e) => errors.push(e));
+      const failed = new Error('publishing rejected as engine not connected within timeout');
+      room.localParticipant.publishData.mockRejectedValueOnce(failed);
+      expect(await controller.SendData('hello', 'lk-chat')).toBe(false);
+      expect(errors).toEqual([{ Kind: 'data', Message: 'Failed to send data message.', Cause: failed }]);
+    });
+
+    it('resolves false outside a room, sending nothing', async () => {
+      const outside = makeController(new FakeRoom(), new FakePicker());
+      expect(await outside.SendData('hello')).toBe(false);
+      await controller.Disconnect();
+      expect(await controller.SendData('hello')).toBe(false);
       expect(room.localParticipant.publishData).not.toHaveBeenCalled();
     });
 

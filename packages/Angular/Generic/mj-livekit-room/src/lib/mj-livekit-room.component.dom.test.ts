@@ -94,7 +94,7 @@ function fakeController(over: Partial<LiveKitRoomState> = {}): ILiveKitRoomContr
     SwitchDevice: vi.fn(() => Promise.resolve()),
     SetNoiseFilterEnabled: vi.fn(() => Promise.resolve(true)),
     SetBackgroundEffect: vi.fn(() => Promise.resolve(true)),
-    SendData: vi.fn(() => Promise.resolve()),
+    SendData: vi.fn(() => Promise.resolve(true)),
     ListDevices: vi.fn(() => Promise.resolve([])),
     GetActiveDeviceId: vi.fn(() => null),
   };

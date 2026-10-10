@@ -156,7 +156,12 @@
 
       @if (SidePanel === "chat" && ShowChat) {
         <aside class="lk-room__panel">
-          <mj-livekit-chat-panel [Messages]="ChatMessages" (Send)="onSendChat($event)" (Close)="onToggleChat()"></mj-livekit-chat-panel>
+          <mj-livekit-chat-panel
+            [Messages]="ChatMessages"
+            (Send)="onSendChat($event)"
+            (Retry)="OnRetryChat($event)"
+            (Close)="onToggleChat()"
+          ></mj-livekit-chat-panel>
         </aside>
       }
       @if (SidePanel === "participants" && ShowParticipantsPanel) {
