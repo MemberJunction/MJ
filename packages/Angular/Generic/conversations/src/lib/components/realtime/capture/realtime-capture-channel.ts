@@ -66,6 +66,7 @@ const STATUS_VALUES = ['off', 'asked', 'starting', 'on', 'failed'];
 export abstract class RealtimeCaptureChannel extends BaseRealtimeChannelClient<RealtimeCaptureSurfaceComponent> {
   private model: RealtimeCaptureModel | null = null;
   private capturesSub: Subscription | null = null;
+  private sourcesSub: Subscription | null = null;
   private surfaceSubs: Subscription[] = [];
 
   /** What makes this channel the camera or the screen share. */
@@ -133,6 +134,8 @@ export abstract class RealtimeCaptureChannel extends BaseRealtimeChannelClient<R
   protected override OnInitialize(): void {
     this.Model.OnChange((change) => this.onModelChange(change));
     this.Model.SetAgentCanSee(this.Exposure === 'pixels');
+    // The sources first, so the model knows whether the capture's frames are sent before it hears the capture is on.
+    this.sourcesSub = this.Context?.VideoSources$?.subscribe((sources) => this.Model.FollowVideoSources(sources)) ?? null;
     this.capturesSub =
       this.Context?.Captures$?.subscribe((states) => this.Model.FollowCapture(this.CaptureKind === 'camera' ? states.Camera : states.Screen)) ?? null;
   }
@@ -168,6 +171,8 @@ export abstract class RealtimeCaptureChannel extends BaseRealtimeChannelClient<R
   public override Dispose(): void {
     this.capturesSub?.unsubscribe();
     this.capturesSub = null;
+    this.sourcesSub?.unsubscribe();
+    this.sourcesSub = null;
     this.unbindSurfaceOutputs();
     this.Model.OnChange(null);
     super.Dispose();

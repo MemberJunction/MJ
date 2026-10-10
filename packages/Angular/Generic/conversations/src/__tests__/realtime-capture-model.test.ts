@@ -1,8 +1,24 @@
 import { describe, it, expect } from 'vitest';
+import type { VideoSourceState } from '@memberjunction/ai-realtime-client/media';
 import { RealtimeCaptureModel, type RealtimeCaptureChange } from '../lib/components/realtime/capture/realtime-capture-model';
 
 /** A stream the model only passes on. */
 const stream = (name: string): MediaStream => ({ id: name }) as unknown as MediaStream;
+
+/**
+ * A capture's source as the session's video source arbiter lists it: on and sent to the model unless the test says
+ * otherwise. The ids are the arbiter's for the camera and the screen share.
+ */
+const source = (kind: 'camera' | 'screen', state: Partial<VideoSourceState> = {}): VideoSourceState => ({
+  SourceID: `capture:${kind}`,
+  Label: kind === 'camera' ? 'Camera' : 'Shared screen',
+  Kind: kind,
+  ChannelKey: kind === 'camera' ? 'Camera' : 'ScreenShare',
+  Enabled: true,
+  Active: true,
+  FramesSent: 0,
+  ...state,
+});
 
 function model(kind: 'camera' | 'screen' = 'camera') {
   const m = new RealtimeCaptureModel(kind);
@@ -146,7 +162,7 @@ describe('RealtimeCaptureModel', () => {
     expect(m.ToState()).toEqual({ status: 'failed', reason: 'please', problem: 'Camera permission was denied.' });
   });
 
-  it('says the agent can see the capture only while it is on and the channel allows pixels', () => {
+  it('says the agent can see the capture only while it is on and the channel allows pixels, on a host that reports no sources', () => {
     const { m, changes } = model();
     m.SetAgentCanSee(true);
     expect(m.View.AgentCanSee).toBe(false);
@@ -155,5 +171,83 @@ describe('RealtimeCaptureModel', () => {
     m.SetAgentCanSee(false);
     expect(m.View.AgentCanSee).toBe(false);
     expect(changes.at(-1)?.Event).toBeNull();
+  });
+
+  describe('whether the model is sent the frames (#5373)', () => {
+    /** A camera that is on, on a channel that lets the agent see pixels. */
+    const cameraOn = () => {
+      const result = model();
+      result.m.SetAgentCanSee(true);
+      result.m.FollowCapture({ Status: 'on', Stream: stream('cam') });
+      return result;
+    };
+
+    it("says the agent can see the camera while the camera's source is on and active", () => {
+      const { m } = cameraOn();
+      m.FollowVideoSources([source('camera')]);
+      expect(m.View.AgentCanSee).toBe(true);
+    });
+
+    it('stops saying so while a screen share started after it is the one the model is sent, and says so again once the user picks the camera', () => {
+      const { m } = cameraOn();
+      m.FollowVideoSources([source('camera')]);
+      m.FollowVideoSources([source('camera', { Active: false }), source('screen')]);
+      expect(m.View.AgentCanSee).toBe(false);
+      m.FollowVideoSources([source('camera', { Picked: true }), source('screen', { Active: false })]);
+      expect(m.View.AgentCanSee).toBe(true);
+    });
+
+    it("changes only the view: the channel's state, and so what the agent is told, stays the same", () => {
+      const { m, changes } = cameraOn();
+      const before = changes.length;
+      const state = m.ToState();
+      m.FollowVideoSources([source('camera')]);
+      m.FollowVideoSources([source('camera', { Active: false }), source('screen')]);
+      expect(changes).toHaveLength(before);
+      expect(m.ToState()).toEqual(state);
+    });
+
+    it("does not say so while the camera's source is off, or not listed", () => {
+      const { m } = cameraOn();
+      m.FollowVideoSources([source('camera', { Enabled: false, Active: false })]);
+      expect(m.View.AgentCanSee).toBe(false);
+      m.FollowVideoSources([source('camera')]);
+      m.FollowVideoSources([source('screen')]);
+      expect(m.View.AgentCanSee).toBe(false);
+      m.FollowVideoSources([]);
+      expect(m.View.AgentCanSee).toBe(false);
+    });
+
+    it('still needs the capture on and the channel to allow pixels, whatever the sources say', () => {
+      const { m } = model();
+      m.FollowVideoSources([source('camera')]);
+      m.SetAgentCanSee(true);
+      expect(m.View.AgentCanSee).toBe(false);
+      m.FollowCapture({ Status: 'on', Stream: stream('cam') });
+      expect(m.View.AgentCanSee).toBe(true);
+      m.SetAgentCanSee(false);
+      expect(m.View.AgentCanSee).toBe(false);
+    });
+
+    it("reads a screen share's own source", () => {
+      const { m } = model('screen');
+      m.SetAgentCanSee(true);
+      m.FollowCapture({ Status: 'on', Stream: stream('scr'), Surface: 'window' });
+      m.FollowVideoSources([source('screen', { Active: false }), source('camera')]);
+      expect(m.View.AgentCanSee).toBe(false);
+      m.FollowVideoSources([source('camera', { Active: false }), source('screen')]);
+      expect(m.View.AgentCanSee).toBe(true);
+    });
+
+    it('shows a new view only when the answer changes', () => {
+      const { m } = cameraOn();
+      m.FollowVideoSources([source('camera')]);
+      const views: boolean[] = [];
+      m.View$.subscribe((view) => views.push(view.AgentCanSee));
+      m.FollowVideoSources([source('camera', { FramesSent: 4 }), source('screen', { Enabled: false, Active: false })]);
+      m.FollowVideoSources([source('camera', { Active: false }), source('screen')]);
+      m.FollowVideoSources([source('camera', { Active: false }), source('screen', { FramesSent: 9 })]);
+      expect(views).toEqual([true, false]);
+    });
   });
 });

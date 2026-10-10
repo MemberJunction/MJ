@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Component, Input } from '@angular/core';
+import { BehaviorSubject } from 'rxjs';
+import type { VideoSourceState } from '@memberjunction/ai-realtime-client';
+import { REALTIME_CAPTURES_OFF, type RealtimeCaptureStates } from '@memberjunction/realtime-runtime';
 import { renderComponentFixture, query, queryAll, text, capture, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
+import { RealtimePerceptionChipComponent } from '../realtime-perception-chip.component';
+import { RealtimeCameraChannel } from './realtime-capture-channel';
 import { RealtimeCaptureModel } from './realtime-capture-model';
 import { RealtimeCaptureSurfaceComponent } from './realtime-capture-surface.component';
 
@@ -9,6 +15,20 @@ import { RealtimeCaptureSurfaceComponent } from './realtime-capture-surface.comp
  * user's buttons out. Real template, real `mj-self-view` and `mj-share-preview`.
  */
 const stream = (name: string): MediaStream => ({ id: name, getTracks: () => [] }) as unknown as MediaStream;
+
+/** The camera's surface beside the "Agent can see" chip, as a call shows them, both fed from the session. */
+@Component({
+  standalone: true,
+  imports: [RealtimeCaptureSurfaceComponent, RealtimePerceptionChipComponent],
+  template: `
+    <mj-realtime-perception-chip [Sources]="Sources"></mj-realtime-perception-chip>
+    <mj-realtime-capture-surface [Model]="Model" AgentName="Sage"></mj-realtime-capture-surface>
+  `,
+})
+class CameraBesideChipHost {
+  @Input() public Model: RealtimeCaptureModel | null = null;
+  @Input() public Sources: readonly VideoSourceState[] = [];
+}
 
 function render(kind: 'camera' | 'screen' = 'camera', configure: (m: RealtimeCaptureModel) => void = () => undefined) {
   const model = new RealtimeCaptureModel(kind);
@@ -107,5 +127,83 @@ describe('RealtimeCaptureSurfaceComponent (DOM)', () => {
   it('has no accessibility violations while asking', async () => {
     const { fixture } = render('camera', (m) => m.Ask('please'));
     await ExpectNoAxeViolations(fixture);
+  });
+
+  describe('"Agent can see this" while the camera is on, following the frames the model is sent (#5373)', () => {
+    /** A capture's source as the session's video source arbiter lists it: on and sent to the model unless the test says otherwise. */
+    const source = (kind: 'camera' | 'screen', state: Partial<VideoSourceState> = {}): VideoSourceState => ({
+      SourceID: `capture:${kind}`,
+      Label: kind === 'camera' ? 'Camera' : 'Shared screen',
+      Kind: kind,
+      ChannelKey: kind === 'camera' ? 'Camera' : 'ScreenShare',
+      Enabled: true,
+      Active: true,
+      FramesSent: 0,
+      ...state,
+    });
+
+    /**
+     * A call with the camera on and the Camera channel in it. The session's captures and video sources reach the channel
+     * through its context; `publish` hands a source list to the channel and, as the call overlay does, to the chip.
+     */
+    function cameraOnInCall() {
+      const captures = new BehaviorSubject<RealtimeCaptureStates>({ ...REALTIME_CAPTURES_OFF, Camera: { Status: 'on', Stream: stream('cam') } });
+      const sources = new BehaviorSubject<readonly VideoSourceState[]>([]);
+      const camera = new RealtimeCameraChannel();
+      camera.Initialize({
+        AgentName: 'Sage',
+        Provider: null,
+        SendContextNote: () => undefined,
+        RequestSave: () => undefined,
+        SetFocusMode: () => undefined,
+        SaveAsArtifact: async () => null,
+        AgentSessionID: 'session-1',
+        ExecuteServerAction: async () => null,
+        Captures$: captures.asObservable(),
+        VideoSources$: sources.asObservable(),
+      });
+      const fixture = renderComponentFixture(CameraBesideChipHost, { inputs: { Model: camera.Model } });
+      const publish = (list: readonly VideoSourceState[]): void => {
+        sources.next(list);
+        fixture.componentRef.setInput('Sources', list);
+        fixture.detectChanges();
+      };
+      return { fixture, publish };
+    }
+
+    const badge = (fixture: ReturnType<typeof cameraOnInCall>['fixture']) => query(fixture, 'mj-self-view .self__badge');
+    const chip = (fixture: ReturnType<typeof cameraOnInCall>['fixture']) => text(fixture, '.perception-chip__summary');
+
+    it('shows the badge while the camera is on and nothing else is shared', () => {
+      const { fixture, publish } = cameraOnInCall();
+      publish([source('camera')]);
+      expect(query(fixture, 'mj-self-view')).not.toBeNull();
+      expect(text(fixture, 'mj-self-view .self__badge')).toBe('Agent can see this');
+      expect(chip(fixture)).toBe('Agent can see: Camera');
+    });
+
+    it('takes it away while a screen share on a one-stream model is what the model is sent, as the chip says', () => {
+      const { fixture, publish } = cameraOnInCall();
+      publish([source('camera')]);
+      publish([source('camera', { Active: false }), source('screen')]);
+      expect(query(fixture, 'mj-self-view')).not.toBeNull();
+      expect(badge(fixture)).toBeNull();
+      expect(chip(fixture)).toBe('Agent sees: Shared screen');
+    });
+
+    it('brings it back when the user picks the camera under "Agent sees"', () => {
+      const { fixture, publish } = cameraOnInCall();
+      publish([source('camera', { Active: false }), source('screen')]);
+      publish([source('camera', { Picked: true }), source('screen', { Active: false })]);
+      expect(text(fixture, 'mj-self-view .self__badge')).toBe('Agent can see this');
+      expect(chip(fixture)).toBe('Agent sees: Camera');
+    });
+
+    it('shows no badge while the user has turned the camera off for the agent', () => {
+      const { fixture, publish } = cameraOnInCall();
+      publish([source('camera', { Enabled: false, Active: false }), source('screen')]);
+      expect(badge(fixture)).toBeNull();
+      expect(chip(fixture)).toBe('Agent can see: Shared screen');
+    });
   });
 });
