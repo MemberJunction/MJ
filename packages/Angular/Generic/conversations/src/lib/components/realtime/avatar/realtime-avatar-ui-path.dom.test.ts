@@ -124,6 +124,14 @@ class SyntheticProviderEnd {
     this.Wire.Send({ Kind: 'frame', Frame: fmp4Frame(ConformanceFmp4InitSegment(true)) });
   }
 
+  /**
+   * The model's first words, transcribed: its answer is under way. Video that comes outside an answer is idle (a provider
+   * may stream it between answers): it plays, but is not the agent speaking.
+   */
+  public AnswerStarted(): void {
+    this.Wire.Send({ Kind: 'transcript', Text: 'Here is what I found.' });
+  }
+
   /** The model sends `count` frames of video, each a one-frame fragment of 1/24 s. */
   public SendFrames(count: number): void {
     for (let i = 0; i < count; i++) {
@@ -359,6 +367,7 @@ describe("The agent's video from a provider that passes the conformance kit, thr
       expect(chips(fixture)).toEqual(['Listening']);
 
       provider.StartVideo();
+      provider.AnswerStarted();
       provider.SendFrames(12);
       paint();
       fixture.detectChanges();
@@ -378,6 +387,7 @@ describe("The agent's video from a provider that passes the conformance kit, thr
       const attach = vi.spyOn(source, 'Attach');
       const fixture = showAvatar(call);
       provider.StartVideo();
+      provider.AnswerStarted();
       provider.SendFrames(6);
       paint();
       fixture.detectChanges();
@@ -399,6 +409,7 @@ describe("The agent's video from a provider that passes the conformance kit, thr
       expect(Query(fixture, '.avatar')?.classList.contains('avatar--speaking')).toBe(false);
 
       provider.TurnComplete();
+      provider.AnswerStarted();
       provider.SendFrames(3);
       paint();
       fixture.detectChanges();
