@@ -1,0 +1,11 @@
+<span class="compare-value-text"
+      [class.compare-value-collapsed]="IsCollapsed"
+      [attr.title]="IsLong ? Value : null">{{ Value }}</span>
+@if (IsLong) {
+    <button type="button" class="compare-value-toggle"
+            [attr.aria-expanded]="Expanded"
+            (click)="ToggleExpanded($event)">
+        <i class="fa-solid" [class.fa-chevron-down]="!Expanded" [class.fa-chevron-up]="Expanded" aria-hidden="true"></i>
+        {{ Expanded ? 'Show less' : 'Show more' }}
+    </button>
+}

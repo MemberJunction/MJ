@@ -667,7 +667,7 @@
                              [class.field-selected]="field.SelectedColumnIndex === 0"
                              (click)="SelectFieldValue(field, 0)">
                             @if (field.SourceValue != null) {
-                                {{ field.SourceValue }}
+                                <mj-compare-value [Value]="field.SourceValue"></mj-compare-value>
                             } @else {
                                 <span class="field-not-available">(not available)</span>
                             }
@@ -687,7 +687,7 @@
                                  [class.field-selected]="field.SelectedColumnIndex === mi + 1"
                                  (click)="matchVal != null ? SelectFieldValue(field, mi + 1) : null">
                                 @if (matchVal != null) {
-                                    {{ matchVal }}
+                                    <mj-compare-value [Value]="matchVal"></mj-compare-value>
                                     @if (field.HasDifference || field.SelectedColumnIndex === mi + 1) {
                                         <input type="radio" [name]="'field-' + field.FieldName" class="field-select-radio"
                                                [checked]="field.SelectedColumnIndex === mi + 1"

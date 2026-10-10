@@ -1,0 +1,46 @@
+:host {
+    display: block;
+    min-width: 0;
+}
+
+.compare-value-text {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+/* Long values: clamp to two lines until expanded */
+.compare-value-collapsed {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+}
+
+.compare-value-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.15rem;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--mj-brand-primary);
+    font-size: 0.72rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.compare-value-toggle:hover {
+    text-decoration: underline;
+}
+
+.compare-value-toggle:focus-visible {
+    outline: 2px solid var(--mj-border-focus);
+    outline-offset: 2px;
+    border-radius: var(--mj-radius-sm);
+}
+
+.compare-value-toggle i {
+    font-size: 0.6rem;
+}
