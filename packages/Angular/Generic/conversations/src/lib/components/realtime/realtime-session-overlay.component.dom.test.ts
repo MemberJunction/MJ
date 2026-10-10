@@ -86,6 +86,8 @@ function fakeSession() {
   const notice$ = new BehaviorSubject<RealtimeAvatarNotice | null>(null);
   /** The call's state, as the runtime maps the client's: a resume on a new connection passes through `'connecting'`. */
   const state$ = new BehaviorSubject<RealtimeConnectionState>('listening');
+  /** Whether a call is live, as the runtime says it. The service's `IsActive` reads it too. */
+  const active$ = new BehaviorSubject(false);
   /** The capture calls the overlay made, in order. */
   const calls: string[] = [];
   /** The element each screen share asked to show alone (`null` for a whole screen, window or tab). */
@@ -98,7 +100,7 @@ function fakeSession() {
     ThoughtNarration$: EMPTY,
     ConnectionState$: state$.asObservable(),
     ModelName$: new BehaviorSubject<string | null>(null).asObservable(),
-    Active$: new BehaviorSubject(false).asObservable(),
+    Active$: active$.asObservable(),
     ActiveChannels$: channels$.asObservable(),
     get ActiveChannels(): readonly BaseRealtimeChannelClient[] { return channels$.value; },
     ChannelFocus$: focus$.asObservable(),
@@ -130,7 +132,7 @@ function fakeSession() {
     StopScreenShare: (): void => {
       calls.push('StopScreenShare');
     },
-    IsActive: false,
+    get IsActive(): boolean { return active$.value; },
     CurrentAgentSessionId: null,
     HasChannelBeenUsed: (): boolean => false,
     SetFocusedChannel: (): void => undefined,
@@ -146,7 +148,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, activity$, captures$, offers$, captions$, sources$, notice$, state$, calls, sharedPanels };
+  return { service, channels$, focus$, activity$, captures$, offers$, captions$, sources$, notice$, state$, active$, calls, sharedPanels };
 }
 
 /**
@@ -209,8 +211,16 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
     }
   };
 
-  /** A live call in console chrome with the whiteboard's tab open in the panel, placed as its registry row says. */
-  const renderWithBoard = async (placement?: ChannelSurfacePlacement, board: TestWhiteboardChannel = new TestWhiteboardChannel()) => {
+  /**
+   * A live call with the whiteboard's tab open in the panel (the Details peek), placed as its registry row says. In
+   * console chrome (the default) the panel always has room; in orb chrome it shows only while the call is at least as
+   * wide as the console breakpoint.
+   */
+  const renderWithBoard = async (
+    placement?: ChannelSurfacePlacement,
+    board: TestWhiteboardChannel = new TestWhiteboardChannel(),
+    chrome: 'console' | 'orb' = 'console'
+  ) => {
     const session = fakeSession();
     if (placement) {
       board.ApplySurfacePlacement(placement);
@@ -220,7 +230,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
         { provide: RealtimeSessionService, useValue: session.service },
         { provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } },
       ],
-      inputs: { Chrome: 'console' },
+      inputs: { Chrome: chrome },
       autoDetect: true,
     });
     session.channels$.next([board]);
@@ -362,6 +372,134 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
     await pick(f, '.board-focus-pill mj-media-move-menu', 'Reset layout');
     expect(f.componentInstance.ChannelFocusMode).toBe(false);
     expect(savedLayouts.at(-1)).toBe('[]');
+  });
+
+  describe('the panel collapsed to its strip, when the panel area hides and comes back (#5387)', () => {
+    /** The overlay's width observers, by the element each observes: jsdom has no ResizeObserver and lays nothing out. */
+    const observers = new Map<Element, ResizeObserverCallback>();
+    class FakeResizeObserver {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      public observe(target: Element): void {
+        observers.set(target, this.callback);
+      }
+      public unobserve(): void {}
+      public disconnect(): void {}
+    }
+
+    /** Reports the call `width` px wide, as the browser does when the window is resized. */
+    const resizeCall = async (f: Awaited<ReturnType<typeof renderWithBoard>>['f'], width: number): Promise<void> => {
+      const overlay = query(f, '.call-overlay') as Element;
+      observers.get(overlay)?.([{ contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver);
+      await settle();
+    };
+
+    afterEach(() => {
+      observers.clear();
+      vi.unstubAllGlobals();
+      Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+    });
+
+    /** The panel as the user sees it: the width the overlay gives it, its strip or its tabs, and whether it can be resized. */
+    const panel = (f: Awaited<ReturnType<typeof renderWithBoard>>['f']) => {
+      const area = query(f, '.call-panel') as HTMLElement | null;
+      if (!area) {
+        return null;
+      }
+      const shows = query(f, '.surface__strip') ? 'strip' : query(f, '.surface-tabs') ? 'tabs' : 'nothing';
+      return { width: area.style.width, shows, resizable: query(f, '.call-resizer') !== null };
+    };
+    const expanded = { width: '380px', shows: 'tabs', resizable: true };
+    const collapsed = { width: '40px', shows: 'strip', resizable: false };
+
+    /** The composer's Details control, which peeks at the panel and hides it. */
+    const details = (f: Awaited<ReturnType<typeof renderWithBoard>>['f'], title: 'Peek at the session panels' | 'Hide the session panels') =>
+      click(f, `mj-realtime-composer button[title="${title}"]`);
+
+    it('comes back expanded at its width, with its tabs and the board, after the Details control hides and shows it', async () => {
+      const { f } = await renderWithBoard();
+      expect(panel(f)).toEqual(expanded);
+      click(f, '.surface__toggle');
+      await settle();
+      expect(panel(f)).toEqual(collapsed);
+
+      details(f, 'Hide the session panels');
+      await settle();
+      expect(panel(f)).toBeNull();
+      details(f, 'Peek at the session panels');
+      await settle();
+      expect(panel(f)).toEqual(expanded);
+      expect(isShown(f)).toBe(true);
+
+      click(f, '.surface__toggle');
+      await settle();
+      expect(panel(f)).toEqual(collapsed);
+    });
+
+    it('comes back expanded after a channel holds the stage and gives it back', async () => {
+      const { f, board, focus$ } = await renderWithBoard();
+      click(f, '.surface__toggle');
+      await settle();
+      focus$.next({ Channel: board, Focused: true });
+      await settle();
+      expect(panel(f)).toBeNull();
+      click(f, '.board-focus-pill__btn[title="Show thread"]');
+      await settle();
+      expect(panel(f)).toEqual(expanded);
+      expect(isShown(f)).toBe(true);
+    });
+
+    it('comes back expanded after the call narrows below the console breakpoint and widens again', async () => {
+      vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+      const { f } = await renderWithBoard(undefined, new TestWhiteboardChannel(), 'orb');
+      await resizeCall(f, 1000);
+      expect(panel(f)).toEqual(expanded);
+      click(f, '.surface__toggle');
+      await settle();
+      expect(panel(f)).toEqual(collapsed);
+
+      await resizeCall(f, 480);
+      expect(panel(f)).toBeNull();
+      await resizeCall(f, 1000);
+      expect(panel(f)).toEqual(expanded);
+      expect(isShown(f)).toBe(true);
+    });
+
+    it('comes back expanded in the live call a reviewed session turns into', async () => {
+      // The thread scrolls to what the live call adds to it; jsdom has no scrollIntoView.
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: () => undefined });
+      const review: RealtimeSessionReview = {
+        SessionID: 'past-1', AgentID: 'agent-1', AgentName: 'Sage', TargetAgentID: 'agent-1', ConversationID: null,
+        Status: 'Closed', CloseReason: null, StartedAt: null, LastActiveAt: null, ClosedAt: null,
+        RecordingFileID: null, RecordingStartedAt: null, RecordingMedia: null,
+        Turns: [], DelegatedRuns: [], ChannelStates: [], Legs: [], Artifacts: [],
+      };
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console', ReviewData: review },
+        autoDetect: true,
+      });
+      await settle();
+      // No channel tab is focused in this call, so the expanded panel keeps its normal width.
+      const normal = { width: '308px', shows: 'tabs', resizable: true };
+      expect(panel(f)).toEqual(normal);
+      click(f, '.surface__toggle');
+      await settle();
+      expect(panel(f)).toEqual(collapsed);
+
+      // "Start live session": the host starts the call, then lets the review go.
+      click(f, '.start-live-pill');
+      session.active$.next(true);
+      f.componentRef.setInput('ReviewData', null);
+      await settle();
+      expect(panel(f)).toBeNull();
+      details(f, 'Peek at the session panels');
+      await settle();
+      expect(panel(f)).toEqual(normal);
+    });
   });
 
   describe('picture-in-picture', () => {
