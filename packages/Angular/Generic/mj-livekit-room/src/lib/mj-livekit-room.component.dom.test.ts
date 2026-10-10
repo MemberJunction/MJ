@@ -794,6 +794,17 @@ describe("MJLiveKitRoomComponent: an agent's avatar that can't be shown (DOM)", 
     ]);
   });
 
+  it("words a reason the room doesn't know in the host's own line for it (unknown), and only that reason", () => {
+    const { f, state } = render();
+    f.componentInstance.AvatarNoticeLabels = { unknown: 'Acme Meet shows {Agent} as audio only', bridged: 'Acme Meet shows {Agent} as audio only here' };
+    state([agent('sage', { Reason: 'bridged' }), agent('rowan', {}), agent('ivy', { Reason: 'endpoint' })]);
+    expect(texts(f)).toEqual([
+      'Acme Meet shows Sage as audio only here',
+      'Acme Meet shows Rowan as audio only',
+      "Audio only for Ivy: this voice model can't show an avatar",
+    ]);
+  });
+
   it('hides itself after ten seconds', () => {
     vi.useFakeTimers();
     const { f, state } = render();

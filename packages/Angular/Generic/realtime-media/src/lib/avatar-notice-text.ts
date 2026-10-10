@@ -2,9 +2,12 @@ import type { RealtimeAvatarUnavailableReason } from '@memberjunction/ai';
 
 /**
  * A host's own words for some reasons a call or meeting shows no avatar, such as the product's name for "this app". A
- * reason it leaves out keeps its words from {@link AVATAR_NOTICE_TEXT}.
+ * reason it leaves out keeps its words from {@link AVATAR_NOTICE_TEXT}. `unknown` words a reason this version doesn't
+ * know, such as a newer meeting bot's, in place of {@link AVATAR_NOTICE_UNKNOWN_REASON_TEXT}; it doesn't stand in for a
+ * known reason the host leaves out. A call shows no notice for a reason the browser doesn't know, so there it has no
+ * effect.
  */
-export type AvatarNoticeOverrides = Partial<Readonly<Record<RealtimeAvatarUnavailableReason, string>>>;
+export type AvatarNoticeOverrides = Partial<Readonly<Record<RealtimeAvatarUnavailableReason | 'unknown', string>>>;
 
 /** How {@link AvatarNoticeText} words a line. */
 export interface AvatarNoticeTextOptions {
@@ -50,7 +53,7 @@ export const AVATAR_NOTICE_TEXT: Readonly<Record<RealtimeAvatarUnavailableReason
 
 /**
  * What a meeting says when an agent's bot gives a reason this version doesn't know, such as a newer bot's: the avatar
- * was asked for and can't be shown. A host can't word it.
+ * was asked for and can't be shown. A host words it with `unknown` in {@link AvatarNoticeOverrides}.
  */
 export const AVATAR_NOTICE_UNKNOWN_REASON_TEXT = `Audio only for ${AGENT_TOKEN}: the avatar couldn't be shown in this meeting`;
 
@@ -58,9 +61,10 @@ export const AVATAR_NOTICE_UNKNOWN_REASON_TEXT = `Audio only for ${AGENT_TOKEN}:
  * The words for one reason: the host's own as written when it gave some (a blank one keeps the stock line, so a notice
  * is never empty), else {@link AVATAR_NOTICE_TEXT}, with `{Agent}` replaced by the agent's name.
  *
- * @param reason Why the call or meeting shows no avatar; `null` for a reason this version doesn't know
- *   ({@link AVATAR_NOTICE_UNKNOWN_REASON_TEXT}).
- * @param overrides The host's own words for some reasons.
+ * @param reason Why the call or meeting shows no avatar; `null` for a reason this version doesn't know, which reads the
+ *   host's `unknown` line, else {@link AVATAR_NOTICE_UNKNOWN_REASON_TEXT}. A reason with no line in
+ *   {@link AVATAR_NOTICE_TEXT}, such as one from a newer `@memberjunction/ai`, reads the same way.
+ * @param overrides The host's own words for some reasons, and for a reason this version doesn't know (`unknown`).
  * @param agentName The agent's name, for the lines that name it; "the agent" when none is given.
  * @param options How to word the line; a meeting passes `{ NameAgent: true }`.
  * @returns The line to show.
@@ -75,15 +79,32 @@ export function AvatarNoticeText(
   return noticeLine(reason, overrides, options).split(AGENT_TOKEN).join(name);
 }
 
-/** The line before the agent's name goes in: the host's own, else the stock line, naming the agent when asked. */
+/**
+ * The line before the agent's name goes in: the host's own, else the stock line, naming the agent when asked. A reason
+ * this version doesn't know takes the host's `unknown` line, else {@link AVATAR_NOTICE_UNKNOWN_REASON_TEXT}.
+ */
 function noticeLine(reason: RealtimeAvatarUnavailableReason | null, overrides: AvatarNoticeOverrides | null | undefined, options: AvatarNoticeTextOptions | undefined): string {
-  if (reason === null) {
-    return AVATAR_NOTICE_UNKNOWN_REASON_TEXT;
+  if (reason === null || !hasStockLine(reason)) {
+    return hostLine(overrides?.unknown) ?? AVATAR_NOTICE_UNKNOWN_REASON_TEXT;
   }
-  const own = overrides?.[reason];
-  if (own && own.trim().length > 0) {
-    return own;
-  }
+  return hostLine(overrides?.[reason]) ?? stockLine(reason, options);
+}
+
+/**
+ * Whether {@link AVATAR_NOTICE_TEXT} has a line for a reason. A reason from a newer `@memberjunction/ai`, or text cast to
+ * one, may have none; checking own properties keeps names such as `constructor` out.
+ */
+function hasStockLine(reason: string): boolean {
+  return Object.prototype.hasOwnProperty.call(AVATAR_NOTICE_TEXT, reason);
+}
+
+/** A host's line as given, or `null` for none or a blank one, which keeps the stock line so a notice is never empty. */
+function hostLine(own: string | undefined): string | null {
+  return own && own.trim().length > 0 ? own : null;
+}
+
+/** A known reason's stock line; with {@link AvatarNoticeTextOptions.NameAgent}, a call's line names the agent. */
+function stockLine(reason: RealtimeAvatarUnavailableReason, options: AvatarNoticeTextOptions | undefined): string {
   const stock = AVATAR_NOTICE_TEXT[reason];
   return options?.NameAgent && stock.startsWith(CALL_LEAD) ? NAMED_LEAD + stock.slice(CALL_LEAD.length) : stock;
 }
