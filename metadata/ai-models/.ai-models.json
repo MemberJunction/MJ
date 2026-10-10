@@ -901,16 +901,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "StartedAt": "2025-01-01T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2,
             "OutputPricePerUnit": 12,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3 Pro pricing on Vertex AI as of January 2025. Input =200K tokens: $2.00/M, >200K: $4.00/M. Output =200K: $12.00/M, >200K: $18.00/M. Base tier pricing shown.",
+            "Comments": "Gemini 3 Pro pricing on Vertex AI as of January 2025. Input =200K tokens: $2.00/M, >200K: $4.00/M. Output =200K: $12.00/M, >200K: $18.00/M. Base tier pricing shown. EXPIRED 2026-03-09: gemini-3-pro-preview shut down by Google; replaced by gemini-3.1-pro-preview.",
             "CacheReadPricePerUnit": 0.2,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-03-09T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "77D9E0CE-E7E2-4F78-91BD-1E9FE736F4F2"
@@ -925,16 +926,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "StartedAt": "2025-11-18T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2,
             "OutputPricePerUnit": 12,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3 Pro (Preview) pricing on Google as of November 2025. Base tier pricing shown ($2/$12 per 1M tokens for prompts <= 200k). Higher tier available for prompts > 200k ($4/$18 per 1M tokens). Released Nov 18, 2025 with fastest-ever deployment into Google Search. API name is gemini-3-pro-preview and will be updated to gemini-3-pro when GA releases. Features 1M token input context window, 64k output capacity, and knowledge cutoff of January 2025. Achieves state-of-the-art performance across 19 of 20 major AI benchmarks including top scores in reasoning (Humanity's Last Exam: 37.5%), coding (SWE-Bench: 76.2%), and multimodal understanding (MMLU: 91.8%).",
+            "Comments": "Gemini 3 Pro (Preview) pricing on Google as of November 2025. Base tier pricing shown ($2/$12 per 1M tokens for prompts <= 200k). Higher tier available for prompts > 200k ($4/$18 per 1M tokens). Released Nov 18, 2025 with fastest-ever deployment into Google Search. API name is gemini-3-pro-preview and will be updated to gemini-3-pro when GA releases. Features 1M token input context window, 64k output capacity, and knowledge cutoff of January 2025. Achieves state-of-the-art performance across 19 of 20 major AI benchmarks including top scores in reasoning (Humanity's Last Exam: 37.5%), coding (SWE-Bench: 76.2%), and multimodal understanding (MMLU: 91.8%). EXPIRED 2026-03-09: gemini-3-pro-preview shut down by Google; replaced by gemini-3.1-pro-preview.",
             "CacheReadPricePerUnit": 0.2,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-03-09T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "694B9C05-604C-42C0-849F-464EC66C900D"
@@ -15318,7 +15320,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "VertexLLM",
             "APIName": "gemma-4-31b-it",
             "MaxInputTokens": 262144,
@@ -15389,16 +15391,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "StartedAt": "2026-04-02T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.13,
             "OutputPricePerUnit": 0.38,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemma 4 31B Instruct pricing on Vertex AI as of April 2026. Dense 31B open-weights model under Gemma Terms of Use. 256K context, multilingual (140+), vision-in/text-out.",
+            "Comments": "Gemma 4 31B Instruct pricing on Vertex AI as of April 2026. Dense 31B open-weights model under Gemma Terms of Use. 256K context, multilingual (140+), vision-in/text-out. EXPIRED 2026-10-06: Vertex AI offers Gemma 4 31B only as a self-deployed Model Garden endpoint; publisher model gemma-4-31b-it (and -maas) returns 404 in global and us-central1.",
             "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-10-06T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "9856C369-1129-4AC2-ADF9-61F067964D1D"
@@ -15490,7 +15493,7 @@
             "Priority": 0,
             "Status": "Active",
             "DriverClass": "VertexLLM",
-            "APIName": "gemma-4-26b-a4b-it",
+            "APIName": "gemma-4-26b-a4b-it-maas",
             "MaxInputTokens": 262144,
             "MaxOutputTokens": 8192,
             "SupportedResponseFormats": "Any, JSON",
@@ -15539,12 +15542,12 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.08,
-            "OutputPricePerUnit": 0.35,
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemma 4 26B A4B Instruct pricing on Vertex AI as of April 2026. 26B total / 4B active MoE, optimized for speed and cost. 256K context, multilingual (140+). Open-weights under Gemma Terms of Use.",
-            "CacheReadPricePerUnit": null,
+            "Comments": "Gemma 4 26B (MaaS, gemma-4-26b-a4b-it-maas) pricing on Vertex AI / Gemini Enterprise Agent Platform as of 2026-10-06: $0.15/M input, $0.60/M output, $0.015/M cache hit. Served from the global location only; launch stage Experimental (https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/maas/google/gemma-4-26b-a4b-it). Corrected from $0.08/$0.35, which was never verified. 26B total / 4B active MoE, 256K context, multilingual (140+). Open-weights under Gemma Terms of Use. Source: https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing",
+            "CacheReadPricePerUnit": 0.015,
             "CacheWritePricePerUnit": null
           },
           "primaryKey": {
