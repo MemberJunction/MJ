@@ -7,6 +7,7 @@ import {
     REALTIME_RELAY_OPEN_WINDOW_SECONDS,
     REALTIME_RELAY_PATH,
     REALTIME_RELAY_SESSION_LIFETIME_SECONDS,
+    ResolveRealtimeProxyBaseHttpUrl,
     ResolveRealtimeProxyBaseWsUrl,
     type IRealtimeRelayPolicy,
     type RealtimeRelayFrameVerdict,
@@ -307,5 +308,49 @@ describe('relay and proxy URLs', () => {
         expect(ResolveRealtimeProxyBaseWsUrl({ Config: {} })).toBe('wss://mjapi.example.com');
         expect(ResolveRealtimeProxyBaseWsUrl({ Config: { proxyBaseUrl: ' http://override:9000/x ' } })).toBe('ws://override:9000');
         expect(ResolveRealtimeProxyBaseWsUrl({ Config: { proxyBaseUrl: '   ' } })).toBe('wss://mjapi.example.com');
+    });
+
+    it("ResolveRealtimeProxyBaseHttpUrl: the same precedence with an http(s) scheme, defaulting to MJAPI's port 4000", () => {
+        expect(ResolveRealtimeProxyBaseHttpUrl({})).toBe('http://localhost:4000');
+        process.env['GRAPHQL_PORT'] = '4100';
+        expect(ResolveRealtimeProxyBaseHttpUrl({})).toBe('http://localhost:4100');
+        process.env['GRAPHQL_BASE_URL'] = 'https://api.deployment.io';
+        process.env['GRAPHQL_PORT'] = '8443';
+        expect(ResolveRealtimeProxyBaseHttpUrl({})).toBe('https://api.deployment.io:8443');
+        process.env['MJAPI_PUBLIC_URL'] = 'https://abc123.ngrok.io/graphql';
+        expect(ResolveRealtimeProxyBaseHttpUrl({ Config: {} })).toBe('https://abc123.ngrok.io');
+        expect(ResolveRealtimeProxyBaseHttpUrl({ Config: { proxyBaseUrl: ' http://override:9000/x ' } })).toBe('http://override:9000');
+        expect(ResolveRealtimeProxyBaseHttpUrl({ Config: { proxyBaseUrl: 'wss://edge.example.com/' } })).toBe('https://edge.example.com');
+        expect(ResolveRealtimeProxyBaseHttpUrl({ Config: { proxyBaseUrl: 'ws://edge.local:81' } })).toBe('http://edge.local:81');
+        expect(ResolveRealtimeProxyBaseHttpUrl({ Config: { proxyBaseUrl: '   ' } })).toBe('https://abc123.ngrok.io');
+    });
+
+    it('ResolveRealtimeProxyBaseHttpUrl keeps a relative override relative, without trailing slashes', () => {
+        process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+        expect(ResolveRealtimeProxyBaseHttpUrl({ Config: { proxyBaseUrl: '/mjapi/' } })).toBe('/mjapi');
+        expect(ResolveRealtimeProxyBaseHttpUrl({ Config: { proxyBaseUrl: '/' } })).toBe('');
+    });
+
+    it('the http and websocket origins name the same host and port', () => {
+        const cases: Array<{ env: Record<string, string>; config?: { proxyBaseUrl: string } }> = [
+            { env: {} },
+            { env: { GRAPHQL_PORT: '4100' } },
+            { env: { GRAPHQL_BASE_URL: 'https://api.deployment.io', GRAPHQL_PORT: '8443' } },
+            { env: { MJAPI_PUBLIC_URL: 'https://abc123.ngrok.io/graphql' } },
+            { env: { MJAPI_PUBLIC_URL: 'http://10.0.2.2:4001' }, config: { proxyBaseUrl: 'https://edge.example.com/some/path' } },
+        ];
+        for (const { env, config } of cases) {
+            for (const key of ENV_KEYS) delete process.env[key];
+            Object.assign(process.env, env);
+            const params = config ? { Config: config } : {};
+            const http = ResolveRealtimeProxyBaseHttpUrl(params);
+            expect(ResolveRealtimeProxyBaseWsUrl(params)).toBe(http.replace(/^http/, 'ws'));
+        }
+    });
+
+    it("an empty GRAPHQL_PORT counts as unset, as MJAPI's configuration reads it", () => {
+        process.env['GRAPHQL_PORT'] = '';
+        expect(ResolveRealtimeProxyBaseWsUrl({})).toBe('ws://localhost:4000');
+        expect(ResolveRealtimeProxyBaseHttpUrl({})).toBe('http://localhost:4000');
     });
 });

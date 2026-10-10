@@ -18,6 +18,7 @@ import {
     RealtimeVoiceOption,
     RealtimeProxyRegistry,
     REALTIME_SDP_EXCHANGE_PATH,
+    ResolveRealtimeProxyBaseHttpUrl,
     RealtimeToolBatchBarrier,
     type RealtimeInputFrame,
 } from '@memberjunction/ai';
@@ -1184,19 +1185,20 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
     }
 
     /**
-     * Resolves the browser-facing HTTP(S) broker URL for the OpenAI Live WebRTC SDP exchange.
+     * Resolves the browser-facing URL of MJAPI's WebRTC SDP broker for one ticket:
+     * `<MJAPI origin>/realtime/sdp-exchange?ticket=<id>`.
+     *
+     * The origin comes from the shared {@link ResolveRealtimeProxyBaseHttpUrl} (`@memberjunction/ai`), so this driver
+     * finds MJAPI the way the relay and proxy drivers do: an explicit `Config.proxyBaseUrl`, else this driver's own
+     * `Config.brokerBaseUrl`, then `MJAPI_PUBLIC_URL`, then `GRAPHQL_BASE_URL` + `GRAPHQL_PORT`. With nothing set
+     * that is `http://localhost:4000`, MJAPI's default port. Only the origin is kept, because MJAPI serves the broker
+     * at its root, not under the GraphQL path.
      */
     protected resolveBrokerUrl(params: RealtimeSessionParams, ticketId: string): string {
-        const override = params.Config?.['proxyBaseUrl'] ?? params.Config?.['brokerBaseUrl'];
-        const source =
-            (typeof override === 'string' && override.trim().length > 0 ? override.trim() : '') ||
-            process.env['MJAPI_PUBLIC_URL'] ||
-            `${process.env['GRAPHQL_BASE_URL'] ?? 'http://localhost'}:${process.env['GRAPHQL_PORT'] ?? '4103'}`;
-        let end = source.length;
-        while (end > 0 && source.charCodeAt(end - 1) === 47 /* '/' */) {
-            end--;
-        }
-        const baseUrl = source.slice(0, end);
+        const override = [params.Config?.['proxyBaseUrl'], params.Config?.['brokerBaseUrl']].find(
+            (value) => typeof value === 'string' && value.trim().length > 0
+        );
+        const baseUrl = ResolveRealtimeProxyBaseHttpUrl({ Config: override === undefined ? {} : { proxyBaseUrl: override } });
         return `${baseUrl}${REALTIME_SDP_EXCHANGE_PATH}?ticket=${encodeURIComponent(ticketId)}`;
     }
 
