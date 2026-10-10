@@ -5,16 +5,20 @@
  * participant connect/disconnect events, roster, data-channel publish, disconnect teardown, the
  * sample-rate overrides, the absence of raw video/screen publish (the avatar is the only video out; its tests are in
  * livekit-rtc-node-avatar.test.ts), the participant-video wiring (the watcher's own rules are in
- * room-video-watcher.test.ts), which audio the bot hears (not screen-share audio), and the actionable error when the
- * addon is absent.
+ * room-video-watcher.test.ts), which audio the bot hears (not screen-share audio), when it stops reading an inbound audio
+ * stream (the bot leaving, a track unsubscribed, a participant leaving), and the actionable error when the addon is
+ * absent.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ LogStatus: vi.fn<(message: string) => void>() }));
+const mocks = vi.hoisted(() => ({
+    LogStatus: vi.fn<(message: string) => void>(),
+    LogError: vi.fn<(message: string) => void>(),
+}));
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
-    return { ...actual, LogStatus: mocks.LogStatus };
+    return { ...actual, LogStatus: mocks.LogStatus, LogError: mocks.LogError };
 });
 
 import {
@@ -26,6 +30,7 @@ import {
     ParticipantsToArray,
     DEFAULT_SAMPLE_RATE,
     type RtcAudioFrame,
+    type RtcNodeModule,
     type RtcTrack,
 } from '../livekit-rtc-node-room';
 import type {
@@ -44,6 +49,7 @@ import {
     ROOM_EVENT,
     TRACK_KIND,
     TRACK_SOURCE,
+    type FakeAudioStream,
     type FakeParticipant,
     type FakeRtc,
 } from './fake-rtc-node';
@@ -53,7 +59,10 @@ const frame = (samples: number[]): RtcAudioFrame => ({
     data: Int16Array.from(samples), sampleRate: DEFAULT_SAMPLE_RATE, channels: 1, samplesPerChannel: samples.length,
 });
 
-beforeEach(() => mocks.LogStatus.mockClear());
+beforeEach(() => {
+    mocks.LogStatus.mockClear();
+    mocks.LogError.mockClear();
+});
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -259,6 +268,169 @@ describe('LiveKitRtcNodeRoomClient — what the bot hears', () => {
         expect(heard.map((f) => f.participantIdentity)).toEqual(['cleo', 'dev']);
         expect(unnamed.subscribeCalls).toEqual([]);
         expect(screenShareAudioLines()).toEqual([]);
+    });
+});
+
+// ── When the bot stops reading inbound audio ────────────────────────────────────
+
+describe('LiveKitRtcNodeRoomClient — stopping inbound audio', () => {
+    const ada = { identity: 'ada', name: 'Ada' };
+    const bob = { identity: 'bob', name: 'Bob' };
+
+    /** A microphone publication. */
+    const micOf = (sid: string): FakePublication => new FakePublication(sid, TRACK_SOURCE.SOURCE_MICROPHONE, { kind: TRACK_KIND.KIND_AUDIO });
+
+    interface Hearing {
+        fake: FakeRtc;
+        client: LiveKitRtcNodeRoomClient;
+        heard: NativeRoomAudioFrame[];
+        adaTrack: RtcTrack;
+        adaMic: FakePublication;
+        adaStream: FakeAudioStream;
+        bobStream: FakeAudioStream;
+    }
+
+    /** A connected bot hearing Ada's and Bob's microphones: each stream has delivered one frame, and is read on. */
+    async function hearingAdaAndBob(): Promise<Hearing> {
+        const fake = makeFakeRtc();
+        const client = new LiveKitRtcNodeRoomClient(24000, 16000, 1, async () => fake.module);
+        const heard: NativeRoomAudioFrame[] = [];
+        client.onAudioFrame((f) => heard.push(f));
+        await client.connect(connectArgs);
+        const adaTrack: RtcTrack = { kind: TRACK_KIND.KIND_AUDIO };
+        const adaMic = micOf('TR_ada_mic');
+        fake.emit(ROOM_EVENT.TrackSubscribed, adaTrack, adaMic, ada);
+        fake.emit(ROOM_EVENT.TrackSubscribed, { kind: TRACK_KIND.KIND_AUDIO }, micOf('TR_bob_mic'), bob);
+        const [adaStream, bobStream] = fake.cap.audioStreams;
+        adaStream.push(frame([1]));
+        bobStream.push(frame([2]));
+        await flush();
+        return { fake, client, heard, adaTrack, adaMic, adaStream, bobStream };
+    }
+
+    /** What the bot heard, as [participant, samples]. */
+    const heardSoFar = (heard: NativeRoomAudioFrame[]): Array<[string, number[]]> =>
+        heard.map((f) => [f.participantIdentity, Array.from(new Int16Array(f.data))]);
+
+    /** The stream's read loop is over: no read waits on the stream, and none was made after its cancel. */
+    const loopEnded = (stream: FakeAudioStream): boolean => stream.pendingReads === 0 && stream.readsAfterCancel === 0;
+
+    it.each([
+        ['disconnect()', (h: Hearing) => h.client.disconnect(), 'the bot left the room'],
+        ["the room's Disconnected event", (h: Hearing) => h.fake.emit(ROOM_EVENT.Disconnected, 'SERVER_SHUTDOWN'), 'the room disconnected'],
+    ])('%s cancels every inbound audio stream, so the SDK releases each one, and ends each read loop', async (_how, leave, reason) => {
+        const h = await hearingAdaAndBob();
+        expect(h.adaStream).toBeInstanceOf(ReadableStream); // as the SDK's stream is: no close(), and `for await` locks it
+        expect('close' in h.adaStream).toBe(false);
+        expect(heardSoFar(h.heard)).toEqual([['ada', [1]], ['bob', [2]]]);
+
+        await leave(h);
+        await flush();
+
+        expect(h.adaStream.cancelReasons).toEqual([reason]);
+        expect(h.bobStream.cancelReasons).toEqual([reason]);
+        expect(loopEnded(h.adaStream)).toBe(true);
+        expect(loopEnded(h.bobStream)).toBe(true);
+    });
+
+    it('a track unsubscribed mid-call stops its stream and its loop; the others are still heard', async () => {
+        const h = await hearingAdaAndBob(); // a bot that does not watch: unsubscriptions are wired in every meeting
+        h.fake.emit(ROOM_EVENT.TrackUnsubscribed, h.adaTrack, h.adaMic, ada);
+        await flush();
+
+        expect(h.adaStream.cancelReasons).toEqual(['track unsubscribed']);
+        expect(loopEnded(h.adaStream)).toBe(true);
+        expect(h.bobStream.cancelled).toBe(false);
+        expect(h.bobStream.pendingReads).toBe(1); // Bob's loop waits for his next frame
+
+        h.bobStream.push(frame([3]));
+        await flush();
+        expect(heardSoFar(h.heard)).toEqual([['ada', [1]], ['bob', [2]], ['bob', [3]]]);
+    });
+
+    it('an unsubscription names the publication by object, or on a new object by track sid and participant', async () => {
+        const h = await hearingAdaAndBob();
+        h.fake.emit(ROOM_EVENT.TrackUnsubscribed, { kind: TRACK_KIND.KIND_AUDIO }, micOf('TR_bob_mic'), bob); // Bob's track, a new object
+        h.fake.emit(ROOM_EVENT.TrackUnsubscribed, { kind: TRACK_KIND.KIND_AUDIO }, micOf('TR_ada_mic'), bob); // Ada's sid, not Ada
+        await flush();
+
+        expect(h.bobStream.cancelReasons).toEqual(['track unsubscribed']);
+        expect(h.adaStream.cancelled).toBe(false);
+    });
+
+    it('nothing is read or heard after disconnect: a frame read just before is dropped, and a track subscribed after opens no stream', async () => {
+        const h = await hearingAdaAndBob();
+        h.adaStream.push(frame([9])); // Ada's waiting read resolves now; the bot handles it after leaving
+        const leaving = h.client.disconnect();
+        h.fake.emit(ROOM_EVENT.TrackSubscribed, { kind: TRACK_KIND.KIND_AUDIO }, micOf('TR_cleo_mic'), { identity: 'cleo', name: 'Cleo' });
+        await leaving;
+        await flush();
+
+        expect(heardSoFar(h.heard)).toEqual([['ada', [1]], ['bob', [2]]]);
+        expect(h.fake.cap.audioStreams).toHaveLength(2);
+        expect(h.adaStream.readsAfterCancel).toBe(0);
+        expect(h.bobStream.readsAfterCancel).toBe(0);
+        expect(h.adaStream.pendingReads + h.bobStream.pendingReads).toBe(0);
+    });
+
+    it('a participant who leaves has their streams cancelled, even when the SDK did not unsubscribe their tracks first', async () => {
+        const h = await hearingAdaAndBob();
+        h.fake.emit(ROOM_EVENT.ParticipantDisconnected, ada);
+        await flush();
+
+        expect(h.adaStream.cancelReasons).toEqual(['participant left']);
+        expect(loopEnded(h.adaStream)).toBe(true);
+        expect(h.bobStream.cancelled).toBe(false);
+    });
+
+    it('a stream that ends on its own ends its loop after its queued frames, and nothing cancels it later', async () => {
+        const h = await hearingAdaAndBob();
+        h.adaStream.push(frame([4]));
+        h.adaStream.end(); // the SDK's end of stream: it disposed the native stream itself
+        await flush();
+        await h.client.disconnect();
+        await flush();
+
+        expect(heardSoFar(h.heard)).toEqual([['ada', [1]], ['bob', [2]], ['ada', [4]]]);
+        expect(h.adaStream.cancelled).toBe(false);
+        expect(h.adaStream.pendingReads).toBe(0);
+        expect(h.bobStream.cancelReasons).toEqual(['the bot left the room']);
+    });
+
+    it('a loop that a throwing audio handler stops still cancels its stream, so the native stream is released', async () => {
+        const fake = makeFakeRtc();
+        const client = new LiveKitRtcNodeRoomClient(24000, 16000, 1, async () => fake.module);
+        client.onAudioFrame(() => {
+            throw new Error('handler failed');
+        });
+        await client.connect(connectArgs);
+        fake.inboundFramesFor([frame([1])]);
+        fake.emit(ROOM_EVENT.TrackSubscribed, { kind: TRACK_KIND.KIND_AUDIO }, micOf('TR_ada_mic'), ada);
+        await flush();
+
+        const [stream] = fake.cap.audioStreams;
+        expect(stream.cancelled).toBe(true);
+        expect(loopEnded(stream)).toBe(true);
+        expect(mocks.LogError.mock.calls.map(([message]) => message)).toEqual([
+            "[LiveKitRtcNodeRoomClient] inbound audio stream for 'ada' ended with error: handler failed",
+        ]);
+    });
+
+    it('an AudioStream with no getReader() (rtc-node before 0.13.12) is reported, not thrown into the room', async () => {
+        const fake = makeFakeRtc();
+        /** rtc-node 0.13.0 to 0.13.11: an async iterator with `close()`, not a ReadableStream. */
+        function OldAudioStream(): AsyncIterable<RtcAudioFrame> & { close(): void } {
+            return { close: () => undefined, async *[Symbol.asyncIterator]() {} };
+        }
+        const module: RtcNodeModule = { ...fake.module, AudioStream: OldAudioStream as unknown as RtcNodeModule['AudioStream'] };
+        const client = new LiveKitRtcNodeRoomClient(24000, 16000, 1, async () => module);
+        await client.connect(connectArgs);
+
+        expect(() => fake.emit(ROOM_EVENT.TrackSubscribed, { kind: TRACK_KIND.KIND_AUDIO }, micOf('TR_ada_mic'), ada)).not.toThrow();
+        expect(mocks.LogError.mock.calls.map(([message]) => message)).toEqual([
+            expect.stringContaining("could not open the audio stream of 'ada'"),
+        ]);
+        await expect(client.disconnect()).resolves.toBeUndefined();
     });
 });
 
