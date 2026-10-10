@@ -3,12 +3,12 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { renderComponentFixture, query, queryAll, text, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import type { MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import type { RealtimeConnectionState } from '@memberjunction/realtime-runtime';
-import { RealtimeAvatarSurfaceComponent } from './realtime-avatar-surface.component';
+import { AGENT_VIDEO_RESUME_HOLD_MS, RealtimeAvatarSurfaceComponent } from './realtime-avatar-surface.component';
 
 /**
  * DOM spec for <mj-realtime-avatar-surface>: the Avatar channel's surface. It must show the agent's video in a media tile,
- * named and labelled as AI-generated, follow a newer video, and let go of the video when destroyed. Real template, real
- * `mj-media-tile`; the video is a player that records where it was attached.
+ * named and labelled as AI-generated, hold its last frame while the call resumes, follow a newer video, and let go of the
+ * video when destroyed. Real template, real `mj-media-tile`; the video is a player that records where it was attached.
  */
 function player(): MediaVideoSource & { Attached: HTMLVideoElement[]; Detaches: number } {
   const source = {
@@ -28,11 +28,27 @@ function player(): MediaVideoSource & { Attached: HTMLVideoElement[]; Detaches: 
 function render(video: MediaVideoSource | null = null, state: RealtimeConnectionState = 'listening') {
   const video$ = new BehaviorSubject<MediaVideoSource | null>(video);
   const state$ = new BehaviorSubject<RealtimeConnectionState>(state);
+  const resuming$ = new BehaviorSubject<boolean>(false);
   const fixture = renderComponentFixture(RealtimeAvatarSurfaceComponent, {
-    inputs: { AgentName: 'Sage Lee', Video$: video$.asObservable(), State$: state$.asObservable() },
+    inputs: { AgentName: 'Sage Lee', Video$: video$.asObservable(), State$: state$.asObservable(), Resuming$: resuming$.asObservable() },
   });
-  return { fixture, video$, state$ };
+  /** The call moves to a new connection, as the session reports it: resuming first, then connecting. */
+  const resume = (): void => {
+    resuming$.next(true);
+    state$.next('connecting');
+  };
+  /** The new connection is in use: the session is live again, though the agent's video has not come back yet. */
+  const resumed = (): void => {
+    resuming$.next(false);
+    state$.next('listening');
+  };
+  return { fixture, video$, state$, resuming$, resume, resumed };
 }
+
+/** Fakes the clock the frame watch and the resume hold run on. */
+const fakeClock = (): void => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'performance'] });
+};
 
 /** The orb in the tile's placeholder, and the turn it shows. */
 const orbState = (fixture: ReturnType<typeof render>['fixture']): string | null =>
@@ -88,7 +104,7 @@ describe('RealtimeAvatarSurfaceComponent (DOM)', () => {
   });
 
   it("shows the orb until the video's first frame, and again after a second without one", () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+    fakeClock();
     const { fixture } = render(player());
     expect(orbState(fixture)).toBe('listening');
     frame();
@@ -99,31 +115,109 @@ describe('RealtimeAvatarSurfaceComponent (DOM)', () => {
     expect(orbState(fixture)).toBe('listening');
   });
 
-  it('keeps its one video through a reconnect: the held frame at first, the orb after a second without one, the video at the next', () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
-    const video = player();
-    const { fixture, state$ } = render(video);
-    const chips = () => queryAll(fixture, '.tile__chip').map((c) => c.textContent?.trim());
-    frame();
-    fixture.detectChanges();
+  /**
+   * A resume on a new connection (Google's `goAway`, a dropped socket) stops the agent's video for a few seconds: on
+   * Vertex AI, new video came about 3 s after each move. The last frame holds from the resume's start until new frames
+   * come, 5 s pass, or the call fails; the session is live again well before the video comes back.
+   */
+  describe('while the call resumes', () => {
+    const chips = (fixture: ReturnType<typeof render>['fixture']) => queryAll(fixture, '.tile__chip').map((c) => c.textContent?.trim());
 
-    state$.next('connecting');
-    vi.advanceTimersByTime(500);
-    fixture.detectChanges();
-    expect(orbState(fixture)).toBeNull();
-    expect(chips()).toEqual(['AI-generated video', 'Connecting']);
+    it('keeps its one video, its last frame on show through a 3 s gap with no orb, and plays on at the next frame', () => {
+      fakeClock();
+      const video = player();
+      const { fixture, resume, resumed } = render(video);
+      frame();
+      fixture.detectChanges();
 
-    vi.advanceTimersByTime(800);
-    fixture.detectChanges();
-    expect(orbState(fixture)).toBe('listening');
-    expect(chips()).toEqual(['Connecting']);
+      resume();
+      vi.advanceTimersByTime(500);
+      fixture.detectChanges();
+      expect(orbState(fixture)).toBeNull();
+      expect(chips(fixture)).toEqual(['AI-generated video', 'Connecting']);
 
-    state$.next('listening');
-    frame();
-    fixture.detectChanges();
-    expect(orbState(fixture)).toBeNull();
-    expect(chips()).toEqual(['AI-generated video', 'Listening']);
-    expect([video.Attached.length, video.Detaches]).toEqual([1, 0]);
+      resumed();
+      vi.advanceTimersByTime(2500);
+      fixture.detectChanges();
+      expect(orbState(fixture)).toBeNull();
+      expect(chips(fixture)).toEqual(['AI-generated video', 'Listening']);
+
+      frame();
+      fixture.detectChanges();
+      expect(orbState(fixture)).toBeNull();
+      expect([video.Attached.length, video.Detaches]).toEqual([1, 0]);
+    });
+
+    it('shows the orb 5 s into a resume when no frame has come by then, and the video at the next frame', () => {
+      fakeClock();
+      const { fixture, resume, resumed } = render(player());
+      frame();
+      fixture.detectChanges();
+
+      resume();
+      vi.advanceTimersByTime(500);
+      resumed();
+      vi.advanceTimersByTime(4400);
+      fixture.detectChanges();
+      expect(orbState(fixture)).toBeNull();
+
+      vi.advanceTimersByTime(200);
+      fixture.detectChanges();
+      expect(orbState(fixture)).toBe('listening');
+      expect(chips(fixture)).toEqual(['Listening']);
+
+      vi.advanceTimersByTime(900);
+      frame();
+      fixture.detectChanges();
+      expect(orbState(fixture)).toBeNull();
+    });
+
+    it("shows the orb a second into a stall again once the resume's video has come back", () => {
+      fakeClock();
+      const { fixture, resume, resumed } = render(player());
+      frame();
+      fixture.detectChanges();
+
+      resume();
+      vi.advanceTimersByTime(500);
+      resumed();
+      vi.advanceTimersByTime(1500);
+      frame();
+      fixture.detectChanges();
+
+      vi.advanceTimersByTime(1300);
+      fixture.detectChanges();
+      expect(orbState(fixture)).toBe('listening');
+    });
+
+    it('shows the orb at once when the resume fails', () => {
+      fakeClock();
+      const { fixture, state$, resume } = render(player());
+      frame();
+      fixture.detectChanges();
+
+      resume();
+      vi.advanceTimersByTime(2000);
+      fixture.detectChanges();
+      expect(orbState(fixture)).toBeNull();
+
+      state$.next('error');
+      fixture.detectChanges();
+      expect(orbState(fixture)).toBe('listening');
+      expect(chips(fixture)).toEqual(['Connection error']);
+    });
+
+    it("holds nothing on a 'connecting' the session does not report as a resume", () => {
+      fakeClock();
+      const { fixture, state$ } = render(player());
+      frame();
+      fixture.detectChanges();
+
+      state$.next('connecting');
+      vi.advanceTimersByTime(1300);
+      fixture.detectChanges();
+      expect(orbState(fixture)).toBe('listening');
+    });
   });
 
   it("follows the agent's turn on the orb: speaking, thinking, and listening for everything else", () => {
@@ -153,10 +247,16 @@ describe('RealtimeAvatarSurfaceComponent (DOM)', () => {
     expect(chips()).toEqual(['AI-generated video']);
   });
 
-  it("lets go of the call's state when it is destroyed", () => {
-    const { fixture, state$ } = render();
+  it("lets go of the call's state and its resumes when it is destroyed, and stops a resume's hold", () => {
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const cleared = vi.spyOn(globalThis, 'clearTimeout');
+    const { fixture, state$, resuming$, resume } = render(player());
+    resume();
+    const index = timers.mock.calls.findIndex((call) => call[1] === AGENT_VIDEO_RESUME_HOLD_MS);
+    expect(index).toBeGreaterThanOrEqual(0);
     fixture.destroy();
-    expect(state$.observed).toBe(false);
+    expect([state$.observed, resuming$.observed]).toEqual([false, false]);
+    expect(cleared).toHaveBeenCalledWith(timers.mock.results[index].value);
   });
 
   it('follows a newer video, and lets go of the one it showed', () => {

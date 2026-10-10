@@ -38,7 +38,8 @@ export type MediaTileVideoFit = 'cover' | 'contain';
  * "AI-generated video" label while it shows an avatar, connection quality, an active-speaker ring, an optional audio
  * meter and a pin button. Video fills the tile, except an avatar, which shows whole ({@link AvatarVideoFit}). With
  * {@link StallAfterMs} set, a video that stops sending frames cross-fades to the picture or initials until its frames
- * come back. Content marked {@link MediaTilePlaceholderDirective} takes the picture's place,
+ * come back, unless {@link HoldLastFrame} keeps its last frame on show. Content marked
+ * {@link MediaTilePlaceholderDirective} takes the picture's place,
  * and content marked `mjMediaTileActions` (such as a "Move to…" menu) sits in the top corner beside the pin, shown on
  * hover or focus: `<mj-media-tile><mj-media-move-menu mjMediaTileActions …></mj-media-move-menu></mj-media-tile>`.
  *
@@ -152,7 +153,9 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
   private watchedSource: MediaVideoSource | null = null;
   /** Whether the attached video's frames are coming: false until its first frame, and after a stall. */
   private framesFlowing = false;
-
+  private holdLastFrame = false;
+  /** Whether the current stall keeps the frame on show ({@link HoldLastFrame}). */
+  private holdingFrame = false;
 
   /** Show the active-speaker ring. */
   @Input() public ShowActiveSpeakerRing = true;
@@ -180,6 +183,22 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
    */
   @Input() public StallAfterMs: number | null = null;
   /**
+   * Keeps the frame on show while the video is out of frames ({@link StallAfterMs}), instead of cross-fading to the
+   * placeholder: for a gap the host expects, such as the call moving to a new connection. Only a frame on show is held,
+   * so the placeholder before the first frame, or one already showing when the hold starts, stays. Turned off while the
+   * video is still out of frames, the placeholder shows; frames that come back end the hold for that stall.
+   */
+  @Input()
+  public set HoldLastFrame(value: boolean) {
+    this.holdLastFrame = value;
+    if (!value) {
+      this.holdingFrame = false;
+    }
+  }
+  public get HoldLastFrame(): boolean {
+    return this.holdLastFrame;
+  }
+  /**
    * How an avatar fits the tile. `'contain'` (the default) shows the whole avatar, with bars where its shape differs from
    * the tile's, so a portrait avatar keeps its face in any box. `'cover'` fills the tile, as every other video does.
    */
@@ -190,6 +209,12 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
 
   /** Emits when the user clicks the pin button. */
   @Output() public TogglePin = new EventEmitter<void>();
+
+  /**
+   * Emits whether the watched video's frames are coming, each time that changes while {@link StallAfterMs} is set: `true`
+   * at its first frame and when frames come back, `false` after {@link StallAfterMs} without one, held or not.
+   */
+  @Output() public FramesFlowingChange = new EventEmitter<boolean>();
 
   /** The participant to show. A different video source replaces the attached one; the same source stays. */
   @Input()
@@ -217,9 +242,12 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
     return this.chooseVideo() !== null;
   }
 
-  /** Whether the video is out of frames ({@link StallAfterMs}): it has sent none yet, or none for that long. */
+  /**
+   * Whether the video is out of frames ({@link StallAfterMs}) and its placeholder shows: it has sent none yet, or none for
+   * that long and {@link HoldLastFrame} is not holding its frame.
+   */
   public get Stalled(): boolean {
-    return this.StallAfterMs !== null && this.HasVideo && !this.framesFlowing;
+    return this.StallAfterMs !== null && this.HasVideo && !this.framesFlowing && !this.holdingFrame;
   }
 
   /** Whether the video shown is mirrored: {@link Mirror} is on and the camera is what shows. */
@@ -285,15 +313,18 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
     }
     this.stopFrameWatch();
     this.watchedSource = source;
-    const watch = new VideoFrameWatch(this.StallAfterMs, (stalled) =>
-      this.zone.run(() => {
-        this.framesFlowing = !stalled;
-        this.cdr.markForCheck();
-      })
-    );
+    const watch = new VideoFrameWatch(this.StallAfterMs, (stalled) => this.zone.run(() => this.onFramesFlowing(!stalled)));
     this.frameWatch = watch;
     // Frames arrive many times a second; only a change of state enters Angular.
     this.zone.runOutsideAngular(() => watch.Watch(element));
+  }
+
+  /** The watched video's frames stopped or came back. A stall while {@link HoldLastFrame} is on keeps the frame on show. */
+  private onFramesFlowing(flowing: boolean): void {
+    this.holdingFrame = !flowing && this.holdLastFrame && this.framesFlowing;
+    this.framesFlowing = flowing;
+    this.cdr.markForCheck();
+    this.FramesFlowingChange.emit(flowing);
   }
 
   private stopFrameWatch(): void {
@@ -301,6 +332,7 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
     this.frameWatch = null;
     this.watchedSource = null;
     this.framesFlowing = false;
+    this.holdingFrame = false;
   }
 
   /** The preferred video, else a shared screen, the camera, the avatar. */

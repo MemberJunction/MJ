@@ -245,3 +245,95 @@ describe("RealtimeSessionRuntime: the agent's video", () => {
         expect(videos.at(-1)).toBeNull();
     });
 });
+
+/**
+ * A resume moves a live call to a new connection with its provider (Google's `goAway`, a dropped socket): the driver
+ * reports `'connecting'` mid-call and a live state once the new connection is in use. The agent's video can stop for a few
+ * seconds meanwhile, which the Avatar channel's surface holds through (#5357).
+ */
+describe('RealtimeSessionRuntime: a resume (Resuming$)', () => {
+    /** The call's resumes and states, in the order they change. */
+    const record = (runtime: RealtimeSessionRuntime): string[] => {
+        const log: string[] = [];
+        runtime.Resuming$.subscribe((resuming) => log.push(`resuming:${resuming}`));
+        runtime.ConnectionState$.subscribe((state) => log.push(state));
+        return log;
+    };
+
+    /** A call that has connected and is live, with its driver. */
+    const live = async (channels: TestChannel[] = []) => {
+        const call = build(channels);
+        const client = await call.start();
+        client.ReportState('connecting');
+        client.ReportState('connected');
+        client.ReportState('listening');
+        return { ...call, client };
+    };
+
+    it("is false through the call's first connect, and outside a call", async () => {
+        const { runtime, start } = build([avatarChannel()]);
+        const seen: boolean[] = [];
+        runtime.Resuming$.subscribe((resuming) => seen.push(resuming));
+        const client = await start();
+        client.ReportState('connecting');
+        client.ReportState('connected');
+        client.ReportState('listening');
+        await runtime.EndRealtimeSession();
+        expect(seen).toEqual([false]);
+    });
+
+    it("is true from a 'connecting' mid-call until the call is live again, and changes before the call's state", async () => {
+        const { runtime, client } = await live();
+        const log = record(runtime);
+        client.ReportState('connecting');
+        client.ReportState('connected');
+        client.ReportState('listening');
+        expect(log).toEqual(['resuming:false', 'listening', 'resuming:true', 'connecting', 'resuming:false', 'listening']);
+        await runtime.EndRealtimeSession();
+    });
+
+    it("starts while the agent speaks, holds through a second 'connecting', and ends at the next live state", async () => {
+        const { runtime, client } = await live();
+        client.ReportState('speaking');
+        const seen: boolean[] = [];
+        runtime.Resuming$.subscribe((resuming) => seen.push(resuming));
+        client.ReportState('connecting');
+        client.ReportState('connecting');
+        expect(seen).toEqual([false, true]);
+        client.ReportState('speaking');
+        expect(seen).toEqual([false, true, false]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it("ends when the resume fails ('error')", async () => {
+        const { runtime, client } = await live();
+        const log = record(runtime);
+        client.ReportState('connecting');
+        client.ReportState('error');
+        expect(log.slice(-2)).toEqual(['resuming:false', 'error']);
+        await runtime.EndRealtimeSession();
+    });
+
+    it("ends when the call ends during a resume ('closed'), and the next call starts with none", async () => {
+        const { runtime, client, start } = await live();
+        client.ReportState('connecting');
+        const log = record(runtime);
+        await runtime.EndRealtimeSession();
+        expect(log.slice(-2)).toEqual(['resuming:false', 'closed']);
+        const next = await start();
+        next.ReportState('connecting');
+        expect(log.filter((entry) => entry.startsWith('resuming:'))).toEqual(['resuming:true', 'resuming:false']);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('reaches a channel through its context', async () => {
+        const avatar = avatarChannel();
+        const { runtime, client } = await live([avatar]);
+        const seen: boolean[] = [];
+        avatar.ContextForTest?.Resuming$?.subscribe((resuming) => seen.push(resuming));
+        client.ReportState('connecting');
+        client.ReportState('listening');
+        expect(seen).toEqual([false, true, false]);
+        await runtime.EndRealtimeSession();
+    });
+});

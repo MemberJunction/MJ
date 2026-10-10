@@ -269,6 +269,13 @@ export interface RealtimeChannelContext {
    * speaking, thinking, an error, or closed. A channel that shows the agent follows the agent's turn here.
    */
   ConnectionState$?: Observable<RealtimeConnectionState>;
+
+  /**
+   * OPTIONAL — whether the call is resuming on a new provider connection mid-call, now and on every change (the runtime's
+   * `Resuming$`). The agent's video can stop for a few seconds while it does, so a channel that shows the agent holds the
+   * last frame through the gap rather than showing that the video has stalled.
+   */
+  Resuming$?: Observable<boolean>;
 }
 
 /**

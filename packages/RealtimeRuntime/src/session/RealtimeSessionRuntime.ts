@@ -527,6 +527,7 @@ export class RealtimeSessionRuntime {
 
   // ── Reactive UI state ──────────────────────────────────────────────────────
   private _connectionState$ = new BehaviorSubject<RealtimeConnectionState>('closed');
+  private readonly _resuming$ = new BehaviorSubject<boolean>(false);
   private _captions$ = new BehaviorSubject<RealtimeCaption[]>([]);
   private _active$ = new BehaviorSubject<boolean>(false);
   private _delegationProgress$ = new Subject<RealtimeDelegationProgress>();
@@ -550,6 +551,16 @@ export class RealtimeSessionRuntime {
 
   /** Current connection / turn state. */
   public readonly ConnectionState$: Observable<RealtimeConnectionState> = this._connectionState$.asObservable();
+  /**
+   * Whether the call is resuming: moving to a new connection with its provider mid-call. `true` from a `'connecting'` the
+   * driver reports while the call is live, until the call is live again (`'listening'`, `'speaking'` or `'thinking'`),
+   * fails (`'error'`) or ends (`'closed'`). A call's first connect is not a resume, so it is `false` until the call has
+   * been live, and outside a call. Gemini Live resumes when Google ends a connection (`goAway`) and after a dropped
+   * socket, and the agent's video can stop for a few seconds meanwhile: a host can show that as a pause rather than as
+   * the agent leaving. It changes before {@link ConnectionState$} does, so a resume's `'connecting'` arrives with it
+   * already `true`.
+   */
+  public readonly Resuming$: Observable<boolean> = this._resuming$.asObservable();
   /** Live captions for both sides of the conversation. */
   public readonly Captions$: Observable<RealtimeCaption[]> = this._captions$.asObservable();
   /** True while a session is open (mic button active, overlay shown). */
@@ -1279,7 +1290,7 @@ export class RealtimeSessionRuntime {
     // published them on ActiveChannels$; skipping teardown would leave them undisposed, their tool
     // handlers registered, and their subscriptions live until the next start replaced them.
     this.agentSessionId = session.AgentSessionId ?? this.agentSessionId;
-    this._connectionState$.next('error');
+    this.setConnectionState('error');
     await this.teardown(true);
   }
 
@@ -1347,7 +1358,7 @@ export class RealtimeSessionRuntime {
     }
     this.resetState();
     this._active$.next(true);
-    this._connectionState$.next('connecting');
+    this.setConnectionState('connecting');
 
     // Resolve recording consent for this session: explicit value wins, else the per-user
     // persisted preference. Computed before mint so it can be reported to the server.
@@ -1767,7 +1778,7 @@ export class RealtimeSessionRuntime {
   private async failSessionStart(error: unknown): Promise<void> {
     console.error('[RealtimeSession] Failed to start session:', error);
     this.lastStartError = error instanceof Error ? error : new Error(String(error));
-    this._connectionState$.next('error');
+    this.setConnectionState('error');
     await this.teardown(false);
   }
 
@@ -2819,9 +2830,10 @@ export class RealtimeSessionRuntime {
       Captures$: this.Captures$,
       StartCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StartCamera() : this.StartScreenShare()),
       StopCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StopCamera() : this.StopScreenShare()),
-      // The agent's video, and the call's state, for a channel that shows the agent.
+      // The agent's video, the call's state and its resumes, for a channel that shows the agent.
       AgentVideo$: this.AgentVideo$,
-      ConnectionState$: this.ConnectionState$
+      ConnectionState$: this.ConnectionState$,
+      Resuming$: this.Resuming$
     };
   }
 
@@ -3238,7 +3250,7 @@ export class RealtimeSessionRuntime {
   private onClientStateChange(state: RealtimeClientState): void {
     const mapped = this.mapClientState(state);
     if (mapped) {
-      this._connectionState$.next(mapped);
+      this.setConnectionState(mapped);
       this.flushChannelCatalogNote();
     }
   }
@@ -3269,6 +3281,18 @@ export class RealtimeSessionRuntime {
   private isSessionLive(): boolean {
     const state = this._connectionState$.value;
     return state === 'listening' || state === 'speaking' || state === 'thinking';
+  }
+
+  /**
+   * Moves {@link ConnectionState$} to `state`, and {@link Resuming$} first: a `'connecting'` while the call is live, or
+   * already resuming, is a resume; any other state ends one. Every state change goes through here.
+   */
+  private setConnectionState(state: RealtimeConnectionState): void {
+    const resuming = state === 'connecting' && (this._resuming$.value || this.isSessionLive());
+    if (resuming !== this._resuming$.value) {
+      this._resuming$.next(resuming);
+    }
+    this._connectionState$.next(state);
   }
 
   // ── Transcript policy ──────────────────────────────────────────────────────
@@ -3460,7 +3484,7 @@ export class RealtimeSessionRuntime {
       void this.relayToolTurn(call.ToolName, call.ArgumentsJson, resultJson);
       return;
     }
-    this._connectionState$.next('thinking');
+    this.setConnectionState('thinking');
     if (this.inFlightCallIds.size === 0) {
       // A fresh delegation burst: anchor the first-update delay and clear the digest
       // buffer. Deliberately NOT reset: lastDelegationNarrationAt (the 8s spacing floor
@@ -4336,7 +4360,7 @@ export class RealtimeSessionRuntime {
     this.SetMinimized(false);
     this._active$.next(false);
     if (this._connectionState$.value !== 'error') {
-      this._connectionState$.next('closed');
+      this.setConnectionState('closed');
     }
 
     // Surface generic session-ended for the conversations runtime bridge.

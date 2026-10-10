@@ -24,7 +24,10 @@ LoadRealtimeAvatarChannel();
 /** The call's state, as the session streams it. */
 const callState$ = new BehaviorSubject<RealtimeConnectionState>('speaking');
 
-/** A session as the channel sees it, with the agent's video and the call's state. */
+/** Whether the call is resuming on a new connection, as the session streams it. */
+const resuming$ = new BehaviorSubject<boolean>(false);
+
+/** A session as the channel sees it, with the agent's video, the call's state and its resumes. */
 function context(video$: BehaviorSubject<MediaVideoSource | null>): RealtimeChannelContext {
   return {
     AgentName: 'Sage',
@@ -37,6 +40,7 @@ function context(video$: BehaviorSubject<MediaVideoSource | null>): RealtimeChan
     ExecuteServerAction: async () => null,
     AgentVideo$: video$.asObservable(),
     ConnectionState$: callState$.asObservable(),
+    Resuming$: resuming$.asObservable(),
   };
 }
 
@@ -76,11 +80,11 @@ describe('the Avatar channel', () => {
     expect(channel.GetSourcedTracks()).toEqual([]);
   });
 
-  it("gives its surface the agent's name, video and the call's state", () => {
+  it("gives its surface the agent's name, video, the call's state and its resumes", () => {
     const video$ = new BehaviorSubject<MediaVideoSource | null>(null);
     const channel = new RealtimeAvatarChannel();
     channel.Initialize(context(video$));
-    const surface = { AgentName: '', Video$: null, State$: null } as unknown as RealtimeAvatarSurfaceComponent;
+    const surface = { AgentName: '', Video$: null, State$: null, Resuming$: null } as unknown as RealtimeAvatarSurfaceComponent;
     channel.BindSurface(surface);
     expect(surface.AgentName).toBe('Sage');
     const states: RealtimeConnectionState[] = [];
@@ -91,15 +95,20 @@ describe('the Avatar channel', () => {
     const player: MediaVideoSource = { Kind: 'element', Attach: () => () => undefined };
     video$.next(player);
     expect(seen).toEqual([null, player]);
+    const resumes: boolean[] = [];
+    surface.Resuming$?.subscribe((r) => resumes.push(r));
+    resuming$.next(true);
+    expect(resumes).toEqual([false, true]);
   });
 
-  it('binds no video on a host that has none to give', () => {
+  it('binds no video and no resumes on a host that has none to give', () => {
     const channel = new RealtimeAvatarChannel();
     const ctx = context(new BehaviorSubject<MediaVideoSource | null>(null));
     delete ctx.AgentVideo$;
+    delete ctx.Resuming$;
     channel.Initialize(ctx);
-    const surface = { AgentName: '', Video$: undefined } as unknown as RealtimeAvatarSurfaceComponent;
+    const surface = { AgentName: '', Video$: undefined, Resuming$: undefined } as unknown as RealtimeAvatarSurfaceComponent;
     channel.BindSurface(surface);
-    expect(surface.Video$).toBeNull();
+    expect([surface.Video$, surface.Resuming$]).toEqual([null, null]);
   });
 });

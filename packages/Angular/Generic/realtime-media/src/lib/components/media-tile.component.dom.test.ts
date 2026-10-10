@@ -356,5 +356,83 @@ describe('MediaTileComponent (DOM)', () => {
       expect(query(f, '.tile__placeholder')).toBeNull();
       expect(frames).toEqual([]);
     });
+
+    it('says when the frames start, stop and come back', () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+      const f = render(participant({ Video: { camera: elementSource() } }), { StallAfterMs: 1000 });
+      const changes: boolean[] = [];
+      f.componentInstance.FramesFlowingChange.subscribe((flowing) => changes.push(flowing));
+      frame();
+      vi.advanceTimersByTime(1300);
+      frame();
+      expect(changes).toEqual([true, false, true]);
+    });
+
+    describe('holding the last frame (HoldLastFrame)', () => {
+      const placeholder = (f: ReturnType<typeof render>) => query(f, '.tile__placeholder');
+
+      it('keeps the frame on show, still labelled, through a stall, and fades to the picture when the hold ends', () => {
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+        const f = render(participant({ Role: 'agent', Video: { avatar: elementSource() } }), { StallAfterMs: 1000, HoldLastFrame: true });
+        frame();
+        f.detectChanges();
+        vi.advanceTimersByTime(3000);
+        f.detectChanges();
+        expect(placeholder(f)).toBeNull();
+        expect(query(f, '.tile__video')?.classList.contains('tile__video--stalled')).toBe(false);
+        expect(query(f, '.tile__chip')?.textContent?.trim()).toBe('AI-generated video');
+
+        f.componentRef.setInput('HoldLastFrame', false);
+        f.detectChanges();
+        expect(placeholder(f)?.classList.contains('tile__placeholder--over-video')).toBe(true);
+        expect(query(f, '.tile__chip')).toBeNull();
+        frame();
+        f.detectChanges();
+        expect(placeholder(f)).toBeNull();
+      });
+
+      it('holds each stall while it is on, and frames that come back end the hold for that stall', () => {
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+        const f = render(participant({ Video: { camera: elementSource() } }), { StallAfterMs: 1000, HoldLastFrame: true });
+        frame();
+        vi.advanceTimersByTime(1300);
+        frame();
+        vi.advanceTimersByTime(1300);
+        f.detectChanges();
+        expect(placeholder(f)).toBeNull();
+        f.componentRef.setInput('HoldLastFrame', false);
+        f.detectChanges();
+        expect(placeholder(f)).not.toBeNull();
+      });
+
+      it('holds no frame before the first one', () => {
+        const f = render(participant({ Video: { camera: elementSource() } }), { StallAfterMs: 1000, HoldLastFrame: true });
+        expect(placeholder(f)).not.toBeNull();
+        frame();
+        f.detectChanges();
+        expect(placeholder(f)).toBeNull();
+      });
+
+      it('brings no frame back once the picture shows', () => {
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+        const f = render(participant({ Video: { camera: elementSource() } }), { StallAfterMs: 1000 });
+        frame();
+        vi.advanceTimersByTime(1300);
+        f.detectChanges();
+        f.componentRef.setInput('HoldLastFrame', true);
+        f.detectChanges();
+        expect(placeholder(f)?.classList.contains('tile__placeholder--over-video')).toBe(true);
+      });
+
+      it('starts a new video out of frames, holding nothing', () => {
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+        const f = render(participant({ Video: { camera: elementSource() } }), { StallAfterMs: 1000, HoldLastFrame: true });
+        frame();
+        vi.advanceTimersByTime(1300);
+        f.componentRef.setInput('Participant', participant({ Video: { camera: elementSource() } }));
+        f.detectChanges();
+        expect(placeholder(f)).not.toBeNull();
+      });
+    });
   });
 });
