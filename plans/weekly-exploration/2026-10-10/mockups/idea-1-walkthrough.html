@@ -1,0 +1,73 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Show Me How — walkthrough mockup</title>
+<style>@import url(_base.css);
+.hl{position:relative;outline:3px solid var(--pri);outline-offset:3px;border-radius:9px;box-shadow:0 0 0 9999px rgba(20,26,43,.0)}
+.dim{opacity:.42}
+.coach{position:absolute;width:330px;background:#fff;border:1px solid var(--pri);border-radius:14px;box-shadow:0 14px 40px rgba(20,26,43,.28);padding:14px 16px;z-index:5}
+.coach h3{margin:0 0 4px;font-size:15px}.coach .meta{display:flex;justify-content:space-between;color:var(--mut);font-size:12px;margin-bottom:6px}
+.coach .acts{display:flex;gap:8px;margin-top:10px;align-items:center}.coach .acts .sp{flex:1}
+.coach::before{content:"";position:absolute;left:-8px;top:26px;width:14px;height:14px;background:#fff;border-left:1px solid var(--pri);border-bottom:1px solid var(--pri);transform:rotate(45deg)}
+.stage{position:relative}
+.launcher{position:absolute;right:32px;top:18px;background:var(--pri);color:#fff;border-radius:99px;padding:11px 18px;font-weight:700;box-shadow:0 8px 24px rgba(47,91,234,.45)}
+.step{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line)}.step i{font-style:normal;width:24px;height:24px;border-radius:50%;background:#eceff4;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none}
+.step.d i{background:var(--ok-s);color:var(--ok)}.step.n i{background:var(--pri);color:#fff}
+.rec{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);margin-right:6px}
+.sheet{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+</style></head><body style="position:relative">
+<div class="app"><nav class="side"><b>Riverbend Association</b><small>Work</small><a>Home</a><a class="on">Pledges</a><a>Members</a><a>Events</a><a>Volunteers</a><small>Help</small><a>📘 Guides (4)</a></nav>
+<main>
+<div class="tag">Volunteer view · Daniel (first week)</div>
+<h1>New Pledge</h1><div class="sub">You are following <b>“Record a pledge the Riverbend way”</b> — 5 steps · about 3 minutes. You can keep working at any time.</div>
+<div class="g2 stage">
+ <div class="card">
+  <div class="fld"><label>Donor *</label><div class="in">Maria Alvarez <span class="chip ok">found 1 match</span></div></div>
+  <div class="fld"><label>Amount *</label><div class="in hl">$ 250.00</div></div>
+  <div class="coach" style="left:calc(50% - 5px);top:128px">
+   <div class="meta"><span><b>Step 2 of 5</b></span><span>Riverbend pledges guide v3</span></div>
+   <h3>Enter the amount the donor promised</h3>
+   <div style="font-size:13px">Use the <b>pledged</b> amount, not what was paid today. Payments are recorded later, on the pledge’s <i>Payments</i> tab.</div>
+   <div class="acts"><span class="btn o s">← Back</span><span class="sp"></span><span class="mut" style="font-size:12px">Continues when you type ✓</span></div>
+   <div class="acts" style="margin-top:6px"><span class="mut" style="font-size:12px">Pause · Skip guide · <u>Why is this asked?</u></span></div>
+  </div>
+  <div class="fld dim"><label>Fund code * <span class="chip gr">next</span></label><div class="in">—</div></div>
+  <div class="fld dim"><label>Pledge date</label><div class="in">Oct 10, 2026</div></div>
+  <div class="fld dim"><label>Receipt preference</label><div class="in">Email</div></div>
+  <div style="margin-top:12px"><span class="btn dim">Save pledge</span></div>
+ </div>
+ <div>
+  <div class="card"><h2>This guide</h2>
+   <div class="step d"><i>✓</i><div><b>Find the donor</b><div class="mut">Search before you create — avoids duplicates.</div></div></div>
+   <div class="step n"><i>2</i><div><b>Enter the pledged amount</b></div></div>
+   <div class="step"><i>3</i><div><b>Pick the fund code</b><div class="mut">Your role can’t edit “Restricted”; guide shows who to ask.</div></div></div>
+   <div class="step"><i>4</i><div><b>Choose a receipt option</b></div></div>
+   <div class="step"><i>5</i><div><b>Save and check the receipt queued</b></div></div>
+   <div style="margin-top:10px"><span class="chip gr">Progress saved — resume any time</span> <span class="chip pri">Keyboard: Tab / Esc</span></div>
+  </div>
+  <div class="card"><h2>Ask for a different guide</h2><div class="in" style="border:1px solid var(--line);border-radius:8px;padding:8px 10px">“How do I add a volunteer to an event?” <span class="btn s" style="float:right;margin-top:-3px">Show me</span></div>
+   <div class="mut" style="margin-top:8px;font-size:12.5px">An assistant picks a published guide, or drafts a one-time walkthrough from the app’s own field descriptions.</div></div>
+ </div>
+</div>
+
+<hr style="border:none;border-top:2px dashed var(--line);margin:26px 0">
+<div class="tag">Staff view · Priya, office manager — authoring &amp; guide health</div>
+<h1>Guides</h1><div class="sub">Teach the software the way <b>your</b> organization uses it. Record it once; it stays current.</div>
+<div class="g2">
+ <div class="card"><h2><span class="rec"></span>Record mode — “Record a pledge the Riverbend way”</h2>
+  <table><tr><th>#</th><th>Captured action</th><th>Drafted explanation (editable)</th></tr>
+  <tr><td>1</td><td>Searched <code>Contacts</code></td><td>Search before you create — avoids duplicates.</td></tr>
+  <tr><td>2</td><td>Typed in <code>Pledges.Amount</code></td><td>Use the <i>pledged</i> amount, not today’s payment.</td></tr>
+  <tr><td>3</td><td>Chose <code>Pledges.FundCode</code></td><td>Pick the fund. <span class="chip warn">Restricted needs treasurer</span></td></tr>
+  <tr><td>4</td><td>Chose <code>Pledges.ReceiptPref</code></td><td>Email is fastest; mail adds 3 days.</td></tr>
+  <tr><td>5</td><td>Clicked <b>Save</b></td><td>Confirm the receipt appears in the queue.</td></tr></table>
+  <div style="margin-top:10px"><span class="btn">Publish to: Volunteers, Data entry</span> <span class="btn o">Preview as Daniel</span> <span class="chip gr">words drawn from your field descriptions</span></div></div>
+ <div class="card"><h2>Guide health</h2>
+  <table><tr><th>Guide</th><th>Used (30d)</th><th>Status</th></tr>
+  <tr><td>Record a pledge</td><td>41</td><td><span class="chip ok">All 5 anchors resolve</span></td></tr>
+  <tr><td>Add a volunteer to an event</td><td>26</td><td><span class="chip warn">Step 3 target renamed</span></td></tr>
+  <tr><td>Process a renewal batch</td><td>9</td><td><span class="chip bad">Step 2 field removed</span></td></tr></table>
+  <p class="mut" style="font-size:12.5px;margin:10px 0 6px">Where people stop in “Record a pledge”</p>
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;align-items:end;height:70px">
+   <div class="bar" style="height:100%"><i style="height:100%"></i></div><div class="bar" style="height:100%"><i style="height:88%"></i></div><div class="bar" style="height:100%"><i style="height:51%;background:var(--warn)"></i></div><div class="bar" style="height:100%"><i style="height:47%"></i></div><div class="bar" style="height:100%"><i style="height:44%"></i></div></div>
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;font-size:11.5px;color:var(--mut);text-align:center"><span>1</span><span>2</span><span>3 ⚠</span><span>4</span><span>5</span></div>
+  <p class="mut" style="font-size:12.5px">Step 3 loses 37% — aggregate only, never per person. Reword the step, or fix the form.</p></div>
+</div>
+</main></div><div class="launcher">❓ Show me how</div></body></html>

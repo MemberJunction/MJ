@@ -1,0 +1,44 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cover &amp; Handover mockup</title>
+<style>@import url(_base.css);.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px}.tabs span{padding:9px 14px;color:var(--mut);font-weight:600}.tabs .on{color:var(--pri);border-bottom:3px solid var(--pri)}
+.kpi{text-align:center}.kpi .big{display:block}.dlg{border:2px solid var(--pri);border-radius:14px;padding:16px;background:#fff;box-shadow:0 12px 36px rgba(20,26,43,.18)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}.seg span{padding:5px 11px;font-size:12.5px;font-weight:600;border-right:1px solid var(--line)}.seg span:last-child{border:none}.seg .a{background:var(--ok-s);color:var(--ok)}.seg .r{background:var(--bad-s);color:var(--bad)}
+.rule{border-left:4px solid var(--pri);background:var(--pri-s);padding:8px 12px;border-radius:0 8px 8px 0;margin:8px 0;font-size:13px}</style></head><body>
+<div class="app"><nav class="side"><b>Riverbend Association</b><small>Admin</small><a>Settings</a><a class="on">People &amp; Access</a><a>Security</a><a>Audit</a></nav>
+<main><h1>People &amp; Access</h1><div class="sub">Right access, for the right time — without anyone running a spreadsheet audit.</div>
+<div class="tabs"><span class="on">Access windows</span><span>Cover (delegation)</span><span>Reviews <span class="chip warn">7 due</span></span><span>Handover</span></div>
+<div class="row"><div class="card kpi"><span class="big" style="color:var(--ok)">92%</span>volunteer roles have an end date</div><div class="card kpi"><span class="big" style="color:var(--warn)">5</span>roles end in the next 14 days</div><div class="card kpi"><span class="big" style="color:var(--pri)">2</span>active delegations</div><div class="card kpi"><span class="big" style="color:var(--bad)">3</span>people unseen 120+ days</div></div>
+<div class="g2">
+<div class="card"><h2>Roles ending soon</h2><table><tr><th>Person</th><th>Role</th><th>Ends</th><th></th></tr>
+<tr><td><span class="av">PS</span>Priya Shah</td><td>Treasurer (audit season)</td><td>Nov 30 <span class="chip warn">in 51 d</span></td><td><span class="btn o s">Extend</span></td></tr>
+<tr><td><span class="av">DK</span>Daniel Kim</td><td>Volunteer — data entry</td><td>Oct 18 <span class="chip warn">in 8 d</span></td><td><span class="btn o s">Extend</span></td></tr>
+<tr><td><span class="av">LO</span>Lena Okafor</td><td>Event lead — Gala</td><td>Oct 25 <span class="chip gr">auto-ends</span></td><td><span class="btn o s">Extend</span></td></tr>
+<tr><td><span class="av">TB</span>Tom Becker</td><td>Contractor — web</td><td>Oct 12 <span class="chip bad">in 2 d</span></td><td><span class="btn o s">Extend</span></td></tr></table>
+<p class="mut" style="font-size:12.5px">When a date arrives, the role simply stops applying — immediately, on every server. Nobody has to remember.</p></div>
+<div class="dlg"><h2>Give a role for a limited time</h2>
+<div class="fld"><label>Person</label><div class="in">Priya Shah</div></div>
+<div class="g2"><div class="fld"><label>Role</label><div class="in">Treasurer</div></div><div class="fld"><label>Until</label><div class="in">Nov 30, 2026 <span class="mut">(audit complete)</span></div></div></div>
+<div class="fld"><label>Why</label><div class="in">Year-end audit support</div></div>
+<div class="rule">Priya will get a reminder 14 days before, and you’ll be asked to <b>extend or let it end</b>.</div>
+<span class="btn">Grant until Nov 30</span> <span class="btn o">Cancel</span></div></div>
+
+<div class="g2">
+<div class="card"><h2>Cover for Marcus Reyes <span class="chip ok">active · Oct 6 → Oct 27</span></h2>
+<table><tr><th>What</th><th>Covered by</th></tr><tr><td>Approvals queue (grants &lt; $5,000)</td><td><span class="av">AW</span>Anita Wolfe</td></tr><tr><td>Open tasks (12)</td><td><span class="av">AW</span>Anita Wolfe</td></tr><tr><td>Role changes &amp; delegation settings</td><td><span class="chip gr">never delegated</span></td></tr></table>
+<div class="rule"><b>Anita can’t do more than Marcus can</b> — her effective rights are the overlap of both. Her actions read “Anita Wolfe, on behalf of Marcus Reyes” in the audit trail. No shared passwords.</div>
+<span class="btn o s">End early</span> <span class="chip gr">Marcus gets a “what happened while I was away” summary on return</span></div>
+<div class="card"><h2>Quarterly access review — Q4 <span class="chip warn">7 of 24 left · due Oct 20</span></h2>
+<div class="bar" style="margin-bottom:10px"><i style="width:71%"></i></div>
+<table><tr><th>Person · access</th><th>Your call</th></tr>
+<tr><td><span class="av">RB</span>Ravi B. · Donor records (read)<div class="mut" style="font-size:12px">last seen 142 days ago</div></td><td><span class="seg"><span>Keep</span><span>Change</span><span class="r">Remove</span></span></td></tr>
+<tr><td><span class="av">CM</span>Chloe M. · Event lead<div class="mut" style="font-size:12px">active · ends Dec 31</div></td><td><span class="seg"><span class="a">Keep</span><span>Change</span><span>Remove</span></span></td></tr></table>
+<p class="mut" style="font-size:12.5px;margin:8px 0">Unanswered volunteer items expire on Oct 20; staff items escalate. <span class="btn o s">Export signed attestation</span></p></div></div>
+
+<div class="card"><h2>Handover Brief — Jordan Pike (leaving Oct 31) <span class="chip gr">disable, don’t delete</span></h2>
+<table><tr><th>What Jordan owns</th><th>Count</th><th>Reassign to</th><th></th></tr>
+<tr><td>Member records (chapter: North)</td><td>412</td><td>Anita Wolfe ▾</td><td><span class="chip ok">ready</span></td></tr>
+<tr><td>Scheduled jobs (weekly digest)</td><td>2</td><td>Priya Shah ▾</td><td><span class="chip ok">ready</span></td></tr>
+<tr><td>Shared dashboards others use</td><td>3</td><td>Marcus Reyes ▾</td><td><span class="chip ok">ready</span></td></tr>
+<tr><td>API key “website-sync”</td><td>1</td><td><span class="mut">choose…</span></td><td><span class="chip warn">needs owner</span></td></tr>
+<tr><td>Agent runs in flight</td><td>0</td><td>—</td><td><span class="chip gr">nothing to move</span></td></tr></table>
+<div style="margin-top:10px"><span class="btn">Reassign &amp; schedule deactivation</span> <span class="mut">Unclaimed items go to the fallback owner (Office Manager), never into the void.</span></div></div>
+</main></div></body></html>

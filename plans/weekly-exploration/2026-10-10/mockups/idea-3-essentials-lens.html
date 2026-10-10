@@ -1,0 +1,45 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Essentials Lens mockup</title>
+<style>@import url(_base.css);.seg{display:inline-flex;border:1px solid var(--line);border-radius:99px;overflow:hidden;background:#fff}.seg span{white-space:nowrap;padding:5px 11px;font-weight:600;font-size:13px;color:var(--mut)}.seg .on{background:var(--pri);color:#fff}
+.more{border:1px dashed var(--pri);color:var(--pri);border-radius:10px;padding:9px 12px;font-weight:600;background:var(--pri-s);margin:8px 0}
+.sec{font-size:11.5px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 6px;border-top:1px solid var(--line);padding-top:10px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.hd{gap:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.t{vertical-align:middle;display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}.t.e{background:var(--ok)}.t.s{background:var(--pri)}.t.x{background:#98a2b3}
+.err{border-color:var(--bad)!important;background:var(--bad-s)}</style></head><body>
+<div class="app"><nav class="side"><b>Riverbend Association</b><small>Apps</small><a>Home</a><a class="on">Members</a><a>Events</a><a>Volunteers</a><a style="color:#8c96b3">More tools ▾ <span style="float:right">6</span></a></nav>
+<main>
+<div class="g2" style="gap:18px">
+ <div>
+  <div class="hd"><div style="min-width:0"><div class="tag">Board member · Essentials lens</div><h1>Maria Alvarez</h1></div><div class="seg" style="flex:none"><span class="on">Essentials</span><span>Standard</span><span>Everything</span></div></div>
+  <div class="card">
+   <div class="cols2">
+    <div class="fld"><label>Full name</label><div class="in">Maria Alvarez</div></div>
+    <div class="fld"><label>Status</label><div class="in"><span class="chip ok">Active member</span></div></div>
+    <div class="fld"><label>Membership type</label><div class="in">Individual — Sustaining</div></div>
+    <div class="fld"><label>Renews</label><div class="in">Mar 1, 2027</div></div>
+    <div class="fld"><label>Email</label><div class="in">maria@example.org</div></div>
+    <div class="fld"><label>Phone</label><div class="in">(555) 014-2290</div></div>
+   </div>
+   <div class="more">▸ Show 31 more fields in 6 sections <span class="mut" style="font-weight:400">· Billing, Preferences, Tax receipts, Consent, System…</span></div>
+   <div class="more" style="border-style:solid;background:#fff;color:var(--ink)">▸ Related: Payments (14) · Events (9) · <b>3 more panels</b></div>
+  </div>
+  <div class="card" style="border-color:var(--bad)"><h2>If something needs attention, it appears — never hidden</h2>
+   <div class="fld"><label>Tax-receipt address * <span class="chip bad">required before saving</span></label><div class="in err">— <span style="color:var(--bad)">Add an address so the receipt can be issued</span></div></div>
+   <div class="mut" style="font-size:12.5px">A required-and-empty field, or the section holding a validation error, <b>reveals itself</b> with the reason. The lens changes what’s <i>calm</i>, never what’s <i>enforced</i>.</div></div>
+  <div class="card"><b>Grid, same lens</b> <span class="mut">(5 of 38 columns)</span><table><tr><th>Name</th><th>Status</th><th>Type</th><th>Renews</th><th>Email</th><th></th></tr><tr><td>Maria Alvarez</td><td><span class="chip ok">Active</span></td><td>Sustaining</td><td>Mar 1</td><td>maria@…</td><td class="mut">+33</td></tr><tr><td>Ben Clarke</td><td><span class="chip warn">Lapsing</span></td><td>Individual</td><td>Nov 14</td><td>ben@…</td><td class="mut">+33</td></tr></table></div>
+ </div>
+ <div>
+  <div class="hd"><div><div class="tag">Data steward · Lens Designer</div><h1>Contacts <span class="mut" style="font-weight:400">· 57 fields</span></h1></div><span class="btn o s">Preview as: Board member ▾</span></div>
+  <div class="card"><div class="row" style="text-align:center"><div><span class="big" style="color:var(--ok)">6</span><div class="mut">Essentials</div></div><div><span class="big" style="color:var(--pri)">20</span><div class="mut">Standard</div></div><div><span class="big" style="color:#667085">31</span><div class="mut">Everything</div></div></div>
+   <p class="mut" style="font-size:12.5px;margin:10px 0 0">First draft by rules (name, required, default-view, high fill-rate) + aggregate usage; AI wrote the reasons. Nothing is live until you approve.</p></div>
+  <div class="card"><table><tr><th>Field</th><th>Suggested</th><th>Why</th><th></th></tr>
+   <tr><td>FullName</td><td><span class="t e"></span>Essentials</td><td class="mut">Name field</td><td>✓</td></tr>
+   <tr><td>Status</td><td><span class="t e"></span>Essentials</td><td class="mut">Edited in 71% of sessions</td><td>✓</td></tr>
+   <tr><td>RenewalDate</td><td><span class="t e"></span>Essentials</td><td class="mut">Default grid column</td><td>✓</td></tr>
+   <tr><td>PreferredName</td><td><span class="t s"></span>Standard</td><td class="mut">Filled in 34% of records</td><td><span class="btn o s">Promote</span></td></tr>
+   <tr><td>LegacyImportKey</td><td><span class="t x"></span>Everything</td><td class="mut">System column, 2% edited</td><td>✓</td></tr>
+   <tr><td>TaxReceiptAddress</td><td><span class="t s"></span>Standard</td><td class="mut"><span class="chip warn">required</span> auto-reveals when empty</td><td>✓</td></tr></table></div>
+  <div class="card"><h2>Who sees what by default</h2><table><tr><th>Role</th><th>Default lens</th></tr><tr><td>Board, Volunteers</td><td><span class="chip ok">Essentials</span></td></tr><tr><td>Staff</td><td><span class="chip pri">Standard</span></td></tr><tr><td>Administrators</td><td><span class="chip gr">Everything</span></td></tr></table>
+   <p class="mut" style="font-size:12.5px;margin:8px 0 0">A person’s own choice always wins and follows them across devices. <b>Not a security feature</b> — field access is still governed by roles and field-level security.</p></div>
+ </div>
+</div>
+</main></div></body></html>
