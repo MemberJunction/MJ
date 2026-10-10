@@ -215,7 +215,7 @@ describe('LiveKitPreviewRoomController: a meeting room with no server', () => {
     expect(room.Status).toBe('connected');
     expect(room.State.LocalMedia.MicrophoneEnabled).toBe(false);
     expect(room.State.Local?.HasAudio).toBe(false);
-    expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to enable microphone.', Cause: 'Not allowed.' }]);
+    expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to enable microphone.', Cause: 'Not allowed.', Device: { Media: 'microphone', Change: 'on' } }]);
   });
 });
 
@@ -300,7 +300,7 @@ describe('LiveKitPreviewRoomController: your camera and microphone', () => {
     made[0].Failing.add('camera');
     await room.SetCameraEnabled(true);
     expect(room.State.LocalMedia.CameraEnabled).toBe(false);
-    expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to enable camera.', Cause: 'Not allowed.' }]);
+    expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to enable camera.', Cause: 'Not allowed.', Device: { Media: 'camera', Change: 'on' } }]);
   });
 
   it('lists your microphones and cameras, and no speakers; reports the ones in use', async () => {
@@ -374,7 +374,7 @@ describe('LiveKitPreviewRoomController: your screen share', () => {
     picks.push({ Status: 'failed', Reason: 'denied', Message: 'Blocked by policy.' });
     await room.SetScreenShareEnabled(true);
     expect(room.State.LocalMedia.ScreenShareEnabled).toBe(false);
-    expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to enable screen.', Cause: 'Blocked by policy.' }]);
+    expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to enable screen.', Cause: 'Blocked by policy.', Device: { Media: 'screen', Change: 'on' } }]);
   });
 
   it('stops a share that starts after you left', async () => {

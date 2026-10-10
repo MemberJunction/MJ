@@ -20,6 +20,7 @@ import {
   type LiveKitRoomState,
 } from '@memberjunction/livekit-room-core';
 import { AgentAvatarNotices, type AgentAvatarNotice } from './agent-avatar-notices';
+import { DeviceErrorNoticeText } from './device-error-notice';
 import { TURN_POLL_DEFAULT_INTERVAL_MS, TurnStatePoller } from './turn-state-poller';
 import {
   BuildRosterTurnBadge,
@@ -171,13 +172,18 @@ export interface AgentInRoom {
         (ParticipantLeft)="ParticipantLeft.emit($event)"
         (DataReceived)="DataReceived.emit($event)"
         (ToggleRecording)="onToggleRecording()"
-        (ErrorOccurred)="ErrorOccurred.emit($event)"
+        (BeforeMediaToggle)="OnDeviceChangeRequested()"
+        (BeforeDeviceSwitch)="OnDeviceChangeRequested()"
+        (ErrorOccurred)="OnRoomError($event)"
       ></mj-livekit-room>
 
-      @if (AgentVisionNotice || AvatarNotices.length > 0) {
+      @if (AgentVisionNotice || DeviceNotice || AvatarNotices.length > 0) {
         <div class="mj-lk-notices">
           @if (AgentVisionNotice) {
             <mj-alert class="mj-lk-notice" Variant="error" Size="sm" [Message]="AgentVisionNotice" [Dismissible]="true" (Dismissed)="AgentVisionNotice = null"></mj-alert>
+          }
+          @if (DeviceNotice) {
+            <mj-alert class="mj-lk-notice mj-lk-notice--device" Variant="error" Size="sm" [Message]="DeviceNotice" [Dismissible]="true" (Dismissed)="DeviceNotice = null"></mj-alert>
           }
           @for (notice of AvatarNotices; track notice.Identity) {
             <mj-alert class="mj-lk-notice mj-lk-notice--avatar" Variant="info" Size="sm" Icon="fa-solid fa-video-slash"
@@ -341,8 +347,8 @@ export interface AgentInRoom {
         width: 100%;
         height: 100%;
       }
-      /* Over the room, under its header, clear of the agents panel at the bottom left: what the agent sees, then one
-         notice per agent whose avatar can't be shown. */
+      /* Over the room, under its header, clear of the agents panel at the bottom left: what the agent sees, what went
+         wrong with the user's devices, then one notice per agent whose avatar can't be shown. */
       .mj-lk-notices {
         position: absolute;
         top: 64px;
@@ -934,6 +940,13 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
    */
   public AgentVisionNotice: string | null = null;
 
+  /**
+   * What went wrong with the user's microphone, camera, speaker or share while the room was connected, such as a share
+   * the browser refused, shown over the room until they dismiss it, ask for another change to their devices, or leave;
+   * `null` when there is nothing to say. A share picker the user closed is no error, so it says nothing.
+   */
+  public DeviceNotice: string | null = null;
+
   /** Which agents' notices show that the meeting can't show their avatar: once per agent per join. */
   private readonly avatarNotices = new AgentAvatarNotices(() => this.cdr.markForCheck());
 
@@ -1082,7 +1095,33 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   /** The room disconnected: its notices go, and joining again shows each agent's once more. */
   public OnRoomDisconnected(event: LiveKitDisconnectedEvent): void {
     this.avatarNotices.Reset();
+    this.DeviceNotice = null;
     this.Disconnected.emit(event);
+  }
+
+  /**
+   * The room reported an error: the host hears it ({@link ErrorOccurred}), and a device error while the room is
+   * connected shows over the room ({@link DeviceNotice}), the latest in place of any earlier one. Until the room
+   * connects, it shows its own connection overlay, which says why a join failed.
+   */
+  public OnRoomError(error: LiveKitRoomError): void {
+    const line = this.roomComponent?.IsConnected ? DeviceErrorNoticeText(error) : null;
+    if (line) {
+      this.DeviceNotice = line;
+      this.cdr.markForCheck();
+    }
+    this.ErrorOccurred.emit(error);
+  }
+
+  /**
+   * The user asked for a change to their devices (turned the microphone, camera or share on or off, or switched a
+   * device): the device notice goes, since it was about an earlier request. Should this one fail too, its own shows.
+   */
+  public OnDeviceChangeRequested(): void {
+    if (this.DeviceNotice) {
+      this.DeviceNotice = null;
+      this.cdr.markForCheck();
+    }
   }
 
   /** The user dismissed an agent's avatar notice: it does not show again in this join. */
@@ -1127,6 +1166,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.Loading = true;
     this.errorMessage = null;
     this.avatarNotices.Reset();
+    this.DeviceNotice = null;
     this.cdr.markForCheck();
     try {
       if (this.Mode === 'preview') {

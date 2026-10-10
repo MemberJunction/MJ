@@ -65,6 +65,7 @@ export type {
   LiveKitAvatarAudioOnly,
   LiveKitDataMessage,
   LiveKitRoomError,
+  LiveKitErrorDevice,
   LiveKitLocalMediaState,
   LiveKitDevice,
   LiveKitRoomConnectOptions,
