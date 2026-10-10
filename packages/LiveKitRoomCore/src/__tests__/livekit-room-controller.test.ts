@@ -789,4 +789,97 @@ describe('LiveKitRoomController', () => {
       expect(reasons[0]).toBe('room-deleted');
     });
   });
+
+  describe('the state after leaving (#5391)', () => {
+    /** Adds a remote participant, as LiveKit reports a join. */
+    const join = (identity: string): void => {
+      const p = new FakeParticipant(identity, identity);
+      room.remoteParticipants.set(identity, p);
+      room.emit(RoomEvent.ParticipantConnected, p);
+    };
+
+    /**
+     * The server ends the connection, as LiveKit reports it: the tracks are unpublished first (the controller still
+     * rebuilds its state from the room), then the connection state changes, then the disconnect.
+     */
+    const endFromServer = (reason: DisconnectReason): void => {
+      room.remoteParticipants.clear();
+      room.emit(RoomEvent.LocalTrackUnpublished);
+      room.state = ConnectionState.Disconnected;
+      room.emit(RoomEvent.ConnectionStateChanged, ConnectionState.Disconnected);
+      room.emit(RoomEvent.Disconnected, reason);
+    };
+
+    it('holds no local participant, no room name and nobody else after the user leaves', async () => {
+      await controller.Connect('wss://x', 'token', { DisplayName: 'Ada' });
+      join('bo');
+      expect(controller.State).toMatchObject({ RoomName: 'test-room', Local: { Identity: 'local-me' } });
+
+      await controller.Disconnect();
+
+      expect(controller.State.Status).toBe('disconnected');
+      expect(controller.State.Local).toBeUndefined();
+      expect(controller.State.RoomName).toBeUndefined();
+      expect(controller.State.Remote).toEqual([]);
+    });
+
+    it('holds neither after the server ends the connection', async () => {
+      await controller.Connect('wss://x', 'token');
+      join('bo');
+
+      endFromServer(DisconnectReason.ROOM_DELETED);
+
+      expect(controller.State).toMatchObject({ Status: 'disconnected', DisconnectReason: 'room-deleted', Remote: [] });
+      expect(controller.State.Local).toBeUndefined();
+      expect(controller.State.RoomName).toBeUndefined();
+    });
+
+    it('names no room while joining again, then sets both from the room joined', async () => {
+      const next = new FakeRoom();
+      next.name = 'next-room';
+      next.localParticipant = new FakeParticipant('local-again', 'Me again');
+      const rooms = [room, next];
+      controller = new LiveKitRoomController({ RoomFactory: () => rooms.shift() as unknown as Room, RequestScreenShare: picker.Request });
+      await controller.Connect('wss://x', 'token');
+      await controller.Disconnect();
+      const connecting: Array<{ RoomName?: string; Local?: string }> = [];
+      controller.Events.On('stateChanged', (s) => {
+        if (s.Status === 'connecting') {
+          connecting.push({ RoomName: s.RoomName, Local: s.Local?.Identity });
+        }
+      });
+      const connected = vi.fn();
+      controller.Events.On('connected', connected);
+
+      await controller.Connect('wss://x', 'token-2');
+
+      expect(connecting).toEqual([{ RoomName: undefined, Local: undefined }]);
+      expect(controller.State).toMatchObject({ Status: 'connected', RoomName: 'next-room', Local: { Identity: 'local-again' } });
+      expect(connected.mock.calls[0][0].State).toMatchObject({ RoomName: 'next-room', Local: { Identity: 'local-again' } });
+    });
+
+    it('lets a beforeDisconnect handler read what the user is leaving, and keeps the reason LiveKit gave', async () => {
+      await controller.Connect('wss://x', 'token', { DisplayName: 'Ada' });
+      let leaving: { RoomName?: string; Local?: string } = {};
+      controller.Events.On('beforeDisconnect', () => {
+        leaving = { RoomName: controller.State.RoomName, Local: controller.State.Local?.DisplayName };
+      });
+
+      await controller.Disconnect();
+
+      expect(leaving).toEqual({ RoomName: 'test-room', Local: 'Ada' });
+      expect(controller.State.DisconnectReason).toBe('client-initiated');
+    });
+
+    it('keeps both when a beforeDisconnect handler cancels the leave', async () => {
+      await controller.Connect('wss://x', 'token', { DisplayName: 'Ada' });
+      controller.Events.On('beforeDisconnect', (e) => {
+        e.Cancel = true;
+      });
+
+      await controller.Disconnect();
+
+      expect(controller.State).toMatchObject({ Status: 'connected', RoomName: 'test-room', Local: { DisplayName: 'Ada' } });
+    });
+  });
 });

@@ -922,10 +922,16 @@ export class LiveKitRoomController implements ILiveKitRoomController {
     this.Events.Emit('error', { Kind: kind, Message: message, Cause: cause });
   }
 
-  /** The initial / reset room state. */
-  private initialState(): LiveKitRoomState {
+  /**
+   * The room state before joining, which a leave or a disconnect merges back over the current state: nobody in the
+   * room, the user included, and no room name. It sets every field ({@link LiveKitRoomResetState}), since a field left
+   * out would keep its value through the merge.
+   */
+  private initialState(): LiveKitRoomResetState {
     return {
       Status: 'idle',
+      RoomName: undefined,
+      Local: undefined,
       Remote: [],
       ActiveSpeakerIdentities: [],
       LocalMedia: { MicrophoneEnabled: false, CameraEnabled: false, ScreenShareEnabled: false },
@@ -937,6 +943,15 @@ export class LiveKitRoomController implements ILiveKitRoomController {
     };
   }
 }
+
+/**
+ * The state the controller's reset merges over the current one. Every field of {@link LiveKitRoomState} is required
+ * here, the optional ones too (`undefined` clears one), so the compiler catches a field the reset leaves out; mapping
+ * over the key union rather than `keyof` keeps `undefined` in an optional field's type. `DisconnectReason` is the
+ * exception: it must outlast the reset, since during `Disconnect` LiveKit reports the disconnect and its reason first
+ * (`handleDisconnected` resets with the reason), and `Disconnect` resets again after it.
+ */
+type LiveKitRoomResetState = { [K in Exclude<keyof LiveKitRoomState, 'DisconnectReason'>]: LiveKitRoomState[K] };
 
 /** Whether an agent in the room watches the cameras and screens people let it see (its bot's attributes say so). */
 function agentWatchesIn(room: Room): boolean {

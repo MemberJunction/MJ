@@ -199,9 +199,12 @@ export interface LiveKitRoomConnectOptions {
 export interface LiveKitRoomState {
   /** The connection lifecycle status. */
   Status: LiveKitConnectionStatus;
-  /** The room name once connected. */
+  /** The room's name, once connected and until leaving: absent before joining and after a leave or a disconnect. */
   RoomName?: string;
-  /** The local participant's view, once connected. */
+  /**
+   * The local participant's view, once connected and until leaving: absent before joining and after a leave or a
+   * disconnect.
+   */
   Local?: LiveKitParticipantView;
   /** All remote participants. */
   Remote: LiveKitParticipantView[];
