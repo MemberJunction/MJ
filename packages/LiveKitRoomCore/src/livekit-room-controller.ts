@@ -42,11 +42,13 @@ import { ReadAvatarAudioOnly } from './agent-avatar';
 import { LiveKitRoomEventBus } from './events';
 import { ApplyBackgroundEffect, ApplyNoiseFilter } from './livekit-effects';
 import { LiveKitScreenShare } from './livekit-screen-share';
+import { ToMediaDeviceKind } from './media-adapters';
 import {
   LiveKitBackgroundEffect,
   LiveKitConnectionStatus,
   LiveKitDevice,
   LiveKitDisconnectReason,
+  LiveKitErrorDevice,
   LiveKitLocalMediaState,
   LiveKitParticipantRole,
   LiveKitParticipantView,
@@ -428,7 +430,7 @@ export class LiveKitRoomController implements ILiveKitRoomController {
       await this.room.startAudio();
       this.patchState({ AudioPlaybackBlocked: !this.room.canPlaybackAudio });
     } catch (err) {
-      this.emitError('device', 'Failed to start audio playback.', err);
+      this.emitError('device', 'Failed to start audio playback.', err, { Media: 'speaker', Change: 'on' });
     }
   }
 
@@ -522,7 +524,8 @@ export class LiveKitRoomController implements ILiveKitRoomController {
     try {
       await this.room.switchActiveDevice(kind, before.DeviceId);
     } catch (err) {
-      this.emitError('device', `Failed to switch ${kind} device.`, err);
+      const device: LiveKitErrorDevice = { Media: ToMediaDeviceKind(kind), Change: 'switch' };
+      this.emitError('device', `Failed to switch ${kind} device.`, err, device);
     }
   }
 
@@ -557,7 +560,9 @@ export class LiveKitRoomController implements ILiveKitRoomController {
         this.handleData(payload, participant, topic),
       )
       .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => this.handleDisconnected(reason))
-      .on(RoomEvent.MediaDevicesError, (err: Error) => this.emitError('device', err.message, err))
+      .on(RoomEvent.MediaDevicesError, (err: Error, kind?: LiveKitDevice['Kind']) =>
+        this.emitError('device', err.message, err, kind ? { Media: ToMediaDeviceKind(kind) } : undefined),
+      )
       .on(RoomEvent.AudioPlaybackStatusChanged, () => this.handleAudioPlayback());
   }
 
@@ -743,8 +748,9 @@ export class LiveKitRoomController implements ILiveKitRoomController {
   }
 
   /**
-   * Toggles a local-media kind via the local participant, surfacing failures as device errors. `screenRequest` is what
-   * a screen share that starts asks the browser's picker for.
+   * Toggles a local-media kind via the local participant, surfacing failures as device errors that name the kind and
+   * whether it was being turned on or off. `screenRequest` is what a screen share that starts asks the browser's picker
+   * for.
    */
   private async toggleLocalMedia(
     kind: 'microphone' | 'camera' | 'screen',
@@ -770,7 +776,8 @@ export class LiveKitRoomController implements ILiveKitRoomController {
       this.rebuildState();
       this.Events.Emit('localMediaChanged', this.stateSubject.value.LocalMedia);
     } catch (err) {
-      this.emitError('device', `Failed to ${enabled ? 'enable' : 'disable'} ${kind}.`, err);
+      const device: LiveKitErrorDevice = { Media: kind, Change: enabled ? 'on' : 'off' };
+      this.emitError('device', `Failed to ${enabled ? 'enable' : 'disable'} ${kind}.`, err, device);
     }
   }
 
@@ -917,9 +924,9 @@ export class LiveKitRoomController implements ILiveKitRoomController {
     this.Events.Emit('stateChanged', next);
   }
 
-  /** Emits a normalized error via the `error` event. */
-  private emitError(kind: LiveKitRoomError['Kind'], message: string, cause?: unknown): void {
-    this.Events.Emit('error', { Kind: kind, Message: message, Cause: cause });
+  /** Emits a normalized error via the `error` event; a device error about one device names it (`Device`). */
+  private emitError(kind: LiveKitRoomError['Kind'], message: string, cause?: unknown, device?: LiveKitErrorDevice): void {
+    this.Events.Emit('error', { Kind: kind, Message: message, Cause: cause, ...(device ? { Device: device } : {}) });
   }
 
   /**

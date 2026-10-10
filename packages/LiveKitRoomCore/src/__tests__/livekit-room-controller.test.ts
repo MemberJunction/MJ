@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConnectionQuality, ConnectionState, DisconnectReason, RoomEvent, Track, type Room, type RoomOptions, type TrackPublishOptions } from 'livekit-client';
 import type { CapturedDisplaySurface, DisplayCapture, DisplayCaptureOptions, DisplayCaptureResult } from '@memberjunction/ai-realtime-client/media';
 import { DEFAULT_SPEECH_ROOM_OPTIONS, LiveKitRoomController } from '../livekit-room-controller';
-import type { LiveKitRoomError } from '../types';
+import type { LiveKitDevice, LiveKitRoomError } from '../types';
 import { REALTIME_AGENT_AVATAR_ATTRIBUTE, REALTIME_AGENT_CAN_SEE_ATTRIBUTE, REALTIME_AGENT_WATCHES_ATTRIBUTE } from '@memberjunction/ai';
 
 /** A publication reduced to what the controller reads: whether it is muted, and a screen share's track settings. */
@@ -116,12 +116,18 @@ class FakeParticipant {
   public PublishError: Error | null = null;
   /** When set, `publishTrack` waits for it, as a publish does for the server. */
   public PublishWait: Promise<void> | null = null;
+  /**
+   * When set, turning the microphone or camera on or off rejects with it. Turning one on also reports it first, as
+   * livekit-client does when the browser refuses the device (`MediaDevicesError`, with the device kind).
+   */
+  public ToggleError: Error | null = null;
   private readonly pubs = new Map<Track.Source, FakePublication>();
 
   constructor(
     public identity: string,
     name?: string,
     metadata?: string,
+    private readonly reportDeviceError: (err: Error, kind: LiveKitDevice['Kind']) => void = () => undefined,
   ) {
     this.name = name ?? '';
     this.metadata = metadata;
@@ -134,12 +140,24 @@ class FakeParticipant {
     this.name = name;
   }
   public async setMicrophoneEnabled(enabled: boolean): Promise<void> {
+    this.failToggle(enabled, 'audioinput');
     this.isMicrophoneEnabled = enabled;
     this.setPub(Track.Source.Microphone, enabled);
   }
   public async setCameraEnabled(enabled: boolean): Promise<void> {
+    this.failToggle(enabled, 'videoinput');
     this.isCameraEnabled = enabled;
     this.setPub(Track.Source.Camera, enabled);
+  }
+  /** Throws {@link ToggleError} when set, reporting it first when turning a device on. */
+  private failToggle(enabled: boolean, kind: LiveKitDevice['Kind']): void {
+    if (!this.ToggleError) {
+      return;
+    }
+    if (enabled) {
+      this.reportDeviceError(this.ToggleError, kind);
+    }
+    throw this.ToggleError;
   }
   /** Publishes a track; one with the screen-share source is the participant's screen share, as in LiveKit. */
   public async publishTrack(track: MediaStreamTrack, options?: TrackPublishOptions): Promise<void> {
@@ -176,7 +194,7 @@ class FakeParticipant {
 class FakeRoom {
   public name = 'test-room';
   public state: ConnectionState = ConnectionState.Disconnected;
-  public localParticipant = new FakeParticipant('local-me', 'Me');
+  public localParticipant = new FakeParticipant('local-me', 'Me', undefined, (err, kind) => this.emit(RoomEvent.MediaDevicesError, err, kind));
   public remoteParticipants = new Map<string, FakeParticipant>();
   public canPlaybackAudio = true;
   public startAudio = vi.fn(async (): Promise<void> => {
@@ -306,6 +324,55 @@ describe('LiveKitRoomController', () => {
     });
   });
 
+  describe('device errors name the device and what the user asked of it', () => {
+    /** The errors the room reports. */
+    let errors: LiveKitRoomError[];
+
+    beforeEach(async () => {
+      await controller.Connect('wss://x', 'token');
+      errors = [];
+      controller.Events.On('error', (e) => errors.push(e));
+    });
+
+    it("reports a camera that fails to turn on after LiveKit's own report, which names the camera alone", async () => {
+      const refused = new Error('Could not start video source');
+      room.localParticipant.ToggleError = refused;
+      await controller.SetCameraEnabled(true);
+      expect(errors).toEqual([
+        { Kind: 'device', Message: 'Could not start video source', Cause: refused, Device: { Media: 'camera' } },
+        { Kind: 'device', Message: 'Failed to enable camera.', Cause: refused, Device: { Media: 'camera', Change: 'on' } },
+      ]);
+      expect(controller.State.LocalMedia.CameraEnabled).toBe(false);
+    });
+
+    it('reports a microphone that fails to turn off', async () => {
+      const failed = new Error('Track is busy');
+      room.localParticipant.ToggleError = failed;
+      await controller.SetMicrophoneEnabled(false);
+      expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to disable microphone.', Cause: failed, Device: { Media: 'microphone', Change: 'off' } }]);
+    });
+
+    it('reports a device switch that fails, by the kind of device', async () => {
+      const missing = new Error('Requested device not found');
+      room.switchActiveDevice.mockRejectedValueOnce(missing);
+      await controller.SwitchDevice('audiooutput', 'speaker-2');
+      expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to switch audiooutput device.', Cause: missing, Device: { Media: 'speaker', Change: 'switch' } }]);
+    });
+
+    it("reports the room's sound failing to start as the speaker turning on", async () => {
+      const blocked = new Error('play() was blocked');
+      room.startAudio.mockRejectedValueOnce(blocked);
+      await controller.StartAudio();
+      expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to start audio playback.', Cause: blocked, Device: { Media: 'speaker', Change: 'on' } }]);
+    });
+
+    it('names no device on a failure LiveKit reports without one', () => {
+      const lost = new Error('Device lost');
+      room.emit(RoomEvent.MediaDevicesError, lost);
+      expect(errors).toEqual([{ Kind: 'device', Message: 'Device lost', Cause: lost }]);
+    });
+  });
+
   describe('the screen share, through /media display capture', () => {
     /** The errors the room reports. */
     let errors: LiveKitRoomError[];
@@ -424,7 +491,12 @@ describe('LiveKitRoomController', () => {
       picker.Answers.push({ Status: 'failed', Reason: 'panel-wrong-surface', Message: "To share only the panel, choose this tab in the browser's picker." });
       await controller.SetScreenShareEnabled(true, { PanelLabel: 'Whiteboard' });
       expect(errors).toEqual([
-        { Kind: 'device', Message: 'Failed to enable screen.', Cause: new Error("To share only the panel, choose this tab in the browser's picker.") },
+        {
+          Kind: 'device',
+          Message: 'Failed to enable screen.',
+          Cause: new Error("To share only the panel, choose this tab in the browser's picker."),
+          Device: { Media: 'screen', Change: 'on' },
+        },
       ]);
       expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(false);
     });
@@ -434,7 +506,7 @@ describe('LiveKitRoomController', () => {
       room.localParticipant.PublishError = new Error('Not connected');
       await controller.SetScreenShareEnabled(true);
       expect(capture.Stopped).toBe(true);
-      expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to enable screen.', Cause: new Error('Not connected') }]);
+      expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to enable screen.', Cause: new Error('Not connected'), Device: { Media: 'screen', Change: 'on' } }]);
       room.localParticipant.PublishError = null;
       picker.Starts();
       await controller.SetScreenShareEnabled(true);

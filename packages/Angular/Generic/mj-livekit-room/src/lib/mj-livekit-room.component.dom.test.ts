@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, of, type Observable } from 'rxjs';
 import { ChangeDetectorRef, ErrorHandler, type Provider } from '@angular/core';
+import type { ComponentFixture } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { renderComponentFixture, clearOverlayContainers } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, clearOverlayContainers, overlayQueryAll } from '@memberjunction/ng-test-utils';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { GraphQLLiveKitClient, type RealtimeModelVoices } from '@memberjunction/graphql-dataprovider';
@@ -15,6 +16,8 @@ import {
   type ILiveKitRoomController,
   type LiveKitAvatarAudioOnly,
   type LiveKitParticipantView,
+  type LiveKitRoomError,
+  type LiveKitRoomEventMap,
   type LiveKitRoomState,
 } from '@memberjunction/livekit-room-core';
 import {
@@ -801,5 +804,209 @@ describe("MJLiveKitRoomComponent: an agent's avatar that can't be shown (DOM)", 
     vi.advanceTimersByTime(1);
     f.detectChanges();
     expect(notices(f)).toEqual([]);
+  });
+});
+
+/**
+ * DOM spec for the notice of what went wrong with the user's devices while the room is connected, such as a share the
+ * browser refused or a camera that failed: over the room with its other notices, in their words ("Couldn't …: reason").
+ * A share picker the user closed shows nothing. The panel share runs end to end: the real room on the preview
+ * controller, with `/media`'s display capture over a stand-in for the browser's picker.
+ */
+describe("MJLiveKitRoomComponent: what went wrong with the user's devices (DOM)", () => {
+  const PANEL_REFUSED = "Couldn't start sharing: To share only the panel, choose this tab in the browser's picker.";
+  const CAMERA_FAILED = "Couldn't turn on your camera: Could not start video source";
+
+  beforeEach(() => {
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(navigator, 'mediaDevices');
+    vi.restoreAllMocks();
+    clearOverlayContainers();
+  });
+
+  /** The device notices over the room, by their text. */
+  const deviceNotices = (f: ComponentFixture<MJLiveKitRoomComponent>): string[] =>
+    Array.from(f.nativeElement.querySelectorAll('mj-alert.mj-lk-notice--device') as NodeListOf<HTMLElement>).map((n) => n.textContent?.trim() ?? '');
+  const roomOf = (f: ComponentFixture<MJLiveKitRoomComponent>) =>
+    f.debugElement.query(By.directive(LiveKitRoomComponent)).componentInstance as LiveKitRoomComponent;
+  /** The errors the binding passes on to its host. */
+  const heardBy = (f: ComponentFixture<MJLiveKitRoomComponent>): LiveKitRoomError[] => {
+    const heard: LiveKitRoomError[] = [];
+    f.componentInstance.ErrorOccurred.subscribe((error: LiveKitRoomError) => heard.push(error));
+    return heard;
+  };
+
+  describe("sharing the whiteboard through the browser's picker, in the preview room", () => {
+    /** What the browser's picker does when opened: the user picks a surface, or closes it. */
+    let answer: () => Promise<MediaStream>;
+    let opened: number;
+
+    beforeEach(() => {
+      opened = 0;
+      // Desktop Chrome, as far as `/media` and the share-panel registry can tell: a picker and Region Capture. With no
+      // IntersectionObserver, every registered panel counts as on screen.
+      const getDisplayMedia = (): Promise<MediaStream> => {
+        opened++;
+        return answer();
+      };
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getDisplayMedia } });
+      vi.stubGlobal('CropTarget', { fromElement: async () => ({}) });
+      vi.stubGlobal('IntersectionObserver', undefined);
+      vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+      vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    });
+
+    /** The user picks a window instead of this tab: the browser shares the window. */
+    const picksAWindow = async (): Promise<MediaStream> => {
+      const track = { kind: 'video', getSettings: () => ({ displaySurface: 'window' }), stop: vi.fn() };
+      return { getVideoTracks: () => [track], getTracks: () => [track] } as unknown as MediaStream;
+    };
+    /** The user closes the picker: the browser rejects as it does for a refusal, with no system or policy named. */
+    const closesThePicker = async (): Promise<MediaStream> => {
+      throw Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' });
+    };
+
+    /** Lets the room's async work land and render. */
+    const settle = async (f: ComponentFixture<MJLiveKitRoomComponent>): Promise<void> => {
+      for (let i = 0; i < 6; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        f.detectChanges();
+      }
+    };
+    /** The binding in preview mode with the whiteboard offered, joined on fake devices, the whiteboard open. */
+    const joinWithWhiteboard = async () => {
+      const f = renderComponentFixture(MJLiveKitRoomComponent, {
+        providers: [{ provide: LOCAL_MEDIA_CONTROLLER_FACTORY, useValue: () => new FakeMedia() }],
+        inputs: { Mode: 'preview', ShowPreJoin: false, ShowWhiteboard: true },
+      });
+      await settle(f);
+      (f.nativeElement.querySelector('mj-livekit-control-bar button[title="Whiteboard"]') as HTMLButtonElement).click();
+      await settle(f);
+      return f;
+    };
+    /** Share ▸ This panel ▸ Whiteboard from the control bar, as the user picks it. */
+    const shareWhiteboard = async (f: ComponentFixture<MJLiveKitRoomComponent>): Promise<void> => {
+      (f.nativeElement.querySelector('mj-livekit-control-bar button[title="Choose what to share"]') as HTMLButtonElement).click();
+      f.detectChanges();
+      (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((i) => i.textContent?.trim() === 'This panel')?.click();
+      f.detectChanges();
+      (overlayQueryAll('mj-menu[aria-label="This panel"] mj-menu-item') as HTMLElement[]).find((i) => i.textContent?.trim() === 'Whiteboard')?.click();
+      await settle(f);
+    };
+
+    it("says why the browser refused the share, in the share picker's words, over the room", async () => {
+      answer = picksAWindow;
+      const f = await joinWithWhiteboard();
+      const heard = heardBy(f);
+      await shareWhiteboard(f);
+      expect(opened).toBe(1);
+      expect(deviceNotices(f)).toEqual([PANEL_REFUSED]);
+      const notice = f.nativeElement.querySelector('mj-alert.mj-lk-notice--device') as HTMLElement;
+      expect(notice.classList.contains('mj-alert--error')).toBe(true);
+      expect(notice.getAttribute('role')).toBe('alert');
+      expect(notice.closest('.mj-lk-notices')).not.toBeNull();
+      expect(heard.map((e) => e.Device)).toEqual([{ Media: 'screen', Change: 'on' }]);
+      expect(roomOf(f).State.LocalMedia.ScreenShareEnabled).toBe(false);
+    });
+
+    it('says nothing when the user closes the picker', async () => {
+      answer = closesThePicker;
+      const f = await joinWithWhiteboard();
+      const heard = heardBy(f);
+      await shareWhiteboard(f);
+      expect(opened).toBe(1);
+      expect(deviceNotices(f)).toEqual([]);
+      expect(heard).toEqual([]);
+    });
+
+    it('takes the notice away when the user tries again', async () => {
+      answer = picksAWindow;
+      const f = await joinWithWhiteboard();
+      await shareWhiteboard(f);
+      expect(deviceNotices(f)).toEqual([PANEL_REFUSED]);
+      answer = closesThePicker;
+      await shareWhiteboard(f);
+      expect(opened).toBe(2);
+      expect(deviceNotices(f)).toEqual([]);
+    });
+  });
+
+  describe('in a meeting', () => {
+    /** The binding in a meeting with its room shown; `fire` raises a controller event as LiveKit's controller does. */
+    const render = (over: Partial<LiveKitRoomState> = {}) => {
+      const controller = fakeController(over);
+      const f = renderComponentFixture(MJLiveKitRoomComponent, {
+        providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => controller }],
+        inputs: { AutoStart: false, Mode: 'join', ShowPreJoin: false },
+      });
+      f.componentInstance.ServerUrl = 'wss://example.test';
+      f.componentInstance.Token = 'token';
+      f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+      f.detectChanges();
+      const fire = <K extends keyof LiveKitRoomEventMap>(event: K, payload: LiveKitRoomEventMap[K]): void => {
+        controller.Events.Emit(event, payload);
+        f.detectChanges();
+      };
+      return { f, fire };
+    };
+    const REFUSED = new Error('Could not start video source');
+    /** A camera that fails to turn on, as LiveKit's controller reports it: LiveKit's own report, then the room's. */
+    const cameraFails = (fire: ReturnType<typeof render>['fire']): void => {
+      fire('error', { Kind: 'device', Message: 'Could not start video source', Cause: REFUSED, Device: { Media: 'camera' } });
+      fire('error', { Kind: 'device', Message: 'Failed to enable camera.', Cause: REFUSED, Device: { Media: 'camera', Change: 'on' } });
+    };
+
+    it('says what went wrong with a device, the latest report in place of the earlier, and the host still hears each', () => {
+      const { f, fire } = render();
+      const heard = heardBy(f);
+      cameraFails(fire);
+      expect(deviceNotices(f)).toEqual([CAMERA_FAILED]);
+      expect(heard.map((e) => e.Message)).toEqual(['Could not start video source', 'Failed to enable camera.']);
+    });
+
+    it('stacks it under the notice about what the agent sees', () => {
+      const { f, fire } = render();
+      f.componentInstance.AgentVisionNotice = "Couldn't change what the agent sees: LiveKit is unreachable.";
+      cameraFails(fire);
+      const stack = Array.from(f.nativeElement.querySelectorAll('.mj-lk-notices > mj-alert') as NodeListOf<HTMLElement>);
+      expect(stack.map((a) => a.textContent?.trim())).toEqual(["Couldn't change what the agent sees: LiveKit is unreachable.", CAMERA_FAILED]);
+    });
+
+    it('shows nothing before the room connects, where its connection overlay speaks', () => {
+      const { f, fire } = render({ Status: 'connecting' });
+      cameraFails(fire);
+      expect(deviceNotices(f)).toEqual([]);
+      expect(f.nativeElement.querySelector('mj-connection-overlay')).not.toBeNull();
+    });
+
+    it('shows nothing for an error that is not about a device', () => {
+      const { f, fire } = render();
+      fire('error', { Kind: 'data', Message: 'Failed to send data message.', Cause: new Error('Channel closed') });
+      expect(deviceNotices(f)).toEqual([]);
+    });
+
+    it('goes when the user dismisses it, asks for another device change, or leaves', () => {
+      const { f, fire } = render();
+      cameraFails(fire);
+      (f.nativeElement.querySelector('mj-alert.mj-lk-notice--device button[aria-label="Dismiss"]') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(deviceNotices(f)).toEqual([]);
+
+      cameraFails(fire);
+      fire('beforeMediaToggle', { Kind: 'camera', Enabled: true, Cancel: false });
+      expect(deviceNotices(f)).toEqual([]);
+
+      cameraFails(fire);
+      fire('beforeDeviceSwitch', { Kind: 'videoinput', DeviceId: 'camera-2', Cancel: false });
+      expect(deviceNotices(f)).toEqual([]);
+
+      cameraFails(fire);
+      fire('disconnected', { Reason: 'client-initiated' });
+      expect(deviceNotices(f)).toEqual([]);
+    });
   });
 });

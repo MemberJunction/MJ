@@ -43,6 +43,7 @@ import type {
   LiveKitBackgroundEffect,
   LiveKitConnectionStatus,
   LiveKitDevice,
+  LiveKitErrorDevice,
   LiveKitLocalMediaState,
   LiveKitParticipantRole,
   LiveKitParticipantView,
@@ -439,7 +440,7 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
     }
     const result = await this.requestShare(ToDisplayCaptureOptions(request));
     if (result.Status === 'failed') {
-      this.emitError('device', 'Failed to enable screen.', result.Message);
+      this.emitError('device', 'Failed to enable screen.', result.Message, { Media: 'screen', Change: 'on' });
     } else if (result.Status === 'started') {
       this.keepShare(session, result.Capture);
     }
@@ -468,11 +469,11 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
     }
   }
 
-  /** Reports a kind whose capture failed as a device error. */
+  /** Reports a kind whose capture failed to turn on as a device error. */
   private reportFailure(session: PreviewSession, kind: LocalMediaKind): void {
     const track = kind === 'camera' ? session.Media.State.Camera : session.Media.State.Microphone;
     if (track.Status === 'failed') {
-      this.emitError('device', `Failed to enable ${kind}.`, track.Message);
+      this.emitError('device', `Failed to enable ${kind}.`, track.Message, { Media: kind, Change: 'on' });
     }
   }
 
@@ -505,9 +506,14 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
     this.Events.Emit('stateChanged', next);
   }
 
-  /** Emits a room error. */
-  private emitError(kind: LiveKitRoomError['Kind'], message: string, cause?: string): void {
-    this.Events.Emit('error', { Kind: kind, Message: message, Cause: cause });
+  /** Emits a room error; the preview's are device errors, each naming its device (`Device`). */
+  private emitError(
+    kind: LiveKitRoomError['Kind'],
+    message: string,
+    cause: string | undefined,
+    device: LiveKitErrorDevice
+  ): void {
+    this.Events.Emit('error', { Kind: kind, Message: message, Cause: cause, Device: device });
   }
 }
 

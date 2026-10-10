@@ -12,7 +12,7 @@
 
 import type { Participant, RoomOptions, Track } from 'livekit-client';
 import type { RealtimeAvatarUnavailableReason } from '@memberjunction/ai';
-import type { CapturedDisplaySurface, MediaParticipant } from '@memberjunction/ai-realtime-client/media';
+import type { CapturedDisplaySurface, MediaDeviceKind, MediaParticipant } from '@memberjunction/ai-realtime-client/media';
 
 /**
  * The connection lifecycle of a LiveKit room as the core normalizes it. Maps the livekit-client
@@ -139,6 +139,25 @@ export interface LiveKitRoomError {
   Message: string;
   /** The original error, when available. */
   Cause?: unknown;
+  /**
+   * For a `device` error about one device: which, and what the user asked of it. Absent on other errors, and on a
+   * device error about no one device (listing the devices).
+   */
+  Device?: LiveKitErrorDevice;
+}
+
+/**
+ * The device a `device` error is about, and what the user asked of it, so a UI can say so in its own words (the
+ * meeting room's notice does).
+ */
+export interface LiveKitErrorDevice {
+  /** The microphone, the camera, the screen share, or the speaker (where the room's sound plays). */
+  Media: MediaDeviceKind | 'screen';
+  /**
+   * What the user asked: to turn it on or off, or to switch to another device of its kind. Absent when the room can't
+   * tell, as for a failure LiveKit reports on its own (its `MediaDevicesError`).
+   */
+  Change?: 'on' | 'off' | 'switch';
 }
 
 /** The current local-media toggle state (what the human is publishing). */
