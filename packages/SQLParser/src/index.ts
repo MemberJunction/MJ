@@ -10,6 +10,8 @@ export { LexSQL, SignificantTokens, IsKeyword } from './sqlLexer.js';
 export type { SQLLexToken, SQLLexTokenKind } from './sqlLexer.js';
 export { SplitLeadingCTEs, IsReadOnlyQuery } from './sqlShape.js';
 export type { LeadingCTEs, LeadingCTEDefinition, ReadOnlyQueryCheck } from './sqlShape.js';
+export { IsBalancedSQLFragment, SplitTopLevelAndTerms } from './balancedFragment.js';
+export type { BalancedFragmentCheck, BalancedFragmentOptions } from './balancedFragment.js';
 export { AnalyzePagingShape } from './pagingShape.js';
 export { FindForbiddenFunctionCalls } from './callerSqlFunctions.js';
 export type { PagingShape, OwnRowCap } from './pagingShape.js';
