@@ -48,6 +48,7 @@ class FakeSession {
     public Closed = false;
     /** What the session does while it closes: report its last usage, take a while, or fail. Closes at once when unset. */
     public CloseImpl?: () => Promise<void>;
+    private readonly closeHandlers: Array<() => void> = [];
     SendInput(): void {}
     async RegisterTools(): Promise<void> {}
     OnOutput(): void {}
@@ -63,6 +64,15 @@ class FakeSession {
         this.UsageHandler = handler;
     }
     OnError(): void {}
+    OnClose(handler: () => void): void {
+        this.closeHandlers.push(handler);
+    }
+    /** The provider drops the connection: the close handlers fire, as for any close the consumer did not ask for. */
+    DropConnection(): void {
+        for (const handler of this.closeHandlers) {
+            handler();
+        }
+    }
     SendContextNote(text: string): void {
         this.Notes.push(text);
     }
@@ -84,6 +94,8 @@ class WiringService extends RealtimeClientSessionService {
     /** Usage writes and finalizes, in order. */
     public readonly Events: string[] = [];
     public readonly UsageWrites: Array<{ PromptRunID: string; Input: number; Output: number; Details?: RealtimeUsageRecord }> = [];
+    /** Holds `FinalizeCoAgentRun` until it settles, as slow run writes would; unset, the runs are finalized at once. */
+    public FinalizeGate?: Promise<void>;
 
     protected override async createCoAgentObservabilityRun(): Promise<{ CoAgentRunID: string; PromptRunID?: string } | null> {
         return { ...this.ObservabilityIds };
@@ -101,6 +113,9 @@ class WiringService extends RealtimeClientSessionService {
         return true;
     }
     public override async FinalizeCoAgentRun(_coAgentRunID: string | null, promptRunID: string | null): Promise<void> {
+        if (this.FinalizeGate) {
+            await this.FinalizeGate;
+        }
         this.Events.push(`finalize:${promptRunID}`);
     }
     protected override resolveCoAgentSystemPrompt() {
@@ -428,6 +443,44 @@ describe('WireBridgeRealtimeSession — usage', () => {
         await expect((fake as unknown as IRealtimeSession).Close()).rejects.toThrow('socket already gone');
 
         expect(svc.Events).toEqual(['usage:pr-1', 'finalize:pr-1']);
+    });
+
+    it('resolves Close() only once the finalize a dropped connection started has finished', async () => {
+        const svc = new WiringService();
+        const fake = await wireWithPromptRun(svc, 'pr-1');
+        let finishFinalize: () => void = () => undefined;
+        svc.FinalizeGate = new Promise<void>((resolve) => {
+            finishFinalize = resolve;
+        });
+
+        fake.UsageHandler?.({ InputTokens: 7, OutputTokens: 3 });
+        fake.DropConnection(); // the finalize starts here and is still writing the runs
+        let closed = false;
+        const closing = (fake as unknown as IRealtimeSession).Close().then(() => {
+            closed = true;
+        });
+        await vi.advanceTimersByTimeAsync(BRIDGE_SESSION_CLOSE_WAIT_MS);
+        expect(fake.Closed).toBe(true); // the model session is closed all the same
+        expect(svc.Events).toEqual(['usage:pr-1']);
+        expect(closed).toBe(false);
+
+        finishFinalize();
+        await closing;
+        expect(svc.Events).toEqual(['usage:pr-1', 'finalize:pr-1']);
+    });
+
+    it('finalizes the runs once when the connection drop is reported twice', async () => {
+        const svc = new WiringService();
+        const fake = await wireWithPromptRun(svc, 'pr-1');
+
+        fake.UsageHandler?.({ InputTokens: 7, OutputTokens: 3 });
+        fake.DropConnection();
+        fake.DropConnection(); // a driver can report one drop twice: the server's close event, then the socket's
+        await (fake as unknown as IRealtimeSession).Close();
+        await vi.advanceTimersByTimeAsync(BRIDGE_USAGE_FLUSH_MS);
+
+        expect(svc.Events).toEqual(['usage:pr-1', 'finalize:pr-1']);
+        expect(svc.UsageWrites).toEqual([{ PromptRunID: 'pr-1', Input: 7, Output: 3 }]);
     });
 
     it("keeps a replaced session's usage on its own run; the replacement records on its own", async () => {
