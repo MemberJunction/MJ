@@ -717,7 +717,19 @@ export class RecordProcessor {
         }
       }
 
-      const rawItems = col.Items ?? [];
+      // A collection with matchOn holds declared items alongside rows the server derives for
+      // itself (a query's inferred parameters, say). Pull writes back only what was declared,
+      // identified by its natural key, so derived rows never become authored JSON and the
+      // file stays portable across databases whose generated ids differ.
+      const colConfig = entityConfig.collections?.[colName];
+      const matchOn = colConfig?.matchOn ?? [];
+      const declaredWhere = colConfig?.declaredWhere;
+      const isNaturalKeyed = matchOn.length > 0;
+
+      const loadedItems = col.Items ?? [];
+      const rawItems = declaredWhere
+        ? loadedItems.filter((child) => this.matchesDeclaredWhere(child, declaredWhere))
+        : loadedItems;
       if (rawItems.length > 0) {
         collections[colName] = [];
         const childEntityInfo = rawItems[0].EntityInfo;
@@ -725,11 +737,13 @@ export class RecordProcessor {
           entity: childEntityInfo.Name,
         };
 
-        // Deterministically sort collection items by primary key(s)
+        // Deterministically sort collection items by their identity: the natural key when
+        // matchOn names one, otherwise the primary key(s)
+        const sortKeys = isNaturalKeyed ? matchOn : childEntityInfo.PrimaryKeys.map((pk) => pk.Name);
         const items = [...rawItems].sort((a, b) => {
-          for (const pk of childEntityInfo.PrimaryKeys) {
-            const aVal = String(a.Get(pk.Name) ?? '');
-            const bVal = String(b.Get(pk.Name) ?? '');
+          for (const key of sortKeys) {
+            const aVal = String(a.Get(key) ?? '');
+            const bVal = String(b.Get(key) ?? '');
             const cmp = ordinalCompare(aVal, bVal);
             if (cmp !== 0) return cmp;
           }
@@ -753,9 +767,38 @@ export class RecordProcessor {
             currentDepth + 1,
             new Set([...(ancestryPath ?? []), `${record.EntityInfo.Name}:${JSON.stringify(record.PrimaryKey)}`])
           );
+          if (isNaturalKeyed) {
+            this.toNaturalKeyedItem(childData, rel.RelatedEntityJoinField);
+          }
           collections[colName].push(childData);
         }
       }
+    }
+  }
+
+  /**
+   * True when every field named in `declaredWhere` equals the child's value. Strings compare
+   * case-insensitively, matching the collation of the columns these filters name.
+   */
+  private matchesDeclaredWhere(child: BaseEntity, declaredWhere: Record<string, unknown>): boolean {
+    return Object.entries(declaredWhere).every(([field, wanted]) => {
+      const actual = child.Get(field);
+      if (typeof actual === 'string' && typeof wanted === 'string') {
+        return actual.toLowerCase() === wanted.toLowerCase();
+      }
+      return actual === wanted;
+    });
+  }
+
+  /**
+   * Reshapes a pulled collection item so its natural key is its identity: drops `primaryKey`
+   * (push matches the item on `matchOn` instead) and the join field (the collection stamps
+   * the owner's foreign key itself).
+   */
+  private toNaturalKeyedItem(childData: RecordData, joinField: string | undefined): void {
+    delete childData.primaryKey;
+    if (joinField && childData.fields) {
+      delete childData.fields[joinField];
     }
   }
 

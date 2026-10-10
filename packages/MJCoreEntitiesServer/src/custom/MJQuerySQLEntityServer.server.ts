@@ -64,7 +64,7 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
             return;
         }
 
-        const parentQuery = this.loadParentQuery();
+        const parentQuery = await this.loadParentQuery();
         if (!parentQuery) {
             return;
         }
@@ -91,14 +91,31 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
         return dialect?.PlatformKey === platform;
     }
 
-    private loadParentQuery(): MJQueryEntityServer | null {
-        const query = QueryEngine.Instance.Queries.find(
-            q => UUIDsEqual(q.ID, this.QueryID)
-        );
+    /**
+     * Loads the parent query bound to THIS record's provider.
+     *
+     * The QueryEngine cache holds a parent bound to the provider that loaded the engine —
+     * the process-global one. Re-extracting through that instance reads and writes over a
+     * different connection than the one saving this record, so inside a transaction it
+     * cannot see the rows that transaction has written, and anything it writes settles
+     * outside it. During `mj sync push`, where each record graph runs on its own
+     * connection, that is both wrong (the extraction cannot see the query's authored
+     * parameters and duplicates them) and a deadlock risk (it blocks on rows the
+     * uncommitted graph holds, while that graph waits on this call). So resolve the parent
+     * through `RunViewProviderToUse`, which is the connection this record is already on;
+     * `entity_object` results are bound to the provider that ran the view.
+     */
+    private async loadParentQuery(): Promise<MJQueryEntityServer | null> {
+        const result = await this.RunViewProviderToUse.RunView<MJQueryEntityServer>({
+            EntityName: 'MJ: Queries',
+            ExtraFilter: `ID='${this.QueryID}'`,
+            ResultType: 'entity_object'
+        }, this.ContextCurrentUser);
+        const query = result.Success ? result.Results?.[0] : undefined;
         if (!query) {
-            LogError(`[MJQuerySQLEntityServer] Parent query ${this.QueryID} not found in QueryEngine cache`);
+            LogError(`[MJQuerySQLEntityServer] Parent query ${this.QueryID} could not be loaded`);
             return null;
         }
-        return query as MJQueryEntityServer;
+        return query;
     }
 }

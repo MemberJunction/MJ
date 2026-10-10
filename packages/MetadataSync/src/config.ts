@@ -256,6 +256,34 @@ export interface EntityConfig {
      * under authoritative mode before push refuses (default: 20%).
      */
     maxImpliedDeletePercent?: number;
+    /**
+     * Fields that identify a collection item when its primary key does not, in priority
+     * order — the child's natural key.
+     *
+     * Without it a declared item is matched by `primaryKey` alone, so an item the server
+     * created on its own (a query parameter the extraction pipeline inferred, say) can
+     * never be matched: the declaration has no way to know the id that was generated for
+     * it. Push would then create a second row and collide on the child's unique
+     * constraint. Naming the natural key lets the declaration adopt that row and update it
+     * in place.
+     *
+     * Items matched this way should omit `primaryKey` entirely — the natural key IS their
+     * identity, which keeps the same metadata portable across databases whose generated
+     * ids differ. Declared values are resolved (`@lookup:`, `@parent:`, `@owner:` …) before
+     * they are compared. There is no default: a collection without `matchOn` matches by
+     * primary key only.
+     *
+     * On pull, a collection with `matchOn` emits each item without `primaryKey` and without
+     * the join field (the collection stamps the owner's foreign key itself).
+     */
+    matchOn?: string[];
+    /**
+     * Field values that mark a collection item as declared rather than derived by the
+     * server, e.g. `{ "DetectionMethod": "Manual" }` for query parameters. Pull emits only
+     * items whose fields equal every value given here (strings compare case-insensitively);
+     * the rest are left to the server that derives them. Push is unaffected.
+     */
+    declaredWhere?: Record<string, unknown>;
   }>;
   /** Pull command specific configuration */
   pull?: {
