@@ -6,11 +6,12 @@
  * `ZoomBridge` (the reference driver) — only the platform names + join-coordinate parsing differ.
  *
  * Slack huddles do full audio + video + screen share and run on **Amazon Chime** under the hood. The
- * §8 seed row advertises: on-demand + scheduled + invite join, inbound routing (⚠️), audio/video/screen
- * in/out, a diarized roster (`SpeakerDiarization`, ⚠️), participant mute + huddle/thread chat (via the
- * Meeting Controls channel). Native raised-hand is ⚠️ partial. Telephony features (DTMF / transfer /
- * recording) are NOT Slack-huddle features, so those virtual base methods keep throwing
- * `BridgeCapabilityNotSupportedError`.
+ * seed row advertises: on-demand + scheduled + invite join, inbound routing (⚠️), audio in/out, a diarized
+ * roster (`SpeakerDiarization`, ⚠️), participant mute + huddle/thread chat (via the Meeting Controls
+ * channel). The driver carries no huddle video or screen share in either direction: the
+ * {@link ISlackHuddleSdk} seam carries audio only, so the seed row claims none of the video and screen
+ * flags. Native raised-hand is ⚠️ partial. Telephony features (DTMF / transfer / recording) are NOT
+ * Slack-huddle features, so those virtual base methods keep throwing `BridgeCapabilityNotSupportedError`.
  *
  * ## 🚨 REAL-API RISK — this is the one driver with a genuine API-availability risk 🚨
  * Unlike Zoom/Teams (where the SDK binding is a known, documented deployment TODO), the Slack **huddle
@@ -209,8 +210,8 @@ export class SlackBridge extends BaseRealtimeBridge {
 
     /**
      * Sends an outbound media frame into the huddle. Audio is fed to the SDK's huddle media path;
-     * video/screen frames are gated by the directional capability flags (the transport carries them, and
-     * the SDK send is a deployment-time binding TODO — today the models emit audio).
+     * `video-out` and `screen-out` frames are dropped: the SDK seam has no video or screen send, so the
+     * provider row claims neither `VideoOut` nor `ScreenOut`.
      *
      * ⚠️ REAL-API RISK: the audio send depends on the huddle media path (Chime), the gating unknown — see
      * the file header + `slack-sdk.ts`.
@@ -232,8 +233,8 @@ export class SlackBridge extends BaseRealtimeBridge {
             }
             case 'video-out':
             case 'screen-out':
-                // Directional video/screen capability is declared; the SDK send binding lands with the
-                // first realtime model that emits these tracks (TODO at deployment). No-op for now.
+                // Dropped: the SDK seam has no video or screen send yet, and the provider row claims neither flag.
+                // Carrying one takes a seam method, its real binding, and the flag on the provider row.
                 break;
             default:
                 // An inbound track was passed to SendMedia — ignore (defensive).
