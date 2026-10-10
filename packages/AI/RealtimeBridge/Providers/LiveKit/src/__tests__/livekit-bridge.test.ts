@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ LogStatus: vi.fn<(message: string) => void>() }));
@@ -17,7 +20,15 @@ import {
     BridgeMeetingParticipant,
 } from '@memberjunction/ai-bridge-base';
 import { BridgeVideoSourceEnd } from '@memberjunction/ai-bridge-base';
-import { IsAgentParticipantIdentity, IsAvatarMediaFrame, LiveKitBridge, VideoSourceIdOf, VideoSourceLabelOf, VideoTrackOf } from '../livekit-bridge';
+import {
+    IsAgentParticipantIdentity,
+    IsAvatarMediaFrame,
+    LIVEKIT_BRIDGE_DRIVER_CLASS,
+    LiveKitBridge,
+    VideoSourceIdOf,
+    VideoSourceLabelOf,
+    VideoTrackOf,
+} from '../livekit-bridge';
 import {
     ILiveKitRoomSdk,
     LiveKitParticipant,
@@ -144,19 +155,22 @@ class FakeLiveKitRoomSdk implements ILiveKitRoomSdk {
 // Helpers.
 // ──────────────────────────────────────────────────────────────────────────────
 
-const FULL_FEATURES: MJAIBridgeProviderEntity_IBridgeProviderFeatures = {
+/**
+ * The LiveKit row's `SupportedFeatures` as `metadata/` ships it, and the default for these tests. No `ScreenOut`: the bot
+ * publishes no screen. "The provider row metadata ships" below checks this against the seed file.
+ */
+const LIVEKIT_ROW_FEATURES: MJAIBridgeProviderEntity_IBridgeProviderFeatures = {
     OnDemandJoin: true,
     AudioIn: true,
     AudioOut: true,
     VideoIn: true,
     VideoOut: true,
     ScreenIn: true,
-    ScreenOut: true,
     SpeakerDiarization: true,
 };
 
 function ctx(
-    features: MJAIBridgeProviderEntity_IBridgeProviderFeatures = FULL_FEATURES,
+    features: MJAIBridgeProviderEntity_IBridgeProviderFeatures = LIVEKIT_ROW_FEATURES,
     overrides: Partial<RealtimeBridgeContext> = {},
 ): RealtimeBridgeContext {
     return {
@@ -188,6 +202,45 @@ beforeEach(() => {
 /** The bridge's log lines about outbound frames it dropped. */
 function droppedLines(): string[] {
     return mocks.LogStatus.mock.calls.map(([message]) => message).filter((message) => message.includes('Dropped'));
+}
+
+/** The repository's `metadata/` folder, from this file's folder (`packages/AI/RealtimeBridge/Providers/LiveKit/src/__tests__`). */
+const METADATA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../../../metadata');
+
+/** The part of a `metadata/ai-bridge-providers` record these tests read. */
+interface BridgeProviderSeedRecord {
+    fields?: {
+        DriverClass?: string;
+        /** A JSON string in the seed file; a native JSON object is also valid metadata (`mj sync push` serializes it). */
+        SupportedFeatures?: string | MJAIBridgeProviderEntity_IBridgeProviderFeatures | null;
+    };
+}
+
+/**
+ * The `SupportedFeatures` of the `MJ: AI Bridge Providers` row that `metadata/` ships for this driver, found by its
+ * `DriverClass` (the key the engine resolves the driver by). Read from the seed file, since it is the source of the row.
+ */
+function seededLiveKitRowFeatures(): MJAIBridgeProviderEntity_IBridgeProviderFeatures {
+    const records = JSON.parse(
+        readFileSync(resolve(METADATA_DIR, 'ai-bridge-providers/.ai-bridge-providers.json'), 'utf8'),
+    ) as BridgeProviderSeedRecord[];
+    const rows = records.filter((record) => record.fields?.DriverClass === LIVEKIT_BRIDGE_DRIVER_CLASS);
+    if (rows.length !== 1) {
+        throw new Error(`metadata/ai-bridge-providers ships ${rows.length} rows with DriverClass ${LIVEKIT_BRIDGE_DRIVER_CLASS}, not 1`);
+    }
+    const raw = rows[0].fields?.SupportedFeatures;
+    if (raw == null) {
+        return {};
+    }
+    return typeof raw === 'string' ? (JSON.parse(raw) as MJAIBridgeProviderEntity_IBridgeProviderFeatures) : raw;
+}
+
+/** The flags a features object turns on, sorted. An omitted flag and `false` both mean the feature is off. */
+function enabledFlags(features: MJAIBridgeProviderEntity_IBridgeProviderFeatures): string[] {
+    return Object.entries(features)
+        .filter(([, on]) => on === true)
+        .map(([flag]) => flag)
+        .sort();
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -261,9 +314,9 @@ describe('LiveKitBridge — media', () => {
         expect(new Uint8Array(sdk.PublishedAudio[0])).toEqual(new Uint8Array([1, 2, 3]));
     });
 
-    it('drops a raw video-out frame and a screen-out frame (the room publishes only the avatar), one log line per track', async () => {
+    it('drops a raw video-out frame and, for a row that sets ScreenOut, a screen-out frame (the room publishes only the avatar), one log line per track', async () => {
         const bridge = makeBridge(sdk);
-        await bridge.Connect(ctx());
+        await bridge.Connect(ctx({ ...LIVEKIT_ROW_FEATURES, ScreenOut: true }));
         bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(1) });
         bridge.SendMedia('screen-out', { Track: 'screen-out', Bytes: bytes(2) });
         bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(3) });
@@ -329,7 +382,7 @@ describe('LiveKitBridge — video in (what the agent sees)', () => {
             configs.push(config);
             return sdk;
         });
-        await bridge.Connect(ctx({ ...FULL_FEATURES, ScreenIn: false }));
+        await bridge.Connect(ctx({ ...LIVEKIT_ROW_FEATURES, ScreenIn: false }));
         expect(configs[0]).toMatchObject({ BotDisplayName: 'Sage', AccessToken: 'signed-token-xyz', VideoIn: true, ScreenIn: false });
     });
 
@@ -383,7 +436,7 @@ describe('LiveKitBridge — video in (what the agent sees)', () => {
         const camerasOnly = makeBridge(sdk);
         const fromCamerasOnly: BridgeMediaFrame[] = [];
         camerasOnly.OnMedia((f) => fromCamerasOnly.push(f));
-        await camerasOnly.Connect(ctx({ ...FULL_FEATURES, ScreenIn: false }));
+        await camerasOnly.Connect(ctx({ ...LIVEKIT_ROW_FEATURES, ScreenIn: false }));
         sdk.DriveVideoFrame(cameraFrame({ Source: 'screen' }));
         sdk.DriveVideoFrame(cameraFrame());
         expect(fromCamerasOnly.map((f) => f.Track)).toEqual(['video-in']);
@@ -392,7 +445,7 @@ describe('LiveKitBridge — video in (what the agent sees)', () => {
         const screensOnly = makeBridge(otherSdk);
         const fromScreensOnly: BridgeMediaFrame[] = [];
         screensOnly.OnMedia((f) => fromScreensOnly.push(f));
-        await screensOnly.Connect(ctx({ ...FULL_FEATURES, VideoIn: false }));
+        await screensOnly.Connect(ctx({ ...LIVEKIT_ROW_FEATURES, VideoIn: false }));
         otherSdk.DriveVideoFrame(cameraFrame());
         otherSdk.DriveVideoFrame(cameraFrame({ Source: 'screen' }));
         expect(fromScreensOnly.map((f) => f.Track)).toEqual(['screen-in']);
@@ -589,6 +642,36 @@ describe('LiveKitBridge — capability gating', () => {
         const bridge = makeBridge(sdk);
         await bridge.Connect(ctx({ AudioIn: true, AudioOut: true })); // no SpeakerDiarization
         await expect(bridge.GetParticipants()).rejects.toBeInstanceOf(BridgeCapabilityNotSupportedError);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// The provider row metadata ships. The engine, the provider form and the realtime dashboard read its flags, so they must
+// say what the bot does (#5318).
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('LiveKitBridge — the provider row metadata ships', () => {
+    it('claims audio in and out, cameras and screens in, and the avatar as video out, but no screen share out', () => {
+        const features = seededLiveKitRowFeatures();
+        expect(features.ScreenOut ?? false, 'the bot publishes no screen, so the row must not claim ScreenOut').toBe(false);
+        expect(enabledFlags(features)).toEqual(enabledFlags(LIVEKIT_ROW_FEATURES));
+    });
+
+    it("with the row's flags, the bot reads cameras and screens, publishes the avatar, and drops a screen-out frame without a log line", async () => {
+        const configs: Array<Record<string, unknown> | undefined> = [];
+        const bridge = new LiveKitBridge();
+        bridge.SetSdkFactory((config) => {
+            configs.push(config);
+            return sdk;
+        });
+        await bridge.Connect(ctx(seededLiveKitRowFeatures()));
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(1), MimeType: 'video/mp4' });
+        bridge.SendMedia('screen-out', { Track: 'screen-out', Bytes: bytes(2) });
+
+        expect(configs[0]).toMatchObject({ VideoIn: true, ScreenIn: true });
+        expect(sdk.PublishedAvatar).toHaveLength(1);
+        expect(sdk.PublishedScreen).toHaveLength(0);
+        expect(droppedLines()).toEqual([]);
     });
 });
 
