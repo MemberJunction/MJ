@@ -26,6 +26,7 @@ import {
   BaseRealtimeClient,
   type ILocalMediaController,
   type LocalMediaFailure,
+  type LocalMediaState,
   LoadAssemblyAIRealtimeClient,
   LoadElevenLabsRealtimeClient,
   LoadGeminiEnterpriseRealtimeClient,
@@ -58,6 +59,7 @@ import {
   type RealtimeCaptureState,
   type RealtimeCaptureStates,
 } from './realtime-captures';
+import { REALTIME_MICROPHONE_NONE, ReadMicrophoneState, SameMicrophoneState, type RealtimeMicrophoneState } from './realtime-microphone';
 import { RealtimeSessionEventHub, type IRealtimeSessionEventSource, type RealtimeSessionStreamEvent } from './session-event-hub';
 import { BuildNarrationInstructions } from '../narration/narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
@@ -623,6 +625,15 @@ export class RealtimeSessionRuntime {
    */
   public readonly CaptureOffers$: Observable<RealtimeCaptureOffers> = this._captureOffers$.asObservable();
 
+  private readonly _microphone$ = new BehaviorSubject<RealtimeMicrophoneState>(REALTIME_MICROPHONE_NONE);
+  /**
+   * The call's microphone, now and on every change: the one in use and the ones the user can move it to with
+   * {@link SwitchMicrophone}, as the host's camera-and-microphone controller lists them. Offered from the moment the call
+   * connects until it ends, and kept current as devices come and go. {@link REALTIME_MICROPHONE_NONE} outside a call and
+   * on a host without a controller, which opens the microphone itself (`IRealtimeMediaHost.AcquireMicrophone`).
+   */
+  public readonly Microphone$: Observable<RealtimeMicrophoneState> = this._microphone$.asObservable();
+
   private readonly _agentVideo$ = new BehaviorSubject<MediaVideoSource | null>(null);
   /**
    * The agent's video (an avatar) while the model sends it: a live stream, or a player that owns the `<video>` element.
@@ -771,6 +782,11 @@ export class RealtimeSessionRuntime {
   private localMedia: ILocalMediaController | null = null;
   /** Follows the controller's microphone, so a swapped-in track reaches the driver and the recorder. */
   private localMediaSubscription: Subscription | null = null;
+  /**
+   * Whether the call offers its microphone for switching ({@link Microphone$}, {@link SwitchMicrophone}): from the moment
+   * the client is connected until the call ends. Not before: a driver still connecting may have bound the old track.
+   */
+  private microphoneOffered = false;
   /** The live session's camera and screen share; created once the client is connected. */
   private captures: RealtimeCaptures | null = null;
   private capturesSubscription: Subscription | null = null;
@@ -1414,8 +1430,9 @@ export class RealtimeSessionRuntime {
         return;
       }
       // Tracks are negotiated now, so a capture can tell whether the model takes video, and the call whether it shows
-      // the avatar its agent asked for.
+      // the avatar its agent asked for. The driver holds the microphone now, so the user may switch it.
       this.openCaptures(client, cameraCheck);
+      this.offerMicrophone();
       this.publishAvatarNotice(session, clientConfig, client);
 
       // Notify active channels that the session client is connected and tracks are established
@@ -1554,29 +1571,54 @@ export class RealtimeSessionRuntime {
    * Moves the driver and the recorder onto the microphone's new track whenever the controller swaps one into
    * the stream: a device switch, or a lost device replaced by the default. The stream stays the same object,
    * and the controller carries the old track's mute over. Mid-swap the stream holds no track, so only a
-   * finished swap is followed.
+   * finished swap is followed. Every report also keeps {@link Microphone$} current once the call offers it.
    */
   private followMicrophone(controller: ILocalMediaController, stream: MediaStream): void {
     let followed = stream.getAudioTracks()[0] ?? null;
-    this.localMediaSubscription = controller.State$.subscribe(() => {
+    this.localMediaSubscription = controller.State$.subscribe((media) => {
       const track = stream.getAudioTracks()[0] ?? null;
-      if (!track || track === followed) {
-        return;
+      if (track && track !== followed) {
+        followed = track;
+        this.recorder?.ReplaceMicrophone?.(stream);
+        this.client?.ReplaceMicrophone?.(stream)?.catch((error: unknown) => {
+          console.error('[RealtimeSession] The realtime driver could not move to the new microphone:', error);
+        });
       }
-      followed = track;
-      this.recorder?.ReplaceMicrophone?.(stream);
-      this.client?.ReplaceMicrophone?.(stream)?.catch((error: unknown) => {
-        console.error('[RealtimeSession] The realtime driver could not move to the new microphone:', error);
-      });
+      this.publishMicrophone(media);
     });
   }
 
-  /** Stops following the controller and disposes it, which releases its devices. */
+  /** The client is connected: the call offers its microphone on {@link Microphone$}, and {@link SwitchMicrophone} moves it. */
+  private offerMicrophone(): void {
+    if (!this.localMedia) {
+      return;
+    }
+    this.microphoneOffered = true;
+    this.publishMicrophone(this.localMedia.State);
+  }
+
+  /** Publishes the call's microphone from the controller's state while the call offers it, when it names a change. */
+  private publishMicrophone(media: LocalMediaState): void {
+    if (!this.microphoneOffered) {
+      return;
+    }
+    const current = this._microphone$.value;
+    const next = ReadMicrophoneState(media, current.DeviceID);
+    if (!SameMicrophoneState(next, current)) {
+      this._microphone$.next(next);
+    }
+  }
+
+  /** Stops following the controller and disposes it, which releases its devices; the call no longer offers a microphone. */
   private closeLocalMedia(): void {
     this.localMediaSubscription?.unsubscribe();
     this.localMediaSubscription = null;
     this.localMedia?.Dispose();
     this.localMedia = null;
+    this.microphoneOffered = false;
+    if (this._microphone$.value !== REALTIME_MICROPHONE_NONE) {
+      this._microphone$.next(REALTIME_MICROPHONE_NONE);
+    }
   }
 
   /**
@@ -1715,6 +1757,24 @@ export class RealtimeSessionRuntime {
    */
   public async SwitchCamera(deviceId: string): Promise<RealtimeCaptureState> {
     return this.captures ? this.captures.SwitchCamera(deviceId) : this.noSessionCapture();
+  }
+
+  /**
+   * Moves the call's microphone to another device: one of the `Devices` on {@link Microphone$}. The host's controller
+   * swaps the new track into the same stream and carries the mute over, and the driver and the call's recording move to
+   * it, so the agent keeps hearing the user. When the new microphone cannot open, the controller goes back to the one in
+   * use. Resolves with the microphone's state once the switch is over. Nothing changes outside a call, on a host without a
+   * controller, or while the call has no microphone open (the controller stopped it).
+   *
+   * @param deviceId The microphone to move to.
+   */
+  public async SwitchMicrophone(deviceId: string): Promise<RealtimeMicrophoneState> {
+    const controller = this.localMedia;
+    const status = controller?.State.Microphone.Status;
+    if (controller && this.microphoneOffered && (status === 'on' || status === 'starting')) {
+      await controller.SwitchDevice('microphone', deviceId);
+    }
+    return this._microphone$.value;
   }
 
   /**

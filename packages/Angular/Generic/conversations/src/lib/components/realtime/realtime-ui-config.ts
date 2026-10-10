@@ -71,6 +71,8 @@ export type RealtimeControlId =
   | 'mute'
   | 'camera'
   | 'share'
+  /** A microphone or camera picked in the composer's device menu. */
+  | 'devices'
   | 'captions'
   | 'type'
   | 'end'

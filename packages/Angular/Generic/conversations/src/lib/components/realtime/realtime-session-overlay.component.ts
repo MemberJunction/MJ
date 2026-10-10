@@ -10,11 +10,13 @@ import { MJStorageMediaPlayerComponent, MediaTranscriptCue } from '@memberjuncti
 import {
   REALTIME_CAPTURES_OFF,
   REALTIME_CAPTURE_OFFERS_NONE,
+  REALTIME_MICROPHONE_NONE,
   type RealtimeAvatarNotice,
   type RealtimeCaptureOffers,
   type RealtimeCaptureState,
   type RealtimeCaptureStates,
   type RealtimeConnectionState,
+  type RealtimeMicrophoneState,
 } from '@memberjunction/realtime-runtime';
 import { MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
@@ -53,7 +55,7 @@ import {
   SharePanelDirective, SharePanelRegistry,
   type AvatarNoticeOverrides, type MediaMoveRequest, type MediaSharePanel, type MediaShareRequest, type MediaStagePipRectChange
 } from '@memberjunction/ng-realtime-media';
-import { MediaLayoutPrefs, RecordPipRect, type MediaPipRect } from '@memberjunction/ai-realtime-client/media';
+import { MediaLayoutPrefs, RecordPipRect, type MediaDevice, type MediaDeviceSelection, type MediaPipRect } from '@memberjunction/ai-realtime-client/media';
 
 /** How long the call's avatar notice stays before it hides itself (N5: it also has a dismiss button). */
 const AVATAR_NOTICE_VISIBLE_MS = 10_000;
@@ -758,6 +760,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // The camera and screen share, and which of them the call offers: the composer's Camera and Share follow both.
       this.realtime.Captures$.subscribe(states => this.onCapturesChanged(states)),
       this.realtime.CaptureOffers$.subscribe(offers => { this.CaptureOffers = offers; this.cdr.markForCheck(); }),
+      // The call's microphone and the ones it can move to: the composer's device menu lists them.
+      this.realtime.Microphone$.subscribe(microphone => this.onMicrophoneChanged(microphone)),
       // The panels of the page on screen, which the Share menu offers under "This panel"; a shared one that goes away
       // ends its share.
       this.sharePanelRegistry.PanelsFor$(this.hostRef.nativeElement).subscribe(panels => {
@@ -938,7 +942,78 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     if (!isCapturing(states.Screen)) {
       this.sharedPanelKey = null;
     }
+    this.refreshCallDevices();
     this.cdr.markForCheck();
+  }
+
+  /** The call's microphone (see {@link RealtimeSessionService.Microphone$}). */
+  private microphone: RealtimeMicrophoneState = REALTIME_MICROPHONE_NONE;
+
+  /** The microphone and the camera the user picked in the device menu, each while the call switches to it. */
+  private switchingTo: { microphone: string | null; camera: string | null } = { microphone: null, camera: null };
+
+  /**
+   * The microphones and cameras the composer's device menu offers: the call's microphones, and its cameras while the
+   * camera is open (a browser names cameras only once the user has allowed one).
+   */
+  public CallDevices: readonly MediaDevice[] = [];
+
+  /** The microphone the device menu shows: the one being switched to, else the one in use. */
+  public get SelectedMicrophoneID(): string | null {
+    return this.switchingTo.microphone ?? this.microphone.DeviceID ?? null;
+  }
+
+  /** The camera the device menu shows: the one being switched to, else the one in use. */
+  public get SelectedCameraID(): string | null {
+    return this.switchingTo.camera ?? this.CaptureStates.Camera.DeviceID ?? null;
+  }
+
+  /**
+   * A microphone or camera picked in the composer's device menu: the session switches to it. The menu shows the pick
+   * while the switch runs, then the device in use: the new one, or the old one when the new one could not open. A pick of
+   * the device in use changes nothing.
+   */
+  public async OnDeviceSelected(selection: MediaDeviceSelection): Promise<void> {
+    if (selection.Kind !== 'microphone' && selection.Kind !== 'camera') {
+      return;
+    }
+    const kind = selection.Kind;
+    const inUse = kind === 'microphone' ? this.microphone.DeviceID : this.CaptureStates.Camera.DeviceID;
+    if (selection.DeviceID === inUse && this.switchingTo[kind] === null) {
+      return;
+    }
+    this.ControlInvoked.emit('devices');
+    this.switchingTo = { ...this.switchingTo, [kind]: selection.DeviceID };
+    this.cdr.markForCheck();
+    try {
+      if (kind === 'microphone') {
+        await this.realtime.SwitchMicrophone(selection.DeviceID);
+      } else {
+        await this.realtime.SwitchCamera(selection.DeviceID);
+      }
+    } finally {
+      if (this.switchingTo[kind] === selection.DeviceID) {
+        this.switchingTo = { ...this.switchingTo, [kind]: null };
+      }
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** The microphone changed: the device menu follows it. */
+  private onMicrophoneChanged(microphone: RealtimeMicrophoneState): void {
+    this.microphone = microphone;
+    this.refreshCallDevices();
+    this.cdr.markForCheck();
+  }
+
+  /** Lists the call's microphones and its cameras for the device menu, as a new list only when one of them changed. */
+  private refreshCallDevices(): void {
+    const cameras = this.CaptureStates.Camera.Devices ?? [];
+    const devices = [...this.microphone.Devices, ...cameras];
+    const same = devices.length === this.CallDevices.length && devices.every((d, i) => d === this.CallDevices[i]);
+    if (!same) {
+      this.CallDevices = devices;
+    }
   }
 
   /**

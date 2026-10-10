@@ -1,4 +1,6 @@
 :host {
+  /* The device menu opens above the controls, placed against them. */
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--mj-space-2-5);
@@ -19,9 +21,19 @@
   text-align: center;
 }
 
-/* The Share button and its arrow read as one control. */
-.share {
+/* The Share button and its arrow read as one control, as the microphone and its device chevron do. */
+.share,
+.microphone {
   display: inline-flex;
   align-items: center;
   gap: var(--mj-space-0-5);
+}
+
+/* The device menu: above the controls and centered on them, over what lies behind (a call's stage). */
+.devices {
+  position: absolute;
+  bottom: calc(100% + var(--mj-space-3));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
 }

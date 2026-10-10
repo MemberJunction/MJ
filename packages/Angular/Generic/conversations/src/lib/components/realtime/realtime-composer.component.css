@@ -164,11 +164,27 @@
 .dock-lean {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 14px;
+  row-gap: 10px;
   padding: 16px 18px 20px;
   background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--mj-bg-page) 35%, transparent));
+}
+
+/* A narrow lean dock (the call column is at least 420px wide) tightens its gaps, so the microphone's device chevron and
+   the Share arrow fit beside the other controls; where even that is not enough (larger touch targets), it wraps onto a
+   second row rather than cutting off its first and last controls. */
+@container (max-width: 490px) {
+  .dock-lean {
+    gap: 6px;
+    row-gap: 10px;
+    padding-inline: 12px;
+  }
+  .lean__media {
+    gap: 4px;
+  }
 }
 
 

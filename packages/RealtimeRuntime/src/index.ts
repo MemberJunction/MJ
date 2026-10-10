@@ -75,6 +75,8 @@ export {
     type RealtimeCaptureState,
     type RealtimeCaptureStates,
 } from './session/realtime-captures';
+// The call's microphone and the ones it can move to (`RealtimeSessionRuntime.Microphone$`, `SwitchMicrophone`).
+export { REALTIME_MICROPHONE_NONE, type RealtimeMicrophoneState } from './session/realtime-microphone';
 
 // Channel scoping inputs a host supplies at session start.
 export {
