@@ -63,7 +63,7 @@ describe('IntegrationConnectorCreationPipeline — the run deadline', () => {
     });
 
     it('reports a sub-minute deadline in seconds', async () => {
-        // RunDeadlineMs is a public knob and the default is 45min, so minutes read well there — but
+        // RunDeadlineMs is a public knob and the default is 12h, so minutes read well there — but
         // rounding a 200ms deadline to minutes reported "a deadline of 0min", which reads as a bug in
         // the pipeline rather than the limit the caller asked for.
         const result = await new IntegrationConnectorCreationPipeline().Run(hangingOpts(200));
@@ -79,5 +79,83 @@ describe('IntegrationConnectorCreationPipeline — the run deadline', () => {
             new Promise<'pending'>(r => { const t = setTimeout(() => r('pending'), 300); t.unref?.(); }),
         ]);
         expect(settled).toBe('pending');
+    });
+});
+
+describe('IntegrationConnectorCreationPipeline — where the deadline comes from', () => {
+    /**
+     * The ceiling is the OUTERMOST discovery bound and the only one that can fail a whole run, yet it
+     * was the only one with no configuration path: `discoveryTimeBudgetMs`, `discoveryBatchSize` and
+     * `discoveryMaxRecords` all read from the connection, while this read a constant. Changing it meant
+     * editing source and redeploying — so a NetForum catalog of 888 objects was failed at object 336 and
+     * its introspection discarded, with no way to raise the limit for that one connection.
+     *
+     * These pin the precedence, not the numbers.
+     */
+    const resolve = (opts: unknown): number =>
+        (IntegrationConnectorCreationPipeline as unknown as {
+            resolveRunDeadlineMs: (o: unknown) => number;
+        }).resolveRunDeadlineMs(opts);
+
+    const withConfig = (cfg: unknown, rest: Record<string, unknown> = {}) => ({
+        CompanyIntegration: { Configuration: typeof cfg === 'string' ? cfg : JSON.stringify(cfg) },
+        ...rest,
+    });
+
+    const ENV = 'MJ_INTEGRATION_RUN_DEADLINE_MS';
+    afterEach(() => { delete process.env[ENV]; });
+
+    /** The default ceiling. See the test below for why it is this large. */
+    const DEFAULT_MS = 12 * 60 * 60_000;
+
+    it('falls back to the default when nothing is set', () => {
+        expect(resolve({})).toBe(DEFAULT_MS);
+    });
+
+    it('defaults to 12 hours: the ceiling releases a HUNG run, it must not bound a big one', () => {
+        // At 45 minutes the default did the latter: an 888-object catalog was failed at object 336,
+        // and because the failure precedes Persist, every object introspected up to then was
+        // discarded. Big is not hung — a run that is still making progress must be allowed to finish,
+        // and a connection that wants a tighter bound can set one.
+        expect(resolve({})).toBe(12 * 60 * 60_000);
+        expect(resolve({})).toBeGreaterThan(45 * 60_000);
+    });
+
+    it('reads the connection Configuration — the case that had no path before', () => {
+        expect(resolve(withConfig({ runDeadlineMs: 3 * 60 * 60_000 }))).toBe(3 * 60 * 60_000);
+    });
+
+    it('lets an explicit argument win over the connection', () => {
+        expect(resolve(withConfig({ runDeadlineMs: 999 }, { RunDeadlineMs: 123 }))).toBe(123);
+    });
+
+    it('lets the connection win over the environment', () => {
+        process.env[ENV] = '5000';
+        expect(resolve(withConfig({ runDeadlineMs: 7000 }))).toBe(7000);
+    });
+
+    it('reads the environment when the connection says nothing', () => {
+        process.env[ENV] = '5000';
+        expect(resolve({})).toBe(5000);
+    });
+
+    it('honours 0 as "no ceiling" from the connection — the positive-only readers cannot express this', () => {
+        expect(resolve(withConfig({ runDeadlineMs: 0 }))).toBe(0);
+    });
+
+    it('ignores a negative and falls through rather than disabling the ceiling by accident', () => {
+        expect(resolve(withConfig({ runDeadlineMs: -1 }))).toBe(DEFAULT_MS);
+    });
+
+    it('ignores a non-numeric and falls through', () => {
+        expect(resolve(withConfig({ runDeadlineMs: '3h' }))).toBe(DEFAULT_MS);
+    });
+
+    it('survives a malformed Configuration instead of throwing mid-run', () => {
+        expect(resolve(withConfig('{not json'))).toBe(DEFAULT_MS);
+    });
+
+    it('survives a connection with no Configuration at all', () => {
+        expect(resolve({ CompanyIntegration: {} })).toBe(DEFAULT_MS);
     });
 });
