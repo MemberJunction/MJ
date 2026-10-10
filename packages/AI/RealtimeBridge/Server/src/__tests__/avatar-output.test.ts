@@ -100,7 +100,7 @@ const providerEntity = {
     DriverClass: LOOPBACK_BRIDGE_DRIVER_CLASS,
     SupportedFeaturesObject: { AudioIn: true, AudioOut: true, VideoOut: true, SpeakerDiarization: true },
 } as unknown as MJAIBridgeProviderEntity;
-const HOST: IHostInstanceIdentity = { GetHostInstanceID: () => 'testhost:1:boot', GetHostNamePrefix: () => 'testhost:' };
+const HOST: IHostInstanceIdentity = { GetHostInstanceID: () => 'testhost:1:boot', GetInstancePrefix: () => 'testhost:1:', IsPriorBoot: () => false };
 
 function engine(): AIBridgeEngine {
     const e = AIBridgeEngine.Instance;

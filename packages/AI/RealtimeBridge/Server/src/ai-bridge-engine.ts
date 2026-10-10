@@ -9,6 +9,8 @@ import {
     RegisterForStartup,
 } from '@memberjunction/core';
 import { performance } from 'node:perf_hooks';
+import { hostname } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { BaseSingleton, MJGlobal, EscapeSQLString } from '@memberjunction/global';
 import {
     Fmp4AudioSeconds,
@@ -250,38 +252,57 @@ export interface TurnModeratorContext {
  */
 export type TurnModerator = (ctx: TurnModeratorContext) => Promise<string[]>;
 
+/** What follows an instance's prefix in a `HostInstanceID`: a process id, then a boot id. */
+const PID_AND_BOOT_ID = /^\d+:[^:]+$/;
+
 /**
- * The host-instance identity provider the engine uses to stamp `HostInstanceID` for node affinity
- * and orphan reconciliation. Mirrors `@memberjunction/server`'s `HostInstance` helper but is
- * **injected** so this server-tier engine has no hard dependency on MJServer (which would create a
- * layering inversion) and so tests can supply a deterministic identity.
+ * The identity of the server instance that hosts this engine, and of its current boot. The engine stamps
+ * {@link IHostInstanceIdentity.GetHostInstanceID} into the `HostInstanceID` of every `MJ: AI Agent Session Bridges`
+ * row it creates, and its orphan reconcile ({@link AIBridgeEngine.ReconcileOrphans}) closes the rows that
+ * {@link IHostInstanceIdentity.IsPriorBoot} says an earlier boot of this instance left.
+ *
+ * An instance must be something only one live process can be at a time, so that a row stamped by another boot of it
+ * was left by a process that has ended. MJServer's instance is a host and the port it serves on; it injects the
+ * identity its `MJ: AI Agent Sessions` rows carry (`hostname:port:pid:bootId`). The identity is **injected**
+ * ({@link AIBridgeEngine.SetHostInstanceIdentity}) so this server-tier engine has no dependency on MJServer (a
+ * layering inversion) and tests can supply a fixed one; a {@link DefaultHostInstanceIdentity} applies until then.
  *
  * @see `/plans/realtime/realtime-bridges-architecture.md` §10 (host affinity + janitor).
  */
 export interface IHostInstanceIdentity {
-    /** Returns this process's stable host-instance identity (`hostname:pid:bootId`). */
+    /** This boot's id, stamped into the `HostInstanceID` of the bridge rows it creates. */
     GetHostInstanceID(): string;
 
-    /** Returns the host-name prefix (`hostname:`) matching ANY boot of this OS host. */
-    GetHostNamePrefix(): string;
+    /**
+     * The prefix every boot of this instance stamps and no other instance's id starts with. The reconcile reads the
+     * open bridge rows under it (a SQL `LIKE`), then asks {@link IHostInstanceIdentity.IsPriorBoot} about each one.
+     */
+    GetInstancePrefix(): string;
+
+    /**
+     * Whether a `HostInstanceID` was stamped by another boot of this instance, a process that has ended. False for
+     * this boot's id, for any other instance's, and for null. The reconcile closes a row only when this is true, so
+     * the check must be exact: a SQL `LIKE` reads a `_` in a host name as any character.
+     *
+     * @param hostInstanceID A bridge row's `HostInstanceID`.
+     */
+    IsPriorBoot(hostInstanceID: string | null | undefined): boolean;
 }
 
 /**
- * A default {@link IHostInstanceIdentity} for standalone use (and a sane fallback when the host
- * application does not inject one). Generates a stable `unknown-host:pid:bootId` identity at module
- * load. Production hosts (MJServer) inject the real `HostInstance` helper so the janitor's host
- * affinity matches across the whole deployment.
+ * The {@link IHostInstanceIdentity} the engine uses until the host injects one: this process alone, on this host.
+ * Its id is `hostname:pid-<pid>:<pid>:<bootId>`, the shape MJServer gives a process that serves no port, so
+ * {@link DefaultHostInstanceIdentity.IsPriorBoot} matches only an earlier process that had this pid on this host,
+ * which has ended. It never matches another live process's bridges. A host whose instance outlives a restart (MJServer:
+ * a host and a port) injects its own identity, so that its reconcile closes what an earlier boot left.
  */
 export class DefaultHostInstanceIdentity implements IHostInstanceIdentity {
-    private readonly hostName: string;
+    private readonly instancePrefix: string;
     private readonly instanceId: string;
 
     constructor() {
-        const pid = typeof process !== 'undefined' && process.pid ? process.pid : 0;
-        // A cheap, dependency-free random boot id; good enough for the fallback path.
-        const bootId = Math.random().toString(36).slice(2) + Date.now().toString(36);
-        this.hostName = 'unknown-host';
-        this.instanceId = `${this.hostName}:${pid}:${bootId}`;
+        this.instancePrefix = `${hostname()}:pid-${process.pid}:`;
+        this.instanceId = `${this.instancePrefix}${process.pid}:${randomUUID()}`;
     }
 
     /** @inheritdoc */
@@ -290,8 +311,17 @@ export class DefaultHostInstanceIdentity implements IHostInstanceIdentity {
     }
 
     /** @inheritdoc */
-    public GetHostNamePrefix(): string {
-        return `${this.hostName}:`;
+    public GetInstancePrefix(): string {
+        return this.instancePrefix;
+    }
+
+    /** @inheritdoc */
+    public IsPriorBoot(hostInstanceID: string | null | undefined): boolean {
+        if (!hostInstanceID || hostInstanceID === this.instanceId) {
+            return false;
+        }
+        const prefix = this.instancePrefix;
+        return hostInstanceID.startsWith(prefix) && PID_AND_BOOT_ID.test(hostInstanceID.slice(prefix.length));
     }
 }
 
@@ -762,8 +792,8 @@ export interface ActiveBridgeSession {
  *   `AIAgentSessionBridgeParticipant` rows.
  * - **Turn-taking integration** — holds a {@link TurnTakingPolicy} per session and feeds diarized
  *   transcript segments through it, acting on the decision (Speak / PostToChat / Silent).
- * - **Janitor scaffold** — {@link ReconcileOrphans} force-closes Connected bridges left by a dead
- *   host, following the `SessionJanitor` shape.
+ * - **Janitor scaffold** — {@link ReconcileOrphans} force-closes Connected bridges left by an earlier
+ *   boot of this instance (see {@link IHostInstanceIdentity}), following the `SessionJanitor` shape.
  *
  * The engine never constructs the realtime model: the {@link IRealtimeSession} is injected via
  * {@link StartBridgeSessionParams}, keeping the only coupling the transport seam itself and making
@@ -860,7 +890,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     /**
      * Deferred-startup entry point (per {@link IStartupSink}). Warms the ONE composed base cache by
      * delegating to {@link AIBridgeEngineBase.Config}; mirrors `AIEngine.HandleStartup`. No double
-     * load — there is only the base's cache to warm.
+     * load — there is only the base's cache to warm. Then starts the same-process stale-session sweep.
+     *
+     * It does not start the orphan reconcile. The host starts that ({@link StartOrphanReconciliation}) once it owns
+     * its instance: the deferred startup can run before MJServer listens on its port, while another live MJAPI may
+     * still hold that port, and a reconcile then would close that MJAPI's bridges as this instance's orphans.
      *
      * @param contextUser The boot/system user context.
      * @param provider Optional metadata provider override (multi-provider scenarios).
@@ -870,10 +904,6 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // Begin reaping stale live sessions (idle / over-duration) — the same-process backstop to the
         // occupancy auto-leave + the prior-boot orphan reconcile. Idempotent.
         this.StartStaleSessionSweep();
-        // Reconcile prior-boot orphans now and periodically. Needs a user + provider for the writes.
-        if (contextUser && provider) {
-            this.StartOrphanReconciliation(contextUser, provider);
-        }
     }
 
     /**
@@ -994,11 +1024,12 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     /**
-     * Injects the host-instance identity provider used for `HostInstanceID` stamping and janitor
-     * affinity. Production hosts (MJServer) call this once at boot with the real `HostInstance`
-     * helper; standalone callers can rely on the {@link DefaultHostInstanceIdentity}.
+     * Injects the identity of the server instance hosting this engine ({@link IHostInstanceIdentity}): the engine
+     * stamps it into every bridge row it creates and reconciles orphans by it. Call it once at boot, before anything
+     * can start a bridge. MJServer's `Serve` passes the identity its agent-session rows carry, right after it sets its
+     * port. Until then the engine uses a {@link DefaultHostInstanceIdentity}.
      *
-     * @param identity The identity provider to use.
+     * @param identity The identity to use.
      */
     public SetHostInstanceIdentity(identity: IHostInstanceIdentity): void {
         this.hostIdentity = identity;
@@ -2903,8 +2934,12 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * Reconciles prior-boot orphans ({@link ReconcileOrphans}) once now and then every
      * {@link ORPHAN_RECONCILE_INTERVAL_MS}. Idempotent — a no-op while already scheduled. The timer is `unref`'d.
      *
+     * The host calls it once it owns its instance, so that no other live process can be that instance: MJServer calls
+     * it after the server listens on its port. {@link HandleStartup} does not start it.
+     *
      * @param contextUser The user the reconciliation writes run as.
      * @param provider The metadata provider for the reads/writes.
+     * @param intervalMs How often to reconcile after the first pass.
      */
     public StartOrphanReconciliation(contextUser: UserInfo, provider: IMetadataProvider, intervalMs: number = ORPHAN_RECONCILE_INTERVAL_MS): void {
         if (this.orphanReconcileTimer) {
@@ -2937,22 +2972,26 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     /**
-     * Force-closes `Connected`/`Connecting` bridges left behind by a **previous boot of this host**
-     * (matching hostname prefix, differing instance id), stamping `CloseReason = 'Janitor'`. Mirrors
-     * `SessionJanitor.RunStartupRecovery`: a crash/redeploy vaporizes the in-memory driver sockets
-     * but leaves the durable rows reading `Connected` forever; this reconciles them.
+     * Force-closes the `Connected`/`Connecting` bridges an **earlier boot of this instance** left, stamping
+     * `CloseReason = 'Janitor'` and finalizing each one's co-agent run. Mirrors `SessionJanitor.RunStartupRecovery`:
+     * a crash/redeploy vaporizes the in-memory driver sockets but leaves the durable rows reading `Connected`
+     * forever; this reconciles them.
      *
-     * The actual *scheduling* (run once at boot + periodic sweep) is intentionally left to the host
-     * application (MJServer's startup + janitor timer) so this engine package carries no timer/IO of
-     * its own; call this method from that scheduler.
+     * Ownership comes from the injected {@link IHostInstanceIdentity}: the read is narrowed to the rows under its
+     * instance prefix other than this boot's, and a row is closed only when
+     * {@link IHostInstanceIdentity.IsPriorBoot} says another boot of this instance stamped it. Another instance's
+     * bridges (another MJAPI on this host, or on another host) are never touched, live or not.
+     *
+     * Run it only once this process owns its instance; {@link StartOrphanReconciliation} schedules it.
      *
      * @param contextUser The system user the reconciliation writes run as.
      * @param provider The metadata provider for the reconciliation reads/writes.
      * @returns The number of orphaned bridges closed.
      */
     public async ReconcileOrphans(contextUser: UserInfo, provider: IMetadataProvider): Promise<number> {
-        const prefix = EscapeSQLString(this.hostIdentity.GetHostNamePrefix());
-        const current = EscapeSQLString(this.hostIdentity.GetHostInstanceID());
+        const identity = this.hostIdentity;
+        const prefix = EscapeSQLString(identity.GetInstancePrefix());
+        const current = EscapeSQLString(identity.GetHostInstanceID());
         const filter =
             `Status IN ('Connecting','Connected') ` +
             `AND HostInstanceID LIKE '${prefix}%' ` +
@@ -2961,18 +3000,25 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         const rows = await this.loadOrphanRows(filter, contextUser, provider);
         let closed = 0;
         for (const row of rows) {
+            // The LIKE narrows the read; the identity decides, since LIKE reads a `_` in a host name as any character.
+            if (!identity.IsPriorBoot(row.HostInstanceID)) {
+                continue;
+            }
             const ok = await this.markBridgeDisconnected(row.ID, 'Janitor', contextUser, provider);
             if (ok) {
                 closed++;
             }
         }
         if (closed > 0) {
-            LogStatus(`[AIBridgeEngine] Janitor reconciled ${closed} orphaned bridge(s) from a prior boot of this host`);
+            LogStatus(
+                `[AIBridgeEngine] Janitor reconciled ${closed} orphaned bridge(s) from an earlier boot of this instance ` +
+                    `(${identity.GetInstancePrefix()})`,
+            );
         }
         return closed;
     }
 
-    /** Loads the orphaned bridge rows matching the janitor filter. */
+    /** Loads the bridge rows the janitor filter matches: the candidates {@link ReconcileOrphans} checks one by one. */
     private async loadOrphanRows(
         filter: string,
         contextUser: UserInfo,

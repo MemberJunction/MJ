@@ -101,7 +101,7 @@ function makeProvider(rows: { bridge: Row; session?: Row }): IMetadataProvider {
 }
 
 const user = { ID: 'user-1', Email: 't@example.com' } as unknown as UserInfo;
-const HOST: IHostInstanceIdentity = { GetHostInstanceID: () => 'h:1:boot', GetHostNamePrefix: () => 'h:' };
+const HOST: IHostInstanceIdentity = { GetHostInstanceID: () => 'h:1:boot', GetInstancePrefix: () => 'h:1:', IsPriorBoot: () => false };
 
 function providerEntity(features: MJAIBridgeProviderEntity_IBridgeProviderFeatures, driver = LOOPBACK_BRIDGE_DRIVER_CLASS): MJAIBridgeProviderEntity {
     return { ID: 'p1', Name: 'Test', DriverClass: driver, SupportedFeaturesObject: features } as unknown as MJAIBridgeProviderEntity;

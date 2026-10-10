@@ -208,7 +208,7 @@ async function startMeeting(session: IRealtimeSession, replace?: (r: BridgeRealt
     const { module, room } = fakeRtcRoom();
     const specifier = `test-avatar-e2e-${++moduleSeq}`;
     RegisterNativeRoomModule(specifier, CreateLiveKitRtcNodeModule({ Loader: async () => module, UseWorker: false, VideoEncodeWorker: false }));
-    AIBridgeEngine.Instance.SetHostInstanceIdentity({ GetHostInstanceID: () => 'test:1:boot', GetHostNamePrefix: () => 'test:' });
+    AIBridgeEngine.Instance.SetHostInstanceIdentity({ GetHostInstanceID: () => 'test:1:boot', GetInstancePrefix: () => 'test:1:', IsPriorBoot: () => false });
     const active = await AIBridgeEngine.Instance.StartBridgeSession({
         AgentSessionID: `avatar-e2e-session-${moduleSeq}`,
         Provider: liveKitProvider,

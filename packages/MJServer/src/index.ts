@@ -85,7 +85,7 @@ import { IntegrationProgressEmitter } from '@memberjunction/integration-progress
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
-import { SessionJanitor, SetHostInstancePort } from './agentSessions/index.js';
+import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
@@ -420,6 +420,8 @@ export const Serve = async (resolverPaths: Array<string>, app: Application = Cre
   // startup recovery closes only the sessions an earlier boot of this instance left, never those of another MJAPI on
   // the same host (#5309).
   SetHostInstancePort(graphqlPort);
+  // The realtime bridge engine stamps its bridge rows with the same identity and reconciles orphans by it (#5310).
+  BindBridgeEngineHostInstance();
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
   // the one-line summary; at `verbose`+ each phase prints inline as before.
@@ -1737,6 +1739,9 @@ const setupComplete$ = new ReplaySubject(1);
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
     SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
       .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
+    // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
+    // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
+    StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
   }
 
   // Launch the durable task-graph dispatcher: claim Pending tasks, execute them with a fresh

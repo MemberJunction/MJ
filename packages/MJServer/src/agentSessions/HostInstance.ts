@@ -7,8 +7,9 @@ const PID_AND_BOOT_ID = /^\d+:[^:]+$/;
 
 /**
  * Identity of one MJAPI instance and of one boot of it. A boot stamps its id into the `HostInstanceID` of the
- * `MJ: AI Agent Sessions` rows it owns, so that after a restart the instance can tell the rows it left behind from
- * another server's live ones.
+ * `MJ: AI Agent Sessions` rows it owns, and of the `MJ: AI Agent Session Bridges` rows the realtime bridge engine
+ * creates for it (see `BindBridgeEngineHostInstance`), so that after a restart the instance can tell the rows it left
+ * behind from another server's live ones.
  *
  * An instance is one MJAPI on one host, named by the host and the port it serves on. Two MJAPIs running at the same
  * time on one host can't serve on the same port, so they are two instances; an MJAPI that restarts serves on its port
