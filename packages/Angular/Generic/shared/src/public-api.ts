@@ -7,6 +7,7 @@ export * from './lib/module';
 
 // Services
 export * from './lib/recent-access.service';
+export * from './lib/recent-resource-type';
 export * from './lib/theme.service';
 
 // DOM helpers

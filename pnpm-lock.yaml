@@ -598,6 +598,9 @@ importers:
 
   packages/AI/AgentsClient:
     dependencies:
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0-edge.3
+        version: link:../CorePlus
       '@memberjunction/core':
         specifier: 6.2.0-edge.3
         version: link:../../MJCore
@@ -1671,6 +1674,9 @@ importers:
       '@memberjunction/ai-cerebras':
         specifier: 6.2.0-edge.3
         version: link:../Cerebras
+      '@memberjunction/ai-cloudflare':
+        specifier: 6.2.0-edge.3
+        version: link:../Cloudflare
       '@memberjunction/ai-cohere':
         specifier: 6.2.0-edge.3
         version: link:../Cohere
@@ -1728,6 +1734,9 @@ importers:
       '@memberjunction/ai-siliconflow':
         specifier: 6.2.0-edge.3
         version: link:../SiliconFlow
+      '@memberjunction/ai-systemone':
+        specifier: 6.2.0-edge.3
+        version: link:../SystemOne
       '@memberjunction/ai-vectors-pinecone':
         specifier: 6.2.0-edge.3
         version: link:../../Vectors/Providers/Pinecone
@@ -1760,6 +1769,22 @@ importers:
       '@memberjunction/unit-testing':
         specifier: 6.2.0-edge.3
         version: link:../../../UnitTesting
+      ts-node-dev:
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/AI/Providers/Cloudflare:
+    dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.3
+        version: link:../../Core
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.3
+        version: link:../../../MJGlobal
+    devDependencies:
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -2194,6 +2219,22 @@ importers:
       '@memberjunction/unit-testing':
         specifier: 6.2.0-edge.3
         version: link:../../../UnitTesting
+      ts-node-dev:
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/AI/Providers/SystemOne:
+    dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.3
+        version: link:../../Core
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.3
+        version: link:../../../MJGlobal
+    devDependencies:
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -3985,6 +4026,9 @@ importers:
       pdfkit:
         specifier: ^0.17.2
         version: 0.17.2
+      playwright:
+        specifier: ^1.58.1
+        version: 1.58.1
       psl:
         specifier: ^1.15.0
         version: 1.15.0
@@ -5133,6 +5177,9 @@ importers:
       '@memberjunction/communication-types':
         specifier: 6.2.0-edge.3
         version: link:../../../Communication/base-types
+      '@memberjunction/conversations-runtime':
+        specifier: 6.2.0-edge.3
+        version: link:../../../ConversationsRuntime
       '@memberjunction/core':
         specifier: 6.2.0-edge.3
         version: link:../../../MJCore
@@ -5277,6 +5324,9 @@ importers:
       '@memberjunction/theme-engine':
         specifier: 6.2.0-edge.3
         version: link:../../../ThemeEngine
+      angular-split:
+        specifier: ^20.0.0
+        version: 20.0.0(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
       golden-layout:
         specifier: ^2.6.0
         version: 2.6.0
@@ -5296,6 +5346,12 @@ importers:
       '@memberjunction/ng-test-utils':
         specifier: 6.2.0-edge.3
         version: link:../../Generic/test-utils
+      '@memberjunction/sql-dialect':
+        specifier: 6.2.0-edge.3
+        version: link:../../../SQLDialect
+      '@memberjunction/sql-parser':
+        specifier: 6.2.0-edge.3
+        version: link:../../../SQLParser
       sass:
         specifier: ^1.97.3
         version: 1.97.3
@@ -8174,6 +8230,9 @@ importers:
       '@memberjunction/ng-media-player':
         specifier: 6.2.0-edge.3
         version: link:../media-player
+      livekit-client:
+        specifier: ^2.7.4
+        version: 2.19.2(@types/dom-mediacapture-record@1.0.22)
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -9311,6 +9370,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.3
         version: link:../../../MJGlobal
+      '@memberjunction/graphql-dataprovider':
+        specifier: 6.2.0-edge.3
+        version: link:../../../GraphQLDataProvider
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -11486,6 +11548,9 @@ importers:
       '@memberjunction/ai-prompts':
         specifier: 6.2.0-edge.3
         version: link:../AI/Prompts
+      '@memberjunction/aiengine':
+        specifier: 6.2.0-edge.3
+        version: link:../AI/Engine
       '@memberjunction/core':
         specifier: 6.2.0-edge.3
         version: link:../MJCore
@@ -11632,6 +11697,9 @@ importers:
       '@memberjunction/query-gen':
         specifier: 6.2.0-edge.3
         version: link:../QueryGen
+      '@memberjunction/redis-provider':
+        specifier: 6.2.0-edge.3
+        version: link:../RedisProvider
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.2.0-edge.3
         version: link:../ServerBootstrapLite
@@ -14581,6 +14649,9 @@ importers:
       '@memberjunction/ai-cerebras':
         specifier: 6.2.0-edge.3
         version: link:../AI/Providers/Cerebras
+      '@memberjunction/ai-cloudflare':
+        specifier: 6.2.0-edge.3
+        version: link:../AI/Providers/Cloudflare
       '@memberjunction/ai-cohere':
         specifier: 6.2.0-edge.3
         version: link:../AI/Providers/Cohere
@@ -14662,6 +14733,9 @@ importers:
       '@memberjunction/ai-siliconflow':
         specifier: 6.2.0-edge.3
         version: link:../AI/Providers/SiliconFlow
+      '@memberjunction/ai-systemone':
+        specifier: 6.2.0-edge.3
+        version: link:../AI/Providers/SystemOne
       '@memberjunction/ai-vector-dupe':
         specifier: 6.2.0-edge.3
         version: link:../AI/Vectors/Dupe
@@ -14960,6 +15034,9 @@ importers:
       '@memberjunction/ai-cerebras':
         specifier: 6.2.0-edge.3
         version: link:../AI/Providers/Cerebras
+      '@memberjunction/ai-cloudflare':
+        specifier: 6.2.0-edge.3
+        version: link:../AI/Providers/Cloudflare
       '@memberjunction/ai-cohere':
         specifier: 6.2.0-edge.3
         version: link:../AI/Providers/Cohere
@@ -15035,6 +15112,9 @@ importers:
       '@memberjunction/ai-siliconflow':
         specifier: 6.2.0-edge.3
         version: link:../AI/Providers/SiliconFlow
+      '@memberjunction/ai-systemone':
+        specifier: 6.2.0-edge.3
+        version: link:../AI/Providers/SystemOne
       '@memberjunction/ai-vector-dupe':
         specifier: 6.2.0-edge.3
         version: link:../AI/Vectors/Dupe
@@ -15475,15 +15555,24 @@ importers:
       '@memberjunction/aiengine':
         specifier: 6.2.0-edge.3
         version: link:../../AI/Engine
+      '@memberjunction/component-registry-client-sdk':
+        specifier: 6.2.0-edge.3
+        version: link:../../ComponentRegistryClientSDK
       '@memberjunction/core':
         specifier: 6.2.0-edge.3
         version: link:../../MJCore
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.3
         version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.3
+        version: link:../../Credentials/Engine
       '@memberjunction/global':
         specifier: 6.2.0-edge.3
         version: link:../../MJGlobal
+      '@memberjunction/interactive-component-types':
+        specifier: 6.2.0-edge.3
+        version: link:../../InteractiveComponents
       '@memberjunction/rubrics':
         specifier: 6.2.0-edge.3
         version: link:../../Rubrics/Engine
@@ -15570,15 +15659,24 @@ importers:
       '@memberjunction/ai-bridge-server':
         specifier: 6.2.0-edge.3
         version: link:../../AI/RealtimeBridge/Server
+      '@memberjunction/ai-cloudflare':
+        specifier: 6.2.0-edge.3
+        version: link:../../AI/Providers/Cloudflare
       '@memberjunction/ai-core-plus':
         specifier: 6.2.0-edge.3
         version: link:../../AI/CorePlus
       '@memberjunction/ai-engine-base':
         specifier: 6.2.0-edge.3
         version: link:../../AI/BaseAIEngine
+      '@memberjunction/ai-openrouter':
+        specifier: 6.2.0-edge.3
+        version: link:../../AI/Providers/OpenRouter
       '@memberjunction/ai-prompts':
         specifier: 6.2.0-edge.3
         version: link:../../AI/Prompts
+      '@memberjunction/ai-systemone':
+        specifier: 6.2.0-edge.3
+        version: link:../../AI/Providers/SystemOne
       '@memberjunction/ai-vector-dupe':
         specifier: 6.2.0-edge.3
         version: link:../../AI/Vectors/Dupe
@@ -15627,6 +15725,12 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.3
         version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.3
+        version: link:../../Credentials/Engine
+      '@memberjunction/encryption':
+        specifier: 6.2.0-edge.3
+        version: link:../../Encryption
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.3
         version: link:../../GenericDatabaseProvider
@@ -15648,6 +15752,9 @@ importers:
       '@memberjunction/open-app-engine':
         specifier: 6.2.0-edge.3
         version: link:../../OpenApp/Engine
+      '@memberjunction/postgresql-dataprovider':
+        specifier: 6.2.0-edge.3
+        version: link:../../PostgreSQLDataProvider
       '@memberjunction/predictive-studio':
         specifier: 6.2.0-edge.3
         version: link:../../AI/PredictiveStudio/Engine

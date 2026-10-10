@@ -11,6 +11,9 @@ import {
 import { Subject } from 'rxjs';
 import { MJDashboardEntity, MJDashboardCategoryEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
 import { UUIDsEqual, NormalizeUUID, EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import type { MJConfirmOptions } from '@memberjunction/ng-ui-components';
+import { DashboardCategoryPath, FormatDashboardDate } from '../dashboard-card/dashboard-card.helpers';
 
 // ========================================
 // Event Types
@@ -26,6 +29,7 @@ export type DashboardBrowserViewMode = 'cards' | 'list';
  */
 export interface DashboardOpenEvent {
     Dashboard: MJDashboardEntity;
+    /** True for a Shift, Ctrl or Cmd click outside selection mode: open the dashboard in a separate tab. */
     OpenInNewTab: boolean;
 }
 
@@ -37,10 +41,17 @@ export interface DashboardEditEvent {
 }
 
 /**
- * Event emitted when dashboards are requested for deletion
+ * Event emitted after the user confirms deleting dashboards. The host deletes them and does not ask again.
  */
 export interface DashboardDeleteEvent {
     Dashboards: MJDashboardEntity[];
+}
+
+/**
+ * Event emitted when the user stars or unstars a dashboard on its card
+ */
+export interface DashboardFavoriteToggleEvent {
+    Dashboard: MJDashboardEntity;
 }
 
 /**
@@ -95,6 +106,16 @@ export interface CategoryDeleteEvent {
  */
 export interface ViewPreferenceChangeEvent {
     ViewMode: DashboardBrowserViewMode;
+}
+
+/** The texts of the delete confirm: names one dashboard, counts several. */
+function deleteDashboardsConfirm(dashboards: MJDashboardEntity[]): Omit<MJConfirmOptions, 'type'> {
+    const count = dashboards.length;
+    return {
+        title: count === 1 ? 'Delete dashboard' : `Delete ${count} dashboards`,
+        message: count === 1 ? `Delete "${dashboards[0].Name}"?` : `Delete ${count} dashboards?`,
+        detail: 'This action cannot be undone.',
+    };
 }
 
 /**
@@ -154,6 +175,26 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     }
     get SelectedCategoryId(): string | null {
         return this._selectedCategoryId;
+    }
+
+    private _flatMode = false;
+
+    /**
+     * When true, shows every dashboard in `Dashboards` in one flat list and ignores
+     * `SelectedCategoryId`: no folder scoping, no folder cards, the breadcrumb stays at the
+     * root, and new dashboards and categories are created at the root. Search and the
+     * Config-type rule still apply. When false (the default), shows the sub-folders and
+     * dashboards of the selected folder.
+     */
+    @Input()
+    set FlatMode(value: boolean) {
+        if (value !== this._flatMode) {
+            this._flatMode = value;
+            this.applyFilters();
+        }
+    }
+    get FlatMode(): boolean {
+        return this._flatMode;
     }
 
     /** Initial view mode */
@@ -223,6 +264,50 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         return this._effectiveCategoryMap;
     }
 
+    /** IDs of the user's favorite dashboards. Their cards show a filled star. */
+    private _favoriteIds = new Set<string>();
+
+    @Input()
+    set FavoriteIds(value: readonly string[] | null) {
+        this._favoriteIds = new Set((value ?? []).map(id => NormalizeUUID(id)));
+        this.cdr.markForCheck();
+    }
+    get FavoriteIds(): string[] {
+        return [...this._favoriteIds];
+    }
+
+    /** Whether cards show the favorite star. Turn it on when the host handles DashboardFavoriteToggle. */
+    @Input() ShowFavorites = false;
+
+    /**
+     * Map of dashboard ID to the owner text its card shows ("You", or a name). A dashboard whose ID
+     * is not in the map shows no owner. IDs match in any letter case.
+     */
+    private _ownerLabels = new Map<string, string>();
+    private ownerLabelById = new Map<string, string>();
+
+    @Input()
+    set OwnerLabels(value: Map<string, string> | null) {
+        this._ownerLabels = value ?? new Map();
+        this.ownerLabelById = new Map([...this._ownerLabels].map(([id, label]) => [NormalizeUUID(id), label]));
+        this.cdr.markForCheck();
+    }
+    get OwnerLabels(): Map<string, string> {
+        return this._ownerLabels;
+    }
+
+    /** Icon of the empty state of a flat list with no dashboards and no search. */
+    @Input() FlatEmptyIcon = 'fa-solid fa-layer-group';
+
+    /** Title of the empty state of a flat list with no dashboards and no search. */
+    @Input() FlatEmptyTitle = 'No dashboards to show';
+
+    /** Message of the empty state of a flat list with no dashboards and no search. */
+    @Input() FlatEmptyMessage = 'There are no dashboards in this list yet.';
+
+    /** When true, an empty flat list with no search shows the first-run welcome instead. */
+    @Input() FlatEmptyWelcome = false;
+
     // ========================================
     // Outputs
     // ========================================
@@ -233,7 +318,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /** Emitted when a dashboard is opened for editing */
     @Output() DashboardEdit = new EventEmitter<DashboardEditEvent>();
 
-    /** Emitted when dashboards are requested for deletion */
+    /** Emitted after the user confirms a delete. The host deletes the dashboards and does not ask again. */
     @Output() DashboardDelete = new EventEmitter<DashboardDeleteEvent>();
 
     /** Emitted when dashboards are requested to move to a folder */
@@ -257,6 +342,9 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /** Emitted when view preference should be persisted */
     @Output() ViewPreferenceChange = new EventEmitter<ViewPreferenceChangeEvent>();
 
+    /** Emitted when the user stars or unstars a dashboard on its card */
+    @Output() DashboardFavoriteToggle = new EventEmitter<DashboardFavoriteToggleEvent>();
+
     // ========================================
     // State
     // ========================================
@@ -270,17 +358,11 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /** Set of selected dashboard IDs */
     public SelectedIds = new Set<string>();
 
-    /** Last clicked dashboard ID (for shift-click range selection) */
+    /** The last dashboard clicked in selection mode: where a Shift-click range starts */
     private lastClickedId: string | null = null;
-
-    /** Whether delete confirmation dialog is visible */
-    public ShowDeleteConfirm = false;
 
     /** Whether move-to-folder dialog is visible */
     public ShowMoveDialog = false;
-
-    /** Dashboards pending deletion (for confirm dialog) */
-    public DashboardsPendingDelete: MJDashboardEntity[] = [];
 
     /** Currently dragging dashboard ID */
     public DraggingId: string | null = null;
@@ -325,7 +407,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     // Constructor
     // ========================================
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef, private confirmService: MJConfirmService) {}
 
     // ========================================
     // Lifecycle
@@ -388,6 +470,15 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      */
     public get NoResultsMessage(): string {
         return `No dashboards or folders match "${this.SearchText}". Try a different search term.`;
+    }
+
+    /**
+     * Whether an empty browser shows the first-run welcome: in flat mode when the host asks for it
+     * (FlatEmptyWelcome) and there is no search; in folder mode at the root when there are no
+     * dashboards at all.
+     */
+    public get ShowWelcome(): boolean {
+        return this._flatMode ? this.FlatEmptyWelcome && !this.SearchText : this.IsAtRoot && this._dashboards.length === 0;
     }
 
     /**
@@ -455,35 +546,27 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     // ========================================
 
     /**
-     * Handle dashboard click with multi-select support
+     * Handles a click on a dashboard. Outside selection mode every click opens the dashboard, and a
+     * Shift, Ctrl or Cmd click asks for a separate tab (`OpenInNewTab`). In selection mode a
+     * Shift-click selects the range from the last dashboard clicked in selection mode (just this one
+     * when there is none yet), a Ctrl or Cmd click toggles the dashboard, and a plain click clears
+     * the selection and opens the dashboard.
      */
     public OnDashboardClick(dashboard: MJDashboardEntity, event: MouseEvent): void {
-        if (!this.AllowMultiSelect) {
-            // Single select mode - just open the dashboard
-            this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: event.ctrlKey || event.metaKey });
+        if (!this.AllowMultiSelect || !this.IsSelectionMode) {
+            this.SelectedIds.clear();
+            this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: event.shiftKey || event.ctrlKey || event.metaKey });
+            this.cdr.markForCheck();
             return;
         }
 
         if (event.shiftKey && this.lastClickedId) {
-            // Shift-click: range selection
             this.selectRange(this.lastClickedId, dashboard.ID);
-        } else if (event.ctrlKey || event.metaKey) {
-            // Ctrl/Cmd-click: toggle selection
+        } else if (event.shiftKey || event.ctrlKey || event.metaKey) {
             this.ToggleSelection(dashboard.ID);
         } else {
-            // Normal click: if not selected, open; if selected with others, open
-            if (this.SelectedIds.size <= 1) {
-                this.SelectedIds.clear();
-                this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: false });
-            } else if (this.SelectedIds.has(dashboard.ID)) {
-                // Clicking on one of multiple selected items - open just this one
-                this.SelectedIds.clear();
-                this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: false });
-            } else {
-                // Clicking on unselected item - clear selection and open
-                this.SelectedIds.clear();
-                this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: false });
-            }
+            this.SelectedIds.clear();
+            this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: false });
         }
 
         this.lastClickedId = dashboard.ID;
@@ -593,7 +676,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      */
     public OnCreateDashboard(): void {
         this.CloseNewMenu();
-        this.DashboardCreate.emit({ CategoryId: this.SelectedCategoryId });
+        this.DashboardCreate.emit({ CategoryId: this.folderIdForNewItems });
     }
 
     /**
@@ -624,7 +707,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         if (!this.NewCategoryName.trim()) return;
 
         this.CategoryCreate.emit({
-            ParentCategoryId: this.SelectedCategoryId,
+            ParentCategoryId: this.folderIdForNewItems,
             Name: this.NewCategoryName.trim(),
             Description: this.NewCategoryDescription.trim() || null
         });
@@ -632,65 +715,39 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Open edit dialog for single dashboard via context menu
+     * Asks the host to edit one dashboard. A click event, when given, does not also reach the row or card.
      */
-    public OnEditDashboard(dashboard: MJDashboardEntity, event: Event): void {
-        event.stopPropagation();
+    public OnEditDashboard(dashboard: MJDashboardEntity, event?: Event): void {
+        event?.stopPropagation();
         this.DashboardEdit.emit({ Dashboard: dashboard });
     }
 
     /**
-     * Request to delete a single dashboard
+     * Asks the user to confirm deleting one dashboard, then emits DashboardDelete. A click event, when
+     * given, does not also reach the row or card.
      */
-    public OnDeleteDashboard(dashboard: MJDashboardEntity, event: Event): void {
-        event.stopPropagation();
-        this.DashboardsPendingDelete = [dashboard];
-        this.ShowDeleteConfirm = true;
-        this.cdr.markForCheck();
+    public async OnDeleteDashboard(dashboard: MJDashboardEntity, event?: Event): Promise<void> {
+        event?.stopPropagation();
+        await this.confirmAndDelete([dashboard]);
     }
 
-    /**
-     * Request to delete selected dashboards.
-     * Only includes dashboards the user has permission to delete.
-     */
-    public OnDeleteSelected(): void {
-        if (this.SelectedIds.size === 0) return;
-
-        // Only include dashboards the user can delete
-        this.DashboardsPendingDelete = this.GetDeletableSelectedDashboards();
-
-        if (this.DashboardsPendingDelete.length === 0) {
-            // No deletable dashboards selected
-            return;
-        }
-
-        this.ShowDeleteConfirm = true;
-        this.cdr.markForCheck();
+    /** Emits DashboardFavoriteToggle for the dashboard whose star the user clicked. */
+    public OnToggleFavorite(dashboard: MJDashboardEntity): void {
+        this.DashboardFavoriteToggle.emit({ Dashboard: dashboard });
     }
 
-    /**
-     * Confirm deletion
-     */
-    public ConfirmDelete(): void {
-        if (this.DashboardsPendingDelete.length > 0) {
-            this.DashboardDelete.emit({ Dashboards: this.DashboardsPendingDelete });
-            // Clear selection for deleted items
-            for (const d of this.DashboardsPendingDelete) {
-                this.SelectedIds.delete(d.ID);
-            }
-        }
-        this.CloseDeleteConfirm();
-        // Exit selection mode after bulk operation
-        this.ExitSelectionMode();
+    /** Asks the user to confirm deleting the selected dashboards they may delete, then emits DashboardDelete. */
+    public async OnDeleteSelected(): Promise<void> {
+        const deletable = this.GetDeletableSelectedDashboards();
+        if (deletable.length === 0) return;
+        await this.confirmAndDelete(deletable);
     }
 
-    /**
-     * Cancel deletion
-     */
-    public CloseDeleteConfirm(): void {
-        this.ShowDeleteConfirm = false;
-        this.DashboardsPendingDelete = [];
-        this.cdr.markForCheck();
+    /** Emits DashboardDelete and leaves selection mode when the user confirms; keeps everything when they cancel. */
+    private async confirmAndDelete(dashboards: MJDashboardEntity[]): Promise<void> {
+        if (!(await this.confirmService.ConfirmDelete(deleteDashboardsConfirm(dashboards)))) return;
+        this.DashboardDelete.emit({ Dashboards: dashboards });
+        this.ExitSelectionMode();   // clears SelectedIds and calls markForCheck
     }
 
     /**
@@ -918,24 +975,25 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Format date for display
+     * Format date for display: "Today", "Yesterday", "N days ago" (under a week), else the local date
      */
     public FormatDate(date: Date): string {
-        if (!date) return '';
-        const d = new Date(date);
-        const now = new Date();
-        const diffMs = now.getTime() - d.getTime();
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        return FormatDashboardDate(date);
+    }
 
-        if (diffDays === 0) {
-            return 'Today';
-        } else if (diffDays === 1) {
-            return 'Yesterday';
-        } else if (diffDays < 7) {
-            return `${diffDays} days ago`;
-        } else {
-            return d.toLocaleDateString();
-        }
+    /** True when the dashboard is one of the user's favorites (FavoriteIds). */
+    public IsFavorite(dashboardId: string): boolean {
+        return this._favoriteIds.has(NormalizeUUID(dashboardId));
+    }
+
+    /** The owner text of the dashboard's card (from OwnerLabels), or null for none. */
+    public OwnerLabel(dashboard: MJDashboardEntity): string | null {
+        return this.ownerLabelById.get(NormalizeUUID(dashboard.ID)) ?? null;
+    }
+
+    /** The category path a card shows: only in flat mode, where the folder is not otherwise visible. */
+    public CardCategoryPath(dashboard: MJDashboardEntity): string | null {
+        return this._flatMode ? DashboardCategoryPath(this.GetEffectiveCategoryId(dashboard), this._categories) : null;
     }
 
     /**
@@ -1112,6 +1170,11 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     // Private Methods
     // ========================================
 
+    /** The folder new dashboards and categories go into: the selected one, or the root in flat mode. */
+    private get folderIdForNewItems(): string | null {
+        return this._flatMode ? null : this.SelectedCategoryId;
+    }
+
     private applyFilters(): void {
         let filtered = [...this._dashboards];
 
@@ -1127,15 +1190,17 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             );
         }
 
-        // Filter by current folder (category)
+        // Filter by current folder (category); flat mode skips this and shows every dashboard
         // When at root (null), show only uncategorized dashboards
         // When in a category, show only dashboards directly in that category
         // Uses effective category (from EffectiveCategoryMap) for shared dashboards
-        if (this._selectedCategoryId) {
-            filtered = filtered.filter(d => this.GetEffectiveCategoryId(d) === this._selectedCategoryId);
-        } else {
-            // At root level, show only uncategorized dashboards (effective CategoryID is null or empty)
-            filtered = filtered.filter(d => !this.GetEffectiveCategoryId(d));
+        if (!this._flatMode) {
+            if (this._selectedCategoryId) {
+                filtered = filtered.filter(d => this.GetEffectiveCategoryId(d) === this._selectedCategoryId);
+            } else {
+                // At root level, show only uncategorized dashboards (effective CategoryID is null or empty)
+                filtered = filtered.filter(d => !this.GetEffectiveCategoryId(d));
+            }
         }
 
         this.FilteredDashboards = filtered;
@@ -1148,9 +1213,11 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      * Update the list of child categories for the current folder
      */
     private updateChildCategories(): void {
-        // Find categories that are children of the current category
+        // Find categories that are children of the current category (none in flat mode)
         // Handle both null and undefined ParentID for root-level categories
-        if (this._selectedCategoryId) {
+        if (this._flatMode) {
+            this.ChildCategories = [];
+        } else if (this._selectedCategoryId) {
             this.ChildCategories = this.Categories.filter(c => UUIDsEqual(c.ParentID, this._selectedCategoryId));
         } else {
             // At root level - show categories with no parent (null or undefined)
@@ -1175,7 +1242,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     private updateBreadcrumbs(): void {
         this.Breadcrumbs = [];
 
-        if (!this._selectedCategoryId) return;
+        if (!this._selectedCategoryId || this._flatMode) return;
 
         // Build the path from current category to root
         const path: MJDashboardCategoryEntity[] = [];

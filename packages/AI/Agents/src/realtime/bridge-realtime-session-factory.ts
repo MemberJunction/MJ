@@ -23,7 +23,7 @@ import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
-import { RealtimeClientSessionService } from './realtime-client-session-service';
+import { RealtimeClientSessionService, RealtimeHostToolsResolver } from './realtime-client-session-service';
 import { SelectRealtimeVendorForModel } from './realtime-vendor-resolution';
 
 /**
@@ -78,6 +78,11 @@ export interface BridgeRealtimeSessionContext {
      * (see `GetBridgeRealtimeRuntime`).
      */
     HostTools?: RealtimeToolDefinition[];
+    /**
+     * Optional callback that allows the host to resolve host tools dynamically based on
+     * the model, vendor, and driver actually resolved for the session, before session opening.
+     */
+    ResolveHostTools?: RealtimeHostToolsResolver;
     /** Host-authored instructions appended to the system prompt (e.g. the phone-call and caller framing). */
     HostFraming?: string;
     /**
@@ -206,6 +211,9 @@ function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, un
     }
     if (ctx.HostTools && ctx.HostTools.length > 0) {
         data.realtimeHostTools = ctx.HostTools;
+    }
+    if (ctx.ResolveHostTools) {
+        data.resolveHostTools = ctx.ResolveHostTools;
     }
     if (ctx.HostFraming && ctx.HostFraming.trim().length > 0) {
         data.realtimeHostFraming = ctx.HostFraming.trim();

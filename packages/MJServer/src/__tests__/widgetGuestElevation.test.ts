@@ -16,6 +16,7 @@ import {
   ResolveWidgetGuestRunContext,
   ElevateUserPayload,
   ResolveScopedAnonymousRunUser,
+  ResolveRecordingStoreUser,
 } from '../realtimeWidget/widgetGuestElevation.js';
 import type { UserPayload } from '../types.js';
 
@@ -96,6 +97,49 @@ describe('widgetGuestElevation — ResolveScopedAnonymousRunUser (issue #3371)',
   it('returns the SYSTEM user for a scoped anonymous (non-widget) magic-link session', () => {
     const scopedAnon = userWith({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'res-1' } });
     expect(ResolveScopedAnonymousRunUser(scopedAnon)).toBe(systemUser);
+  });
+});
+
+describe('widgetGuestElevation — ResolveRecordingStoreUser (#5195: UI-role users lost every recording)', () => {
+  const systemUser = { ID: 'system-1', Email: 'system@system.org' } as UserInfo;
+
+  function userWith(flags: Partial<UserInfo>): UserInfo {
+    return { ID: 'user-1', Email: 'someone@example.com', ...flags } as UserInfo;
+  }
+
+  beforeEach(() => {
+    getSystemUserMock.mockReset();
+    getSystemUserMock.mockReturnValue(systemUser);
+  });
+
+  it('runs a signed-in owner’s recording store as the SYSTEM user (the stock UI role cannot create MJ: Files)', () => {
+    expect(ResolveRecordingStoreUser(userWith({ IsMagicLinkAnonymous: false }))).toBe(systemUser);
+  });
+
+  it('runs a scoped anonymous magic-link session as the SYSTEM user, exactly as before', () => {
+    const scopedAnon = userWith({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'res-1' } });
+    expect(ResolveRecordingStoreUser(scopedAnon)).toBe(systemUser);
+  });
+
+  it('keeps an UNSCOPED anonymous session on the caller, exactly as before', () => {
+    const unscoped = userWith({ IsMagicLinkAnonymous: true, MagicLinkScope: undefined });
+    expect(ResolveRecordingStoreUser(unscoped)).toBe(unscoped);
+  });
+
+  it('keeps a PUBLIC WEB-WIDGET guest on the caller (their RLS read filter depends on it)', () => {
+    const widgetGuest = userWith({
+      IsMagicLinkAnonymous: true,
+      MagicLinkScope: { ResourceID: 'res-1' },
+      WidgetGuestContext: { WidgetID: 'widget-1' },
+    });
+    expect(ResolveRecordingStoreUser(widgetGuest)).toBe(widgetGuest);
+    expect(getSystemUserMock).not.toHaveBeenCalled();
+  });
+
+  it('FAILS CLOSED to the caller when no system user is available', () => {
+    getSystemUserMock.mockReturnValue(undefined);
+    const named = userWith({ IsMagicLinkAnonymous: false });
+    expect(ResolveRecordingStoreUser(named)).toBe(named);
   });
 });
 
