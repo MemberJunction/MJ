@@ -44,7 +44,7 @@ export type VoiceCallBodyProps = {
     TranscriptText: string;
     /** The caption's scroll view, which is kept at its end as the caption grows. */
     TranscriptScrollRef: RefObject<ScrollView | null>;
-    /** Called when the user taps the stop button. */
+    /** Called when the user taps the stop button ("Stop" to a screen reader). */
     OnStop: () => void;
 };
 
@@ -56,6 +56,10 @@ export type VoiceCallBodyProps = {
  * it and passes it back as {@link VoiceCallBodyProps.MiddleHeight}, which sizes the stage. The card
  * is as tall as its caption, up to the room under the stage; past that the caption scrolls, kept at
  * its latest words.
+ *
+ * A screen reader finds the controls as three buttons: "Keyboard", "Stop" and "Menu", the words the
+ * screen's hint and the mobile app plan use for them. Only "Stop" acts; the other two are disabled
+ * placeholders.
  */
 export function VoiceCallBody({
     MiddleHeight,
@@ -86,13 +90,16 @@ export function VoiceCallBody({
 
             <View style={styles.controlsBlock}>
                 <View style={styles.controls}>
-                    <Pressable style={styles.ctrlBtn}>
+                    {/* The side buttons are the mobile app plan's keyboard mode and menu, which aren't built yet.
+                        They are disabled, so a screen reader says they can't be used rather than offering a
+                        button that does nothing. */}
+                    <Pressable style={styles.ctrlBtn} disabled accessibilityRole="button" accessibilityLabel="Keyboard">
                         <Icons.ChevronUp size={22} color="#f6f6f8" strokeWidth={2} />
                     </Pressable>
-                    <Pressable style={styles.ctrlBtnPrimary} onPress={OnStop}>
+                    <Pressable style={styles.ctrlBtnPrimary} onPress={OnStop} accessibilityRole="button" accessibilityLabel="Stop">
                         <View style={styles.ctrlSquare} />
                     </Pressable>
-                    <Pressable style={styles.ctrlBtn}>
+                    <Pressable style={styles.ctrlBtn} disabled accessibilityRole="button" accessibilityLabel="Menu">
                         <Icons.Sliders size={22} color="#f6f6f8" strokeWidth={2} />
                     </Pressable>
                 </View>
