@@ -80,6 +80,8 @@ interface ModifyPayload {
  */
 @RegisterClass(BaseAction, "__ModifyFormContribution")
 export class ModifyFormContributionAction extends BaseAction {
+    /** Changes only the caller's own User-scope forms and panels, with the caller's permissions. */
+    public static readonly AuthorizesCaller = true;
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {

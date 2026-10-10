@@ -21,6 +21,8 @@ import { buildDefaultFormScaffold } from "@memberjunction/interactive-component-
  */
 @RegisterClass(BaseAction, "__GetDefaultFormScaffoldForEntity")
 export class GetDefaultFormScaffoldForEntityAction extends BaseAction {
+    /** Reads entity metadata only. */
+    public static readonly AuthorizesCaller = true;
 
     /**
      * Required input:

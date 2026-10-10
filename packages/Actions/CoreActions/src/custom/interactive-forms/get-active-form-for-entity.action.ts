@@ -47,6 +47,8 @@ import type { ComponentSpec } from "@memberjunction/interactive-component-types"
  */
 @RegisterClass(BaseAction, "__GetActiveFormForEntity")
 export class GetActiveFormForEntityAction extends BaseAction {
+    /** Reads only with the caller's permissions. */
+    public static readonly AuthorizesCaller = true;
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {

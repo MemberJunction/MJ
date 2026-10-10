@@ -76,6 +76,7 @@ const { mockClassFactory } = vi.hoisted(() => ({
     mockClassFactory: {
         CreateInstance: vi.fn(),
         GetAllRegistrations: vi.fn().mockReturnValue([]),
+        GetRegistration: vi.fn().mockReturnValue(null),
     },
 }));
 vi.mock('@memberjunction/global', async (importOriginal) => ({
@@ -958,6 +959,112 @@ describe('ActionEngineServer', () => {
         it('should return an instance from static getter', () => {
             const instance = ActionEngineServer.Instance;
             expect(instance).toBeDefined();
+        });
+    });
+
+    // ========================================================================
+    // Actions that authorize their own caller
+    // ========================================================================
+    describe('ActionAuthorizesCaller', () => {
+        class SelfAuthorizingAction extends BaseAction {
+            public static readonly AuthorizesCaller = true;
+            protected async InternalRunAction(): Promise<{ Success: boolean; ResultCode: string }> {
+                return { Success: true, ResultCode: 'SUCCESS' };
+            }
+        }
+
+        const action = (fields: { Name: string; DriverClass?: string | null; Type?: string }) =>
+            ({ ID: 'action-1', DriverClass: null, Type: 'Custom', ...fields }) as unknown as Parameters<ActionEngineServer['ActionAuthorizesCaller']>[0];
+
+        it('is true when the class that runs the action declares AuthorizesCaller', () => {
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: SelfAuthorizingAction });
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Create Entity' }))).toBe(true);
+        });
+
+        it('is false for an action class that does not declare it', () => {
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: TestAction });
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Calculate Expression' }))).toBe(false);
+        });
+
+        it('is false when no class is registered for the action', () => {
+            mockClassFactory.GetRegistration.mockReturnValue(null);
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Unregistered' }))).toBe(false);
+        });
+
+        it('is false for a Runtime action, which has no class', () => {
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: SelfAuthorizingAction });
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Create Entity', Type: 'Runtime' }))).toBe(false);
+        });
+
+        it('looks the class up by DriverClass, falling back to the action name, as RunAction does', () => {
+            mockClassFactory.GetRegistration.mockReturnValue(null);
+
+            engine.ActionAuthorizesCaller(action({ Name: 'Calculate Expression', DriverClass: '__CalculateExpression' }));
+            engine.ActionAuthorizesCaller(action({ Name: 'Create Entity' }));
+
+            expect(mockClassFactory.GetRegistration).toHaveBeenNthCalledWith(1, BaseAction, '__CalculateExpression');
+            expect(mockClassFactory.GetRegistration).toHaveBeenNthCalledWith(2, BaseAction, 'Create Entity');
+        });
+    });
+
+    // ========================================================================
+    // The host's checks for SQL a caller wrote
+    // ========================================================================
+    describe('AdhocSQLAuthorizer', () => {
+        const authorizer = { Authorize: vi.fn().mockReturnValue(null), ClampTimeoutSeconds: vi.fn().mockReturnValue(30) };
+
+        it('is null until the host registers one', () => {
+            expect(engine.AdhocSQLAuthorizer).toBeNull();
+        });
+
+        it('returns the authorizer the host registered', () => {
+            engine.SetAdhocSQLAuthorizer(authorizer);
+
+            expect(engine.AdhocSQLAuthorizer).toBe(authorizer);
+        });
+
+        it('is null again once it is cleared', () => {
+            engine.SetAdhocSQLAuthorizer(authorizer);
+            engine.SetAdhocSQLAuthorizer(null);
+
+            expect(engine.AdhocSQLAuthorizer).toBeNull();
+        });
+    });
+
+    // ========================================================================
+    // The host's read-only provider, for actions that run caller-supplied SQL
+    // ========================================================================
+    describe('GetReadOnlyProvider', () => {
+        const readOnlyProvider = { RunQuery: vi.fn(), RunQueries: vi.fn(), RunQueriesWithCacheCheck: vi.fn(), Config: vi.fn() };
+
+        it('resolves null until the host registers a factory', async () => {
+            expect(await engine.GetReadOnlyProvider()).toBeNull();
+        });
+
+        it('opens a provider through the registered factory on every call', async () => {
+            const factory = vi.fn().mockResolvedValue(readOnlyProvider);
+            engine.SetReadOnlyProviderFactory(factory);
+
+            expect(await engine.GetReadOnlyProvider()).toBe(readOnlyProvider);
+            expect(await engine.GetReadOnlyProvider()).toBe(readOnlyProvider);
+            expect(factory).toHaveBeenCalledTimes(2);
+        });
+
+        it('resolves null when the host has no read-only login', async () => {
+            engine.SetReadOnlyProviderFactory(vi.fn().mockResolvedValue(null));
+
+            expect(await engine.GetReadOnlyProvider()).toBeNull();
+        });
+
+        it('resolves null again once the factory is cleared', async () => {
+            engine.SetReadOnlyProviderFactory(vi.fn().mockResolvedValue(readOnlyProvider));
+            engine.SetReadOnlyProviderFactory(null);
+
+            expect(await engine.GetReadOnlyProvider()).toBeNull();
         });
     });
 

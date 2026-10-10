@@ -48,6 +48,8 @@ import {
  */
 @RegisterClass(BaseAction, "__ActivateInteractiveFormVersion")
 export class ActivateInteractiveFormVersionAction extends BaseAction {
+    /** Changes only the caller's own User-scope forms and panels, with the caller's permissions. */
+    public static readonly AuthorizesCaller = true;
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {

@@ -50,6 +50,9 @@ interface EntityInfo {
  */
 @RegisterClass(BaseAction, 'Describe Entity')
 export class DescribeEntityAction extends BaseDatabaseDesignerAction {
+    /** Reads entity metadata and reads entity fields with the caller's permissions. */
+    public static readonly AuthorizesCaller = true;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const entityID = this.getStringParam(params, 'EntityID');

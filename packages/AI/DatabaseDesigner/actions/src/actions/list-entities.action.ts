@@ -38,6 +38,9 @@ interface EntitySummary {
  */
 @RegisterClass(BaseAction, 'List My Entities')
 export class ListMyEntitiesAction extends BaseDatabaseDesignerAction {
+    /** Reads only the caller's own entities, with the caller's permissions. */
+    public static readonly AuthorizesCaller = true;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const userID = params.ContextUser?.ID;

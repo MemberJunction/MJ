@@ -811,19 +811,23 @@ async function createPerRequestProviders(
     { provider: p, type: 'Read-Write' }
   ];
 
-  if (isPostgres) {
-    const rp = await tryCreateReadOnlyPostgresProvider();
-    if (rp) {
-      providers.push({ provider: rp, type: 'Read-Only' });
-    }
-  } else {
-    const rp = await tryCreateReadOnlyProvider(dataSources);
-    if (rp) {
-      providers.push({ provider: rp, type: 'Read-Only' });
-    }
+  const rp = await CreateReadOnlyProvider(dataSources);
+  if (rp) {
+    providers.push({ provider: rp, type: 'Read-Only' });
   }
 
   return providers;
+}
+
+/**
+ * Opens a provider on the read-only database login, for the current platform. Resolves null when no
+ * read-only login is configured; it never falls back to the read-write pool.
+ * @param dataSources the data sources MJAPI opened at startup
+ */
+export async function CreateReadOnlyProvider(dataSources: DataSourceInfo[]): Promise<DatabaseProviderBase | null> {
+  return resolveDbPlatformFromEnv() === 'postgresql'
+    ? tryCreateReadOnlyPostgresProvider()
+    : tryCreateReadOnlyProvider(dataSources);
 }
 
 /**
