@@ -234,6 +234,8 @@ export class TelephonyCallSessionStarter {
 
         const openModelSession = async (priorTranscript?: string): Promise<IRealtimeSession> => {
             const session = await this.deps.SessionFactory({
+                // The caller sees no video: the session asks the model for no avatar and reports `phone`.
+                PhoneCall: true,
                 AgentID: coAgentID,
                 TargetAgentID: args.Identity.AgentID,
                 ContextUser: args.ContextUser,

@@ -6,7 +6,14 @@
 import { describe, it, expect } from 'vitest';
 import type { ResolvedAgentPersona, ResolvedModelPersona } from '@memberjunction/ai-engine-base';
 import type { MJAIAgentPersonaEntity, MJAIPersonaEntity, MJAIPersonaVendorEntity } from '@memberjunction/core-entities';
-import { ResolveRealtimeAvatar, ResolveRealtimeAvatarStatus, type RealtimeAvatarPersonaSource } from '../realtime/realtime-avatar-resolution';
+import {
+    ResolveAvatarUnseenReason,
+    ResolveRealtimeAvatar,
+    ResolveRealtimeAvatarStatus,
+    ResolveUnseenAvatarStatus,
+    WithoutUnseenAvatar,
+    type RealtimeAvatarPersonaSource,
+} from '../realtime/realtime-avatar-resolution';
 import { BuildRealtimeOverridesJson, ResolveEffectiveRealtimeConfig, type RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
 
 const MODEL = 'model-38-live';
@@ -192,5 +199,49 @@ describe('ResolveRealtimeAvatarStatus', () => {
             DriverStatus: { Requested: true, Granted: false, Reason: 'custom-disabled' },
         })).toEqual({ Requested: true, Granted: false, Reason: 'custom-disabled' });
         expect(ResolveRealtimeAvatarStatus({ Resolution: { Avatar: BEN }, ModelSupportsAvatarOutput: true })).toBeUndefined();
+    });
+
+    it('says phone for a phone call before the model or the face could say anything', () => {
+        const phone = { Requested: true, Granted: false, Reason: 'phone' };
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'phone' }, ModelSupportsAvatarOutput: false })).toEqual(phone);
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'phone', Voice: 'Puck' }, ModelSupportsAvatarOutput: true, DriverStatus: { Requested: true, Granted: true } })).toEqual(phone);
+    });
+});
+
+describe('A phone call asks for no avatar (WithoutUnseenAvatar)', () => {
+    const BEN_REQUEST = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' as const };
+
+    it('names phone as the reason nobody would see an avatar, and nothing for any other session', () => {
+        expect(ResolveAvatarUnseenReason({ PhoneCall: true })).toBe('phone');
+        expect(ResolveAvatarUnseenReason({ PhoneCall: false })).toBeUndefined();
+        expect(ResolveAvatarUnseenReason({})).toBeUndefined();
+    });
+
+    it("drops a phone call's request and keeps the persona's voice, so the agent sounds the same", () => {
+        expect(WithoutUnseenAvatar({ Avatar: BEN_REQUEST, Voice: 'Puck' }, { PhoneCall: true })).toEqual({ Voice: 'Puck', Reason: 'phone' });
+        expect(WithoutUnseenAvatar({ Avatar: BEN_REQUEST }, { PhoneCall: true })).toEqual({ Reason: 'phone' });
+    });
+
+    it("says phone over any other reason: no model or face could show the caller an avatar", () => {
+        expect(WithoutUnseenAvatar({ Reason: 'endpoint' }, { PhoneCall: true })).toEqual({ Reason: 'phone' });
+        expect(WithoutUnseenAvatar({ Reason: 'no-binding' }, { PhoneCall: true })).toEqual({ Reason: 'phone' });
+    });
+
+    it("leaves a call whose agent asked for no avatar (video setting off) without a reason, so it gets no notice", () => {
+        expect(WithoutUnseenAvatar({}, { PhoneCall: true })).toEqual({});
+    });
+
+    it('leaves every other session as resolved', () => {
+        const resolved = { Avatar: BEN_REQUEST, Voice: 'Puck' };
+        expect(WithoutUnseenAvatar(resolved, {})).toBe(resolved);
+        expect(WithoutUnseenAvatar(resolved, { PhoneCall: false })).toBe(resolved);
+    });
+
+    it("gives a phone call's bridged session the phone status its driver can't, and leaves every other driver status", () => {
+        expect(ResolveUnseenAvatarStatus({ Voice: 'Puck', Reason: 'phone' }, undefined)).toEqual({ Requested: true, Granted: false, Reason: 'phone' });
+        const driver = { Requested: true, Granted: false, Reason: 'bridged' as const };
+        expect(ResolveUnseenAvatarStatus({ Avatar: BEN_REQUEST }, driver)).toBe(driver);
+        expect(ResolveUnseenAvatarStatus({ Reason: 'no-binding' }, undefined)).toBeUndefined();
+        expect(ResolveUnseenAvatarStatus(undefined, undefined)).toBeUndefined();
     });
 });

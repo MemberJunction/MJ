@@ -154,6 +154,17 @@ describe('TelephonyCallSessionStarter.Start — agents', () => {
         expect(s.sessionFactory.mock.calls[0][0]).toMatchObject({ AgentSessionID: 'AS1', ConversationID: 'CONV1' });
     });
 
+    it('opens every model session as a phone call, inbound or outbound and after a recovery, so it asks for no avatar', async () => {
+        const s = setup();
+        await s.starter.Start(s.args());
+        await s.starter.Start(s.args({ Direction: 'Outbound', RemoteNumber: '+14155550188' }));
+        const recover = (s.engine.StartBridgeSession.mock.calls[0][0] as { RecoverRealtimeSession: (r: { PriorTranscript: string; Attempt: number; Reason: string }) => Promise<IRealtimeSession> }).RecoverRealtimeSession;
+        await recover({ PriorTranscript: 'User: hi', Attempt: 1, Reason: 'closed' });
+        const opened = s.sessionFactory.mock.calls.map((c) => c[0] as Record<string, unknown>);
+        expect(opened.map((o) => o['PhoneCall'])).toEqual([true, true, true]);
+        expect(opened.every((o) => o['AvatarDelivery'] === undefined)).toBe(true);
+    });
+
     it('gives the model the phone framing, the caller number and an unverified-caller warning', async () => {
         const s = setup();
         await s.starter.Start(s.args());

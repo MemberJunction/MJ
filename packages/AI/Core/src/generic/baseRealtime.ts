@@ -650,8 +650,9 @@ export interface IRealtimeSession {
     OnVideoOutput?(handler: (chunk: ArrayBuffer) => void): void;
 
     /**
-     * What became of the session's avatar request, as the driver decided when it opened the session. Absent when the
-     * session asked for no avatar, or the driver does not report it.
+     * What became of the session's avatar request, as decided when the session opened: by its driver, or, for a phone
+     * call, by the session prep, which asks the driver for no avatar and reports `'phone'`. Absent when the session asked
+     * for no avatar, or the driver does not report it.
      */
     AvatarStatus?: RealtimeAvatarStatus;
 
@@ -940,7 +941,7 @@ export interface RealtimeAvatarSettings {
      * Who shows the avatar's video. `'room'`: a server-side session whose host publishes it into a meeting room (the
      * meeting bot decodes it and publishes a camera track), so the driver may render it there. `'client'` or absent: the
      * browser that opened the session shows it; a server-side session without `'room'` stays audio only (reason
-     * `'bridged'`).
+     * `'bridged'`). A phone call never carries a request (reason `'phone'`).
      */
     Delivery?: 'client' | 'room';
 }
@@ -948,7 +949,9 @@ export interface RealtimeAvatarSettings {
 /**
  * Why a session that asked for an avatar runs audio-only:
  * - `'endpoint'`: the model, on the endpoint serving it, renders no avatar;
- * - `'bridged'`: the session runs on the server (a meeting or a phone call) whose host can't publish video;
+ * - `'bridged'`: the session runs on the server (a meeting bot) and its host can't publish video into the room;
+ * - `'phone'`: the session is a phone call (a carrier call, or one that reaches a meeting room through SIP): the caller
+ *   hears the agent and sees no video, so the session asks the model for no avatar;
  * - `'custom-disabled'`: custom avatars are not enabled;
  * - `'unknown-avatar'`: the request names no avatar the vendor knows;
  * - `'no-binding'`: the persona has no avatar on this vendor;
@@ -962,6 +965,7 @@ export interface RealtimeAvatarSettings {
 export type RealtimeAvatarUnavailableReason =
     | 'endpoint'
     | 'bridged'
+    | 'phone'
     | 'custom-disabled'
     | 'unknown-avatar'
     | 'no-binding'

@@ -41,6 +41,12 @@ describe('mj.agentAvatar', () => {
         it("names 'bridged' when a refusal gives no reason", () => {
             expect(AgentAvatarAttributes({ Requested: true, Granted: false })).toEqual({ 'mj.agentAvatar': 'audio-only:bridged' });
         });
+
+        it("says audio only for a phone call that reaches a room through SIP, and the room reads 'phone' back", () => {
+            const attributes = AgentAvatarAttributes({ Requested: true, Granted: false, Reason: 'phone' });
+            expect(attributes).toEqual({ 'mj.agentAvatar': 'audio-only:phone' });
+            expect(ReadAgentAvatarAttribute(attributes)).toEqual({ State: 'audio-only', Reason: 'phone' });
+        });
     });
 
     it('AgentAvatarAudioOnlyAttributes is the change a bot applies on a fallback', () => {

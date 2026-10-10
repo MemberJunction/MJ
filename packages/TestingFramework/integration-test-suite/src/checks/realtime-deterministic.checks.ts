@@ -17,8 +17,9 @@
  *    leakage refusal, sign-off-reason gate, and the lifecycle state machine (RD9),
  *  - live avatars (RD13): a tagged persona with a face on the session's vendor, bound to the voiced agent, becomes the
  *    session's avatar request through the real session prep, on a run-scoped placeholder key (nothing is minted, no
- *    network); without that face, the prep asks for no avatar and says why (`no-binding`); its fixture rows are
- *    deleted afterwards,
+ *    network); on a phone call (even one in a room that could publish it) the prep asks for none and says why
+ *    (`phone`), keeping the persona's voice; without that face, the prep asks for no avatar and says why
+ *    (`no-binding`); its fixture rows are deleted afterwards,
  *  - realtime driver wiring (RD14): every Active realtime vendor row's DriverClass resolves to a BaseRealtimeModel in the
  *    ClassFactory, so a driver missing from the class-registration manifest is caught,
  *  - a bridged (server-held) realtime session's usage landing on its co-agent prompt run before
@@ -336,6 +337,19 @@ function assertAvatarResolved(prep: RealtimeSessionParamsPrep, anchors: AvatarFi
     AssertEqual(avatar!.Source, 'persona', 'RD13: the avatar came from the voiced agent\'s persona');
     AssertEqual(avatar!.Kind, 'preset', 'RD13: the binding\'s avatar settings reach the request');
     AssertEqual(prep.SessionParams?.Config?.['voice'], fixture.Voice, 'RD13: the face\'s persona supplies the session\'s voice');
+}
+
+/**
+ * RD13's phone leg: the same voiced agent on a phone call that reaches a room able to publish the avatar (a SIP call)
+ * asks the driver for no avatar, says why (`phone`), and keeps the face's persona's voice.
+ */
+async function assertPhoneCallAsksForNone(ctx: IntegrationCheckContext, service: RealtimeClientSessionService, anchors: AvatarFixtureAnchors, fixture: AvatarFixture): Promise<void> {
+    const input: PrepareClientSessionInput = { ...avatarPrepInput(anchors, true), ServerSide: true, PhoneCall: true, AvatarDelivery: 'room' };
+    const prep = await service.PrepareRealtimeSessionParams(input, ctx.User, ctx.Provider);
+    Assert(prep.Success, `RD13: the phone-call prep failed: ${prep.ErrorMessage}`);
+    AssertEqual(prep.SessionParams?.Avatar, undefined, 'RD13: a phone call asks the driver for no avatar: the caller sees no video');
+    AssertEqual(prep.AvatarResolution?.Reason, 'phone', 'RD13: the prep says why: a phone call');
+    AssertEqual(prep.SessionParams?.Config?.['voice'], fixture.Voice, "RD13: a phone call keeps the face's persona's voice");
 }
 
 // ── RD18: the Modalities gate for avatars ──────────────────────────────────────────────────────────
@@ -1492,7 +1506,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
     },
     {
         Id: 'realtime-deterministic.RD13',
-        Name: "RD13: a voiced agent's persona with a face on the session's vendor becomes the session's avatar request; without the face, no-binding (run-scoped key, no network)",
+        Name: "RD13: a voiced agent's persona with a face on the session's vendor becomes the session's avatar request; on a phone call, none (phone); without the face, no-binding (run-scoped key, no network)",
         Fn: async (ctx): Promise<void> => {
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const anchors = findAvatarFixtureAnchors(AIEngineBase.Instance);
@@ -1511,12 +1525,13 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 Assert(off.Success, `RD13: the prep with the video setting off failed: ${off.ErrorMessage}`);
                 AssertEqual(off.SessionParams?.Avatar, undefined, 'RD13: with the video setting off, the session asks for no avatar');
                 AssertEqual(off.AvatarResolution?.Reason, undefined, 'RD13: with the video setting off, there is no reason to give');
+                await assertPhoneCallAsksForNone(ctx, service, anchors, fixture);
                 await assertNoBindingReason(ctx, service, anchors, fixture);
             } finally {
                 await deleteAvatarFixture(fixture);
                 await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider).catch(() => undefined);
             }
-            console.log(`      → '${anchors.Target.Name}' asks for its persona's face on ${anchors.VendorRow.DriverClass} (${anchors.Model.Name}); fixture removed`);
+            console.log(`      → '${anchors.Target.Name}' asks for its persona's face on ${anchors.VendorRow.DriverClass} (${anchors.Model.Name}), and none on a phone call; fixture removed`);
         }
     },
     {

@@ -9,6 +9,9 @@
  * 3. else the co-agent's personas, the same way;
  * 4. else none. The model's own first persona is never used: an agent with no persona gets no face.
  *
+ * Where the session runs can rule the avatar out before any of that: nobody sees an avatar on a phone call, so a phone
+ * session asks for none ({@link WithoutUnseenAvatar}, reason `phone`) and keeps only the persona's voice.
+ *
  * Whether the session can render the avatar is otherwise the driver's call (its endpoint profile); this only decides
  * which one to ask for. Once the driver has minted the session, {@link ResolveRealtimeAvatarStatus} merges the two into
  * the status the call gets, so a call that shows no avatar can say why.
@@ -47,18 +50,79 @@ export interface RealtimeAvatarResolutionInput {
     VideoOutputRow?: RealtimeVideoOutputRow;
 }
 
+/**
+ * Why nobody would see an avatar in a session, whatever its model renders: `'phone'`, a phone call. Such a session asks
+ * the model for none.
+ */
+export type RealtimeAvatarUnseenReason = Extract<RealtimeAvatarUnavailableReason, 'phone'>;
+
 /** Which avatar to ask for, and its persona's voice; or why there is none. */
 export interface RealtimeAvatarResolution {
-    /** The avatar to ask for. Absent when the video setting is off, the model's row turns video off, or no face resolves. */
+    /**
+     * The avatar to ask for. Absent when the video setting is off, the model's row turns video off, no face resolves, or
+     * nobody in the session would see it.
+     */
     Avatar?: RealtimeAvatarSettings;
-    /** The avatar persona's voice on the same vendor, when it has one. */
+    /**
+     * The avatar persona's voice on the same vendor, when it has one. Kept when nobody would see the avatar, so the agent
+     * sounds the same on a phone call as in a call that shows its face.
+     */
     Voice?: string;
     /**
-     * Why there is no avatar although the video setting is on: the model's Video/Output row turns video off (`endpoint`),
-     * the requested avatar is not a face the model has on the vendor (`unknown-avatar`), or no persona has one
-     * (`no-binding`).
+     * Why there is no avatar although the video setting is on: nobody in the session would see it (`phone`), the model's
+     * Video/Output row turns video off (`endpoint`), the requested avatar is not a face the model has on the vendor
+     * (`unknown-avatar`), or no persona has one (`no-binding`).
      */
-    Reason?: Extract<RealtimeAvatarUnavailableReason, 'endpoint' | 'unknown-avatar' | 'no-binding'>;
+    Reason?: RealtimeAvatarUnseenReason | Extract<RealtimeAvatarUnavailableReason, 'endpoint' | 'unknown-avatar' | 'no-binding'>;
+}
+
+/** What says, before any model is asked, whether anyone in a session could see an avatar. */
+export interface RealtimeAvatarViewers {
+    /** `true` when the session is a phone call: the caller hears the agent and sees no video. */
+    PhoneCall?: boolean;
+}
+
+/**
+ * Why nobody would see an avatar in a session, whatever its model renders, or `undefined` when someone could.
+ *
+ * @param viewers What the session says about who is on the other end.
+ */
+export function ResolveAvatarUnseenReason(viewers: RealtimeAvatarViewers): RealtimeAvatarUnseenReason | undefined {
+    return viewers.PhoneCall === true ? 'phone' : undefined;
+}
+
+/**
+ * A resolution without its avatar request when nobody in the session would see the avatar
+ * ({@link ResolveAvatarUnseenReason}), so the driver is never asked to render video that nobody sees. The reason replaces
+ * any other, since no model or face could change it; the persona's voice stays. A resolution that asked for nothing
+ * (the video setting is off) stays as it is, so the call gets no notice.
+ *
+ * @param resolution The session's avatar resolution.
+ * @param viewers What the session says about who is on the other end.
+ */
+export function WithoutUnseenAvatar(resolution: RealtimeAvatarResolution, viewers: RealtimeAvatarViewers): RealtimeAvatarResolution {
+    const unseen = ResolveAvatarUnseenReason(viewers);
+    if (!unseen || (!resolution.Avatar && !resolution.Reason)) {
+        return resolution;
+    }
+    return resolution.Voice ? { Voice: resolution.Voice, Reason: unseen } : { Reason: unseen };
+}
+
+/**
+ * The status a server-side session reports when its prep asked the driver for no avatar because nobody would see it
+ * (`phone`): asked for, not granted, and why. Otherwise the driver's own status.
+ *
+ * @param resolution The session's avatar resolution.
+ * @param driverStatus What the driver reported when it opened the session (`IRealtimeSession.AvatarStatus`).
+ */
+export function ResolveUnseenAvatarStatus(resolution: RealtimeAvatarResolution | undefined, driverStatus: RealtimeAvatarStatus | undefined): RealtimeAvatarStatus | undefined {
+    const reason = resolution?.Reason;
+    return reason && isUnseenReason(reason) ? { Requested: true, Granted: false, Reason: reason } : driverStatus;
+}
+
+/** Whether a resolution's reason says nobody in the session would see the avatar. */
+function isUnseenReason(reason: NonNullable<RealtimeAvatarResolution['Reason']>): reason is RealtimeAvatarUnseenReason {
+    return reason === 'phone';
 }
 
 /**
@@ -119,8 +183,9 @@ export interface RealtimeAvatarStatusInput {
 
 /**
  * The status a call gets about the avatar its agent asked for. Nothing when the agent asked for none (its video
- * setting is off). Otherwise audio only with `endpoint` when the model shows no avatar (its Video/Output row turns video
- * off, or it renders none on its endpoint), whatever driver serves it; then the resolution's reason (`unknown-avatar`,
+ * setting is off). Otherwise audio only when nobody in the session would see it ({@link RealtimeAvatarUnseenReason}),
+ * whatever the model renders; then `endpoint` when the model shows no avatar (its Video/Output row turns video off, or it
+ * renders none on its endpoint), whatever driver serves it; then the resolution's reason (`unknown-avatar`,
  * `no-binding`); else the driver's own decision (granted, or `custom-disabled` and the like).
  *
  * @param input The resolution, the model's capability and the driver's decision.
@@ -130,6 +195,9 @@ export function ResolveRealtimeAvatarStatus(input: RealtimeAvatarStatusInput): R
     const { Avatar: avatar, Reason: reason } = input.Resolution;
     if (!avatar && !reason) {
         return undefined;
+    }
+    if (reason && isUnseenReason(reason)) {
+        return { Requested: true, Granted: false, Reason: reason };
     }
     if (!input.ModelSupportsAvatarOutput) {
         return { Requested: true, Granted: false, Reason: 'endpoint' };

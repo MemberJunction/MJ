@@ -16,6 +16,7 @@ import type { JSONValue, RealtimeAvatarStatus, RealtimeAvatarUnavailableReason }
 const KNOWN_REASONS: Readonly<Record<RealtimeAvatarUnavailableReason, true>> = {
     endpoint: true,
     bridged: true,
+    phone: true,
     'custom-disabled': true,
     'unknown-avatar': true,
     'no-binding': true,

@@ -400,3 +400,36 @@ describe('WireBridgeRealtimeSession — usage', () => {
         expect(fake.UsageHandler).toBeUndefined();
     });
 });
+
+describe('WireBridgeRealtimeSession — the avatar status of a phone call', () => {
+    const PHONE = { Requested: true, Granted: false, Reason: 'phone' };
+
+    it("reports phone on a phone call's session, whose driver was asked for no avatar and reports none", async () => {
+        const svc = new WiringService();
+        const fake = new FakeSession() as unknown as IRealtimeSession;
+        const prep = { ...makePrep([]), AvatarResolution: { Voice: 'Puck', Reason: 'phone' } } as RealtimeSessionParamsPrep;
+        await svc.WireBridgeRealtimeSession(fake, input, prep, contextUser, provider);
+        expect(fake.AvatarStatus).toEqual(PHONE);
+    });
+
+    it("keeps the driver's own status on every other session", async () => {
+        const svc = new WiringService();
+        const meeting = new FakeSession() as unknown as IRealtimeSession;
+        const granted = { Requested: true, Granted: true };
+        meeting.AvatarStatus = granted;
+        await svc.WireBridgeRealtimeSession(meeting, input, { ...makePrep([]), AvatarResolution: { Avatar: { AvatarID: 'Ben' } } } as RealtimeSessionParamsPrep, contextUser, provider);
+        expect(meeting.AvatarStatus).toBe(granted);
+
+        const none = new FakeSession() as unknown as IRealtimeSession;
+        await svc.WireBridgeRealtimeSession(none, input, makePrep([]), contextUser, provider);
+        expect(none.AvatarStatus).toBeUndefined();
+    });
+
+    it('reports it on the fallback runtime too (no co-agent resolved)', async () => {
+        const svc = new WiringService();
+        const fake = new FakeSession() as unknown as IRealtimeSession;
+        const prep = { ...makePrep([]), CoAgent: undefined, AvatarResolution: { Reason: 'phone' } } as RealtimeSessionParamsPrep;
+        await svc.WireBridgeRealtimeSession(fake, input, prep, contextUser, provider);
+        expect(fake.AvatarStatus).toEqual(PHONE);
+    });
+});

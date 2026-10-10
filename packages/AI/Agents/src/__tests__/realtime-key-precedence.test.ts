@@ -253,6 +253,14 @@ describe('probe: BaseAgent.StartBridgeRealtimeSession mints on the run\'s key', 
         expect(build.mock.calls.map(([input]) => input.ServerSide)).toEqual([true, true]);
     });
 
+    it('marks the session prep as a phone call only when the telephony host said so', async () => {
+        const build = vi.spyOn(proto, 'buildSessionParams');
+        await start(RUN_KEYS, { realtimePhoneCall: true });
+        await start(RUN_KEYS, { realtimePhoneCall: 'yes' });
+        await start(RUN_KEYS);
+        expect(build.mock.calls.map(([input]) => input.PhoneCall)).toEqual([true, undefined, undefined]);
+    });
+
     it('RuntimeOnly with no run keys → no session, even though the platform holds a key', async () => {
         await expect(start(undefined, undefined, 'RuntimeOnly')).rejects.toThrow();
         expect(minted).toEqual([]);

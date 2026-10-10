@@ -73,7 +73,14 @@ import {
     type RealtimeSessionClientTools
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ResolveRealtimeAvatar, ResolveRealtimeAvatarStatus, type RealtimeAvatarResolution } from './realtime-avatar-resolution';
+import {
+    ResolveAvatarUnseenReason,
+    ResolveRealtimeAvatar,
+    ResolveRealtimeAvatarStatus,
+    ResolveUnseenAvatarStatus,
+    WithoutUnseenAvatar,
+    type RealtimeAvatarResolution,
+} from './realtime-avatar-resolution';
 import { ReadRealtimeVideoOutputRow, RealtimeModelShowsAvatar } from './realtime-video-output-gate';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
@@ -277,7 +284,8 @@ export interface PrepareClientSessionInput {
     /**
      * `'room'` for a server-side (bridged) session whose host publishes the agent's avatar into a meeting room: the
      * avatar request resolved for the voiced agent carries it (`RealtimeAvatarSettings.Delivery`), so a driver may
-     * render it there. Absent: a server-side session asks for no video (the driver logs `bridged`).
+     * render it there. Absent: a server-side session asks for no video (the driver logs `bridged`). Ignored on a
+     * {@link PhoneCall}.
      */
     AvatarDelivery?: 'room';
     /**
@@ -286,6 +294,13 @@ export interface PrepareClientSessionInput {
      * preference skips the session: no model would bring it an avatar. Absent: a browser (client-direct) session.
      */
     ServerSide?: boolean;
+    /**
+     * `true` when the session is a phone call: a carrier call (Twilio, Vonage, RingCentral), or a call that reaches a
+     * LiveKit room through SIP. The caller hears the agent and sees nothing, so the session asks the driver for no avatar,
+     * even in a room that could show one, and reports why (`phone`); the avatar persona's voice is kept, and the default
+     * model walk prefers no avatar model. Absent: not a phone call.
+     */
+    PhoneCall?: boolean;
     /**
      * Optional server-authoritative hard ceiling on the session's wall-clock duration, in seconds.
      * Threaded into {@link RealtimeSessionParams.MaxSessionSeconds} so a driver can bound the
@@ -922,6 +937,8 @@ export class RealtimeClientSessionService {
      * under the co-agent run, supports barge-in cancel + paused-run resume — all of it, for free).
      *
      * Responsibilities, in order:
+     * 0. Report the avatar status the prep decided before the driver: a phone call asked the driver for no avatar, so
+     *    the session's `AvatarStatus` says so (`phone`) instead of saying nothing ({@link ResolveUnseenAvatarStatus}).
      * 1. Create the co-agent observability run (+ prompt run + step) so the voice session shows up in the
      *    agent-run timeline and delegated runs nest under it (best-effort; a failure just omits the ids).
      * 2. Record the session's usage on the co-agent prompt run, as client-direct calls do: `session.OnUsage` →
@@ -946,6 +963,7 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<BridgeRealtimeRuntime> {
+        this.reportUnseenAvatar(session, prep);
         const coAgent = prep.CoAgent;
         const resolution = prep.Resolution;
         if (!coAgent || !resolution) {
@@ -999,6 +1017,20 @@ export class RealtimeClientSessionService {
         };
         bridgeRuntimes.set(session, runtime);
         return runtime;
+    }
+
+    /**
+     * Gives a bridged session the avatar status its prep decided before the driver ({@link ResolveUnseenAvatarStatus}):
+     * a phone call asked the driver for no avatar, so the driver reports none, and the session says `phone` instead. A
+     * host reads it like any driver's status (the LiveKit room puts it on the agent's bot). Any other session keeps the
+     * driver's status.
+     */
+    private reportUnseenAvatar(session: IRealtimeSession, prep: RealtimeSessionParamsPrep): void {
+        const status = ResolveUnseenAvatarStatus(prep.AvatarResolution, session.AvatarStatus);
+        if (status && status !== session.AvatarStatus) {
+            session.AvatarStatus = status;
+            LogStatus(`[RealtimeCoAgent] bridged session avatar: audio only (${status.Reason}); the driver was asked for none.`);
+        }
     }
 
     /**
@@ -1182,7 +1214,11 @@ export class RealtimeClientSessionService {
         // folds the app tier into the capability manifest the prompt renders. The scoped input is what
         // the prompt/tool builders see, so a vetoed channel is absent from the framing as well as the tools.
         const scoped = await this.scopeSessionInput(effectiveInput, effectiveConfig, contextUser, provider, zeroDataRetention);
-        const avatar = this.ResolveSessionAvatar(scoped.Input, coAgent, effectiveConfig, resolution.ModelID, resolution.ModelVendorID);
+        // A session nobody would see an avatar in (a phone call) asks the driver for none and keeps the persona's voice.
+        const avatar = WithoutUnseenAvatar(
+            this.ResolveSessionAvatar(scoped.Input, coAgent, effectiveConfig, resolution.ModelID, resolution.ModelVendorID),
+            scoped.Input,
+        );
         const sessionParams: RealtimeSessionParams = {
             ...(await this.buildSessionParams(
                 scoped.Input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
@@ -2214,9 +2250,13 @@ export class RealtimeClientSessionService {
 
     /**
      * Whether the session could show an avatar at all: a browser session, or a server-side one whose host publishes the
-     * avatar into a room. A phone call, or a meeting whose host can't publish video, can't.
+     * avatar into a room. A phone call ({@link ResolveAvatarUnseenReason}), or a meeting whose host can't publish video,
+     * can't.
      */
     private sessionCanShowAvatar(input: PrepareClientSessionInput): boolean {
+        if (ResolveAvatarUnseenReason(input)) {
+            return false;
+        }
         return input.ServerSide !== true || input.AvatarDelivery === 'room';
     }
 
@@ -2592,8 +2632,9 @@ export class RealtimeClientSessionService {
             : input.ExtraTools;
         const tools = this.appendHostTools(this.buildStableToolSet(combinedExtra), input.HostTools);
         // Hoisted (rather than built inline at the return) so the mint log below can report the voice
-        // that ACTUALLY reached the driver — see the `voice=` field. Same bag, built once.
-        const avatar = resolvedAvatar ?? this.ResolveSessionAvatar(input, coAgent, effectiveConfig, modelID, modelVendorID);
+        // that ACTUALLY reached the driver — see the `voice=` field. Same bag, built once. A phone call
+        // carries no avatar request whoever resolved it (WithoutUnseenAvatar is idempotent).
+        const avatar = WithoutUnseenAvatar(resolvedAvatar ?? this.ResolveSessionAvatar(input, coAgent, effectiveConfig, modelID, modelVendorID), input);
         const configBag = this.withAvatarVoice(this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID), avatar, input);
         WarnOnUnmatchedProviderVoice(effectiveConfig, driverClass, 'RealtimeClientSessionService');
 
@@ -2664,10 +2705,11 @@ export class RealtimeClientSessionService {
 
     /**
      * The config bag with the avatar persona's voice, so the face and the voice match, unless a voice was picked in this
-     * call (a runtime override's `realtime.voice.default.voice`), which wins.
+     * call (a runtime override's `realtime.voice.default.voice`), which wins. A session nobody would see the avatar in (a
+     * phone call) keeps the voice without the face, so the agent sounds the same as in a call that shows it.
      */
     private withAvatarVoice(bag: JSONObject | undefined, avatar: RealtimeAvatarResolution, input: PrepareClientSessionInput): JSONObject | undefined {
-        if (!avatar.Avatar || !avatar.Voice) {
+        if (!avatar.Voice) {
             return bag;
         }
         const picked = ResolveEffectiveRealtimeConfig(null, null, input.ConfigOverridesJson).realtime?.voice?.default?.voice;

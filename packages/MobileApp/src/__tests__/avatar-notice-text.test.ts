@@ -25,11 +25,15 @@ describe('AvatarNoticeText', () => {
 
     it('covers exactly the reasons the runtime reports, each opening "Audio only"', () => {
         expect(Object.keys(AVATAR_NOTICE_TEXT).sort()).toEqual(
-            ['bridged', 'browser', 'custom-disabled', 'decoder-failed', 'decoder-missing', 'endpoint', 'host', 'no-binding', 'publish-failed', 'unknown-avatar'],
+            ['bridged', 'browser', 'custom-disabled', 'decoder-failed', 'decoder-missing', 'endpoint', 'host', 'no-binding', 'phone', 'publish-failed', 'unknown-avatar'],
         );
         for (const sentence of Object.values(AVATAR_NOTICE_TEXT)) {
             expect(sentence.startsWith('Audio only')).toBe(true);
         }
+    });
+
+    it("says a phone call shows no avatar, naming the agent, as the web's room does", () => {
+        expect(AvatarNoticeText('phone', 'Sage')).toBe("Audio only for Sage: the avatar isn't shown on phone calls");
     });
 
     it('names the agent in a meeting sentence', () => {

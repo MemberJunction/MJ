@@ -102,6 +102,12 @@ export interface BridgeRealtimeSessionContext {
      * module first). Flows to the session's avatar request, so the driver may render it. Absent: audio only.
      */
     AvatarDelivery?: 'room';
+    /**
+     * `true` when the session is a phone call (a carrier call, or a SIP call in a LiveKit room). Flows to
+     * `params.data.realtimePhoneCall`: the session then asks the driver for no avatar (the caller sees no video) and
+     * reports `phone` as its avatar status.
+     */
+    PhoneCall?: boolean;
 }
 
 /**
@@ -236,6 +242,9 @@ function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, un
     }
     if (ctx.AvatarDelivery === 'room') {
         data.realtimeAvatarDelivery = 'room';
+    }
+    if (ctx.PhoneCall === true) {
+        data.realtimePhoneCall = true;
     }
     return Object.keys(data).length > 0 ? data : undefined;
 }

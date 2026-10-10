@@ -745,7 +745,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
     private avatarUnavailableMessage(request: RealtimeAvatarSettings, model: string, reason: RealtimeAvatarUnavailableReason): string {
         const why: Record<RealtimeAvatarUnavailableReason, string> = {
             endpoint: `${model} on ${GEMINI_ENDPOINT_NAMES[this.Endpoint]} renders no avatar`,
-            bridged: "a session on the server (a meeting or a phone call) whose host can't publish video",
+            bridged: "a session on the server whose host can't publish video into a room",
+            phone: 'a phone caller sees no video',
             'custom-disabled': 'custom avatars are not enabled',
             'unknown-avatar': 'the request names no avatar',
             'no-binding': 'the persona has no avatar on this vendor',
@@ -774,9 +775,10 @@ export class GeminiRealtime extends BaseRealtimeModel {
     }
 
     /**
-     * A server-side session (a bridged meeting or phone call) asks for an avatar only when its host publishes the video
-     * into a room (`Delivery: 'room'`, a meeting bot that decodes it). Anywhere else nothing on the server can show it:
-     * returns the params without the request, logging the reason once.
+     * A server-side session (a meeting bot) asks for an avatar only when its host publishes the video into a room
+     * (`Delivery: 'room'`, a bot that decodes it). Anywhere else nothing on the server can show it: returns the params
+     * without the request, logging the reason once. A phone call never gets here with a request: its session prep asks
+     * for none (`'phone'`).
      */
     private withoutAvatarOnServer(params: RealtimeSessionParams): RealtimeSessionParams {
         if (!params.Avatar || params.Avatar.Delivery === 'room') {

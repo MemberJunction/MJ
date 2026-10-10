@@ -16,6 +16,7 @@ export const AVATAR_NOTICE_TEXT: Record<RealtimeAvatarUnavailableReason, string>
     host: "Audio only: this app can't show the avatar",
     browser: "Audio only: this browser can't play the avatar",
     bridged: "Audio only for {Agent}: the avatar can't be shown in this meeting",
+    phone: "Audio only for {Agent}: the avatar isn't shown on phone calls",
     'decoder-missing': "Audio only for {Agent}: the avatar couldn't be shown in this meeting",
     'decoder-failed': "Audio only for {Agent}: the avatar couldn't be shown in this meeting",
     'publish-failed': "Audio only for {Agent}: the avatar couldn't be shown in this meeting",
