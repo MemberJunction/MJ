@@ -28,7 +28,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
-import { IsAgentParticipantIdentity as AIIsAgentParticipantIdentity } from '@memberjunction/ai';
+import { IsAgentParticipantIdentity } from '@memberjunction/ai';
 import {
     BaseRealtimeBridge,
     BridgeAvatarFailure,
@@ -81,16 +81,6 @@ function mapParticipantRole(role: LiveKitParticipantRole, isLocal: boolean | und
 }
 
 /**
- * Whether a LiveKit participant identity is an agent bot's: it starts with `agent-`, in any case.
- *
- * @deprecated Use `IsAgentParticipantIdentity` from `@memberjunction/ai`, which the room coordinator, the bridge engine
- * and the bot share with this bridge. This calls it.
- */
-export function IsAgentParticipantIdentity(identity: string | undefined): boolean {
-    return AIIsAgentParticipantIdentity(identity);
-}
-
-/**
  * Maps a LiveKit participant onto the bridge's {@link BridgeParticipantInfo}. A bridge knows only its OWN bot, through
  * `IsLocal`; OTHER agents in a multi-agent room are REMOTE participants, recognized by the identity the room coordinator
  * gives every bot (`IsAgentParticipantIdentity` in `@memberjunction/ai`). Without it every other agent reads as a
@@ -103,7 +93,7 @@ function toBridgeParticipant(p: LiveKitParticipant): BridgeParticipantInfo {
         DisplayName: p.DisplayName,
         Role: mapParticipantRole(p.Role, p.IsLocal),
         // The local bot OR any remote agent bot (by identity convention) counts as an agent, not a human.
-        IsAgent: p.IsLocal === true || AIIsAgentParticipantIdentity(p.Identity),
+        IsAgent: p.IsLocal === true || IsAgentParticipantIdentity(p.Identity),
     };
 }
 
