@@ -24,6 +24,7 @@
 import {
     BaseRealtimeModel,
     REALTIME_SHARED_CONFIG_KEYS,
+    RealtimeDroppedInputReporter,
     type IRealtimeSession,
     type RealtimeSessionParams,
     type RealtimeToolDefinition,
@@ -342,6 +343,9 @@ export class InworldRealtimeSession implements IRealtimeSession {
      */
     private currentToolsFingerprint: string;
 
+    /** Reports the frames {@link SendInput} drops, once per kind and type. */
+    private readonly droppedInput = new RealtimeDroppedInputReporter('InworldRealtime', 'this session sends audio only');
+
     /**
      * @param params The session parameters (model, system prompt, tools, initial context, config bag).
      */
@@ -387,8 +391,17 @@ export class InworldRealtimeSession implements IRealtimeSession {
 
     // ── IRealtimeSession outbound ──
 
-    /** @inheritdoc — streams one client media frame as a base64 input audio-append frame. */
+    /**
+     * @inheritdoc
+     *
+     * Streams one audio frame as a base64 input audio-append frame. The session sends audio only, so a frame of another
+     * kind (a camera or screen frame) is dropped, never sent as audio, and reported once per kind and type.
+     */
     public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this.droppedInput.Report(frame);
+            return;
+        }
         this.sendFrame(this.buildAudioAppendFrame(frame.Data));
     }
 
