@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { ConnectionQuality, ConnectionState, DisconnectReason, RoomEvent, Track, type Room, type RoomOptions, type TrackPublishOptions } from 'livekit-client';
 import type { CapturedDisplaySurface, DisplayCapture, DisplayCaptureOptions, DisplayCaptureResult } from '@memberjunction/ai-realtime-client/media';
+import type { LiveKitEventHandler } from '../events';
 import { DEFAULT_SPEECH_ROOM_OPTIONS, LiveKitRoomController } from '../livekit-room-controller';
 import type { LiveKitDevice, LiveKitRoomError } from '../types';
 import { REALTIME_AGENT_AVATAR_ATTRIBUTE, REALTIME_AGENT_CAN_SEE_ATTRIBUTE, REALTIME_AGENT_WATCHES_ATTRIBUTE } from '@memberjunction/ai';
@@ -117,10 +118,12 @@ class FakeParticipant {
   /** When set, `publishTrack` waits for it, as a publish does for the server. */
   public PublishWait: Promise<void> | null = null;
   /**
-   * When set, turning the microphone or camera on or off rejects with it. Turning one on also reports it first, as
-   * livekit-client does when the browser refuses the device (`MediaDevicesError`, with the device kind).
+   * The devices that fail, by kind: turning one on or off rejects with its error. Turning one on also reports it first,
+   * as livekit-client does when the browser refuses the device (`MediaDevicesError`, with the device kind).
    */
-  public ToggleError: Error | null = null;
+  public readonly ToggleErrors = new Map<LiveKitDevice['Kind'], Error>();
+  /** When set, turning the microphone or camera on waits for it first, as for the browser's permission prompt. */
+  public StartWait: Promise<void> | null = null;
   private readonly pubs = new Map<Track.Source, FakePublication>();
 
   constructor(
@@ -140,24 +143,28 @@ class FakeParticipant {
     this.name = name;
   }
   public async setMicrophoneEnabled(enabled: boolean): Promise<void> {
-    this.failToggle(enabled, 'audioinput');
+    await this.toggle(enabled, 'audioinput');
     this.isMicrophoneEnabled = enabled;
     this.setPub(Track.Source.Microphone, enabled);
   }
   public async setCameraEnabled(enabled: boolean): Promise<void> {
-    this.failToggle(enabled, 'videoinput');
+    await this.toggle(enabled, 'videoinput');
     this.isCameraEnabled = enabled;
     this.setPub(Track.Source.Camera, enabled);
   }
-  /** Throws {@link ToggleError} when set, reporting it first when turning a device on. */
-  private failToggle(enabled: boolean, kind: LiveKitDevice['Kind']): void {
-    if (!this.ToggleError) {
+  /** Waits for {@link StartWait} when turning a device on, then throws the kind's {@link ToggleErrors} entry, if any. */
+  private async toggle(enabled: boolean, kind: LiveKitDevice['Kind']): Promise<void> {
+    if (enabled) {
+      await this.StartWait;
+    }
+    const error = this.ToggleErrors.get(kind);
+    if (!error) {
       return;
     }
     if (enabled) {
-      this.reportDeviceError(this.ToggleError, kind);
+      this.reportDeviceError(error, kind);
     }
-    throw this.ToggleError;
+    throw error;
   }
   /** Publishes a track; one with the screen-share source is the participant's screen share, as in LiveKit. */
   public async publishTrack(track: MediaStreamTrack, options?: TrackPublishOptions): Promise<void> {
@@ -201,6 +208,8 @@ class FakeRoom {
     this.canPlaybackAudio = true;
   });
   public setE2EEEnabled = vi.fn(async (): Promise<void> => undefined);
+  /** When set, connecting rejects with it, as when the server can't be reached. */
+  public ConnectError: Error | null = null;
   private readonly handlers = new Map<RoomEvent, ((...args: unknown[]) => void)[]>();
 
   public on(event: RoomEvent, cb: (...args: unknown[]) => void): this {
@@ -213,6 +222,9 @@ class FakeRoom {
     (this.handlers.get(event) ?? []).forEach((cb) => cb(...args));
   }
   public async connect(_url: string, _token: string): Promise<void> {
+    if (this.ConnectError) {
+      throw this.ConnectError;
+    }
     this.state = ConnectionState.Connected;
     this.emit(RoomEvent.Connected);
   }
@@ -296,6 +308,79 @@ describe('LiveKitRoomController', () => {
       await controller.Connect('wss://x', 'token', { DisplayName: 'Original' });
       expect(controller.State.Local?.DisplayName).toBe('Rewritten');
     });
+
+    describe('a device that fails while joining', () => {
+      /** The errors the room reports. */
+      let errors: LiveKitRoomError[];
+      /** Hears the room say it connected. */
+      let connected: Mock<LiveKitEventHandler<'connected'>>;
+      /** The browser's answer when the user (or the system) blocks the microphone for the site. */
+      const denied = Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' });
+
+      beforeEach(() => {
+        errors = [];
+        connected = vi.fn<LiveKitEventHandler<'connected'>>();
+        controller.Events.On('error', (e) => errors.push(e));
+        controller.Events.On('connected', connected);
+      });
+
+      it("joins with the microphone off when the browser refuses it, reporting it after LiveKit's own report", async () => {
+        room.localParticipant.ToggleErrors.set('audioinput', denied);
+        await controller.Connect('wss://x', 'token');
+        expect(controller.Status).toBe('connected');
+        expect(controller.State.LocalMedia.MicrophoneEnabled).toBe(false);
+        expect(connected).toHaveBeenCalledOnce();
+        expect(errors).toEqual([
+          { Kind: 'device', Message: 'Permission denied', Cause: denied, Device: { Media: 'microphone' } },
+          { Kind: 'device', Message: 'Failed to enable microphone.', Cause: denied, Device: { Media: 'microphone', Change: 'on' } },
+        ]);
+      });
+
+      it('still turns on the camera when the microphone is refused', async () => {
+        room.localParticipant.ToggleErrors.set('audioinput', denied);
+        await controller.Connect('wss://x', 'token', { EnableCamera: true });
+        expect(controller.State.LocalMedia).toMatchObject({ MicrophoneEnabled: false, CameraEnabled: true });
+        expect(connected).toHaveBeenCalledOnce();
+      });
+
+      it('keeps the microphone on when the camera fails, and names the camera', async () => {
+        const busy = new Error('Could not start video source');
+        room.localParticipant.ToggleErrors.set('videoinput', busy);
+        await controller.Connect('wss://x', 'token', { EnableCamera: true });
+        expect(controller.Status).toBe('connected');
+        expect(controller.State.LocalMedia).toMatchObject({ MicrophoneEnabled: true, CameraEnabled: false });
+        expect(errors.at(-1)).toEqual({ Kind: 'device', Message: 'Failed to enable camera.', Cause: busy, Device: { Media: 'camera', Change: 'on' } });
+        expect(connected).toHaveBeenCalledOnce();
+      });
+
+      it('still fails the join when the connection fails, and turns no device on', async () => {
+        const unreachable = new Error('could not establish signal connection');
+        room.ConnectError = unreachable;
+        await expect(controller.Connect('wss://x', 'token', { EnableCamera: true })).rejects.toBe(unreachable);
+        expect(controller.Status).toBe('error');
+        expect(errors).toEqual([{ Kind: 'connect', Message: 'Failed to connect to the room.', Cause: unreachable }]);
+        expect(connected).not.toHaveBeenCalled();
+        expect(room.localParticipant).toMatchObject({ isMicrophoneEnabled: false, isCameraEnabled: false });
+      });
+
+      it('goes no further when the user leaves while the browser asks for the microphone', async () => {
+        let answer: () => void = () => undefined;
+        room.localParticipant.StartWait = new Promise<void>((resolve) => (answer = resolve));
+        room.localParticipant.ToggleErrors.set('audioinput', denied);
+        const joining = controller.Connect('wss://x', 'token', { EnableCamera: true });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(controller.Status).toBe('connected');
+
+        await controller.Disconnect();
+        answer();
+        await joining;
+
+        expect(controller.Status).toBe('disconnected');
+        expect(connected).not.toHaveBeenCalled();
+        expect(errors.filter((e) => e.Kind !== 'device')).toEqual([]);
+        expect(room.localParticipant.isCameraEnabled).toBe(false);
+      });
+    });
   });
 
   describe('local media', () => {
@@ -336,7 +421,7 @@ describe('LiveKitRoomController', () => {
 
     it("reports a camera that fails to turn on after LiveKit's own report, which names the camera alone", async () => {
       const refused = new Error('Could not start video source');
-      room.localParticipant.ToggleError = refused;
+      room.localParticipant.ToggleErrors.set('videoinput', refused);
       await controller.SetCameraEnabled(true);
       expect(errors).toEqual([
         { Kind: 'device', Message: 'Could not start video source', Cause: refused, Device: { Media: 'camera' } },
@@ -347,7 +432,7 @@ describe('LiveKitRoomController', () => {
 
     it('reports a microphone that fails to turn off', async () => {
       const failed = new Error('Track is busy');
-      room.localParticipant.ToggleError = failed;
+      room.localParticipant.ToggleErrors.set('audioinput', failed);
       await controller.SetMicrophoneEnabled(false);
       expect(errors).toEqual([{ Kind: 'device', Message: 'Failed to disable microphone.', Cause: failed, Device: { Media: 'microphone', Change: 'off' } }]);
     });

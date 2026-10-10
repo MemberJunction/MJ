@@ -26,6 +26,7 @@ import {
   Track,
   type LocalAudioTrack,
   type LocalParticipant,
+  type LocalTrackPublication,
   type LocalVideoTrack,
   type RoomOptions,
 } from 'livekit-client';
@@ -125,7 +126,10 @@ export interface ILiveKitRoomController {
   readonly State: LiveKitRoomState;
   /** The current connection status. */
   readonly Status: LiveKitConnectionStatus;
-  /** Joins the room and brings the local participant online with the requested media. */
+  /**
+   * Joins the room and brings the local participant online with the requested media. Only a failed connection fails
+   * the join; a microphone or camera that fails to start is left off and reported as a `device` error.
+   */
   Connect(serverUrl: string, token: string, options?: LiveKitRoomConnectOptions): Promise<void>;
   /** Leaves the room. Resolves `false` when a `beforeDisconnect` handler canceled it. */
   Disconnect(userInitiated?: boolean): Promise<boolean>;
@@ -252,6 +256,12 @@ export class LiveKitRoomController implements ILiveKitRoomController {
   /**
    * Connects to a LiveKit room and brings the local participant online with the requested media.
    *
+   * Only the connection can fail the join: then it rejects, the status is `'error'` and a `connect` error is emitted.
+   * The microphone and camera are turned on once connected, each on its own; one that fails (the browser refused it,
+   * or it is in use) is left off and reported as a `device` error, and the join goes on, so the user is in the room
+   * and can turn it on again. If the user leaves while a device starts (the browser's permission prompt can stay open
+   * a while), no other device starts and no `connected` is emitted.
+   *
    * @param serverUrl The LiveKit server URL (e.g. `wss://livekit.myorg.com`).
    * @param token The signed access token authorizing this participant to join a specific room.
    * @param options Initial media + display-name options.
@@ -276,15 +286,18 @@ export class LiveKitRoomController implements ILiveKitRoomController {
       if (before.Options.DisplayName) {
         await room.localParticipant.setName(before.Options.DisplayName);
       }
-      await this.applyInitialMedia(room, before.Options);
-      await this.applyInitialEffects(before.Options);
-      this.rebuildState();
-      this.Events.Emit('connected', { State: this.stateSubject.value });
     } catch (err) {
       this.emitError('connect', 'Failed to connect to the room.', err);
       this.patchState({ Status: 'error' });
       throw err;
     }
+    await this.applyInitialMedia(room, before.Options);
+    if (this.room !== room) {
+      return; // left while the devices were starting
+    }
+    await this.applyInitialEffects(before.Options);
+    this.rebuildState();
+    this.Events.Emit('connected', { State: this.stateSubject.value });
   }
 
   /**
@@ -806,15 +819,32 @@ export class LiveKitRoomController implements ILiveKitRoomController {
     this.Events.Emit('localMediaChanged', this.stateSubject.value.LocalMedia);
   }
 
-  /** Applies the requested initial media (mic on by default, camera off — voice-first), honoring device ids. */
+  /**
+   * Turns on the requested initial media (mic on by default, camera off — voice-first), honoring device ids. Each
+   * device is turned on by itself: one that fails is left off and reported, and the other still starts. The camera is
+   * not started once the user has left.
+   */
   private async applyInitialMedia(room: Room, options: LiveKitRoomConnectOptions): Promise<void> {
-    const wantMic = options.EnableMicrophone ?? true;
-    const wantCam = options.EnableCamera ?? false;
-    if (wantMic) {
-      await room.localParticipant.setMicrophoneEnabled(true, options.MicrophoneDeviceId ? { deviceId: options.MicrophoneDeviceId } : undefined);
+    const lp = room.localParticipant;
+    if (options.EnableMicrophone ?? true) {
+      const device = options.MicrophoneDeviceId ? { deviceId: options.MicrophoneDeviceId } : undefined;
+      await this.startInitialDevice('microphone', () => lp.setMicrophoneEnabled(true, device));
     }
-    if (wantCam) {
-      await room.localParticipant.setCameraEnabled(true, options.CameraDeviceId ? { deviceId: options.CameraDeviceId } : undefined);
+    if ((options.EnableCamera ?? false) && this.room === room) {
+      const device = options.CameraDeviceId ? { deviceId: options.CameraDeviceId } : undefined;
+      await this.startInitialDevice('camera', () => lp.setCameraEnabled(true, device));
+    }
+  }
+
+  /**
+   * Turns on one device while joining. A failure is a `device` error that names the device being turned on, as when
+   * the user turns it on later (LiveKit reports it first, as its own `MediaDevicesError`); the device stays off.
+   */
+  private async startInitialDevice(kind: 'microphone' | 'camera', start: () => Promise<LocalTrackPublication | undefined>): Promise<void> {
+    try {
+      await start();
+    } catch (err) {
+      this.emitError('device', `Failed to enable ${kind}.`, err, { Media: kind, Change: 'on' });
     }
   }
 
