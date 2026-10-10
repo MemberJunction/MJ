@@ -41,6 +41,7 @@ export class IntegrationProgressReader {
 
     /** Read snapshot of a single run. Returns undefined if runID not found. */
     public async GetRun(runID: string): Promise<IntegrationRunSnapshot | undefined> {
+        if (!IntegrationProgressReader.isSafeRunID(runID)) return undefined;
         const runDir = join(this.rootDir, runID);
         const manifest = await this.safeReadJSON<IntegrationRunManifest>(join(runDir, 'manifest.json'));
         if (!manifest) return undefined;
@@ -64,6 +65,7 @@ export class IntegrationProgressReader {
 
     /** Tail events since a given sequence. */
     public async Tail(runID: string, sinceSeq = 0): Promise<IntegrationProgressEvent[]> {
+        if (!IntegrationProgressReader.isSafeRunID(runID)) return [];
         const path = join(this.rootDir, runID, 'progress.jsonl');
         const raw = await this.safeReadFile(path);
         if (!raw) return [];
@@ -93,6 +95,24 @@ export class IntegrationProgressReader {
     }
 
     // ── Internals ──────────────────────────────────────────────────────
+
+    /**
+     * SECURITY: run IDs reach {@link GetRun} / {@link Tail} from callers that may pass
+     * client-supplied values (e.g. the `IntegrationGetRun` / `IntegrationTailRunEvents` GraphQL
+     * queries), and they are joined directly under `rootDir`. Every legitimate run ID is a single
+     * path segment (server-generated `prefix-timestamp-hex` or a record UUID), so anything that
+     * could escape the artifacts root — a path separator, a `.`/`..` segment, or a null byte — is
+     * rejected rather than resolved, preventing path traversal into arbitrary directories.
+     */
+    private static isSafeRunID(runID: string): boolean {
+        return runID.length > 0 &&
+            runID.length <= 256 &&
+            !runID.includes('/') &&
+            !runID.includes('\\') &&
+            !runID.includes('\0') &&
+            runID !== '.' &&
+            runID !== '..';
+    }
 
     private async safeReadDir(p: string): Promise<string[]> {
         try { return await fs.readdir(p); } catch { return []; }
