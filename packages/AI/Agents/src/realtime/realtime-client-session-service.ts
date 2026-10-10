@@ -528,7 +528,7 @@ export interface RealtimeSessionParamsPrep {
  * bridge holds this for the life of the session: the observability run ids (for nesting + correlation)
  * and an **idempotent** {@link Finalize} that keeps the co-agent run + prompt run from dangling in
  * `Running`. It runs when the session's `Close()` is invoked, once the model session has closed, and when
- * the connection drops — calling it again does nothing.
+ * the connection drops; whichever comes first runs it, and a later call waits for that run.
  */
 export interface BridgeRealtimeRuntime {
     /** The `MJ: AI Agent Runs` row id created for this voice session (delegated runs nest under it). */
@@ -538,7 +538,9 @@ export interface BridgeRealtimeRuntime {
     /**
      * Writes the session's last usage, then finalizes the co-agent + prompt run; usage reported afterwards is not
      * stored. Closing the session runs it after the model session closed, so what the session reports while closing
-     * is kept; calling it before `Close()` would drop that report. Idempotent: every teardown path may call it.
+     * is kept; calling it before `Close()` would drop that report. Idempotent, so every teardown path may call it: it
+     * runs once, and every call returns the first call's promise and resolves only once the runs are finalized. The
+     * first call's `success` stands.
      */
     Finalize: (success: boolean) => Promise<void>;
     /**
@@ -969,10 +971,11 @@ export class RealtimeClientSessionService {
      * 3. Wire `session.OnToolCall` → `ExecuteRelayedTool` → `session.SendToolResult`.
      * 4. Guarantee finalize-once: wrap `session.Close()` and listen for an unexpected drop (`OnClose`), both
      *    routed through one idempotent finalizer. The bridge teardown calls `Close()`, so the run finalizes
-     *    on graceful end; a dropped socket finalizes via `OnClose`. The wrapped `Close()` closes the model
-     *    session first (waiting up to {@link BRIDGE_SESSION_CLOSE_WAIT_MS}), so the usage it reports while
-     *    closing is recorded; the finalizer then writes the session's last usage before it finalizes the runs,
-     *    so the prompt run is priced from its final counts.
+     *    on graceful end; a dropped socket finalizes via `OnClose`, and a `Close()` after it waits for that
+     *    finalize. The wrapped `Close()` closes the model session first (waiting up to
+     *    {@link BRIDGE_SESSION_CLOSE_WAIT_MS}), so the usage it reports while closing is recorded; the
+     *    finalizer then writes the session's last usage before it finalizes the runs, so the prompt run is
+     *    priced from its final counts.
      *
      * @param session The live realtime session the bridge owns (from `model.StartSession`).
      * @param input The same prep input used to build the session (carries AgentSessionID, TargetAgentID, …).
@@ -1067,9 +1070,13 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * The bridged session's idempotent finalizer. It closes the usage recorder first (no more updates; the unwritten
-     * usage is written), so the prompt run's cost, computed when finalize stamps `CompletedAt`, covers the whole session.
-     * On a graceful close it runs after the model session closed (see `finalizeOnBridgeClose`).
+     * The bridged session's finalizer. It closes the usage recorder first (no more updates; the unwritten usage is
+     * written), so the prompt run's cost, computed when finalize stamps `CompletedAt`, covers the whole session. On a
+     * graceful close it runs after the model session closed (see `finalizeOnBridgeClose`).
+     *
+     * It runs once, and every call returns the first call's promise: whichever path calls second (a `Close()` after a
+     * dropped connection's `OnClose` started the finalize) resolves only once the runs are finalized and priced. The
+     * first call's `success` stands.
      */
     private createBridgeFinalizer(
         obs: CoAgentObservabilityRunIds | null,
@@ -1077,17 +1084,17 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): (success: boolean) => Promise<void> {
-        let finalized = false;
-        return async (success: boolean): Promise<void> => {
-            if (finalized) {
-                return;
-            }
-            finalized = true;
+        let finalizing: Promise<void> | undefined;
+        const finalizeRuns = async (success: boolean): Promise<void> => {
             await usage?.Close();
             await this.FinalizeCoAgentRun(
                 obs?.CoAgentRunID ?? null, obs?.PromptRunID ?? null,
                 contextUser, provider, success, obs?.CoAgentRunStepID ?? null,
             );
+        };
+        return (success: boolean): Promise<void> => {
+            finalizing ??= finalizeRuns(success);
+            return finalizing;
         };
     }
 
@@ -1120,8 +1127,9 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Finalizes on graceful teardown (the bridge calls `Close()`) and on an unexpected drop. Both go through the
-     * idempotent finalizer, so a double fire is harmless.
+     * Finalizes on graceful teardown (the bridge calls `Close()`) and on an unexpected drop. Both go through the one
+     * finalizer, which runs once: a double fire finalizes once, and a `Close()` after a drop waits for the finalize the
+     * drop started, so it resolves only once the runs are finalized.
      *
      * `Close()` closes the model session before it finalizes: a session reports its last usage while it closes (a
      * Gemini avatar session, the seconds of video not reported yet), and the finalizer stores only what was reported
