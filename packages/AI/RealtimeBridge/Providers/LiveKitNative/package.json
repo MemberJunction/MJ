@@ -25,7 +25,7 @@
     "jpeg-js": "^0.4.4"
   },
   "optionalDependencies": {
-    "@livekit/rtc-node": "^0.13.0"
+    "@livekit/rtc-node": "^0.13.29"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
