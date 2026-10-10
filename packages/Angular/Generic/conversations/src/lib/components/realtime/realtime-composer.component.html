@@ -1,7 +1,8 @@
 @if (StripMode && Compact) {
   <!-- COMPACT (Calm Orb · overlay): the lean dock — a "•••" that blooms a small sheet with the secondary actions
        (Details / Type), a first-class Captions toggle (text stays ONE TAP in the overlay), the call's media controls
-       (the microphone, and the camera and Share when offered) and a red End. Circles from the design system. -->
+       (the microphone with its device chevron, and the camera and Share when offered) and a red End. Circles from the
+       design system. -->
   <div class="dock-lean" role="group" aria-label="Call controls">
     <div class="lean-more" [class.lean-more--open]="MoreOpen">
       <div class="lean-sheet" (click)="$event.stopPropagation()" role="menu" aria-label="More call controls">
@@ -36,7 +37,8 @@
       <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
     </button>
 
-    <mj-media-controls Size="lg"
+    <mj-media-controls class="lean__media"
+                       Size="lg"
                        [MicrophoneOn]="!IsMuted"
                        [ShowCamera]="ShowCamera"
                        [ShowShare]="ShowShare"
@@ -44,10 +46,15 @@
                        [Sharing]="Sharing"
                        [SharePanels]="SharePanels"
                        [CameraOptional]="true"
+                       [ShowDeviceMenu]="true"
+                       [Devices]="Devices"
+                       [SelectedMicrophoneID]="SelectedMicrophoneID"
+                       [SelectedCameraID]="SelectedCameraID"
                        (MicrophoneToggled)="ToggleMute()"
                        (CameraToggled)="CameraToggled.emit($event)"
                        (ShareRequested)="ShareRequested.emit($event)"
-                       (StopShareRequested)="StopShareRequested.emit()"></mj-media-controls>
+                       (StopShareRequested)="StopShareRequested.emit()"
+                       (DeviceSelected)="DeviceSelected.emit($event)"></mj-media-controls>
 
     <button type="button" mjButton Shape="circle" Size="lg" Variant="danger"
             AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
@@ -55,8 +62,8 @@
     </button>
   </div>
 } @else if (StripMode) {
-  <!-- Levels 0–1: phone-call strip — big labelled circles, nothing to configure: the call's media controls (the
-       microphone, and the camera and Share when the call offers them), Captions (level 1+, arriving WITH the text it
+  <!-- Levels 0–1: phone-call strip — big labelled circles: the call's media controls (the microphone with its device
+       chevron, and the camera and Share when the call offers them), Captions (level 1+, arriving WITH the text it
        controls), the Details peek at the surface panels, Type, and End call, the deliberate rightmost action. -->
   <div class="strip" role="group" aria-label="Call controls">
     <mj-media-controls class="strip__media"
@@ -69,10 +76,15 @@
                        [Sharing]="Sharing"
                        [SharePanels]="SharePanels"
                        [CameraOptional]="true"
+                       [ShowDeviceMenu]="true"
+                       [Devices]="Devices"
+                       [SelectedMicrophoneID]="SelectedMicrophoneID"
+                       [SelectedCameraID]="SelectedCameraID"
                        (MicrophoneToggled)="ToggleMute()"
                        (CameraToggled)="CameraToggled.emit($event)"
                        (ShareRequested)="ShareRequested.emit($event)"
-                       (StopShareRequested)="StopShareRequested.emit()"></mj-media-controls>
+                       (StopShareRequested)="StopShareRequested.emit()"
+                       (DeviceSelected)="DeviceSelected.emit($event)"></mj-media-controls>
 
     <div class="ctrl-group">
       <button type="button" mjButton Shape="circle" Size="lg" [Toggleable]="true" [Selected]="CaptionsOn"
@@ -115,7 +127,8 @@
   <!-- Level 2+: the fused dock — small circles and the in-call composer in ONE bottom bar. -->
   <div class="dock">
     <div class="dock__minis">
-      <!-- No Share arrow in the dock, which is short of room: the browser's picker still offers every kind of surface. -->
+      <!-- No Share arrow and no device chevron in the dock, which is short of room: the browser's picker still offers
+           every kind of surface, and Hide brings back the strip, which has the device menu. -->
       <mj-media-controls Size="sm"
                          [MicrophoneOn]="!IsMuted"
                          [ShowCamera]="ShowCamera"

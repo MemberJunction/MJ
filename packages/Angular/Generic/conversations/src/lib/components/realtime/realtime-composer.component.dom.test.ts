@@ -14,6 +14,7 @@ import {
   ExpectNoAxeViolations,
 } from '@memberjunction/ng-test-utils';
 import { MediaControlsComponent, type MediaSharePanel } from '@memberjunction/ng-realtime-media';
+import type { MediaDevice } from '@memberjunction/ai-realtime-client/media';
 import { RealtimeComposerComponent } from './realtime-composer.component';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 
@@ -215,6 +216,48 @@ describe('RealtimeComposerComponent (DOM)', () => {
     f.detectChanges();
     expect(query(f, '.dock')).not.toBeNull();
     expect(controls().SharePanels).toEqual([]);
+  });
+
+  describe('the device chevron (#5371)', () => {
+    const DEVICES: MediaDevice[] = [
+      { DeviceID: 'mic-built-in', Kind: 'microphone', Label: 'Built-in Microphone', GroupID: 'laptop' },
+      { DeviceID: 'mic-headset', Kind: 'microphone', Label: 'USB Headset', GroupID: 'headset' },
+      { DeviceID: 'cam-built-in', Kind: 'camera', Label: 'Built-in Camera', GroupID: 'laptop' },
+    ];
+    const CHOOSE = 'button[title="Choose microphone and camera"]';
+    const controls = (f: ReturnType<typeof render>) => f.debugElement.query(By.directive(MediaControlsComponent)).componentInstance as MediaControlsComponent;
+
+    it('sits on the microphone in the strip and the lean dock, and not in the fused dock, which is short of room', () => {
+      const f = render({ Devices: DEVICES });
+      expect(query(f, `.strip mj-media-controls .microphone ${CHOOSE}`)).not.toBeNull();
+      expect(queryAll(f, '.strip .control__label, .strip .ctrl-label').map((l) => l.textContent?.trim())).toEqual(['Mute', 'Captions', 'Type', 'End call']);
+      f.componentRef.setInput('Compact', true);
+      f.detectChanges();
+      expect(query(f, `.dock-lean mj-media-controls .microphone ${CHOOSE}`)).not.toBeNull();
+      f.componentRef.setInput('Open', true);
+      f.detectChanges();
+      expect(query(f, '.dock mj-media-controls')).not.toBeNull();
+      expect(query(f, CHOOSE)).toBeNull();
+    });
+
+    it('has none while the overlay lists no device', () => {
+      const f = render();
+      expect(query(f, '.strip mj-media-controls .microphone__devices')).toBeNull();
+    });
+
+    it("gives the controls the overlay's devices and picks, and passes the user's pick up", () => {
+      const f = render({ Devices: DEVICES, SelectedMicrophoneID: 'mic-built-in', SelectedCameraID: 'cam-built-in' });
+      expect(controls(f).Devices).toEqual(DEVICES);
+      expect(controls(f).SelectedMicrophoneID).toBe('mic-built-in');
+      expect(controls(f).SelectedCameraID).toBe('cam-built-in');
+      const picks = capture(f.componentInstance.DeviceSelected);
+      click(f, `.strip ${CHOOSE}`);
+      f.detectChanges();
+      const microphone = query(f, '.strip .devices select') as HTMLSelectElement;
+      microphone.value = 'mic-headset';
+      microphone.dispatchEvent(new Event('change'));
+      expect(picks).toEqual([{ Kind: 'microphone', DeviceID: 'mic-headset' }]);
+    });
   });
 
   it('has no axe violations on the strip', async () => {

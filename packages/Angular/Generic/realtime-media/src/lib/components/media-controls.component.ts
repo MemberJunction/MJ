@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, ViewChild, inject } from '@angular/core';
 import {
   MJButtonDirective,
   MJMenuComponent,
@@ -7,7 +7,8 @@ import {
   MJMenuTriggerDirective,
   type MjButtonSize,
 } from '@memberjunction/ng-ui-components';
-import type { DisplayCaptureSurface } from '@memberjunction/ai-realtime-client/media';
+import type { DisplayCaptureSurface, MediaDevice, MediaDeviceSelection } from '@memberjunction/ai-realtime-client/media';
+import { MediaDeviceMenuComponent } from './media-device-menu.component';
 
 /** What the user asked to share from `mj-media-controls`. */
 export type MediaShareRequest =
@@ -51,31 +52,66 @@ const SHARE_SURFACES: readonly ShareSurfaceOption[] = [
  * user shares. Its arrow opens a menu that asks for an entire screen, a window or a browser tab first and, when the
  * host lists {@link SharePanels}, offers "This panel" with one of them. The arrow hides while the user shares.
  *
+ * With {@link ShowDeviceMenu}, the microphone is a split button too: its chevron opens `mj-media-device-menu` above the
+ * controls, to pick the microphone and the camera from the host's {@link Devices}. The menu stays open while the user
+ * picks, and closes from its close button, the chevron, Escape or a click outside.
+ *
  * The buttons are circles of one {@link Size}. With {@link ShowLabels}, each carries a short label beneath it, for a
  * call bar that names its controls.
  */
 @Component({
   selector: 'mj-media-controls',
   standalone: true,
-  imports: [MJButtonDirective, MJMenuTriggerDirective, MJMenuComponent, MJMenuItemComponent, MJMenuDividerComponent],
+  imports: [MJButtonDirective, MJMenuTriggerDirective, MJMenuComponent, MJMenuItemComponent, MJMenuDividerComponent, MediaDeviceMenuComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (ShowMicrophone) {
       <span class="control">
-        <button
-          type="button"
-          mjButton
-          Shape="circle"
-          [Size]="Size"
-          [Variant]="MicrophoneOn ? 'secondary' : 'danger'"
-          [AriaLabel]="MicrophoneLabel"
-          [title]="MicrophoneLabel"
-          (click)="MicrophoneToggled.emit(!MicrophoneOn)"
-        >
-          <i class="fa-solid" [class.fa-microphone]="MicrophoneOn" [class.fa-microphone-slash]="!MicrophoneOn" aria-hidden="true"></i>
-        </button>
+        <span class="microphone">
+          <button
+            type="button"
+            mjButton
+            Shape="circle"
+            [Size]="Size"
+            [Variant]="MicrophoneOn ? 'secondary' : 'danger'"
+            [AriaLabel]="MicrophoneLabel"
+            [title]="MicrophoneLabel"
+            (click)="MicrophoneToggled.emit(!MicrophoneOn)"
+          >
+            <i class="fa-solid" [class.fa-microphone]="MicrophoneOn" [class.fa-microphone-slash]="!MicrophoneOn" aria-hidden="true"></i>
+          </button>
+          @if (DeviceChevronShown) {
+            <button
+              #deviceChevron
+              type="button"
+              mjButton
+              Shape="circle"
+              Size="sm"
+              class="microphone__devices"
+              [Variant]="DeviceMenuOpen ? 'primary' : 'secondary'"
+              [AriaLabel]="DeviceMenuLabel"
+              [title]="DeviceMenuLabel"
+              [attr.aria-expanded]="DeviceMenuOpen"
+              [attr.aria-controls]="DeviceMenuOpen ? DeviceMenuID : null"
+              (click)="ToggleDeviceMenu()"
+            >
+              <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+            </button>
+          }
+        </span>
         @if (ShowLabels) {
           <span class="control__label" aria-hidden="true">{{ MicrophoneOn ? 'Mute' : 'Unmute' }}</span>
+        }
+        @if (DeviceMenuOpen && DeviceChevronShown) {
+          <div class="devices" [id]="DeviceMenuID" role="group" aria-label="Devices">
+            <mj-media-device-menu
+              [Devices]="Devices"
+              [SelectedMicrophoneID]="SelectedMicrophoneID"
+              [SelectedCameraID]="SelectedCameraID"
+              (DeviceSelected)="DeviceSelected.emit($event)"
+              (Close)="CloseDeviceMenu(true)"
+            ></mj-media-device-menu>
+          </div>
         }
       </span>
     }
@@ -124,6 +160,7 @@ const SHARE_SURFACES: readonly ShareSurfaceOption[] = [
               AriaLabel="Choose what to share"
               title="Choose what to share"
               [mjMenuTriggerFor]="shareMenu"
+              (MenuOpened)="CloseDeviceMenu()"
             >
               <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
             </button>
@@ -176,9 +213,23 @@ const SHARE_SURFACES: readonly ShareSurfaceOption[] = [
   `,
   styleUrls: ['./media-controls.component.css'],
 })
-export class MediaControlsComponent {
+export class MediaControlsComponent implements OnChanges {
+  /** Numbers each instance's device menu, so its chevron can name the menu it controls. */
+  private static nextDeviceMenu = 0;
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private devices: readonly MediaDevice[] = [];
+
+  @ViewChild('deviceChevron') private deviceChevron?: ElementRef<HTMLButtonElement>;
+
   /** The kinds of display surface the Share menu asks for. */
   public readonly ShareSurfaces = SHARE_SURFACES;
+
+  /** The device menu's element id, for the chevron's `aria-controls`. */
+  public readonly DeviceMenuID = `mj-media-devices-${++MediaControlsComponent.nextDeviceMenu}`;
+
+  /** Whether the device menu is open. */
+  public DeviceMenuOpen = false;
 
   /** Whether the microphone is on. */
   @Input() public MicrophoneOn = false;
@@ -212,6 +263,26 @@ export class MediaControlsComponent {
   @Input() public ShowAgentVision = false;
   /** Whether the user lets an agent see their camera and shared screen. */
   @Input() public AgentVisionOn = false;
+  /**
+   * Show the device chevron beside the microphone, which opens the device menu. Off by default. It shows only while
+   * {@link Devices} lists something to pick.
+   */
+  @Input() public ShowDeviceMenu = false;
+  /**
+   * The microphones and cameras the device menu offers. Speakers are left out: these controls pick what the user sends,
+   * and a host that plays sound through a chosen output offers that in its own menu.
+   */
+  @Input()
+  public set Devices(value: readonly MediaDevice[]) {
+    this.devices = (value ?? []).filter((d) => d.Kind === 'microphone' || d.Kind === 'camera');
+  }
+  public get Devices(): readonly MediaDevice[] {
+    return this.devices;
+  }
+  /** The microphone the device menu shows as picked. */
+  @Input() public SelectedMicrophoneID: string | null = null;
+  /** The camera the device menu shows as picked. */
+  @Input() public SelectedCameraID: string | null = null;
 
   /** The user asked to turn the microphone on (`true`) or off (`false`). */
   @Output() public MicrophoneToggled = new EventEmitter<boolean>();
@@ -223,6 +294,68 @@ export class MediaControlsComponent {
   @Output() public StopShareRequested = new EventEmitter<void>();
   /** The user turned the agent's view of their camera and shared screen on (`true`) or off (`false`). */
   @Output() public AgentVisionToggled = new EventEmitter<boolean>();
+  /** The user picked a microphone or a camera in the device menu. The host switches to it. */
+  @Output() public DeviceSelected = new EventEmitter<MediaDeviceSelection>();
+
+  /** Whether the device chevron shows: the host asked for it, and there is a device to pick. */
+  public get DeviceChevronShown(): boolean {
+    return this.ShowDeviceMenu && this.devices.length > 0;
+  }
+
+  /** The device chevron's name: what its menu lets the user pick. */
+  public get DeviceMenuLabel(): string {
+    const microphones = this.devices.some((d) => d.Kind === 'microphone');
+    const cameras = this.devices.some((d) => d.Kind === 'camera');
+    if (microphones && cameras) {
+      return 'Choose microphone and camera';
+    }
+    return cameras ? 'Choose camera' : 'Choose microphone';
+  }
+
+  /** A menu left with nothing to pick, or one the host stops offering, closes, so it does not come back by itself. */
+  public ngOnChanges(): void {
+    if (!this.DeviceChevronShown) {
+      this.DeviceMenuOpen = false;
+    }
+  }
+
+  /** The device chevron: opens the device menu, or closes it. */
+  public ToggleDeviceMenu(): void {
+    this.DeviceMenuOpen = !this.DeviceMenuOpen && this.DeviceChevronShown;
+  }
+
+  /**
+   * Closes the device menu.
+   *
+   * @param refocus Put focus back on the chevron, as after the menu's close button or Escape, so it is not lost with the
+   *   menu.
+   */
+  public CloseDeviceMenu(refocus = false): void {
+    if (!this.DeviceMenuOpen) {
+      return;
+    }
+    this.DeviceMenuOpen = false;
+    if (refocus) {
+      this.deviceChevron?.nativeElement.focus();
+    }
+  }
+
+  /** Escape inside the controls closes an open device menu, and goes no further. */
+  @HostListener('keydown.escape', ['$event'])
+  public OnEscape(event: Event): void {
+    if (this.DeviceMenuOpen) {
+      event.stopPropagation();
+      this.CloseDeviceMenu(true);
+    }
+  }
+
+  /** A click outside the controls closes an open device menu. */
+  @HostListener('document:click', ['$event'])
+  public OnDocumentClick(event: MouseEvent): void {
+    if (this.DeviceMenuOpen && !this.host.nativeElement.contains(event.target as Node | null)) {
+      this.CloseDeviceMenu();
+    }
+  }
 
   /** The microphone button's name. */
   public get MicrophoneLabel(): string {

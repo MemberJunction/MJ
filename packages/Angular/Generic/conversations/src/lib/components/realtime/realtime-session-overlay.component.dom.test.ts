@@ -8,6 +8,7 @@ import {
   BaseRealtimeChannelClient,
   REALTIME_CAPTURES_OFF,
   REALTIME_CAPTURE_OFFERS_NONE,
+  REALTIME_MICROPHONE_NONE,
   ReadChannelSurfacePlacement,
   type ChannelSurfacePlacement,
   type RealtimeAvatarNotice,
@@ -17,10 +18,11 @@ import {
   type RealtimeCaptureStates,
   type RealtimeChannelFocusEvent,
   type RealtimeConnectionState,
+  type RealtimeMicrophoneState,
 } from '@memberjunction/realtime-runtime';
 import { renderComponentFixture, query, queryAll, click, overlayQueryAll, clearOverlayContainers, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import { UserInfoEngine } from '@memberjunction/core-entities';
-import type { MediaPlacement, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
+import type { MediaDevice, MediaPlacement, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { SharePanelRegistry } from '@memberjunction/ng-realtime-media';
 import { RealtimeSessionOverlayComponent } from './realtime-session-overlay.component';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
@@ -78,6 +80,8 @@ function fakeSession() {
   const activity$ = new Subject<BaseRealtimeChannelClient>();
   const captures$ = new BehaviorSubject<RealtimeCaptureStates>(REALTIME_CAPTURES_OFF);
   const offers$ = new BehaviorSubject<RealtimeCaptureOffers>(REALTIME_CAPTURE_OFFERS_NONE);
+  /** The call's microphone and the ones it can move to, as the runtime lists them. */
+  const microphone$ = new BehaviorSubject<RealtimeMicrophoneState>(REALTIME_MICROPHONE_NONE);
   /** The video sources the agent can or could see, as the runtime's arbiter lists them. */
   const sources$ = new BehaviorSubject<readonly VideoSourceState[]>([]);
   /** The call's captions, as the runtime grows them. */
@@ -90,6 +94,14 @@ function fakeSession() {
   const calls: string[] = [];
   /** The element each screen share asked to show alone (`null` for a whole screen, window or tab). */
   const sharedPanels: Array<Element | null> = [];
+  /** A microphone switch waits for this, so a test can look at the menu while the switch runs. */
+  let switchGate: Promise<void> = Promise.resolve();
+  /** Holds the next microphone switches until the returned function is called. */
+  const holdSwitch = (): (() => void) => {
+    let release: () => void = () => undefined;
+    switchGate = new Promise<void>((resolve) => (release = resolve));
+    return release;
+  };
   const service = {
     Captions$: captions$.asObservable(),
     DelegationProgress$: EMPTY,
@@ -106,6 +118,7 @@ function fakeSession() {
     VideoSources$: sources$.asObservable(),
     Captures$: captures$.asObservable(),
     CaptureOffers$: offers$.asObservable(),
+    Microphone$: microphone$.asObservable(),
     AvatarNotice$: notice$.asObservable(),
     StartCamera: async (): Promise<RealtimeCaptureState> => {
       calls.push('StartCamera');
@@ -121,6 +134,11 @@ function fakeSession() {
     SwitchCamera: async (deviceId: string): Promise<RealtimeCaptureState> => {
       calls.push(`SwitchCamera:${deviceId}`);
       return { Status: 'starting', Checking: true };
+    },
+    SwitchMicrophone: async (deviceId: string): Promise<RealtimeMicrophoneState> => {
+      calls.push(`SwitchMicrophone:${deviceId}`);
+      await switchGate;
+      return microphone$.value;
     },
     StartScreenShare: async (options?: DisplayCaptureOptions): Promise<RealtimeCaptureState> => {
       calls.push(options?.Panel ? `StartScreenShare:panel:${options.PanelLabel}` : `StartScreenShare:${options?.PreferredSurface ?? 'any'}`);
@@ -146,7 +164,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, activity$, captures$, offers$, captions$, sources$, notice$, state$, calls, sharedPanels };
+  return { service, channels$, focus$, activity$, captures$, offers$, microphone$, holdSwitch, captions$, sources$, notice$, state$, calls, sharedPanels };
 }
 
 /**
@@ -445,6 +463,117 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       await settle();
       composerButton(f, 'Stop sharing')?.click();
       expect(calls).toEqual(['StartScreenShare:any', 'StartScreenShare:tab', 'StopScreenShare']);
+    });
+  });
+
+  describe("the composer's device menu (#5371)", () => {
+    const BUILT_IN_MIC: MediaDevice = { DeviceID: 'mic-built-in', Kind: 'microphone', Label: 'Built-in Microphone', GroupID: 'laptop' };
+    const HEADSET: MediaDevice = { DeviceID: 'mic-headset', Kind: 'microphone', Label: 'USB Headset', GroupID: 'headset' };
+    const BUILT_IN_CAMERA: MediaDevice = { DeviceID: 'cam-built-in', Kind: 'camera', Label: 'Built-in Camera', GroupID: 'laptop' };
+    const DESK_CAMERA: MediaDevice = { DeviceID: 'cam-desk', Kind: 'camera', Label: 'Desk Camera', GroupID: 'desk' };
+    const MICROPHONE: RealtimeMicrophoneState = { DeviceID: 'mic-built-in', Devices: [BUILT_IN_MIC, HEADSET] };
+    const CAMERA_ON: RealtimeCaptureState = {
+      Status: 'on',
+      Stream: { id: 'camera', getTracks: () => [] } as unknown as MediaStream,
+      DeviceID: 'cam-desk',
+      Devices: [BUILT_IN_CAMERA, DESK_CAMERA],
+    };
+
+    type Fixture = Awaited<ReturnType<typeof renderWithBoard>>['f'];
+    const chevron = (f: Fixture, title: string) => query(f, `mj-realtime-composer mj-media-controls button[title="${title}"]`) as HTMLButtonElement | null;
+    const selects = (f: Fixture) => queryAll(f, 'mj-realtime-composer .devices select') as HTMLSelectElement[];
+    const options = (select: HTMLSelectElement) => Array.from(select.options).map((o) => o.textContent?.trim());
+    const pickIn = (select: HTMLSelectElement, deviceId: string): void => {
+      select.value = deviceId;
+      select.dispatchEvent(new Event('change'));
+    };
+
+    it('has no chevron while the call lists no microphone', async () => {
+      const { f } = await renderWithBoard();
+      expect(query(f, 'mj-realtime-composer mj-media-controls')).not.toBeNull();
+      expect(query(f, 'mj-realtime-composer .microphone__devices')).toBeNull();
+    });
+
+    it("lists the call's microphones, and its cameras while the camera is open, with the ones in use picked", async () => {
+      vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+      vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+      const { f, microphone$, captures$ } = await renderWithBoard();
+      microphone$.next(MICROPHONE);
+      await settle();
+      chevron(f, 'Choose microphone')?.click();
+      await settle();
+      expect(selects(f).map(options)).toEqual([['Built-in Microphone', 'USB Headset']]);
+      expect(selects(f)[0].value).toBe('mic-built-in');
+
+      captures$.next({ ...REALTIME_CAPTURES_OFF, Camera: CAMERA_ON });
+      await settle();
+      expect(chevron(f, 'Choose microphone and camera')?.getAttribute('aria-expanded')).toBe('true');
+      expect(selects(f).map(options)).toEqual([
+        ['Built-in Microphone', 'USB Headset'],
+        ['Built-in Camera', 'Desk Camera'],
+      ]);
+      expect(selects(f)[1].value).toBe('cam-desk');
+
+      captures$.next(REALTIME_CAPTURES_OFF);
+      await settle();
+      expect(selects(f).map(options)).toEqual([['Built-in Microphone', 'USB Headset']]);
+    });
+
+    it('switches the picked microphone and camera through the session, and says a control was used', async () => {
+      vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+      vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+      const { f, microphone$, captures$, calls } = await renderWithBoard();
+      const used: string[] = [];
+      f.componentInstance.ControlInvoked.subscribe((control: string) => used.push(control));
+      microphone$.next(MICROPHONE);
+      captures$.next({ ...REALTIME_CAPTURES_OFF, Camera: CAMERA_ON });
+      await settle();
+      chevron(f, 'Choose microphone and camera')?.click();
+      await settle();
+
+      pickIn(selects(f)[0], 'mic-headset');
+      pickIn(selects(f)[1], 'cam-built-in');
+      await settle();
+
+      expect(calls).toEqual(['SwitchMicrophone:mic-headset', 'SwitchCamera:cam-built-in']);
+      expect(used).toEqual(['devices', 'devices']);
+    });
+
+    it('shows the pick while the microphone switches, then the one in use: the new one, or the old one when the new one could not open', async () => {
+      const { f, microphone$, holdSwitch } = await renderWithBoard();
+      microphone$.next(MICROPHONE);
+      await settle();
+      chevron(f, 'Choose microphone')?.click();
+      await settle();
+
+      // The headset could not open: the call stays on the built-in microphone.
+      let release = holdSwitch();
+      pickIn(selects(f)[0], 'mic-headset');
+      await settle();
+      expect(f.componentInstance.SelectedMicrophoneID).toBe('mic-headset');
+      release();
+      await settle();
+      expect(f.componentInstance.SelectedMicrophoneID).toBe('mic-built-in');
+      expect(selects(f)[0].value).toBe('mic-built-in');
+
+      // The headset opened: the call names it.
+      release = holdSwitch();
+      pickIn(selects(f)[0], 'mic-headset');
+      await settle();
+      microphone$.next({ ...MICROPHONE, DeviceID: 'mic-headset' });
+      release();
+      await settle();
+      expect(f.componentInstance.SelectedMicrophoneID).toBe('mic-headset');
+      expect(selects(f)[0].value).toBe('mic-headset');
+    });
+
+    it('switches nothing for the device in use', async () => {
+      const { f, microphone$, calls } = await renderWithBoard();
+      microphone$.next(MICROPHONE);
+      await settle();
+      await f.componentInstance.OnDeviceSelected({ Kind: 'microphone', DeviceID: 'mic-built-in' });
+      await f.componentInstance.OnDeviceSelected({ Kind: 'speaker', DeviceID: 'speaker-built-in' });
+      expect(calls).toEqual([]);
     });
   });
 

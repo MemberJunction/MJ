@@ -8,6 +8,7 @@ import {
   clearOverlayContainers,
   ExpectNoAxeViolations,
 } from '@memberjunction/ng-test-utils';
+import type { MediaDevice, MediaDeviceSelection } from '@memberjunction/ai-realtime-client/media';
 import { MediaControlsComponent, type MediaShareRequest } from './media-controls.component';
 
 afterEach(() => {
@@ -196,6 +197,173 @@ describe('MediaControlsComponent (DOM)', () => {
 
     it('has no axe violations', async () => {
       await ExpectNoAxeViolations(render({ ShowAgentVision: true, AgentVisionOn: true, ShowLabels: true }));
+    });
+  });
+
+  describe('the device chevron (#5371)', () => {
+    const MICROPHONES: MediaDevice[] = [
+      { DeviceID: 'mic-built-in', Kind: 'microphone', Label: 'Built-in Microphone', GroupID: 'laptop' },
+      { DeviceID: 'mic-headset', Kind: 'microphone', Label: 'USB Headset', GroupID: 'headset' },
+    ];
+    const CAMERAS: MediaDevice[] = [
+      { DeviceID: 'cam-built-in', Kind: 'camera', Label: 'Built-in Camera', GroupID: 'laptop' },
+      { DeviceID: 'cam-desk', Kind: 'camera', Label: 'Desk Camera', GroupID: 'desk' },
+    ];
+    const SPEAKER: MediaDevice = { DeviceID: 'speaker-built-in', Kind: 'speaker', Label: 'Built-in Speakers', GroupID: 'laptop' };
+    const CHOOSE = 'Choose microphone and camera';
+
+    /** Controls whose host offers the device menu, with two microphones, two cameras and a speaker, and the picked ones. */
+    const withDevices = (inputs: Record<string, unknown> = {}) =>
+      render({
+        ShowDeviceMenu: true,
+        MicrophoneOn: true,
+        Devices: [...MICROPHONES, ...CAMERAS, SPEAKER],
+        SelectedMicrophoneID: 'mic-built-in',
+        SelectedCameraID: 'cam-desk',
+        ...inputs,
+      });
+    const openDeviceMenu = (f: ReturnType<typeof render>) => {
+      button(f, CHOOSE)?.click();
+      f.detectChanges();
+    };
+    const deviceMenu = (f: ReturnType<typeof render>) => query(f, '.devices mj-media-device-menu');
+    const selects = (f: ReturnType<typeof render>) => queryAll(f, '.devices select') as HTMLSelectElement[];
+    const options = (select: HTMLSelectElement) => Array.from(select.options).map((o) => o.textContent?.trim());
+
+    it('is there only when the host asks for it and lists a device to pick', () => {
+      expect(button(render({ Devices: MICROPHONES }), 'Choose microphone')).toBeNull();
+      expect(button(render({ ShowDeviceMenu: true }), 'Choose microphone')).toBeNull();
+      expect(button(render({ ShowDeviceMenu: true, Devices: [SPEAKER] }), 'Choose microphone')).toBeNull();
+      const chevron = button(render({ ShowDeviceMenu: true, Devices: MICROPHONES }), 'Choose microphone');
+      expect(chevron?.getAttribute('aria-label')).toBe('Choose microphone');
+      expect(chevron?.getAttribute('aria-expanded')).toBe('false');
+      expect(chevron?.querySelector('.fa-chevron-up')).not.toBeNull();
+    });
+
+    it('sits beside the microphone as one control, small, with no label of its own', () => {
+      const f = withDevices({ Size: 'lg', ShowLabels: true });
+      expect(queryAll(f, 'button').map((b) => b.getAttribute('title'))).toEqual([
+        'Mute microphone',
+        CHOOSE,
+        'Turn on camera',
+        'Share screen',
+        'Choose what to share',
+      ]);
+      expect(query(f, '.microphone')?.contains(button(f, CHOOSE))).toBe(true);
+      expect(button(f, CHOOSE)?.classList.contains('mj-btn--sm')).toBe(true);
+      expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim())).toEqual(['Mute', 'Video', 'Share']);
+    });
+
+    it('goes with the microphone when its gate is off', () => {
+      expect(button(withDevices({ ShowMicrophone: false }), CHOOSE)).toBeNull();
+    });
+
+    it('opens the device menu with the microphones and the cameras, the picked ones selected, and no speakers', async () => {
+      const f = withDevices();
+      expect(deviceMenu(f)).toBeNull();
+      openDeviceMenu(f);
+      await f.whenStable();
+      const chevron = button(f, CHOOSE);
+      expect(deviceMenu(f)).not.toBeNull();
+      expect(chevron?.getAttribute('aria-expanded')).toBe('true');
+      expect(chevron?.getAttribute('aria-controls')).toBe(query(f, '.devices')?.id);
+      expect(chevron?.classList.contains('mj-btn--primary')).toBe(true);
+      const [microphone, camera] = selects(f);
+      expect(selects(f)).toHaveLength(2);
+      expect(options(microphone)).toEqual(['Built-in Microphone', 'USB Headset']);
+      expect(options(camera)).toEqual(['Built-in Camera', 'Desk Camera']);
+      expect(microphone.value).toBe('mic-built-in');
+      expect(camera.value).toBe('cam-desk');
+    });
+
+    it('lists only the microphones, and names itself so, while the host lists no camera', () => {
+      const f = withDevices({ Devices: MICROPHONES, SelectedCameraID: null });
+      button(f, 'Choose microphone')?.click();
+      f.detectChanges();
+      expect(selects(f).map(options)).toEqual([['Built-in Microphone', 'USB Headset']]);
+    });
+
+    it('sends the picked microphone and camera up, and stays open for the next pick', () => {
+      const f = withDevices();
+      const picked: MediaDeviceSelection[] = [];
+      f.componentInstance.DeviceSelected.subscribe((selection: MediaDeviceSelection) => picked.push(selection));
+      openDeviceMenu(f);
+      const [microphone, camera] = selects(f);
+      microphone.value = 'mic-headset';
+      microphone.dispatchEvent(new Event('change'));
+      camera.value = 'cam-built-in';
+      camera.dispatchEvent(new Event('change'));
+      f.detectChanges();
+      expect(picked).toEqual([
+        { Kind: 'microphone', DeviceID: 'mic-headset' },
+        { Kind: 'camera', DeviceID: 'cam-built-in' },
+      ]);
+      expect(deviceMenu(f)).not.toBeNull();
+    });
+
+    it('closes from its close button and from Escape, and gives focus back to the chevron', () => {
+      const f = withDevices();
+      openDeviceMenu(f);
+      (query(f, '.devices .menu__close') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(deviceMenu(f)).toBeNull();
+      expect(document.activeElement).toBe(button(f, CHOOSE));
+
+      openDeviceMenu(f);
+      const outside = vi.fn();
+      document.addEventListener('keydown', outside);
+      selects(f)[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      document.removeEventListener('keydown', outside);
+      f.detectChanges();
+      expect(deviceMenu(f)).toBeNull();
+      expect(document.activeElement).toBe(button(f, CHOOSE));
+      expect(button(f, CHOOSE)?.getAttribute('aria-expanded')).toBe('false');
+      // Escape closed the menu and went no further, so a dialog the controls sit in stays open.
+      expect(outside).not.toHaveBeenCalled();
+    });
+
+    it('closes from the chevron and from a click outside, but not from a click inside', () => {
+      const f = withDevices();
+      openDeviceMenu(f);
+      button(f, CHOOSE)?.click();
+      f.detectChanges();
+      expect(deviceMenu(f)).toBeNull();
+
+      openDeviceMenu(f);
+      (query(f, '.devices .menu') as HTMLElement).click();
+      button(f, 'Mute microphone')?.click();
+      f.detectChanges();
+      expect(deviceMenu(f)).not.toBeNull();
+      document.body.click();
+      f.detectChanges();
+      expect(deviceMenu(f)).toBeNull();
+    });
+
+    it('closes when the Share menu opens', () => {
+      const f = withDevices();
+      openDeviceMenu(f);
+      openShareMenu(f);
+      expect(overlayQuery('mj-menu[aria-label="Share"]')).not.toBeNull();
+      expect(deviceMenu(f)).toBeNull();
+    });
+
+    it('closes with nothing left to pick, and stays closed when devices come back', () => {
+      const f = withDevices();
+      openDeviceMenu(f);
+      f.componentRef.setInput('Devices', []);
+      f.detectChanges();
+      expect(deviceMenu(f)).toBeNull();
+      expect(button(f, CHOOSE)).toBeNull();
+      f.componentRef.setInput('Devices', [...MICROPHONES, ...CAMERAS]);
+      f.detectChanges();
+      expect(button(f, CHOOSE)?.getAttribute('aria-expanded')).toBe('false');
+      expect(deviceMenu(f)).toBeNull();
+    });
+
+    it('has no axe violations with the device menu open', async () => {
+      const f = withDevices({ ShowLabels: true });
+      openDeviceMenu(f);
+      await ExpectNoAxeViolations(f);
     });
   });
 

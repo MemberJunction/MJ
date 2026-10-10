@@ -13,8 +13,10 @@ import {
 import type { IMetadataProvider } from '@memberjunction/core';
 import {
     RealtimeSessionRuntime,
+    REALTIME_MICROPHONE_NONE,
     type IRealtimeMediaHost,
     type IRealtimeSessionRecorder,
+    type RealtimeMicrophoneState,
     type StartRealtimeClientSessionResult,
 } from '../index';
 
@@ -39,13 +41,18 @@ class FakeStream {
 }
 
 /**
- * A controller whose microphone the test drives: it can hold a start, fail one, and swap the track in its
- * stream. Like the browser's, disposing it fails a start still in flight.
+ * A controller whose microphone the test drives: it can hold a start, fail one, swap the track in its stream,
+ * switch devices as the browser's does, and list devices. Like the browser's, disposing it fails a start still
+ * in flight.
  */
 class FakeLocalMediaController implements ILocalMediaController {
     public readonly FakeStream = new FakeStream();
     public readonly Stream = this.FakeStream as unknown as MediaStream;
     public readonly StartCalls: LocalMediaKind[] = [];
+    /** Each device switch asked for: the kind and the device. */
+    public readonly SwitchCalls: Array<[LocalMediaKind, string]> = [];
+    /** How the next switch ends: on the new device, or back on the one in use when the new one cannot open. */
+    public NextSwitch: 'switched' | 'back' = 'switched';
     public Disposed = 0;
     /** A failure the next start reports. */
     public NextFailure: { Reason: LocalMediaFailure; Message: string } | null = null;
@@ -78,8 +85,22 @@ class FakeLocalMediaController implements ILocalMediaController {
         this.publishMicrophone('mic-built-in');
         return { Status: 'started', Stream: this.Stream };
     }
-    public async SwitchDevice(kind: LocalMediaKind): Promise<LocalMediaResult> {
-        return this.Start(kind);
+    /**
+     * Switches the microphone as the browser's controller does: the old track leaves the stream and the new one arrives
+     * in it. When the new device cannot open, the one in use is opened again, also as a new track.
+     */
+    public async SwitchDevice(kind: LocalMediaKind, deviceId: string): Promise<LocalMediaResult> {
+        this.SwitchCalls.push([kind, deviceId]);
+        const previous = this.state.value.Microphone.DeviceID ?? 'mic-built-in';
+        const outcome = this.NextSwitch;
+        this.NextSwitch = 'switched';
+        await Promise.resolve();
+        if (outcome === 'back') {
+            this.SwapTrack(previous);
+            return { Status: 'failed', Reason: 'in-use', Message: 'Another application is using the microphone.' };
+        }
+        this.SwapTrack(deviceId);
+        return { Status: 'started', Stream: this.Stream };
     }
     public Stop(_kind: LocalMediaKind): void {
         this.state.next({ ...this.state.value, Microphone: { Status: 'off' } });
@@ -113,6 +134,10 @@ class FakeLocalMediaController implements ILocalMediaController {
     /** A state change that keeps the same track (a device-list refresh). */
     public Republish(): void {
         this.state.next({ ...this.state.value });
+    }
+    /** The devices the browser lists from now on, as after the user allows the microphone or plugs one in. */
+    public SetDevices(devices: MediaDevice[]): void {
+        this.state.next({ ...this.state.value, Devices: devices });
     }
 
     private publishMicrophone(deviceId: string): void {
@@ -181,6 +206,8 @@ class AcquiringHost implements IRealtimeMediaHost {
 @RegisterClass(BaseRealtimeClient, 'mic-following-provider')
 class MicFollowingClient extends BaseRealtimeClient {
     public static Instances: MicFollowingClient[] = [];
+    /** When set, every connect waits for it: the window in which the driver is still connecting. */
+    public static ConnectGate: Promise<void> | null = null;
     public ConnectedWith: MediaStream | null = null;
     public readonly Replaced: MediaStream[] = [];
     constructor() {
@@ -188,6 +215,7 @@ class MicFollowingClient extends BaseRealtimeClient {
         MicFollowingClient.Instances.push(this);
     }
     public async Connect(_config: unknown, micStream: MediaStream): Promise<void> {
+        await MicFollowingClient.ConnectGate;
         this.ConnectedWith = micStream;
     }
     public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
@@ -371,5 +399,149 @@ describe('RealtimeSessionRuntime with a host that has no controller', () => {
 
         expect(runtime.LastStartError).toBeNull();
         expect(states).not.toContain('error');
+    });
+});
+
+describe('RealtimeSessionRuntime: the microphone the user can switch to (#5371)', () => {
+    const BUILT_IN: MediaDevice = { DeviceID: 'mic-built-in', Kind: 'microphone', Label: 'Built-in Microphone', GroupID: 'laptop' };
+    const HEADSET: MediaDevice = { DeviceID: 'mic-headset', Kind: 'microphone', Label: 'USB Headset', GroupID: 'headset' };
+    const CAMERA: MediaDevice = { DeviceID: 'cam-built-in', Kind: 'camera', Label: 'Built-in Camera', GroupID: 'laptop' };
+
+    /** A host whose controller lists two microphones and a camera, as the browser does once the call's microphone is open. */
+    const listingHost = (): ControllerHost => {
+        const host = new ControllerHost();
+        host.Prepare = (controller) => controller.SetDevices([BUILT_IN, CAMERA, HEADSET]);
+        return host;
+    };
+    /** Every microphone state the runtime publishes from now on, starting with the current one. */
+    const watch = (runtime: RealtimeSessionRuntime): RealtimeMicrophoneState[] => {
+        const seen: RealtimeMicrophoneState[] = [];
+        runtime.Microphone$.subscribe((microphone) => seen.push(microphone));
+        return seen;
+    };
+    const current = (runtime: RealtimeSessionRuntime): RealtimeMicrophoneState => watch(runtime)[0];
+    /** Lets a start run as far as it can: past the mint and the microphone, up to a connect that waits. */
+    const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+    beforeEach(() => {
+        MicFollowingClient.Instances = [];
+        MicFollowingClient.ConnectGate = null;
+    });
+
+    it('offers no microphone outside a call', () => {
+        const { runtime } = build(listingHost());
+        expect(current(runtime)).toBe(REALTIME_MICROPHONE_NONE);
+    });
+
+    it('lists the microphones and the one in use once the call is connected, and none while the driver is still connecting', async () => {
+        const host = listingHost();
+        const { runtime } = build(host);
+        const seen = watch(runtime);
+        let connect: () => void = () => undefined;
+        MicFollowingClient.ConnectGate = new Promise<void>((resolve) => (connect = resolve));
+
+        const starting = runtime.StartRealtimeSessionFromResult(mintedSession());
+        await settle();
+        expect(host.Controllers[0].StartCalls).toEqual(['microphone']);
+        expect(lastClient().ConnectedWith).toBeNull();
+        expect(await runtime.SwitchMicrophone('mic-headset')).toBe(REALTIME_MICROPHONE_NONE);
+        expect(host.Controllers[0].SwitchCalls).toEqual([]);
+        expect(seen).toEqual([REALTIME_MICROPHONE_NONE]);
+
+        connect();
+        await starting;
+        expect(seen).toEqual([REALTIME_MICROPHONE_NONE, { DeviceID: 'mic-built-in', Devices: [BUILT_IN, HEADSET] }]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('follows the list as microphones come and go, and says nothing when only the cameras change', async () => {
+        const host = listingHost();
+        const { runtime } = build(host);
+        await runtime.StartRealtimeSessionFromResult(mintedSession());
+        const seen = watch(runtime);
+        const controller = host.Controllers[0];
+
+        controller.SetDevices([BUILT_IN, CAMERA]);
+        controller.SetDevices([BUILT_IN, CAMERA, { ...CAMERA, DeviceID: 'cam-desk', Label: 'Desk Camera', GroupID: 'desk' }]);
+        controller.Republish();
+
+        expect(seen).toEqual([
+            { DeviceID: 'mic-built-in', Devices: [BUILT_IN, HEADSET] },
+            { DeviceID: 'mic-built-in', Devices: [BUILT_IN] },
+        ]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('moves the call to the picked microphone: the driver and the recording follow it, and the call names it once it is on', async () => {
+        const host = listingHost();
+        const { runtime } = build(host);
+        await runtime.StartRealtimeSessionFromResult(mintedSession(), { recordingConsent: true });
+        const seen = watch(runtime);
+        const controller = host.Controllers[0];
+
+        const switched = await runtime.SwitchMicrophone('mic-headset');
+
+        expect(controller.SwitchCalls).toEqual([['microphone', 'mic-headset']]);
+        expect(lastClient().Replaced).toEqual([controller.Stream]);
+        expect(host.Recorder.ReplaceMicrophone).toHaveBeenCalledWith(controller.Stream);
+        expect(switched).toEqual({ DeviceID: 'mic-headset', Devices: [BUILT_IN, HEADSET] });
+        // Mid-switch the controller has no microphone on; the call kept naming the one in use until the new one was on.
+        expect(seen.map((microphone) => microphone.DeviceID)).toEqual(['mic-built-in', 'mic-headset']);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('stays on the microphone in use when the picked one cannot open, and the driver follows its reopened track', async () => {
+        const host = listingHost();
+        const { runtime } = build(host);
+        await runtime.StartRealtimeSessionFromResult(mintedSession());
+        const seen = watch(runtime);
+        const controller = host.Controllers[0];
+        controller.NextSwitch = 'back';
+
+        const switched = await runtime.SwitchMicrophone('mic-headset');
+
+        expect(switched.DeviceID).toBe('mic-built-in');
+        expect(seen.map((microphone) => microphone.DeviceID)).toEqual(['mic-built-in']);
+        expect(lastClient().Replaced).toEqual([controller.Stream]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('names no microphone while the call has none open, and switches nothing then', async () => {
+        const host = listingHost();
+        const { runtime } = build(host);
+        await runtime.StartRealtimeSessionFromResult(mintedSession());
+        const controller = host.Controllers[0];
+
+        controller.Stop('microphone');
+        expect(current(runtime)).toEqual({ Devices: [BUILT_IN, HEADSET] });
+        await runtime.SwitchMicrophone('mic-headset');
+        expect(controller.SwitchCalls).toEqual([]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('switches nothing outside a call or on a host without a controller', async () => {
+        const { runtime } = build(listingHost());
+        expect(await runtime.SwitchMicrophone('mic-headset')).toBe(REALTIME_MICROPHONE_NONE);
+
+        const plain = build(new AcquiringHost()).runtime;
+        await plain.StartRealtimeSessionFromResult(mintedSession());
+        expect(current(plain)).toBe(REALTIME_MICROPHONE_NONE);
+        expect(await plain.SwitchMicrophone('mic-headset')).toBe(REALTIME_MICROPHONE_NONE);
+        await plain.EndRealtimeSession();
+    });
+
+    it('offers no microphone once the call ends, and the next call lists its own', async () => {
+        const host = listingHost();
+        const { runtime } = build(host);
+        await runtime.StartRealtimeSessionFromResult(mintedSession('session-1'));
+        await runtime.EndRealtimeSession();
+        expect(current(runtime)).toBe(REALTIME_MICROPHONE_NONE);
+        expect(await runtime.SwitchMicrophone('mic-headset')).toBe(REALTIME_MICROPHONE_NONE);
+        expect(host.Controllers[0].SwitchCalls).toEqual([]);
+
+        host.Prepare = (controller) => controller.SetDevices([HEADSET]);
+        await runtime.StartRealtimeSessionFromResult(mintedSession('session-2'));
+        expect(current(runtime)).toEqual({ DeviceID: 'mic-built-in', Devices: [HEADSET] });
+        await runtime.EndRealtimeSession();
     });
 });
