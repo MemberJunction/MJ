@@ -75,6 +75,15 @@ const GLOBAL_API_KEY_ROUTE_LABEL = 'api-key-global-route';
 /** A Google Cloud location as it may appear in a host name. */
 const LOCATION_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/**
+ * The Live socket's path, as `@google/genai` writes it after its base URL: what comes before it (a path prefix) and the
+ * API version it names.
+ */
+const LIVE_SOCKET_PATH = /^(.*)\/ws\/google\.cloud\.aiplatform\.([^/]+)\.LlmBidiService\/BidiGenerateContent$/;
+
+/** The schemes of a Live URL a bridged session can open: `@google/genai` opens `ws` from `http` and `wss` from `https`. */
+const LIVE_URL_SCHEMES: ReadonlySet<string> = new Set(['ws:', 'wss:', 'http:', 'https:']);
+
 /** What is wrong with a key, in words that quote none of it. */
 const CREDENTIALS_PROBLEMS: Readonly<Record<VertexCredentialsError['Problem'], string>> = {
     'invalid-json': 'is not valid JSON',
@@ -89,6 +98,9 @@ const CREDENTIALS_PROBLEMS: Readonly<Record<VertexCredentialsError['Problem'], s
     'invalid-api-key': 'has an apiKey that is not an API key (visible characters only, no spaces)',
     'api-key-with-credentials': 'names an apiKey beside another credential (a key file, a service account or serviceAccountJson); give one',
 };
+
+/** The client-level HTTP options of a bridged session's `@google/genai` client. */
+type LiveHttpOptions = NonNullable<GoogleGenAIOptions['httpOptions']>;
 
 /** The part of a `@google/genai` client a bridged session uses. Tests pass a fake. */
 export interface GeminiEnterpriseLiveClient {
@@ -238,7 +250,8 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
     /**
      * Creation seam for the Vertex-mode `@google/genai` client of bridged sessions (tests return a fake).
      *
-     * @param options The credentials' Vertex options (`VertexGenAIOptions`), with the Live API version and any Live host.
+     * @param options The credentials' Vertex options (`VertexGenAIOptions`), with the Live API version and any Live base
+     *   URL (see {@link LiveUrl}).
      */
     protected CreateVertexClient(options: GoogleGenAIOptions): GeminiEnterpriseLiveClient {
         return new GoogleGenAI(options);
@@ -246,10 +259,13 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
 
     /**
      * The Vertex AI Live websocket a session connects to. MJAPI's relay opens each upstream connection of a client-direct
-     * session on this URL. A bridged session's `@google/genai` client connects to its scheme, host and port; the SDK
-     * writes the path, with the key's API version, and the driver reads this URL once, when it builds that client. By
-     * default: the key's `liveHost` when it names one, else the host `@google/genai` picks for the location (Google's
-     * global host for an API key without a project), with the key's `liveApiVersion`, else `v1`.
+     * session on this URL. A bridged session's `@google/genai` client opens it too; the driver reads it once, when it
+     * builds that client, and gives the SDK everything before the socket path
+     * (`/ws/google.cloud.aiplatform.<version>.LlmBidiService/BidiGenerateContent`) as its base URL, path prefix included,
+     * with the version the socket path names. The SDK writes the socket path back after it; with nothing before the
+     * socket path, it writes `//ws/…`, as it does on Google's own hosts. By default: the key's `liveHost` when it names
+     * one, else the host `@google/genai` picks for the location (Google's global host for an API key without a project),
+     * with the key's `liveApiVersion`, else `v1`.
      *
      * A seam for a subclass registered at a higher priority (a mock upstream, a private endpoint, a proxy), not a setting.
      * Both paths send the session's credential to the host returned (an OAuth bearer token, or the key's API key), without
@@ -258,7 +274,9 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
      *
      * @param credentials The session's key, checked.
      * @param location The session's location, checked; `null` for an API key on Google's global route.
-     * @returns A `wss://` URL, or `ws://` for a host without TLS.
+     * @returns A `wss://` URL, or `ws://` for a host without TLS, that ends in the socket path. A bridged session fails on
+     *   a moved URL the SDK cannot open as given: one without the socket path at its end, or with a user, a query or a
+     *   fragment.
      */
     protected LiveUrl(credentials: VertexAICredentials, location: string | null): string {
         return GeminiEnterpriseRealtime.defaultLiveUrl(credentials, location);
@@ -392,26 +410,30 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
     }
 
     /**
-     * The bridged client's HTTP options: the key's `liveApiVersion` (else `v1`) and, as the base URL from which the SDK
-     * builds the same Live socket as the relay's, the host of a {@link LiveUrl} a subclass moved; else the key's
-     * `liveHost`, or the location's host for an API key on the regional route (in API-key mode the SDK would pick the
-     * global host). With none of these there is no base URL, and the SDK picks the location's host itself.
+     * The bridged client's HTTP options. For a {@link LiveUrl} a subclass moved: the base URL and API version from which
+     * the SDK opens that same URL. Else the key's `liveApiVersion` (else `v1`) and, as the base URL, the key's `liveHost`,
+     * or the location's host for an API key on the regional route (in API-key mode the SDK would pick the global host).
+     * With neither there is no base URL, and the SDK picks the location's host itself.
      */
-    private liveHttpOptions(credentials: VertexAICredentials): NonNullable<GoogleGenAIOptions['httpOptions']> {
+    private liveHttpOptions(credentials: VertexAICredentials): LiveHttpOptions {
+        const moved = this.movedLiveHttpOptions(credentials);
+        if (moved) {
+            return moved;
+        }
         const apiVersion = credentials.liveApiVersion ?? VERTEX_LIVE_API_VERSION;
-        const baseUrl = this.movedLiveBaseUrl(credentials) ?? GeminiEnterpriseRealtime.keyLiveBaseUrl(credentials);
+        const baseUrl = GeminiEnterpriseRealtime.keyLiveBaseUrl(credentials);
         return baseUrl ? { apiVersion, baseUrl } : { apiVersion };
     }
 
     /**
-     * The SDK base URL of a {@link LiveUrl} a subclass moved, or `null` while it returns the default. Comparing with the
+     * The SDK options of a {@link LiveUrl} a subclass moved, or `null` while it returns the default. Comparing with the
      * default keeps the options of a driver no subclass moved exactly as they were: without a base URL, the SDK applies
      * its own defaults.
      */
-    private movedLiveBaseUrl(credentials: VertexAICredentials): string | null {
+    private movedLiveHttpOptions(credentials: VertexAICredentials): LiveHttpOptions | null {
         const location = GeminiEnterpriseRealtime.liveLocation(credentials);
         const liveUrl = this.LiveUrl(credentials, location);
-        return liveUrl === GeminiEnterpriseRealtime.defaultLiveUrl(credentials, location) ? null : GeminiEnterpriseRealtime.sdkBaseUrl(liveUrl);
+        return liveUrl === GeminiEnterpriseRealtime.defaultLiveUrl(credentials, location) ? null : GeminiEnterpriseRealtime.sdkLiveHttpOptions(liveUrl);
     }
 
     /** The bridged base URL the key names: its `liveHost`, or the location's host for an API key on the regional route. */
@@ -423,20 +445,34 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
     }
 
     /**
-     * The `@google/genai` base URL for a Live socket URL: its host and port, over `http` for a `ws://` URL and `https`
-     * otherwise (the SDK opens `ws` from `http` and `wss` from anything else).
+     * The `@google/genai` options that open a Live socket URL as given. The SDK writes
+     * `/ws/google.cloud.aiplatform.<apiVersion>.LlmBidiService/BidiGenerateContent` after its base URL, so the base URL
+     * is everything before that path (scheme, host, port and path prefix), over `http` for a `ws://` URL and `https` for
+     * `wss://` (the SDK opens `ws` from `http` and `wss` from anything else), and the API version is the one the path
+     * names.
      *
-     * @throws When the URL cannot be read. The message does not quote it, since a URL can carry a key.
+     * @throws When the URL cannot be read, or the SDK cannot open it as given: it does not end in the socket path; it has
+     *   a query or a fragment, which the SDK cannot keep, since it writes the socket path after its whole base URL; it has
+     *   a user or password, which `ws` would send as a second credential; or its scheme is not ws, wss, http or https. No
+     *   message quotes the URL, since a URL can carry a key.
      */
-    private static sdkBaseUrl(liveUrl: string): string {
+    private static sdkLiveHttpOptions(liveUrl: string): LiveHttpOptions {
         let url: URL;
         try {
             url = new URL(liveUrl);
         } catch {
             throw new Error(`${DRIVER_CLASS}: its Live URL (LiveUrl) is not a URL.`);
         }
+        const socket = LIVE_SOCKET_PATH.exec(url.pathname);
+        if (!socket || !LIVE_URL_SCHEMES.has(url.protocol) || url.username || url.password || url.search || url.hash) {
+            throw new Error(
+                `${DRIVER_CLASS}: a bridged session cannot open its Live URL (LiveUrl) as given: @google/genai opens a ws:// or ` +
+                    'wss:// URL that ends in /ws/google.cloud.aiplatform.<version>.LlmBidiService/BidiGenerateContent and has no user, query or fragment.'
+            );
+        }
+        const [, pathPrefix, apiVersion] = socket;
         const scheme = url.protocol === 'ws:' || url.protocol === 'http:' ? 'http' : 'https';
-        return `${scheme}://${url.host}`;
+        return { apiVersion, baseUrl: `${scheme}://${url.host}${pathPrefix}` };
     }
 
     /**

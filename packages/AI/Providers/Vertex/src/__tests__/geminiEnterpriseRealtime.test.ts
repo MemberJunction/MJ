@@ -3,7 +3,17 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GoogleAuth, JWT, type GoogleAuthOptions } from 'google-auth-library';
-import { LiveServerMessage, type Content, type FunctionResponse, type GoogleGenAIOptions, type LiveClientSetup, type LiveConnectParameters, type Blob as GeminiBlob } from '@google/genai';
+import {
+    GoogleGenAI,
+    LiveServerMessage,
+    type Content,
+    type FunctionResponse,
+    type GoogleGenAIOptions,
+    type Live,
+    type LiveClientSetup,
+    type LiveConnectParameters,
+    type Blob as GeminiBlob,
+} from '@google/genai';
 import {
     BaseRealtimeModel,
     RealtimeProxyRegistry,
@@ -182,6 +192,62 @@ function cachedTokenAuth(options: GoogleAuthOptions): VertexGoogleAuth {
     return new GoogleAuth(options);
 }
 
+/** `@google/genai`'s websocket factory, a type the SDK declares without exporting it. */
+type SdkWebSocketFactory = ConstructorParameters<typeof Live>[2];
+
+/** A Live socket `@google/genai` asked its websocket factory for: the URL it built, its headers and what it sent. */
+interface SdkSocket {
+    Url: string;
+    Headers: Record<string, string>;
+    Sent: string[];
+}
+
+/**
+ * The driver over the real `@google/genai` client, with the SDK's websocket factory swapped for one that records each
+ * socket and connects nothing, and the key's `JWT` holding a token already: a bridged session reaches no network, and
+ * each recorded URL is the one the SDK built from the driver's options. With `movedUrl`, a subclass that moves `LiveUrl`.
+ */
+class SdkEnterprise extends GeminiEnterpriseRealtime {
+    public readonly Sockets: SdkSocket[] = [];
+    private readonly movedUrl: string | null;
+
+    constructor(credentialsJson: string, movedUrl: string | null = null) {
+        super(credentialsJson);
+        this.movedUrl = movedUrl;
+    }
+
+    protected override LiveUrl(credentials: VertexAICredentials, location: string | null): string {
+        return this.movedUrl ?? super.LiveUrl(credentials, location);
+    }
+
+    protected override CreateVertexClient(options: GoogleGenAIOptions): GeminiEnterpriseLiveClient {
+        const authClient = options.googleAuthOptions?.authClient;
+        if (authClient instanceof JWT) {
+            authClient.setCredentials({ access_token: ACCESS_TOKEN, expiry_date: Date.now() + 60 * 60 * 1000 });
+        }
+        const client = new GoogleGenAI(options);
+        // The factory is a private field of the SDK's Live module: if a release renames it, fail here rather than open a real socket.
+        if (!('webSocketFactory' in client.live)) {
+            throw new Error('@google/genai keeps its websocket factory somewhere else now; this test cannot record its sockets');
+        }
+        const recorder: SdkWebSocketFactory = {
+            create: (url, headers, callbacks) => {
+                const socket: SdkSocket = { Url: url, Headers: headers, Sent: [] };
+                this.Sockets.push(socket);
+                return {
+                    connect: () => callbacks.onopen(),
+                    send: (message: string) => {
+                        socket.Sent.push(message);
+                    },
+                    close: () => undefined,
+                };
+            },
+        };
+        Object.defineProperty(client.live, 'webSocketFactory', { value: recorder });
+        return client;
+    }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────────────────────────────
 
 /** The ticket id in a minted session's relay URL path. */
@@ -211,6 +277,14 @@ function openingSetup(grant: RealtimeRelayGrant, audioOnly = false): LiveClientS
 async function mint(json = serviceAccountKey(), params = makeParams()): Promise<{ Driver: TestEnterprise; Minted: ClientRealtimeSessionConfig }> {
     const driver = new TestEnterprise(json);
     return { Driver: driver, Minted: await driver.CreateClientSession(params) };
+}
+
+/** The one socket the real SDK opened for a bridged session. */
+async function sdkSocketOf(driver: SdkEnterprise): Promise<SdkSocket> {
+    const session = await driver.StartSession(makeParams());
+    await session.Close();
+    expect(driver.Sockets).toHaveLength(1);
+    return driver.Sockets[0];
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -656,17 +730,18 @@ describe('GeminiEnterpriseRealtime', () => {
             expect(JSON.stringify(minted)).not.toContain('127.0.0.1');
         });
 
-        it("moves bridged sessions with it: the SDK's base URL is its scheme, host and port, and the credential options stay as they were", async () => {
-            const cases: Array<[string, string]> = [
-                [MOCK_LIVE_URL, 'http://127.0.0.1:9000'],
-                ['wss://live-proxy.example.test:8443/vertex/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent', 'https://live-proxy.example.test:8443'],
-                ['wss://live-proxy.example.test:443/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent', 'https://live-proxy.example.test'],
+        it("moves bridged sessions with it: the SDK's base URL is all of it before the socket path, its API version the one that path names, and the credential options stay as they were", async () => {
+            const cases: Array<[string, string, string]> = [
+                [MOCK_LIVE_URL, 'http://127.0.0.1:9000', 'v1'],
+                ['wss://live-proxy.example.test:8443/vertex/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent', 'https://live-proxy.example.test:8443/vertex', 'v1'],
+                ['wss://live-proxy.example.test:443/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent', 'https://live-proxy.example.test', 'v1'],
+                ['wss://live-proxy.example.test/a/b/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent', 'https://live-proxy.example.test/a/b', 'v1beta1'],
             ];
-            for (const [liveUrl, baseUrl] of cases) {
+            for (const [liveUrl, baseUrl, apiVersion] of cases) {
                 const driver = new MovedEnterprise(serviceAccountKey(), liveUrl);
                 await driver.StartSession(makeParams());
                 expect(driver.ClientOptions).toEqual([
-                    { vertexai: true, project: PROJECT, location: 'us-central1', googleAuthOptions: { authClient: expect.any(JWT) }, httpOptions: { apiVersion: 'v1', baseUrl } },
+                    { vertexai: true, project: PROJECT, location: 'us-central1', googleAuthOptions: { authClient: expect.any(JWT) }, httpOptions: { apiVersion, baseUrl } },
                 ]);
                 expect(driver.LiveUrlCalls).toEqual([{ Project: PROJECT, Location: 'us-central1' }]);
             }
@@ -699,6 +774,69 @@ describe('GeminiEnterpriseRealtime', () => {
             const started = new MovedEnterprise(serviceAccountKey(), 'not a url?key=leak').StartSession(makeParams());
             await expect(started).rejects.toThrow('GeminiEnterpriseRealtime: its Live URL (LiveUrl) is not a URL.');
             await expect(started).rejects.not.toThrow('leak');
+        });
+
+        it("opens a moved LiveUrl through @google/genai as given: its path prefix and its API version reach the SDK's socket URL", async () => {
+            const cases: Array<[string, string]> = [
+                // A path prefix.
+                [
+                    'wss://live-proxy.example.test:8443/vertex-live/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent',
+                    'wss://live-proxy.example.test:8443/vertex-live/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent',
+                ],
+                // Another API version than the key's (v1).
+                [
+                    'wss://live-proxy.example.test:8443/vertex-live/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent',
+                    'wss://live-proxy.example.test:8443/vertex-live/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent',
+                ],
+                // Another API version and no prefix: the SDK writes its own slash before ws/, as on Google's hosts.
+                [
+                    'ws://127.0.0.1:9000/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent',
+                    'ws://127.0.0.1:9000//ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent',
+                ],
+            ];
+            for (const [liveUrl, socketUrl] of cases) {
+                const socket = await sdkSocketOf(new SdkEnterprise(serviceAccountKey(), liveUrl));
+                expect(socket.Url, liveUrl).toBe(socketUrl);
+                // The SDK added the token itself: with a project and location it never takes its proxy branch, which sends no credential.
+                expect(socket.Headers['authorization'], liveUrl).toBe(`Bearer ${ACCESS_TOKEN}`);
+            }
+        });
+
+        it("leaves the SDK's socket URL as it was for a driver no subclass moved: the route's Google host and the key's API version", async () => {
+            // The SDK reads a base URL from GOOGLE_VERTEX_BASE_URL when the driver passes none.
+            const saved = process.env['GOOGLE_VERTEX_BASE_URL'];
+            delete process.env['GOOGLE_VERTEX_BASE_URL'];
+            try {
+                const cases: Array<[string, string]> = [
+                    [serviceAccountKey(), 'wss://us-central1-aiplatform.googleapis.com//ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent'],
+                    [serviceAccountKey({ liveApiVersion: 'v1beta1' }), 'wss://us-central1-aiplatform.googleapis.com//ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent'],
+                    [JSON.stringify({ apiKey: STAND_IN_API_KEY }), 'wss://aiplatform.googleapis.com//ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent'],
+                    [JSON.stringify({ apiKey: STAND_IN_API_KEY, project: PROJECT, location: 'us' }), 'wss://aiplatform.us.rep.googleapis.com//ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent'],
+                ];
+                for (const [key, socketUrl] of cases) {
+                    expect((await sdkSocketOf(new SdkEnterprise(key))).Url, key).toBe(socketUrl);
+                }
+            } finally {
+                if (saved !== undefined) process.env['GOOGLE_VERTEX_BASE_URL'] = saved;
+            }
+        });
+
+        it('fails a bridged session whose moved LiveUrl @google/genai cannot open as given, quoting none of it', async () => {
+            const socketPath = '/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent';
+            const unopenable = [
+                'wss://live-proxy.example.test/leak/live', // no socket path at its end
+                `wss://live-proxy.example.test${socketPath}?key=leak`, // a query
+                `wss://live-proxy.example.test${socketPath}#leak`, // a fragment
+                `wss://proxy-user:leak@live-proxy.example.test${socketPath}`, // a user and password
+                `ftp://leak.example.test${socketPath}`, // a scheme the SDK cannot open
+            ];
+            for (const liveUrl of unopenable) {
+                const driver = new MovedEnterprise(serviceAccountKey(), liveUrl);
+                const started = driver.StartSession(makeParams());
+                await expect(started, liveUrl).rejects.toThrow('GeminiEnterpriseRealtime: a bridged session cannot open its Live URL (LiveUrl) as given');
+                await expect(started, liveUrl).rejects.not.toThrow('leak');
+                expect(driver.ClientOptions, liveUrl).toEqual([]);
+            }
         });
     });
 });
