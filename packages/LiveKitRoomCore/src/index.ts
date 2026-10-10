@@ -28,7 +28,7 @@ export {
 } from './audio-meter';
 
 export { LiveKitMediaPreview } from './livekit-preview';
-export { ToMediaParticipant, ToMediaDevice, ToMediaDeviceKind, ToLiveKitDeviceKind, ToScreenShareCaptureOptions } from './media-adapters';
+export { ToMediaParticipant, ToMediaDevice, ToMediaDeviceKind, ToLiveKitDeviceKind } from './media-adapters';
 export {
   LiveKitPreviewRoomController,
   LIVEKIT_PREVIEW_PEOPLE,

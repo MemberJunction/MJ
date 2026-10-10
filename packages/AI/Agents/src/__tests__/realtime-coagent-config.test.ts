@@ -26,7 +26,8 @@ import {
     RealtimeConfigSection,
     GetDirectActionsConfig,
     IsActionAllowedForDirectInvocation,
-    GetWatchesMeetingVideo
+    GetWatchesMeetingVideo,
+    FindDeprecatedRealtimeVideoKeys
 } from '../realtime/realtime-coagent-config';
 
 describe('DeepMergeConfigs', () => {
@@ -432,6 +433,27 @@ describe('GetWatchesMeetingVideo', () => {
         expect(GetWatchesMeetingVideo(ResolveEffectiveRealtimeConfig(null, off, null, on))).toBe(true);
         expect(GetWatchesMeetingVideo(ResolveEffectiveRealtimeConfig(null, on, null, off))).toBe(false);
         expect(GetWatchesMeetingVideo(ResolveEffectiveRealtimeConfig(on, null, null, null))).toBe(true);
+    });
+});
+
+describe('FindDeprecatedRealtimeVideoKeys', () => {
+    it('reports realtime.video.provider and providers when the effective configuration sets them', () => {
+        const config = ResolveEffectiveRealtimeConfig(
+            null,
+            '{"realtime":{"video":{"enabled":true,"provider":"Runway Avatar","providers":{"runway":{"quality":"high"}}}}}',
+            null
+        );
+        expect(FindDeprecatedRealtimeVideoKeys(config)).toEqual(['realtime.video.provider', 'realtime.video.providers']);
+        expect(FindDeprecatedRealtimeVideoKeys({ realtime: { video: { providers: { gemini: {} } } } })).toEqual(['realtime.video.providers']);
+    });
+
+    it('reports nothing for the keys that are read, for values normalization drops, or without a video block', () => {
+        expect(FindDeprecatedRealtimeVideoKeys({ realtime: { video: { enabled: true, avatarId: 'Ben', watchMeetings: true } } })).toEqual([]);
+        const dropped = ResolveEffectiveRealtimeConfig(null, '{"realtime":{"video":{"enabled":true,"provider":"  ","providers":{"runway":7}}}}', null);
+        expect(FindDeprecatedRealtimeVideoKeys(dropped)).toEqual([]);
+        expect(FindDeprecatedRealtimeVideoKeys({})).toEqual([]);
+        expect(FindDeprecatedRealtimeVideoKeys(null)).toEqual([]);
+        expect(FindDeprecatedRealtimeVideoKeys(undefined)).toEqual([]);
     });
 });
 

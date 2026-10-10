@@ -224,10 +224,17 @@ export interface RealtimeChannelContext {
   SessionEvents$?: Observable<RealtimeSessionStreamEvent>;
 
   /**
-   * OPTIONAL — sends a visual frame into the live session's inbound video track
-   * (e.g. from Whiteboard or Remote Browser video bridges). No-op when the session
-   * has not established an inbound video track or is not live.
+   * OPTIONAL — sends a visual frame into the live session's inbound video track, as this channel's source at the
+   * session's `VideoSourceArbiter` (the id its own frame bridge uses, {@link ChannelVideoSourceID}). The frame reaches
+   * the model only while the arbiter picks this channel, and the model is told when that changes; nothing is sent while
+   * the channel's exposure is below `pixels`. No-op when the session has not established an inbound video track or is
+   * not live.
    *
+   * @deprecated Use a `ChannelInboundVideoBridge` (`@memberjunction/ai-realtime-client`), or
+   *   {@link BaseRealtimeChannelClient.EnableVisualPerception}, which runs one for the channel: the bridge lists the
+   *   source before its first frame, removes it when stopped, and says whether each frame was sent. The context's
+   *   {@link Client} still bypasses the arbiter: a frame sent with its own `SendVideoFrame` overrides the source the
+   *   arbiter picked, and the model is not told.
    * @param base64Image The image data (base64-encoded JPEG/PNG).
    * @param mimeType The image MIME type (defaults to 'image/jpeg').
    */
@@ -239,7 +246,9 @@ export interface RealtimeChannelContext {
   IsTrackEstablished?(modality: string, direction: RealtimeTrackDirection): boolean;
 
   /**
-   * OPTIONAL — the underlying {@link BaseRealtimeClient} driving the media and transport planes.
+   * OPTIONAL — the underlying {@link BaseRealtimeClient} driving the media and transport planes. Send video through a
+   * `ChannelInboundVideoBridge` over it, not through its own `SendVideoFrame`, which bypasses the session's
+   * `VideoSourceArbiter`.
    */
   Client?: BaseRealtimeClient | null;
 
@@ -1303,7 +1312,7 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
       // which one the model sees and tells it. The id and label are how the "agent can see" UI names it.
       const descriptor = this.GetDescriptor();
       this.VisualVideoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this.visualFrameProvider, {
-        SourceID: `${descriptor.Key}#${this.InstanceId}`,
+        SourceID: ChannelVideoSourceID(descriptor.Key, this.InstanceId),
         Label: descriptor.DisplayName,
         Kind: 'surface',
         ChannelKey: descriptor.Key,
@@ -1394,6 +1403,18 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
 
 /** The primary instance id of a single-instance channel. */
 const PRIMARY_CHANNEL_INSTANCE_ID = '1';
+
+/**
+ * The id of a channel's video source at the session's `VideoSourceArbiter`: `<channel key>#<instance id>`. The channel's
+ * own frame bridge and the runtime's {@link RealtimeChannelContext.SendVideoFrame} register under it, so a channel is
+ * one source however it sends, and the "agent can see" control lists it once.
+ *
+ * @param channelKey The channel's descriptor key.
+ * @param instanceId The channel instance.
+ */
+export function ChannelVideoSourceID(channelKey: string, instanceId: string): string {
+  return `${channelKey}#${instanceId}`;
+}
 
 /**
  * Settings for {@link BaseRealtimeChannelClient.ApplyExposure}.

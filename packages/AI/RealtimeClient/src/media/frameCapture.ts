@@ -1,11 +1,19 @@
 /**
  * @fileoverview FRAME CAPTURE for realtime video tracks — camera and screen capture pipelines.
  *
- * Patterned beside `micCapture.ts`:
- * - `CreateCameraCapture`: prompts via `getUserMedia` (consent-gated via {@link RealtimeTrackDescriptor.RequiresConsent}).
- * - `CreateScreenCapture`: prompts via `getDisplayMedia` (consent-gated via {@link RealtimeTrackDescriptor.RequiresConsent}).
+ * Patterned beside `micCapture.ts`. Every exported function here is deprecated; new code uses the `/media` modules:
+ * - `CreateCameraCapture` (deprecated): prompts via `getUserMedia` (consent-gated via
+ *   {@link RealtimeTrackDescriptor.RequiresConsent}). New code starts the camera with `LocalMediaController` and samples
+ *   its stream with {@link FrameSampler}.
+ * - `CreateScreenCapture` (deprecated): prompts via `getDisplayMedia` (consent-gated via
+ *   {@link RealtimeTrackDescriptor.RequiresConsent}). New code shares with `RequestDisplayCapture` and samples with
+ *   {@link FrameSampler}.
  * - `CreateStreamFrameCapture` (deprecated): extracts periodic JPEG frames from an already-acquired
  *   `MediaStream`. It is now a thin wrapper over {@link FrameSampler}, which new code uses directly.
+ *
+ * The two capture helpers keep their own `getUserMedia` and `getDisplayMedia` calls rather than wrapping the new
+ * modules: those differ in what they offer (the screen picker leaves out the current tab, for one) and in how they
+ * report a failure, so a caller of a helper keeps the behaviour it was written against.
  *
  * Capture runs at the device's native frame rate; only the sampling is paced, at the rate the caller passes
  * (the negotiated track rate). There is no 1 fps ceiling here.
@@ -87,6 +95,9 @@ function startSampler(stream: MediaStream, options: FrameCaptureOptions): IFrame
  * Requests user camera video capture via `navigator.mediaDevices.getUserMedia`.
  * Gated on {@link FrameCaptureOptions.ConsentGranted} when consent is required.
  *
+ * @deprecated Start the camera with `LocalMediaController` (in `localMediaController.ts`), which lists and switches
+ *   devices and reports failures as a state, then sample its stream (`GetStream('camera')`) with a
+ *   {@link FrameSampler}.
  * @param options Frame capture options.
  * @param constraints Video track constraints.
  */

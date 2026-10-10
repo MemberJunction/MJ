@@ -32,7 +32,7 @@
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView, DatabaseProviderBase } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
-import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
+import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
 import {
@@ -110,6 +110,7 @@ import {
     BuildVoiceMannerSection,
     BuildAppRealtimeOverridesJson,
     DeepMergeConfigs,
+    FindDeprecatedRealtimeVideoKeys,
     GetModelCatalogSessionSettings,
     GetDisclosureForTarget,
     GetNarrationPaceMs,
@@ -141,6 +142,12 @@ const VIDEO_SECONDS_GRACE = 30;
  * the seconds of video it has not reported yet), and the runs are priced from what was stored when they are finalized.
  */
 export const BRIDGE_SESSION_CLOSE_WAIT_MS = 5_000;
+
+/**
+ * The co-agent and target pairs already named in the deprecated `realtime.video` keys line, so the line is logged once
+ * per pair per process rather than on every session.
+ */
+const deprecatedVideoKeysLogged = new Set<string>();
 
 /**
  * Context passed to {@link PrepareClientSessionInput.ResolveHostTools} describing the
@@ -1257,6 +1264,7 @@ export class RealtimeClientSessionService {
         const targetAgent = this.resolveTargetAgent(input.TargetAgentID);
         const appSettingsJson = await this.resolveAppRealtimeOverrides(input.ApplicationID, contextUser, provider);
         const effectiveConfig = this.resolveEffectiveConfig(coAgent, input.ConfigOverridesJson, targetAgent, appSettingsJson);
+        this.logDeprecatedVideoKeys(effectiveConfig, coAgent, targetAgent);
 
         const outcome = await this.resolveModelForSession(input, coAgent, effectiveConfig);
         if (!outcome.Resolution) {
@@ -1462,6 +1470,30 @@ export class RealtimeClientSessionService {
             overridesJson ?? null,
             targetAgent?.TypeConfiguration ?? null,
             appSettingsJson ?? null
+        );
+    }
+
+    /**
+     * Logs one line, once per co-agent and target pair per process, when the effective configuration sets
+     * `realtime.video.provider` or `realtime.video.providers`. Both are deprecated and nothing reads them, so an author
+     * who set them would otherwise get nothing and no word of it.
+     *
+     * @param config The effective configuration.
+     * @param coAgent The co-agent.
+     * @param targetAgent The voiced agent, when there is one.
+     */
+    private logDeprecatedVideoKeys(config: RealtimeCoAgentConfig, coAgent: MJAIAgentEntityExtended, targetAgent: MJAIAgentEntityExtended | null): void {
+        const keys = FindDeprecatedRealtimeVideoKeys(config);
+        const pair = `${NormalizeUUID(coAgent.ID)}|${NormalizeUUID(targetAgent?.ID)}`;
+        if (keys.length === 0 || deprecatedVideoKeysLogged.has(pair)) {
+            return;
+        }
+        deprecatedVideoKeysLogged.add(pair);
+        const voiced = targetAgent && !UUIDsEqual(targetAgent.ID, coAgent.ID) ? `'${targetAgent.Name}' (co-agent '${coAgent.Name}')` : `'${coAgent.Name}'`;
+        const what = keys.length === 1 ? `${keys[0]}, which is deprecated and does nothing` : `${keys.join(' and ')}, which are deprecated and do nothing`;
+        LogStatus(
+            `[RealtimeCoAgent] The realtime configuration for ${voiced} sets ${what}. Choose the model with ` +
+                "realtime.modelPreference, and set an avatar's settings on its persona's Video binding (VendorSettings.Avatar).",
         );
     }
 

@@ -3133,3 +3133,40 @@ describe("RealtimeClientSessionService.ResolveSessionAvatar: the model's Video/O
         expect(vetoLines()).toEqual([]);
     });
 });
+
+describe('RealtimeClientSessionService: the deprecated realtime.video provider keys', () => {
+    let log: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => { log = vi.spyOn(console, 'log').mockImplementation(() => undefined); });
+    afterEach(() => vi.restoreAllMocks());
+    const deprecationLines = (): string[] =>
+        log.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith('[RealtimeCoAgent] The realtime configuration for'));
+    /** A co-agent whose own configuration sets the given video block. Each test uses its own id: the line is once per process. */
+    const coAgentWithVideo = (id: string, video: JSONObject): MJAIAgentEntityExtended =>
+        makeCoAgent({ ID: id, TypeConfiguration: JSON.stringify({ realtime: { video } }) });
+
+    it('logs one line per agent naming the keys, the agent and what replaces them, however many sessions start', async () => {
+        const svc = new TestableService();
+        const coAgent = coAgentWithVideo('co-video-keys-1', { provider: 'Runway Avatar', providers: { runway: { quality: 'high' } } });
+        await svc.PrepareClientSession(makePrepInput({ CoAgent: coAgent }), contextUser, provider);
+        await svc.PrepareClientSession(makePrepInput({ CoAgent: coAgent }), contextUser, provider);
+        await new TestableService().PrepareClientSession(makePrepInput({ CoAgent: coAgent }), contextUser, provider);
+        expect(deprecationLines()).toEqual([
+            "[RealtimeCoAgent] The realtime configuration for 'Sales Agent' (co-agent 'Realtime Co-Agent') sets realtime.video.provider " +
+                "and realtime.video.providers, which are deprecated and do nothing. Choose the model with realtime.modelPreference, and " +
+                "set an avatar's settings on its persona's Video binding (VendorSettings.Avatar).",
+        ]);
+    });
+
+    it('names the voiced agent and the one key its configuration sets, and says nothing when it sets neither', async () => {
+        const svc = new TestableService();
+        svc.TargetAgentNames = { 'target-2': 'Support Agent' };
+        const coAgent = coAgentWithVideo('co-video-keys-2', { provider: 'Runway Avatar' });
+        await svc.PrepareClientSession(makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-2' }), contextUser, provider);
+        await svc.PrepareClientSession(makePrepInput({ CoAgent: coAgentWithVideo('co-video-keys-3', { avatarId: 'Ben' }) }), contextUser, provider);
+        expect(deprecationLines()).toEqual([
+            "[RealtimeCoAgent] The realtime configuration for 'Support Agent' (co-agent 'Realtime Co-Agent') sets realtime.video.provider, " +
+                "which is deprecated and does nothing. Choose the model with realtime.modelPreference, and set an avatar's settings on its " +
+                "persona's Video binding (VendorSettings.Avatar).",
+        ]);
+    });
+});
