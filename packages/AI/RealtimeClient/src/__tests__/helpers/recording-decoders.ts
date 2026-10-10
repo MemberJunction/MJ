@@ -13,6 +13,8 @@ import { WEBCODECS_CHUNK_DECODER } from '../../media/decoders/webCodecsChunkDeco
 export class RecordingDecoder implements IVideoFrameDecoder {
     public readonly Calls: string[] = [];
     public IsPlaying = false;
+    /** Controllable stand-in for the frames still to play. */
+    public FramesAhead = 0;
     public Element: HTMLVideoElement | null = null;
 
     constructor(

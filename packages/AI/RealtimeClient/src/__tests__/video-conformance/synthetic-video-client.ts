@@ -8,8 +8,10 @@
  * or images. The server's grant is the pact's `avatar` block. In `'playout'` mode the driver plays the frames through a
  * player it creates with {@link SyntheticVideoClient.CreateVideoPlayout}; when the pact says the voice is timed, it
  * queues each PCM chunk at its media time and gives the player its voice playback as the clock, so the face moves with the
- * voice. In `'stream'` mode the video arrives as a live stream, as a WebRTC provider's does. Each `SyntheticFaults` switch
- * breaks one rule, so the kit's tests show each check fails a driver that breaks it.
+ * voice. In `'stream'` mode the video arrives as a live stream, as a WebRTC provider's does. The model's answer is under
+ * way from its transcript or its voice until the turn's generation completes: video outside an answer (a provider may
+ * stream it between answers) plays, but is not the agent speaking. Each `SyntheticFaults` switch breaks one rule, so the
+ * kit's tests show each check fails a driver that breaks it.
  *
  * Registered with no ClassFactory key: it is never resolved by a host.
  */
@@ -73,6 +75,12 @@ export class SyntheticVideoClient extends BaseRealtimeClient {
     /** Seconds reported for the current turn, for the {@link SyntheticFaults.SecondsTwice} fault. */
     private turnSecondsReported = 0;
     private responseActive = false;
+    /** Whether the model's answer is under way: video outside it is idle. */
+    private answering = false;
+    /** Frames handed to the player so far. */
+    private framesHanded = 0;
+    /** {@link framesHanded} just after the latest frame of an answer. 0 until one. */
+    private answerEndsAtFrame = 0;
     private handedOverAgain = false;
     private readonly reported = new Set<string>();
 
@@ -117,6 +125,7 @@ export class SyntheticVideoClient extends BaseRealtimeClient {
         this.voice?.Flush();
         this.player?.Flush();
         this.responseActive = false;
+        this.answering = false;
     }
 
     public SendText(_text: string): void {
@@ -139,8 +148,9 @@ export class SyntheticVideoClient extends BaseRealtimeClient {
         return this.responseActive;
     }
 
+    /** The voice, or the avatar's video while some of an answer's frames are still ahead of its playhead. */
     public get IsAudioPlaying(): boolean {
-        return (this.voice?.IsPlaying ?? false) || (this.player?.IsPlaying ?? false);
+        return (this.voice?.IsPlaying ?? false) || this.answerVideoPlaying();
     }
 
     // ── Creation seams (a test wires its recorders in here) ──────────────────────────────────────────────────────
@@ -224,6 +234,9 @@ export class SyntheticVideoClient extends BaseRealtimeClient {
             case 'part':
                 this.handlePart(message.MimeType, message.Data);
                 break;
+            case 'transcript':
+                this.handleTranscript();
+                break;
             case 'generation-complete':
                 this.handleGenerationComplete();
                 break;
@@ -269,13 +282,26 @@ export class SyntheticVideoClient extends BaseRealtimeClient {
             this.startTurnVideo();
         }
         this.turn.VideoEnded = false;
-        this.appendToPlayer(this.player, frame);
+        if (this.appendToPlayer(this.player, frame)) {
+            this.framesHanded++;
+            if (this.answering) {
+                this.answerEndsAtFrame = this.framesHanded;
+            }
+        }
         if (this.faults.VideoToVoice) {
             this.voice?.Enqueue(frame.Data);
         }
         if (!this.turn.Dropping) {
             this.countVideo(frame);
         }
+        if (this.answering || this.faults.IdleVideoIsSpeech) {
+            this.markSpeaking();
+        }
+    }
+
+    /** The model's words: its answer is under way. */
+    private handleTranscript(): void {
+        this.answering = true;
         this.markSpeaking();
     }
 
@@ -288,10 +314,10 @@ export class SyntheticVideoClient extends BaseRealtimeClient {
         this.reportOnce(`type:${frame.MimeType}`, `[SyntheticVideoClient] Dropped model output of type ${frame.MimeType}: this session shows no avatar.`);
     }
 
-    /** Hands the player the frame as the model sent it (the faults change what it gets). */
-    private appendToPlayer(player: IAvatarVideoPlayout, frame: RealtimeVideoFrame): void {
+    /** Hands the player the frame as the model sent it (the faults change what it gets). Returns whether it handed one over. */
+    private appendToPlayer(player: IAvatarVideoPlayout, frame: RealtimeVideoFrame): boolean {
         if (this.faults.DropsInitSegment && frame.Kind === 'fmp4' && frame.Piece === 'init') {
-            return;
+            return false;
         }
         if (this.faults.MislabelsPieces && frame.Kind === 'fmp4') {
             player.Append({ ...frame, Piece: 'fragment' });
@@ -302,6 +328,7 @@ export class SyntheticVideoClient extends BaseRealtimeClient {
         } else {
             player.Append(frame);
         }
+        return true;
     }
 
     /** The turn's first video: when it carries the voice, the PCM the turn queued would double it, so it stops. */
@@ -328,16 +355,18 @@ export class SyntheticVideoClient extends BaseRealtimeClient {
         this.playVoice(pcm, mediaTimeMs);
     }
 
-    /** Queues the voice, at its media time when the voice is timed. */
+    /** Queues the voice, at its media time when the voice is timed. The voice means the answer is under way. */
     private playVoice(pcm: ArrayBuffer, mediaTimeMs: number | undefined): void {
         const timed = this.grant?.TimedVoice && !this.faults.UntimedVoice;
         this.voice?.Enqueue(pcm, timed ? mediaTimeMs : undefined);
         this.turn.HasVoice = true;
+        this.answering = true;
         this.markSpeaking();
     }
 
     private handleGenerationComplete(): void {
         this.turn.GenerationComplete = true;
+        this.answering = false;
         if (!this.faults.NoEndOfTurn) {
             this.endTurnVideo();
         }
@@ -363,6 +392,7 @@ export class SyntheticVideoClient extends BaseRealtimeClient {
         this.turn.VideoEnded = true;
         this.turn.Dropping = true;
         this.responseActive = false;
+        this.answering = false;
         this.emitInterruption();
         this.emitStateChange('listening');
     }
@@ -386,11 +416,12 @@ export class SyntheticVideoClient extends BaseRealtimeClient {
         }
     }
 
-    /** A new turn: nothing played, nothing reported. */
+    /** A new turn: nothing played, nothing reported, no answer under way. */
     private startNewTurn(): void {
         this.turn = newTurn();
         this.turnSecondsReported = 0;
         this.responseActive = false;
+        this.answering = false;
     }
 
     // ── Usage ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -436,6 +467,18 @@ export class SyntheticVideoClient extends BaseRealtimeClient {
     private markSpeaking(): void {
         this.responseActive = true;
         this.emitStateChange('speaking');
+    }
+
+    /** Whether the player plays with some of an answer's frames still ahead of its playhead (any video, with the fault). */
+    private answerVideoPlaying(): boolean {
+        const player = this.player;
+        if (!player?.IsPlaying) {
+            return false;
+        }
+        if (this.faults.IdleVideoIsSpeech) {
+            return true;
+        }
+        return this.answerEndsAtFrame > 0 && this.framesHanded - player.FramesAhead < this.answerEndsAtFrame;
     }
 
     private reportOnce(key: string, message: string): void {

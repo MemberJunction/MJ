@@ -1,8 +1,8 @@
 /**
  * @fileoverview Checks VC08-VC15: what each turn boundary does to the avatar's video and voice. Barge-in stops both at
  * once and drops the cut turn's late media; a turn's end lets its video play out; a video that carries the voice never
- * plays it twice; generated video seconds are reported once, an interrupted turn's included and idle video excluded; a
- * resume keeps the avatar; Disconnect releases it.
+ * plays it twice; generated video seconds are reported once, an interrupted turn's included and idle video excluded;
+ * the idle video after a turn plays without the agent speaking; a resume keeps the avatar; Disconnect releases it.
  *
  * @module @memberjunction/ai-realtime-client/testing
  */
@@ -123,6 +123,8 @@ const VC12: RealtimeVideoConformanceCheck = {
             const turn = [await s.StartVideo(), ...(await s.SendFrames(3))];
             await s.EndTurn();
             AssertSeconds(s.VideoSeconds(first), SecondsOfVideo(turn), 'video seconds reported for a turn, once');
+            // These frames come with no answer start: they count as a turn's here, though VC13 takes such video as idle
+            // for whether the agent is speaking. Whether video outside an answer counts in usage is open (#5312).
             const second = s.Timeline.Mark();
             const next = await s.SendFrames(2);
             await s.EndTurn();
@@ -136,7 +138,7 @@ const VC12: RealtimeVideoConformanceCheck = {
 
 const VC13: RealtimeVideoConformanceCheck = {
     Id: 'VC13',
-    Title: "An interrupted turn counts what arrived; idle video doesn't count",
+    Title: "An interrupted turn counts what arrived; idle video doesn't count, and is not the agent speaking",
     Gate: AllOf(NeedsPlayout, NeedsGrant, NeedsVideoUsage),
     Run: (harness) =>
         WithConformanceSession(harness, { Grant: { Avatar: true } }, async (s) => {
@@ -146,15 +148,19 @@ const VC13: RealtimeVideoConformanceCheck = {
             await s.SendFrames(1);
             await harness.TurnComplete();
             AssertSeconds(s.VideoSeconds(interrupted), SecondsOfVideo(arrived), 'video seconds reported for an interrupted turn: what arrived before it (1 more frame came late)');
-            if (!harness.GenerationComplete) {
-                return; // Without generation complete, idle video can't be told from the turn's own.
+            // Without generation complete, idle video can't be told from the turn's own.
+            if (harness.GenerationComplete) {
+                const idle = s.Timeline.Mark();
+                const generated = await s.SendFrames(1);
+                await harness.GenerationComplete();
+                await s.SendFrames(2);
+                await harness.TurnComplete();
+                AssertSeconds(s.VideoSeconds(idle), SecondsOfVideo(generated), 'video seconds reported for a turn of 1 frame followed by 2 idle frames');
             }
-            const idle = s.Timeline.Mark();
-            const generated = await s.SendFrames(1);
-            await harness.GenerationComplete();
-            await s.SendFrames(2);
-            await harness.TurnComplete();
-            AssertSeconds(s.VideoSeconds(idle), SecondsOfVideo(generated), 'video seconds reported for a turn of 1 frame followed by 2 idle frames');
+            // Without the answer's start, idle video can't be told from an answer's.
+            if (harness.AnswerStarted) {
+                await assertIdleVideoIsNotSpeech(s);
+            }
         }),
 };
 
@@ -238,6 +244,26 @@ async function assertSeparateVoicePlays(s: ConformanceSession): Promise<void> {
     AssertSameBytes(s.VoiceEnqueued(mark), pcm, 'a separate voice plays every PCM chunk beside the video');
     AssertCount(s.Count('voice-flush', mark), 0, 'flushes of a separate voice by the video');
     AssertValue(s.Players[0]?.CarriesVoice, false, "whether the player plays the video's audio (the voice plays as PCM)");
+}
+
+/**
+ * The idle video after a turn, which a provider may stream between answers (Vertex AI does): the answer's video is the
+ * agent speaking; the video after its turn plays, but reports no `'speaking'`, leaves the client idle, and, once the
+ * answer has played out, is not audible.
+ */
+async function assertIdleVideoIsNotSpeech(s: ConformanceSession): Promise<void> {
+    const answer = s.Timeline.Mark();
+    await s.Harness.AnswerStarted?.();
+    await s.SendFrames(2);
+    AssertTrue(s.States(answer).includes('speaking'), "the client reports 'speaking' for an answer's video", `it reported ${s.States(answer).join(', ') || 'no state'}`);
+    await s.EndTurn();
+    s.FinishPlaying();
+    const idle = s.Timeline.Mark();
+    const frames = await s.SendFrames(2);
+    AssertSameBytes(s.AppendedFrames(0, idle).map((frame) => frame.Data), frames.map((frame) => frame.Data), 'idle video after a turn plays');
+    AssertCount(s.States(idle).filter((state) => state === 'speaking').length, 0, "'speaking' reported for idle video after a turn");
+    AssertValue(s.Client.IsBusy, false, 'IsBusy while idle video plays after a turn');
+    AssertValue(s.Client.IsAudioPlaying, false, 'IsAudioPlaying once the answer has played out and only idle video plays');
 }
 
 /** A resume left the avatar as it was: no new hand-over or player, no flush or dispose, the cut turn ended, the track live. */

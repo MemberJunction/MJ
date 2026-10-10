@@ -97,6 +97,14 @@ export interface IAvatarVideoPlayout {
     readonly Source: MediaVideoSource;
     /** Whether it plays forward with media buffered ahead of the playhead: the avatar is audibly speaking. */
     readonly IsPlaying: boolean;
+    /**
+     * Where the playhead is, in frames: how many of the frames handed to {@link Append} are still to play (waiting,
+     * being decoded or appended, or buffered ahead of the playhead). A frame that was dropped, or that no decoder plays,
+     * is not counted. Frames play in the order they were handed over, so the frames ahead are the latest ones handed
+     * over, less any of those that were dropped: a driver that counts what it hands over can tell whether a given frame
+     * has played.
+     */
+    readonly FramesAhead: number;
     /** Whether the element plays the media's audio; `false` mutes it. */
     CarriesVoice: boolean;
     /**
@@ -174,6 +182,14 @@ export class VideoPlayout implements IAvatarVideoPlayout {
     /** Whether the decoder's own audio is audibly playing: an MP4 that carries the voice, buffered ahead of the playhead. */
     public get IsPlaying(): boolean {
         return this.active?.Decoder.IsPlaying ?? false;
+    }
+
+    /**
+     * How many of the frames handed over are still to play, as the decoder in use counts them. Frames a decoder that
+     * gave up held, and frames no decoder plays, never play, so they are not counted.
+     */
+    public get FramesAhead(): number {
+        return this.active?.Decoder.FramesAhead ?? 0;
     }
 
     /**

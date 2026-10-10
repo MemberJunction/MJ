@@ -13,10 +13,18 @@
  *   type: unknown data never plays.
  * - **Turns.** From `interrupted` until that turn's `turnComplete`, media parts are dropped (Google sends
  *   `interrupted` before `turn_complete`; anything in between is stale after the barge-in).
+ * - **Answer or idle.** Vertex AI streams the avatar's video between answers too. The model's answer is under way from
+ *   its first spoken words (the session reports its output transcription with
+ *   {@link GeminiBridgedAvatarOutput.AnswerStarted}) or a PCM voice part that plays, until its `generationComplete`, the
+ *   turn's `turnComplete`, a barge-in, a tool call, a resume or the session's close. Before a part of the answer goes to
+ *   the host, {@link GeminiBridgedAvatarSinks.OnAnswer} says the model is answering, so the session holds its sends; the
+ *   video outside an answer goes to the host as well (the avatar keeps its face), but marks nothing.
  * - **Usage.** The seconds of avatar video generated in a turn (its video samples' durations, read from the fragments)
  *   are reported as deltas at the turn's end: `generationComplete`, `interrupted`, `turnComplete`, a resume, or the
  *   session's close. Video after `generationComplete` is forwarded (idle frames, if Google sends any) but not counted;
- *   an interrupted turn counts what arrived before the interruption.
+ *   an interrupted turn counts what arrived before the interruption. The count does not follow the answer above: all
+ *   video from the session's start, a `turnComplete` or a resume until the next `generationComplete` counts, idle or
+ *   not, while how Google bills avatar video is open (#5312).
  *
  * @module @memberjunction/ai-gemini
  * @author MemberJunction.com
@@ -40,6 +48,11 @@ export interface GeminiBridgedAvatarSinks {
     OnPcm(pcm: ArrayBuffer): void;
     /** Seconds of avatar video generated since the last report (a delta, never a total). */
     OnVideoSeconds(seconds: number): void;
+    /**
+     * The model is answering: called before each part of its answer goes to the host (its avatar's video while the answer
+     * is under way, or voice that plays). Never called for the video the avatar streams between answers.
+     */
+    OnAnswer(): void;
     /** One line about a part that was dropped; called once per kind of drop. */
     Report(message: string): void;
 }
@@ -63,8 +76,9 @@ function newTurn(): BridgedAvatarTurn {
 
 /**
  * Routes a granted bridged avatar session's model parts to the host (avatar pieces) and the session's audio output
- * (PCM before the turn's first video), applies each turn boundary, and reports the avatar video seconds generated.
- * The Gemini session creates one when the driver granted an avatar to a host that publishes it into a room.
+ * (PCM before the turn's first video), says which of them are the model's answer, applies each turn boundary, and reports
+ * the avatar video seconds generated. The Gemini session creates one when the driver granted an avatar to a host that
+ * publishes it into a room.
  */
 export class GeminiBridgedAvatarOutput {
     private readonly reported = new Set<string>();
@@ -73,6 +87,8 @@ export class GeminiBridgedAvatarOutput {
     private init: Fmp4Init | null = null;
     /** Avatar video seconds counted and not yet reported. */
     private pendingVideoSeconds = 0;
+    /** Whether the model's answer is under way (see the module's "Answer or idle"): video outside it is idle. */
+    private answering = false;
 
     /** @param sinks Where the media, the voice, the usage and the drop reports go. */
     constructor(private readonly sinks: GeminiBridgedAvatarSinks) {}
@@ -97,33 +113,57 @@ export class GeminiBridgedAvatarOutput {
         }
     }
 
-    /** `generationComplete`: the turn's media is all in. Its avatar seconds are reported; later video is not counted. */
+    /**
+     * The model's answer is under way: its output transcription has words. The video that follows is the answer's until
+     * its generation completes, the turn completes, a barge-in stops it, or the model calls a tool.
+     */
+    public AnswerStarted(): void {
+        this.answering = true;
+    }
+
+    /** The model called a tool: its answer stops there, and the video until it speaks again is idle. */
+    public ToolCalled(): void {
+        this.answering = false;
+    }
+
+    /**
+     * `generationComplete`: the turn's media is all in, and the answer is over. Its avatar seconds are reported; later
+     * video is idle and not counted.
+     */
     public GenerationComplete(): void {
         this.reportVideoSeconds();
         this.turn.GenerationEnded = true;
+        this.answering = false;
     }
 
-    /** `turnComplete`: reports what is still uncounted, ends a barge-in's drop window, and starts a new turn. */
+    /** `turnComplete`: reports what is still uncounted, ends the answer and a barge-in's drop window, and starts a new turn. */
     public TurnComplete(): void {
         this.reportVideoSeconds();
+        this.answering = false;
         this.turn = newTurn();
     }
 
-    /** `interrupted`: the turn counts what arrived; its late parts are dropped (and not counted) until its `turnComplete`. */
+    /**
+     * `interrupted`: the turn counts what arrived and its answer ends; its late parts are dropped (and not counted) until
+     * its `turnComplete`.
+     */
     public Interrupted(): void {
         this.reportVideoSeconds();
+        this.answering = false;
         this.turn.Dropping = true;
     }
 
-    /** The session resumed on a new connection, where a turn the drop cut off never completes: a new turn starts. */
+    /** The session resumed on a new connection, where a turn the drop cut off never completes: the answer ends, a new turn starts. */
     public Resumed(): void {
         this.reportVideoSeconds();
+        this.answering = false;
         this.turn = newTurn();
     }
 
-    /** The session is closing: what was generated and not yet reported is reported now. */
+    /** The session is closing: what was generated and not yet reported is reported now, and no answer is under way. */
     public Close(): void {
         this.reportVideoSeconds();
+        this.answering = false;
     }
 
     /**
@@ -147,10 +187,10 @@ export class GeminiBridgedAvatarOutput {
     }
 
     /**
-     * Makes the piece a frame, counts its video seconds (before the host may take the buffer), then hands it on. The frame
-     * is typed `video/mp4`, keeping the part's own type when it names `video/mp4` with its codecs: the room's bridge
-     * publishes a piece as the avatar only when its type is `video/mp4`, and every piece of the stream is. A piece that
-     * isn't MP4 is dropped, reported once per type.
+     * Makes the piece a frame, counts its video seconds (before the host may take the buffer), then hands it on, saying
+     * first that the model is answering when the piece is the answer's. The frame is typed `video/mp4`, keeping the part's
+     * own type when it names `video/mp4` with its codecs: the room's bridge publishes a piece as the avatar only when its
+     * type is `video/mp4`, and every piece of the stream is. A piece that isn't MP4 is dropped, reported once per type.
      */
     private acceptAvatar(mimeType: string | undefined, data: ArrayBuffer): void {
         const frame = Fmp4PieceToVideoFrame(data, mimeType, this.init);
@@ -165,14 +205,20 @@ export class GeminiBridgedAvatarOutput {
             this.pendingVideoSeconds += Fmp4VideoSeconds(data, this.init) ?? 0;
         }
         this.turn.HasVideo = true;
+        if (this.answering) {
+            this.sinks.OnAnswer();
+        }
         this.sinks.OnVideoFrame(frame);
     }
 
+    /** Plays a PCM part as the voice, unless the turn's video carries it. Voice that plays means the answer is under way. */
     private acceptVoice(pcm: ArrayBuffer): void {
         if (this.turn.HasVideo) {
             this.reportOnce('pcm-with-video', '[GeminiRealtime] Dropped PCM audio in a turn whose avatar video carries the voice.');
             return;
         }
+        this.answering = true;
+        this.sinks.OnAnswer();
         this.sinks.OnPcm(pcm);
     }
 

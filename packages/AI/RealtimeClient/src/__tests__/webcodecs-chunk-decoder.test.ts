@@ -218,6 +218,26 @@ describe('WebCodecsChunkDecoder', () => {
             expect(browser.Chunks).toHaveLength(MAX_FRAMES_AHEAD + 2);
         });
 
+        it('counts the frames still to show: chunks waiting, chunks decoding, and frames waiting for their time; none after a flush', async () => {
+            const browser = await started();
+            for (let i = 1; i <= 7; i++) {
+                decoder.Append(chunk(i * 40));
+            }
+            // MAX_FRAMES_AHEAD decoding, two waiting encoded.
+            expect(decoder.FramesAhead).toBe(8);
+
+            browser.Output(0); // shown at once; the next chunk starts decoding
+            expect(decoder.FramesAhead).toBe(7);
+            browser.Output(40_000); // waits for its time
+            expect(decoder.FramesAhead).toBe(7);
+            vi.advanceTimersByTime(40);
+            expect(shown()).toEqual(['frame@0', 'frame@40000']);
+            expect(decoder.FramesAhead).toBe(6);
+
+            decoder.Flush();
+            expect(decoder.FramesAhead).toBe(0);
+        });
+
         it('Detach takes the stream out of the element', () => {
             decoder.Attach(document.createElement('video'));
             decoder.Detach();

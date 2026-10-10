@@ -365,11 +365,18 @@ export class FakeAvatarPlayout implements IAvatarVideoPlayout {
     public Disposed = false;
     /** Controllable stand-in for "the element plays with media buffered ahead". */
     public IsPlaying = false;
+    /** Controllable stand-in for the playhead: how many of the appended frames, from the first, have played. A flush plays them all. */
+    public Played = 0;
     public CarriesVoice: boolean;
     public readonly Source: MediaVideoSource = { Kind: 'element', Attach: () => () => undefined };
 
     constructor(public readonly Options: VideoPlayoutOptions) {
         this.CarriesVoice = Options.CarriesVoice ?? true;
+    }
+
+    /** The appended frames the playhead has not reached ({@link Played}). */
+    public get FramesAhead(): number {
+        return Math.max(0, this.Appended.length - this.Played);
     }
 
     public Append(frame: RealtimeVideoFrame): void {
@@ -381,6 +388,7 @@ export class FakeAvatarPlayout implements IAvatarVideoPlayout {
     public Flush(): void {
         this.FlushCount++;
         this.IsPlaying = false;
+        this.Played = this.Appended.length;
     }
     public OnProblem(_handler: (problem: VideoPlayoutProblem, message: string) => void): () => void {
         return () => undefined;

@@ -78,6 +78,11 @@ export abstract class GeminiHarnessBase implements IRealtimeVideoConformanceHarn
         return this.deliverContent({ modelTurn: { role: 'model', parts: [{ inlineData: { mimeType, data: BytesToBase64(new Uint8Array(data)) } }] } });
     }
 
+    /** The model's first words, as Gemini transcribes its output: its answer is under way. */
+    public AnswerStarted(): Promise<void> {
+        return this.deliverContent({ outputTranscription: { text: 'Here is what I found.' } });
+    }
+
     public GenerationComplete(): Promise<void> {
         return this.deliverContent({ generationComplete: true });
     }
