@@ -70,6 +70,15 @@ export type BridgeOps = Pick<AIBridgeEngine, 'Config' | 'ProviderByDriverClass' 
 /** The `DriverClass` the LiveKit bridge registers under (must match the `MJ: AI Bridge Providers` row). */
 export const LIVEKIT_BRIDGE_DRIVER_CLASS = 'LiveKitBridge';
 
+/**
+ * Whether an agent's avatar can be shown in the room: the native module's answer, or, on a phone call, no without asking
+ * (`phone`: the caller sees no video).
+ */
+type RoomAvatarVideo = NativeAvatarVideoSupport | { Supported: false; Reason: 'phone'; Detail?: string };
+
+/** The answer for a phone call: the module is not asked. */
+const PHONE_CALL_AVATAR_VIDEO: RoomAvatarVideo = { Supported: false, Reason: 'phone' };
+
 /** Context passed to the realtime-session factory when starting an agent room session. */
 export interface RealtimeSessionStartContext {
   /** The agent to voice in the room, when known. */
@@ -115,6 +124,12 @@ export interface RealtimeSessionStartContext {
    * `describeAvatarVideo` with support): the session may then ask the model to render it. Absent: audio only, as before.
    */
   AvatarDelivery?: 'room';
+  /**
+   * `true` when the agent is answering a phone call in the room ({@link AgentRoomHostOptions.Channel} `'phone'`): the
+   * caller sees no video, so the session asks the model for no avatar and reports `phone`. Never set with
+   * {@link AvatarDelivery}.
+   */
+  PhoneCall?: boolean;
 }
 
 /**
@@ -146,6 +161,13 @@ export interface AgentRoomHostOptions {
   JoinMethod?: 'InboundRoute' | 'OnDemand' | 'Invite';
   /** Whether the agent was called into the room or placed the call. Default: not stated. */
   Direction?: 'Inbound' | 'Outbound';
+  /**
+   * How the person the agent serves reached the room: `'phone'`, a phone call through SIP (they hear the agent and see
+   * nothing), or `'web'`, a browser. On a phone call the coordinator never asks for the avatar: no room delivery, and the
+   * session asks the model for none (`phone`), even when people in the room could see it. Default: not stated, which
+   * is treated like `'web'`.
+   */
+  Channel?: 'phone' | 'web';
 }
 
 /**
@@ -391,7 +413,9 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
 
     // Whether this host's bot can publish the agent's avatar is asked BEFORE the model session opens, so a host that
     // can't never asks the model for it (and is never billed for video nobody sees). Cleared if the avatar is taken down.
-    const avatarVideo = await this.DescribeAvatarVideo();
+    // A phone call is never asked about: the caller sees no video, so the session asks for no avatar at all.
+    const phoneCall = host?.Channel === 'phone';
+    const avatarVideo: RoomAvatarVideo = phoneCall ? PHONE_CALL_AVATAR_VIDEO : await this.DescribeAvatarVideo();
     let avatarDelivery: 'room' | undefined = avatarVideo.Supported === true ? 'room' : undefined;
 
     let activeTurnHandler: BridgeTurnTakingToolHandler | undefined = undefined;
@@ -399,6 +423,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       const initialTools = buildToolsForFullDuplex(resolvedFullDuplex ?? false);
       const opened = await this.sessionFactory({
         AvatarDelivery: avatarDelivery,
+        PhoneCall: phoneCall || undefined,
         AgentID: params.AgentID,
         AgentName: params.AgentName,
         TargetAgentID: params.TargetAgentID,
@@ -599,9 +624,10 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
   /**
    * What became of the agent's avatar request: the session's own status, except that a session which asked for an
    * avatar and stayed audio only because this host could not publish it carries the host's reason (`decoder-missing`
-   * when there is no usable ffmpeg). Logged once per join when an avatar was asked for.
+   * when there is no usable ffmpeg, `phone` on a phone call whose session factory still asked). Logged once per join when
+   * an avatar was asked for.
    */
-  private avatarStatusFor(session: IRealtimeSession, avatarVideo: NativeAvatarVideoSupport, botName: string): RealtimeAvatarStatus | undefined {
+  private avatarStatusFor(session: IRealtimeSession, avatarVideo: RoomAvatarVideo, botName: string): RealtimeAvatarStatus | undefined {
     const status = session.AvatarStatus;
     if (!status?.Requested) {
       return status;

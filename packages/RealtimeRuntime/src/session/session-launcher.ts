@@ -46,6 +46,13 @@ export interface RealtimeSessionLaunchRequest {
    * configuration and answers with the resolved policy. `null` when the host brings none.
    */
   ChannelCandidatesJson: string | null;
+  /**
+   * Whether this host can show the agent's video: one of its channels shows it (the Avatar channel). `false` for a host
+   * with none (the embeddable widget, the mobile app): the server then asks the model for no avatar, so a video model is
+   * not chosen for a face nobody would see, and says why (`host`). A launcher that mints through its own endpoint should
+   * pass a `false` on. Absent: not stated, and the server assumes the host may show it.
+   */
+  ShowsAgentVideo?: boolean;
 }
 
 /** What the runtime hands a launcher besides the request: the provider the session runs on. */
@@ -107,6 +114,8 @@ interface MintExtensions {
   AvatarStatus: boolean;
   /** How the browser reaches the provider: the `Transport` and `RelayUrl` fields of a relay session. */
   RelayTransport: boolean;
+  /** That this host shows no agent video: the `showsAgentVideo` argument, sent only as `false`. */
+  NoAgentVideo: boolean;
 }
 
 /** What the launcher says, once, when the server rejects an extension of the mint. */
@@ -114,17 +123,22 @@ const UNSUPPORTED_EXTENSION_WARNINGS: Readonly<Record<keyof MintExtensions, stri
   ChannelScoping: '[RealtimeSession] The server does not support channel scoping — minting without it and resolving channels locally.',
   AvatarStatus: '[RealtimeSession] The server does not report the avatar status — minting without it; the call shows no avatar notice.',
   RelayTransport: '[RealtimeSession] The server does not report the session transport — minting without it; every session connects directly.',
+  NoAgentVideo:
+    "[RealtimeSession] The server does not take showsAgentVideo — minting without it; it may ask for an avatar this app can't show (the call stays audio only).",
 };
 
 /**
  * The extension a mint failure rejects, when the failure is a GraphQL validation rejection of one the mint asked for —
  * the signature of a server that predates it ("Unknown argument "channelCandidatesJson"…", "Cannot query field
- * "ClientPolicyJson"…", "Cannot query field "AvatarStatusJson"…", "Cannot query field "Transport"…"). Only that case is
- * recoverable; any other failure is a real mint failure and must surface. A rejection names one field at a time, so a
- * server that predates several extensions is found out one step at a time.
+ * "ClientPolicyJson"…", "Cannot query field "AvatarStatusJson"…", "Cannot query field "Transport"…", "Unknown argument
+ * "showsAgentVideo"…"). Only that case is recoverable; any other failure is a real mint failure and must surface. A
+ * rejection names one field at a time, so a server that predates several extensions is found out one step at a time.
  */
 function unsupportedExtension(error: unknown, asked: MintExtensions): keyof MintExtensions | null {
   const message = error instanceof Error ? error.message : String(error);
+  if (asked.NoAgentVideo && message.includes('showsAgentVideo')) {
+    return 'NoAgentVideo';
+  }
   if (asked.AvatarStatus && message.includes('AvatarStatusJson')) {
     return 'AvatarStatus';
   }
@@ -145,11 +159,13 @@ function unsupportedExtension(error: unknown, asked: MintExtensions): keyof Mint
  * When the session has channel candidates it asks the server to scope them (`channelCandidatesJson`)
  * and to return the resolved policy (`ClientPolicyJson`). It also asks for the session's live-avatar status
  * (`AvatarStatusJson`), which the call reads to say why it shows no avatar, and for how the browser reaches the
- * provider (`Transport` and `RelayUrl`), which a relay session's client driver connects with. A server that predates
- * an extension rejects it at validation, in which case the launcher mints without that extension alone (the
- * runtime then resolves the channel scope locally, shows no avatar notice, or treats every session as direct) — a
- * new client must keep working against an older server, and a failed mint over an optional extension would be the
- * worst way to find out they differ. Each fallback is remembered per launcher instance so a long-lived runtime asks once.
+ * provider (`Transport` and `RelayUrl`), which a relay session's client driver connects with. A host that shows no agent
+ * video ({@link RealtimeSessionLaunchRequest.ShowsAgentVideo} `false`) says so (`showsAgentVideo: false`), so the
+ * server asks the model for no avatar. A server that predates an extension rejects it at validation, in which case the
+ * launcher mints without that extension alone (the runtime then resolves the channel scope locally, shows no avatar
+ * notice, treats every session as direct, or leaves the avatar to the browser's audio-only fallback at connect) — a new
+ * client must keep working against an older server, and a failed mint over an optional extension would be the worst way
+ * to find out they differ. Each fallback is remembered per launcher instance so a long-lived runtime asks once.
  */
 export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher {
   /** The extensions of the mint the server rejected; each is added once and kept. */
@@ -158,7 +174,7 @@ export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher 
   public async Launch(request: RealtimeSessionLaunchRequest, context: RealtimeSessionLaunchContext): Promise<StartRealtimeClientSessionResult> {
     // The session's provider is the GraphQL one in every shipped host; this is the same narrowing the runtime applies for its relay mutations.
     const transport = context.Provider as GraphQLDataProvider;
-    const result = await this.executeMintMutation(transport, this.buildVariables(request), request.ChannelCandidatesJson);
+    const result = await this.executeMintMutation(transport, this.buildVariables(request), request.ChannelCandidatesJson, request.ShowsAgentVideo === false);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
     if (!payload || !HasClientCredential(payload)) {
       throw new Error('StartRealtimeClientSession returned no ephemeral token (or, for a relay session, no relay URL)');
@@ -191,16 +207,22 @@ export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher 
   private async executeMintMutation(
     transport: GraphQLDataProvider,
     variables: Record<string, JSONValue>,
-    channelCandidatesJson: string | null
+    channelCandidatesJson: string | null,
+    noAgentVideo: boolean
   ): Promise<{ StartRealtimeClientSession?: StartRealtimeClientSessionResult } | undefined> {
     let asked: MintExtensions = {
       ChannelScoping: channelCandidatesJson !== null && !this.serverLacks.has('ChannelScoping'),
       AvatarStatus: !this.serverLacks.has('AvatarStatus'),
       RelayTransport: !this.serverLacks.has('RelayTransport'),
+      NoAgentVideo: noAgentVideo && !this.serverLacks.has('NoAgentVideo'),
     };
     for (;;) {
       try {
-        const mintVariables = asked.ChannelScoping ? { ...variables, channelCandidatesJson } : variables;
+        const mintVariables: Record<string, JSONValue> = {
+          ...variables,
+          ...(asked.ChannelScoping ? { channelCandidatesJson } : {}),
+          ...(asked.NoAgentVideo ? { showsAgentVideo: false } : {}),
+        };
         return await transport.ExecuteGQL(this.buildMintMutation(asked), mintVariables);
       } catch (error) {
         const unsupported = unsupportedExtension(error, asked);
@@ -221,8 +243,9 @@ export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher 
 
   /** The `StartRealtimeClientSession` document, with the extensions asked for. */
   private buildMintMutation(asked: MintExtensions): string {
-    const extraVariable = asked.ChannelScoping ? ', $channelCandidatesJson: String' : '';
-    const extraArgument = asked.ChannelScoping ? ', channelCandidatesJson: $channelCandidatesJson' : '';
+    const extraVariable = (asked.ChannelScoping ? ', $channelCandidatesJson: String' : '') + (asked.NoAgentVideo ? ', $showsAgentVideo: Boolean' : '');
+    const extraArgument =
+      (asked.ChannelScoping ? ', channelCandidatesJson: $channelCandidatesJson' : '') + (asked.NoAgentVideo ? ', showsAgentVideo: $showsAgentVideo' : '');
     const extraField = [
       asked.ChannelScoping ? 'ClientPolicyJson' : '',
       asked.AvatarStatus ? 'AvatarStatusJson' : '',

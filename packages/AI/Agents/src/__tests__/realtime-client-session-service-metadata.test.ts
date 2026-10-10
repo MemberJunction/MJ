@@ -604,4 +604,24 @@ describe('resolveModelForSession — a co-agent with video on prefers a model th
         const browser = await bothKeys().CallResolveModelForSession({ ServerSide: false }, VIDEO_ON);
         expect(browser.Resolution?.DriverClass).toBe('GeminiEnterpriseRealtime');
     });
+
+    it('skips the preference for a phone call even in a room that publishes avatars (a SIP call)', async () => {
+        geminiCatalog();
+        const svc = bothKeys();
+        const sip = await svc.CallResolveModelForSession({ ServerSide: true, PhoneCall: true, AvatarDelivery: 'room' }, VIDEO_ON);
+        expect(sip.Resolution?.ModelID).toBe('m-ext');
+        expect(svc.AvatarAsked).toEqual([]);
+        expect(fallbackLines()).toEqual([]);
+    });
+
+    it("skips the preference for a browser app that shows no agent video (the widget, the mobile app), and keeps it when it may", async () => {
+        geminiCatalog();
+        const svc = bothKeys();
+        const widget = await svc.CallResolveModelForSession({ ShowsAgentVideo: false }, VIDEO_ON);
+        expect(widget.Resolution?.ModelID).toBe('m-ext');
+        expect(svc.AvatarAsked).toEqual([]);
+        expect(fallbackLines()).toEqual([]);
+        const explorer = await bothKeys().CallResolveModelForSession({ ShowsAgentVideo: true }, VIDEO_ON);
+        expect(explorer.Resolution?.DriverClass).toBe('GeminiEnterpriseRealtime');
+    });
 });

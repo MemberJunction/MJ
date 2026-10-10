@@ -93,6 +93,18 @@ export function FindPreparedChannel(prepared: ReadonlyArray<PreparedChannel>, ke
 }
 
 /**
+ * Whether a session with these prepared channels could show the agent's video: one of them shows it (it sinks outbound
+ * video, as the Avatar channel does) and is not switched off in the registry. A policy can only select among the
+ * prepared plugins, so with none the session never asks for the agent's video at connect, whatever the server scopes:
+ * the mint can then ask the model for no avatar (`showsAgentVideo: false`).
+ *
+ * @param prepared The channels prepared for the session.
+ */
+export function PreparedChannelsShowAgentVideo(prepared: ReadonlyArray<PreparedChannel>): boolean {
+    return prepared.some((p) => p.Registry !== 'inactive' && p.Plugin.ShowsAgentVideo);
+}
+
+/**
  * The facts the browser reports about one channel at mint (also the input to the local scope
  * decision). Reads the plugin's descriptor and tools; never initializes it.
  *

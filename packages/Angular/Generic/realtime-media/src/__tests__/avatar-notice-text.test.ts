@@ -11,12 +11,19 @@ const DECIDED: Readonly<Record<RealtimeAvatarUnavailableReason, string>> = {
   host: "Audio only: this app can't show the avatar",
   browser: "Audio only: this browser can't play the avatar",
   bridged: "Audio only for Sage: the avatar can't be shown in this meeting",
+  phone: "Audio only for Sage: the avatar isn't shown on phone calls",
   'decoder-missing': "Audio only for Sage: the avatar couldn't be shown in this meeting",
   'decoder-failed': "Audio only for Sage: the avatar couldn't be shown in this meeting",
   'publish-failed': "Audio only for Sage: the avatar couldn't be shown in this meeting",
 };
 
 describe('AvatarNoticeText', () => {
+  it("says a phone call shows no avatar, in its own words rather than the meeting's 'bridged' line", () => {
+    expect(AvatarNoticeText('phone', null, 'Sage', { NameAgent: true })).toBe("Audio only for Sage: the avatar isn't shown on phone calls");
+    expect(AvatarNoticeText('phone')).toBe("Audio only for the agent: the avatar isn't shown on phone calls");
+    expect(AvatarNoticeText('phone', null, 'Sage')).not.toBe(AvatarNoticeText('bridged', null, 'Sage'));
+  });
+
   it('says each reason in the decided words', () => {
     for (const [reason, line] of Object.entries(DECIDED) as Array<[RealtimeAvatarUnavailableReason, string]>) {
       expect(AvatarNoticeText(reason, null, 'Sage'), reason).toBe(line);
@@ -53,6 +60,7 @@ const MEETING: Readonly<Record<RealtimeAvatarUnavailableReason, string>> = {
   host: "Audio only for Sage: this app can't show the avatar",
   browser: "Audio only for Sage: this browser can't play the avatar",
   bridged: "Audio only for Sage: the avatar can't be shown in this meeting",
+  phone: "Audio only for Sage: the avatar isn't shown on phone calls",
   'decoder-missing': "Audio only for Sage: the avatar couldn't be shown in this meeting",
   'decoder-failed': "Audio only for Sage: the avatar couldn't be shown in this meeting",
   'publish-failed': "Audio only for Sage: the avatar couldn't be shown in this meeting",

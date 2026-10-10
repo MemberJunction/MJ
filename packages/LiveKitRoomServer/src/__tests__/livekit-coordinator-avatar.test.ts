@@ -10,7 +10,7 @@ import type { IRealtimeSession, RealtimeAvatarStatus, RealtimeSessionCapabilitie
 import type { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
 import { RegisterNativeRoomModule, type NativeAvatarVideoSupport, type NativeRoomClient, type NativeRoomModule } from '@memberjunction/ai-bridge-livekit';
 import type { ActiveBridgeSession, BridgeRealtimeSessionRecovery, StartBridgeSessionParams } from '@memberjunction/ai-bridge-server';
-import { LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, type BridgeOps, type RealtimeSessionStartContext } from '../livekit-agent-room-coordinator';
+import { LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, type AgentRoomHostOptions, type BridgeOps, type RealtimeSessionStartContext } from '../livekit-agent-room-coordinator';
 import { LiveKitTokenService } from '../livekit-token-service';
 
 const CONFIG = { ServerUrl: 'wss://test.livekit.cloud', ApiKey: 'devkey', ApiSecret: 'devsecretdevsecretdevsecret123456' };
@@ -192,6 +192,58 @@ describe('LiveKitAgentRoomCoordinator — the agent\'s avatar in a meeting', () 
         await start();
         expect(await tokenAttributes(starts[0].Configuration?.AccessToken)).toEqual({ 'mj.agentAvatar': 'audio-only:endpoint' });
         expect(starts[0].RecoverRealtimeSessionWithoutAvatar).toBeUndefined();
+    });
+
+    describe('a phone call that reaches the room through SIP (Host.Channel phone)', () => {
+        const startPhone = (host: AgentRoomHostOptions = {}) =>
+            coordinator.StartAgentRoomSession({ AgentSessionID: `avatar-${++room}`, RoomName: `avatar-room-${room}`, AgentName: 'Sage', Host: { Channel: 'phone', ...host } });
+
+        it("never asks the native module, passes no room delivery, marks the phone call, and puts 'audio-only:phone' on the token", async () => {
+            const calls: string[] = [];
+            const { ops, starts } = makeBridgeOps();
+            coordinator.SetBridgeOps(ops);
+            coordinator.SetNativeModuleSpecifier(registerModule({ Supported: true }, calls));
+            coordinator.SetSessionFactory(async (ctx) => {
+                calls.push('open');
+                contexts.push(ctx);
+                return new AvatarModelSession({ Requested: true, Granted: false, Reason: 'phone' });
+            });
+            await startPhone();
+            expect(calls).toEqual(['open']);
+            expect(contexts[0].AvatarDelivery).toBeUndefined();
+            expect(contexts[0].PhoneCall).toBe(true);
+            expect(await tokenAttributes(starts[0].Configuration?.AccessToken)).toEqual({ 'mj.agentAvatar': 'audio-only:phone' });
+            expect(starts[0].RecoverRealtimeSessionWithoutAvatar).toBeUndefined();
+        });
+
+        it("names phone on the token when a session factory still asked and its driver refused it as 'bridged'", async () => {
+            const { ops, starts } = makeBridgeOps();
+            coordinator.SetBridgeOps(ops);
+            coordinator.SetNativeModuleSpecifier(registerModule({ Supported: true }));
+            sessions(new AvatarModelSession({ Requested: true, Granted: false, Reason: 'bridged' }));
+            await startPhone();
+            expect(await tokenAttributes(starts[0].Configuration?.AccessToken)).toEqual({ 'mj.agentAvatar': 'audio-only:phone' });
+        });
+
+        it('re-opens a dropped phone session still as a phone call, without room delivery', async () => {
+            const { ops, starts } = makeBridgeOps();
+            coordinator.SetBridgeOps(ops);
+            coordinator.SetNativeModuleSpecifier(registerModule({ Supported: true }));
+            sessions(new AvatarModelSession({ Requested: true, Granted: false, Reason: 'phone' }));
+            await startPhone({ RecoverModelSession: true });
+            await starts[0].RecoverRealtimeSession!({ PriorTranscript: 'User: hi', Attempt: 1, Reason: 'drop' });
+            expect(contexts.map((c) => [c.AvatarDelivery, c.PhoneCall])).toEqual([[undefined, true], [undefined, true]]);
+        });
+
+        it("keeps room delivery for a web visitor's room call (Host.Channel web)", async () => {
+            const { ops } = makeBridgeOps();
+            coordinator.SetBridgeOps(ops);
+            coordinator.SetNativeModuleSpecifier(registerModule({ Supported: true }));
+            sessions(new AvatarModelSession({ Requested: true, Granted: true }));
+            await startPhone({ Channel: 'web' });
+            expect(contexts[0].AvatarDelivery).toBe('room');
+            expect(contexts[0].PhoneCall).toBeUndefined();
+        });
     });
 
     it('carries no avatar attribute when the agent asked for none, and keeps mj.agentWatches beside one when it did', async () => {

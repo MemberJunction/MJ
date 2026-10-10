@@ -73,6 +73,7 @@ import {
   BuildChannelCandidate,
   FindPreparedChannel,
   MergeToolMetadata,
+  PreparedChannelsShowAgentVideo,
   ReconcileChannelsWithPolicy,
   ResolveLocalChannelScope,
   ToolsByChannelKey,
@@ -1229,7 +1230,7 @@ export class RealtimeSessionRuntime {
       // server needs the candidates to scope them. Nothing is initialized until the policy is known.
       const scope = await this.prepareChannelScope(options?.HostChannels);
       const allClientTools = [...(clientTools ?? []), ...scope.NativeTools];
-      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext, scope.CandidatesJson);
+      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext, scope.CandidatesJson, scope.ShowsAgentVideo);
     } catch (error) {
       await this.failSessionStart(error);
       return;
@@ -2356,12 +2357,13 @@ export class RealtimeSessionRuntime {
    * the native tools to declare and the candidates to report. Starts nothing.
    *
    * @param hostChannels Channels the host brings to this session.
-   * @returns The native tools to declare at mint, and the candidates as JSON (`null` when there are none,
-   *   so a channel-less session sends exactly the mint it always did).
+   * @returns The native tools to declare at mint, the candidates as JSON (`null` when there are none,
+   *   so a channel-less session sends exactly the mint it always did), and whether the host could show the agent's
+   *   video ({@link PreparedChannelsShowAgentVideo}).
    */
   private async prepareChannelScope(
     hostChannels?: RealtimeHostChannelDeclaration[]
-  ): Promise<{ NativeTools: RealtimeToolDefinition[]; CandidatesJson: string | null }> {
+  ): Promise<{ NativeTools: RealtimeToolDefinition[]; CandidatesJson: string | null; ShowsAgentVideo: boolean }> {
     this.discardUnmountedChannels();
     const prepared = await this.prepareChannels(hostChannels);
     this.preparedChannels = prepared;
@@ -2374,7 +2376,7 @@ export class RealtimeSessionRuntime {
     const nativeTools = SelectNativeChannelTools(local.Channels, ToolsByChannelKey(candidates));
     // `Registry` is the browser's own view and never goes over the wire: the server reads the registry itself.
     const wire = candidates.map(({ Registry: _registry, ...candidate }) => candidate);
-    return { NativeTools: nativeTools, CandidatesJson: wire.length > 0 ? JSON.stringify(wire) : null };
+    return { NativeTools: nativeTools, CandidatesJson: wire.length > 0 ? JSON.stringify(wire) : null, ShowsAgentVideo: PreparedChannelsShowAgentVideo(prepared) };
   }
 
   /**
@@ -3694,7 +3696,8 @@ export class RealtimeSessionRuntime {
 
   /**
    * Mints a session through the installed {@link Launcher} — by default the stock
-   * `StartRealtimeClientSession` mutation (see {@link DefaultRealtimeSessionLauncher}).
+   * `StartRealtimeClientSession` mutation (see {@link DefaultRealtimeSessionLauncher}). `showsAgentVideo` is whether
+   * one of the session's channels could show the agent's video; without one the server asks the model for no avatar.
    */
   private async mintSession(
     targetAgentId: string,
@@ -3709,7 +3712,8 @@ export class RealtimeSessionRuntime {
     mediaCollectionId?: string | null,
     applicationId?: string | null,
     appContext?: AppContextSnapshot | null,
-    channelCandidatesJson?: string | null
+    channelCandidatesJson?: string | null,
+    showsAgentVideo?: boolean
   ): Promise<StartRealtimeClientSessionResult> {
     const result = await this._launcher.Launch(
       {
@@ -3725,7 +3729,8 @@ export class RealtimeSessionRuntime {
         MediaCollectionId: mediaCollectionId ?? null,
         ApplicationId: applicationId ?? null,
         AppContext: appContext ?? null,
-        ChannelCandidatesJson: channelCandidatesJson ?? null
+        ChannelCandidatesJson: channelCandidatesJson ?? null,
+        ...(showsAgentVideo === undefined ? {} : { ShowsAgentVideo: showsAgentVideo })
       },
       { Provider: this.Provider }
     );

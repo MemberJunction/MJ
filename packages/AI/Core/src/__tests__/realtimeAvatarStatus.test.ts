@@ -5,6 +5,7 @@ import type { RealtimeAvatarUnavailableReason } from '../generic/baseRealtime';
 const EVERY_REASON: RealtimeAvatarUnavailableReason[] = [
     'endpoint',
     'bridged',
+    'phone',
     'custom-disabled',
     'unknown-avatar',
     'no-binding',
@@ -23,6 +24,10 @@ describe('ParseRealtimeAvatarStatus', () => {
             Granted: false,
             Reason: 'endpoint',
         });
+    });
+
+    it("reads a phone call's status: asked for, not granted, because the caller sees no video", () => {
+        expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":"phone"}')).toEqual({ Requested: true, Granted: false, Reason: 'phone' });
     });
 
     it('reads every reason this version knows, and treats a null reason as none', () => {
