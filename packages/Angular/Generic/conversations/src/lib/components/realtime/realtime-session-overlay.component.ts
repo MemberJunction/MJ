@@ -61,6 +61,15 @@ import { MediaLayoutPrefs, RecordPipRect, type MediaDevice, type MediaDeviceSele
 const AVATAR_NOTICE_VISIBLE_MS = 10_000;
 
 /**
+ * What the call says while no microphone works, by why: a microphone the browser blocked must be allowed before a pick
+ * can open it. `{Agent}` stands for the agent's name. The arrow is the device chevron on the microphone button.
+ */
+const MICROPHONE_NOTICE_TEXT = {
+  Blocked: "{Agent} can't hear you: the browser blocked the microphone. Allow it for this site, then choose it from the arrow next to the microphone button.",
+  Lost: "{Agent} can't hear you: no microphone is working. Connect one, or choose one from the arrow next to the microphone button.",
+} as const;
+
+/**
  * A request to open an entity record, emitted by the call overlay's gear-gated developer
  * links ("Open run" / "Open session"). The Generic host (chat area) converts it onto its
  * existing `openEntityRecord` output chain — the package never navigates itself (no Router).
@@ -973,9 +982,24 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
+   * What the call says while no microphone works: the call lost its microphone (the one in use failed and so did the
+   * default, or the last one went away), so the agent hears nothing until the user picks one in the device menu. Shown
+   * under the banner for as long as that lasts. `null` while the microphone works, outside a call, and always in review.
+   */
+  public get MicrophoneNotice(): string | null {
+    const failure = this.microphone.Failure;
+    if (!failure || this.IsReviewing) {
+      return null;
+    }
+    const line = failure === 'denied' ? MICROPHONE_NOTICE_TEXT.Blocked : MICROPHONE_NOTICE_TEXT.Lost;
+    return line.split('{Agent}').join(this.AgentName);
+  }
+
+  /**
    * A microphone or camera picked in the composer's device menu: the session switches to it. The menu shows the pick
    * while the switch runs, then the device in use: the new one, or the old one when the new one could not open. A pick of
-   * the device in use changes nothing.
+   * the device in use changes nothing. While no microphone works, the session opens the picked microphone, and the menu
+   * then shows it, or none when it could not open.
    */
   public async OnDeviceSelected(selection: MediaDeviceSelection): Promise<void> {
     if (selection.Kind !== 'microphone' && selection.Kind !== 'camera') {

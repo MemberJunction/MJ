@@ -649,7 +649,9 @@ export class RealtimeSessionRuntime {
   /**
    * The call's microphone, now and on every change: the one in use and the ones the user can move it to with
    * {@link SwitchMicrophone}, as the host's camera-and-microphone controller lists them. Offered from the moment the call
-   * connects until it ends, and kept current as devices come and go. {@link REALTIME_MICROPHONE_NONE} outside a call and
+   * connects until it ends, and kept current as devices come and go. When the call loses its microphone (the one in use
+   * fails and so does the fallback to the default, or the last one goes away), its `Failure` says why: the agent hears
+   * nothing until the user picks a microphone, which opens it again. {@link REALTIME_MICROPHONE_NONE} outside a call and
    * on a host without a controller, which opens the microphone itself (`IRealtimeMediaHost.AcquireMicrophone`).
    */
   public readonly Microphone$: Observable<RealtimeMicrophoneState> = this._microphone$.asObservable();
@@ -796,11 +798,19 @@ export class RealtimeSessionRuntime {
   // ── Session internals ──────────────────────────────────────────────────────
   /** The provider-direct realtime client driving the live session (ClassFactory-resolved). */
   private client: BaseRealtimeClient | null = null;
-  /** The mic capture stream — acquired here (permission UX) and handed to the client. */
+  /**
+   * The mic capture stream — acquired here (permission UX) and handed to the client. A microphone the controller opens
+   * again after the call lost one replaces it.
+   */
   private localStream: MediaStream | null = null;
+  /**
+   * Whether the user muted the call's microphone, as {@link ToggleMute} last reported it. While the call has no microphone
+   * track there is nothing to mute, and a microphone opened again after the call lost one starts this way.
+   */
+  private microphoneMuted = false;
   /** The host's camera-and-microphone controller for this session, when the host offers one. */
   private localMedia: ILocalMediaController | null = null;
-  /** Follows the controller's microphone, so a swapped-in track reaches the driver and the recorder. */
+  /** Follows the controller's microphone, so a swapped-in track or a reopened microphone reaches the driver and the recorder. */
   private localMediaSubscription: Subscription | null = null;
   /**
    * Whether the call offers its microphone for switching ({@link Microphone$}, {@link SwitchMicrophone}): from the moment
@@ -1568,6 +1578,7 @@ export class RealtimeSessionRuntime {
     this.closeLocalMedia();
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
+    this.microphoneMuted = false;
     // Teardown left the release to this start when the microphone was still opening. A cleared or
     // replaced lease means teardown already released it, or a newer start has opened the microphone
     // since and its own end releases it.
@@ -1641,19 +1652,28 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Moves the driver and the recorder onto the microphone's new track whenever the controller swaps one into
-   * the stream: a device switch, or a lost device replaced by the default. The stream stays the same object,
-   * and the controller carries the old track's mute over. Mid-swap the stream holds no track, so only a
-   * finished swap is followed. Every report also keeps {@link Microphone$} current once the call offers it.
+   * Moves the driver and the recorder onto the call's microphone whenever the controller gives it a new track. A device
+   * switch, or a lost device replaced by the default, swaps a track into the same stream, and the controller carries the
+   * old track's mute over. A microphone opened again after the call lost one comes in a new stream: its track takes the
+   * call's mute, and the stream becomes the one {@link ToggleMute} and the teardown act on. Mid-swap the stream holds no
+   * track, so only a finished swap is followed. Every report also keeps {@link Microphone$} current once the call offers
+   * it.
    */
   private followMicrophone(controller: ILocalMediaController, stream: MediaStream): void {
-    let followed = stream.getAudioTracks()[0] ?? null;
+    let followedStream = stream;
+    let followedTrack = stream.getAudioTracks()[0] ?? null;
     this.localMediaSubscription = controller.State$.subscribe((media) => {
-      const track = stream.getAudioTracks()[0] ?? null;
-      if (track && track !== followed) {
-        followed = track;
-        this.recorder?.ReplaceMicrophone?.(stream);
-        this.client?.ReplaceMicrophone?.(stream)?.catch((error: unknown) => {
+      const current = controller.GetStream('microphone') ?? followedStream;
+      const track = current.getAudioTracks()[0] ?? null;
+      if (track && track !== followedTrack) {
+        if (current !== followedStream) {
+          track.enabled = !this.microphoneMuted;
+          this.localStream = current;
+          followedStream = current;
+        }
+        followedTrack = track;
+        this.recorder?.ReplaceMicrophone?.(current);
+        this.client?.ReplaceMicrophone?.(current)?.catch((error: unknown) => {
           console.error('[RealtimeSession] The realtime driver could not move to the new microphone:', error);
         });
       }
@@ -1676,7 +1696,7 @@ export class RealtimeSessionRuntime {
       return;
     }
     const current = this._microphone$.value;
-    const next = ReadMicrophoneState(media, current.DeviceID);
+    const next = ReadMicrophoneState(media, current);
     if (!SameMicrophoneState(next, current)) {
       this._microphone$.next(next);
     }
@@ -1836,16 +1856,18 @@ export class RealtimeSessionRuntime {
    * Moves the call's microphone to another device: one of the `Devices` on {@link Microphone$}. The host's controller
    * swaps the new track into the same stream and carries the mute over, and the driver and the call's recording move to
    * it, so the agent keeps hearing the user. When the new microphone cannot open, the controller goes back to the one in
-   * use. Resolves with the microphone's state once the switch is over. Nothing changes outside a call, on a host without a
-   * controller, or while the call has no microphone open (the controller stopped it).
+   * use. While the call has no microphone open (it lost the one in use and the default, or the last one went away), the
+   * pick opens one again: the driver and the recording move to it, and it keeps the call's mute. Resolves with the
+   * microphone's state once the switch is over. Nothing changes outside a call or on a host without a controller.
    *
    * @param deviceId The microphone to move to.
    */
   public async SwitchMicrophone(deviceId: string): Promise<RealtimeMicrophoneState> {
     const controller = this.localMedia;
-    const status = controller?.State.Microphone.Status;
-    if (controller && this.microphoneOffered && (status === 'on' || status === 'starting')) {
-      await controller.SwitchDevice('microphone', deviceId);
+    if (controller && this.microphoneOffered) {
+      const status = controller.State.Microphone.Status;
+      const live = status === 'on' || status === 'starting';
+      await (live ? controller.SwitchDevice('microphone', deviceId) : controller.Start('microphone', deviceId));
     }
     return this._microphone$.value;
   }
@@ -1942,14 +1964,19 @@ export class RealtimeSessionRuntime {
     void this.onUserTranscript(trimmed);
   }
 
-  /** Mute / unmute the local microphone track. Returns the new muted state. */
+  /**
+   * Mute / unmute the local microphone track. Returns the new muted state. While the call has no microphone track (a
+   * switch is putting a new one in, or the call lost its microphone) there is nothing to mute: nothing changes, and it
+   * returns the call's mute, which the next microphone keeps. Outside a call it returns `false`.
+   */
   public ToggleMute(): boolean {
     const tracks = this.localStream?.getAudioTracks() ?? [];
     if (tracks.length === 0) {
-      return false;
+      return this.microphoneMuted;
     }
     const muted = tracks[0].enabled; // currently enabled → becomes muted
     this.client?.SetMuted(muted);
+    this.microphoneMuted = muted;
     return muted;
   }
 
@@ -4485,6 +4512,7 @@ export class RealtimeSessionRuntime {
     this.closeLocalMedia();
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
+    this.microphoneMuted = false;
 
     // Hand the platform back whatever opening the microphone changed. Stopping the tracks is not
     // the same thing: iOS, for instance, is put into a record-and-play audio category for the call,
@@ -4597,6 +4625,7 @@ export class RealtimeSessionRuntime {
     this.currentTurnStartMs = null;
     this.turnAudioStartCaptured = false;
     this.usedChannelNames.clear();
+    this.microphoneMuted = false;
   }
 
   /** The GraphQL provider used for relay mutations. */
