@@ -8,7 +8,8 @@
  * - **Voice out** — `publishAudio(pcm)` captures the agent's synthesized PCM onto a published audio track
  *   (a LiveKit `AudioSource` → `LocalAudioTrack`), so other participants hear the agent.
  * - **Hearing in** — each remote participant's subscribed audio track is read via an `AudioStream` and
- *   surfaced as a diarized `NativeRoomAudioFrame` (`{ data, participantIdentity, name }`).
+ *   surfaced as a diarized `NativeRoomAudioFrame` (`{ data, participantIdentity, name }`). Screen-share audio (a shared
+ *   tab's or screen's sound) is not the participant's speech: it is unsubscribed as it arrives and never reaches the model.
  * - **Seeing in** — when the client is created with video options (the agent watches the meeting), a
  *   {@link RoomVideoWatcher} reads the cameras and screens of people who let agents see them, as many at once as the
  *   model takes (one today), picked by a ranking: a shared screen first, else the active speaker's camera after a short
@@ -39,7 +40,7 @@
  * @author MemberJunction.com
  */
 
-import { LogError, LogStatusEx } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { performance } from 'node:perf_hooks';
 import type {
     NativeAvatarMediaChunk,
@@ -308,9 +309,11 @@ export interface RtcNodeModule {
     TrackPublishOptions: new (data?: { source?: number; dtx?: boolean; red?: boolean; stream?: string; simulcast?: boolean }) => RtcTrackPublishOptions;
     /**
      * Track-source constants — `SOURCE_MICROPHONE` tags the bot's published voice track; `SOURCE_CAMERA` and
-     * `SOURCE_SCREENSHARE` tell a participant's camera from a screen they share.
+     * `SOURCE_SCREENSHARE` tell a participant's camera from a screen they share; `SOURCE_SCREENSHARE_AUDIO` marks the
+     * sound of a shared tab or screen, which the bot does not hear. A track published without a source reports
+     * `SOURCE_UNKNOWN` (0), which the bot hears.
      */
-    TrackSource: { SOURCE_MICROPHONE: number; SOURCE_CAMERA: number; SOURCE_SCREENSHARE: number };
+    TrackSource: { SOURCE_MICROPHONE: number; SOURCE_CAMERA: number; SOURCE_SCREENSHARE: number; SOURCE_SCREENSHARE_AUDIO: number };
 }
 
 /** Opaque marker for a constructed `TrackPublishOptions` proto handed to `publishTrack`. */
@@ -497,6 +500,8 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     private draining = false;
 
     private readonly inboundGaps = new Map<string, InboundFrameGapHistogram>();
+    /** Participants whose screen-share audio the bot has logged not hearing: one line per participant while in the room. */
+    private readonly screenShareAudioLogged = new Set<string>();
     private readonly outboundTelemetry: OutboundAudioTelemetry = {
         captureCount: 0,
         underrunCount: 0,
@@ -603,6 +608,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         this.avatarPublisher = null;
         this.closeInboundStreams();
         this.inboundGaps.clear();
+        this.screenShareAudioLogged.clear();
         this.lastCaptureFinishMs = undefined;
         this.outboundQueue.length = 0; // stop the drain loop (it bails when audioSource is null)
         this.room = null;
@@ -864,7 +870,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         // VERIFY against @livekit/rtc-node: TrackSubscribed listener arity (track, publication, participant).
         room.on(rtc.RoomEvent.TrackSubscribed, ((track: RtcTrack, publication: RtcTrackPublication, participant: RtcParticipant) => {
             if (track.kind === rtc.TrackKind.KIND_AUDIO) {
-                this.consumeInboundAudio(rtc, track, participant);
+                this.routeInboundAudio(rtc, track, publication, participant);
             } else if (track.kind === rtc.TrackKind.KIND_VIDEO) {
                 this.routeInboundVideo(track, publication, participant);
             }
@@ -876,6 +882,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 
         room.on(rtc.RoomEvent.ParticipantDisconnected, ((participant: RtcParticipant) => {
             this.inboundGaps.delete(participant.identity);
+            this.screenShareAudioLogged.delete(participant.identity);
             this.videoWatcher?.HandleParticipantDisconnected(participant);
             this.participantDisconnectedHandler?.(participant.identity);
         }) as (...args: never[]) => void);
@@ -887,6 +894,38 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 
         if (this.videoWatcher) {
             this.wireVideoEvents(rtc, room, this.videoWatcher);
+        }
+    }
+
+    /**
+     * Hears a subscribed audio track as its participant's speech, unless it is screen-share audio
+     * (`SOURCE_SCREENSHARE_AUDIO`, the sound of a shared tab or screen): that is not the person speaking, and tab or system
+     * audio is not model input. It is unsubscribed, as video the bot does not read is. Every other source is heard,
+     * `SOURCE_UNKNOWN` and a missing source included: clients built on LiveKit's Rust SDK (rtc-node, the Python SDK)
+     * publish audio as `SOURCE_UNKNOWN` unless they name a source, so hearing only microphones would silence them.
+     */
+    private routeInboundAudio(rtc: RtcNodeModule, track: RtcTrack, publication: RtcTrackPublication, participant: RtcParticipant): void {
+        if (publication.source === rtc.TrackSource.SOURCE_SCREENSHARE_AUDIO) {
+            this.dropScreenShareAudio(publication, participant);
+            return;
+        }
+        this.consumeInboundAudio(rtc, track, participant);
+    }
+
+    /**
+     * Stops the server sending a participant's screen-share audio to the bot (best-effort, like
+     * {@link DropVideoSubscription}). The first such track per participant is logged, so an operator can tell why the agent
+     * did not react to a shared video's sound.
+     */
+    private dropScreenShareAudio(publication: RtcTrackPublication, participant: RtcParticipant): void {
+        if (!this.screenShareAudioLogged.has(participant.identity)) {
+            this.screenShareAudioLogged.add(participant.identity);
+            LogStatus(`[LiveKitRtcNodeRoomClient] not hearing screen-share audio from '${participant.identity}': a shared tab's or screen's sound is not their speech`);
+        }
+        try {
+            publication.setSubscribed?.(false);
+        } catch (err) {
+            LogError(`[LiveKitRtcNodeRoomClient] unsubscribing the screen-share audio of '${participant.identity}' failed: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 

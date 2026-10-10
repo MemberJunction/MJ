@@ -5,9 +5,18 @@
  * participant connect/disconnect events, roster, data-channel publish, disconnect teardown, the
  * sample-rate overrides, the absence of raw video/screen publish (the avatar is the only video out; its tests are in
  * livekit-rtc-node-avatar.test.ts), the participant-video wiring (the watcher's own rules are in
- * room-video-watcher.test.ts), and the actionable error when the addon is absent.
+ * room-video-watcher.test.ts), which audio the bot hears (not screen-share audio), and the actionable error when the
+ * addon is absent.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mocks = vi.hoisted(() => ({ LogStatus: vi.fn<(message: string) => void>() }));
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return { ...actual, LogStatus: mocks.LogStatus };
+});
+
 import {
     CreateLiveKitRtcNodeModule,
     LiveKitRtcNodeRoomClient,
@@ -36,12 +45,15 @@ import {
     TRACK_KIND,
     TRACK_SOURCE,
     type FakeParticipant,
+    type FakeRtc,
 } from './fake-rtc-node';
 
 const connectArgs: NativeConnectArgs = { url: 'wss://lk.example', token: 'tok', name: 'Agent' };
 const frame = (samples: number[]): RtcAudioFrame => ({
     data: Int16Array.from(samples), sampleRate: DEFAULT_SAMPLE_RATE, channels: 1, samplesPerChannel: samples.length,
 });
+
+beforeEach(() => mocks.LogStatus.mockClear());
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -170,6 +182,83 @@ describe('LiveKitRtcNodeRoomClient — connect + audio', () => {
 
         await client.disconnect();
         expect(Object.keys(client.GetTelemetry().inboundGaps)).toHaveLength(0);
+    });
+});
+
+// ── What the bot hears ──────────────────────────────────────────────────────────
+
+describe('LiveKitRtcNodeRoomClient — what the bot hears', () => {
+    const audioTrack: RtcTrack = { kind: TRACK_KIND.KIND_AUDIO };
+    const ada = { identity: 'ada', name: 'Ada' };
+    const bob = { identity: 'bob', name: 'Bob' };
+
+    /** A remote audio publication with the given track source. */
+    const audioFrom = (sid: string, source: number): FakePublication => new FakePublication(sid, source, { kind: TRACK_KIND.KIND_AUDIO });
+
+    /** The status lines saying whose screen-share audio the bot does not hear. */
+    const screenShareAudioLines = (): string[] =>
+        mocks.LogStatus.mock.calls.map(([message]) => message).filter((message) => message.includes('screen-share audio'));
+
+    /** A connected bot (model input at 16 kHz) collecting what it hears; every audio stream it opens yields `samples`. */
+    async function listening(samples: number[]): Promise<{ fake: FakeRtc; heard: NativeRoomAudioFrame[] }> {
+        const fake = makeFakeRtc();
+        const client = new LiveKitRtcNodeRoomClient(24000, 16000, 1, async () => fake.module);
+        const heard: NativeRoomAudioFrame[] = [];
+        client.onAudioFrame((f) => heard.push(f));
+        await client.connect(connectArgs);
+        fake.inboundFramesFor([frame(samples)]);
+        return { fake, heard };
+    }
+
+    it('does not hear screen-share audio: it opens no stream, unsubscribes the track, and says so once per participant in the room', async () => {
+        const { fake, heard } = await listening([1, 2, 3]);
+        const adasTab = audioFrom('TR_ada_tab', TRACK_SOURCE.SOURCE_SCREENSHARE_AUDIO);
+        const adasNextTab = audioFrom('TR_ada_tab_2', TRACK_SOURCE.SOURCE_SCREENSHARE_AUDIO); // Ada stops and shares again
+        const bobsTab = audioFrom('TR_bob_tab', TRACK_SOURCE.SOURCE_SCREENSHARE_AUDIO);
+        fake.emit(ROOM_EVENT.TrackSubscribed, audioTrack, adasTab, ada);
+        fake.emit(ROOM_EVENT.TrackSubscribed, audioTrack, adasNextTab, ada);
+        fake.emit(ROOM_EVENT.TrackSubscribed, audioTrack, bobsTab, bob);
+        await flush();
+
+        expect(fake.cap.audioStreamRates).toEqual([]); // no AudioStream: nothing of it reaches the model
+        expect(heard).toEqual([]);
+        expect([adasTab, adasNextTab, bobsTab].map((p) => p.subscribeCalls)).toEqual([[false], [false], [false]]);
+        const lines = screenShareAudioLines();
+        expect(lines).toHaveLength(2);
+        expect(lines[0]).toContain("'ada'");
+        expect(lines[1]).toContain("'bob'");
+
+        // Ada leaves, rejoins and shares a tab with sound again: a new stay in the room gets its own line.
+        fake.emit(ROOM_EVENT.ParticipantDisconnected, ada);
+        fake.emit(ROOM_EVENT.TrackSubscribed, audioTrack, audioFrom('TR_ada_tab_3', TRACK_SOURCE.SOURCE_SCREENSHARE_AUDIO), ada);
+        expect(screenShareAudioLines()).toHaveLength(3);
+        expect(fake.cap.audioStreamRates).toEqual([]);
+    });
+
+    it('hears the microphone of a person who shares a tab with sound, and only the microphone', async () => {
+        const { fake, heard } = await listening([4, 5]);
+        const mic = audioFrom('TR_mic', TRACK_SOURCE.SOURCE_MICROPHONE);
+        const tab = audioFrom('TR_tab', TRACK_SOURCE.SOURCE_SCREENSHARE_AUDIO);
+        fake.emit(ROOM_EVENT.TrackSubscribed, audioTrack, mic, ada);
+        fake.emit(ROOM_EVENT.TrackSubscribed, audioTrack, tab, ada);
+        await flush();
+
+        expect(fake.cap.audioStreamRates).toEqual([[16000, 1]]); // one stream, the microphone's, at the model's input rate
+        expect(heard.map((f) => [f.participantIdentity, Array.from(new Int16Array(f.data))])).toEqual([['ada', [4, 5]]]);
+        expect(mic.subscribeCalls).toEqual([]);
+        expect(tab.subscribeCalls).toEqual([false]);
+    });
+
+    it('still hears audio whose source is unknown or missing (a client that published it without naming a source)', async () => {
+        const { fake, heard } = await listening([6]);
+        const unnamed = audioFrom('TR_unnamed', TRACK_SOURCE.SOURCE_UNKNOWN);
+        fake.emit(ROOM_EVENT.TrackSubscribed, audioTrack, unnamed, { identity: 'cleo', name: 'Cleo' });
+        fake.emit(ROOM_EVENT.TrackSubscribed, audioTrack, {}, { identity: 'dev' }); // a publication with no source at all
+        await flush();
+
+        expect(heard.map((f) => f.participantIdentity)).toEqual(['cleo', 'dev']);
+        expect(unnamed.subscribeCalls).toEqual([]);
+        expect(screenShareAudioLines()).toEqual([]);
     });
 });
 
