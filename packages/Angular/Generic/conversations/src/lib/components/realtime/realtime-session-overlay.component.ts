@@ -203,7 +203,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /**
    * The host's own words for why the call shows no avatar, per reason (for example its product's name for "this app").
-   * A reason it leaves out keeps the stock line from `ng-realtime-media` (`AVATAR_NOTICE_TEXT`).
+   * A reason it leaves out keeps the stock line from `ng-realtime-media` (`AVATAR_NOTICE_TEXT`). `unknown` words a reason
+   * this version doesn't know, such as a newer server's, in place of `AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT`.
    */
   @Input() AvatarNoticeLabels: AvatarNoticeOverrides | null = null;
 
@@ -792,10 +793,13 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     return notice && notice !== this.avatarNoticeDone && !this.IsReviewing ? notice : null;
   }
 
-  /** The notice's line, in the host's words when it gave some ({@link AvatarNoticeLabels}). */
+  /**
+   * The notice's line, in the host's words when it gave some ({@link AvatarNoticeLabels}); a notice without a reason (one
+   * this version doesn't know) reads the call's line for it.
+   */
   public get AvatarNoticeMessage(): string {
     const notice = this.AvatarNotice;
-    return notice ? AvatarNoticeText(notice.Reason, this.AvatarNoticeLabels, this.AgentName) : '';
+    return notice ? AvatarNoticeText(notice.Reason ?? null, this.AvatarNoticeLabels, this.AgentName) : '';
   }
 
   /** The user dismissed the notice: it does not come back in this call. */

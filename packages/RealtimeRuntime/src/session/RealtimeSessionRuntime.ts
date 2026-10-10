@@ -635,10 +635,11 @@ export class RealtimeSessionRuntime {
   private readonly _avatarNotice$ = new BehaviorSubject<RealtimeAvatarNotice | null>(null);
   /**
    * Why the call shows no avatar the agent asked for: set once per call, after it connects, when the model renders none,
-   * the persona has no face for it, the app shows no agent video (`host`) or the browser can't play it (`browser`).
-   * `null` when there is nothing to say (no avatar asked for, the avatar shows, or the mint reported no status) and after
-   * the call ends. A provider resume inside the call does not set it again. A host turns the reason into words once,
-   * for example "Audio only: this voice model can't show an avatar".
+   * the persona has no face for it, the app shows no agent video (`host`) or the browser can't play it (`browser`); with
+   * no `Reason` when the mint gave one this version doesn't know, such as a newer server's. `null` when there is nothing
+   * to say (no avatar asked for, the avatar shows, or the mint reported no status) and after the call ends. A provider
+   * resume inside the call does not set it again. A host turns the reason into words once, for example "Audio only: this
+   * voice model can't show an avatar".
    */
   public readonly AvatarNotice$: Observable<RealtimeAvatarNotice | null> = this._avatarNotice$.asObservable();
 

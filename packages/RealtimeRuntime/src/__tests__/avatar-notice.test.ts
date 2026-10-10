@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { ClientRealtimeSessionConfig, JSONValue, RealtimeAvatarStatus } from '@memberjunction/ai';
+import type { ClientRealtimeSessionConfig, JSONValue, ParsedRealtimeAvatarStatus, RealtimeAvatarStatus } from '@memberjunction/ai';
 import { RequestsAgentVideo, ResolveAvatarNotice } from '../session/avatar-notice';
 
 const GRANTED: RealtimeAvatarStatus = { Requested: true, Granted: true };
@@ -17,6 +17,17 @@ describe('ResolveAvatarNotice', () => {
         ['granted, asked for, live', GRANTED, true, true, null],
     ])('%s', (_case, status, requested, established, reason) => {
         expect(ResolveAvatarNotice(status, requested, established)).toEqual(reason ? { Reason: reason } : null);
+    });
+
+    it("gives a notice without a reason when the mint's reason is one this version doesn't know, and decides the rest as before", () => {
+        const notGranted: ParsedRealtimeAvatarStatus = { Requested: true, Granted: false, ReasonUnknown: true };
+        expect(ResolveAvatarNotice(notGranted, true, false)).toStrictEqual({});
+        expect(ResolveAvatarNotice(notGranted, false, false)).toStrictEqual({});
+        expect(ResolveAvatarNotice({ ...notGranted, Requested: false }, true, false)).toBeNull();
+        const granted: ParsedRealtimeAvatarStatus = { ...GRANTED, ReasonUnknown: true };
+        expect(ResolveAvatarNotice(granted, false, false)).toEqual({ Reason: 'host' });
+        expect(ResolveAvatarNotice(granted, true, false)).toEqual({ Reason: 'browser' });
+        expect(ResolveAvatarNotice(granted, true, true)).toBeNull();
     });
 });
 

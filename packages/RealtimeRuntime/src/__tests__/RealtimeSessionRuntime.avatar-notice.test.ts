@@ -90,19 +90,30 @@ function mintResult(driver: string, avatarStatusJson?: string | null): StartReal
     };
 }
 
+/** A mint's avatar status: as a server builds it, or as JSON given as is (for a reason this version doesn't know). */
+type MintStatus = RealtimeAvatarStatus | string | null;
+
+/** The status as the mint result's `AvatarStatusJson`. */
+function statusJson(status: MintStatus): string | null {
+    if (typeof status === 'string') {
+        return status;
+    }
+    return status ? JSON.stringify(status) : null;
+}
+
 /** Answers the mint with the driver and avatar status a test names. */
 class MintProvider {
     public readonly sessionId = 'transport-session-1';
     public readonly Entities: unknown[] = [];
     constructor(
         private readonly driver: string,
-        private readonly status: RealtimeAvatarStatus | null
+        private readonly status: MintStatus
     ) {}
     public async ExecuteGQL(query: string): Promise<unknown> {
         if (!query.includes('mutation StartRealtimeClientSession')) {
             return {};
         }
-        return { StartRealtimeClientSession: mintResult(this.driver, this.status ? JSON.stringify(this.status) : null) };
+        return { StartRealtimeClientSession: mintResult(this.driver, statusJson(this.status)) };
     }
     public PushStatusUpdates(): { subscribe(): { unsubscribe(): void } } {
         return { subscribe: () => ({ unsubscribe: () => undefined }) };
@@ -110,7 +121,7 @@ class MintProvider {
 }
 
 /** A session whose mint reports `status`, with or without the Avatar channel, recording every notice it publishes. */
-function build(status: RealtimeAvatarStatus | null, options: { Driver?: string; AvatarChannel?: boolean } = {}) {
+function build(status: MintStatus, options: { Driver?: string; AvatarChannel?: boolean } = {}) {
     const runtime = new RealtimeSessionRuntime({ AcquireMicrophone: async () => videoStream('mic') });
     runtime.Provider = new MintProvider(options.Driver ?? 'notice-video-out', status) as unknown as IMetadataProvider;
     const notices: Array<RealtimeAvatarNotice | null> = [];
@@ -162,10 +173,19 @@ describe('RealtimeSessionRuntime.AvatarNotice$', () => {
         const fromResult = selfMinting();
         const seen: Array<RealtimeAvatarNotice | null> = [];
         fromResult.AvatarNotice$.subscribe((n) => seen.push(n));
-        await fromResult.StartRealtimeSessionFromResult(mintResult('notice-video-out', '{"Requested":true,"Granted":false,"Reason":"downgraded"}'));
+        await fromResult.StartRealtimeSessionFromResult(mintResult('notice-video-out', '{"Requested":true,"Granted":false,"Reason":7}'));
         expect(fromResult.IsActive).toBe(true);
         expect(seen).toEqual([null]);
         await fromResult.EndRealtimeSession();
+    });
+
+    it("says the call is audio only, without a reason, when the mint's reason is one this version doesn't know", async () => {
+        const { runtime, notices, begin } = build('{"Requested":true,"Granted":false,"Reason":"some-newer-reason"}');
+        await begin();
+        expect(runtime.CurrentAvatarNotice).toStrictEqual({});
+        expect(notices).toHaveLength(2);
+        await runtime.EndRealtimeSession();
+        expect(notices).toEqual([null, {}, null]);
     });
 
     it("says the app can't show the avatar when it was granted and no channel asked for the agent's video", async () => {

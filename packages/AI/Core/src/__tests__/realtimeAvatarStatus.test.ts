@@ -36,11 +36,35 @@ describe('ParseRealtimeAvatarStatus', () => {
         expect([...REALTIME_AVATAR_UNAVAILABLE_REASONS].sort()).toEqual([...EVERY_REASON].sort());
     });
 
-    it('reads no status from a reason it does not know, including the retired "downgraded"', () => {
-        expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":"downgraded"}')).toBeNull();
-        expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":"a-future-reason"}')).toBeNull();
+    it('keeps the status of a reason it does not know without the reason, marked unknown (a newer one, the retired "downgraded", an inherited name)', () => {
+        for (const reason of ['a-future-reason', 'downgraded', 'toString']) {
+            expect(ParseRealtimeAvatarStatus(JSON.stringify({ Requested: true, Granted: false, Reason: reason })), reason).toStrictEqual({
+                Requested: true,
+                Granted: false,
+                ReasonUnknown: true,
+            });
+        }
+        expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":true,"Reason":"a-future-reason"}')).toStrictEqual({
+            Requested: true,
+            Granted: true,
+            ReasonUnknown: true,
+        });
+    });
+
+    it('marks no reason unknown when it knows the reason or there is none', () => {
+        expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":"endpoint"}')).toStrictEqual({
+            Requested: true,
+            Granted: false,
+            Reason: 'endpoint',
+        });
+        expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false}')).toStrictEqual({ Requested: true, Granted: false });
+    });
+
+    it('reads no status from a reason that is not text', () => {
         expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":7}')).toBeNull();
-        expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":"toString"}')).toBeNull();
+        expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":true}')).toBeNull();
+        expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":{"Code":"endpoint"}}')).toBeNull();
+        expect(ParseRealtimeAvatarStatus('{"Requested":true,"Granted":false,"Reason":["endpoint"]}')).toBeNull();
     });
 
     it('reads no status when a field is missing or of the wrong type', () => {

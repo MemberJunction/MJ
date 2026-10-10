@@ -1015,6 +1015,27 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(textOf(f)).toBe("Audio only: the Example widget can't show the avatar");
     });
 
+    it("says the call can't show the avatar when the notice has no reason (one this version doesn't know)", async () => {
+      const { f, notice$ } = await renderCall('console');
+      notice$.next({});
+      await settle();
+      const alert = alertOf(f);
+      expect(textOf(f)).toBe("Audio only: the avatar can't be shown in this call");
+      expect(alert?.getAttribute('role')).toBe('status');
+      expect(alert?.querySelector('.mj-alert__icon')?.classList.contains('fa-video-slash')).toBe(true);
+    });
+
+    it("uses the host's own line for a reason this version doesn't know (unknown), and only for that reason", async () => {
+      const { f, notice$ } = await renderCall('orb', { AvatarNoticeLabels: { unknown: 'Audio only: Example Chat shows {Agent} without an avatar' } });
+      notice$.next({});
+      await settle();
+      expect(textOf(f)).toBe('Audio only: Example Chat shows Sage without an avatar');
+      notice$.next(null);
+      notice$.next(ENDPOINT);
+      await settle();
+      expect(textOf(f)).toBe("Audio only: this voice model can't show an avatar");
+    });
+
     it('goes when dismissed and does not come back in that call; the next call says its own', async () => {
       const { f, notice$ } = await renderCall();
       notice$.next(ENDPOINT);
