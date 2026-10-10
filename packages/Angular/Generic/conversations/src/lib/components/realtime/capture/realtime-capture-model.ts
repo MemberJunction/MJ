@@ -1,7 +1,7 @@
 import { BehaviorSubject, type Observable } from 'rxjs';
 import type { JSONObject } from '@memberjunction/ai';
-import type { CapturedDisplaySurface, MediaParticipant, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
-import type { RealtimeCaptureKind, RealtimeCaptureState } from '@memberjunction/realtime-runtime';
+import type { CapturedDisplaySurface, MediaParticipant, MediaVideoSource, VideoSourceState } from '@memberjunction/ai-realtime-client/media';
+import { REALTIME_CAPTURE_SOURCE_IDS, type RealtimeCaptureKind, type RealtimeCaptureState } from '@memberjunction/realtime-runtime';
 
 /** Where a capture channel stands, as the agent reads it (its `status` noun) and its surface shows it. */
 export type RealtimeCaptureStatus = 'off' | 'asked' | 'starting' | 'on' | 'failed';
@@ -22,7 +22,12 @@ export interface RealtimeCaptureView {
   Surface: CapturedDisplaySurface;
   /** The shared panel's name, while the user shares one panel of the page; `null` otherwise. */
   PanelLabel: string | null;
-  /** Whether the agent sees the capture now: it is on and the channel lets the agent see pixels. */
+  /**
+   * Whether the agent sees the capture now: it is on, the channel lets the agent see pixels, and the model is being sent
+   * its frames (its source among the session's video sources is on and active, which is what the "Agent can see" chip
+   * reads). On a model that takes one video stream, a screen share started after the camera is the one sent, so the camera
+   * is not seen until the user picks it again.
+   */
   AgentCanSee: boolean;
 }
 
@@ -44,6 +49,11 @@ export class RealtimeCaptureModel {
   private reason: string | null = null;
   private capture: RealtimeCaptureState = { Status: 'off' };
   private agentCanSee = false;
+  /**
+   * Whether the model is being sent this capture's frames: its source is on and active. `null` until the host reports the
+   * session's sources ({@link FollowVideoSources}); a host that never does leaves the channel's exposure alone to decide.
+   */
+  private framesSent: boolean | null = null;
   private onStream: { Stream: MediaStream; Participant: MediaParticipant | null; Source: MediaVideoSource | null } | null = null;
   private readonly view: BehaviorSubject<RealtimeCaptureView>;
   private changeHandler: ((change: RealtimeCaptureChange) => void) | null = null;
@@ -116,6 +126,22 @@ export class RealtimeCaptureModel {
     }
   }
 
+  /**
+   * The session's video sources changed (the runtime's `VideoSources$`). The model is sent this capture's frames only while
+   * its source (`REALTIME_CAPTURE_SOURCE_IDS`) is on and active; a capture with no source yet, or none any more, is not
+   * sent. Only the view changes: the channel's state is the same, so the change handler hears nothing and the agent is
+   * told nothing (the arbiter tells the model what it now sees).
+   */
+  public FollowVideoSources(sources: readonly VideoSourceState[]): void {
+    const sourceId = REALTIME_CAPTURE_SOURCE_IDS[this.Kind];
+    const source = sources.find((s) => s.SourceID === sourceId);
+    const sent = source !== undefined && source.Enabled && source.Active;
+    if (sent !== this.framesSent) {
+      this.framesSent = sent;
+      this.view.next(this.buildView());
+    }
+  }
+
   /** The channel's state as the agent reads it. */
   public ToState(): JSONObject {
     const view = this.View;
@@ -157,7 +183,7 @@ export class RealtimeCaptureModel {
       Source: shown?.Source ?? null,
       Surface: capture.Surface ?? 'unknown',
       PanelLabel: capture.PanelLabel ?? null,
-      AgentCanSee: capture.Status === 'on' && this.agentCanSee,
+      AgentCanSee: capture.Status === 'on' && this.agentCanSee && (this.framesSent ?? true),
     };
   }
 

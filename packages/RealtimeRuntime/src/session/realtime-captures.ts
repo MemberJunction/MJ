@@ -156,8 +156,15 @@ const ADMITTED: RealtimeCaptureAdmission = { Admitted: true, VisibleToAgent: tru
 /** Both captures off: what a host shows outside a session. */
 export const REALTIME_CAPTURES_OFF: RealtimeCaptureStates = Object.freeze({ Camera: OFF, Screen: OFF });
 
-/** The arbiter source ids, prefixed so they never meet a channel's (`Key#instance`). */
-const SOURCE_IDS: Record<RealtimeCaptureKind, string> = { camera: 'capture:camera', screen: 'capture:screen' };
+/**
+ * The ids the camera and the screen share go by on the session's video source arbiter, and so on the runtime's
+ * `VideoSources$`; prefixed so they never meet a channel's (`Key#instance`). A host or channel finds a capture's source
+ * by its id there, to tell whether the model is being sent its frames (`Enabled` and `Active`).
+ */
+export const REALTIME_CAPTURE_SOURCE_IDS: Readonly<Record<RealtimeCaptureKind, string>> = Object.freeze({
+    camera: 'capture:camera',
+    screen: 'capture:screen',
+});
 
 /** The names the model is told it is looking at, and the "agent can see" list shows. A shared panel goes by its own. */
 const LABELS: Record<RealtimeCaptureKind, string> = { camera: 'Camera', screen: 'Shared screen' };
@@ -311,7 +318,7 @@ export class RealtimeCaptures {
     public SetVisibleToAgent(kind: RealtimeCaptureKind, visible: boolean): void {
         this.showing[kind] = { ...this.showing[kind], VisibleToAgent: visible };
         if (this.live[kind]) {
-            VideoSourceArbiter.ForSink(this.options.Client).SetSourceEnabled(SOURCE_IDS[kind], visible, false);
+            VideoSourceArbiter.ForSink(this.options.Client).SetSourceEnabled(REALTIME_CAPTURE_SOURCE_IDS[kind], visible, false);
         }
     }
 
@@ -322,7 +329,7 @@ export class RealtimeCaptures {
         this.live[kind] = null;
         if (live) {
             live.Sampler?.Stop();
-            VideoSourceArbiter.ForSink(this.options.Client).UnregisterSource(SOURCE_IDS[kind]);
+            VideoSourceArbiter.ForSink(this.options.Client).UnregisterSource(REALTIME_CAPTURE_SOURCE_IDS[kind]);
             live.Release();
         }
         if (this.stateOf(kind).Status !== 'off') {
@@ -408,7 +415,7 @@ export class RealtimeCaptures {
      */
     private showToAgent(kind: RealtimeCaptureKind, stream: MediaStream, label: string): { Stop(): void } {
         const arbiter = VideoSourceArbiter.ForSink(this.options.Client);
-        const sourceId = SOURCE_IDS[kind];
+        const sourceId = REALTIME_CAPTURE_SOURCE_IDS[kind];
         const { ChannelKey, VisibleToAgent } = this.showing[kind];
         arbiter.RegisterSource({ SourceID: sourceId, Label: label, Kind: kind, Enabled: VisibleToAgent, ...(ChannelKey ? { ChannelKey } : {}) });
         const create = this.options.CreateSampler ?? createDomSampler;

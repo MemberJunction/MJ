@@ -6,6 +6,7 @@ import { EventEmitter } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { MJGlobal } from '@memberjunction/global';
 import type { IMetadataProvider } from '@memberjunction/core';
+import type { VideoSourceState } from '@memberjunction/ai-realtime-client';
 import {
   BaseRealtimeChannelClient,
   REALTIME_CAPTURES_OFF,
@@ -28,9 +29,24 @@ LoadRealtimeCaptureChannels();
 
 const stream = (name: string): MediaStream => ({ id: name }) as unknown as MediaStream;
 
-/** A session as the channel sees it: the captures, the user's clicks, the notes to the model. */
-function session() {
+/** A capture's source as the session's video source arbiter lists it: on and sent to the model unless the test says otherwise. */
+const source = (kind: RealtimeCaptureKind, state: Partial<VideoSourceState> = {}): VideoSourceState => ({
+  SourceID: `capture:${kind}`,
+  Label: kind === 'camera' ? 'Camera' : 'Shared screen',
+  Kind: kind,
+  Enabled: true,
+  Active: true,
+  FramesSent: 0,
+  ...state,
+});
+
+/**
+ * A session as the channel sees it: the captures, the video sources, the user's clicks, the notes to the model. With
+ * `WithSources: false` the context has no `VideoSources$`, as on a host that does not report them.
+ */
+function session(options: { WithSources?: boolean } = {}) {
   const captures = new BehaviorSubject<RealtimeCaptureStates>(REALTIME_CAPTURES_OFF);
+  const sources = new BehaviorSubject<readonly VideoSourceState[]>([]);
   const started: RealtimeCaptureKind[] = [];
   const stopped: RealtimeCaptureKind[] = [];
   const notes: string[] = [];
@@ -44,6 +60,7 @@ function session() {
     AgentSessionID: 'session-1',
     ExecuteServerAction: async () => null,
     Captures$: captures.asObservable(),
+    ...(options.WithSources === false ? {} : { VideoSources$: sources.asObservable() }),
     StartCapture: async (kind): Promise<RealtimeCaptureState> => {
       started.push(kind);
       return { Status: 'starting' };
@@ -54,7 +71,7 @@ function session() {
   };
   const set = (kind: RealtimeCaptureKind, state: RealtimeCaptureState) =>
     captures.next(kind === 'camera' ? { ...captures.value, Camera: state } : { ...captures.value, Screen: state });
-  return { ctx, captures, set, started, stopped, notes };
+  return { ctx, captures, sources, set, started, stopped, notes };
 }
 
 /** A stand-in for the surface: its outputs, and what the channel binds to it. */
@@ -135,12 +152,36 @@ describe('the Camera and Screen Share channels', () => {
   });
 
   it('say the agent can see the camera only while their exposure allows pixels', () => {
+    host.sources.next([source('camera')]);
     host.set('camera', { Status: 'on', Stream: stream('cam') });
     expect(camera.Model.View.AgentCanSee).toBe(true);
     camera.ApplyExposure({ User: 'state' });
     expect(camera.Model.View.AgentCanSee).toBe(false);
     camera.ApplyExposure({});
     expect(camera.Model.View.AgentCanSee).toBe(true);
+  });
+
+  it("say the agent can see the camera only while the session's sources say the model is sent its frames (#5373)", () => {
+    host.sources.next([source('camera')]);
+    host.set('camera', { Status: 'on', Stream: stream('cam') });
+    expect(camera.Model.View.AgentCanSee).toBe(true);
+    // A screen share starts on a model that takes one video stream: the model is sent the screen, the most recent capture.
+    host.sources.next([source('camera', { Active: false }), source('screen')]);
+    expect(camera.Model.View.AgentCanSee).toBe(false);
+    // The user picks the camera under "Agent sees".
+    host.sources.next([source('camera', { Picked: true }), source('screen', { Active: false })]);
+    expect(camera.Model.View.AgentCanSee).toBe(true);
+    expect(names()).toEqual(['started']);
+  });
+
+  it('keep to their exposure alone on a host that reports no video sources', () => {
+    const other = session({ WithSources: false });
+    const channel = new RealtimeCameraChannel();
+    channel.Initialize(other.ctx);
+    other.set('camera', { Status: 'on', Stream: stream('cam') });
+    expect(channel.Model.View.AgentCanSee).toBe(true);
+    channel.ApplyExposure({ User: 'state' });
+    expect(channel.Model.View.AgentCanSee).toBe(false);
   });
 
   it("run the user's buttons on their surface: start, not now, stop", async () => {
@@ -177,5 +218,7 @@ describe('the Camera and Screen Share channels', () => {
     camera.Dispose();
     host.set('camera', { Status: 'on', Stream: stream('cam') });
     expect(camera.Model.View.Status).toBe('off');
+    expect(host.captures.observed).toBe(false);
+    expect(host.sources.observed).toBe(false);
   });
 });

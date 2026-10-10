@@ -15,6 +15,7 @@ import {
     RealtimeSessionRuntime,
     REALTIME_CAPTURES_OFF,
     REALTIME_CAPTURE_OFFERS_NONE,
+    REALTIME_CAPTURE_SOURCE_IDS,
     type RealtimeCaptureKind,
     type RealtimeCaptureOffers,
     type RealtimeCaptureStates,
@@ -352,6 +353,28 @@ describe('RealtimeSessionRuntime camera and screen share', () => {
             expect(seen).toEqual(['off', 'starting', 'on', 'off']);
             expect(await ctx?.StartCapture?.('screen')).toMatchObject({ Status: 'failed', Failure: 'policy' });
             await runtime.EndRealtimeSession();
+        });
+
+        it("gives a capture channel the session's video sources through its context, with the ones the model is sent (#5373)", async () => {
+            const camera = new CaptureChannel('Camera', 'camera', 'open-on-start');
+            const { runtime, start } = build([camera, new CaptureChannel('ScreenShare', 'screen')]);
+            await start();
+            let sent: string[] = [];
+            camera.ContextForTest?.VideoSources$?.subscribe((sources) => (sent = sources.filter((s) => s.Enabled && s.Active).map((s) => s.SourceID)));
+            expect(sent).toEqual([]);
+            await runtime.StartCamera();
+            expect(sent).toEqual([REALTIME_CAPTURE_SOURCE_IDS.camera]);
+            // The test model takes one video stream: a screen share started after the camera is the one it is sent.
+            await runtime.StartScreenShare();
+            expect(sent).toEqual([REALTIME_CAPTURE_SOURCE_IDS.screen]);
+            runtime.SelectVideoSource(REALTIME_CAPTURE_SOURCE_IDS.camera);
+            expect(sent).toEqual([REALTIME_CAPTURE_SOURCE_IDS.camera]);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('names the captures on the video sources by fixed ids', () => {
+            expect(REALTIME_CAPTURE_SOURCE_IDS).toEqual({ camera: 'capture:camera', screen: 'capture:screen' });
+            expect(Object.isFrozen(REALTIME_CAPTURE_SOURCE_IDS)).toBe(true);
         });
 
         it("hides a running capture from the agent when the user lowers its channel's exposure, and keeps it running", async () => {

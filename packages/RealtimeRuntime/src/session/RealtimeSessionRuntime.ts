@@ -2819,6 +2819,8 @@ export class RealtimeSessionRuntime {
       Captures$: this.Captures$,
       StartCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StartCamera() : this.StartScreenShare()),
       StopCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StopCamera() : this.StopScreenShare()),
+      // The video sources and which of them the model is sent, so a capture's channel says the agent sees it only then.
+      VideoSources$: this.VideoSources$,
       // The agent's video, and the call's state, for a channel that shows the agent.
       AgentVideo$: this.AgentVideo$,
       ConnectionState$: this.ConnectionState$

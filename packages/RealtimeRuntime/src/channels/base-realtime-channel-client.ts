@@ -9,7 +9,8 @@ import {
   type BaseRealtimeClient,
   type IChannelFrameProvider,
   type MediaPlacement,
-  type MediaVideoSource
+  type MediaVideoSource,
+  type VideoSourceState
 } from '@memberjunction/ai-realtime-client';
 import {
   CompareExposure,
@@ -257,6 +258,15 @@ export interface RealtimeChannelContext {
 
   /** OPTIONAL — stops the camera or the screen share (the runtime's `StopCamera` / `StopScreenShare`). */
   StopCapture?(kind: RealtimeCaptureKind): void;
+
+  /**
+   * OPTIONAL — the session's video sources, now and on every change (the runtime's `VideoSources$`): each source the
+   * video source arbiter knows, whether it is on (`Enabled`) and whether the model is being sent its frames (`Active`).
+   * On a model that takes one video stream, a capture that is on can still be one the model is not sent. A channel that
+   * fronts a capture finds its source by `REALTIME_CAPTURE_SOURCE_IDS`, and says the agent sees the capture only while
+   * that source is both.
+   */
+  VideoSources$?: Observable<readonly VideoSourceState[]>;
 
   /**
    * OPTIONAL — the agent's video while the model sends it, `null` otherwise (the runtime's `AgentVideo$`). A channel that
