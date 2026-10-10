@@ -184,6 +184,20 @@ describe('LiveKitAgentRoomCoordinator — the agent\'s avatar in a meeting', () 
         expect(await tokenAttributes(starts[0].Configuration?.AccessToken)).toEqual({ 'mj.agentAvatar': 'audio-only:custom-disabled' });
     });
 
+    it("puts the session prep's reason on the bot's token when the prep asked the model for no avatar (#5319)", async () => {
+        for (const reason of ['no-binding', 'unknown-avatar', 'endpoint'] as const) {
+            const { ops, starts } = makeBridgeOps();
+            coordinator.SetBridgeOps(ops);
+            coordinator.SetNativeModuleSpecifier(registerModule({ Supported: true }));
+            contexts = [];
+            sessions(new AvatarModelSession({ Requested: true, Granted: false, Reason: reason }));
+            await start();
+            expect(contexts[0].AvatarDelivery).toBe('room');
+            expect(await tokenAttributes(starts[0].Configuration?.AccessToken)).toEqual({ 'mj.agentAvatar': `audio-only:${reason}` });
+            expect(starts[0].RecoverRealtimeSessionWithoutAvatar).toBeUndefined();
+        }
+    });
+
     it("keeps the model's own reason when the host could publish but the model won't render it", async () => {
         const { ops, starts } = makeBridgeOps();
         coordinator.SetBridgeOps(ops);
