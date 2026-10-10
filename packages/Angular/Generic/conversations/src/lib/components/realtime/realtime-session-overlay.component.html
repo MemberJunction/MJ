@@ -129,44 +129,48 @@
         }
       </div>
 
-      @if (!IsReviewing) {
-        <!-- "Agent can see": what the agent is looking at, with a switch per source. Always shown while any
-             video source exists (a privacy indicator is never gated behind the disclosure ladder). -->
-        <mj-realtime-perception-chip [Sources]="VideoSources"
-                                     (SourceToggled)="OnVideoSourceToggled($event)"
-                                     (SourcePicked)="OnVideoSourcePicked($event)">
-        </mj-realtime-perception-chip>
+      <!-- The call's controls along the foot of the column. The stage starts its picture-in-picture boxes clear of
+           them, so a camera or a shared screen never opens over End call (#5408). Empty, so with no size, in review. -->
+      <div class="call-controls" #callControls>
+        @if (!IsReviewing) {
+          <!-- "Agent can see": what the agent is looking at, with a switch per source. Always shown while any
+               video source exists (a privacy indicator is never gated behind the disclosure ladder). -->
+          <mj-realtime-perception-chip [Sources]="VideoSources"
+                                       (SourceToggled)="OnVideoSourceToggled($event)"
+                                       (SourcePicked)="OnVideoSourcePicked($event)">
+          </mj-realtime-perception-chip>
 
-        <!-- Active channels (earned with the console at level 2+, host-gated via [ShowChannels]).
-             The strip component self-hides when there are no active channels. -->
-        @if (ChannelStripVisible) {
-          <mj-realtime-channel-strip></mj-realtime-channel-strip>
+          <!-- Active channels (earned with the console at level 2+, host-gated via [ShowChannels]).
+               The strip component self-hides when there are no active channels. -->
+          @if (ChannelStripVisible) {
+            <mj-realtime-channel-strip></mj-realtime-channel-strip>
+          }
+
+          <!-- The BOTTOM DOCK: phone-call strip ⇄ fused minis+composer — the user's own
+               two-way toggle (Type opens, hide closes), never level-forced. -->
+          <mj-realtime-composer
+            [Open]="ComposerOpen"
+            [Compact]="Ui.compact && Ui.chrome === 'orb'"
+            (OpenChanged)="OnComposerOpenChanged($event)"
+            [CaptionsOn]="ShowCaptions"
+            [IsMuted]="Muted"
+            [ShowCamera]="CaptureOffers.Camera"
+            [ShowShare]="CaptureOffers.Screen"
+            [CameraOn]="CameraOn"
+            [Sharing]="Sharing"
+            [SharePanels]="SharePanels"
+            (CameraToggled)="OnCameraToggled($event)"
+            (ShareRequested)="OnShareRequested($event)"
+            (StopShareRequested)="OnStopShareRequested()"
+            [ShowDetails]="ShowDetailsControl"
+            [DetailsOn]="DetailsPeek"
+            (CaptionsToggled)="OnCaptionsToggled($event)"
+            (DetailsToggled)="OnDetailsToggled()"
+            (MuteChanged)="OnComposerMuteChanged($event)"
+            (EndRequested)="OnEndCall()">
+          </mj-realtime-composer>
         }
-
-        <!-- The BOTTOM DOCK: phone-call strip ⇄ fused minis+composer — the user's own
-             two-way toggle (Type opens, hide closes), never level-forced. -->
-        <mj-realtime-composer
-          [Open]="ComposerOpen"
-          [Compact]="Ui.compact && Ui.chrome === 'orb'"
-          (OpenChanged)="OnComposerOpenChanged($event)"
-          [CaptionsOn]="ShowCaptions"
-          [IsMuted]="Muted"
-          [ShowCamera]="CaptureOffers.Camera"
-          [ShowShare]="CaptureOffers.Screen"
-          [CameraOn]="CameraOn"
-          [Sharing]="Sharing"
-          [SharePanels]="SharePanels"
-          (CameraToggled)="OnCameraToggled($event)"
-          (ShareRequested)="OnShareRequested($event)"
-          (StopShareRequested)="OnStopShareRequested()"
-          [ShowDetails]="ShowDetailsControl"
-          [DetailsOn]="DetailsPeek"
-          (CaptionsToggled)="OnCaptionsToggled($event)"
-          (DetailsToggled)="OnDetailsToggled()"
-          (MuteChanged)="OnComposerMuteChanged($event)"
-          (EndRequested)="OnEndCall()">
-        </mj-realtime-composer>
-      }
+      </div>
     </div>
 
     <!-- RIGHT: TABBED SURFACE PANEL — disclosure-gated: it EXISTS once earned (level 2+,
@@ -213,13 +217,15 @@
          collapsing the panel, switching tabs or entering focus never reloads it.
          The pane tells each channel when its surface goes out of sight, so it can pause.
          A channel that opts in (SurfaceShareable, such as the whiteboard) marks its frame as a panel the Share menu
-         offers under "This panel" while it is on screen. -->
+         offers under "This panel" while it is on screen. A picture-in-picture box the user has not moved starts
+         clear of the call's controls. -->
     <mj-media-stage class="call-stage"
                     [Surfaces]="SurfaceStage.Surfaces"
                     [TabSlot]="StageSlot?.Element ?? null"
                     [StageSlot]="StageSurfaceSlot"
                     [ActiveTabKey]="StageSlot?.Key ?? null"
                     [PipRects]="PipRects"
+                    [PipKeepClear]="callControls"
                     (PipRectChange)="OnPipRectChange($event)">
       <ng-template mjMediaStageSurface let-key let-visible="Visible" let-placement="Placement">
         @if (SurfaceStage.PluginFor(key); as plugin) {

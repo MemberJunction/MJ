@@ -22,6 +22,34 @@ describe('picture-in-picture geometry', () => {
     expect(DefaultPipBox(5, STAGE).Top).toBe(0);
   });
 
+  describe("clear of the host's controls along the stage's foot (#5408)", () => {
+    /** The box in the corner when nothing is in the way. */
+    const IN_CORNER = { Left: 664, Top: 584, Width: 320, Height: 200 };
+    /** Controls across the stage's foot, 180 px tall, as a call's are with no side panel. */
+    const CONTROLS = { Left: 0, Top: 620, Width: 1000, Height: 180 };
+
+    it('stacks the boxes upward from just above controls the corner box would cover', () => {
+      expect(DefaultPipBox(0, STAGE, CONTROLS)).toEqual({ Left: 664, Top: 404, Width: 320, Height: 200 });
+      expect(DefaultPipBox(1, STAGE, CONTROLS)).toEqual({ Left: 664, Top: 196, Width: 320, Height: 200 });
+    });
+
+    it('lifts the stack for controls that reach only part of the way under the corner box', () => {
+      // A side panel 308 px wide, with its 7 px resize handle, leaves the call's controls 21 px under the box's column.
+      expect(DefaultPipBox(0, STAGE, { ...CONTROLS, Width: 685 }).Top).toBe(404);
+    });
+
+    it('leaves the stack in the corner when the controls are beside it or below it', () => {
+      expect(DefaultPipBox(0, STAGE, { ...CONTROLS, Width: 600 })).toEqual(IN_CORNER);
+      expect(DefaultPipBox(0, STAGE, { ...CONTROLS, Width: 664 })).toEqual(IN_CORNER);
+      expect(DefaultPipBox(0, STAGE, { Left: 0, Top: 790, Width: 1000, Height: 10 })).toEqual(IN_CORNER);
+      expect(DefaultPipBox(0, STAGE, null)).toEqual(IN_CORNER);
+    });
+
+    it('keeps a stack taller than the room above the controls inside the stage', () => {
+      expect(DefaultPipBox(2, STAGE, CONTROLS).Top).toBe(0);
+    });
+  });
+
   it('pulls a box back inside the stage and holds it between the minimum and the stage size', () => {
     expect(ClampPipBox({ Left: -50, Top: 900, Width: 50, Height: 20 }, STAGE)).toEqual({
       Left: 0,

@@ -15,6 +15,7 @@ import {
   type RealtimeCaptureOffers,
   type RealtimeCaptureState,
   type RealtimeCaptureStates,
+  type RealtimeChannelContext,
   type RealtimeChannelFocusEvent,
   type RealtimeConnectionState,
 } from '@memberjunction/realtime-runtime';
@@ -25,6 +26,7 @@ import { SharePanelRegistry } from '@memberjunction/ng-realtime-media';
 import { RealtimeSessionOverlayComponent } from './realtime-session-overlay.component';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeAvatarChannel } from './avatar/realtime-avatar-channel';
+import { RealtimeCameraChannel } from './capture/realtime-capture-channel';
 import type { RealtimeSessionReview } from '../../services/realtime-session-review.service';
 
 /** Every surface creation, destruction, bind and unbind, in order. */
@@ -545,6 +547,167 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(savedPipLayouts.at(-1)).toBe('{}');
       expect(savedLayouts.at(-1)).toBe('[]');
       expect(surface(f).classList.contains('stage-surface--pip')).toBe(false);
+    });
+  });
+
+  describe("the camera's picture-in-picture box and the call's controls (#5408)", () => {
+    /**
+     * Boxes as Chrome lays out the call in orb chrome with the camera on (measured from the real components): the stage,
+     * which covers the call, the call's controls along its foot (the "Agent can see" chip and the composer) and End call
+     * in them. A narrow call (420 x 640) has no room for the side panel and shows the compact dock; a wide one
+     * (960 x 640) shows the strip, beside the side panel while it is open.
+     */
+    const NARROW = { Stage: new DOMRect(0, 0, 420, 640), Controls: new DOMRect(0, 510.5, 420, 129.5), EndCall: new DOMRect(354, 568, 52, 52) };
+    const WIDE = { Stage: new DOMRect(0, 0, 960, 640), Controls: new DOMRect(0, 484.5, 960, 155.5), EndCall: new DOMRect(697.86, 547, 52, 52) };
+    const WIDE_BESIDE_PANEL = { Controls: new DOMRect(0, 484.5, 530.61, 155.5), EndCall: new DOMRect(453.17, 547, 52, 52) };
+
+    /** The layout the boxes come from; WIDE switches to WIDE_BESIDE_PANEL while the side panel is open. */
+    let layout: typeof NARROW = NARROW;
+    const panelOpen = (): boolean => document.querySelector('.call-panel') !== null;
+    const controlsBox = (): DOMRect => (layout === WIDE && panelOpen() ? WIDE_BESIDE_PANEL.Controls : layout.Controls);
+    const endCallBox = (): DOMRect => (layout === WIDE && panelOpen() ? WIDE_BESIDE_PANEL.EndCall : layout.EndCall);
+
+    /** The resize observers by the element each observes: jsdom has none and lays nothing out. */
+    const observers = new Map<Element, ResizeObserverCallback>();
+    class FakeResizeObserver {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      public observe(target: Element): void {
+        observers.set(target, this.callback);
+      }
+      public unobserve(): void {}
+      public disconnect(): void {}
+    }
+
+    beforeEach(() => {
+      layout = NARROW;
+      vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+      vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+      vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+      vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function (this: HTMLElement) {
+        if (this.tagName === 'MJ-MEDIA-STAGE' || this.classList.contains('call-overlay')) {
+          return layout.Stage;
+        }
+        if (this.classList.contains('call-controls')) {
+          return controlsBox();
+        }
+        return this.matches('mj-realtime-composer button[title="End call"]') ? endCallBox() : new DOMRect(0, 0, 0, 0);
+      });
+    });
+
+    /** The calls each test rendered. */
+    const calls: Array<{ destroy(): void }> = [];
+
+    afterEach(() => {
+      // Ended while the video stand-ins are still in place: jsdom pauses a video taken out of the page, and has no pause.
+      calls.splice(0).forEach((call) => call.destroy());
+      observers.clear();
+      vi.unstubAllGlobals();
+    });
+
+    /** The call's controls changed size (the side panel opened or closed beside them): the browser tells the stage. */
+    const controlsResized = async (f: Awaited<ReturnType<typeof renderWithCamera>>['f']): Promise<void> => {
+      const controls = query(f, '.call-controls') as Element;
+      observers.get(controls)?.([], {} as ResizeObserver);
+      await settle();
+    };
+
+    /**
+     * A live call in orb chrome with the camera on. The camera's channel places its surface in picture-in-picture, as
+     * its registry row does, and its first activity gives it its box (and peeks at the side panel where there is room).
+     */
+    const renderWithCamera = async () => {
+      const session = fakeSession();
+      session.captures$.next({
+        ...REALTIME_CAPTURES_OFF,
+        Camera: { Status: 'on', Stream: { id: 'camera', getTracks: () => [] } as unknown as MediaStream },
+      });
+      const context: RealtimeChannelContext = {
+        AgentName: 'Sage',
+        Provider: null,
+        SendContextNote: () => undefined,
+        RequestSave: () => undefined,
+        SetFocusMode: () => undefined,
+        SaveAsArtifact: async () => null,
+        AgentSessionID: 'session-1',
+        ExecuteServerAction: async () => null,
+        Captures$: session.captures$.asObservable(),
+      };
+      const camera = new RealtimeCameraChannel();
+      camera.ApplySurfacePlacement(ReadChannelSurfacePlacement({ Placement: 'pip' }));
+      camera.Initialize(context);
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'orb' },
+        autoDetect: true,
+      });
+      calls.push(f);
+      session.channels$.next([camera]);
+      await settle();
+      session.activity$.next(camera);
+      await settle();
+      return { f, camera, ...session };
+    };
+
+    /** The camera's box, as the stage placed it. */
+    const cameraBox = (f: Awaited<ReturnType<typeof renderWithCamera>>['f']): DOMRect => {
+      const element = query(f, '[data-surface="Camera"]') as HTMLElement;
+      const [left, top, width, height] = [element.style.left, element.style.top, element.style.width, element.style.height].map(parseFloat);
+      return new DOMRect(left, top, width, height);
+    };
+    const place = (box: DOMRect): number[] => [box.left, box.top, box.width, box.height];
+    const covers = (a: DOMRect, b: DOMRect): boolean => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+    it('starts clear of End call and the rest of the controls, with the camera on and no side panel', async () => {
+      const { f } = await renderWithCamera();
+      expect(query(f, '.call-panel')).toBeNull();
+      expect(query(f, '[data-surface="Camera"]')?.classList.contains('stage-surface--pip')).toBe(true);
+      expect(covers(cameraBox(f), NARROW.EndCall)).toBe(false);
+      expect(covers(cameraBox(f), NARROW.Controls)).toBe(false);
+      // Still in the bottom-right corner's column, 16 px above the controls.
+      expect(place(cameraBox(f))).toEqual([84, 294.5, 320, 200]);
+    });
+
+    it('keeps its corner over the side panel while it is open, and moves above the controls when the user closes the panel', async () => {
+      layout = WIDE;
+      const { f } = await renderWithCamera();
+      expect(query(f, '.call-panel')).not.toBeNull();
+      await controlsResized(f);
+      expect(place(cameraBox(f))).toEqual([624, 424, 320, 200]);
+      expect(covers(cameraBox(f), WIDE_BESIDE_PANEL.Controls)).toBe(false);
+
+      click(f, 'mj-realtime-composer button[title="Hide the session panels"]');
+      await settle();
+      await controlsResized(f);
+      expect(query(f, '.call-panel')).toBeNull();
+      expect(covers(cameraBox(f), WIDE.EndCall)).toBe(false);
+      expect(covers(cameraBox(f), WIDE.Controls)).toBe(false);
+      expect(place(cameraBox(f))).toEqual([624, 268.5, 320, 200]);
+    });
+
+    /** Where the user drags the box in these tests: down over the controls, End call included. */
+    const MOVED = { X: 64 / 420, Y: 425 / 640, W: 320 / 420, H: 200 / 640 };
+
+    it('stays where the user drags it, over the controls or not, and saves that place', async () => {
+      const { f } = await renderWithCamera();
+      const bar = query(f, '[data-surface="Camera"] .stage-pip-bar') as HTMLElement;
+      bar.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 200, clientY: 310 }));
+      bar.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 180, clientY: 440.5 }));
+      bar.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 180, clientY: 440.5 }));
+      await settle();
+      expect(place(cameraBox(f))).toEqual([64, 425, 320, 200]);
+      expect(covers(cameraBox(f), NARROW.EndCall)).toBe(true);
+      expect(JSON.parse(savedPipLayouts.at(-1) ?? '{}')).toEqual({ Camera: MOVED });
+      await controlsResized(f);
+      expect(place(cameraBox(f))).toEqual([64, 425, 320, 200]);
+    });
+
+    it('starts where the user last put it, over the controls or not', async () => {
+      savedPips = JSON.stringify({ Camera: MOVED });
+      const { f } = await renderWithCamera();
+      expect(place(cameraBox(f))).toEqual([64, 425, 320, 200]);
     });
   });
 

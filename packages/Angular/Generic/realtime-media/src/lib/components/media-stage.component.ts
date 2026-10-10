@@ -42,7 +42,7 @@ export interface MediaStageSurface {
   Label?: string;
   /**
    * Where a picture-in-picture box stacks until the user moves it: 0, the newest, sits in the stage's bottom-right
-   * corner and the others stack upward.
+   * corner (above {@link MediaStageComponent.PipKeepClear} when that is in the way) and the others stack upward.
    */
   PipIndex?: number;
 }
@@ -136,9 +136,10 @@ let nextStageId = 0;
  * covers {@link TabSlot}, an element the host's tab panel keeps for the active tab. Both slots are followed as they
  * resize or slide; a `pip` surface floats in a box the user drags by its bar, resizes from
  * its corner, or moves with the arrow keys, stacked in the bottom-right corner until moved ({@link PipRects},
- * {@link PipRectChange}); any other surface stays alive, out of sight. So does every surface while the stage itself
- * has no size (a hidden ancestor). Each surface's template learns whether it is on screen (`Visible`), so the host
- * can tell the surface to pause work nobody sees.
+ * {@link PipRectChange}), above the host's controls when they are in that corner ({@link PipKeepClear}); any other
+ * surface stays alive, out of sight. So does every surface while the stage itself has no size (a hidden ancestor).
+ * Each surface's template learns whether it is on screen (`Visible`), so the host can tell the surface to pause work
+ * nobody sees.
  */
 @Component({
   selector: 'mj-media-stage',
@@ -199,6 +200,9 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
   private slotRect: MediaStageBox | null = null;
   private stageSlot: HTMLElement | null = null;
   private stageSlotRect: MediaStageBox | null = null;
+  private keepClear: HTMLElement | null = null;
+  /** {@link PipKeepClear}'s box relative to the stage, or `null` while there is none or it has no size. */
+  private keepClearRect: MediaStageBox | null = null;
   /** The stage's size, once measured; picture-in-picture boxes are placed in it. */
   private stageSize: MediaStageSize | null = null;
   /** Whether the stage itself has a size; a hidden ancestor (a minimized call) puts every surface out of sight. */
@@ -256,6 +260,28 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
+   * An element along the stage's foot that picture-in-picture boxes start clear of, such as the host's call controls,
+   * or `null` (the default) for none. While the box in the stage's bottom-right corner would cover any of it, the boxes
+   * the user has not moved stack upward from just above it instead; a box the user put somewhere stays there
+   * ({@link PipRects}). It is followed like {@link TabSlot}, and while it has no size it counts as none.
+   */
+  @Input()
+  public set PipKeepClear(value: HTMLElement | null) {
+    if (value === this.keepClear) {
+      return;
+    }
+    this.unobserve(this.keepClear);
+    this.keepClear = value;
+    this.observe(value);
+    if (this.viewReady) {
+      this.settle();
+    }
+  }
+  public get PipKeepClear(): HTMLElement | null {
+    return this.keepClear;
+  }
+
+  /**
    * Where the user put picture-in-picture boxes, by key, as fractions of the stage (what the host saved). A box with
    * no entry stacks in the corner by its {@link MediaStageSurface.PipIndex}. Setting this replaces every box.
    */
@@ -289,6 +315,7 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
       this.resizeObserver.observe(this.host.nativeElement);
       this.observe(this.tabSlot);
       this.observe(this.stageSlot);
+      this.observe(this.keepClear);
     }
     // The view was just checked; measuring now would change it inside the same pass.
     queueMicrotask(() => this.settle());
@@ -383,7 +410,7 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
     this.commitPip(surface.Key, next);
   }
 
-  /** Where a picture-in-picture box is: mid-drag, where the user put it, or stacked in the corner. */
+  /** Where a picture-in-picture box is: mid-drag, where the user put it, or stacked in the corner, clear of {@link PipKeepClear}. */
   private pipBoxFor(surface: MediaStageSurface): MediaStageBox | null {
     if (!this.stageSize) {
       return null;
@@ -392,7 +419,7 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
       return this.gesture.Box;
     }
     const rect = this.pipRects.get(surface.Key);
-    return rect ? PipRectToBox(rect, this.stageSize) : DefaultPipBox(surface.PipIndex ?? 0, this.stageSize);
+    return rect ? PipRectToBox(rect, this.stageSize) : DefaultPipBox(surface.PipIndex ?? 0, this.stageSize, this.keepClearRect);
   }
 
   private readonly onPointerMove = (event: PointerEvent): void => {
@@ -464,8 +491,9 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Reads whether the stage is on screen and the slot's box relative to it; a slot with no size (hidden) counts as no
-   * slot. Runs outside Angular while following the slot, and enters it only when something changed.
+   * Reads whether the stage is on screen, and the boxes of the slots and of {@link PipKeepClear} relative to it; an
+   * element with no size (hidden) counts as none. Runs outside Angular while following the slot, and enters it only
+   * when something changed.
    */
   private measure(): void {
     const stage = this.host.nativeElement.getBoundingClientRect();
@@ -473,10 +501,12 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
     const size = shown ? { Width: stage.width, Height: stage.height } : this.stageSize;
     const next = readSlotRect(this.tabSlot, stage);
     const nextStageSlot = readSlotRect(this.stageSlot, stage);
+    const nextKeepClear = readSlotRect(this.keepClear, stage);
     if (
       shown === this.stageShown &&
       sameRect(next, this.slotRect) &&
       sameRect(nextStageSlot, this.stageSlotRect) &&
+      sameRect(nextKeepClear, this.keepClearRect) &&
       sameSize(size, this.stageSize)
     ) {
       return;
@@ -485,6 +515,7 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
       this.stageShown = shown;
       this.slotRect = next;
       this.stageSlotRect = nextStageSlot;
+      this.keepClearRect = nextKeepClear;
       this.stageSize = size;
       this.cdr.markForCheck();
     });
@@ -503,7 +534,10 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
   }
 }
 
-/** A slot's box relative to the stage, or `null` for no slot, or one with no size (hidden). */
+/**
+ * A slot's box (or {@link MediaStageComponent.PipKeepClear}'s) relative to the stage, or `null` for none, or one with no
+ * size (hidden).
+ */
 function readSlotRect(slot: HTMLElement | null, stage: DOMRect): MediaStageBox | null {
   if (!slot) {
     return null;

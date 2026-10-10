@@ -47,7 +47,7 @@ class TestSurfaceComponent implements OnInit, OnDestroy {
   standalone: true,
   imports: [MediaStageComponent, MediaStageSurfaceDirective, MediaStagePipActionsDirective, TestSurfaceComponent],
   template: `
-    <mj-media-stage [Surfaces]="Surfaces" [TabSlot]="Slot" [StageSlot]="StageSlot" [ActiveTabKey]="ActiveTabKey" [PipRects]="PipRects" (PipRectChange)="Changes.push($event)">
+    <mj-media-stage [Surfaces]="Surfaces" [TabSlot]="Slot" [StageSlot]="StageSlot" [ActiveTabKey]="ActiveTabKey" [PipRects]="PipRects" [PipKeepClear]="KeepClear" (PipRectChange)="Changes.push($event)">
       <ng-template mjMediaStageSurface let-key let-visible="Visible" let-placement="Placement">
         <mj-test-surface [Key]="key" [Visible]="visible" [Placement]="placement"></mj-test-surface>
       </ng-template>
@@ -63,6 +63,7 @@ class StageHostComponent {
   @Input() public Slot: HTMLElement | null = null;
   @Input() public StageSlot: HTMLElement | null = null;
   @Input() public PipRects: ReadonlyMap<string, MediaPipRect> = new Map();
+  @Input() public KeepClear: HTMLElement | null = null;
   public readonly Changes: MediaStagePipRectChange[] = [];
 }
 
@@ -409,6 +410,55 @@ describe('MediaStageComponent (DOM)', () => {
       expect(bar(f, 'a').getAttribute('aria-label')).toBe('Alpha, picture-in-picture');
       expect(bar(f, 'a').getAttribute('aria-describedby')).toBe(hint.id);
       expect(hint.textContent).toContain('Arrow keys move it');
+    });
+
+    describe("clear of the host's controls (#5408)", () => {
+      /** The host's controls across the stage's foot, 180 px tall, as a call's are with no side panel. */
+      const controls = () => slotAt(0, 620, 1000, 180);
+
+      it('stacks the boxes upward from just above the controls when the box in the corner would cover them', async () => {
+        const f = await render({ Surfaces: pips(), KeepClear: controls() });
+        expect(place(box(f, 'a'))).toEqual(['664px', '404px', '320px', '200px']);
+        expect(place(box(f, 'b'))).toEqual(['664px', '196px', '320px', '200px']);
+      });
+
+      it('follows the controls as they change, and goes back to the corner while they are beside it or out of sight', async () => {
+        const keepClear = controls();
+        const f = await render({ Surfaces: pips(), KeepClear: keepClear });
+        // The controls grow, as when the typed-input dock opens.
+        keepClear.Move(0, 560, 1000, 240);
+        resized();
+        f.detectChanges();
+        expect(place(box(f, 'a'))).toEqual(['664px', '344px', '320px', '200px']);
+        // A side panel takes the stage's right side, so the controls end before the box's column.
+        keepClear.Move(0, 620, 600, 180);
+        resized();
+        f.detectChanges();
+        expect(place(box(f, 'a'))).toEqual(['664px', '584px', '320px', '200px']);
+        // The controls are hidden, as while a channel holds the stage.
+        keepClear.Move(0, 0, 0, 0);
+        resized();
+        f.detectChanges();
+        expect(place(box(f, 'a'))).toEqual(['664px', '584px', '320px', '200px']);
+      });
+
+      it('leaves a box the user moved where they put it, over the controls or not', async () => {
+        const f = await render({
+          Surfaces: pips(),
+          KeepClear: controls(),
+          PipRects: new Map([['a', { X: 0.664, Y: 0.73, W: 0.32, H: 0.25 }]]),
+        });
+        expect(place(box(f, 'a'))).toEqual(['664px', '584px', '320px', '200px']);
+        expect(place(box(f, 'b'))).toEqual(['664px', '196px', '320px', '200px']);
+      });
+
+      it('moves a box from where it starts above the controls', async () => {
+        const f = await render({ Surfaces: pips(), KeepClear: controls() });
+        key(bar(f, 'a'), 'ArrowLeft');
+        f.detectChanges();
+        expect(f.componentInstance.Changes).toEqual([{ Key: 'a', Rect: { X: 0.648, Y: 0.505, W: 0.32, H: 0.25 } }]);
+        expect(place(box(f, 'a'))).toEqual(['648px', '404px', '320px', '200px']);
+      });
     });
   });
 });
