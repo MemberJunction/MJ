@@ -4938,6 +4938,9 @@ importers:
       '@angular/compiler-cli':
         specifier: 21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@fortawesome/fontawesome-free':
+        specifier: 6.7.2
+        version: 6.7.2
       '@memberjunction/ng-test-utils':
         specifier: 6.2.0-edge.3
         version: link:../../Generic/test-utils
@@ -6873,6 +6876,9 @@ importers:
       '@angular/compiler-cli':
         specifier: 21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@fortawesome/fontawesome-free':
+        specifier: 6.7.2
+        version: 6.7.2
       '@memberjunction/ng-test-utils':
         specifier: 6.2.0-edge.3
         version: link:../test-utils

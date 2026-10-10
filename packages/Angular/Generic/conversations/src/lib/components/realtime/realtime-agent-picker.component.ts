@@ -179,7 +179,7 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
                 @if (SelectedModelVoices.length) {
                     <div class="mj-voice-picker__select-row mj-voice-picker__select-row--model mj-voice-picker__voice-row">
                         <span class="mj-voice-picker__select-label" id="mjRealtimeVoiceLabel">
-                            <i class="fa-solid fa-waveform-lines"></i>
+                            <i class="fa-solid fa-wave-square"></i>
                             <span>Voice</span>
                         </span>
                         <!-- No ValueField: an option is its voice object, one per persona, because two personas
