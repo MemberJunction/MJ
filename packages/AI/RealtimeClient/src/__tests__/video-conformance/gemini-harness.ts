@@ -18,7 +18,7 @@ import {
 } from '../../drivers/geminiRealtimeClient';
 import type { IAvatarVideoPlayout, VideoPlayoutOptions } from '../../media/videoPlayout';
 import type { IRealtimeVideoConformanceHarness, RealtimeVideoConformanceGrant, RealtimeVideoConformanceMedia, RealtimeVideoConformanceTraits } from '../../testing';
-import { FakeGeminiSession, FakeMicCapture } from '../helpers/realtime-fakes';
+import { ConfirmGeminiSetup, FakeGeminiSession, FakeMicCapture } from '../helpers/realtime-fakes';
 import { HalfAnHourFromNow, NextMacrotask, PlayabilityStub, WaitUntil } from './harness-support';
 
 /** The MIME type of Gemini Live's model voice. */
@@ -129,6 +129,8 @@ export class GeminiDeveloperKitClient extends GeminiRealtimeClient {
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         const session = new FakeGeminiSession();
         this.Connections.push({ Args: args, Session: session });
+        // Google confirms the setup; the client puts the connection to use only after that.
+        ConfirmGeminiSetup(args);
         return session;
     }
 

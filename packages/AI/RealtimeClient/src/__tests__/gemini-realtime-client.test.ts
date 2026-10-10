@@ -17,7 +17,7 @@ import {
     IGeminiAudioPlayback,
     IGeminiMicCapture,
 } from '../drivers/geminiRealtimeClient';
-import { FakeMicCapture } from './helpers/realtime-fakes';
+import { ConfirmGeminiSetup, FakeMicCapture } from './helpers/realtime-fakes';
 import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
@@ -144,6 +144,7 @@ class TestGeminiClient extends GeminiRealtimeClient {
 
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         this.LastConnectArgs = args;
+        ConfirmGeminiSetup(args);
         return this.Fake;
     }
     protected override async createMicCapture(
@@ -829,6 +830,7 @@ describe('GeminiRealtimeClient', () => {
                     this.ArgsPerSession.push(args);
                     const session = new FakeGeminiSession();
                     this.Sessions.push(session);
+                    ConfirmGeminiSetup(args);
                     return session;
                 }
             }

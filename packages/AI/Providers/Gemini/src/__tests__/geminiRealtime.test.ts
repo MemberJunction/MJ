@@ -22,6 +22,7 @@ import type {
 
 import { GeminiRealtime, type GeminiLiveSession, type GeminiConnectArgs } from '../geminiRealtime';
 import { ResolveGeminiLiveProfile } from '../geminiLiveProfiles';
+import { ConfirmGeminiSetup } from './live-session-test-helpers';
 
 /* ------------------------------------------------------------------ */
 /*  Fake in-memory Gemini Live session                                */
@@ -64,6 +65,7 @@ class TestGeminiRealtime extends GeminiRealtime {
     protected override async connectLiveSession(args: GeminiConnectArgs): Promise<GeminiLiveSession> {
         this.LastConnectArgs = args;
         this.Fake.Emit = args.OnMessage;
+        ConfirmGeminiSetup(args);
         return this.Fake;
     }
 }

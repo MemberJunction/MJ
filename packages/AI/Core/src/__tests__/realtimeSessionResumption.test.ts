@@ -3,6 +3,7 @@ import {
     ParseDurationToMs,
     RealtimeSessionResumption,
     REALTIME_RESUMPTION_DEADLINE_MARGIN_MS,
+    REALTIME_RESUMPTION_MIN_DEADLINE_MARGIN_MS,
     type RealtimeReconnectReason,
     type RealtimeResumeAttempt,
 } from '../generic/realtimeSessionResumption';
@@ -113,6 +114,177 @@ describe('RealtimeSessionResumption', () => {
             await vi.advanceTimersByTimeAsync(60000);
             expect(h.Reconnects).toEqual([]);
             expect(h.Failures).toEqual([]);
+        });
+    });
+
+    // Vertex AI marks every update resumable and sends one 20-70 ms after each turnComplete, never `resumable: false`;
+    // these runs replay that cadence (#5354).
+    describe('turns (the driver reports them; the provider never says a point is not resumable)', () => {
+        it('a goAway mid-answer waits for the turn to end and the handle that follows it', async () => {
+            const h = new Harness();
+            h.Resumption.RecordHandle('h1', true); // after the previous turn
+            h.Resumption.TurnStarted(); // the user asked; the model is answering
+            h.Resumption.ConnectionEnding(30000);
+            await vi.advanceTimersByTimeAsync(5000);
+            expect(h.Reconnects).toEqual([]);
+
+            h.Resumption.TurnEnded(); // turnComplete
+            await vi.advanceTimersByTimeAsync(50);
+            expect(h.Reconnects).toEqual([]); // h1 predates the turn: resuming from it would drop the answer
+
+            h.Resumption.RecordHandle('h2', true);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual(['h2']);
+            expect(h.Reconnecting).toEqual(['connection-ending']);
+        });
+
+        it('a goAway right after a question waits too, though no answer has started', async () => {
+            const h = new Harness();
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted(); // the first transcription of the question
+            h.Resumption.ConnectionEnding(30000);
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(h.Reconnects).toEqual([]);
+
+            h.Resumption.TurnEnded();
+            h.Resumption.RecordHandle('h2', true);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual(['h2']);
+        });
+
+        it('keeps a resumable handle issued mid-turn as the fallback, without moving on it', async () => {
+            const h = new Harness();
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.ConnectionEnding(30000);
+            h.Resumption.RecordHandle('h2', true);
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(h.Reconnects).toEqual([]);
+            expect(h.Resumption.Handle).toBe('h2');
+
+            // A drop resumes from it at once.
+            expect(h.Resumption.ConnectionLost()).toBe(true);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual(['h2']);
+        });
+
+        it('with no answer coming, the deadline still moves the session, with the last handle', async () => {
+            const h = new Harness();
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.ConnectionEnding(30000);
+            // 30 s of notice keeps a 10 s margin: the deadline is at 20 s.
+            await vi.advanceTimersByTimeAsync(19999);
+            expect(h.Reconnects).toEqual([]);
+            await vi.advanceTimersByTimeAsync(2);
+            expect(h.Reconnects).toEqual(['h1']);
+        });
+
+        it('does not move at once on a goAway when the latest handle predates a turn that has since ended', async () => {
+            const h = new Harness();
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.TurnEnded();
+            h.Resumption.ConnectionEnding(30000); // in the 20-70 ms before the turn's handle
+            await vi.advanceTimersByTimeAsync(10);
+            expect(h.Reconnects).toEqual([]);
+
+            h.Resumption.RecordHandle('h2', true);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual(['h2']);
+        });
+
+        it('moves at once on a goAway when a handle arrived after the last turn ended', async () => {
+            const h = new Harness();
+            h.Resumption.TurnStarted();
+            h.Resumption.TurnEnded();
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.ConnectionEnding(30000);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual(['h1']);
+        });
+
+        it('a resume ends the turn it cut off: the next planned move does not wait for it', async () => {
+            const h = new Harness();
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.ConnectionLost();
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnected).toBe(1);
+
+            h.Resumption.RecordHandle('h2', true);
+            h.Resumption.ConnectionEnding(30000);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual(['h1', 'h2']);
+        });
+    });
+
+    // A notice of 10 s or less used to move at once, cutting the turn (#5313).
+    describe('deadline margin (scaled to the notice)', () => {
+        it.each([
+            [60000, 50000],
+            [30000, 20000],
+            [9000, 6000],
+            [5000, 3333],
+            [3000, 1500],
+        ])('with %d ms of notice and no resumable point, moves %d ms after the goAway', async (notice, movesAt) => {
+            const h = new Harness();
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.ConnectionEnding(notice);
+            await vi.advanceTimersByTimeAsync(movesAt - 1);
+            expect(h.Reconnects).toEqual([]);
+            await vi.advanceTimersByTimeAsync(2);
+            expect(h.Reconnects).toEqual(['h1']);
+        });
+
+        it('moves at once when the notice is shorter than what a reconnect needs', async () => {
+            const h = new Harness();
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.ConnectionEnding(REALTIME_RESUMPTION_MIN_DEADLINE_MARGIN_MS - 500);
+            // The deadline fires at once; its zero-delay attempt runs on the next tick.
+            await vi.advanceTimersByTimeAsync(2);
+            expect(h.Reconnects).toEqual(['h1']);
+        });
+
+        it('a 5 s notice with a turn that ends in 2 s does not cut the turn', async () => {
+            const h = new Harness();
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.ConnectionEnding(5000);
+            await vi.advanceTimersByTimeAsync(2000);
+            h.Resumption.TurnEnded();
+            await vi.advanceTimersByTimeAsync(50);
+            h.Resumption.RecordHandle('h2', true);
+            await vi.advanceTimersByTimeAsync(5000);
+            expect(h.Reconnects).toEqual(['h2']);
+        });
+
+        it('a 5 s notice with a turn that does not end cuts it, with the last handle, before the deadline', async () => {
+            const h = new Harness();
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.ConnectionEnding(5000);
+            await vi.advanceTimersByTimeAsync(5000);
+            expect(h.Reconnects).toEqual(['h1']);
+        });
+
+        it('keeps at most DeadlineMarginMs when it is set', async () => {
+            const reasons: RealtimeReconnectReason[] = [];
+            const resumption = new RealtimeSessionResumption({
+                Reconnect: async () => undefined,
+                OnReconnectFailed: () => undefined,
+                OnReconnecting: (reason) => reasons.push(reason),
+                DeadlineMarginMs: 2000,
+            });
+            resumption.RecordHandle('h1', true);
+            resumption.TurnStarted();
+            resumption.ConnectionEnding(30000);
+            await vi.advanceTimersByTimeAsync(27999);
+            expect(reasons).toEqual([]);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(reasons).toEqual(['connection-ending']);
         });
     });
 

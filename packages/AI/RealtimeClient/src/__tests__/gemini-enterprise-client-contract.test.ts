@@ -139,11 +139,18 @@ async function nextSocket(count: number): Promise<FakeWebSocket> {
     return FakeWebSocket.Instances[count - 1];
 }
 
-/** Connects a client through the fake relay: the socket opens and the SDK sends its setup. */
+/** Opens a socket the client asked for: the relay accepts it, the SDK sends its setup, and the relay passes on Google's `setupComplete`. */
+async function openAndConfirm(socket: FakeWebSocket): Promise<void> {
+    socket.Open();
+    await vi.waitFor(() => expect(socket.Sent.length).toBeGreaterThan(0));
+    socket.Receive({ setupComplete: {} });
+}
+
+/** Connects a client through the fake relay: the socket opens, the SDK sends its setup, and Google confirms it. */
 async function connect(pact: ClientRealtimeSessionConfig, client = new EnterpriseHarness()): Promise<{ Client: EnterpriseHarness; Socket: FakeWebSocket }> {
     const connecting = client.Connect(pact, new FakeMediaStream([new FakeTrack()]));
     const socket = await nextSocket(FakeWebSocket.Instances.length + 1);
-    socket.Open();
+    await openAndConfirm(socket);
     await connecting;
     return { Client: client, Socket: socket };
 }
@@ -260,14 +267,12 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             const resumed = new EnterpriseHarness();
             const resumedOutput = captureOutput(resumed);
             const { Socket: first } = await connect(enterprisePact({ Avatar: true }), resumed);
-            first.Receive({ setupComplete: {} });
             first.Receive({ sessionResumptionUpdate: { newHandle: 'handle-1', resumable: true } });
             await vi.waitFor(() => expect(resumed.ResumptionHandle).toBe('handle-1'));
             first.onerror?.(new Event('error'));
             first.onclose?.(new CloseEvent('close', { code: 1006, reason: 'relay went away', wasClean: false }));
             const second = await nextSocket(2);
-            second.Open();
-            await vi.waitFor(() => expect(second.Sent.length).toBeGreaterThan(0));
+            await openAndConfirm(second);
             await resumed.Disconnect();
 
             // A session whose connection fails before Google issued a handle: a fatal error to the host.
@@ -341,7 +346,6 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             const { Client, Socket } = await connect(enterprisePact());
             const transcripts: RealtimeClientTranscript[] = [];
             Client.OnTranscript((t) => transcripts.push(t));
-            Socket.Receive({ setupComplete: {} });
             Socket.Receive({ serverContent: { outputTranscription: { text: 'Hello' } } });
             await vi.waitFor(() => expect(transcripts).toEqual([{ Role: 'Assistant', Text: 'Hello', IsFinal: false, Kind: 'normal' }]));
         });
@@ -403,7 +407,6 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             const { Client, Socket } = await connect(enterprisePact({ Avatar: true }));
             const usages: RealtimeClientUsage[] = [];
             Client.OnUsage((u) => usages.push(u));
-            Socket.Receive({ setupComplete: {} });
             Socket.Receive({ serverContent: { modelTurn: { role: 'model', parts: [videoPart(AvatarInitSegment()), videoPart(AvatarVideoFragment(24))] } } });
             Socket.Receive({ serverContent: { generationComplete: true } });
 
@@ -416,7 +419,6 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             const { Client, Socket } = await connect(enterprisePact({ Avatar: true }));
             const usages: RealtimeClientUsage[] = [];
             Client.OnUsage((u) => usages.push(u));
-            Socket.Receive({ setupComplete: {} });
             Socket.Receive({
                 usageMetadata: {
                     promptTokenCount: 120,
@@ -433,14 +435,12 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
     describe('resume', () => {
         it('reopens the same relay URL with Google\'s handle, keeping the modalities, and closes the old socket', async () => {
             const { Client, Socket: first } = await connect(enterprisePact({ Avatar: true }));
-            first.Receive({ setupComplete: {} });
             first.Receive({ sessionResumptionUpdate: { newHandle: 'handle-1', resumable: true } });
             await vi.waitFor(() => expect(Client.ResumptionHandle).toBe('handle-1'));
             first.Receive({ goAway: { timeLeft: '50s' } });
 
             const second = await nextSocket(2);
-            second.Open();
-            await vi.waitFor(() => expect(second.Sent.length).toBeGreaterThan(0));
+            await openAndConfirm(second);
             expect(second.Url).toBe(first.Url);
             expect(setupOf(second)['sessionResumption']).toEqual({ handle: 'handle-1' });
             expect(modalitiesOf(second)).toEqual(['VIDEO']);
@@ -454,7 +454,6 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             const videos: MediaVideoSource[] = [];
             client.OnRemoteVideo((video) => videos.push(video));
             const { Socket: first } = await connect(enterprisePact({ Avatar: true }), client);
-            first.Receive({ setupComplete: {} });
             AttachVideoSource(videos[0], document.createElement('video'));
             const element = dom.Videos[0];
             const source = FakeMediaSource.Instances[0];
@@ -469,9 +468,8 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             first.Receive({ goAway: { timeLeft: '50s' } });
 
             const second = await nextSocket(2);
-            second.Open();
+            await openAndConfirm(second);
             await vi.waitFor(() => expect(first.Closed).toBe(true));
-            second.Receive({ setupComplete: {} });
             second.Receive(parts(AvatarInitSegment(), AvatarFragment(2)));
 
             await vi.waitFor(() => expect(buffer.Appended).toHaveLength(4));

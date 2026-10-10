@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { LiveServerMessage, Blob as GeminiBlob, Content, FunctionResponse, LiveServerContent, Part } from '@google/genai';
 import type { IRealtimeSession, RealtimeSessionParams, RealtimeUsage, RealtimeVideoFrame } from '@memberjunction/ai';
 import { GeminiRealtime, type GeminiLiveSession, type GeminiConnectArgs } from '../geminiRealtime';
+import { ConfirmGeminiSetup } from './live-session-test-helpers';
 
 // ── Fakes ──────────────────────────────────────────────────────────────────────
 
@@ -26,6 +27,7 @@ class BridgedGemini extends GeminiRealtime {
 
     protected override async connectLiveSession(args: GeminiConnectArgs): Promise<GeminiLiveSession> {
         this.Args = args;
+        ConfirmGeminiSetup(args);
         return new FakeConnection();
     }
 

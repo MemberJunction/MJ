@@ -8,6 +8,7 @@ import { InstallFakeDom, type FakeDom, type FakeVideoElement } from './helpers/f
 import { FakeInitSegment, FakeMediaSource, FakeTimeRanges, InstallFakeMse, type FakeSourceBuffer } from './helpers/fake-mse';
 import { AvatarFragment, AvatarInitSegment, AvatarTimedVideoFragment, PieceToBase64, VIDEO_ONLY_MP4_TYPE } from './helpers/fmp4-pieces';
 import {
+    ConfirmGeminiSetup,
     FakeGeminiSession,
     FakeMediaStream,
     FakeTrack,
@@ -75,6 +76,7 @@ class ResumingClient extends GeminiTestClient {
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         this.Connections.push(args);
         this.LastConnectArgs = args;
+        ConfirmGeminiSetup(args);
         return new FakeGeminiSession();
     }
 
@@ -474,6 +476,24 @@ describe('GeminiRealtimeClient avatar playout', () => {
 
             emitParts(client, videoPart(AvatarFragment()));
             expect(client.Playout.Appended).toHaveLength(2);
+        });
+
+        it('an answer in progress holds a planned move; the idle video Vertex AI streams after its turnComplete does not', async () => {
+            const client = new ResumingClient();
+            await connectAvatar({}, client);
+            emit(client, { outputTranscription: { text: 'Hello there.' } });
+            emitParts(client, videoPart(AvatarInitSegment()), videoPart(AvatarFragment(1)));
+            await client.Resume();
+            expect(client.Connections).toHaveLength(1);
+            expect(client.IsTurnOpen).toBe(true);
+
+            emit(client, { turnComplete: true });
+            emitParts(client, videoPart(AvatarFragment(2)));
+            expect(client.IsTurnOpen).toBe(false);
+            client.Connections[0].OnMessage({ sessionResumptionUpdate: { newHandle: 'after-the-answer', resumable: true } } as LiveServerMessage);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections).toHaveLength(2);
+            expect(client.Connections[1].Config.sessionResumption).toEqual({ handle: 'after-the-answer' });
         });
     });
 

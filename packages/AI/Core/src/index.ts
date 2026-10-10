@@ -27,6 +27,7 @@ export * from './generic/errorTypes';
 export * from './generic/errorAnalyzer';
 export * from './generic/realtimeToolBatchBarrier';
 export * from './generic/realtimeSessionResumption';
+export * from './generic/realtimeConnectionSetup';
 export * from './generic/realtimeTracks';
 export * from './generic/realtimeAgentVision';
 export * from './generic/realtimeAvatarStatus';
