@@ -81,6 +81,24 @@ const GEMINI_VIDEO_INPUT_MIME_TYPES: ReadonlySet<string> = new Set(['image/jpeg'
 /** The endpoints' names in log lines. */
 const GEMINI_ENDPOINT_NAMES: Readonly<Record<GeminiLiveEndpoint, string>> = { developer: 'the Gemini Developer API', enterprise: 'Gemini Enterprise' };
 
+/** The value the driver reads from a shared config key it applies after the merge: an object, or a named effort (a string). */
+type GeminiSharedKeyShape = 'object' | 'named effort';
+
+/**
+ * The keys in `REALTIME_SHARED_CONFIG_KEYS` that this driver applies after the config-bag merge, reading them from the
+ * original bag in `applyModelLegality`, with the value each must hold: `turnDetection` (its `Coverage` sets the turn
+ * coverage), `reasoning` (the thinking level and thought summaries), and `effortLevel` or `reasoningEffort` (a named
+ * thinking level). The scrub in `BuildConnectConfig` keeps them out of the merge without calling them non-Gemini
+ * (#5334). The other shared keys the driver applies (`voice`, `disableAutoResponse`, `tooling`, `toolBehavior`) are
+ * consumed before the scrub.
+ */
+const GEMINI_SHARED_KEYS_APPLIED_AFTER_MERGE: ReadonlyMap<string, GeminiSharedKeyShape> = new Map<string, GeminiSharedKeyShape>([
+    ['turnDetection', 'object'],
+    ['reasoning', 'object'],
+    ['effortLevel', 'named effort'],
+    ['reasoningEffort', 'named effort'],
+]);
+
 /** Meeting-mode watchdog: how long to wait for a turn after `activityEnd` before clearing a latched `responseActive` (shorter than the bridge's floor safety timer). */
 const GEMINI_MEETING_RESPONSE_WATCHDOG_MS = 5000;
 
@@ -544,6 +562,44 @@ export class GeminiRealtime extends BaseRealtimeModel {
     }
 
     /**
+     * Deletes every key in {@link REALTIME_SHARED_CONFIG_KEYS} from the copy of the config bag that is merged into the
+     * connect config, so none reaches the Live SDK raw, and logs what the session will not apply:
+     *
+     * - the keys Gemini Live has no use for, in one line;
+     * - a key the driver applies after the merge ({@link GEMINI_SHARED_KEYS_APPLIED_AFTER_MERGE}) whose value is of a
+     *   type it cannot read, one line each. `null` reads as unset, the way a config layer clears an inherited value.
+     *
+     * A key the driver applies, with a value it can read, gets no line here: `applyModelLegality` applies it and logs a
+     * value the model or endpoint doesn't accept (a turn coverage, a thinking level).
+     *
+     * @param cfg The copy of the session config bag that is merged into the connect config. The keys are deleted from it.
+     */
+    private static scrubSharedKeys(cfg: Record<string, unknown>): void {
+        const notApplied: string[] = [];
+        for (const key of REALTIME_SHARED_CONFIG_KEYS) {
+            if (!(key in cfg)) {
+                continue;
+            }
+            const value = cfg[key];
+            delete cfg[key];
+            const shape = GEMINI_SHARED_KEYS_APPLIED_AFTER_MERGE.get(key);
+            if (shape === undefined) {
+                notApplied.push(key);
+                continue;
+            }
+            const unset = value === null || value === undefined;
+            const readable = shape === 'object' ? GeminiRealtime.readObject(value) !== undefined : typeof value === 'string';
+            if (!unset && !readable) {
+                const expected = shape === 'object' ? 'an object' : 'a named effort such as "medium"';
+                console.warn(`[GeminiRealtime] Ignored the session config bag's \`${key}\` because it is not ${expected} (got ${Array.isArray(value) ? 'array' : typeof value}).`);
+            }
+        }
+        if (notApplied.length > 0) {
+            console.warn(`[GeminiRealtime] Scrubbed non-Gemini config key(s) from the session bag: ${notApplied.join(', ')} — other realtime drivers use these; Gemini Live does not apply them.`);
+        }
+    }
+
+    /**
      * Keeps a config-bag `contextWindowCompression` only when it is an object. The bag is untyped
      * JSON, so a string, array or null would otherwise reach the wire and fail the session at
      * connect. A malformed value is replaced by the default and reported; a well-formed one wins
@@ -642,14 +698,15 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 const reason = typeof rawVoice === 'string' ? 'blank' : `not a string (got ${typeof rawVoice})`;
                 console.warn(`[GeminiRealtime] Ignored the session config bag's \`voice\` because it is ${reason} — expected a Gemini prebuilt voice name.`);
             }
-            // Scrub the MJ-side keys shared across the realtime driver family (OpenAI-protocol
-            // feature knobs + transport settings). They are NOT Gemini config keys — a co-agent
-            // config carrying e.g. `effortLevel` or `mcpTools` must be SAFE on a Gemini session,
-            // not spread raw into the Live SDK where strictness varies by version. Scrubbed keys
-            // are diag-logged so config typos / cross-provider keys stop being silent.
-            // The two keys Gemini translates natively (`disableAutoResponse`, `voice`) were already
-            // consumed and deleted above, so the loop only ever sees keys with no Gemini mapping —
-            // no per-key exemption needed here.
+            // Scrub the MJ-side keys shared across the realtime driver family. None is a Live config
+            // field — a co-agent config carrying e.g. `effortLevel` or `mcpTools` must not break a
+            // Gemini session by being spread raw into the Live SDK, where strictness varies by version.
+            // The keys this driver applies after the merge (`turnDetection`, `reasoning`,
+            // `effortLevel`, `reasoningEffort`) are read from params.Config by applyModelLegality, so
+            // the scrub reports one only when its value is of a type the driver cannot read; the
+            // rest are diag-logged so config typos and cross-provider keys stop being silent. The
+            // keys consumed above (`disableAutoResponse`, `voice`, `tooling`, `toolBehavior`) never
+            // reach it.
             //
             // This scrub NARROWS the silent-drop class of #3721; it does not close it. The list is an
             // allowlist of MJ-SHARED keys, not of non-Gemini keys, so anything outside it still rides
@@ -658,16 +715,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
             // deprecated but deliberately kept authorable in the agent-type ConfigSchema. Closing the
             // class means inverting this check to warn on any key that is not a known
             // `LiveConnectConfig` field — tracked separately rather than widened here.
-            const scrubbed: string[] = [];
-            for (const key of REALTIME_SHARED_CONFIG_KEYS) {
-                if (key in cfg) {
-                    delete cfg[key];
-                    scrubbed.push(key);
-                }
-            }
-            if (scrubbed.length > 0) {
-                console.warn(`[GeminiRealtime] Scrubbed non-Gemini config key(s) from the session bag: ${scrubbed.join(', ')} — these are OpenAI-protocol/transport keys and do not apply to Gemini Live.`);
-            }
+            GeminiRealtime.scrubSharedKeys(cfg);
             Object.assign(config, cfg as Partial<LiveConnectConfig>);
             GeminiRealtime.ensureContextWindowCompression(config);
             // Captured BEFORE the mapping below replaces or deletes it, so the warning can report the
@@ -861,7 +909,9 @@ export class GeminiRealtime extends BaseRealtimeModel {
         const profile = ResolveGeminiLiveProfile(params.Model, this.Endpoint);
         // The catalog's ModelConfiguration.Realtime reaches a driver folded into the session Config
         // BAG as neutral keys (the same route `turnDetection` already travels), not as a field on
-        // RealtimeSessionParams — so read it from there.
+        // RealtimeSessionParams — so read it from there. A shared key read here belongs in
+        // GEMINI_SHARED_KEYS_APPLIED_AFTER_MERGE; otherwise the scrub logs it as a key Gemini Live
+        // does not apply.
         const bag: Record<string, unknown> = (params.Config as Record<string, unknown> | undefined) ?? {};
         const reasoning = GeminiRealtime.readObject(bag['reasoning']);
         const turnDetection = GeminiRealtime.readObject(bag['turnDetection']);

@@ -844,6 +844,100 @@ describe('C6: cross-provider config-bag safety (shared-key scrubbing)', () => {
             warn.mockRestore();
         }
     });
+
+    /*
+     * Issue #5334. The driver applies `turnDetection`, `reasoning`, `effortLevel` and `reasoningEffort` itself, reading
+     * them from the original bag after the merge, so the scrub line must not call them non-Gemini. Gemini 3.8 Live's
+     * catalog rows set `turnDetection.Coverage`, which put the key in that line on every such session.
+     */
+    const scrubLines = (warnings: string[]): string[] => warnings.filter((line) => line.includes('Scrubbed non-Gemini config key'));
+    const turnCoverageOf = (config: Record<string, unknown>): unknown => (config['realtimeInputConfig'] as Record<string, unknown> | undefined)?.['turnCoverage'];
+    const thinkingConfigOf = (config: Record<string, unknown>): Record<string, unknown> | undefined => config['thinkingConfig'] as Record<string, unknown> | undefined;
+
+    it('a session that sets turn coverage logs no scrub line and still sends that coverage, bridged and minted', async () => {
+        const params = makeParams({ Model: 'gemini-3.8-live', Config: { turnDetection: { Coverage: 'audioActivityAndAllVideo' } } });
+        const bridged = await startWithWarnings(new TestGeminiRealtime('k'), params);
+        const minted = await mintWithWarnings(new ClientDirectTestable('k'), params);
+        for (const [path, run] of [['bridged', bridged], ['minted', minted]] as const) {
+            expect(scrubLines(run.warnings), path).toEqual([]);
+            expect(turnCoverageOf(run.config), path).toBe('TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO');
+            // Still kept out of the config itself: the driver reads the key from the bag, it is not a Live field.
+            expect(run.config['turnDetection'], path).toBeUndefined();
+        }
+    });
+
+    it("Extended Thinking's catalog bag logs no scrub line, and its reasoning and coverage are applied", async () => {
+        // What the catalog projects for the model's Google row: Tooling, Reasoning and TurnDetection.
+        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
+            Model: 'gemini-3.8-live-extended-thinking',
+            Config: {
+                tooling: { SupportsBlockingExecution: false, SupportsScheduling: false },
+                reasoning: { IncludeThoughtSummaries: true, Level: 'high' },
+                turnDetection: { Coverage: 'audioActivityAndAllVideo' },
+            },
+        }));
+        expect(scrubLines(warnings)).toEqual([]);
+        expect(thinkingConfigOf(config)).toEqual({ thinkingLevel: 'HIGH', includeThoughts: true });
+        expect(turnCoverageOf(config)).toBe('TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO');
+        expect(config['reasoning']).toBeUndefined();
+    });
+
+    it('a named effort in effortLevel or reasoningEffort logs no scrub line and sets the thinking level', async () => {
+        const viaEffortLevel = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({ Model: 'gemini-3.8-live-extended-thinking', Config: { effortLevel: 'low' } }));
+        const viaReasoningEffort = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({ Model: 'gemini-3.8-live-extended-thinking', Config: { reasoningEffort: 'high' } }));
+        expect(scrubLines([...viaEffortLevel.warnings, ...viaReasoningEffort.warnings])).toEqual([]);
+        expect(thinkingConfigOf(viaEffortLevel.config)?.['thinkingLevel']).toBe('LOW');
+        expect(thinkingConfigOf(viaReasoningEffort.config)?.['thinkingLevel']).toBe('HIGH');
+    });
+
+    it('a key Gemini Live does not apply still gets the scrub line, which names only the keys it does not apply', async () => {
+        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
+            Model: 'gemini-3.8-live-extended-thinking',
+            Config: {
+                turnDetection: { Coverage: 'audioActivityAndAllVideo' },
+                reasoning: { Level: 'low' },
+                parallelToolCalls: true,
+                mcpTools: [{ type: 'mcp', server_label: 'kb' }],
+            },
+        }));
+        expect(scrubLines(warnings)).toEqual([
+            '[GeminiRealtime] Scrubbed non-Gemini config key(s) from the session bag: parallelToolCalls, mcpTools — other realtime drivers use these; Gemini Live does not apply them.',
+        ]);
+        expect(config['parallelToolCalls']).toBeUndefined();
+        expect(config['mcpTools']).toBeUndefined();
+        expect(turnCoverageOf(config)).toBe('TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO');
+        expect(thinkingConfigOf(config)?.['thinkingLevel']).toBe('LOW');
+    });
+
+    it('a value of a type the driver cannot read is named on its own line, not as a non-Gemini key', async () => {
+        // A number is a valid MJ effort level (1-100) that the OpenAI drivers map; Gemini Live reads only a named effort.
+        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
+            Model: 'gemini-3.8-live-extended-thinking',
+            Config: { effortLevel: 85, turnDetection: 'semanticVad' },
+        }));
+        expect(scrubLines(warnings)).toEqual([]);
+        expect(warnings.filter((line) => line.includes('Ignored the session config bag'))).toEqual([
+            '[GeminiRealtime] Ignored the session config bag\'s `effortLevel` because it is not a named effort such as "medium" (got number).',
+            '[GeminiRealtime] Ignored the session config bag\'s `turnDetection` because it is not an object (got string).',
+        ]);
+        expect(config['effortLevel']).toBeUndefined();
+        expect(config['turnDetection']).toBeUndefined();
+        // Neither applies, so the model's defaults stand.
+        expect(thinkingConfigOf(config)?.['thinkingLevel']).toBe('MEDIUM');
+        expect(turnCoverageOf(config)).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+    });
+
+    it('reads null as unset: no line for a key the driver applies, and its default stands', async () => {
+        // A config layer clears an inherited value with null (DeepMergeConfigs lets null replace).
+        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
+            Model: 'gemini-3.8-live-extended-thinking',
+            Config: { turnDetection: null, reasoning: null, effortLevel: null, reasoningEffort: null },
+        }));
+        expect(scrubLines(warnings)).toEqual([]);
+        expect(warnings.filter((line) => line.includes('Ignored the session config bag'))).toEqual([]);
+        expect(thinkingConfigOf(config)?.['thinkingLevel']).toBe('MEDIUM');
+        expect(turnCoverageOf(config)).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+    });
 });
 
 describe('C7: agnostic voice → Gemini speechConfig (issue #3721)', () => {
@@ -955,8 +1049,8 @@ describe('C7: agnostic voice → Gemini speechConfig (issue #3721)', () => {
             await driver.StartSession(makeParams({ Config: { voice: 42 } }));
             expect((driver.LastConnectArgs!.Config as Record<string, unknown>).voice).toBeUndefined();
             expect('speechConfig' in driver.LastConnectArgs!.Config).toBe(false);
-            // `voice` IS a Gemini-meaningful key, so the scrub message ("OpenAI-protocol/transport
-            // keys ... do not apply to Gemini Live") would be a lie about a plain config typo.
+            // `voice` IS a Gemini-meaningful key, so the scrub message ("other realtime drivers use
+            // these; Gemini Live does not apply them") would be a lie about a plain config typo.
             expect(warn).toHaveBeenCalledWith(expect.stringContaining('not a string'));
             expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('Scrubbed non-Gemini config key'));
         } finally {
