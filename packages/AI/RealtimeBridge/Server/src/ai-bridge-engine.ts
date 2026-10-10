@@ -800,9 +800,13 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
     /** roomKey (lowercased) → the bridge id of that room's current transcript scribe. Election dedup. */
     private readonly roomScribes = new Map<string, string>();
-    /** Diagnostic: session ids that have already logged their first inbound / outbound media frame. */
-    private diagInbound = new Set<string>();
-    private diagOutbound = new Set<string>();
+    /**
+     * Diagnostic: the bridges (by `SessionBridgeID`) that have logged their first inbound media frame. An ending bridge
+     * adds no id, and {@link StopBridgeSession} drops its id, so a long-running host keeps only its live bridges.
+     */
+    private readonly diagInbound = new Set<string>();
+    /** Diagnostic: the bridges that have logged the agent's first outbound audio, kept the same way as {@link diagInbound}. */
+    private readonly diagOutbound = new Set<string>();
     /** In-memory registry of bridged sessions this process currently hosts, keyed by bridge id (lowercased). */
     private activeSessions = new Map<string, ActiveBridgeSession>();
 
@@ -1198,6 +1202,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             active.Ending = true; // ignore model-loss signals that race the teardown
             await this.disconnectDriver(active, reason);
             this.activeSessions.delete(key);
+            // Forget its first-frame diagnostics. A frame that arrives after this can't add the id back: an ending bridge
+            // records none.
+            this.diagInbound.delete(active.SessionBridgeID);
+            this.diagOutbound.delete(active.SessionBridgeID);
             const done = await this.markBridgeDisconnected(
                 sessionBridgeID,
                 reason,
@@ -1280,7 +1288,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             const chunk = this.frameToArrayBuffer(frame);
             this.observeInboundHumanSpeech(active, frame, chunk);
             if (chunk && !active.ModelRecovering) {
-                if (!this.diagInbound.has(active.SessionBridgeID)) {
+                if (!active.Ending && !this.diagInbound.has(active.SessionBridgeID)) {
                     this.diagInbound.add(active.SessionBridgeID);
                     LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). ${firstInboundFrameMeaning(frame.Track)}`, verboseOnly: true });
                 }
@@ -1372,7 +1380,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                     verboseOnly: true,
                 });
             }
-            if (!this.diagOutbound.has(active.SessionBridgeID)) {
+            if (!active.Ending && !this.diagOutbound.has(active.SessionBridgeID)) {
                 this.diagOutbound.add(active.SessionBridgeID);
                 LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST outbound audio from the agent (bridge ${active.SessionBridgeID}). The agent is SPEAKING into the room.`, verboseOnly: true });
             }

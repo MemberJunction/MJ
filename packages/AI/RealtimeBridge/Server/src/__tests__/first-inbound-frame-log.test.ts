@@ -2,6 +2,9 @@
  * The engine's verbose first-frame log: once per bridge, it says what the first inbound frame that reached the model
  * shows. A camera or screen frame means the agent can see it; audio means the agent hears you. It used to say "HEARING"
  * for every track, so a meeting whose first frame was a camera read as the agent hearing the room.
+ *
+ * The engine remembers which bridges have logged their first inbound frame and their first outbound audio. It forgets a
+ * bridge when the bridge ends; it used to keep every bridge id for the life of the process.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IMetadataProvider, LogStatusOptions, UserInfo } from '@memberjunction/core';
@@ -30,9 +33,10 @@ import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '../loopback-bridge
 const AUDIO_IN: RealtimeTrackDescriptor = { Modality: 'audio', Direction: 'inbound' };
 const VIDEO_IN: RealtimeTrackDescriptor = { Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: 1 };
 
-/** A model session that declares whether it takes inbound video, and keeps what reached it. */
+/** A model session that declares whether it takes inbound video, keeps what reached it, and can speak. */
 class MediaSession implements IRealtimeSession {
     public readonly Heard: RealtimeInputFrame[] = [];
+    private outputHandler?: (chunk: ArrayBuffer) => void;
     constructor(private readonly takesVideo: boolean) {}
     public get Capabilities(): RealtimeSessionCapabilities {
         return { CanReconfigureTurnMode: false, SupportedInboundTracks: this.takesVideo ? [AUDIO_IN, VIDEO_IN] : [AUDIO_IN] };
@@ -46,8 +50,12 @@ class MediaSession implements IRealtimeSession {
     public async RegisterTools(): Promise<void> {
         /* not driven here */
     }
-    public OnOutput(): void {
-        /* not driven here */
+    public OnOutput(handler: (chunk: ArrayBuffer) => void): void {
+        this.outputHandler = handler;
+    }
+    /** Sends one chunk of the agent's speech through the handler the engine registered. */
+    public Speak(chunk: ArrayBuffer): void {
+        this.outputHandler?.(chunk);
     }
     public OnTranscript(): void {
         /* not driven here */
@@ -98,9 +106,9 @@ function engine(): AIBridgeEngine {
     return e;
 }
 
-async function seat(session: MediaSession): Promise<ActiveBridgeSession> {
+async function seat(session: MediaSession, agentSessionId = 'session-first-frame'): Promise<ActiveBridgeSession> {
     return engine().StartBridgeSession({
-        AgentSessionID: 'session-first-frame',
+        AgentSessionID: agentSessionId,
         Provider: providerEntity,
         RealtimeSession: session,
         Address: 'loopback://first-frame-room',
@@ -117,11 +125,28 @@ function bytes(...values: number[]): ArrayBuffer {
     return new Uint8Array(values).buffer;
 }
 
+/** Every message the engine logged through `LogStatusEx`, in order. */
+function loggedMessages(): string[] {
+    return mocks.LogStatusEx.mock.calls.map(([options]) => (typeof options === 'string' ? options : options.message));
+}
+
 /** The first-frame lines the engine logged, in order. */
 function firstFrameLines(): string[] {
-    return mocks.LogStatusEx.mock.calls
-        .map(([options]) => (typeof options === 'string' ? options : options.message))
-        .filter((message) => message.includes('FIRST inbound media frame'));
+    return loggedMessages().filter((message) => message.includes('FIRST inbound media frame'));
+}
+
+/** The first-outbound-audio lines the engine logged, in order. */
+function firstOutboundLines(): string[] {
+    return loggedMessages().filter((message) => message.includes('FIRST outbound audio'));
+}
+
+/**
+ * The engine's two private sets of bridge ids that have logged their first inbound frame and their first outbound
+ * audio. Read by name (TypeScript allows bracket access to a private member), since what they keep is under test.
+ */
+function diagnosticIds(): { Inbound: ReadonlySet<string>; Outbound: ReadonlySet<string> } {
+    const e = engine();
+    return { Inbound: e['diagInbound'], Outbound: e['diagOutbound'] };
 }
 
 beforeEach(() => {
@@ -192,5 +217,83 @@ describe('AIBridgeEngine — the first inbound frame log', () => {
         expect(firstFrameLines()).toEqual([
             `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=audio-in). The agent is HEARING you.`,
         ]);
+    });
+});
+
+describe('AIBridgeEngine — the first-frame diagnostics when a bridge ends', () => {
+    it('forgets the bridge: once it ends, its id is in neither the inbound nor the outbound set', async () => {
+        const session = new MediaSession(true);
+        const active = await seat(session);
+        const id = active.SessionBridgeID;
+        loopback(active).EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2, 3) });
+        session.Speak(bytes(4, 5, 6));
+        expect(diagnosticIds().Inbound.has(id)).toBe(true);
+        expect(diagnosticIds().Outbound.has(id)).toBe(true);
+
+        await engine().StopBridgeSession(id, 'Explicit');
+
+        expect(diagnosticIds().Inbound.has(id)).toBe(false);
+        expect(diagnosticIds().Outbound.has(id)).toBe(false);
+    });
+
+    it('adds no id back for a frame that arrives after the bridge ended, and logs no first frame for it', async () => {
+        const onMedia = vi.spyOn(LoopbackBridge.prototype, 'OnMedia');
+        const session = new MediaSession(true);
+        const active = await seat(session);
+        // The engine's inbound handler, kept past the driver's teardown, as a driver that delivers a late frame would.
+        const deliverInbound = onMedia.mock.calls[0][0];
+        onMedia.mockRestore();
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+        mocks.LogStatusEx.mockClear();
+
+        deliverInbound({ Track: 'audio-in', Bytes: bytes(1, 2, 3) });
+        session.Speak(bytes(4, 5, 6)); // this session keeps its output handler after Close
+
+        expect(diagnosticIds().Inbound.has(active.SessionBridgeID)).toBe(false);
+        expect(diagnosticIds().Outbound.has(active.SessionBridgeID)).toBe(false);
+        expect(firstFrameLines()).toEqual([]);
+        expect(firstOutboundLines()).toEqual([]);
+    });
+
+    it('a bridge that starts after another ended logs its first inbound frame and its first outbound audio, once each', async () => {
+        const endedSession = new MediaSession(true);
+        const ended = await seat(endedSession);
+        loopback(ended).EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2, 3) });
+        endedSession.Speak(bytes(4, 5, 6));
+        await engine().StopBridgeSession(ended.SessionBridgeID, 'Explicit');
+        mocks.LogStatusEx.mockClear();
+
+        const session = new MediaSession(true);
+        const active = await seat(session);
+        loopback(active).EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2, 3) });
+        loopback(active).EmitInbound({ Track: 'audio-in', Bytes: bytes(4, 5, 6) });
+        session.Speak(bytes(7, 8, 9));
+        session.Speak(bytes(10, 11, 12));
+
+        expect(firstFrameLines()).toEqual([
+            `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=audio-in). The agent is HEARING you.`,
+        ]);
+        expect(firstOutboundLines()).toEqual([
+            `[AIBridgeEngine][diag] FIRST outbound audio from the agent (bridge ${active.SessionBridgeID}). The agent is SPEAKING into the room.`,
+        ]);
+    });
+
+    it('leaves the other bridges alone: when one agent leaves a room, the one that stays logs no first frame again', async () => {
+        const leaving = await seat(new MediaSession(true), 'session-first-frame-leaving');
+        const stayingSession = new MediaSession(true);
+        const staying = await seat(stayingSession, 'session-first-frame-staying');
+        loopback(leaving).EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2, 3) });
+        loopback(staying).EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2, 3) });
+        stayingSession.Speak(bytes(4, 5, 6));
+
+        await engine().StopBridgeSession(leaving.SessionBridgeID, 'Explicit');
+        mocks.LogStatusEx.mockClear();
+        loopback(staying).EmitInbound({ Track: 'audio-in', Bytes: bytes(7, 8, 9) });
+        stayingSession.Speak(bytes(10, 11, 12));
+
+        expect(firstFrameLines()).toEqual([]);
+        expect(firstOutboundLines()).toEqual([]);
+        expect(diagnosticIds().Inbound.has(staying.SessionBridgeID)).toBe(true);
+        expect(diagnosticIds().Outbound.has(staying.SessionBridgeID)).toBe(true);
     });
 });
