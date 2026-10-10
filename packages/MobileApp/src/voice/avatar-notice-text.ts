@@ -23,11 +23,19 @@ export const AVATAR_NOTICE_TEXT: Record<RealtimeAvatarUnavailableReason, string>
 };
 
 /**
+ * The sentence for a reason this version doesn't know, such as a newer server's: a copy of
+ * `ng-realtime-media`'s `AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT` (change both together).
+ */
+export const AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT = "Audio only: the avatar can't be shown in this call";
+
+/**
  * The notice's sentence for a reason.
  *
- * @param reason Why the call is audio only.
+ * @param reason Why the call is audio only; `null` for a reason this version doesn't know, which reads
+ *   {@link AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT}.
  * @param agentName The agent a meeting sentence names; "the agent" when not given.
  */
-export function AvatarNoticeText(reason: RealtimeAvatarUnavailableReason, agentName?: string | null): string {
-    return AVATAR_NOTICE_TEXT[reason].replace('{Agent}', agentName?.trim() || 'the agent');
+export function AvatarNoticeText(reason: RealtimeAvatarUnavailableReason | null, agentName?: string | null): string {
+    const sentence = reason === null ? AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT : AVATAR_NOTICE_TEXT[reason];
+    return sentence.replace('{Agent}', agentName?.trim() || 'the agent');
 }

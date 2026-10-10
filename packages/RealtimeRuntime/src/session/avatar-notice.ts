@@ -10,35 +10,42 @@
  * @module @memberjunction/realtime-runtime
  */
 
-import type { ClientRealtimeSessionConfig, JSONValue, RealtimeAvatarStatus, RealtimeAvatarUnavailableReason } from '@memberjunction/ai';
+import type { ClientRealtimeSessionConfig, JSONValue, ParsedRealtimeAvatarStatus, RealtimeAvatarUnavailableReason } from '@memberjunction/ai';
 import { REQUESTED_TRACKS_SESSION_KEY } from '@memberjunction/ai-realtime-client';
 
 /** Why a call shows no avatar, told once after it connects. A host turns the reason into words. */
 export interface RealtimeAvatarNotice {
-  /** Why the call is audio only. */
-  readonly Reason: RealtimeAvatarUnavailableReason;
+  /**
+   * Why the call is audio only. Absent when the mint gave a reason this version doesn't know, such as a newer server's:
+   * the avatar was asked for and isn't shown, and a host says so without a reason.
+   */
+  readonly Reason?: RealtimeAvatarUnavailableReason;
 }
 
 /**
  * Whether a connected call should say it shows no avatar, and why.
  *
  * - No status, or the session asked for no avatar: nothing to say.
- * - Asked for and not granted: the status's reason (nothing without one).
+ * - Asked for and not granted: the status's reason; a notice without one when the reason is one this version doesn't
+ *   know (`ReasonUnknown`); nothing when the status gives no reason.
  * - Granted, but the app asked for no agent video: `host`.
  * - Granted and asked for, but the agent's video track is not live: `browser`.
  * - Granted, asked for and live: nothing to say; the avatar shows.
  *
- * @param status The mint's avatar status, or `null` when the mint reported none.
+ * @param status The mint's avatar status as `ParseRealtimeAvatarStatus` reads it, or `null` when the mint reported none.
  * @param requested Whether the session asked for the agent's video (an outbound video track).
  * @param established Whether the agent's video track is live once connected.
  * @returns The notice, or `null` when there is nothing to say.
  */
-export function ResolveAvatarNotice(status: RealtimeAvatarStatus | null, requested: boolean, established: boolean): RealtimeAvatarNotice | null {
+export function ResolveAvatarNotice(status: ParsedRealtimeAvatarStatus | null, requested: boolean, established: boolean): RealtimeAvatarNotice | null {
   if (!status?.Requested) {
     return null;
   }
   if (!status.Granted) {
-    return status.Reason ? { Reason: status.Reason } : null;
+    if (status.Reason) {
+      return { Reason: status.Reason };
+    }
+    return status.ReasonUnknown ? {} : null;
   }
   if (!requested) {
     return { Reason: 'host' };

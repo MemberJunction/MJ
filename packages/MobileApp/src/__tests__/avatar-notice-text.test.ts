@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AVATAR_NOTICE_TEXT, AvatarNoticeText } from '@/voice/avatar-notice-text';
+import { AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT, AVATAR_NOTICE_TEXT, AvatarNoticeText } from '@/voice/avatar-notice-text';
 
 /**
  * Tests for the words of the voice screen's "Audio only" notice.
@@ -51,5 +51,11 @@ describe('AvatarNoticeText', () => {
 
     it('leaves the agent out of a call sentence', () => {
         expect(AvatarNoticeText('host', 'Sage')).toBe("Audio only: this app can't show the avatar");
+    });
+
+    it("says the call can't show the avatar for a reason this version doesn't know, as the web's call does", () => {
+        expect(AvatarNoticeText(null)).toBe("Audio only: the avatar can't be shown in this call");
+        expect(AvatarNoticeText(null, 'Sage')).toBe("Audio only: the avatar can't be shown in this call");
+        expect(AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT).toBe("Audio only: the avatar can't be shown in this call");
     });
 });

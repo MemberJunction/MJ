@@ -147,7 +147,7 @@ export default function VoiceModeScreen() {
     }, [conversationId, preferredAgentId, sessionEpoch]);
 
     // ── Avatar notice: read aloud on iOS when it appears (Android uses the notice's live region) ──
-    const noticeText = avatarNotice ? AvatarNoticeText(avatarNotice.Reason, agentName) : null;
+    const noticeText = avatarNotice ? AvatarNoticeText(avatarNotice.Reason ?? null, agentName) : null;
     useEffect(() => {
         if (noticeText) {
             AnnounceAvatarNotice(noticeText);
