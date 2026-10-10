@@ -48,7 +48,7 @@ export type RealtimeAgentAvatarState =
  * The attributes a bot joins with for a session's avatar status: `'on'` when granted, `'audio-only:<reason>'` when the
  * session asked for an avatar it doesn't render, and none when it asked for none.
  *
- * @param status The session's avatar status (`IRealtimeSession.AvatarStatus`), as its driver or its session prep reported it.
+ * @param status The session's avatar status (`IRealtimeSession.AvatarStatus`), as its driver or the agent runtime reported it.
  */
 export function AgentAvatarAttributes(status: RealtimeAvatarStatus | null | undefined): Record<string, string> {
     if (!status?.Requested) {

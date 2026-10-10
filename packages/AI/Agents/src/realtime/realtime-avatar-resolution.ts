@@ -16,7 +16,8 @@
  * Whether the session can render the avatar is otherwise the driver's call (its endpoint profile); this only decides
  * which one to ask for. Once the driver has minted the session, {@link ResolveRealtimeAvatarStatus} merges the two into
  * the status the call gets, so a call that shows no avatar can say why. A server-side session gets its status from
- * {@link ResolveBridgedAvatarStatus}, so a meeting can say why too, including when the prep asked its driver for none.
+ * {@link ResolveBridgedAvatarStatus}, so a meeting can say why too, including when the prep asked its driver for none
+ * and when its driver renders no avatar and ignored the request.
  *
  * @module @memberjunction/ai-agents
  */
@@ -130,8 +131,8 @@ export interface RealtimeBridgedAvatarStatusInput {
     RoomDelivery: boolean;
     /**
      * Whether the session's model shows avatars (`RealtimeModelShowsAvatar`: its Video/Output row and its driver's
-     * endpoint). Asked only when the prep asked the driver for no avatar for a reason other than who would see it, in a
-     * session whose host publishes the avatar.
+     * endpoint). Asked only in a session whose host publishes the avatar, when the driver had nothing to report: the prep
+     * asked it for no avatar for a reason other than who would see it, or asked it for one and it reported nothing.
      */
     ModelShowsAvatar: () => boolean;
     /** What the driver reported when it opened the session (`IRealtimeSession.AvatarStatus`). */
@@ -140,35 +141,47 @@ export interface RealtimeBridgedAvatarStatusInput {
 
 /**
  * The avatar status a server-side (bridged) session reports, which its host shows (the LiveKit room puts it on the
- * agent's bot as `mj.agentAvatar`). A session whose prep asked the driver for an avatar, or for none because the video
- * setting is off, keeps the driver's status: the driver decided. A session whose prep asked for none for a reason leaves
- * the driver nothing to report, so the status says why, asked for and not granted:
+ * agent's bot as `mj.agentAvatar`). A status the driver reported about the avatar it was asked for stands: the driver
+ * decided. A session whose prep asked for none because the video setting is off keeps the driver's status (none).
+ * Otherwise the driver had nothing to report, because the prep asked it for no avatar for a reason, or because it renders
+ * no avatar and ignored the request, so the status says why, asked for and not granted:
  * 1. `phone` (or `host`): nobody would see the avatar, whatever renders it;
  * 2. `bridged` when the host publishes no avatar into a room, which is what a driver asked there says (the LiveKit room
  *    then names its own reason, such as `decoder-missing`);
  * 3. `endpoint` when the model shows no avatar, as a browser call says ({@link ResolveRealtimeAvatarStatus});
- * 4. else the prep's reason: `endpoint` (the model's Video/Output row), `unknown-avatar` or `no-binding`.
+ * 4. else the prep's reason: `endpoint` (the model's Video/Output row), `unknown-avatar` or `no-binding`. A driver that
+ *    was asked for the avatar on a model that shows avatars and reported nothing gives no reason, so there is no status.
  *
  * @param input The resolution, whether the host publishes the avatar, the model's capability and the driver's status.
- * @returns The status for the session; `undefined` when the prep gave no reason and the driver reported none.
+ * @returns The status for the session; `undefined` when the session asked for no avatar, or its driver reported nothing
+ *   about one on a model that shows avatars.
  */
 export function ResolveBridgedAvatarStatus(input: RealtimeBridgedAvatarStatusInput): RealtimeAvatarStatus | undefined {
-    const reason = input.Resolution?.Reason;
-    if (!reason) {
+    const prepReason = input.Resolution?.Reason;
+    const unreported = input.Resolution?.Avatar !== undefined && !input.DriverStatus;
+    if (!prepReason && !unreported) {
         return input.DriverStatus;
     }
-    return { Requested: true, Granted: false, Reason: bridgedAudioOnlyReason(reason, input) };
+    const reason = bridgedAudioOnlyReason(prepReason, input);
+    return reason ? { Requested: true, Granted: false, Reason: reason } : undefined;
 }
 
-/** Why a bridged session whose prep asked the driver for no avatar is audio only, in {@link ResolveBridgedAvatarStatus}'s order. */
-function bridgedAudioOnlyReason(reason: NonNullable<RealtimeAvatarResolution['Reason']>, input: RealtimeBridgedAvatarStatusInput): RealtimeAvatarUnavailableReason {
-    if (isUnseenReason(reason)) {
-        return reason;
+/**
+ * Why a bridged session whose driver had nothing to report is audio only, in {@link ResolveBridgedAvatarStatus}'s order.
+ * `prepReason` is why the prep asked the driver for no avatar; it is absent when the prep asked for one and the driver
+ * reported nothing, which names no reason (`undefined`) on a model that shows avatars.
+ */
+function bridgedAudioOnlyReason(
+    prepReason: RealtimeAvatarResolution['Reason'],
+    input: RealtimeBridgedAvatarStatusInput,
+): RealtimeAvatarUnavailableReason | undefined {
+    if (prepReason && isUnseenReason(prepReason)) {
+        return prepReason;
     }
     if (!input.RoomDelivery) {
         return 'bridged';
     }
-    return input.ModelShowsAvatar() ? reason : 'endpoint';
+    return input.ModelShowsAvatar() ? prepReason : 'endpoint';
 }
 
 /** Whether a resolution's reason says nobody in the session would see the avatar. */

@@ -28,8 +28,11 @@ const BEN = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' as const };
 /** The params every session the probe driver opened was started with, in order. */
 const started: RealtimeSessionParams[] = [];
 
-/** A session that reports no avatar status of its own, as a driver asked for no avatar does. */
-function probeSession(): IRealtimeSession {
+/**
+ * A session reporting what a driver that renders avatars reports: granted when asked for one, and no status of its own
+ * when asked for none.
+ */
+function probeSession(params: RealtimeSessionParams): IRealtimeSession {
     return {
         SendInput: () => undefined,
         RegisterTools: async () => undefined,
@@ -41,6 +44,7 @@ function probeSession(): IRealtimeSession {
         OnUsage: () => undefined,
         OnError: () => undefined,
         Close: async () => undefined,
+        ...(params.Avatar ? { AvatarStatus: { Requested: true, Granted: true } } : {}),
     };
 }
 
@@ -49,9 +53,13 @@ class PhoneProbeDriver extends BaseRealtimeModel {
     public override get SupportsClientDirect(): boolean {
         return true;
     }
+    /** Renders avatars, so a meeting's request is the driver's to grant. */
+    public override SupportsAvatarOutput(): boolean {
+        return true;
+    }
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
         started.push(params);
-        return probeSession();
+        return probeSession(params);
     }
 }
 
@@ -124,6 +132,6 @@ describe('A phone call through the bridged path asks the driver for no avatar (#
     it('still asks for the avatar in a meeting room that publishes it, and leaves the status to the driver', async () => {
         const session = await open({ AvatarDelivery: 'room' });
         expect(started[0].Avatar).toEqual({ ...BEN, Delivery: 'room' });
-        expect(session.AvatarStatus).toBeUndefined();
+        expect(session.AvatarStatus).toEqual({ Requested: true, Granted: true });
     });
 });

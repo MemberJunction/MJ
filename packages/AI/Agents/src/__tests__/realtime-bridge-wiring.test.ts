@@ -457,3 +457,45 @@ describe("WireBridgeRealtimeSession — the avatar status of a meeting whose pre
         expect(fake.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'bridged' });
     });
 });
+
+describe('WireBridgeRealtimeSession — the avatar status of a meeting whose driver ignored the avatar request (#5429)', () => {
+    /** A prep that asked the driver for the persona's face, on a model whose driver renders avatars or not. */
+    function prepWithAvatar(driverRendersAvatars: boolean): RealtimeSessionParamsPrep {
+        const prep = makePrep([]);
+        const model = { SupportsAvatarOutput: () => driverRendersAvatars };
+        return {
+            ...prep,
+            Resolution: { ...prep.Resolution, Model: model },
+            AvatarResolution: { Avatar: { AvatarID: 'Ben' }, Voice: 'Puck' },
+        } as unknown as RealtimeSessionParamsPrep;
+    }
+    const roomInput = { ...input, AvatarDelivery: 'room' } as PrepareClientSessionInput;
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it('reports endpoint on a session whose host publishes the avatar, when its driver renders none and reported nothing', async () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const fake = new FakeSession() as unknown as IRealtimeSession;
+        await new WiringService().WireBridgeRealtimeSession(fake, roomInput, prepWithAvatar(false), contextUser, provider);
+        expect(fake.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+        expect(log).toHaveBeenCalledWith('[RealtimeCoAgent] bridged session avatar: audio only (endpoint); the driver was asked for one and reported nothing.');
+    });
+
+    it('reports bridged on a session whose host publishes no avatar into a room', async () => {
+        const fake = new FakeSession() as unknown as IRealtimeSession;
+        await new WiringService().WireBridgeRealtimeSession(fake, input, prepWithAvatar(false), contextUser, provider);
+        expect(fake.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'bridged' });
+    });
+
+    it('keeps a status the driver reported, and reports nothing when a driver that renders avatars said nothing', async () => {
+        const reported = new FakeSession() as unknown as IRealtimeSession;
+        const customDisabled = { Requested: true, Granted: false, Reason: 'custom-disabled' as const };
+        reported.AvatarStatus = customDisabled;
+        await new WiringService().WireBridgeRealtimeSession(reported, roomInput, prepWithAvatar(false), contextUser, provider);
+        expect(reported.AvatarStatus).toBe(customDisabled);
+
+        const silent = new FakeSession() as unknown as IRealtimeSession;
+        await new WiringService().WireBridgeRealtimeSession(silent, roomInput, prepWithAvatar(true), contextUser, provider);
+        expect(silent.AvatarStatus).toBeUndefined();
+    });
+});
