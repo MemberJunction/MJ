@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, of, type Observable } from 'rxjs';
+import { ConnectionQuality, ConnectionState, DisconnectReason, RoomEvent, Track, type Room } from 'livekit-client';
 import { ChangeDetectorRef, ErrorHandler, type Provider } from '@angular/core';
 import type { ComponentFixture } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -12,6 +13,7 @@ import { LOCAL_MEDIA_CONTROLLER_FACTORY } from '@memberjunction/ng-realtime-medi
 import {
   LIVEKIT_PREVIEW_PEOPLE,
   LiveKitPreviewRoomController,
+  LiveKitRoomController,
   LiveKitRoomEventBus,
   type ILiveKitRoomController,
   type LiveKitAvatarAudioOnly,
@@ -798,11 +800,94 @@ describe("MJLiveKitRoomComponent: an agent's avatar that can't be shown (DOM)", 
   });
 });
 
+/** The device kinds a meeting turns on as it joins, in LiveKit's words. */
+type JoinDeviceKind = 'audioinput' | 'videoinput';
+
+/**
+ * A livekit-client participant reduced to what LiveKit's room controller and the room's tiles read. It has no media
+ * tracks: a device that is on shows as a publication with nothing to attach. Turning on a device the browser refuses
+ * ({@link Refused}) reports it first, as livekit-client does (`MediaDevicesError`, with the device kind), then rejects.
+ */
+class FakeLiveKitParticipant {
+  public isSpeaking = false;
+  public audioLevel = 0;
+  public connectionQuality = ConnectionQuality.Good;
+  public isCameraEnabled = false;
+  public isScreenShareEnabled = false;
+  public attributes: Record<string, string> = {};
+  /** The devices the browser refuses, with the error it gives. */
+  public readonly Refused = new Map<JoinDeviceKind, Error>();
+
+  constructor(
+    public identity: string,
+    public name: string,
+    public isMicrophoneEnabled = false,
+    public metadata?: string,
+    private readonly reportRefusal: (error: Error, kind: JoinDeviceKind) => void = () => undefined
+  ) {}
+
+  public getTrackPublication(source: Track.Source): { isMuted: boolean } | undefined {
+    const on = source === Track.Source.Microphone ? this.isMicrophoneEnabled : source === Track.Source.Camera && this.isCameraEnabled;
+    return on ? { isMuted: false } : undefined;
+  }
+  public async setName(name: string): Promise<void> {
+    this.name = name;
+  }
+  public async setMicrophoneEnabled(enabled: boolean): Promise<void> {
+    this.refuse(enabled, 'audioinput');
+    this.isMicrophoneEnabled = enabled;
+  }
+  public async setCameraEnabled(enabled: boolean): Promise<void> {
+    this.refuse(enabled, 'videoinput');
+    this.isCameraEnabled = enabled;
+  }
+  private refuse(enabled: boolean, kind: JoinDeviceKind): void {
+    const error = enabled ? this.Refused.get(kind) : undefined;
+    if (error) {
+      this.reportRefusal(error, kind);
+      throw error;
+    }
+  }
+}
+
+/**
+ * A livekit-client `Room` reduced to what LiveKit's room controller reads. It connects at once, telling its listeners
+ * as LiveKit does; its local participant, Avery, reports a device the browser refuses to it.
+ */
+class FakeLiveKitRoom {
+  public name = 'weekly-planning';
+  public state = ConnectionState.Disconnected;
+  public canPlaybackAudio = true;
+  public readonly localParticipant = new FakeLiveKitParticipant('avery', 'Avery', false, undefined, (error, kind) =>
+    this.emit(RoomEvent.MediaDevicesError, error, kind)
+  );
+  public readonly remoteParticipants = new Map<string, FakeLiveKitParticipant>();
+  private readonly handlers = new Map<RoomEvent, ((...args: unknown[]) => void)[]>();
+
+  public on(event: RoomEvent, handler: (...args: unknown[]) => void): this {
+    this.handlers.set(event, [...(this.handlers.get(event) ?? []), handler]);
+    return this;
+  }
+  public emit(event: RoomEvent, ...args: unknown[]): void {
+    (this.handlers.get(event) ?? []).forEach((handler) => handler(...args));
+  }
+  public async connect(): Promise<void> {
+    this.state = ConnectionState.Connected;
+    this.emit(RoomEvent.ConnectionStateChanged, this.state);
+    this.emit(RoomEvent.Connected);
+  }
+  public async disconnect(): Promise<void> {
+    this.state = ConnectionState.Disconnected;
+    this.emit(RoomEvent.Disconnected, DisconnectReason.CLIENT_INITIATED);
+  }
+}
+
 /**
  * DOM spec for the notice of what went wrong with the user's devices while the room is connected, such as a share the
  * browser refused or a camera that failed: over the room with its other notices, in their words ("Couldn't …: reason").
  * A share picker the user closed shows nothing. The panel share runs end to end: the real room on the preview
- * controller, with `/media`'s display capture over a stand-in for the browser's picker.
+ * controller, with `/media`'s display capture over a stand-in for the browser's picker. A microphone refused while
+ * joining runs end to end too: the real room on LiveKit's controller, over a stand-in for LiveKit's room.
  */
 describe("MJLiveKitRoomComponent: what went wrong with the user's devices (DOM)", () => {
   const PANEL_REFUSED = "Couldn't start sharing: To share only the panel, choose this tab in the browser's picker.";
@@ -829,6 +914,13 @@ describe("MJLiveKitRoomComponent: what went wrong with the user's devices (DOM)"
     const heard: LiveKitRoomError[] = [];
     f.componentInstance.ErrorOccurred.subscribe((error: LiveKitRoomError) => heard.push(error));
     return heard;
+  };
+  /** Lets the room's async work land and render. */
+  const settle = async (f: ComponentFixture<MJLiveKitRoomComponent>): Promise<void> => {
+    for (let i = 0; i < 6; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      f.detectChanges();
+    }
   };
 
   describe("sharing the whiteboard through the browser's picker, in the preview room", () => {
@@ -861,13 +953,6 @@ describe("MJLiveKitRoomComponent: what went wrong with the user's devices (DOM)"
       throw Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' });
     };
 
-    /** Lets the room's async work land and render. */
-    const settle = async (f: ComponentFixture<MJLiveKitRoomComponent>): Promise<void> => {
-      for (let i = 0; i < 6; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        f.detectChanges();
-      }
-    };
     /** The binding in preview mode with the whiteboard offered, joined on fake devices, the whiteboard open. */
     const joinWithWhiteboard = async () => {
       const f = renderComponentFixture(MJLiveKitRoomComponent, {
@@ -998,6 +1083,35 @@ describe("MJLiveKitRoomComponent: what went wrong with the user's devices (DOM)"
       cameraFails(fire);
       fire('disconnected', { Reason: 'client-initiated' });
       expect(deviceNotices(f)).toEqual([]);
+    });
+
+    it('joins with the microphone off when the browser refuses it, and says why over the room', async () => {
+      const room = new FakeLiveKitRoom();
+      room.localParticipant.Refused.set('audioinput', Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' }));
+      const f = renderComponentFixture(MJLiveKitRoomComponent, {
+        providers: [
+          { provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => new LiveKitRoomController({ RoomFactory: () => room as unknown as Room }) },
+        ],
+        inputs: { AutoStart: false, Mode: 'join', ShowPreJoin: false },
+      });
+      const heard = heardBy(f);
+      const connected = vi.fn();
+      f.componentInstance.Connected.subscribe(connected);
+      f.componentInstance.ServerUrl = 'wss://example.test';
+      f.componentInstance.Token = 'token';
+      f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+      f.detectChanges();
+      await settle(f);
+
+      expect(roomOf(f).State.Status).toBe('connected');
+      expect(connected).toHaveBeenCalledOnce();
+      expect(f.nativeElement.querySelector('mj-connection-overlay')).toBeNull();
+      expect(deviceNotices(f)).toEqual(["Couldn't turn on your microphone: Permission denied"]);
+      expect(f.nativeElement.querySelector('mj-livekit-control-bar button[title="Unmute microphone"]')).not.toBeNull();
+      expect(heard.map((e) => ({ Kind: e.Kind, Device: e.Device }))).toEqual([
+        { Kind: 'device', Device: { Media: 'microphone' } },
+        { Kind: 'device', Device: { Media: 'microphone', Change: 'on' } },
+      ]);
     });
   });
 });

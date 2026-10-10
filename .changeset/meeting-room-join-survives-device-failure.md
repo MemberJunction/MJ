@@ -1,0 +1,5 @@
+---
+"@memberjunction/livekit-room-core": patch
+---
+
+A microphone or camera that fails while joining a LiveKit meeting no longer fails the join. `LiveKitRoomController.Connect` turned the devices on inside the same `try` as the connection, so a microphone the browser refused set the room to "Connection failed: Failed to connect to the room." although LiveKit had connected, and "Try again" failed the same way. The devices now start once the connection is made, each on its own: one that fails is left off and reported as a `device` error (`Failed to enable microphone.` with `Device: { Media: 'microphone', Change: 'on' }`, after LiveKit's own report), the other still starts, and the join completes. `<mj-livekit-agent-room>` then shows its device notice over the connected room ("Couldn't turn on your microphone: Permission denied"), and the user can turn the device on from the control bar. Only a failed connection fails the join: `Connect` rejects, the status is `'error'` and a `connect` error is emitted. If the user leaves while a device starts (the browser's permission prompt can stay open a while), no other device starts and no `connected` is emitted.
