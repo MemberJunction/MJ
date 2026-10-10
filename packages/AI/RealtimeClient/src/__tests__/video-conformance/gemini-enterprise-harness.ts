@@ -32,6 +32,9 @@ const VIDEO_ONLY_AVATAR_TYPE = 'video/mp4; codecs="avc1.42c01f"';
 /** The avatar name the harness mints; a stand-in, not a real preset. */
 const CONFORMANCE_AVATAR_NAME = 'conformance-avatar';
 
+/** What the relay passes on from Google once it has applied a connection's setup. */
+const SETUP_COMPLETE = { setupComplete: {} } as LiveServerMessage;
+
 /** Stands in for the browser's `WebSocket`: records the frames the client sends; the harness plays the relay. */
 export class FakeRelaySocket {
     public onopen: ((event: Event) => void) | null = null;
@@ -132,7 +135,10 @@ export class GeminiEnterpriseHarness extends GeminiHarnessBase {
         return new GeminiEnterpriseKitClient(media);
     }
 
-    /** Connects through the relay: the client opens a socket, the relay accepts it, the SDK sends its setup. */
+    /**
+     * Connects through the relay: the client opens a socket, the relay accepts it, the SDK sends its setup, and the relay
+     * passes on Google's `setupComplete`.
+     */
     public async Connect(client: BaseRealtimeClient, config: ClientRealtimeSessionConfig, microphone: MediaStream): Promise<void> {
         const opened = this.Sockets.length;
         let settled = false;
@@ -140,7 +146,12 @@ export class GeminiEnterpriseHarness extends GeminiHarnessBase {
             settled = true;
         });
         await WaitUntil(() => this.Sockets.length > opened || settled, 'the Enterprise client to open its relay socket');
-        this.Sockets[opened]?.Open();
+        const socket = this.Sockets[opened];
+        if (socket) {
+            socket.Open();
+            await WaitUntil(() => socket.Sent.length > 0 || settled, 'the Enterprise client to send its setup');
+            socket.Receive(SETUP_COMPLETE);
+        }
         await connecting;
     }
 
@@ -151,7 +162,10 @@ export class GeminiEnterpriseHarness extends GeminiHarnessBase {
         return AsksForVideo({ responseModalities: modalities ?? null });
     }
 
-    /** Google issues a handle and announces the end; the client opens a second socket to the same relay URL. */
+    /**
+     * Google issues a handle and announces the end; the client opens a second socket to the same relay URL and moves to it
+     * once the relay passes on Google's `setupComplete`.
+     */
     public async Resume(): Promise<void> {
         const first = this.currentSocket();
         const opened = this.Sockets.length;
@@ -159,7 +173,10 @@ export class GeminiEnterpriseHarness extends GeminiHarnessBase {
             first.Receive(message);
         }
         await WaitUntil(() => this.Sockets.length > opened, 'the Enterprise client to open the resumed relay socket');
-        this.Sockets[opened].Open();
+        const resumed = this.Sockets[opened];
+        resumed.Open();
+        await WaitUntil(() => resumed.Sent.length > 0, 'the Enterprise client to send the resumed setup');
+        resumed.Receive(SETUP_COMPLETE);
         await WaitUntil(() => first.Closed, 'the Enterprise client to close the replaced relay socket');
         await NextMacrotask();
     }

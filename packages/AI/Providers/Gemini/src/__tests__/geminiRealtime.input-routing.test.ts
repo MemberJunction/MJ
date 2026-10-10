@@ -3,6 +3,7 @@ import type { Blob as GeminiBlob, Content, FunctionResponse } from '@google/gena
 import type { IRealtimeSession, RealtimeSessionParams } from '@memberjunction/ai';
 
 import { GeminiRealtime, type GeminiLiveSession, type GeminiConnectArgs } from '../geminiRealtime';
+import { ConfirmGeminiSetup } from './live-session-test-helpers';
 
 type SentInput = { audio?: GeminiBlob; video?: GeminiBlob; activityStart?: unknown; activityEnd?: unknown };
 
@@ -18,7 +19,8 @@ class FakeConnection implements GeminiLiveSession {
 
 class TestGemini extends GeminiRealtime {
     public Fake = new FakeConnection();
-    protected override async connectLiveSession(_args: GeminiConnectArgs): Promise<GeminiLiveSession> {
+    protected override async connectLiveSession(args: GeminiConnectArgs): Promise<GeminiLiveSession> {
+        ConfirmGeminiSetup(args);
         return this.Fake;
     }
 }

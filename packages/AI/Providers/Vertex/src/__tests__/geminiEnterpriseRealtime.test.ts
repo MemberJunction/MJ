@@ -136,6 +136,8 @@ class TestEnterprise extends GeminiEnterpriseRealtime {
             live: {
                 connect: async (params: LiveConnectParameters): Promise<GeminiLiveSession> => {
                     this.Connects.push(params);
+                    // Google confirms the setup; the session puts a connection to use only after that.
+                    params.callbacks.onmessage(Object.assign(new LiveServerMessage(), { setupComplete: {} }));
                     return this.Session;
                 },
             },

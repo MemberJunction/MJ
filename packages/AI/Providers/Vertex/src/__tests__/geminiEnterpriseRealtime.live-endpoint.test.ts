@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from 'vitest';
 import type { GoogleAuthOptions } from 'google-auth-library';
-import type { Content, FunctionResponse, GoogleGenAIOptions, LiveClientSetup, LiveConnectParameters, Blob as GeminiBlob } from '@google/genai';
+import { LiveServerMessage, type Content, type FunctionResponse, type GoogleGenAIOptions, type LiveClientSetup, type LiveConnectParameters, type Blob as GeminiBlob } from '@google/genai';
 import { RealtimeProxyRegistry, type ClientRealtimeSessionConfig, type RealtimeRelayGrant, type RealtimeSessionParams } from '@memberjunction/ai';
 import type { GeminiLiveSession } from '@memberjunction/ai-gemini';
 import { GeminiEnterpriseRealtime, type GeminiEnterpriseLiveClient } from '../models/geminiEnterpriseRealtime';
@@ -62,7 +62,15 @@ class TestEnterprise extends GeminiEnterpriseRealtime {
 
     protected override CreateVertexClient(options: GoogleGenAIOptions): GeminiEnterpriseLiveClient {
         this.ClientOptions.push(options);
-        return { live: { connect: async (_params: LiveConnectParameters): Promise<GeminiLiveSession> => new FakeLiveSession() } };
+        return {
+            live: {
+                connect: async (params: LiveConnectParameters): Promise<GeminiLiveSession> => {
+                    // Google confirms the setup; the session puts a connection to use only after that.
+                    params.callbacks.onmessage(Object.assign(new LiveServerMessage(), { setupComplete: {} }));
+                    return new FakeLiveSession();
+                },
+            },
+        };
     }
 }
 

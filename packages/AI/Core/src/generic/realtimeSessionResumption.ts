@@ -41,9 +41,11 @@ export interface RealtimeSessionResumptionOptions {
      */
     AttemptTimeoutMs?: number;
     /**
-     * When the provider announces the connection is ending, how long before the deadline to
-     * reconnect with the last handle if no resumable point has arrived. Defaults to
-     * {@link REALTIME_RESUMPTION_DEADLINE_MARGIN_MS}.
+     * The longest margin the helper keeps before an announced connection end. When no resumable
+     * point has arrived by then, it reconnects with the last handle. The margin is a third of the
+     * notice, so a turn in progress gets the rest of it to finish, kept between
+     * {@link REALTIME_RESUMPTION_MIN_DEADLINE_MARGIN_MS} (what a reconnect needs) and this value.
+     * Defaults to {@link REALTIME_RESUMPTION_DEADLINE_MARGIN_MS}.
      */
     DeadlineMarginMs?: number;
     /** Diagnostic sink; defaults to no logging. */
@@ -56,8 +58,20 @@ export const REALTIME_RESUMPTION_RETRY_DELAYS_MS: readonly number[] = [0, 1000, 
 /** Default limit on one reconnect attempt. */
 export const REALTIME_RESUMPTION_ATTEMPT_TIMEOUT_MS = 15000;
 
-/** Default margin before an announced connection end at which the helper stops waiting for a resumable point. */
+/**
+ * Default for the longest margin the helper keeps before an announced connection end (see
+ * {@link RealtimeSessionResumptionOptions.DeadlineMarginMs}): reached at a notice of 30 s or more.
+ */
 export const REALTIME_RESUMPTION_DEADLINE_MARGIN_MS = 10000;
+
+/**
+ * The shortest margin the helper keeps before an announced connection end: what a reconnect needs.
+ * A resume on Vertex AI had its setup confirmed 0.4 to 0.5 s after the move started.
+ */
+export const REALTIME_RESUMPTION_MIN_DEADLINE_MARGIN_MS = 1500;
+
+/** The share of the notice kept as the margin; the rest is the time a turn in progress has to finish. */
+const DEADLINE_MARGIN_SHARE_OF_NOTICE = 1 / 3;
 
 /** Used when the provider announces a connection end without saying how long is left. */
 const UNKNOWN_TIME_LEFT_DELAY_MS = 30000;
@@ -79,11 +93,16 @@ export function ParseDurationToMs(duration: string | undefined): number | undefi
  * supplies the call that opens the replacement connection.
  *
  * Two triggers:
- * - **The connection is ending** ({@link ConnectionEnding}). Gemini Live sends `goAway` about 60 s
- *   before a connection reaches its ~10-minute limit. The helper reconnects at the next point the
- *   provider marks as resumable, because resuming from an older handle drops whatever happened
- *   since it was issued. If no resumable point arrives, it reconnects with the last handle
- *   {@link RealtimeSessionResumptionOptions.DeadlineMarginMs} before the deadline.
+ * - **The connection is ending** ({@link ConnectionEnding}). Gemini Live sends `goAway` with the
+ *   time left before it closes a connection; the notice varies (on Vertex AI it came about 9
+ *   minutes after the connection opened, with 30 s left). The helper reconnects at the next resumable
+ *   point, because resuming from an older handle drops whatever happened since it was issued. A
+ *   resumable point is a handle the provider marks resumable, issued while no turn is in progress:
+ *   the driver reports turns ({@link TurnStarted}, {@link TurnEnded}), because a provider's own
+ *   word is not enough (Vertex AI marks every update resumable, mid-answer too). If no resumable
+ *   point arrives, it reconnects with the last handle shortly before the deadline: a third of the
+ *   notice before it, between {@link REALTIME_RESUMPTION_MIN_DEADLINE_MARGIN_MS} and
+ *   {@link RealtimeSessionResumptionOptions.DeadlineMarginMs}.
  * - **The connection was lost** ({@link ConnectionLost}): a network change or a server reset. The
  *   helper reconnects with the last handle.
  *
@@ -94,7 +113,9 @@ export function ParseDurationToMs(duration: string | undefined): number | undefi
  */
 export class RealtimeSessionResumption {
     private _handle: string | null = null;
+    /** A resumable handle arrived after the last turn ended, and no turn has started since. */
     private _resumableNow = false;
+    private _turnOpen = false;
     private _endingAnnounced = false;
     private _reconnecting = false;
     private _exhausted = false;
@@ -121,7 +142,9 @@ export class RealtimeSessionResumption {
     /**
      * Records the provider's latest resumption state. `resumable: false` means the session is
      * mid-generation or mid-tool-call: the previous handle stays as a fallback for a lost
-     * connection, but a planned move waits for the next resumable point.
+     * connection, but a planned move waits for the next resumable point. A resumable handle that
+     * arrives while a turn is in progress is kept as that fallback too: resuming from it would cut
+     * the turn, so it is not a point to move at.
      *
      * @param handle The new handle, when the provider sent one.
      * @param resumable Whether the session can be resumed from this point without losing data.
@@ -133,7 +156,7 @@ export class RealtimeSessionResumption {
         }
         if (handle) {
             this._handle = handle;
-            this._resumableNow = true;
+            this._resumableNow = !this._turnOpen;
         }
         if (this._endingAnnounced && this._resumableNow) {
             this.startReconnect('connection-ending');
@@ -141,7 +164,30 @@ export class RealtimeSessionResumption {
     }
 
     /**
-     * The provider announced the current connection ends in `timeLeftMs`.
+     * A turn started or continued: the user's first transcribed words, a turn the client sent, or
+     * the model's output. Until {@link TurnEnded}, a planned move waits, whatever the provider's
+     * updates say; the deadline still bounds the wait. Call it for every sign of the turn: a repeat
+     * changes nothing.
+     */
+    public TurnStarted(): void {
+        this._turnOpen = true;
+        // The latest handle predates the turn: resuming from it would drop the turn.
+        this._resumableNow = false;
+    }
+
+    /**
+     * The turn ended (its `turnComplete`, with no tool call pending). A planned move now happens at
+     * the next resumable handle, which the provider issues after the turn (Vertex AI: 20-70 ms
+     * after `turnComplete`), so the new connection resumes with the finished turn.
+     */
+    public TurnEnded(): void {
+        this._turnOpen = false;
+    }
+
+    /**
+     * The provider announced the current connection ends in `timeLeftMs`. The helper moves at once
+     * when the latest handle is a resumable point (issued after the last turn ended, with no turn
+     * since); otherwise it waits for one, until the deadline.
      *
      * @param timeLeftMs Time until the provider closes the connection; `undefined` when not given.
      */
@@ -244,8 +290,10 @@ export class RealtimeSessionResumption {
     private onAttemptSucceeded(): void {
         this._reconnecting = false;
         this._endingAnnounced = false;
-        // The new connection has not reported a resumable point yet.
+        // The new connection has not reported a resumable point yet, and a turn the move cut off
+        // never completes there.
         this._resumableNow = false;
+        this._turnOpen = false;
         if (!this._disposed) {
             this.options.OnReconnected?.();
         }
@@ -268,12 +316,23 @@ export class RealtimeSessionResumption {
 
     private armDeadline(timeLeftMs: number | undefined): void {
         this.clearDeadline();
-        const margin = this.options.DeadlineMarginMs ?? REALTIME_RESUMPTION_DEADLINE_MARGIN_MS;
-        const delay = timeLeftMs === undefined ? UNKNOWN_TIME_LEFT_DELAY_MS : Math.max(0, timeLeftMs - margin);
+        const delay = timeLeftMs === undefined ? UNKNOWN_TIME_LEFT_DELAY_MS : Math.max(0, timeLeftMs - this.deadlineMarginFor(timeLeftMs));
         this._deadlineTimer = setTimeout(() => {
             this._deadlineTimer = null;
             this.startReconnect('connection-ending');
         }, delay);
+    }
+
+    /**
+     * The margin kept before an announced connection end: a third of the notice, so a turn in
+     * progress gets the rest of it, between {@link REALTIME_RESUMPTION_MIN_DEADLINE_MARGIN_MS} and
+     * {@link RealtimeSessionResumptionOptions.DeadlineMarginMs}. A notice shorter than the least
+     * margin moves at once.
+     */
+    private deadlineMarginFor(timeLeftMs: number): number {
+        const most = this.options.DeadlineMarginMs ?? REALTIME_RESUMPTION_DEADLINE_MARGIN_MS;
+        const least = Math.min(most, REALTIME_RESUMPTION_MIN_DEADLINE_MARGIN_MS);
+        return Math.min(most, Math.max(least, Math.round(timeLeftMs * DEADLINE_MARGIN_SHARE_OF_NOTICE)));
     }
 
     private retryDelays(): readonly number[] {

@@ -10,7 +10,7 @@ import {
     AvatarVideoFragment,
     PieceToBase64,
 } from './helpers/fmp4-pieces';
-import { FakeGeminiSession, FakeMediaStream, FakeTrack, GeminiTestClient, makeGeminiAvatarConfig } from './helpers/realtime-fakes';
+import { ConfirmGeminiSetup, FakeGeminiSession, FakeMediaStream, FakeTrack, GeminiTestClient, makeGeminiAvatarConfig } from './helpers/realtime-fakes';
 
 /**
  * The avatar's generated video in the Gemini browser client's usage: seconds from the fragments' durations (Core's
@@ -69,6 +69,7 @@ class ResumingClient extends GeminiTestClient {
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         this.Connections.push(args);
         this.LastConnectArgs = args;
+        ConfirmGeminiSetup(args);
         return new FakeGeminiSession();
     }
 

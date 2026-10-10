@@ -297,6 +297,17 @@ export function makeOpenAIConfig(sessionConfig: JSONObject = { instructions: 'be
 
 // ── Gemini fakes ───────────────────────────────────────────────────────────────
 
+/** What Google sends once it has applied a connection's setup. */
+export const GEMINI_SETUP_COMPLETE = { setupComplete: {} } as LiveServerMessage;
+
+/**
+ * Confirms a fake connection's setup through its message callback, as Google does once it has applied the setup the
+ * client sent. The Gemini client puts a connection to use only after that.
+ */
+export function ConfirmGeminiSetup(args: GeminiClientConnectArgs): void {
+    args.OnMessage(GEMINI_SETUP_COMPLETE);
+}
+
 /** Fake Gemini Live session: records every outbound send for assertions. */
 export class FakeGeminiSession implements GeminiLiveClientSession {
     public RealtimeInputs: Array<{ audio?: GeminiBlob; text?: string; media?: GeminiBlob; video?: GeminiBlob }> = [];
@@ -393,6 +404,8 @@ export class GeminiTestClient extends GeminiRealtimeClient {
     public readonly PlayoutOptions: VideoPlayoutOptions[] = [];
     /** Create the real `VideoPlayout` (install the fake MSE and DOM first) instead of a {@link FakeAvatarPlayout}. */
     public UseRealPlayout = false;
+    /** Confirm each connection's setup as it opens, as Google does; `false` leaves it to the test ({@link ConfirmSetup}). */
+    public AutoConfirmSetup = true;
 
     /** The fake avatar player the driver created last; throws when it created none or a real one. */
     public get Playout(): FakeAvatarPlayout {
@@ -412,8 +425,19 @@ export class GeminiTestClient extends GeminiRealtimeClient {
 
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         this.LastConnectArgs = args;
+        if (this.AutoConfirmSetup) {
+            ConfirmGeminiSetup(args);
+        }
         return this.Fake;
     }
+
+    /** Has Google confirm the setup of the connection opened last (with {@link AutoConfirmSetup} off). */
+    public ConfirmSetup(): void {
+        if (this.LastConnectArgs) {
+            ConfirmGeminiSetup(this.LastConnectArgs);
+        }
+    }
+
     protected override async createMicCapture(
         _micStream: MediaStream,
         onPcmChunk: (base64Pcm16: string) => void
