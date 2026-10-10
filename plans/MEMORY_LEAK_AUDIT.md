@@ -1,11 +1,68 @@
 # MemberJunction Memory & Resource Leak Audit
 
-**Generated:** 2026-10-03 (Round 17)
-**Prior Runs:** Rounds 1–16 retained below under "Prior rounds (history)". Round 16 was 2026-09-26.
+**Generated:** 2026-10-10 (Round 18)
+**Prior Runs:** Round 17 (2026-10-03) and Rounds 1–16 retained below as history.
 **Scope:** Full monorepo `packages/` tree, 10 parallel `Explore` subagents in two waves (5 broad + 5 deep-subtree) plus repo-wide static cross-check greps. This round concentrated on the **885 commits / 583 changed non-test source files** since Round 16, and re-verified every Round 16 finding at its cited location.
 **Re-run command:** `/audit-memory-leaks`
 
-This document is organised as: Round 17 (this round) first, then Rounds 16 and earlier unchanged as history. Raw per-agent output lives in `plans/.memory-leak-snapshots/2026-10-03/` (git-ignored).
+This document is organised as: Round 18 (this round) first, then Round 17 and earlier unchanged as history. Raw per-agent output lives in `plans/.memory-leak-snapshots/2026-10-10/` (git-ignored).
+
+## Round 18 Executive Summary (2026-10-10)
+
+Scope: 10 parallel subagents (5 broad + 5 deep) over the 633 commits / 836 changed non-test source files since Round 17 (2026-10-03), plus re-verification of Round 17's deferred list. Raw per-agent output: `plans/.memory-leak-snapshots/2026-10-10/` (git-ignored). Static cross-check: 36 `MJGlobal…GetEventListener`, 148 `setInterval` greps (only ~78 real call sites; rest comments/types), 258 `.addEventListener(`, 379 private `Map` fields, 108 `BaseSingleton` subclasses, 341 `package.json`.
+
+| Status | Critical | High | Medium | Low |
+|---|---:|---:|---:|---:|
+| **New in Round 18** (de-duplicated) | 0 | 3 | ~9 | ~17 |
+| **Fixed in this round's PR** | 0 | 2 | 2 | 0 |
+| **Resolved since Round 17** | 1 (12 forms `super.ngOnDestroy`, re-verified) | 0 | 1 (`openAIRealtime` close listener) | 2 (`TelemetryManager._patterns` pruned; SSE keepalives re-rated Low) |
+
+Persisted Round 17 deferred items are listed under "Still open" below. Per-agent counts are directional and not strictly reconciled.
+
+### New High findings
+1. **`AIBridgeEngine.diagInbound`/`diagOutbound`** (`packages/AI/RealtimeBridge/Server/src/ai-bridge-engine.ts:763-764`) — one session ID per bridged call/meeting added on the process-lifetime engine, never deleted. *(Found independently by Subagents D and F.)* **FIXED.**
+2. **`DialInRateLimiter.attempts`** (`packages/LiveKitRoomServer/src/meeting-dial-in-service.ts`) — keyed by caller-supplied caller/dialed strings; entries removed only when the same key is looked up again → attacker-drivable unbounded growth. **FIXED.**
+3. **`BaseEntity._subtypeLookupCache`** (`packages/MJCore/src/generic/baseEntity.ts:2113`, written ~2417-2453) — static, one fully loaded entity (or null) per `entity|pk` SubtypeSelector target, never evicted (`ClearSubtypeLookupCache` is test-only). **DEFERRED** — see plan below; needs a decision on invalidation semantics.
+
+### Other new findings
+- Medium, **fixed**: `MCPResolver` (`packages/MJServer/src/resolvers/MCPResolver.ts`) removed its `toolsSynced` listener only on the success path; a throwing `syncTools` stacked a handler per failed sync on the shared manager.
+- Medium, **fixed**: `TelephonyOperationsDashboardComponent.ngOnInit` armed its 15 s `setInterval` after `await LoadData()`; closing the tab mid-load left an interval running on a destroyed component.
+- Medium, **fixed** (4 rounds open): `OpenAILiveSession.Close()` never cleared its seven handler arrays / `_countedResponseIds`, and left the 5 s safety timer armed after a graceful close.
+- Medium, deferred: `AwsTransportDriver` has no `Close()`, so `WorkQueueEngine.evict` never destroys its SQS/SNS clients on transport edit/shutdown (`WorkQueue/aws/src/driver/AwsTransportDriver.ts:27-33`).
+- Medium, deferred: `SqsTransportConsumer.tracked` entries (raw message bodies) not removed on failed settle / LeaseLost (`WorkQueue/aws/src/consumer/SqsTransportConsumer.ts:30,165-170`).
+- Medium, deferred: `SimpleVectorDatabase` module-level `indexCache` — full parsed vectors, no cap/TTL (`AI/Vectors/Memory/src/models/SimpleVectorDatabase.ts:70`).
+- Medium, deferred: singleton timers with no `IShutdownable` (`ai-bridge-engine.ts:2659,2730`, `handoff-offer-registry.ts:122`, `sharedCache.ts:138`, `baseEngineSweeper.ts:59`, `UserCache.ts:716`).
+- Medium, deferred: `DeliveryExecution.Run` horizon timer cleared only after `awaitPendingHeartbeat` (rejection leaves it armed).
+- Low (new): `ConversationFeedbackResource.ngOnInit` missing `super.ngOnInit()`; `NavigationService.agentTools.Owner` pin; `home-dashboard` `watchPinMenuDismiss` document listeners; `geminiRealtime` `meetingResponseWatchdog` not cleared in `Close()`; 2 module-level once-subscribes in `base-forms/panel-slot`; `RegistryDispose()`/`ExpectedCallStore.Rekey` nits in telephony; others in agent files.
+
+### Still open (persisted, highest priority first)
+1. **Telephony media registries** — Twilio/Vonage now have a connect-TTL via `ExpectedCallStore` (partially resolved), but **Teams ACS registry has no TTL and an uncapped `outboundBuffer`** (+ `TeamsMeetingsService.graphClientsByCall`), and **all three registries resurrect a channel after `EndCall`** through `ensureChannel` in `Send*/On*` (wider than previously reported: Vonage `:195,215,224`, Twilio `:138,154`, Teams `:44,53,57`). High.
+2. `ClientToolRequestManager.sessionTools` (`ClearSession` still has no production caller). High.
+3. `IntegrationEngine._rateLimiters`/`_fetchGates`; `ExternalDataSourceRouter` N1. High.
+4. `combineSignals` (`realtime-client-session-service.ts:3296`) listener accumulation; `AIPromptRunner.ts:2405` abort listener; `mention-editor.component.ts:1400`. Medium/High.
+5. `AIPromptRunner._outputExampleCache`, `ConversationCompactionManager.warnedConversationBudgets`. Medium.
+6. Angular High: `shell.component.ts:824`, `search-suggest.component.ts:380`, `join-grid.component.ts:668`, `ng-fill-container-directive.ts:154`; 8 DevTools dashboards missing `super.ngOnInit()`.
+7. `TestEngine._suiteFixtures` error path; `React/runtime resource-manager`; `MetadataSync` backup-dir orphaning; `run-adhoc-query.action.ts:115` race timer.
+
+### Round 18 Fix Summary
+
+| # | Package | Fix | Tests |
+|---|---|---|---|
+| 1 | `@memberjunction/ai-bridge-server` | `diagInbound`/`diagOutbound` deleted next to `activeSessions.delete` in the session-end path | Package suite 17 files / 387 tests pass; `tsc --noEmit` clean. No dedicated regression test (state is private to a heavy engine; see follow-up). |
+| 2 | `@memberjunction/livekit-room-server` | `DialInRateLimiter`: sweep expired (window and lockout elapsed) entries once ≥1,000 keys; hard ceiling of 10,000 (oldest dropped); `Size` getter | 2 new tests (sweep reclaims spoofed keys; lockouts survive sweep + ceiling enforced — the ceiling test caught a real off-by-one). Suite 19 files / 229 tests pass; `tsc` clean. |
+| 3 | `@memberjunction/ai-openai` | `OpenAILiveSession.Close()` clears handlers + `_countedResponseIds` and clears the safety timer in `finally` | New fake-timer test (timer count 1→0, late frame not delivered). Suite 9 files / 273 tests pass; `tsc` clean. |
+| 4 | `@memberjunction/server` | `MCPResolver` detaches `toolsSynced` in `finally` | Not run — package deps are not built in this sandbox, so `tsc` for MJServer could not resolve `@memberjunction/ai-agents`; change is a 5-line `try/finally` with definite assignment. |
+| 5 | `@memberjunction/ng-dashboards` | `destroyed` flag; interval not armed after destroy | Not run — Angular package not built/tested here; trivial guard. |
+
+Not run: the deterministic integration tier (`pnpm run test:integration`) needs a provisioned database unavailable in this sandbox; none of the changes touch schema, migrations or metadata.
+
+### Recommended next steps
+- Plan for `_subtypeLookupCache`: replace the static `Map` with an `MJLruCache` (e.g. 5,000 entries / 1 h TTL) keyed per provider, and call invalidate from the existing entity save/delete path so a changed subtype record is not served stale. Needs owner sign-off because it is core ORM behaviour.
+- Shared base for the telephony media registries: last-activity TTL sweep, byte-capped outbound buffer, and a non-creating lookup in `Send*/On*` after `EndCall` (tombstone with TTL).
+- Give `AwsTransportDriver` a `Close()` that calls `destroy()` on its SQS/SNS clients (satisfies `IsClosable`).
+- ESLint rule: `super.ngOnInit()/ngOnDestroy()` in `BaseResourceComponent`/`BaseFormComponent` subclass overrides (still unbuilt; 9 more violations found this round).
+
+---
 
 ## Round 17 Executive Summary
 
