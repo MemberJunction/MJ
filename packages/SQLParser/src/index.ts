@@ -12,6 +12,9 @@ export { SplitLeadingCTEs, IsReadOnlyQuery } from './sqlShape.js';
 export type { LeadingCTEs, LeadingCTEDefinition, ReadOnlyQueryCheck } from './sqlShape.js';
 export { AnalyzePagingShape } from './pagingShape.js';
 export { FindForbiddenFunctionCalls } from './callerSqlFunctions.js';
+// Screen for a caller-supplied RunView aggregate expression
+export { CheckAggregateExpression } from './aggregateExpression.js';
+export type { AggregateExpressionCheck } from './aggregateExpression.js';
 export type { PagingShape, OwnRowCap } from './pagingShape.js';
 // Structural parser and composition IR
 export { ParseToIR, RenderIR } from './structuralParser.js';
