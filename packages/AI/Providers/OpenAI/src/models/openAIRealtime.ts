@@ -324,14 +324,19 @@ interface ExtractedRealtimeFeatures {
     /** Per-session input-transcription model override (`inputTranscriptionModel` bag key). */
     inputTranscriptionModel?: string;
     /**
-     * MJ-side transport settings (`endpoint`, `sampleRate`, `proxyBaseUrl` bag keys) consumed by
-     * self-hosted/proxied drivers — ALWAYS scrubbed so they never leak into a provider payload.
+     * MJ-side transport settings (`endpoint`, `sampleRate`, `proxyBaseUrl`, `brokerBaseUrl` bag keys) consumed by
+     * self-hosted/proxied drivers and OpenAI Live — ALWAYS scrubbed so they never leak into a provider payload.
      */
     endpoint?: string;
     /** See {@link ExtractedRealtimeFeatures.endpoint}. */
     sampleRate?: number;
     /** See {@link ExtractedRealtimeFeatures.endpoint}. */
     proxyBaseUrl?: string;
+    /**
+     * OpenAI Live's SDP broker origin. No driver in this family reads it, but a co-agent's provider bag keyed
+     * `openai` is filed onto OpenAI Realtime as well as OpenAI Live. See {@link ExtractedRealtimeFeatures.endpoint}.
+     */
+    brokerBaseUrl?: string;
     /** The remaining bag entries, safe to spread into the session payload. */
     rest: JSONObject;
 }
@@ -426,7 +431,7 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
 
     // Per-session transcription-model override + MJ-side transport settings. All scrubbed
     // unconditionally — none of these are wire fields on ANY provider in the family.
-    const bag = rest as JSONObject & { inputTranscriptionModel?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown };
+    const bag = rest as JSONObject & { inputTranscriptionModel?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown; brokerBaseUrl?: unknown };
     const rawItm = bag.inputTranscriptionModel;
     delete bag.inputTranscriptionModel;
     const inputTranscriptionModel = typeof rawItm === 'string' && rawItm.trim().length > 0 ? rawItm.trim() : undefined;
@@ -439,8 +444,11 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     const rawProxy = bag.proxyBaseUrl;
     delete bag.proxyBaseUrl;
     const proxyBaseUrl = typeof rawProxy === 'string' && rawProxy.trim().length > 0 ? rawProxy.trim() : undefined;
+    const rawBroker = bag.brokerBaseUrl;
+    delete bag.brokerBaseUrl;
+    const brokerBaseUrl = typeof rawBroker === 'string' && rawBroker.trim().length > 0 ? rawBroker.trim() : undefined;
 
-    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, rest };
+    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, brokerBaseUrl, rest };
 }
 
 /**

@@ -246,6 +246,10 @@ export abstract class BaseRealtimeModel extends BaseModel {
  * and tools with it. So any key added to the neutral vocabulary belongs in this list at the same
  * time, and the OpenAI family's own scrub in `ExtractRealtimeFeatures` must delete it too — that
  * function enumerates its deletes explicitly and does NOT read this list.
+ *
+ * A setting only one driver reads belongs here too: a co-agent's `realtime.voice.providers.<key>`
+ * bag is matched to drivers by class-name prefix, so a bag keyed `openai` that sets OpenAI Live's
+ * `brokerBaseUrl` (its SDP broker origin) also reaches OpenAI Realtime.
  */
 export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'effortLevel',
@@ -261,6 +265,7 @@ export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'endpoint',
     'sampleRate',
     'proxyBaseUrl',
+    'brokerBaseUrl',
     'tooling',
     'toolBehavior',
 ] as const;
