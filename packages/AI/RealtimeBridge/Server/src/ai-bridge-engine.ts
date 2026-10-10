@@ -19,6 +19,7 @@ import {
     ReadFmp4Init,
     RealtimeMediaKind,
     RealtimeTranscript,
+    UnnamedVideoSourceLabel,
     VideoSourceEndedNote,
     VideoSourceSeenNote,
     type Fmp4Init,
@@ -647,8 +648,8 @@ export interface ActiveBridgeSession {
     /**
      * The camera and screen sources whose frames reached the current model session (`SourceID` → the label the model was
      * given). A source not in it is new to the model, which is told what it can now see before its first frame; when one
-     * in it ends, the model is told it can no longer see it (and only about sources it actually saw). Cleared when a
-     * recovered session replaces the model.
+     * in it ends, the model is told, by that label, that it can no longer see it (and only about sources it actually saw).
+     * Cleared when a recovered session replaces the model.
      */
     SeenVideoSources: Map<string, string>;
 
@@ -1320,8 +1321,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     /**
      * Tells the model it can no longer see a camera or screen whose frames reached it (the person stopped letting agents
      * see them, left, stopped sharing or turned the camera off, or the view moved to another source), so it stops
-     * describing the last frame as current. A source the model never saw is ignored. Reads `active.RealtimeSession` each
-     * time: a recovered session replaces it.
+     * describing the last frame as current. The note names the source as the model was told with its first frame, not by
+     * the label the driver reports at the end: the two differ when the person was renamed in between, or had no name when
+     * that first frame was read. A source the model never saw is ignored. Reads `active.RealtimeSession` each time: a
+     * recovered session replaces it.
      *
      * @param active The live bridged session.
      * @param source The source that ended, as the driver reported it.
@@ -1332,7 +1335,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             return;
         }
         active.SeenVideoSources.delete(source.SourceID);
-        active.RealtimeSession.SendContextNote?.(VideoSourceEndedNote(source.SourceLabel ?? seenLabel));
+        active.RealtimeSession.SendContextNote?.(VideoSourceEndedNote(seenLabel));
     }
 
     /**
@@ -3271,9 +3274,13 @@ function mediaKindOf(track: BridgeMediaTrackKind): RealtimeMediaKind {
     return track === 'video-in' || track === 'screen-in' ? 'video' : 'audio';
 }
 
-/** The name a camera or screen gets in a note when its driver gave none: never its `SourceID`. */
+/**
+ * The name a camera or screen gets in a note when its driver gave none, never its `SourceID`: the name for an unnamed
+ * source in `@memberjunction/ai` ({@link UnnamedVideoSourceLabel}), which the LiveKit bridge also gives a person with no
+ * display name.
+ */
 function fallbackVideoSourceLabel(track: BridgeMediaTrackKind): string {
-    return track === 'screen-in' ? "a participant's screen" : "a participant's camera";
+    return UnnamedVideoSourceLabel(track === 'screen-in' ? 'screen' : 'camera');
 }
 
 /**

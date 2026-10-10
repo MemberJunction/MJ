@@ -129,7 +129,11 @@ export interface BridgeVideoSourceEnd {
     Track: Extract<BridgeMediaTrackKind, 'video-in' | 'screen-in'>;
     /** The source's key, as its frames carried it in {@link BridgeMediaFrame.SourceID}. */
     SourceID: string;
-    /** The source's human-readable name ("Ada's camera"), as its frames carried it in {@link BridgeMediaFrame.SourceLabel}. */
+    /**
+     * The source's human-readable name ("Ada's camera") as the driver names it when the source ends, like
+     * {@link BridgeMediaFrame.SourceLabel}. It can differ from the name the source's first frame carried (the person was
+     * renamed, or had no name yet), so the engine names an ended source as the model was told it, not by this.
+     */
     SourceLabel?: string;
 }
 

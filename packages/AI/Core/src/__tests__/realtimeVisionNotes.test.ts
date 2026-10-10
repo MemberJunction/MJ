@@ -1,10 +1,18 @@
 /**
  * The notes a realtime model gets when the video it sees changes. A browser call (the video source arbiter) and a meeting
  * (the bridge engine) both send them, so the exact text is pinned here. These are the strings each sent before the wording
- * moved into one module; changing one changes what every model reads, in a call and in a meeting.
+ * moved into one module; changing one changes what every model reads, in a call and in a meeting. The same goes for the
+ * name a meeting gives a camera or screen that has none of its own, which the bridge engine and the LiveKit bridge each
+ * wrote before it moved here.
  */
 import { describe, it, expect } from 'vitest';
-import { VideoSourceEndedNote, VideoSourceSeenNote, VideoSourceTurnedOffNote, VideoSourceTurnedOnNote } from '../generic/realtimeVisionNotes';
+import {
+    UnnamedVideoSourceLabel,
+    VideoSourceEndedNote,
+    VideoSourceSeenNote,
+    VideoSourceTurnedOffNote,
+    VideoSourceTurnedOnNote,
+} from '../generic/realtimeVisionNotes';
 
 /** A label with an apostrophe, a non-ASCII letter, brackets and a comma. */
 const ODD_LABEL = "Zoë's screen [draft], v2";
@@ -46,6 +54,13 @@ describe('realtime vision notes', () => {
             expect(VideoSourceTurnedOnNote('Whiteboard')).toBe('[You can now see: Whiteboard (turned back on)]');
             expect(VideoSourceTurnedOnNote('Camera')).toBe('[You can now see: Camera (turned back on)]');
             expect(VideoSourceTurnedOnNote('Screen')).toBe('[You can now see: Screen (turned back on)]');
+        });
+    });
+
+    describe('UnnamedVideoSourceLabel (a meeting: a camera or screen that has no name of its own)', () => {
+        it('names the source by its kind', () => {
+            expect(UnnamedVideoSourceLabel('camera')).toBe("a participant's camera");
+            expect(UnnamedVideoSourceLabel('screen')).toBe("a participant's screen");
         });
     });
 
