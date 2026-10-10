@@ -801,11 +801,12 @@ describe('C6: cross-provider config-bag safety (shared-key scrubbing)', () => {
                     endpoint: 'ws://x/v1/realtime',
                     sampleRate: 24000,
                     proxyBaseUrl: 'https://p',
+                    brokerBaseUrl: 'https://b',
                     temperature: 0.4, // legit Gemini key — must survive
                 },
             }));
             const cfg = driver.LastConnectArgs?.Config as Record<string, unknown>;
-            for (const key of ['effortLevel', 'reasoningEffort', 'parallelToolCalls', 'mcpTools', 'inputTranscriptionModel', 'endpoint', 'sampleRate', 'proxyBaseUrl']) {
+            for (const key of ['effortLevel', 'reasoningEffort', 'parallelToolCalls', 'mcpTools', 'inputTranscriptionModel', 'endpoint', 'sampleRate', 'proxyBaseUrl', 'brokerBaseUrl']) {
                 expect(cfg[key], `key ${key} must be scrubbed`).toBeUndefined();
             }
             expect(cfg.temperature).toBe(0.4);

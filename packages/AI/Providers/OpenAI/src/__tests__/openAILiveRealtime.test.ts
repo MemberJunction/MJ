@@ -10,11 +10,13 @@ import {
     RealtimeUsage,
     RealtimeSessionError,
 } from '@memberjunction/ai';
+import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
 import {
     OpenAILiveRealtime,
     OpenAILiveSession,
     ILiveWebSocketLike,
 } from '../models/openAILiveRealtime';
+import { OpenAIRealtime } from '../models/openAIRealtime';
 
 class MockLiveWebSocket implements ILiveWebSocketLike {
     public sentFrames: string[] = [];
@@ -62,6 +64,16 @@ class TestableOpenAILiveRealtime extends OpenAILiveRealtime {
         const mock = new MockLiveWebSocket();
         this.lastMockSocket = mock;
         return mock;
+    }
+}
+
+/** OpenAI Realtime with its client-secret mint captured instead of sent to OpenAI. */
+class MintCapturingOpenAIRealtime extends OpenAIRealtime {
+    public MintBody: ClientSecretCreateParams | null = null;
+
+    protected override async mintClientSecret(body: ClientSecretCreateParams): Promise<ClientSecretCreateResponse> {
+        this.MintBody = body;
+        return { value: 'ephemeral-secret', expires_at: 1893456000, session: { type: 'realtime' } as ClientSecretCreateResponse['session'] };
     }
 }
 
@@ -1045,5 +1057,23 @@ describe('OpenAILiveRealtime SDP broker URL', () => {
 
         const brokerUrl = await mintBrokerUrl({ brokerBaseUrl: '/' });
         expect(brokerUrl).toBe(`/realtime/sdp-exchange?ticket=${ticketOf(brokerUrl)}`);
+    });
+
+    it("a config with brokerBaseUrl reaches OpenAI Live's broker URL and not the session OpenAI Realtime sends", async () => {
+        // A co-agent config's `realtime.voice.providers.openai` bag is filed onto both OpenAI drivers (both class
+        // names start with "openai"), so the bag that sets OpenAI Live's broker origin reaches OpenAI Realtime too
+        // when the session resolves to a gpt-realtime model.
+        const config: JSONObject = { voice: 'marin', brokerBaseUrl: 'https://edge.example.com' };
+
+        const live = await new OpenAILiveRealtime('test-key').CreateClientSession({ Model: 'gpt-live-1', SystemPrompt: 'Hello', Config: config });
+        expect(live.EphemeralToken.startsWith('https://edge.example.com/realtime/sdp-exchange?ticket=')).toBe(true);
+        expect(live.SessionConfig).not.toHaveProperty('brokerBaseUrl');
+
+        const realtime = new MintCapturingOpenAIRealtime('test-key');
+        const minted = await realtime.CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'Hello', Config: config });
+        expect(realtime.MintBody?.session).not.toHaveProperty('brokerBaseUrl');
+        expect(minted.SessionConfig).not.toHaveProperty('brokerBaseUrl');
+        // The rest of the bag still applies.
+        expect((minted.SessionConfig as { audio?: { output?: { voice?: string } } }).audio?.output?.voice).toBe('marin');
     });
 });

@@ -1111,11 +1111,17 @@ describe('OpenAIRealtime config extraction hardening', () => {
         expect((blank.audio as { output?: unknown }).output).toBeUndefined();
     });
 
-    it('scrubs MJ-side transport keys (endpoint/sampleRate/proxyBaseUrl) even on OpenAI', async () => {
-        const session = await startAndGetSession({ endpoint: 'ws://x:1/v1/realtime', sampleRate: 24000, proxyBaseUrl: 'https://p' });
+    it('scrubs MJ-side transport keys (endpoint/sampleRate/proxyBaseUrl/brokerBaseUrl) even on OpenAI', async () => {
+        const session = await startAndGetSession({
+            endpoint: 'ws://x:1/v1/realtime',
+            sampleRate: 24000,
+            proxyBaseUrl: 'https://p',
+            brokerBaseUrl: 'https://b',
+        });
         expect(session.endpoint).toBeUndefined();
         expect(session.sampleRate).toBeUndefined();
         expect(session.proxyBaseUrl).toBeUndefined();
+        expect(session.brokerBaseUrl).toBeUndefined();
     });
 
     it('honors a per-session inputTranscriptionModel override from the Config bag', async () => {

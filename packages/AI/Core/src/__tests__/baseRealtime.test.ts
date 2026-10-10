@@ -389,6 +389,7 @@ describe('REALTIME_SHARED_CONFIG_KEYS', () => {
     it.each([
         ['voice', 'the agnostic voice id (#3530)'],
         ['firstMessage', 'the agnostic opening utterance (#3557)'],
+        ['brokerBaseUrl', "OpenAI Live's SDP broker origin, which a provider bag keyed openai also files onto OpenAI Realtime"],
     ])('registers %s — %s', (key) => {
         expect(REALTIME_SHARED_CONFIG_KEYS).toContain(key);
     });
