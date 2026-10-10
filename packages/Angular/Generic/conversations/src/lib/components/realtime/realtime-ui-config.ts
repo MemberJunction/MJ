@@ -255,6 +255,12 @@ export interface ResolvedRealtimeUi {
   showComposer: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The right-hand surface panel is visible. */
   showSurfacePanel: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /**
+   * The surface panel is hidden only because the call has no room for it: the host allows it, it is earned and no
+   * channel holds the stage, but the call is narrower than the console breakpoint outside console chrome. It shows again
+   * once the call is wide enough. The overlay keeps the user's collapse of the panel through this, and only this.
+   */
+  SurfacePanelWaitsForRoom: boolean;
   /** The Activity tab/rail is available. */
   showActivityTab: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The channel strip is visible. */
@@ -373,8 +379,10 @@ export function ResolveRealtimeUi(
   // is already a console (incl. review / forced-console at any width) OR the container is at least as
   // wide as the console breakpoint — never in a cramped narrow overlay, and never dependent on text.
   const roomForSurfacePanel = isConsole || signals.ContainerWidthPx >= cfg.consoleBreakpointPx;
-  const showSurfacePanel =
-    cfg.showSurfacePanel && signals.SurfacePanelEarned && !signals.channelFocus && roomForSurfacePanel;
+  // Everything the panel needs but room. Kept apart so the overlay can tell a panel that waits for room from one that
+  // was hidden on purpose (SurfacePanelWaitsForRoom).
+  const surfacePanelWanted = cfg.showSurfacePanel && signals.SurfacePanelEarned && !signals.channelFocus;
+  const showSurfacePanel = surfacePanelWanted && roomForSurfacePanel;
 
   const showActivityTab = cfg.showActivityRail && (signals.HasActivity || signals.IsReviewing) && isConsole;
 
@@ -390,6 +398,7 @@ export function ResolveRealtimeUi(
     showThread,
     showComposer,
     showSurfacePanel,
+    SurfacePanelWaitsForRoom: surfacePanelWanted && !roomForSurfacePanel,
     showActivityTab,
     showChannelStrip,
     showCaptionsControl: cfg.showCaptionsControl,

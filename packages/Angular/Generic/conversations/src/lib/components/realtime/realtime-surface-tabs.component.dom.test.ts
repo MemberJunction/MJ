@@ -253,3 +253,33 @@ describe('RealtimeSurfaceTabsComponent: moving surfaces (DOM)', () => {
     expect(items).toEqual(['Picture-in-picture', 'Hide', 'Reset layout']);
   });
 });
+
+/**
+ * DOM spec for the panel's collapsed state as its host binds it (#5433): a host that creates the panel again starts it
+ * as the user left the one before, and hears only what the user changes. Real template; a channel tab with no plugin.
+ */
+describe('RealtimeSurfaceTabsComponent: Collapsed (DOM)', () => {
+  const render = (collapsed: boolean) =>
+    renderComponentFixture(RealtimeSurfaceTabsComponent, { inputs: { State: {} as RealtimeSessionState, Collapsed: collapsed } });
+
+  const settle = async (f: ReturnType<typeof render>): Promise<void> => {
+    await f.whenStable();
+    f.detectChanges();
+  };
+
+  it('starts collapsed to its strip when its host says so, then reports the user expanding it, wide on its channel tab', async () => {
+    const f = render(true);
+    const collapsedChanges: boolean[] = capture(f.componentInstance.CollapsedChange);
+    const wideChanges: boolean[] = capture(f.componentInstance.WideChanged);
+    f.componentInstance.RegisterChannelTab({ Key: 'Whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard', Focus: true });
+    await settle(f);
+    expect(query(f, '.surface__strip')).not.toBeNull();
+    expect(query(f, '.surface-tabs')).toBeNull();
+    expect([collapsedChanges, wideChanges]).toEqual([[], []]);
+
+    click(f, '.surface__toggle');
+    await settle(f);
+    expect(query(f, '.surface-tabs .s-tab--active')?.getAttribute('title')).toBe('Whiteboard');
+    expect([collapsedChanges, wideChanges]).toEqual([[false], [true]]);
+  });
+});
