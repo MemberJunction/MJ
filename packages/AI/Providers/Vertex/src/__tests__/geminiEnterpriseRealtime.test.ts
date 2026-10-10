@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { JWT, type GoogleAuthOptions } from 'google-auth-library';
+import { GoogleAuth, JWT, type GoogleAuthOptions } from 'google-auth-library';
 import { LiveServerMessage, type Content, type FunctionResponse, type GoogleGenAIOptions, type LiveClientSetup, type LiveConnectParameters, type Blob as GeminiBlob } from '@google/genai';
 import {
     BaseRealtimeModel,
@@ -17,7 +17,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { GeminiRealtime, type GeminiLiveSession } from '@memberjunction/ai-gemini';
 import { GeminiEnterpriseRealtime, type GeminiEnterpriseLiveClient } from '../models/geminiEnterpriseRealtime';
 import type { VertexGoogleAuth } from '../vertexAccessToken';
-import { ParseVertexAICredentials } from '../vertexCredentials';
+import { ParseVertexAICredentials, type VertexAICredentials } from '../vertexCredentials';
 
 // ── Stand-in credentials (none of them real) ──────────────────────────────────────────────────────────
 
@@ -42,6 +42,10 @@ const ONLY_ACTIVITY_COVERAGE = 'TURN_INCLUDES_ONLY_ACTIVITY';
 const ENTERPRISE_COVERAGE_LINE =
     '[GeminiRealtime] Turn coverage "audioActivityAndAllVideo" is not one Gemini Enterprise accepts for gemini-3.8-live ' +
     '(it accepts audioActivityOnly); sent "audioActivityOnly" (TURN_INCLUDES_ONLY_ACTIVITY) instead.';
+/** Where a subclass points the Live socket: a mock upstream on this machine, without TLS. */
+const MOCK_LIVE_URL = 'ws://127.0.0.1:9000/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent';
+/** A Google Cloud API key in Google's shape (AIza…): a stand-in, never a real one. */
+const STAND_IN_API_KEY = 'AIzaStandInSeamKeyNotReal0123456789abcd';
 
 let keyDir: string;
 let keyFilePath: string;
@@ -148,6 +152,36 @@ class TestEnterprise extends GeminiEnterpriseRealtime {
     public async MintDeveloperToken(): Promise<never> {
         return this.mintAuthToken();
     }
+
+    /** The protected Live URL seam, as this driver answers it. */
+    public LiveUrlOf(credentials: VertexAICredentials, location: string | null): string {
+        return this.LiveUrl(credentials, location);
+    }
+}
+
+/** A subclass that moves the Live socket (to a mock upstream, a proxy) and records what it was asked. */
+class MovedEnterprise extends TestEnterprise {
+    public readonly LiveUrlCalls: Array<{ Project: string; Location: string | null }> = [];
+    private readonly movedUrl: string;
+
+    constructor(credentialsJson: string, movedUrl: string) {
+        super(credentialsJson);
+        this.movedUrl = movedUrl;
+    }
+
+    protected override LiveUrl(credentials: VertexAICredentials, location: string | null): string {
+        this.LiveUrlCalls.push({ Project: credentials.project, Location: location });
+        return this.movedUrl;
+    }
+}
+
+/**
+ * The real `GoogleAuth` over the key's own `JWT` client, holding a token already, so no call reaches Google. What it
+ * returns for a URL is what `google-auth-library` would put on the upstream open.
+ */
+function cachedTokenAuth(options: GoogleAuthOptions): VertexGoogleAuth {
+    (options.authClient as JWT).setCredentials({ access_token: ACCESS_TOKEN, expiry_date: Date.now() + 60 * 60 * 1000 });
+    return new GoogleAuth(options);
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────────────────────────────
@@ -592,6 +626,81 @@ describe('GeminiEnterpriseRealtime', () => {
         it('warns about an undocumented location for bridged sessions too', async () => {
             await new TestEnterprise(serviceAccountKey({ location: 'asia-east1' })).StartSession(makeParams());
             expect(warn.mock.calls.some((call) => String(call[0]).includes('Location "asia-east1"'))).toBe(true);
+        });
+    });
+
+    describe('the Live URL seam (LiveUrl)', () => {
+        it("returns Google's Live socket by default: the relay opens it, and bridged sessions keep the SDK's own host", async () => {
+            const cases: Array<[string, string | null, string]> = [
+                [serviceAccountKey(), 'us-central1', 'wss://us-central1-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent'],
+                [serviceAccountKey({ location: 'eu' }), 'eu', 'wss://aiplatform.eu.rep.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent'],
+                [JSON.stringify({ apiKey: STAND_IN_API_KEY }), null, 'wss://aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent'],
+            ];
+            for (const [key, location, url] of cases) {
+                const driver = new TestEnterprise(key);
+                expect(driver.LiveUrlOf(ParseVertexAICredentials(key), location)).toBe(url);
+                expect(openFresh(await driver.CreateClientSession(makeParams())).UpstreamUrl).toBe(url);
+                await driver.StartSession(makeParams());
+                expect(driver.ClientOptions[0].httpOptions).toEqual({ apiVersion: 'v1' });
+            }
+        });
+
+        it('moves the relay for a subclass that overrides it: the upstream opens there, with the same token request, setup and browser view', async () => {
+            const driver = new MovedEnterprise(serviceAccountKey({ location: 'us' }), MOCK_LIVE_URL);
+            const minted = await driver.CreateClientSession(makeParams());
+            const grant = openFresh(minted);
+            expect(grant.UpstreamUrl).toBe(MOCK_LIVE_URL);
+            expect(driver.LiveUrlCalls).toEqual([{ Project: PROJECT, Location: 'us' }]);
+            expect(await grant.Policy.UpstreamHeaders()).toEqual({ authorization: `Bearer ${ACCESS_TOKEN}` });
+            expect(driver.Auth.Urls).toEqual([MOCK_LIVE_URL]); // as before, the token is asked for with the URL the relay opens
+            expect(openingSetup(grant).model).toBe(`projects/${PROJECT}/locations/us/publishers/google/models/gemini-3.8-live`);
+            expect(minted.RelayUrl).toMatch(/^wss:\/\/mjapi\.example\.test\/realtime\/relay\//);
+            expect(JSON.stringify(minted)).not.toContain('127.0.0.1');
+        });
+
+        it("moves bridged sessions with it: the SDK's base URL is its scheme, host and port, and the credential options stay as they were", async () => {
+            const cases: Array<[string, string]> = [
+                [MOCK_LIVE_URL, 'http://127.0.0.1:9000'],
+                ['wss://live-proxy.example.test:8443/vertex/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent', 'https://live-proxy.example.test:8443'],
+                ['wss://live-proxy.example.test:443/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent', 'https://live-proxy.example.test'],
+            ];
+            for (const [liveUrl, baseUrl] of cases) {
+                const driver = new MovedEnterprise(serviceAccountKey(), liveUrl);
+                await driver.StartSession(makeParams());
+                expect(driver.ClientOptions).toEqual([
+                    { vertexai: true, project: PROJECT, location: 'us-central1', googleAuthOptions: { authClient: expect.any(JWT) }, httpOptions: { apiVersion: 'v1', baseUrl } },
+                ]);
+                expect(driver.LiveUrlCalls).toEqual([{ Project: PROJECT, Location: 'us-central1' }]);
+            }
+            const keyed = new MovedEnterprise(JSON.stringify({ apiKey: STAND_IN_API_KEY }), MOCK_LIVE_URL);
+            await keyed.StartSession(makeParams());
+            expect(keyed.ClientOptions).toEqual([{ vertexai: true, apiKey: STAND_IN_API_KEY, httpOptions: { apiVersion: 'v1', baseUrl: 'http://127.0.0.1:9000' } }]);
+            expect(keyed.LiveUrlCalls).toEqual([{ Project: '', Location: null }]);
+        });
+
+        it("leaves the bearer token as it was: the key's scoped JWT client never makes the URL its audience", async () => {
+            class CachedTokenDefault extends TestEnterprise {
+                protected override CreateGoogleAuth(options: GoogleAuthOptions): VertexGoogleAuth {
+                    return cachedTokenAuth(options);
+                }
+            }
+            class CachedTokenMoved extends MovedEnterprise {
+                protected override CreateGoogleAuth(options: GoogleAuthOptions): VertexGoogleAuth {
+                    return cachedTokenAuth(options);
+                }
+            }
+            const headersOf = async (driver: TestEnterprise): Promise<Record<string, string>> =>
+                openFresh(await driver.CreateClientSession(makeParams())).Policy.UpstreamHeaders();
+            const google = await headersOf(new CachedTokenDefault(serviceAccountKey()));
+            const moved = await headersOf(new CachedTokenMoved(serviceAccountKey(), MOCK_LIVE_URL));
+            expect(google).toEqual({ authorization: `Bearer ${ACCESS_TOKEN}` });
+            expect(moved).toEqual(google);
+        });
+
+        it('fails a bridged session whose LiveUrl is not a URL, quoting none of it', async () => {
+            const started = new MovedEnterprise(serviceAccountKey(), 'not a url?key=leak').StartSession(makeParams());
+            await expect(started).rejects.toThrow('GeminiEnterpriseRealtime: its Live URL (LiveUrl) is not a URL.');
+            await expect(started).rejects.not.toThrow('leak');
         });
     });
 });
