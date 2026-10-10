@@ -1445,8 +1445,9 @@ export class RealtimeSessionRuntime {
       this.wireClientHandlers(client);
 
       // Everything past here awaits on hardware and the network, during which the host may end the
-      // session. Each await is followed by a staleness check so an abandoned start releases what it
-      // just acquired instead of leaving a live microphone and a live call behind it.
+      // session. Each await is followed by a staleness check, before any failure is reported, so an
+      // abandoned start releases what it just acquired instead of leaving a live microphone and a live
+      // call behind it, and reports nothing to a host that has ended the call.
       const lease: MicrophoneLease = { Opening: true };
       this.microphoneLease = lease;
       const microphone = await this.openMicrophone().finally(() => {
@@ -1462,10 +1463,13 @@ export class RealtimeSessionRuntime {
       }
 
       const clientConfig = this.BuildClientConfig(session);
-      await client.Connect(clientConfig, microphone.Stream);
+      const connectError = await this.connectClient(client, clientConfig, microphone.Stream);
       if (this.startGeneration !== generation) {
         await this.unwindAbandonedStart(session, client, lease);
         return;
+      }
+      if (connectError) {
+        throw connectError;
       }
       // Tracks are negotiated now, so a capture can tell whether the model takes video, and the call whether it shows
       // the avatar its agent asked for. The driver holds the microphone now, so the user may switch it.
@@ -1546,10 +1550,11 @@ export class RealtimeSessionRuntime {
    * Releases everything a start acquired after the host had already ended the session.
    *
    * Reached only when {@link teardown} ran while this start was awaiting the microphone or the
-   * provider connection. Teardown found nothing to release because nothing existed yet, so this
+   * provider connection, whether that wait then succeeded or failed: the host has ended the call,
+   * so a failure there is not reported. Teardown could not release what did not exist yet, so this
    * start owns the cleanup: stop the microphone, hand it back to the host when teardown left that
    * to it ({@link microphoneLease}), close the provider connection, and close the server-side
-   * session row that the mint created.
+   * session row that the mint created when no teardown has closed it or is closing it.
    *
    * @param lease This start's opening of the microphone.
    */
@@ -1582,11 +1587,12 @@ export class RealtimeSessionRuntime {
       this.clearAgentVideo();
       this.client = null;
     }
-    // Close the server session only if teardown has NOT already done so. It nulls `agentSessionId`
-    // after closing, so a still-matching id means this attempt still owns the row; a cleared one
-    // means the teardown that invalidated this start already closed it, and closing again would
-    // send a second `CloseAgentSession` for one session.
-    if (session.AgentSessionId && this.agentSessionId === session.AgentSessionId) {
+    // Close the server session only if no teardown has closed it or is closing it. Teardown nulls
+    // `agentSessionId` after closing, so a cleared id means the teardown that invalidated this start
+    // already closed it. A teardown still running closes it itself and then reports the end on
+    // `SessionEnded$`: closing it here as well would send a second `CloseAgentSession` for one
+    // session, and clearing the id would leave that teardown no session to report.
+    if (session.AgentSessionId && this.agentSessionId === session.AgentSessionId && !this.teardownInFlight) {
       this.agentSessionId = null;
       await this.closeServerSession(session.AgentSessionId);
     }
@@ -1614,6 +1620,24 @@ export class RealtimeSessionRuntime {
     }
     this.followMicrophone(controller, started.Stream);
     return { Stream: started.Stream, Error: null };
+  }
+
+  /**
+   * Opens the provider connection. As with {@link openMicrophone}, a failure is returned rather than thrown, so the
+   * caller can first check whether the start was abandoned meanwhile and unwind quietly instead of reporting an error
+   * nobody is waiting for: a teardown disconnects the client, which with most drivers fails a connection still opening.
+   */
+  private async connectClient(
+    client: BaseRealtimeClient,
+    config: ClientRealtimeSessionConfig,
+    microphone: MediaStream
+  ): Promise<Error | null> {
+    try {
+      await client.Connect(config, microphone);
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error : new Error(String(error));
+    }
   }
 
   /**
