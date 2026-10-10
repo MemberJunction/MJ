@@ -1818,9 +1818,10 @@ export class ResolverBase {
       // that hydrates from those values — never loading what the database actually holds.
       const hasNarrowedAuditPayload = this.StripRecordChangePayloadFromClientInput(entityInfo, userInfo, input, clientNewValues);
 
-      if (this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload)) {
+      if (this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload, userInfo)) {
         // We get here because the entity tracks record changes, OR the client did not provide OldValues,
-        // OR field-level security is in play — in every case we need the true old values from the DB
+        // OR field-level security or an Update row filter is in play — in every case we need the true
+        // old values from the DB
         const cKey = new CompositeKey(
           entityInfo.PrimaryKeys.map((pk) => {
             return {
@@ -1918,19 +1919,28 @@ export class ResolverBase {
    * it never applies them to the entity. An update-denied field can then only become dirty by being
    * named in the mutation input itself, which is precisely the case that check does catch.
    *
-   * Ordered so the boolean flag is evaluated last: the extra load lands only on entities that have
-   * the feature switched on, which is almost none of them.
+   * The flag comes after the cheap terms, so the extra load lands only on entities that have the
+   * feature switched on, which is almost none of them.
    *
    * `MJ: Record Changes` always loads from the database: its server class allows an update only when
    * Comments is the one dirty field, and "dirty" compared against client-supplied OldValues lets a
    * caller pin forged audit columns as both old and new values. It doesn't track its own changes, so
    * nothing else forces the load.
+   *
+   * A caller under an Update row filter (a role's Update RLS filter or an API-key row filter) always
+   * loads from the database too (#4919). The save's post-image check skips its query when no column
+   * the filter reads is dirty, and dirtiness measured against client OldValues is the caller's to
+   * choose: claiming the new value of a filter column as its old value made it clean, so the update
+   * moved the row outside the caller's scope without the check ever running. Evaluated last: it
+   * builds the filter clause, and only callers with such a filter pay for the load. A missing user
+   * (a user-cache miss) also loads: with no user the filter can't be ruled out.
    */
   protected MustLoadTruthFromDatabase(
     entityInfo: EntityInfo,
     input: { OldValues___?: Array<{ Key: string; Value: unknown }> },
     hasDeniedReadFields: boolean,
-    hasNarrowedAuditPayload: boolean
+    hasNarrowedAuditPayload: boolean,
+    user: UserInfo | undefined
   ): boolean {
     return (
       entityInfo.TrackRecordChanges ||
@@ -1938,7 +1948,9 @@ export class ResolverBase {
       !input.OldValues___ ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
-      entityInfo.EnableFieldLevelSecurity
+      entityInfo.EnableFieldLevelSecurity ||
+      !user ||
+      entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Update, '').length > 0
     );
   }
 
