@@ -33,6 +33,12 @@
   overflow: hidden;
 }
 
+/* The call's controls at the foot of the column: the "Agent can see" chip, the channel strip and the composer. The
+   stage starts its picture-in-picture boxes above this box, so it is never squeezed below its content's height. */
+.call-controls {
+  flex: none;
+}
+
 .call-body {
   flex: 1;
   overflow-y: auto;
@@ -294,8 +300,9 @@
 
 /* ---------- the stage (every channel surface, in one layer) ----------
    mj-media-stage covers the overlay and places each surface itself. Above the panel it
-   lays surfaces over; below the onboarding card (5), the dock and chip (5) and the
-   focus pill (60). */
+   lays surfaces over, and above the call's controls, so its picture-in-picture boxes
+   start clear of them (.call-controls); below the onboarding card (5), the menus of the
+   dock and the chip (5) and the focus pill (60). */
 .call-stage {
   z-index: 1;
 }

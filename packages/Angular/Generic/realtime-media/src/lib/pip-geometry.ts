@@ -37,16 +37,20 @@ export const PIP_KEY_STEP = 16;
 
 /**
  * Where a box goes before the user moves it: stacked upward from the stage's bottom-right corner, the newest
- * (`index` 0) in the corner. A stack taller than the stage keeps going past the top; {@link ClampPipBox} pulls each
- * box back inside.
+ * (`index` 0) in the corner. `keepClear` is a box along the stage's foot that the stack stands on, such as the host's
+ * call controls: when the box in the corner would cover any of it, the stack starts above its top edge instead of at
+ * the stage's bottom. A stack taller than the room keeps going past the top; {@link ClampPipBox} pulls each box back
+ * inside.
  */
-export function DefaultPipBox(index: number, stage: MediaStageSize): MediaStageBox {
-  const box = {
+export function DefaultPipBox(index: number, stage: MediaStageSize, keepClear: MediaStageBox | null = null): MediaStageBox {
+  const inCorner = {
     Left: stage.Width - PIP_MARGIN - PIP_DEFAULT_WIDTH,
-    Top: stage.Height - PIP_MARGIN - PIP_DEFAULT_HEIGHT - index * (PIP_DEFAULT_HEIGHT + PIP_GAP),
+    Top: stage.Height - PIP_MARGIN - PIP_DEFAULT_HEIGHT,
     Width: PIP_DEFAULT_WIDTH,
     Height: PIP_DEFAULT_HEIGHT,
   };
+  const lift = keepClear && boxesOverlap(inCorner, keepClear) ? stage.Height - keepClear.Top : 0;
+  const box = { ...inCorner, Top: inCorner.Top - lift - index * (PIP_DEFAULT_HEIGHT + PIP_GAP) };
   return ClampPipBox(box, stage);
 }
 
@@ -99,4 +103,9 @@ export function PipRectToBox(rect: MediaPipRect, stage: MediaStageSize): MediaSt
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));
+}
+
+/** Whether two boxes share any area; boxes that only touch do not. */
+function boxesOverlap(a: MediaStageBox, b: MediaStageBox): boolean {
+  return a.Left < b.Left + b.Width && b.Left < a.Left + a.Width && a.Top < b.Top + b.Height && b.Top < a.Top + a.Height;
 }
