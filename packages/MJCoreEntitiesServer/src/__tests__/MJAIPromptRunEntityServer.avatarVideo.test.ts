@@ -2,14 +2,16 @@
  * Unit tests for the avatar video line in prompt-run pricing (`MJAIPromptRunEntityServer.CalculateAndSetCost`).
  *
  * A realtime run that stored a usage record is priced at its default cost row plus, when the model vendor's resolved
- * configuration has a per-minute avatar video price, a video line; the video's output tokens then leave the default
- * row's output bucket and the cost lines are written into the run's details. Without a price the run prices exactly as
- * before; without a default row it stays unpriced.
+ * configuration has an avatar video price, a video line: the video seconds at a per-minute price, or the video tokens
+ * at a per-1M-token price. The video's output tokens then leave the default row's output bucket and the cost lines are
+ * written into the run's details. Without a price the run prices exactly as before; without a default row it stays
+ * unpriced.
  *
  * The generated base (`MJAIPromptRunEntityExtended`) is replaced by a plain stub, as the package's other entity
  * tests do, and the engine's catalog lookups are stubbed on the real singleton; the pricing math is the real code.
  * Numbers: one speaking minute of Gemini 3.8 Live on Vertex AI at $0.75 / $4.50 per 1M tokens, with Google counting
- * 371,520 avatar video tokens in the response total, and the avatar's video at $0.37152 per minute.
+ * 371,520 avatar video tokens in the response total, and the avatar's video at $0.37152 per minute or $1.00 per 1M
+ * video tokens.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AIModelConfiguration } from '@memberjunction/ai';
@@ -87,6 +89,8 @@ const COST_ROW = {
 } as unknown as MJAIModelCostEntity;
 
 const VIDEO_PRICE: AIModelConfiguration = { Realtime: { Pricing: { AvatarVideoOutput: { Price: 0.37152, Unit: 'Per Minute', Currency: 'USD' } } } };
+/** Google's list price for avatar video output tokens. */
+const TOKEN_PRICE: AIModelConfiguration = { Realtime: { Pricing: { AvatarVideoOutput: { Price: 1, Unit: 'Per 1M Tokens', Currency: 'USD' } } } };
 
 /** One speaking minute: 371,520 of the 373,520 output tokens are the avatar's video. */
 const ONE_MINUTE_RECORD = {
@@ -207,6 +211,42 @@ describe('MJAIPromptRunEntityServer pricing: the avatar video line', () => {
         });
     });
 
+    describe('with a per-token avatar video price', () => {
+        beforeEach(() => {
+            configuration.mockReturnValue(TOKEN_PRICE);
+        });
+
+        it('prices the video tokens on the video line and takes them out of the output bucket', async () => {
+            const run = makeRun(ONE_MINUTE_RECORD);
+            await run.Price();
+
+            expect(run.Cost).toBeCloseTo(DEFAULT_LINE_COST + 0.37152, 10);
+            expect(ReadCostLines(run.ModelSpecificResponseDetails)).toEqual([
+                { Modality: null, CostRowID: 'cost-row-vertex', Measure: 'Tokens', Input: 10000, Output: 2000, Cost: 0.0165 },
+                { Modality: 'Video', CostRowID: null, Measure: 'Tokens', Input: 0, Output: 371520, Cost: 0.37152 },
+            ]);
+        });
+
+        it("prices the 10-minute call's 460,530 VIDEO tokens, not its 617.79 streamed seconds (#5312)", async () => {
+            const run = makeRun({ RealtimeUsage: { Output: { AudioTokens: 2000, VideoTokens: 460530, VideoSeconds: 617.79 } } }, { Completion: 462530 });
+            await run.Price();
+
+            expect(run.Cost).toBeCloseTo(DEFAULT_LINE_COST + 0.46053, 10);
+            expect(ReadCostLines(run.ModelSpecificResponseDetails)[1]).toEqual({ Modality: 'Video', CostRowID: null, Measure: 'Tokens', Input: 0, Output: 460530, Cost: 0.46053 });
+        });
+
+        it('prices as before, with one log line, when the run stored video seconds but no video tokens', async () => {
+            const run = makeRun({ RealtimeUsage: { Output: { AudioTokens: 2000, VideoSeconds: 30 } } }, { Completion: 2000 });
+            await run.Price();
+
+            expect(run.Cost).toBeCloseTo(DEFAULT_LINE_COST, 10);
+            expect(ReadCostLines(run.ModelSpecificResponseDetails)).toEqual([
+                { Modality: null, CostRowID: 'cost-row-vertex', Measure: 'Tokens', Input: 10000, Output: 2000, Cost: 0.0165 },
+            ]);
+            expect(loggedStatus('no video tokens to price')).toBe(1);
+        });
+    });
+
     describe('without a usable price: priced as before', () => {
         it('prices every output token at the output rate when the configuration has no price, and writes the default line', async () => {
             configuration.mockReturnValue(null);
@@ -219,6 +259,15 @@ describe('MJAIPromptRunEntityServer pricing: the avatar video line', () => {
                 { Modality: null, CostRowID: 'cost-row-vertex', Measure: 'Tokens', Input: 10000, Output: 373520, Cost: 1.68834 },
             ]);
             expect(loggedStatus('no usable Realtime.Pricing.AvatarVideoOutput price')).toBe(1);
+        });
+
+        it("prices as before, with one log line, when the price's unit is neither per minute nor per 1M tokens", async () => {
+            configuration.mockReturnValue({ Realtime: { Pricing: { AvatarVideoOutput: { Price: 22, Unit: 'Per Hour', Currency: 'USD' } } } } as unknown as AIModelConfiguration);
+            const run = makeRun(ONE_MINUTE_RECORD);
+            await run.Price();
+
+            expect(run.Cost).toBeCloseTo(TODAY_COST, 10);
+            expect(loggedStatus("neither 'Per Minute' nor 'Per 1M Tokens'")).toBe(1);
         });
 
         it("prices as before, with one log line, when the price is in another currency than the cost row's", async () => {

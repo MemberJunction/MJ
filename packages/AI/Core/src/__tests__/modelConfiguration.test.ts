@@ -529,5 +529,18 @@ describe('Lockstep — the JSONType source CodeGen generates from declares what 
 
         expect([...reached].filter((name) => !declaredInSource.has(name)).sort()).toEqual([]);
     });
+
+    it("the price units it declares are names of seeded MJ: AI Model Price Unit Types rows: 'Per Minute' and 'Per 1M Tokens'", () => {
+        const unitTypes: Array<{ fields: { Name: string } }> = JSON.parse(
+            readFileSync(resolve(HERE, '../../../../../metadata/ai-model-price-unit-types/.ai-model-price-unit-types.json'), 'utf8')
+        );
+        const seeded = new Set(unitTypes.map((row) => row.fields.Name));
+        const shape = core.get('RealtimeUnitPrice');
+        const unit = shape?.Kind === 'interface' ? shape.Members.find((member) => member.startsWith('Unit?:')) : undefined;
+        const declared = [...(unit ?? '').matchAll(/'([^']*)'/g)].map((match) => match[1]);
+
+        expect(declared).toEqual(['Per Minute', 'Per 1M Tokens']);
+        expect(declared.filter((name) => !seeded.has(name))).toEqual([]);
+    });
 });
 

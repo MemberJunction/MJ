@@ -269,8 +269,11 @@ export interface RealtimeToolingSettings {
 export interface RealtimeUnitPrice {
     /** The amount charged per {@link RealtimeUnitPrice.Unit}. Never negative. */
     Price?: number | null;
-    /** The billing unit, named as in `MJ: AI Model Price Unit Types`. `'Per Minute'`: one minute. */
-    Unit?: 'Per Minute' | null;
+    /**
+     * The billing unit, named as in `MJ: AI Model Price Unit Types`. `'Per Minute'`: one minute.
+     * `'Per 1M Tokens'`: one million tokens.
+     */
+    Unit?: 'Per Minute' | 'Per 1M Tokens' | null;
     /** ISO 4217 currency code, uppercase (e.g. `USD`), as on `MJ: AI Model Costs`. */
     Currency?: string | null;
 }
@@ -283,12 +286,14 @@ export interface RealtimeUnitPrice {
  */
 export interface RealtimePricingSettings {
     /**
-     * The price of avatar video output: the seconds of avatar video the model generates, charged
-     * per minute on top of the session's token cost.
+     * The price of avatar video output, charged on top of the session's token cost. `'Per Minute'`
+     * prices the seconds of avatar video the model generates; `'Per 1M Tokens'` prices the output
+     * tokens the provider counts as video. Set the price and its unit together: the cascade merges
+     * per key, so a layer that sets only one of them keeps the other from the layer below.
      *
-     * Unverified until Vertex AI access: Gemini 3.8 Live on Vertex AI is seeded at $0.37152 per
-     * minute, derived from Google's $1.00 per 1M avatar video output tokens at 6,192 tokens per
-     * second.
+     * Unverified until checked against Google's bill (#5312): Gemini 3.8 Live on Vertex AI is
+     * seeded at $0.37152 per minute, derived from Google's $1.00 per 1M avatar video output tokens
+     * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: RealtimeUnitPrice | null;
 }

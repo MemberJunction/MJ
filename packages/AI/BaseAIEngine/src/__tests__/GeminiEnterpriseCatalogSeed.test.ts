@@ -348,7 +348,7 @@ describe('Gemini 3.8 Live on Vertex AI — the avatar video price, as pricing re
         const video = PriceAvatarVideoOutput(minute, configurationOn(VERTEX), costRow.Currency);
         const tokens = new PerMillionTokensPriceUnitType().CalculateCost(costRow, ExcludeAvatarVideoTokens({ input: 10000, output: 373520 }, 371520).Usage);
 
-        expect(video).toEqual({ Priced: true, Seconds: 60, Cost: 0.37152, VideoTokens: 371520 });
+        expect(video).toEqual({ Priced: true, Measure: 'Seconds', Seconds: 60, Cost: 0.37152, VideoTokens: 371520 });
         expect(RoundCost(tokens)).toBe(0.0165);
         expect(RoundCost(tokens + (video?.Priced ? video.Cost : 0))).toBe(0.38802);
     });

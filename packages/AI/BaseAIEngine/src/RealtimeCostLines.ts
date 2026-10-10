@@ -4,9 +4,10 @@
  * the run is priced.
  *
  * A realtime call is one prompt run priced by one cost row. Avatar video has its own price, in the model vendor's
- * resolved configuration (`Realtime.Pricing.AvatarVideoOutput`, per minute). The run's cost is then its default line
- * (the cost row, over the run's token columns less the output tokens the provider counted as video) plus the video
- * line (the stored output video seconds at the per-minute price).
+ * resolved configuration (`Realtime.Pricing.AvatarVideoOutput`), per minute or per 1M tokens. The run's cost is then
+ * its default line (the cost row, over the run's token columns less the output tokens the provider counted as video)
+ * plus the video line: the stored output video seconds at a per-minute price, or the stored output video tokens at a
+ * per-token price.
  *
  * Pure: no entity or engine access; `MJAIPromptRunEntityServer` resolves the cost row and the configuration.
  */
@@ -28,7 +29,11 @@ export interface PromptRunCostLine {
     Modality: string | null;
     /** The `MJ: AI Model Costs` row that priced the line; `null` for a line priced from the model configuration. */
     CostRowID: string | null;
-    /** What the line's quantities count: `'Tokens'`, or `'Seconds'` for the avatar video line. */
+    /**
+     * What the line's quantities count. The default line counts in its cost row's measure (`'Tokens'`, or `'Seconds'`
+     * for a time-priced run); the avatar video line counts `'Seconds'` at a per-minute price, `'Tokens'` at a per-token
+     * price.
+     */
     Measure: string;
     /** The input quantity priced on the line, cache reads and writes included. */
     Input: number;
@@ -39,16 +44,21 @@ export interface PromptRunCostLine {
 }
 
 /** Why a run's avatar video was not priced on its own line. */
-export type AvatarVideoUnpricedReason = 'no-price' | 'unit' | 'currency' | 'no-seconds';
+export type AvatarVideoUnpricedReason = 'no-price' | 'unit' | 'currency' | 'no-seconds' | 'no-tokens';
 
 /** An avatar video line priced from the configuration. */
 export interface PricedAvatarVideo {
     Priced: true;
-    /** The output video seconds priced. */
+    /** What the line priced: the output video `'Seconds'` at a per-minute price, or its `'Tokens'` at a per-token price. */
+    Measure: 'Seconds' | 'Tokens';
+    /** The output video seconds the run stored; the quantity priced when {@link PricedAvatarVideo.Measure} is `'Seconds'`. */
     Seconds: number;
-    /** Their cost, to 8 decimals. */
+    /** The line's cost, to 8 decimals. */
     Cost: number;
-    /** The output tokens the provider counted as video, which leave the default line's output bucket. */
+    /**
+     * The output tokens the provider counted as video, which leave the default line's output bucket; the quantity priced
+     * when {@link PricedAvatarVideo.Measure} is `'Tokens'`.
+     */
     VideoTokens: number;
 }
 
@@ -65,12 +75,36 @@ export interface AvatarVideoTokenExclusion {
     Clamped: boolean;
 }
 
+/** What one avatar video price unit prices, and how many of that quantity one billed unit holds. */
+interface AvatarVideoPriceUnit {
+    Measure: PricedAvatarVideo['Measure'];
+    PerBillingUnit: number;
+}
+
 /**
- * Prices the avatar video a realtime run stored: its output video seconds at the per-minute price of the model
- * vendor's resolved configuration. `null` when the run stored no avatar video (no output video seconds and no video
- * tokens). Otherwise either the priced line, or why the video stays priced as before: no usable price (a partial
- * price counts as none), a unit other than `'Per Minute'`, a currency other than the cost row's, or video tokens
- * without seconds to price.
+ * The avatar video price units this prices, with the measure and size the `MJ: AI Model Price Unit Types` row of the
+ * same name gives them (`UsageTypeID`, `UnitsPerBillingUnit`): a minute is 60 seconds, the token unit a million tokens.
+ * Keyed by the configuration's unit type, so a unit added there does not compile until it is priced here.
+ */
+const AVATAR_VIDEO_PRICE_UNITS: ReadonlyMap<string, AvatarVideoPriceUnit> = new Map(
+    Object.entries({
+        'Per Minute': { Measure: 'Seconds', PerBillingUnit: 60 },
+        'Per 1M Tokens': { Measure: 'Tokens', PerBillingUnit: 1_000_000 },
+    } satisfies Record<NonNullable<RealtimeUnitPrice['Unit']>, AvatarVideoPriceUnit>)
+);
+
+/** A configured avatar video price that can price the run: its amount and its unit. */
+interface UsableAvatarVideoPrice extends AvatarVideoPriceUnit {
+    Price: number;
+}
+
+/**
+ * Prices the avatar video a realtime run stored at the price in the model vendor's resolved configuration: its output
+ * video seconds at a `'Per Minute'` price, or its output video tokens at a `'Per 1M Tokens'` price. `null` when the
+ * run stored no avatar video (no output video seconds and no video tokens). Otherwise either the priced line, or why
+ * the video stays priced as before: no usable price (a partial price counts as none), a unit other than those two, a
+ * currency other than the cost row's, or nothing stored in the price's measure (video tokens without seconds at a
+ * per-minute price, seconds without video tokens at a per-token price).
  *
  * @param record The run's stored usage record.
  * @param configuration The model vendor's resolved model configuration.
@@ -86,14 +120,21 @@ export function PriceAvatarVideoOutput(
     if (seconds <= 0 && videoTokens <= 0) {
         return null;
     }
-    const perMinute = readAvatarPrice(configuration?.Realtime?.Pricing?.AvatarVideoOutput ?? null, rowCurrency);
-    if (typeof perMinute !== 'number') {
-        return { Priced: false, Reason: perMinute };
+    const price = readAvatarPrice(configuration?.Realtime?.Pricing?.AvatarVideoOutput ?? null, rowCurrency);
+    if (typeof price === 'string') {
+        return { Priced: false, Reason: price };
     }
-    if (seconds <= 0) {
-        return { Priced: false, Reason: 'no-seconds' };
+    const quantity = price.Measure === 'Tokens' ? videoTokens : seconds;
+    if (quantity <= 0) {
+        return { Priced: false, Reason: price.Measure === 'Tokens' ? 'no-tokens' : 'no-seconds' };
     }
-    return { Priced: true, Seconds: seconds, Cost: RoundCost((seconds / 60) * perMinute), VideoTokens: videoTokens };
+    return {
+        Priced: true,
+        Measure: price.Measure,
+        Seconds: seconds,
+        Cost: RoundCost((quantity / price.PerBillingUnit) * price.Price),
+        VideoTokens: videoTokens,
+    };
 }
 
 /**
@@ -131,7 +172,8 @@ export function BuildCostLines(
         },
     ];
     if (video) {
-        lines.push({ Modality: AVATAR_VIDEO_COST_LINE_MODALITY, CostRowID: null, Measure: 'Seconds', Input: 0, Output: video.Seconds, Cost: video.Cost });
+        const output = video.Measure === 'Tokens' ? video.VideoTokens : video.Seconds;
+        lines.push({ Modality: AVATAR_VIDEO_COST_LINE_MODALITY, CostRowID: null, Measure: video.Measure, Input: 0, Output: output, Cost: video.Cost });
     }
     return lines;
 }
@@ -172,20 +214,21 @@ export function RoundCost(cost: number): number {
 }
 
 /**
- * The configured price per minute when it can price the run, or why it can't. A price applies only when all three of
+ * The configured price and its unit when it can price the run, or why it can't. A price applies only when all three of
  * its fields are set, so a partial price counts as none.
  */
-function readAvatarPrice(price: RealtimeUnitPrice | null, rowCurrency: string): number | AvatarVideoUnpricedReason {
+function readAvatarPrice(price: RealtimeUnitPrice | null, rowCurrency: string): UsableAvatarVideoPrice | AvatarVideoUnpricedReason {
     if (!price || price.Price == null || price.Unit == null || price.Currency == null) {
         return 'no-price';
     }
     if (!Number.isFinite(price.Price) || price.Price < 0) {
         return 'no-price';
     }
-    if (price.Unit !== 'Per Minute') {
+    const unit = AVATAR_VIDEO_PRICE_UNITS.get(price.Unit);
+    if (!unit) {
         return 'unit';
     }
-    return price.Currency.trim().toUpperCase() === rowCurrency.trim().toUpperCase() ? price.Price : 'currency';
+    return price.Currency.trim().toUpperCase() === rowCurrency.trim().toUpperCase() ? { ...unit, Price: price.Price } : 'currency';
 }
 
 function costLineAsJson(line: PromptRunCostLine): JSONObject {
