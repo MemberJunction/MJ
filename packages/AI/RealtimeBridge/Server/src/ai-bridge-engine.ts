@@ -19,6 +19,8 @@ import {
     ReadFmp4Init,
     RealtimeMediaKind,
     RealtimeTranscript,
+    VideoSourceEndedNote,
+    VideoSourceSeenNote,
     type Fmp4Init,
     type RealtimeVideoFrame,
 } from '@memberjunction/ai';
@@ -3317,26 +3319,4 @@ function frameVideoFacts(frame: RealtimeVideoFrame, streamInit: Fmp4Init | null 
     const video = streamInit?.Tracks.find((track) => track.Handler === 'vide');
     const streamSize = video?.Width && video.Height ? { Width: video.Width, Height: video.Height } : {};
     return { ...streamSize, KeyFrame: frame.KeyFrame };
-}
-
-/**
- * The note that tells the model what it can now see, sent right before the first frame of a camera or screen new to its
- * session ("[You can now see: Ada's screen]"). Paired with {@link VideoSourceEndedNote}. In the second person, like the
- * engine's other meeting notes, so in a room with other agents it can't be read as another agent's view.
- *
- * @param sourceLabel The source's human-readable name.
- */
-export function VideoSourceSeenNote(sourceLabel: string): string {
-    return `[You can now see: ${sourceLabel}]`;
-}
-
-/**
- * The note that tells the model a camera or screen it was seeing has stopped ("[You can no longer see: Bob's camera]"):
- * the person stopped letting agents see them, left, stopped sharing or turned the camera off, or the view moved to
- * another source. Paired with {@link VideoSourceSeenNote}.
- *
- * @param sourceLabel The source's human-readable name.
- */
-export function VideoSourceEndedNote(sourceLabel: string): string {
-    return `[You can no longer see: ${sourceLabel}]`;
 }
