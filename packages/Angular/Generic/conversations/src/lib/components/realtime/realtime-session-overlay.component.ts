@@ -591,10 +591,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // The panel went away with its slots. StageSlot reads null while it is away, so the bindings don't change.
       this.channelSlot = null;
       this.SurfaceStage.SetActiveTab(null);
-      // It also took its collapsed state: the panel reports collapsing and expanding, not going away. The panel that comes
-      // back is a new one, which starts expanded, so the overlay sizes it expanded too (#5387). No binding reads this while
-      // the panel is away, so changing it in this change detection pass trips no NG0100 check.
-      this.PanelCollapsed = false;
+      // The panel that comes back is a new one, which starts as PanelCollapsed says: expanded unless only the call's
+      // width hid this one (#5387, #5433).
+      this.resetPanelCollapseUnlessWaitingForRoom();
     } else {
       // A (re)created panel starts with a FRESH tab model. Re-register the live channel set
       // here (gated to whiteboard + already-used channels) so hiding the panel (pure-audio
@@ -616,6 +615,13 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
           // lead the strip — NOT the Activity rail; agent-run plumbing is opt-in only.
           // (Review channel tabs register a beat later and take focus themselves.)
           ref.FocusFirstTab();
+          // The panel reports its wide tier only when it flips, from a start that is not wide, so landing on Activity
+          // reports nothing. PanelWide may still hold the tier of the panel before, whose focused channel left the call
+          // while it was away, so it takes the tier of the tab this one landed on (#5433). Only a different tier moves
+          // the width. A reveal always lands on a channel's tab, which the panel reports itself.
+          if (ref.IsWide !== this.PanelWide) {
+            this.OnPanelWideChanged(ref.IsWide);
+          }
         }
       });
     }
@@ -1086,6 +1092,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     if (next.chrome !== prevChrome) {
       this.ChromeChanged.emit(next.chrome);
     }
+    // The panel's area may have just hidden, or, while it waited for room, been hidden for another reason too.
+    this.resetPanelCollapseUnlessWaitingForRoom();
     this.cdr.markForCheck();
   }
 
@@ -1159,11 +1167,16 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   // adopted or persisted.
 
   /**
-   * Whether the surface panel is collapsed to its slim strip, as the panel reports it. Back to `false` whenever the panel
-   * goes away (the panel area hides), since the panel that replaces it starts expanded.
+   * Whether the surface panel is collapsed to its slim strip, as the panel reports it. A panel created again starts this
+   * way (the overlay binds the panel's `Collapsed`). Back to `false` while the panel's area is hidden for any reason but
+   * room, so the panel comes back expanded after Details, a channel on the stage or a review turning into a live call,
+   * and as the user left it when only the call's width hid it.
    */
   public PanelCollapsed = false;
-  /** Wide tier active (a content tab is focused) — drives the DEFAULT width only. */
+  /**
+   * Wide tier active (a content tab is focused) — drives the DEFAULT width only. The panel reports it when it flips; a
+   * panel created again also sets it from the tab it lands on.
+   */
   public PanelWide = false;
   /** The user's explicit dragged width (persisted); null = follow the default tiers. */
   private userPanelWidth: number | null = null;
@@ -1198,6 +1211,20 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public OnPanelCollapsedChange(collapsed: boolean): void {
     this.PanelCollapsed = collapsed;
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Resets {@link PanelCollapsed} while the panel's area is hidden for any reason but room. Details, a channel taking the
+   * stage and a reviewed session turning into a live call hide the panel on purpose, and what brings it back asks to see
+   * it, so it comes back expanded (#5387). A call that only got too narrow asked for nothing, so the panel comes back as
+   * the user left it (#5433). Runs when the panel goes away and on every re-resolve, so a panel that waits for room and
+   * is then hidden on purpose (Details closed meanwhile) comes back expanded too. No binding reads PanelCollapsed while
+   * the area is hidden, so a change here trips no NG0100 check.
+   */
+  private resetPanelCollapseUnlessWaitingForRoom(): void {
+    if (!this.ShowPanelArea && !this._ui.SurfacePanelWaitsForRoom) {
+      this.PanelCollapsed = false;
+    }
   }
 
   /** Wide-tier flips only move the DEFAULT width — an explicit user width always wins. */

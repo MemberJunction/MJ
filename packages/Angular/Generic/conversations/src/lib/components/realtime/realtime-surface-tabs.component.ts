@@ -178,8 +178,21 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy, AfterVie
   /** The panel's tab state (add / focus / dedupe / flash) — see the model for the rules. */
   public readonly Model = new RealtimeSurfaceTabsModel();
 
-  /** Whether the panel is collapsed to its slim strip. */
-  public Collapsed = false;
+  /**
+   * Whether the panel is collapsed to its slim strip. The chevron toggles it, a reveal expands it, and the panel reports
+   * each such change through {@link CollapsedChange}. A host may bind it, so that a panel it creates again starts as the
+   * user left the one before (the call overlay does when only the call's width hid the panel, #5433). A value the host
+   * sets is not reported back.
+   */
+  @Input()
+  set Collapsed(value: boolean) {
+    this.collapsed = value;
+    this.syncWide();
+  }
+  get Collapsed(): boolean {
+    return this.collapsed;
+  }
+  private collapsed = false;
 
   /** The embedded Activity rail (owns the inline artifact previews + the split-pane viewer). */
   @ViewChild(RealtimeActivityRailComponent) private activityRail?: RealtimeActivityRailComponent;
@@ -280,8 +293,8 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy, AfterVie
 
   /** Collapse-state transitions funnel through here so the shell always hears about them. */
   private setCollapsed(value: boolean): void {
-    if (this.Collapsed !== value) {
-      this.Collapsed = value;
+    if (this.collapsed !== value) {
+      this.collapsed = value;
       this.CollapsedChange.emit(value);
       this.syncWide();
     }

@@ -1,0 +1,5 @@
+---
+"@memberjunction/ng-conversations": patch
+---
+
+A call's side panel keeps the user's collapse through a window resize, and comes back at the right width tier. When the call got narrower than the console breakpoint and wider again, the panel was created again expanded although the user had collapsed it and only resized; it now comes back collapsed to its strip. It still comes back expanded after Details, a channel on the stage or a reviewed session turning into a live call, which ask to see the panel, including when one of those happens while the call is too narrow for the panel. `RealtimeSurfaceTabsComponent.Collapsed` is now an input the overlay binds, so a new panel starts as the user left the old one, and `ResolvedRealtimeUi` gains `SurfacePanelWaitsForRoom` (the panel is hidden only for lack of room). Separately, a panel created again on its Activity tab (the channel whose tab was focused left the call while the panel was away) kept the wide width; the overlay now takes the width tier from the tab the panel lands on.
