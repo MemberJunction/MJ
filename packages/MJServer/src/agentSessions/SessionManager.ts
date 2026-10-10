@@ -266,6 +266,33 @@ export class SessionManager {
     }
 
     /**
+     * Closes a session that was created for one agent's time in a room when that agent failed to start: its model session
+     * could not open, the bot's token could not be minted, the bridge did not start. The agent never joined, so no
+     * end-of-session hook will close the session; without this it stays `Active` until the janitor's staleness sweep.
+     *
+     * The close is {@link CloseSession} with reason `Error`. A session already closed keeps its reason.
+     *
+     * Never throws: it runs while the caller handles the failed start, whose error is the one the caller reports. A failure
+     * is logged and leaves the session to the janitor.
+     *
+     * @param agentSessionID The session created for the agent.
+     * @param contextUser The user the session was created for.
+     * @param provider The metadata provider the session was created through.
+     * @returns `true` when the session is (or already was) closed.
+     */
+    public async CloseSessionForFailedStart(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<boolean> {
+        try {
+            return await this.CloseSession(agentSessionID, contextUser, provider, 'Error');
+        } catch (e) {
+            LogError(
+                `SessionManager.CloseSessionForFailedStart could not close agent session ${agentSessionID} after its agent failed ` +
+                    `to start; the janitor will: ${e instanceof Error ? e.message : String(e)}`,
+            );
+            return false;
+        }
+    }
+
+    /**
      * Notifies the server-side channel-plugin host that a session started, so it can resolve the
      * ACTIVE `MJ: AI Agent Channels` rows' `ServerPluginClass` plugins (one fresh instance per
      * channel, per session) and fire their start hooks. Strictly best-effort: the host itself

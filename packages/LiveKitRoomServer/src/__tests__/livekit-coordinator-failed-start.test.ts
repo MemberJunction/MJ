@@ -1,0 +1,143 @@
+/**
+ * A start that fails once the agent's model session is open closes that session before the error propagates (#5308): the
+ * bot's token can't be minted, or the bridge doesn't start (its row can't be saved, the driver can't connect). Nothing else
+ * would close it: the bridge engine closes a model session only once it holds one, so a failed bridge start left a live
+ * model connection in MJAPI until the provider timed it out.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { IRealtimeSession, RealtimeInputFrame, RealtimeToolDefinition } from '@memberjunction/ai';
+import type { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
+import type { ActiveBridgeSession } from '@memberjunction/ai-bridge-server';
+import { LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, type BridgeOps } from '../livekit-agent-room-coordinator';
+import { LiveKitTokenService, type MintedToken } from '../livekit-token-service';
+
+const CONFIG = { ServerUrl: 'wss://test.livekit.cloud', ApiKey: 'devkey', ApiSecret: 'devsecretdevsecretdevsecret123456' };
+
+/** What the engine throws when the bridge row can't be saved, as for a user who may not create bridge rows (#5307). */
+const BRIDGE_ROW_ERROR = 'Failed to create AIAgentSessionBridge: the user may not create MJ: AI Agent Session Bridges';
+
+/** A model session that counts its closes; its close can be made to fail. */
+class FakeModelSession implements IRealtimeSession {
+    public CloseCalls = 0;
+    constructor(private readonly closeError?: Error) {}
+    public SendInput(_frame: RealtimeInputFrame): void {
+        /* not driven here */
+    }
+    public async RegisterTools(_tools: RealtimeToolDefinition[]): Promise<void> {
+        /* not driven here */
+    }
+    public OnOutput(): void {
+        /* not driven here */
+    }
+    public OnTranscript(): void {
+        /* not driven here */
+    }
+    public OnToolCall(): void {
+        /* not driven here */
+    }
+    public async SendToolResult(): Promise<void> {
+        /* not driven here */
+    }
+    public OnInterruption(): void {
+        /* not driven here */
+    }
+    public OnError(): void {
+        /* not driven here */
+    }
+    public OnUsage(): void {
+        /* not driven here */
+    }
+    public async Close(): Promise<void> {
+        this.CloseCalls++;
+        if (this.closeError) {
+            throw this.closeError;
+        }
+    }
+}
+
+/** A token service whose bot-token mint fails, after the coordinator's configuration check passes. */
+class FailingMintTokenService extends LiveKitTokenService {
+    public override async MintBotToken(): Promise<MintedToken> {
+        throw new Error('mint failed');
+    }
+}
+
+/** Bridge operations whose start succeeds, or fails with the given error. */
+function makeBridgeOps(startError?: Error): BridgeOps {
+    let seq = 0;
+    return {
+        Config: vi.fn(async () => undefined),
+        ProviderByDriverClass: vi.fn(() => ({ ID: 'p1', DriverClass: LIVEKIT_BRIDGE_DRIVER_CLASS }) as unknown as MJAIBridgeProviderEntity),
+        StartBridgeSession: vi.fn(async () => {
+            if (startError) {
+                throw startError;
+            }
+            return { SessionBridgeID: `failed-start-bridge-${++seq}` } as unknown as ActiveBridgeSession;
+        }),
+        StopBridgeSession: vi.fn(async () => true),
+        ReconfigureSessionToMeeting: vi.fn(() => true),
+    };
+}
+
+describe('LiveKitAgentRoomCoordinator — a failed start closes the model session it opened (#5308)', () => {
+    const coordinator = LiveKitAgentRoomCoordinator.Instance;
+    let room = 0;
+    let session: FakeModelSession;
+    const roomName = () => `failed-start-room-${room}`;
+    const start = () => coordinator.StartAgentRoomSession({ AgentSessionID: `failed-start-${++room}`, RoomName: `failed-start-room-${room}`, AgentName: 'Sage' });
+
+    beforeEach(() => {
+        session = new FakeModelSession();
+        coordinator.SetSessionFactory(async () => session);
+        coordinator.SetTokenService(new LiveKitTokenService(CONFIG));
+    });
+
+    it("closes it when the bot's token can't be minted, before any bridge starts", async () => {
+        const ops = makeBridgeOps();
+        coordinator.SetBridgeOps(ops);
+        coordinator.SetTokenService(new FailingMintTokenService(CONFIG));
+
+        await expect(start()).rejects.toThrow('mint failed');
+
+        expect(session.CloseCalls).toBe(1);
+        expect(ops.StartBridgeSession).not.toHaveBeenCalled();
+    });
+
+    it("closes it when the bridge doesn't start, and the caller gets the bridge's error", async () => {
+        const ops = makeBridgeOps(new Error(BRIDGE_ROW_ERROR));
+        coordinator.SetBridgeOps(ops);
+
+        await expect(start()).rejects.toThrow(BRIDGE_ROW_ERROR);
+
+        expect(ops.StartBridgeSession).toHaveBeenCalledWith(expect.objectContaining({ RealtimeSession: session }));
+        expect(session.CloseCalls).toBe(1);
+        // The agent never joined, so it isn't on the room's roster.
+        expect(coordinator.GetAgentsInRoom(roomName())).toEqual([]);
+    });
+
+    it("still reports the start's own error when closing the model session fails as well", async () => {
+        session = new FakeModelSession(new Error('socket already gone'));
+        coordinator.SetBridgeOps(makeBridgeOps(new Error(BRIDGE_ROW_ERROR)));
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        try {
+            await expect(start()).rejects.toThrow(BRIDGE_ROW_ERROR);
+
+            expect(session.CloseCalls).toBe(1);
+            expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('closing the model session of a failed start failed: socket already gone'));
+        } finally {
+            consoleError.mockRestore();
+        }
+    });
+
+    it('leaves it open when the start succeeds: from then on the bridge holds it', async () => {
+        const ops = makeBridgeOps();
+        coordinator.SetBridgeOps(ops);
+
+        const started = await start();
+
+        expect(session.CloseCalls).toBe(0);
+        expect(ops.StartBridgeSession).toHaveBeenCalledWith(expect.objectContaining({ RealtimeSession: session }));
+        expect(coordinator.GetAgentsInRoom(roomName())).toEqual([expect.objectContaining({ SessionBridgeID: started.SessionBridgeID })]);
+    });
+});

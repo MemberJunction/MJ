@@ -305,6 +305,12 @@ export async function ExecuteUpdateMeeting(
   }
 }
 
+/**
+ * Starts a meeting for the `StartMeeting` mutation (`MeetingResolver`): marks it `Live`, ensures its Interaction, starts
+ * each agent participant in the room under an agent session created for it, starts an automatic recording, and mints the
+ * caller's client token. An agent that fails to start doesn't fail the meeting; the session created for it is closed
+ * (`Error`).
+ */
 export async function ExecuteStartMeeting(
   provider: IMetadataProvider,
   user: UserInfo,
@@ -343,12 +349,15 @@ export async function ExecuteStartMeeting(
     const agentParticipants = participants.filter((p) => p.Role === 'Agent' && p.AgentID);
 
     for (const ap of agentParticipants) {
+      // Set once this agent's session exists, so a start that fails after it was created can close it.
+      let createdSessionID: string | undefined;
       try {
         const createdSession = await sessionManager.CreateSession(
           { agentID: ap.AgentID!, userID: user.ID },
           user,
           provider,
         );
+        createdSessionID = createdSession.ID;
         await LiveKitAgentRoomCoordinator.Instance.StartAgentRoomSession({
           AgentSessionID: createdSession.ID,
           RoomName: meeting.RoomName,
@@ -367,6 +376,11 @@ export async function ExecuteStartMeeting(
         });
       } catch (agentErr) {
         LogError(`[MeetingResolver] Failed to start agent participant ${ap.AgentID} in room ${meeting.RoomName}: ${agentErr instanceof Error ? agentErr.message : String(agentErr)}`);
+        // The agent never joined, so the hook above never runs: close its session now (Error), not when the janitor finds
+        // it idle. The coordinator has already closed any model session the start opened (#5308).
+        if (createdSessionID) {
+          await sessionManager.CloseSessionForFailedStart(createdSessionID, user, provider);
+        }
       }
     }
 

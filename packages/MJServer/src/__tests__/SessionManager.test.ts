@@ -473,6 +473,33 @@ describe('SessionManager.CloseSessionForEndedBridge (a bridged agent left its ro
     });
 });
 
+describe('SessionManager.CloseSessionForFailedStart (an agent that never joined its room)', () => {
+    it('closes the session as Error, through the close the janitor runs', async () => {
+        const session = makeSessionEntity({ ID: 'session-unstarted', Status: 'Active' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const ok = await mgr.CloseSessionForFailedStart('session-unstarted', makeUser(), provider);
+
+        expect(ok).toBe(true);
+        expect(session.Status).toBe('Closed');
+        expect(session.ClosedAt).toBeInstanceOf(Date);
+        expect(session.CloseReason).toBe('Error');
+        expect(hostSessionClosedMock).toHaveBeenCalledWith('session-unstarted', 'Error');
+    });
+
+    it('never throws: a close that fails is reported as not closed, leaving the session to the janitor', async () => {
+        const provider = {
+            GetEntityObject: vi.fn(async () => {
+                throw new Error('database unreachable');
+            }),
+        } as unknown as IMetadataProvider;
+        const mgr = new SessionManager();
+
+        await expect(mgr.CloseSessionForFailedStart('session-unstarted', makeUser(), provider)).resolves.toBe(false);
+    });
+});
+
 describe('SessionManager.Heartbeat', () => {
     it('coalesces writes within the min interval (one write, not two)', async () => {
         const session = makeSessionEntity({ ID: 'session-1', Status: 'Active' });

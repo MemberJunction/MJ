@@ -11,7 +11,9 @@ import {
   LiveKitUserIdentity,
   RoomHandoffEngine,
   type AgentRoomHostOptions,
+  type AgentRoomSession,
   type ParticipantUpdateResult,
+  type StartAgentRoomSessionParams,
 } from '@memberjunction/livekit-room-server';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -350,7 +352,8 @@ export class RealtimeBridgeResolver extends ResolverBase {
 
   /**
    * Starts (or reuses) an agent's presence in a LiveKit room and returns a client token so the calling
-   * user can immediately join the same room.
+   * user can immediately join the same room. When no `AgentSessionID` is passed, an agent session is created for the
+   * agent; if the agent then fails to start, that session is closed (`Error`) before the failure is returned.
    */
   @Mutation(() => LiveKitAgentRoomSessionResult)
   async StartLiveKitAgentRoomSession(
@@ -402,8 +405,9 @@ export class RealtimeBridgeResolver extends ResolverBase {
       // bridge INSERT failed the FK_AIAgentSessionBridge_Session constraint.
       let agentSessionID = input.AgentSessionID?.trim();
       // A session created here exists for this agent's time in the room alone, so it closes when the agent leaves, however
-      // it leaves. A session the caller supplied is the caller's to close.
-      let host: AgentRoomHostOptions | undefined;
+      // it leaves, or at once if the agent fails to start (see startAgentInRoom). A session the caller supplied is the
+      // caller's to close.
+      let createdSessionID: string | undefined;
       if (!agentSessionID) {
         if (!input.AgentID?.trim()) {
           return failure('An AgentID is required to start an agent room session.', roomName);
@@ -414,10 +418,10 @@ export class RealtimeBridgeResolver extends ResolverBase {
           provider,
         );
         agentSessionID = createdSession.ID;
-        host = this.closeSessionWhenAgentLeaves(createdSession.ID, user, provider);
+        createdSessionID = createdSession.ID;
       }
 
-      const session = await LiveKitAgentRoomCoordinator.Instance.StartAgentRoomSession({
+      const session = await this.startAgentInRoom(createdSessionID, user, provider, {
         AgentSessionID: agentSessionID,
         RoomName: roomName,
         AgentID: input.AgentID,
@@ -429,7 +433,6 @@ export class RealtimeBridgeResolver extends ResolverBase {
         TurnAddressing: this.normalizeTurnAddressing(input.TurnAddressing),
         ContextUser: user,
         MetadataProvider: provider,
-        Host: host,
       });
 
       const tokenService = new LiveKitTokenService();
@@ -796,6 +799,32 @@ export class RealtimeBridgeResolver extends ResolverBase {
       RealtimeVoice: input.RealtimeVoice,
     });
     return started.SessionBridgeID;
+  }
+
+  /**
+   * Starts the agent in the room through the coordinator. An agent session created for this agent's time in the room
+   * (`createdSessionID`) is this start's to close: once the agent has joined, through the end-of-session hook from
+   * {@link closeSessionWhenAgentLeaves}; when the start fails, at once, as `Error`, through
+   * {@link SessionManager.CloseSessionForFailedStart}, before the error propagates, since the agent never joined and that
+   * hook never runs (#5308). By then the coordinator has closed any model session the start opened. A session the caller
+   * supplied gets neither: it is the caller's.
+   */
+  private async startAgentInRoom(
+    createdSessionID: string | undefined,
+    user: UserInfo,
+    provider: IMetadataProvider,
+    params: Omit<StartAgentRoomSessionParams, 'Host'>,
+  ): Promise<AgentRoomSession> {
+    const coordinator = LiveKitAgentRoomCoordinator.Instance;
+    if (!createdSessionID) {
+      return coordinator.StartAgentRoomSession(params);
+    }
+    try {
+      return await coordinator.StartAgentRoomSession({ ...params, Host: this.closeSessionWhenAgentLeaves(createdSessionID, user, provider) });
+    } catch (error) {
+      await this.sessionManager.CloseSessionForFailedStart(createdSessionID, user, provider);
+      throw error;
+    }
   }
 
   /**
