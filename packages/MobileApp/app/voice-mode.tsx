@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Pressable, type ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icons } from '@/components/Icon';
 import { Type } from '@/theme/tokens';
@@ -12,6 +12,7 @@ import { MobileVoiceSession } from '@/voice/MobileVoiceSession';
 import { AnnounceAvatarNotice, AvatarNotice } from '@/voice/AvatarNotice';
 import { AvatarNoticePresenter } from '@/voice/avatar-notice-presenter';
 import { AvatarNoticeText } from '@/voice/avatar-notice-text';
+import { VoiceCallBody } from '@/voice/VoiceCallBody';
 
 /** Why voice could not start, when it could not. */
 type VoiceUnavailableReason = 'provider' | 'permission' | 'backend' | 'unknown';
@@ -30,6 +31,10 @@ const DARK_BG = '#0d0d12';
  *   audio-reactive orb, and live captions. Final captions persist to the conversation server-side.
  *   When the runtime reports why a call has no avatar, the screen says so once per call, under the
  *   top row ({@link AvatarNotice}); it hides on ✕ or after 10 s.
+ * Layout: a column with the call controls in flow at the bottom ({@link VoiceCallBody}). The
+ *   transcript card keeps room for its label and two lines above them at the phone's text size; on
+ *   a short phone, or while the notice shows, the orb scales down to make that room, and a long
+ *   caption scrolls in the card.
  * Graceful fallback: when the feature can't run — the resolved provider needs a PCM audio plane
  *   this build does not ship, mic permission was denied, or the deployment has no realtime model
  *   configured — the screen shows a clear "Voice isn't available" card rather than opening a
@@ -57,6 +62,11 @@ export default function VoiceModeScreen() {
     const [liveLevel, setLiveLevel] = useState<number | null>(null);
     const noticeRef = useRef<AvatarNoticePresenter | null>(null);
     const [avatarNotice, setAvatarNotice] = useState<RealtimeAvatarNotice | null>(null);
+    // The height the orb's stage and the transcript card share, as VoiceCallBody measures it, and the
+    // text size: together they size the stage.
+    const [middleHeight, setMiddleHeight] = useState<number | null>(null);
+    const { fontScale } = useWindowDimensions();
+    const transcriptScrollRef = useRef<ScrollView | null>(null);
 
     // ── Session lifecycle ───────────────────────────────────────────────────────
     useEffect(() => {
@@ -256,41 +266,23 @@ export default function VoiceModeScreen() {
                 }}
             />
 
-            <View style={styles.stage}>
-                <View style={styles.orbFrame}>
-                    <Animated.View style={[styles.ripple, { transform: [{ scale: ripple1Scale }], opacity: ripple1Opacity }]} />
-                    <Animated.View style={[styles.ripple, { transform: [{ scale: ripple2Scale }], opacity: ripple2Opacity }]} />
-                    <Animated.View style={[styles.orb, { transform: [{ scale: orbScale }] }]} />
-                </View>
-
-                <View style={styles.waveform}>
-                    {WAVE_HEIGHTS.map((h, i) => (
-                        <View key={i} style={[styles.bar, { height: barHeight(h, liveLevel) }]} />
-                    ))}
-                </View>
-            </View>
-
-            <View style={styles.transcriptCard}>
-                <Text style={styles.transcriptLabel}>
-                    {latest ? `${latest.Role === 'User' ? 'YOU' : 'AGENT'} · LIVE` : status.label.toUpperCase()}
-                </Text>
-                <Text style={styles.transcript}>
-                    {latest ? latest.Text : status.hint}
-                </Text>
-            </View>
-
-            <View style={styles.controls}>
-                <Pressable style={styles.ctrlBtn}>
-                    <Icons.ChevronUp size={22} color="#f6f6f8" strokeWidth={2} />
-                </Pressable>
-                <Pressable style={styles.ctrlBtnPrimary} onPress={close}>
-                    <View style={styles.ctrlSquare} />
-                </Pressable>
-                <Pressable style={styles.ctrlBtn}>
-                    <Icons.Sliders size={22} color="#f6f6f8" strokeWidth={2} />
-                </Pressable>
-            </View>
-            <Text style={styles.ctrlLabel}>Tap to stop · swipe right for keyboard</Text>
+            <VoiceCallBody
+                MiddleHeight={middleHeight}
+                OnMiddleLayout={setMiddleHeight}
+                FontScale={fontScale}
+                Motion={{
+                    OrbScale: orbScale,
+                    Ripples: [
+                        { Scale: ripple1Scale, Opacity: ripple1Opacity },
+                        { Scale: ripple2Scale, Opacity: ripple2Opacity },
+                    ],
+                }}
+                LiveLevel={liveLevel}
+                TranscriptLabel={latest ? `${latest.Role === 'User' ? 'YOU' : 'AGENT'} · LIVE` : status.label.toUpperCase()}
+                TranscriptText={latest ? latest.Text : status.hint}
+                TranscriptScrollRef={transcriptScrollRef}
+                OnStop={close}
+            />
         </SafeAreaView>
     );
 }
@@ -359,17 +351,6 @@ function statusFor(state: RealtimeConnectionState | 'idle' | 'unavailable'): {
     }
 }
 
-/** Scales a decorative bar by the live audio level when metered, else uses the static height. */
-function barHeight(base: number, level: number | null): number {
-    if (level === null) {
-        return base;
-    }
-    return Math.max(6, base * (0.4 + level));
-}
-
-/** Static bar heights (px) for the decorative waveform — scaled by real amplitude when metered. */
-const WAVE_HEIGHTS = [18, 32, 52, 42, 28, 48, 36, 22, 40, 30, 50, 24, 38];
-
 const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: DARK_BG },
     atmospheric: {
@@ -389,24 +370,6 @@ const styles = StyleSheet.create({
     agentChip: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: 150, marginLeft: 10, paddingLeft: 12, paddingRight: 9, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
     agentChipText: { flexShrink: 1, fontSize: 12.5, fontWeight: Type.semibold, color: '#f6f6f8' },
     closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
-
-    stage: { alignItems: 'center', paddingTop: 30 },
-    orbFrame: { width: 240, height: 240, alignItems: 'center', justifyContent: 'center' },
-    ripple: { position: 'absolute', width: 240, height: 240, borderRadius: 120, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.18)' },
-    orb: { width: 200, height: 200, borderRadius: 100, backgroundColor: '#3a5cd0', shadowColor: '#6688f0', shadowOpacity: 0.6, shadowRadius: 80, shadowOffset: { width: 0, height: 0 }, elevation: 24 },
-
-    waveform: { marginTop: 32, flexDirection: 'row', alignItems: 'center', gap: 5, height: 56 },
-    bar: { width: 4, borderRadius: 2, backgroundColor: '#6688f0' },
-
-    transcriptCard: { marginHorizontal: 24, marginTop: 32, padding: 22, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 22 },
-    transcriptLabel: { fontSize: 11, fontWeight: Type.bold, color: 'rgba(170,186,255,0.85)', letterSpacing: 1.4, marginBottom: 8 },
-    transcript: { fontSize: 19, lineHeight: 26, color: '#f6f6f8', fontWeight: Type.medium, letterSpacing: -0.2 },
-
-    controls: { position: 'absolute', bottom: 80, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 32 },
-    ctrlBtn: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', alignItems: 'center', justifyContent: 'center' },
-    ctrlBtnPrimary: { width: 84, height: 84, borderRadius: 42, backgroundColor: '#d63a3f', shadowColor: '#ff5a5f', shadowOpacity: 0.45, shadowRadius: 30, shadowOffset: { width: 0, height: 12 }, elevation: 12, alignItems: 'center', justifyContent: 'center' },
-    ctrlSquare: { width: 28, height: 28, borderRadius: 4, backgroundColor: '#ffffff' },
-    ctrlLabel: { position: 'absolute', bottom: 36, left: 0, right: 0, textAlign: 'center', fontSize: 12, color: '#6e6e7a', letterSpacing: 0.4 },
 
     // Fallback (unavailable / error)
     fallbackStage: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36, paddingBottom: 80 },
