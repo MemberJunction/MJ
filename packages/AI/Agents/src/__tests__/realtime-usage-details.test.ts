@@ -1,8 +1,9 @@
 /**
  * Unit tests for the per-modality usage {@link RealtimeClientSessionService.AccumulatePromptRunUsage} stores on the
  * co-agent prompt run: the relayed input and output blocks add into `ModelSpecificResponseDetails.RealtimeUsage`
- * beside every other key (pricing's `CostLines` included), an update carrying only avatar video seconds is stored, and
- * the stored output video seconds never exceed the run's elapsed time plus 30 seconds.
+ * beside every other key (pricing's `CostLines` included), an update carrying only avatar video seconds is stored, the
+ * stored output video seconds never exceed the run's elapsed time plus 30 seconds, and the stored output video tokens
+ * never exceed 6,192 a second of that time.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as coreModule from '@memberjunction/core';
@@ -105,6 +106,26 @@ describe('RealtimeClientSessionService.AccumulatePromptRunUsage: per-modality de
         await new RealtimeClientSessionService().AccumulatePromptRunUsage('pr-1', 0, 0, contextUser, storeProvider(store), { Output: { VideoSeconds: 59.5 } });
 
         expect(storedDetails(store)).toEqual({ RealtimeUsage: { Output: { VideoSeconds: 59.5 } } });
+    });
+
+    it("caps the stored output video tokens at 6,192 a second of the run's elapsed time plus 30 s, and logs it", async () => {
+        const logStatus = vi.spyOn(coreModule, 'LogStatus').mockImplementation(() => undefined);
+        const store = makeStoredRun({ RunAt: new Date(Date.now() - 60_000) });
+        await new RealtimeClientSessionService().AccumulatePromptRunUsage('pr-1', 0, 0, contextUser, storeProvider(store), { Output: { VideoTokens: 10_000_000 } });
+
+        const tokens = (storedDetails(store)['RealtimeUsage'] as { Output: { VideoTokens: number } }).Output.VideoTokens;
+        expect(tokens).toBeGreaterThanOrEqual(90 * 6192);
+        expect(tokens).toBeLessThan(91 * 6192);
+        expect(Number.isInteger(tokens)).toBe(true);
+        expect(logStatus.mock.calls.filter((call) => String(call[0]).includes('stored tokens are capped'))).toHaveLength(1);
+        expect(logStatus.mock.calls.filter((call) => String(call[0]).includes('stored seconds are capped'))).toHaveLength(0);
+    });
+
+    it('leaves video tokens within the elapsed time alone', async () => {
+        const store = makeStoredRun({ RunAt: new Date(Date.now() - 60_000) });
+        await new RealtimeClientSessionService().AccumulatePromptRunUsage('pr-1', 0, 0, contextUser, storeProvider(store), { Output: { VideoTokens: 368424, VideoSeconds: 59.5 } });
+
+        expect(storedDetails(store)).toEqual({ RealtimeUsage: { Output: { VideoTokens: 368424, VideoSeconds: 59.5 } } });
     });
 
     it('leaves the details untouched for a token-only relay', async () => {

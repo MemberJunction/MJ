@@ -28,9 +28,10 @@ interface DefaultRunPricing {
 /** What each reason an avatar's video stays priced as before means, for the one log line. */
 const AVATAR_VIDEO_UNPRICED_REASONS: Record<AvatarVideoUnpricedReason, string> = {
     'no-price': 'the model vendor configuration has no usable Realtime.Pricing.AvatarVideoOutput price',
-    'unit': "the avatar video price's unit is not 'Per Minute'",
+    'unit': "the avatar video price's unit is neither 'Per Minute' nor 'Per 1M Tokens'",
     'currency': "the avatar video price is not in the cost row's currency",
     'no-seconds': 'the run stored video tokens but no video seconds to price',
+    'no-tokens': 'the run stored video seconds but no video tokens to price',
 };
 
 /**
@@ -266,10 +267,11 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
      * Calculates the cost for this prompt run based on token usage and active pricing.
      *
      * A realtime run that stored a usage record (`ModelSpecificResponseDetails.RealtimeUsage`) may add an avatar
-     * video line: its output video seconds at the per-minute price in the model vendor's resolved configuration
-     * (`Realtime.Pricing.AvatarVideoOutput`). The output tokens the provider counted as video then leave the default
-     * row's output bucket, and the run's cost lines are written into its details (`CostLines`). Without a default
-     * row the run stays unpriced, video or not; without a usable video price the run prices as before.
+     * video line, priced from the model vendor's resolved configuration (`Realtime.Pricing.AvatarVideoOutput`): its
+     * output video seconds at a per-minute price, or its output video tokens at a per-1M-token price. The output tokens
+     * the provider counted as video then leave the default row's output bucket, and the run's cost lines are written
+     * into its details (`CostLines`). Without a default row the run stays unpriced, video or not; without a usable
+     * video price the run prices as before.
      */
     protected async CalculateAndSetCost(): Promise<void> {
         try {

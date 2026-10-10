@@ -1,7 +1,7 @@
 /**
  * Unit tests for the realtime usage record: how usage updates add up (amounts sum, inbound running totals keep the
- * larger value), how the record is read from and merged into a prompt run's `ModelSpecificResponseDetails`, and the cap
- * on stored output video seconds.
+ * larger value), how the record is read from and merged into a prompt run's `ModelSpecificResponseDetails`, and the caps
+ * on stored output video seconds and output video tokens.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -131,7 +131,7 @@ describe('ReadRealtimeUsageRecord', () => {
 describe('MergeRealtimeUsageRecord', () => {
     it('starts the record in empty details', () => {
         const merged = MergeRealtimeUsageRecord(null, { Output: { VideoSeconds: 2 } });
-        expect(merged).toEqual({ Details: JSON.stringify({ RealtimeUsage: { Output: { VideoSeconds: 2 } } }), ClampedVideoSeconds: 0 });
+        expect(merged).toEqual({ Details: JSON.stringify({ RealtimeUsage: { Output: { VideoSeconds: 2 } } }), ClampedVideoSeconds: 0, ClampedVideoTokens: 0 });
     });
 
     it('adds into the stored record and keeps CostLines and every other key', () => {
@@ -168,6 +168,20 @@ describe('MergeRealtimeUsageRecord', () => {
         const merged = MergeRealtimeUsageRecord(null, { Output: { VideoSeconds: 30 } }, { MaxOutputVideoSeconds: 95.5 });
         expect(storedRecord(merged?.Details)).toEqual({ Output: { VideoSeconds: 30 } });
         expect(merged?.ClampedVideoSeconds).toBe(0);
+    });
+
+    it('caps the stored output video tokens at a whole number and reports what it dropped', () => {
+        const details = JSON.stringify({ RealtimeUsage: { Output: { VideoTokens: 500000, AudioTokens: 10 } } });
+        const merged = MergeRealtimeUsageRecord(details, { Output: { VideoTokens: 100000 } }, { MaxOutputVideoTokens: 557280.5 });
+        expect(storedRecord(merged?.Details)).toEqual({ Output: { VideoTokens: 557280, AudioTokens: 10 } });
+        expect(merged?.ClampedVideoTokens).toBe(42720);
+    });
+
+    it('caps output video seconds and tokens each by its own limit, and never the input', () => {
+        const update = { Input: { VideoTokens: 9000000, VideoSeconds: 400 }, Output: { VideoSeconds: 120, VideoTokens: 6192 } };
+        const merged = MergeRealtimeUsageRecord(null, update, { MaxOutputVideoSeconds: 90, MaxOutputVideoTokens: 557280 });
+        expect(storedRecord(merged?.Details)).toEqual({ Input: { VideoTokens: 9000000, VideoSeconds: 400 }, Output: { VideoSeconds: 90, VideoTokens: 6192 } });
+        expect(merged).toMatchObject({ ClampedVideoSeconds: 30, ClampedVideoTokens: 0 });
     });
 
     it('never overwrites details that are not a JSON object', () => {

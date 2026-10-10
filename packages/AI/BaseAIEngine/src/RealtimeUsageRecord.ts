@@ -40,6 +40,12 @@ export interface RealtimeUsageMergeOptions {
      * client cannot report more avatar video than the call could have generated.
      */
     MaxOutputVideoSeconds?: number;
+    /**
+     * The most output video tokens the record may hold; a fractional limit rounds down. The relay passes the seconds
+     * limit at 6,192 tokens a second, the rate Gemini counts avatar video at, so a client cannot report more video
+     * tokens than that video could have counted.
+     */
+    MaxOutputVideoTokens?: number;
 }
 
 /** What {@link MergeRealtimeUsageRecord} produced. */
@@ -48,6 +54,8 @@ export interface RealtimeUsageMergeResult {
     Details: string;
     /** Output video seconds the limit dropped (0 when the record stayed under it). */
     ClampedVideoSeconds: number;
+    /** Output video tokens the limit dropped (0 when the record stayed under it). */
+    ClampedVideoTokens: number;
 }
 
 type RealtimeUsageDirection = 'Input' | 'Output';
@@ -145,13 +153,14 @@ export function MergeRealtimeUsageRecord(
     const storedValue = root[REALTIME_USAGE_DETAILS_KEY];
     const stored: JSONObject = IsPlainObject(storedValue) ? storedValue : {};
     const sum = AddRealtimeUsageRecord(readRecord(stored, true), update);
-    const clamped = clampOutputVideoSeconds(sum, options.MaxOutputVideoSeconds);
+    const clampedSeconds = clampOutputField(sum, 'VideoSeconds', options.MaxOutputVideoSeconds);
+    const clampedTokens = clampOutputField(sum, 'VideoTokens', options.MaxOutputVideoTokens);
     root[REALTIME_USAGE_DETAILS_KEY] = {
         ...stored,
         ...blocksAsJson(stored, sum),
         ...(sum.DurationSeconds !== undefined ? { DurationSeconds: sum.DurationSeconds } : {}),
     };
-    return { Details: JSON.stringify(root), ClampedVideoSeconds: clamped };
+    return { Details: JSON.stringify(root), ClampedVideoSeconds: clampedSeconds, ClampedVideoTokens: clampedTokens };
 }
 
 /** The sum of two blocks, or `undefined` when neither exists. */
@@ -230,15 +239,18 @@ function blocksAsJson(stored: JSONObject, record: RealtimeUsageRecord): JSONObje
     return result;
 }
 
-/** Caps the record's output video seconds at `max` and returns how many it dropped. */
-function clampOutputVideoSeconds(record: RealtimeUsageRecord, max: number | undefined): number {
-    const seconds = record.Output?.VideoSeconds;
-    if (record.Output === undefined || seconds === undefined || max === undefined || !Number.isFinite(max) || seconds <= max) {
+/**
+ * Caps one output field of the record at `max`, rounded as the field is stored (seconds to the millisecond, tokens down
+ * to a whole number), and returns how much it dropped.
+ */
+function clampOutputField(record: RealtimeUsageRecord, field: 'VideoSeconds' | 'VideoTokens', max: number | undefined): number {
+    const value = record.Output?.[field];
+    if (record.Output === undefined || value === undefined || max === undefined || !Number.isFinite(max) || value <= max) {
         return 0;
     }
-    const limit = roundField('VideoSeconds', Math.max(0, max));
-    record.Output.VideoSeconds = limit;
-    return roundField('VideoSeconds', seconds - limit);
+    const limit = roundField(field, Math.max(0, max));
+    record.Output[field] = limit;
+    return roundField(field, value - limit);
 }
 
 /** A finite number of at least 0, or `undefined`. */
