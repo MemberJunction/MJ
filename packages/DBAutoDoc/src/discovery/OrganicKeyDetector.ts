@@ -22,8 +22,9 @@ import { OrganicKeyCluster, OrganicKeyDetectionPhase } from '../types/organic-ke
 import { RunSemanticPhase, ProgressCallback } from './SemanticPhase.js';
 import { RunStructuralPhase } from './StructuralPhase.js';
 import { BridgeViewProvider } from './BridgeViewSQLGenerator.js';
-import { Compose } from './Composer.js';
+import { Compose, ClusterVerification } from './Composer.js';
 import { DetectedOrganicKeysOutput } from './OrganicKeyTranslator.js';
+import { KeyVerifier } from './JoinProbe.js';
 
 export interface OrganicKeyDetectionResult {
     clusters: OrganicKeyCluster[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -41,22 +42,47 @@ export interface OrganicKeyDetectionResult {
         outputKeys: number;
         outputSpokes: number;
         transitiveBridges: number;
+        /** Clusters the value-overlap probe refuted outright. */
+        clustersDroppedUnverified: number;
+        /** Members dropped for not sharing the anchor's value space. */
+        membersDroppedUnverified: number;
+        /** Probes spent, and the cap they ran under. */
+        probesUsed: number;
+        probesAllowed: number;
     };
+    /** Per-cluster probe record, so a dropped key can be explained rather than just missing. */
+    Verification: ClusterVerification[];
 }
 
 export interface DetectorRunOptions {
     OnProgress?: ProgressCallback;
 }
 
+/** Emit-time behaviour for the detector. */
+export interface OrganicKeyEmitOptions {
+    /**
+     * Set `AutoCreateRelatedViewOnForm` on emitted keys. Default false — a
+     * machine-proposed key should not silently create a grid per spoke on every form.
+     */
+    AutoCreateRelatedViewOnForm?: boolean;
+}
+
 export class OrganicKeyDetector {
     /**
      * @param databaseProvider - Platform of the analyzed database. Bridge-view SQL is emitted in
      *                           its dialect because CodeGen executes it verbatim. Default SQL Server.
+     * @param keyVerifier - Probes each cluster member against the cluster anchor before
+     *                      the key is emitted. Pass the SAME instance the analysis engine
+     *                      got, so one probe budget covers the whole run. When null, keys
+     *                      are emitted unverified — the previous behaviour — and the
+     *                      per-cluster record says they were never checked.
      */
     constructor(
         private readonly config: OrganicKeyDetectionConfig,
         private readonly aiConfig: AIConfig,
         private readonly databaseProvider?: BridgeViewProvider,
+        private readonly keyVerifier: KeyVerifier | null = null,
+        private readonly emitOptions: OrganicKeyEmitOptions = {},
     ) {}
 
     public async Detect(
@@ -69,8 +95,19 @@ export class OrganicKeyDetector {
         const a = await RunSemanticPhase(state, this.config, this.aiConfig, progress);
         const b = RunStructuralPhase(state, a.clusters, this.databaseProvider);
         progress(`structural: ${b.Summary.transitiveBridgesFound} bridges`);
-        const c = Compose(a.clusters, b.Bridges);
-        progress(`compose: emitted ${c.Emitted}/${a.clusters.length} clusters (${c.Summary.outputKeys} keys, ${c.Summary.outputSpokes} spokes)`);
+        const c = await Compose(a.clusters, b.Bridges, this.keyVerifier, {
+            AutoCreateRelatedViewOnForm: this.emitOptions.AutoCreateRelatedViewOnForm,
+        });
+        // Report what the probe removed, not just what survived: "emitted 5 clusters" and
+        // "emitted 5 of 161, 156 refuted" are the same output and completely different
+        // facts about the schema.
+        const budget = this.keyVerifier ? this.keyVerifier.Budget : null;
+        progress(
+            `compose: emitted ${c.Emitted}/${a.clusters.length} clusters (${c.Summary.outputKeys} keys, ${c.Summary.outputSpokes} spokes)`
+            + (budget
+                ? `; probe refuted ${c.DroppedUnverified} clusters and ${c.DroppedMembers} members using ${budget.ProbesUsed}/${budget.ProbesAllowed} probes`
+                : '; keys NOT verified (no probe configured)')
+        );
 
         // Net additional clusters produced by the concept-name split (sub-clusters created
         // beyond the raw clusterer output, counting both kept and dropped sub-clusters).
@@ -109,7 +146,12 @@ export class OrganicKeyDetector {
                 outputKeys: c.Summary.outputKeys,
                 outputSpokes: c.Summary.outputSpokes,
                 transitiveBridges: b.Summary.transitiveBridgesFound,
+                clustersDroppedUnverified: c.DroppedUnverified,
+                membersDroppedUnverified: c.DroppedMembers,
+                probesUsed: budget ? budget.ProbesUsed : 0,
+                probesAllowed: budget ? budget.ProbesAllowed : 0,
             },
+            Verification: c.Verification,
         };
     }
 

@@ -13,7 +13,7 @@
  * table-PK noise out of view without losing the underlying candidates.
  */
 
-import { OrganicKeyCluster, OrganicKeyClusterMember } from '../types/organic-keys.js';
+import { OrganicKeyCluster, OrganicKeyClusterMember, memberColumns } from '../types/organic-keys.js';
 import {
     DetectedOrganicKeysOutput,
     TransitiveSpokeInput,
@@ -21,17 +21,38 @@ import {
     CountOutputEntries,
 } from './OrganicKeyTranslator.js';
 import { TransitiveBridgeFinding } from './TransitiveBridgeDetector.js';
+import { JoinProbeResult, KeyVerifier } from './JoinProbe.js';
 
 /** Output of the compose step: the PR #2193 JSON, the FK-redundancy-annotated clusters, and emit counts. */
 export interface ComposerResult {
     output: DetectedOrganicKeysOutput;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    /** Per-cluster record of what the value-overlap probe concluded, for reporting. */
+    Verification: ClusterVerification[];
     /** Clusters with isFKRedundant filled in — callers that persist the cluster list
      *  (e.g. detector → state.json → dashboard) should use THIS, not the pre-compose
      *  input, otherwise the flag is silently lost. */
     AnnotatedClusters: OrganicKeyCluster[];
     Emitted: number;
     FlaggedFKRedundant: number;
+    /** Clusters dropped because the probe refuted the shared value space. */
+    DroppedUnverified: number;
+    /** Individual members dropped for not sharing the anchor's value space. */
+    DroppedMembers: number;
     Summary: { outputSchemas: number; outputTables: number; outputKeys: number; outputSpokes: number };
+}
+
+/** What the probe concluded about one cluster. */
+export interface ClusterVerification {
+    ClusterId: string;
+    Concept: string;
+    /** `schema.table.column` of the member every other member was probed against. */
+    Anchor: string;
+    MembersIn: number;
+    MembersKept: number;
+    /** One entry per probed member. */
+    Results: Array<{ member: string; status: JoinProbeResult['Status']; reason: string }>;
+    /** True when the cluster was not emitted at all. */
+    Dropped: boolean;
 }
 
 /**
@@ -41,16 +62,36 @@ export interface ComposerResult {
  * declared foreign key — kept but flagged, not dropped). Matching transitive bridges are
  * attached as spokes. Returns the JSON plus the annotated clusters and emit counts.
  */
-export function Compose(
+export async function Compose(
     clusters: OrganicKeyCluster[],
     bridges: TransitiveBridgeFinding[],
-): ComposerResult {
+    verifier: KeyVerifier | null = null,
+    options: ComposeOptions = {},
+): Promise<ComposerResult> {
     let flaggedCount = 0;
-    const annotated: OrganicKeyCluster[] = clusters.map((c) => {
+    const preVerify: OrganicKeyCluster[] = clusters.map((c) => {
         const redundant = isFKRedundant(c);
         if (redundant) flaggedCount += 1;
         return { ...c, isFKRedundant: redundant };
     });
+
+    // ── Value-overlap gate ───────────────────────────────────────────────────────
+    //
+    // A cluster asserts that its member columns share a value space: that two rows
+    // holding the same value refer to the same real-world entity. Nothing checked
+    // that. Membership was decided by LLM concept naming and embedding distance, so
+    // columns that merely SOUND alike were emitted as a key — and the emitted key
+    // becomes a related-record view that value-joins them, producing "related" rows
+    // that are not related.
+    //
+    // Each member is probed against ONE anchor rather than against every other
+    // member: N-1 probes per cluster instead of N², and it tests the cluster's actual
+    // claim, since sharing a value space is transitive through the anchor. The anchor
+    // is a PK member when the cluster has one (a PK is the canonical, unique value
+    // space), otherwise the first member.
+    const { clusters: annotated, verification, droppedMembers } =
+        await verifyClusters(preVerify, verifier);
+    const droppedUnverified = preVerify.length - annotated.length;
 
     const hubKeys = new Set<string>();
     for (const c of annotated) {
@@ -71,14 +112,19 @@ export function Compose(
             hubConcept: b.HubConcept,
         }));
 
-    const output = TranslateClusters(annotated, spokes);
+    const output = TranslateClusters(annotated, spokes, {
+        AutoCreateRelatedViewOnForm: options.AutoCreateRelatedViewOnForm,
+    });
     const counts = CountOutputEntries(output);
 
     return {
         output,
         AnnotatedClusters: annotated,
+        Verification: verification,
         Emitted: annotated.length,
         FlaggedFKRedundant: flaggedCount,
+        DroppedUnverified: droppedUnverified,
+        DroppedMembers: droppedMembers,
         Summary: {
             outputSchemas: counts.schemas,
             outputTables: counts.tables,
@@ -88,12 +134,114 @@ export function Compose(
     };
 }
 
+/** Emit-time options threaded through to the translator. */
+export interface ComposeOptions {
+    /** See {@link import('./OrganicKeyTranslator.js').TranslateOptions}. Default false. */
+    AutoCreateRelatedViewOnForm?: boolean;
+}
+
+/** `schema.table.col[,col]` for a cluster member. */
+function memberLabel(m: OrganicKeyClusterMember): string {
+    return `${m.schema}.${m.table}.${memberColumns(m).join(',')}`;
+}
+
+/**
+ * Pick the member every other member is probed against.
+ *
+ * A PK member is preferred: its value space is canonical and unique, so containment
+ * into it is a meaningful measure. Failing that, the first member — arbitrary but
+ * stable, and the probe is symmetric enough that the choice does not change which
+ * clusters survive, only which member is reported as the reference.
+ */
+function pickAnchorMember(members: OrganicKeyClusterMember[]): OrganicKeyClusterMember {
+    return members.find((m) => m.isPrimaryKey) ?? members[0];
+}
+
+/**
+ * Drop cluster members whose values do not overlap the anchor's, and drop any cluster
+ * left with fewer than two members or spanning fewer than two tables.
+ *
+ * `Unprobed` members are KEPT. Refusing to emit whenever a probe cannot run would turn
+ * a permissions or budget problem into silent total key loss; the member stays and the
+ * per-cluster record says it was never checked. Only a measured refutation removes
+ * anything.
+ */
+async function verifyClusters(
+    clusters: OrganicKeyCluster[],
+    verifier: KeyVerifier | null,
+): Promise<{ clusters: OrganicKeyCluster[]; verification: ClusterVerification[]; droppedMembers: number }> {
+    const out: OrganicKeyCluster[] = [];
+    const verification: ClusterVerification[] = [];
+    let droppedMembers = 0;
+
+    for (const cluster of clusters) {
+        if (!verifier || cluster.members.length < 2) {
+            // Nothing to probe against, or no probe available: emit unchanged and say so.
+            verification.push({
+                ClusterId: cluster.id,
+                Concept: cluster.concept,
+                Anchor: cluster.members.length > 0 ? memberLabel(pickAnchorMember(cluster.members)) : '',
+                MembersIn: cluster.members.length,
+                MembersKept: cluster.members.length,
+                Results: [],
+                Dropped: false,
+            });
+            out.push(cluster);
+            continue;
+        }
+
+        const anchorMember = pickAnchorMember(cluster.members);
+        const kept: OrganicKeyClusterMember[] = [];
+        const results: ClusterVerification['Results'] = [];
+
+        for (const member of cluster.members) {
+            if (member === anchorMember) {
+                kept.push(member);
+                continue;
+            }
+            const probe = await verifier.Verify({
+                Child: { Schema: member.schema, Table: member.table, Column: member.column },
+                Parent: { Schema: anchorMember.schema, Table: anchorMember.table, Column: anchorMember.column },
+            });
+            results.push({ member: memberLabel(member), status: probe.Status, reason: probe.Reason });
+            if (probe.Status === 'Refuted') {
+                droppedMembers += 1;
+                continue;
+            }
+            kept.push(member);
+        }
+
+        const distinctTables = new Set(kept.map((m) => `${m.schema}.${m.table}`));
+        const dropped = kept.length < 2 || distinctTables.size < 2;
+        verification.push({
+            ClusterId: cluster.id,
+            Concept: cluster.concept,
+            Anchor: memberLabel(anchorMember),
+            MembersIn: cluster.members.length,
+            MembersKept: dropped ? 0 : kept.length,
+            Results: results,
+            Dropped: dropped,
+        });
+        if (dropped) {
+            // Everything but the anchor was refuted, or what survives no longer spans
+            // two tables — there is no cross-table organic key left to emit.
+            droppedMembers += kept.length;
+            continue;
+        }
+        out.push({ ...cluster, members: kept });
+    }
+
+    return { clusters: out, verification, droppedMembers };
+}
+
 /** @deprecated Use {@link Compose}. */
 export function compose(
     clusters: OrganicKeyCluster[],
     bridges: TransitiveBridgeFinding[],
-): ComposerResult {
-    return Compose(clusters, bridges);
+    verifier: KeyVerifier | null = null,
+    options: ComposeOptions = {},
+): Promise<ComposerResult> {
+    return Compose(clusters, bridges, verifier, options);
 }
 
 /**

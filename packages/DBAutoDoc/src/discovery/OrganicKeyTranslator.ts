@@ -83,6 +83,19 @@ export interface TransitiveSpokeInput {
 
 // ─── Entry point — pure fan-out ─────────────────────────────────────────────
 
+/** Emit-time options for {@link TranslateClusters}. */
+export interface TranslateOptions {
+    /**
+     * Value for `AutoCreateRelatedViewOnForm` on every emitted key. Default FALSE.
+     *
+     * This was a hardcoded `true`, so every emitted key auto-created a related-record
+     * grid per spoke — around 22 grids per key on a real run, none of them asked for,
+     * each one a value-join on a column the detector had never verified. Opting in is
+     * the right default for a machine-proposed key.
+     */
+    AutoCreateRelatedViewOnForm?: boolean;
+}
+
 /**
  * Render gated clusters into PR #2193 JSON. Same-concept consolidation +
  * per-table fan-out + transitive spoke attachment. No filters, no thresholds.
@@ -93,7 +106,9 @@ export interface TransitiveSpokeInput {
 export function TranslateClusters(
     clusters: OrganicKeyCluster[],
     transitiveSpokes: TransitiveSpokeInput[] = [],
+    options: TranslateOptions = {},
 ): DetectedOrganicKeysOutput {
+    const autoCreateRelatedView = options.AutoCreateRelatedViewOnForm ?? false;
     // Step 1 — group by normalized canonical concept name.
     const byConcept = new Map<string, OrganicKeyCluster[]>();
     for (const cluster of clusters) {
@@ -185,7 +200,7 @@ export function TranslateClusters(
                 MatchFieldNames: ownerColumns,
                 NormalizationStrategy: ownerNormalization,
                 CustomNormalizationExpression: ownerCustomExpression,
-                AutoCreateRelatedViewOnForm: true,
+                AutoCreateRelatedViewOnForm: autoCreateRelatedView,
                 RelatedEntities: spokes,
             });
         }
@@ -198,8 +213,9 @@ export function TranslateClusters(
 export function translateClusters(
     clusters: OrganicKeyCluster[],
     transitiveSpokes: TransitiveSpokeInput[] = [],
+    options: TranslateOptions = {},
 ): DetectedOrganicKeysOutput {
-    return TranslateClusters(clusters, transitiveSpokes);
+    return TranslateClusters(clusters, transitiveSpokes, options);
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
