@@ -6,6 +6,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJFileFormComponent } from '../../generated/Entities/MJFile/mjfile.form.component';
+import { ClassifyFileMediaType, DescribeFileSize, MediaLoadsByElement, type FileMediaType } from './file-form.logic';
 import { z } from 'zod';
 
 const CreateMediaAccessTokenMutation = gql`
@@ -152,6 +153,10 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
             // fallback
           }
           this.IsMediaLoaded = true;
+        } else if (!MediaLoadsByElement(mediaType)) {
+          // No element will fire `load` for this type: the fallback card is the view, so it is loaded now.
+          // Without this the overlay stayed on "Loading…" for every .zip and the like (MJ#4947).
+          this.IsMediaLoaded = true;
         }
       } else {
         this.IsMediaLoaded = true;
@@ -173,27 +178,9 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
     }, 350);
   }
 
-  /**
-   * Determines media type category based on MIME type or file extension.
-   */
-  public get MediaType(): 'image' | 'pdf' | 'video' | 'audio' | 'text' | 'other' {
-    const mime = (this.record?.ContentType || '').toLowerCase();
-    const name = (this.record?.Name || '').toLowerCase();
-
-    if (mime.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|ico|bmp|avif)$/.test(name)) return 'image';
-    if (mime === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
-    if (mime.startsWith('video/') || /\.(mp4|webm|ogg|mov|mkv|avi)$/.test(name)) return 'video';
-    if (mime.startsWith('audio/') || /\.(mp3|wav|ogg|aac|m4a|flac)$/.test(name)) return 'audio';
-    if (
-      mime.startsWith('text/') ||
-      mime.includes('json') ||
-      mime.includes('xml') ||
-      mime.includes('javascript') ||
-      /\.(txt|md|csv|json|xml|yaml|yml|js|ts|html|css|sql|sh|log)$/.test(name)
-    ) {
-      return 'text';
-    }
-    return 'other';
+  /** The viewer's category for the file, from its MIME type or its name (`ClassifyFileMediaType`). */
+  public get MediaType(): FileMediaType {
+    return ClassifyFileMediaType(this.record?.ContentType, this.record?.Name);
   }
 
   public get FileIconClass(): string {
@@ -203,16 +190,16 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
       case 'video': return 'fa-solid fa-file-video mj-file-color-video';
       case 'audio': return 'fa-solid fa-file-audio mj-file-color-audio';
       case 'text': return 'fa-solid fa-file-lines mj-file-color-text';
+      case 'docx': return 'fa-solid fa-file-word mj-file-color-word';
+      case 'xlsx': return 'fa-solid fa-file-excel mj-file-color-excel';
       default: return 'fa-solid fa-file mj-file-color-generic';
     }
   }
 
-  public FormatFileSize(bytes: number | null | undefined): string {
-    if (bytes == null || isNaN(bytes) || bytes <= 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const idx = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    const val = bytes / Math.pow(1024, idx);
-    return `${val.toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`;
+  /** The size badge's text, or null when no size is recorded: `MJ: Files` has no length column today. */
+  public get FileSizeLabel(): string | null {
+    const length = (this.record as unknown as { ContentLength?: number | null }).ContentLength;
+    return DescribeFileSize(length);
   }
 
   public OpenInExternalTab(): void {

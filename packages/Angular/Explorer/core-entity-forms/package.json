@@ -43,6 +43,7 @@
     "@memberjunction/ng-action-gallery": "6.2.0-edge.3",
     "@memberjunction/ng-actions": "6.2.0-edge.3",
     "@memberjunction/ng-agents": "6.2.0-edge.3",
+    "@memberjunction/ng-artifacts": "6.2.0-edge.3",
     "@memberjunction/ng-ai-test-harness": "6.2.0-edge.3",
     "@memberjunction/ng-base-application": "6.2.0-edge.3",
     "@memberjunction/ng-base-forms": "6.2.0-edge.3",
