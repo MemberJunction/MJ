@@ -593,6 +593,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // The panel went away with its slots. StageSlot reads null while it is away, so the bindings don't change.
       this.channelSlot = null;
       this.SurfaceStage.SetActiveTab(null);
+      // It also took its collapsed state: the panel reports collapsing and expanding, not going away. The panel that comes
+      // back is a new one, which starts expanded, so the overlay sizes it expanded too (#5387). No binding reads this while
+      // the panel is away, so changing it in this change detection pass trips no NG0100 check.
+      this.PanelCollapsed = false;
     } else {
       // A (re)created panel starts with a FRESH tab model. Re-register the live channel set
       // here (gated to whiteboard + already-used channels) so hiding the panel (pure-audio
@@ -1229,7 +1233,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   // (width follows the pointer delta) and the click-vs-drag guard keeps it from being
   // adopted or persisted.
 
-  /** Whether the surface panel is collapsed to its slim strip (reported by the panel). */
+  /**
+   * Whether the surface panel is collapsed to its slim strip, as the panel reports it. Back to `false` whenever the panel
+   * goes away (the panel area hides), since the panel that replaces it starts expanded.
+   */
   public PanelCollapsed = false;
   /** Wide tier active (a content tab is focused) — drives the DEFAULT width only. */
   public PanelWide = false;
