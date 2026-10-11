@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
+import { FindReferencedIdentifiers, PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
 import { CheckAggregateExpression } from '../index.js';
 
 const ss = new SQLServerDialect();
@@ -94,8 +94,7 @@ describe('CheckAggregateExpression — SQL Server', () => {
     });
 
     it('refuses a backslash inside a quoted string, where the parser and the database read the string differently', () => {
-        // node-sql-parser reads \' as an escaped quote; SQL Server does not. Without the refusal, the
-        // database reads the harmless subquery here as code while the parser reads it as string content.
+        // The parser and the database engines read backslashes inside plain string literals differently.
         const check = CheckAggregateExpression("MAX(LEN('\\' + (SELECT 1) + '--'\n))", ss, COLUMNS);
         expect(check).toEqual({ IsAllowed: false, Reason: expect.stringMatching(/backslash/), SQL: null });
     });
@@ -142,6 +141,7 @@ describe('CheckAggregateExpression — PostgreSQL', () => {
         ['SUM(*)', /"\*".*not a column/],
         [`MAX(pg_read_file('x'))`, /pg_read_file/],
         [`MAX("Name" -> 'a')`, /operator "->"/],
+        [`COUNT(CASE WHEN "Name" LIKE 'a!%' ESCAPE '!' THEN 1 END)`, /ESCAPE/],
         ['AVG(EXTRACT(EPOCH FROM ("EndDate" - "StartDate")))', /not allow/],
     ])('refuses %s', (expression, reason) => {
         const check = CheckAggregateExpression(expression, pg, COLUMNS);
@@ -151,8 +151,7 @@ describe('CheckAggregateExpression — PostgreSQL', () => {
     });
 
     it('refuses a backslash inside a quoted string, where the parser and the database read the string differently', () => {
-        // Same disagreement as on SQL Server: PostgreSQL (standard_conforming_strings on) does not treat
-        // \' as an escape inside '…', node-sql-parser does.
+        // The parser and the database engines read backslashes inside plain string literals differently.
         const check = CheckAggregateExpression("MAX(LENGTH('\\' || (SELECT 1) || '--'\n))", pg, COLUMNS);
         expect(check).toEqual({ IsAllowed: false, Reason: expect.stringMatching(/backslash/), SQL: null });
     });
@@ -183,6 +182,7 @@ describe('CheckAggregateExpression — the SQL to run is rebuilt from the checke
         ["STRING_AGG(Name, ', ')", "STRING_AGG([Name], ', ')"],
         ['STDEV(Amount)', 'STDEV([Amount])'],
         ['SUM(1.50)', 'SUM(1.50)'],
+        ['COUNT(CASE WHEN (NOT (Amount > 1)) IS NULL THEN 1 END)', 'COUNT(CASE WHEN (NOT ([Amount] > 1)) IS NULL THEN 1 END)'],
         // A unary minus over a negative number keeps its space, so the rebuilt SQL never contains `--`.
         ['SUM(- -1)', 'SUM(- -1)'],
     ])('SQL Server: %s runs as %s', (expression, sql) => {
@@ -196,7 +196,77 @@ describe('CheckAggregateExpression — the SQL to run is rebuilt from the checke
         [`COUNT(CASE WHEN "Status" = 'Active' THEN 1 END)`, `COUNT(CASE WHEN "Status" = 'Active' THEN 1 END)`],
         [`STRING_AGG("Name", ',')`, `STRING_AGG("Name", ',')`],
         [`AVG(DATE_PART('day', "EndDate"))`, `AVG(DATE_PART('day', "EndDate"))`],
+        [`COUNT(CASE WHEN (NOT ("Amount" > 1)) IS NULL THEN 1 END)`, `COUNT(CASE WHEN (NOT ("Amount" > 1)) IS NULL THEN 1 END)`],
     ])('PostgreSQL: %s runs as %s', (expression, sql) => {
         expect(CheckAggregateExpression(expression, pg, COLUMNS).SQL).toBe(sql);
+    });
+});
+
+/** Every BMP letter that has another case form, grouped with the letters it shares a one-character case form with. */
+function caseGroups(): string[][] {
+    const groupOf = new Map<string, Set<string>>();
+    for (let code = 0; code <= 0xffff; code++) {
+        if (code >= 0xd800 && code <= 0xdfff) continue;
+        const letter = String.fromCharCode(code);
+        const forms = [letter.toUpperCase(), letter.toLowerCase()].filter(form => form !== letter);
+        if (forms.length === 0) continue;
+        const group = groupOf.get(letter) ?? new Set([letter]);
+        groupOf.set(letter, group);
+        for (const form of forms.filter(f => f.length === 1)) {
+            for (const member of groupOf.get(form) ?? [form]) {
+                group.add(member);
+                groupOf.set(member, group);
+            }
+        }
+    }
+    return [...new Set(groupOf.values())].map(group => [...group]);
+}
+
+/** A name as UTF-16 code units, so look-alike letters read apart in a failure message. */
+function codeUnits(name: string): string {
+    return Array.from(name, c => c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')).join(' ');
+}
+
+describe('CheckAggregateExpression — column names resolve by the field-security gate\'s rule', () => {
+    it.each([
+        // U+212A KELVIN SIGN lower-cases to "k", but the field-security gate does not read it as "k".
+        ['BankAccount', 'Ban\u212AAccount'],
+        // Full Unicode case mapping equates each of these with a letter of the column name.
+        ['Μισθός', 'Μισθόσ'],
+        ['Dose\u03BCg', 'Dose\u00B5g'],
+        ['Ставка', 'С\u1C84авка'],
+    ])('does not resolve a look-alike spelling of the column %s', (column, lookAlike) => {
+        const refused = { IsAllowed: false, Reason: expect.stringMatching(/not a column/), SQL: null };
+        expect(CheckAggregateExpression(`MAX([${lookAlike}])`, ss, [column])).toEqual(refused);
+        expect(CheckAggregateExpression(`MAX("${lookAlike}")`, pg, [column])).toEqual(refused);
+    });
+
+    it('resolves a column name written in another case', () => {
+        expect(CheckAggregateExpression('MAX([BANKACCOUNT])', ss, ['BankAccount']).SQL).toBe('MAX([BankAccount])');
+        expect(CheckAggregateExpression('MAX([ΜΙΣΘΌΣ])', ss, ['Μισθός']).SQL).toBe('MAX([Μισθός])');
+    });
+
+    it('prefers the exactly spelled column and refuses a reference that fits two columns', () => {
+        expect(CheckAggregateExpression('SUM("Name")', pg, ['Name', 'NAME']).SQL).toBe('SUM("Name")');
+        expect(CheckAggregateExpression('SUM("name")', pg, ['Name', 'NAME']).Reason).toMatch(/more than one column/);
+    });
+
+    it('never resolves a column that the field-security gate would not see in the expression', () => {
+        const unseen: string[] = [];
+        for (const group of caseGroups()) {
+            for (const written of group) {
+                for (const letter of group) {
+                    for (const [reference, column] of [[`A${written}B`, `A${letter}B`], [`A${written}`, `A${letter}`]]) {
+                        for (const [dialect, expression] of [[ss, `MAX([${reference}])`], [pg, `MAX("${reference}")`]] as const) {
+                            const allowed = CheckAggregateExpression(expression, dialect, [column]).IsAllowed;
+                            if (allowed && FindReferencedIdentifiers(expression, [column]).length === 0) {
+                                unseen.push(`${dialect.PlatformKey}: ${codeUnits(reference)} resolved to ${codeUnits(column)}`);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        expect(unseen).toEqual([]);
     });
 });

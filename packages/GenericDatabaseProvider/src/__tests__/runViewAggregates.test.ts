@@ -5,9 +5,8 @@
  * reaches the database. Refused expressions come back as per-aggregate errors; the rows and the
  * other aggregates are unaffected.
  *
- * The payloads are harmless (`SELECT 1`). Each hides a statement separator from a quote-only
- * literal stripper: on SQL Server behind a quote inside a `[bracket]` identifier, on PostgreSQL
- * behind a backslash-escaped quote in an `E'…'` string.
+ * The payloads are harmless (`SELECT 1`). Each one hides a second statement from the keyword
+ * validator's literal stripper.
  */
 import { describe, it, expect, vi } from 'vitest';
 
@@ -47,16 +46,15 @@ import { PostgreSQLDialect, SQLServerDialect, type DatabasePlatform, type SQLPar
 
 const ENTITY_NAME = 'Widgets';
 
-/** SQL Server: the `'` inside `[a']` opens a fake literal for a quote-only stripper. */
+/** SQL Server: a second statement the keyword validator's literal stripper does not see. */
 const SQL_SERVER_STACKED = "COUNT(*) AS [a'] ; SELECT 1 AS [b'], COUNT(*)";
 
-/** PostgreSQL: `E'\''` is one escaped quote, which a quote-only stripper reads as an open literal. */
+/** PostgreSQL: a second statement the keyword validator's literal stripper does not see. */
 const POSTGRES_STACKED = "COUNT(*) + LENGTH(E'\\'') ; SELECT 1 AS x, COUNT(E'\\'')";
 
 /**
- * node-sql-parser reads `\'` inside `'…'` as an escaped quote; SQL Server and PostgreSQL do not. In
- * these single-call expressions the database reads the harmless subquery as code while the parser
- * reads it as part of a string constant.
+ * The parser and the database engines read backslashes inside plain string literals differently.
+ * These single-call expressions carry a harmless subquery.
  */
 const SQL_SERVER_BACKSLASH_STRING = "MAX(LEN('\\' + (SELECT 1) + '--'\n))";
 const POSTGRES_BACKSLASH_STRING = "MAX(LENGTH('\\' || (SELECT 1) || '--'\n))";
@@ -146,9 +144,9 @@ class AggregateTestProvider extends GenericDatabaseProviderTestBase {
 }
 
 /** A readable entity with no row-level security, field-level security or external data source. */
-function widgetsEntity(): EntityInfo {
+function widgetsEntity(deniedFields: string[] = []): EntityInfo {
     // `Database` is a real column whose name the keyword validator also treats as a keyword.
-    const fields = ['ID', 'Name', 'Sequence', 'Database'].map((name) => ({ Name: name, CodeName: name }));
+    const fields = ['ID', 'Name', 'Sequence', 'Database', 'BankAccount', 'Μισθός'].map((name) => ({ Name: name, CodeName: name }));
     const id = fields[0];
     return {
         ID: 'ENT-Widgets',
@@ -163,7 +161,8 @@ function widgetsEntity(): EntityInfo {
         DatetimeFields: [],
         ExternalDataSourceID: null,
         UserViewMaxRows: 0,
-        EnableFieldLevelSecurity: false,
+        EnableFieldLevelSecurity: deniedFields.length > 0,
+        GetDeniedReadFields: () => new Set(deniedFields.map((f) => f.toLowerCase())),
         HasBinaryFields: false,
         GetUserPermisions: () => ({ CanRead: true }),
         GetEffectiveRowFilterWhereClause: () => '',
@@ -178,7 +177,7 @@ function statementSeparators(sql: string, dialect: SQLParserDialect): number {
 }
 
 describe('GenericDatabaseProvider.RunViewCore — aggregate expressions', () => {
-    it('SQL Server: an aggregate that hides a second statement behind a bracket-identifier quote never reaches the database', async () => {
+    it('SQL Server: an aggregate that carries a second statement never reaches the database', async () => {
         const provider = new AggregateTestProvider('sqlserver', [widgetsEntity()]);
 
         const result = await provider.RunViewAs({ EntityName: ENTITY_NAME, Aggregates: [{ expression: SQL_SERVER_STACKED }] }, user);
@@ -188,7 +187,7 @@ describe('GenericDatabaseProvider.RunViewCore — aggregate expressions', () => 
         expect(result.AggregateResults?.[0].error).toMatch(/statement separator/);
     });
 
-    it('PostgreSQL: an aggregate that hides a second statement behind an E-string escape never reaches the database', async () => {
+    it('PostgreSQL: an aggregate that carries a second statement never reaches the database', async () => {
         const provider = new AggregateTestProvider('postgresql', [widgetsEntity()]);
 
         const result = await provider.RunViewAs({ EntityName: ENTITY_NAME, Aggregates: [{ expression: POSTGRES_STACKED }] }, user);
@@ -222,6 +221,27 @@ describe('GenericDatabaseProvider.RunViewCore — aggregate expressions', () => 
         expect(provider.ExecutedSQL.some((sql) => sql.includes('SELECT 1'))).toBe(false);
         // Refused by the provider's own check, not left to the keyword validator behind it.
         expect(result.AggregateResults?.[0].error).toMatch(/backslash/);
+    });
+
+    it.each([
+        // U+212A KELVIN SIGN in place of "k".
+        ['BankAccount', 'Ban\u212AAccount'],
+        // σ in place of the final ς.
+        ['Μισθός', 'Μισθόσ'],
+    ])('an aggregate cannot read the field-security-denied column %s through a look-alike spelling of its name', async (column, lookAlike) => {
+        const provider = new AggregateTestProvider('sqlserver', [widgetsEntity([column])]);
+        const run = (expression: string) =>
+            provider.RunViewsWithCacheCheck([{ params: { EntityName: ENTITY_NAME, BypassCache: true, Aggregates: [{ expression }] } }], user);
+
+        // Control: the exact spelling is refused by the field-security gate before any SQL runs.
+        const plain = await run(`MAX([${column}])`);
+        expect(plain.results[0].status).toBe('error');
+        expect(provider.ExecutedSQL).toEqual([]);
+
+        // The gate does not see the look-alike spelling, so the rebuild must not resolve it to the column.
+        const lookAlikeRun = await run(`MAX([${lookAlike}])`);
+        expect(provider.ExecutedSQL.some((sql) => sql.includes(column))).toBe(false);
+        expect(lookAlikeRun.results[0].aggregateResults?.[0].error).toMatch(/not a column/);
     });
 
     it('a refused aggregate does not shift the values of the aggregates beside it', async () => {
