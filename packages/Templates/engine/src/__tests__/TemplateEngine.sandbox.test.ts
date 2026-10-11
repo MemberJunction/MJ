@@ -102,6 +102,33 @@ describe('TemplateEngineServer sandbox: templates cannot reach the shared render
 });
 
 /**
+ * nunjucks writes dictionary keys and keyword arguments as JavaScript object-literal keys, and fills a
+ * macro argument that a call leaves out from the call's keyword arguments. Each template here only
+ * tries to put a marker string into an omitted argument or a dictionary member. The guard must refuse
+ * each one before nunjucks compiles it, and the marker must never print.
+ */
+describe('TemplateEngineServer sandbox: keyword arguments and dictionary keys', () => {
+    it.each([
+        ['a macro call', '{% macro m(a) %}[{{ a }}]{% endmacro %}{{ m(__proto__={a: "MJ-MARKER"}) }}'],
+        ['a macro call with a quoted key', '{% macro m(a) %}[{{ a }}]{% endmacro %}{{ m("__proto__"={a: "MJ-MARKER"}) }}'],
+        ['a call block', '{% macro m(a) %}[{{ a }}]{% endmacro %}{% call m(__proto__={a: "MJ-MARKER"}) %}{% endcall %}'],
+        ['caller()', '{% macro w() %}{{ caller(__proto__={p: "MJ-MARKER"}) }}{% endmacro %}{% call(p) w() %}[{{ p }}]{% endcall %}'],
+        ['a dictionary literal', '{% set d = {__proto__: {a: "MJ-MARKER"} } %}[{{ d.a }}]'],
+    ])('refuses a key that every object inherits before compiling it, in %s', async (_form, templateText) => {
+        const result = await render(templateText);
+
+        expect(result.Success).toBe(false);
+        expect(result.Message).toContain('TemplateSandboxError');
+        expect(result.Output ?? '').not.toContain('MJ-MARKER');
+    });
+
+    it('still leaves an omitted macro argument empty, and fills one that the call names', async () => {
+        const result = await render('{% macro m(a, b) %}[{{ a }}][{{ b }}]{% endmacro %}{{ m(1) }}|{{ m(b=2) }}|{{ m(1, 2) }}');
+        expect(result.Output).toBe('[1][]|[][2]|[1][2]');
+    });
+});
+
+/**
  * The nunjucks compiler copies template-controlled names into the code it generates, and that code
  * runs on render without passing the runtime guard. Each input here only puts a quote, a backslash
  * or a line break into a name; none of them runs anything. The guard must refuse each one before

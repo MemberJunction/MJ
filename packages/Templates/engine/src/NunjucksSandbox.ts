@@ -4,19 +4,22 @@
  * nunjucks has no sandbox mode, and a template can attack it at two points:
  * - **Compile time.** The compiler copies template-controlled names into the code it generates.
  *   {@link HardenNunjucksRuntime} wraps the parser that the compiler calls, so every parsed template is
- *   checked by `AssertTemplateTreeIsSafe` (`NunjucksCompileGuard.ts`) before it compiles.
+ *   checked by `AssertTemplateTreeIsSafe` (`NunjucksCompileGuard.ts`) before it compiles. It also wraps
+ *   the code generator's `compilePair`, which writes dictionary keys and keyword arguments.
  * - **Render time.** Every compiled template resolves bare names, member access and calls through
  *   three functions on nunjucks' shared runtime module: `contextOrFrameLookup`, `memberLookup` and
- *   `callWrap`. It finds filters and tests with the environment's `getFilter` and `getTest`, which read
- *   plain objects. Unguarded, a template can walk from any value to `Function`, or reach the render
- *   context and change the shared environment. {@link HardenNunjucksRuntime} wraps those functions in place.
+ *   `callWrap`. It builds macros with `makeMacro` and marks keyword arguments with `makeKeywordArgs`, and
+ *   it finds filters and tests with the environment's `getFilter` and `getTest`, which read plain
+ *   objects. Unguarded, a template can walk from any value to `Function`, or reach the render context
+ *   and change the shared environment. {@link HardenNunjucksRuntime} wraps those functions in place.
  *
- * The parser, the runtime module and the `Environment` prototype are shared by every nunjucks
- * environment in the process, so the guard covers all of them, including templates loaded through
- * `include` and `import`.
+ * The parser, the code generator, the runtime module and the `Environment` prototype are shared by every
+ * nunjucks environment in the process, so the guard covers all of them, including templates loaded
+ * through `include` and `import`.
  * @module @memberjunction/templates
  */
 import nunjucks from 'nunjucks';
+import { IsInheritedMemberName } from './InheritedMemberNames';
 import { AssertTemplateTreeIsSafe } from './NunjucksCompileGuard';
 import { TemplateSandboxError } from './TemplateSandboxError';
 
@@ -31,6 +34,9 @@ interface NunjucksFrame {
     lookup(name: string): unknown;
 }
 
+/** A macro or call block as nunjucks builds it. The last argument can be the call's keyword arguments. */
+type NunjucksMacro = (this: unknown, ...args: unknown[]) => unknown;
+
 /**
  * The runtime functions every compiled template calls. Member names match nunjucks' runtime module.
  * Template values are arbitrary data, so they are typed `unknown`.
@@ -39,6 +45,8 @@ interface NunjucksRuntimeHooks {
     memberLookup: (obj: unknown, val: unknown) => unknown;
     contextOrFrameLookup: (context: NunjucksRenderContext, frame: NunjucksFrame, name: string) => unknown;
     callWrap: (obj: unknown, name: string, context: NunjucksRenderContext, args: unknown[]) => unknown;
+    makeMacro: (argNames: string[], kwargNames: string[], func: NunjucksMacro) => NunjucksMacro;
+    makeKeywordArgs: (obj: object) => object;
 }
 
 /** The registries of a nunjucks environment, and the methods that find a name in them. */
@@ -59,14 +67,17 @@ interface NunjucksParser {
     parse: (src: string, extensions?: unknown, opts?: unknown) => unknown;
 }
 
+/** The code generator's method that writes one dictionary key or keyword argument, and its value, into an object literal. */
+type CompilePair = (this: unknown, node: unknown, frame: unknown) => void;
+
 /** The nunjucks modules and classes the guard wraps or recognizes. */
 interface NunjucksInternals {
     parser: NunjucksParser;
     runtime: NunjucksRuntimeHooks & { Frame: { prototype: object } };
     Environment: { prototype: NunjucksEnvironmentRegistries };
     Template: { prototype: object };
+    compiler: { Compiler: { prototype: { compilePair: CompilePair } } };
     lib: object;
-    compiler: object;
     lexer: object;
     nodes: object;
 }
@@ -117,8 +128,14 @@ const NUNJUCKS_MODULES: ReadonlySet<unknown> = new Set<unknown>([
 const installedGuards = new WeakSet<GuardableHook>();
 
 /**
- * Guards the nunjucks parser and runtime used by every nunjucks environment in this process. After this call:
+ * Guards the nunjucks parser, code generator and runtime used by every nunjucks environment in this process. After this call:
  * - a template whose names could change the compiled code fails to compile (see `AssertTemplateTreeIsSafe`)
+ * - a macro or call-block argument that a call leaves out is filled only from a keyword argument that the
+ *   call itself passes under that name, never from a member the keyword arguments inherit, so otherwise it
+ *   reads as empty
+ * - keyword arguments must be an ordinary object literal: keyword arguments that inherit from anything but
+ *   `Object.prototype`, or that use a name that every object inherits (or `prototype`), throw; the code
+ *   generator refuses such a name as a dictionary key or keyword argument too
  * - a filter, test or global resolves only to a name the environment registered itself, never to a member
  *   that every object inherits (such as `hasOwnProperty`); an object, a function or a symbol is refused as the name
  * - a member named `constructor`, `prototype`, `__proto__` or one of the `__define/lookup Getter/Setter__`
@@ -134,11 +151,14 @@ const installedGuards = new WeakSet<GuardableHook>();
  * Safe to call any number of times: a hook that already carries the guard is left as it is.
  */
 export function HardenNunjucksRuntime(): void {
-    const { parser, runtime, Environment } = NUNJUCKS;
+    const { parser, compiler, runtime, Environment } = NUNJUCKS;
     installGuard(parser, 'parse', guardParse);
+    installGuard(compiler.Compiler.prototype, 'compilePair', guardCompilePair);
     installGuard(runtime, 'memberLookup', guardMemberLookup);
     installGuard(runtime, 'contextOrFrameLookup', guardContextOrFrameLookup);
     installGuard(runtime, 'callWrap', guardCallWrap);
+    installGuard(runtime, 'makeMacro', guardMakeMacro);
+    installGuard(runtime, 'makeKeywordArgs', guardMakeKeywordArgs);
     installGuard(Environment.prototype, 'getFilter', guardRegistryLookup('filters'));
     installGuard(Environment.prototype, 'getTest', guardRegistryLookup('tests'));
     installGuard(Environment.prototype, 'getGlobal', guardRegistryLookup('globals'));
@@ -164,6 +184,71 @@ function guardParse(original: NunjucksParser['parse']): NunjucksParser['parse'] 
         const tree = original(src, extensions, opts);
         AssertTemplateTreeIsSafe(tree);
         return tree;
+    };
+}
+
+/**
+ * The code generator writes a dictionary key or keyword argument as an object-literal key. A key that
+ * `IsInheritedMemberName` matches is refused here as well, so one that reaches the code generator without
+ * passing the parse-time check still cannot become an object-literal key.
+ */
+function guardCompilePair(original: CompilePair): CompilePair {
+    return function guardedCompilePair(this: unknown, node: unknown, frame: unknown): void {
+        const key = pairKeyName(node);
+        if (key !== undefined && IsInheritedMemberName(key)) {
+            throw new TemplateSandboxError(`Templates may not use "${key}" as a dictionary key or keyword argument`);
+        }
+        original.call(this, node, frame);
+    };
+}
+
+/**
+ * `runtime.makeMacro`, which builds every macro and call block. The macro it returns fills an argument that a
+ * call leaves out by reading the call's keyword arguments, and stores extra positional values in them. The
+ * guard gives nunjucks a copy of the keyword arguments without a prototype, holding only the keys the call
+ * passed, so neither step can reach an inherited member.
+ */
+function guardMakeMacro(original: NunjucksRuntimeHooks['makeMacro']): NunjucksRuntimeHooks['makeMacro'] {
+    return (argNames, kwargNames, func) => {
+        const macro = original(argNames, kwargNames, func);
+        return function guardedMacro(this: unknown, ...macroArgs: unknown[]): unknown {
+            return macro.apply(this, withOwnKeywordArguments(macroArgs));
+        };
+    };
+}
+
+/**
+ * The call's arguments, with its keyword arguments replaced by a copy of their own keys in an object without a
+ * prototype. A call without keyword arguments gets an empty copy, because nunjucks would read from a new plain object.
+ */
+function withOwnKeywordArguments(macroArgs: unknown[]): unknown[] {
+    const last = macroArgs[macroArgs.length - 1];
+    const hasKeywordArguments = isKeywordArguments(last);
+    const ownKeywordArguments: Record<string, unknown> = Object.create(null);
+    if (hasKeywordArguments) {
+        for (const key of Object.keys(last)) {
+            ownKeywordArguments[key] = readMember(last, key);
+        }
+    }
+    ownKeywordArguments.__keywords = true;
+    return [...(hasKeywordArguments ? macroArgs.slice(0, -1) : macroArgs), ownKeywordArguments];
+}
+
+/** Keyword arguments as nunjucks recognizes them: an object or function that owns `__keywords`. */
+function isKeywordArguments(value: unknown): value is object {
+    return (typeof value === 'object' || typeof value === 'function') && value !== null && Object.hasOwn(value, '__keywords');
+}
+
+/**
+ * `runtime.makeKeywordArgs`, which marks the object literal that a call passes as keyword arguments. It must
+ * inherit from `Object.prototype`, as an object literal does, and must not own a key that `IsInheritedMemberName` matches.
+ */
+function guardMakeKeywordArgs(original: NunjucksRuntimeHooks['makeKeywordArgs']): NunjucksRuntimeHooks['makeKeywordArgs'] {
+    return (obj) => {
+        if (Object.getPrototypeOf(obj) !== Object.prototype || Object.getOwnPropertyNames(obj).some((key) => IsInheritedMemberName(key))) {
+            throw new TemplateSandboxError('Templates may only pass keyword arguments that are a plain object with ordinary names');
+        }
+        return original(obj);
     };
 }
 
@@ -279,6 +364,13 @@ function isNunjucksObject(value: unknown): boolean {
 /** Reads a member the way a template does, including members of primitive strings and numbers. */
 function readMember(obj: unknown, key: string): unknown {
     return (obj as { readonly [member: string]: unknown })[key];
+}
+
+/** The text of a dictionary key or keyword argument (a symbol or a quoted string), or `undefined` for any other key. */
+function pairKeyName(pair: unknown): string | undefined {
+    const key = typeof pair === 'object' && pair !== null ? readMember(pair, 'key') : undefined;
+    const value = typeof key === 'object' && key !== null ? readMember(key, 'value') : undefined;
+    return typeof value === 'string' ? value : undefined;
 }
 
 /** Throws when a lookup or call would give a template a restricted value, the render context or another nunjucks object. */
