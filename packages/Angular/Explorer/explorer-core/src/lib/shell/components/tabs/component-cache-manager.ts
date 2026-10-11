@@ -39,12 +39,12 @@ export interface CachedComponentInfo {
   // so the URL reflects the component's preserved state.
   savedQueryParams?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
-  // Agent context reported by this component via NavigationService.SetAgentContext()
-  // Cached so it can be restored when the component becomes active again.
+  // Not written or read by the cache manager. Tools are replayed on reattach by
+  // NavigationService.NotifyResourceReattached; a component that publishes agent context keeps
+  // it itself and publishes it again on reattach (NavigationService.ResourceReattached$).
   AgentContext?: Record<string, unknown>;
 
-  // Agent client tools registered by this component via NavigationService.SetAgentClientTools()
-  // Cached so they can be re-registered when the component becomes active again.
+  // Not written or read by the cache manager; see AgentContext.
   AgentClientTools?: { Name: string; Description: string; ParameterSchema: Record<string, unknown>; Handler: (params: Record<string, unknown>) => Promise<unknown> }[];
 }
 

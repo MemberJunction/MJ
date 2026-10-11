@@ -19,7 +19,13 @@
           "NormalizedValue": 0,
           "Sequence": 0
         },
-        "primaryKey": { "ID": "C0D6600D-067B-4204-8626-93E54F290706" }
+        "primaryKey": {
+          "ID": "C0D6600D-067B-4204-8626-93E54F290706"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:21.777Z",
+          "checksum": "d0d81f4e11b868644e708dd8c23ace5099985372f9f3b229e4deba7e6b48d175"
+        }
       },
       {
         "fields": {
@@ -29,8 +35,18 @@
           "NormalizedValue": 1,
           "Sequence": 1
         },
-        "primaryKey": { "ID": "C81357B9-4FB9-49DD-B274-ECD0B570630D" }
+        "primaryKey": {
+          "ID": "C81357B9-4FB9-49DD-B274-ECD0B570630D"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:21.788Z",
+          "checksum": "4af008104f585d66cb494d5e5f2905f8ff328203bb0b881bbf95f41fa7e6e114"
+        }
       }
     ]
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:21.743Z",
+    "checksum": "4f00c6788cb42ce7aee3c1b772c382653811f051226bf4b356b991adc299d6bd"
   }
 }

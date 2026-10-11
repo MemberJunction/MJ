@@ -9,7 +9,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          EntityInfo, EntityFieldInfo, EntityFieldTSType, TenantContext,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus,
-         TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
+         TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameCache,
          EntityRecordNameResult, RecordDependency, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
@@ -620,7 +620,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
         if (params.SQL) {
-            return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
+            return this.RunAdhocQuery(params.SQL, params.MaxRows, params.TimeoutSeconds, params.StartRow);
         }
         else if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment, params.DataSource);
@@ -1012,6 +1012,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // vs its live base view ('Live', default). Only forward when set so default is unchanged.
                 if (params.DataSource !== undefined)
                     innerParams.DataSource = params.DataSource;
+                // Binary fields (base64 strings) are left out unless requested. Only forward when set
+                // so the default request is unchanged.
+                if (params.IncludeBinaryFields !== undefined)
+                    innerParams.IncludeBinaryFields = params.IncludeBinaryFields;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -1187,6 +1191,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (param.DataSource !== undefined) {
                         innerParam.DataSource = param.DataSource;
                     }
+                    if (param.IncludeBinaryFields !== undefined) {
+                        innerParam.IncludeBinaryFields = param.IncludeBinaryFields;
+                    }
 
                     if (!dynamicView) {
                         innerParam.ExcludeUserViewRunID = param.ExcludeUserViewRunID || "";
@@ -1312,6 +1319,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // a CacheLocal batch routes through this smart-cache-check path, so omitting it silently
                     // downgrades a DataSource:'Materialized' request to a live read.
                     DataSource: item.params.DataSource,
+                    // Forwarded on this transport too, so a CacheLocal batch that asked for binary
+                    // fields gets them (the slot fingerprint already distinguishes the two widths).
+                    IncludeBinaryFields: item.params.IncludeBinaryFields,
+                    // BypassCache needs the same forwarding as the fields above, and omitting it INVERTED
+                    // the caller's intent rather than merely losing it. A param that bypasses the cache is
+                    // ineligible for a cache status, so none is attached below —
+                    // and the server reads a missing cacheStatus as "the client has nothing cached", which
+                    // is its cue to answer from the SERVER cache without touching the database. So the
+                    // strongest available "read true database state" arrived as its opposite, and
+                    // BaseEngine.Config(true) in a browser could not escape a stale server slot.
+                    BypassCache: item.params.BypassCache,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -1507,9 +1525,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // If so, we need to include all fields since the caller didn't specify the fields they want
             // otherwise, we include the fields that are part of the view definition.
             if (dynamicView) {
-                // include all fields since no fields were passed in
+                // include all fields since no fields were passed in — except binary fields
+                // (large base64 values), which are fetched only when IncludeBinaryFields is set
                 e.Fields.forEach(f => {
-                    if (!f.IsBinaryFieldType) {
+                    if (!f.IsBinaryFieldType || params.IncludeBinaryFields === true) {
                       fieldList.push(SharedFieldMapper.MapFieldName(f.CodeName));
                     }
                 });
@@ -1531,6 +1550,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         if (!c.EntityField) {
                             // this can happen if a field was previously included in a view, but is no longer part of the entity
                             // simply don't include it in the field list
+                        }
+                        else if (c.EntityField.IsBinaryFieldType && params.IncludeBinaryFields !== true) {
+                            // binary columns are fetched only on request — the server leaves them
+                            // out of a saved view's column list too, so selecting one here would
+                            // hydrate a null instead of a not-loaded field
                         }
                         else
                             fieldList.push(SharedFieldMapper.MapFieldName(c.EntityField.CodeName));
@@ -2307,7 +2331,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
-                                    ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType && !deniedReadFields.has(f.Name.trim().toLowerCase()))
+                                    ${entity.Fields.filter((f) => !deniedReadFields.has(f.Name.trim().toLowerCase())) /* binary fields included: a single-record Load hydrates every readable field, binary values arriving as base64 */
                                       .map((f) => {
                                         if (f.EntityFieldInfo.Name.trim().toLowerCase().startsWith('__mj_')) {
                                           // fields that start with __mj_ need to be converted to _mj__ for the GraphQL query
@@ -2762,6 +2786,41 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                                          );
         if (data && data.SetRecordFavoriteStatus !== null)
             return data.SetRecordFavoriteStatus.Success;
+    }
+
+    /**
+     * Record names this connection has seen, for synchronous display code. Safe to keep here
+     * because every request on a connection is answered as the same user.
+     */
+    private readonly _recordNames = new EntityRecordNameCache();
+
+    public override async GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined> {
+        const cached = this._recordNames.Get(entityName, compositeKey);
+        if (!cached && loadIfNeeded) {
+            return this.GetEntityRecordName(entityName, compositeKey);
+        }
+        return cached;
+    }
+
+    public override HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean {
+        return this._recordNames.Has(entityName, compositeKey);
+    }
+
+    public override GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined {
+        return this._recordNames.Get(entityName, compositeKey);
+    }
+
+    public override SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void {
+        this._recordNames.Set(entityName, compositeKey, recordName);
+    }
+
+    public override async GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo, forceRefresh: boolean = false): Promise<string> {
+        return this._recordNames.GetOrFetch(entityName, compositeKey, forceRefresh,
+            () => this.InternalGetEntityRecordName(entityName, compositeKey));
+    }
+
+    public override async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh: boolean = false): Promise<EntityRecordNameResult[]> {
+        return this._recordNames.GetOrFetchMany(info, forceRefresh, (uncached) => this.InternalGetEntityRecordNames(uncached));
     }
 
     protected async InternalGetEntityRecordName(entityName: string, primaryKey: CompositeKey): Promise<string> {

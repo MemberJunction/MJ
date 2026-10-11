@@ -121,6 +121,11 @@ export type RunViewGenericParams = {
    * Propagated to `RunViewParams.DataSource`.
    */
   dataSource?: 'Live' | 'Materialized';
+  /**
+   * When true, binary fields (`varbinary` / `bytea`, as base64 strings) are returned.
+   * Propagated to `RunViewParams.IncludeBinaryFields`.
+   */
+  includeBinaryFields?: boolean;
 };
 
 

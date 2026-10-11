@@ -30,6 +30,12 @@ export class FormStateService {
     private _provider: IMetadataProvider | null = null;
 
     /**
+     * Whether changes are saved to User Settings. False keeps every change in memory, for a copy
+     * of a form that must not change the user's own, such as the placement dialog's preview.
+     */
+    public Persist = true;
+
+    /**
      * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
      */
     public set Provider(value: IMetadataProvider | null) {
@@ -637,7 +643,7 @@ export class FormStateService {
      * layout changes made while editing a record.
      */
     private queueSave(entityName: string): void {
-        if (this.editingEntities.has(entityName)) {
+        if (!this.Persist || this.editingEntities.has(entityName)) {
             return;
         }
 

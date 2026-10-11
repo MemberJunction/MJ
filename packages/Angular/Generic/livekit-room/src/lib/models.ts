@@ -47,3 +47,71 @@ export const LIVEKIT_AGENT_STATE_TOPIC = 'lk-agent-state';
  * snapshots to its `WhiteboardState`; an agent in a realtime session co-authors via the same topic.
  */
 export const LIVEKIT_WHITEBOARD_TOPIC = 'lk-whiteboard';
+
+// ── Turn-taking display models ─────────────────────────────────────────────────────
+// Structurally identical to the shapes the MJ binding reads from the server (see
+// `LiveKitRoomTurnState` in `@memberjunction/graphql-dataprovider`), declared here so this generic package
+// stays MJ-agnostic: any host that can produce these objects can drive the turn-taking panel.
+
+/** The kinds of events a room's turn-taking log records. */
+export type LiveKitTurnEventKind =
+  | 'FloorGranted'
+  | 'FloorReleased'
+  | 'FloorDenied'
+  | 'Yielded'
+  | 'Backchannel'
+  | 'HumanSpeech'
+  | 'HumanPreempted'
+  | 'LoopCapReached';
+
+/** One recorded turn-taking event. */
+export interface LiveKitTurnEventModel {
+  /** Monotonic per-room sequence number. */
+  Seq: number;
+  /** Epoch-ms the event happened. */
+  AtMs: number;
+  /** What happened. */
+  Type: LiveKitTurnEventKind;
+  /** The agent session the event is about, when it concerns one. */
+  AgentSessionId?: string;
+  /** For `Yielded`: the agent the floor was handed to. */
+  ToAgentSessionId?: string;
+  /** A short machine-readable reason (e.g. `HeldByOtherAgent`). */
+  Reason?: string;
+}
+
+/** One agent seated in the room. */
+export interface LiveKitTurnAgentModel {
+  /** The agent's session id (matches the ids elsewhere in the state). */
+  AgentSessionID: string;
+  /** The names the agent answers to; the first is its display name. */
+  Names: string[];
+  /** The configured turn-taking mode. */
+  TurnMode: 'Passive' | 'Active' | 'Hybrid';
+  /** How it decides it was addressed. */
+  Addressing: 'ModelSide' | 'Regex';
+  /** Whether its model is full-duplex. */
+  FullDuplex: boolean;
+}
+
+/** A room's live turn-taking state. */
+export interface LiveKitTurnStateModel {
+  /** The agent session holding the floor, or `null` when it is free. */
+  FloorHolderAgentSessionId: string | null;
+  /** Whether a person is speaking right now. */
+  HumanSpeaking: boolean;
+  /** The agent session the floor is reserved for after a hand-off, or `null`. */
+  PendingHandoffToAgentSessionId: string | null;
+  /** Consecutive agent turns since a person last spoke. */
+  ConsecutiveAgentTurns: number;
+  /** The cap on consecutive agent turns. */
+  MaxConsecutiveAgentTurns: number;
+  /** Whether the loop cap is reached — agents are passive until a person speaks. */
+  LoopCapReached: boolean;
+  /** How many backchannels the room has recorded. */
+  BackchannelCount: number;
+  /** The most recent events, oldest first. */
+  RecentEvents: LiveKitTurnEventModel[];
+  /** The agents seated in the room. */
+  Agents: LiveKitTurnAgentModel[];
+}

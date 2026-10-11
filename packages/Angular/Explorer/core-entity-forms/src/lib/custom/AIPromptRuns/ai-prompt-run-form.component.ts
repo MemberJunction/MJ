@@ -353,6 +353,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     }
     
     ngOnDestroy() {
+        super.ngOnDestroy();
         // Clean up any resources
         // Currently no subscriptions or timers to clean up
         // This is here for future use and to complete the lifecycle

@@ -15,26 +15,16 @@ export interface SamplingLink {
     evaluatorConfig?: unknown;
 }
 
-/** The evaluator a sampled run uses. Missing config is LLM SinglePass, not Deterministic. */
-export function SamplingEvaluatorChoice(config: unknown): { evaluator: 'LLM' | 'Deterministic' | 'AI'; promptMode: 'SinglePass' | 'PerCriterion' } {
-    const parsed = typeof config === 'string' ? parseConfig(config) : config;
-    const record = parsed && typeof parsed === 'object' ? parsed as { EvaluatorType?: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self'; Mode?: string } : {};
-    const promptMode = record.Mode === 'PerCriterion' ? 'PerCriterion' : 'SinglePass';
-    if (record.EvaluatorType === 'Deterministic') return { evaluator: 'Deterministic', promptMode };
-    if (record.EvaluatorType === 'Agent') return { evaluator: 'AI', promptMode };
-    return { evaluator: 'LLM', promptMode };
-}
-
-function parseConfig(value: string): unknown {
-    return JSON.parse(value);
-}
-
 export interface SampledRun {
     RunId: string;
     AgentId: string;
     RubricId: string;
-    Evaluator: 'LLM' | 'Deterministic' | 'AI';
-    PromptMode: 'SinglePass' | 'PerCriterion';
+    /**
+     * The link's EvaluatorConfig, passed to the engine as is. The engine resolves it, so a link
+     * whose config names no runnable evaluator fails that run and not the whole job. Missing
+     * config is LLM SinglePass, not Deterministic.
+     */
+    EvaluatorConfig?: unknown;
 }
 
 /** Active production-sampling links, recent runs, skipping runs that already have this rubric's evaluation. */
@@ -50,13 +40,11 @@ export function SelectSampledRuns(input: {
             if (run.agentId !== link.agentId) continue;
             if (input.evaluated.some(row => row.runId === run.id && row.rubricId === link.rubricId)) continue;
             if (!KeepSample(run.id, link.sampleRate)) continue;
-            const choice = SamplingEvaluatorChoice(link.evaluatorConfig);
             chosen.push({
                 RunId: run.id,
                 AgentId: link.agentId,
                 RubricId: link.rubricId,
-                Evaluator: choice.evaluator,
-                PromptMode: choice.promptMode,
+                EvaluatorConfig: link.evaluatorConfig,
             });
         }
     }
@@ -75,8 +63,8 @@ export interface SamplingEvaluator {
         rubricId: string;
         subjectRecordId: string;
         subjectEntityName: string;
-        evaluator: 'LLM' | 'Deterministic' | 'AI';
-        promptMode: 'SinglePass' | 'PerCriterion';
+        /** AIAgentRubric.EvaluatorConfig. See ResolveRubricEvaluatorSelection. */
+        evaluatorConfig?: unknown;
         agent?: EvaluationAgentRunner;
     }): Promise<void>;
 }
@@ -105,8 +93,7 @@ export class EvaluateSampledAgentRuns {
                     rubricId: item.RubricId,
                     subjectRecordId: item.RunId,
                     subjectEntityName: AGENT_RUN_SUBJECT,
-                    evaluator: item.Evaluator,
-                    promptMode: item.PromptMode,
+                    evaluatorConfig: item.EvaluatorConfig,
                     ...(this.agent ? { agent: this.agent } : {}),
                 });
             } catch (error) {

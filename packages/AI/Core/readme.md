@@ -27,6 +27,7 @@ Every AI capability is represented by an abstract base class. Provider packages 
 | `BaseVideoGenerator` | Avatar video generation (`Video` models) | `CreateAvatarVideo()`, `GetAvatars()` |
 | `BaseReranker` | Document reranking for retrieval | `Rerank()` |
 | `BaseDecision` | Typed decisions (Likelihood, Choice, Score) with a probability per answer | `Decide()` |
+| `BaseSystemOneDecision` | A `BaseDecision` for APIs that speak the System One decisions format (`noul` / `choice` / `score`): it builds the request, maps the answers, renormalises the distributions and records usage. A subclass supplies the endpoint, headers, model name, response unwrapping and a configuration check through protected hooks, and `SendRequest` is its one network call. `ParseSystemOneCredential` reads the key: an AI Credential's JSON gives its `apiKey`, `endpoint` and `accountId`, a raw key is used as given. Extended by `OpenRouterDecision` (Jev, Kev-4B), `CloudflareDecision` (Clef), `SystemOneDecision` (any `/v1/systemone` server) and `PerplexityDecision` (Perplexity's Decider) | `Decide()` |
 | `BaseRealtimeModel` | Live, full-duplex, tool-calling realtime sessions (voice) | `StartSession()`, `CreateClientSession()` |
 
 All inherit from `BaseModel`, which manages API key storage and provides the `@RegisterClass` integration point.
@@ -75,6 +76,7 @@ One additional realtime primitive lives here that is *not* a `BaseModel` capabil
 | Export | Description |
 |--------|-------------|
 | `AIAPIKeys` / `GetAIAPIKey()` | API key resolution from environment variables (`AI_VENDOR_API_KEY__<DRIVER>`) with optional runtime overrides |
+| `AICredentialScope` / `CredentialScopeAllows()` | Which credential sources (`'Runtime'`, `'PlatformCredential'`, `'Environment'`) a run's scope (`'Any'` or `'RuntimeOnly'`) may use — the one place that decision is made |
 | `ErrorAnalyzer` | Classifies provider errors into structured types with severity, retry hints, and failover recommendations |
 | `AIErrorInfo` / `AIErrorType` | Structured error types: rate limit, authentication, context length, content filter, etc. |
 | `serializeMessageContent()` / `deserializeMessageContent()` | Content block serialization for database storage |
@@ -173,6 +175,9 @@ const key = GetAIAPIKey("OpenAILLM");
 const key2 = GetAIAPIKey("AnthropicLLM", [
     { driverClass: "AnthropicLLM", apiKey: "sk-ant-..." },
 ]);
+
+// Restricted to the runtime keys: no environment fallback for a class the list lacks
+const key3 = GetAIAPIKey("OpenAILLM", runKeys, false, 'RuntimeOnly'); // undefined unless runKeys has OpenAILLM
 ```
 
 ## Implementing a New Provider

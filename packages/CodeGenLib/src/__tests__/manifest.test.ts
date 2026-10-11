@@ -1679,3 +1679,78 @@ describe('Manifest Generator - lazy subpath resolution refuses to guess', () => 
         expect(() => ResolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR)).not.toThrow();
     });
 });
+
+// ============================================================================
+// Regression: a checkout that itself lives under a `src` folder
+// ============================================================================
+// `resolveTypesEntryPoint` turns `types: ./src/index.ts` into `dist/index.d.ts`.
+// It used to replace the FIRST `/src/` of the absolute path, which on a checkout
+// under e.g. `~/Documents/src/` rewrote a parent directory instead. The scanner then
+// fell back to the raw `.ts` entry (no `declare`, re-exports not followed) and every
+// class reached through `export * from` was dropped as "not in public exports" —
+// so a manifest regenerated on that machine disagreed with CI.
+
+describe('generateClassRegistrationsManifest - types entry when the checkout lives under a src folder', () => {
+    let virtualFiles: Record<string, string>;
+    let writtenFiles: Array<{ path: string; content: string }>;
+
+    const appDir = path.resolve('/home/dev/src/repo/packages/test-app').replace(/\\/g, '/');
+    const libDir = `${appDir}/node_modules/@test/lib`;
+    const outputPath = `${appDir}/src/generated/manifest.ts`;
+    const norm = (p: string) => p.replace(/\\/g, '/');
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        writtenFiles = [];
+        virtualFiles = {
+            [`${appDir}/package.json`]: JSON.stringify({ name: 'test-app', version: '1.0.0', dependencies: { '@test/lib': '1.0.0' } }),
+            [`${libDir}/package.json`]: JSON.stringify({ name: '@test/lib', version: '1.0.0', main: './dist/index.js', types: './src/index.ts', dependencies: {} }),
+            // Source: one named export, one class only reachable through `export *`
+            [`${libDir}/src/index.ts`]: "export { Helper } from './helper.js';\nexport * from './widgets/index.js';",
+            [`${libDir}/src/helper.ts`]: 'export class Helper {}',
+            [`${libDir}/src/widgets/index.ts`]: "export * from './widget.js';",
+            [`${libDir}/src/widgets/widget.ts`]: [
+                "import { RegisterClass } from '@memberjunction/global';",
+                "@RegisterClass(BaseWidget, 'TestWidget')",
+                'export class TestWidget extends BaseWidget {}',
+            ].join('\n'),
+            // Built declarations mirror the source layout
+            [`${libDir}/dist/index.d.ts`]: "export { Helper } from './helper.js';\nexport * from './widgets/index.js';",
+            [`${libDir}/dist/helper.d.ts`]: 'export declare class Helper {}',
+            [`${libDir}/dist/widgets/index.d.ts`]: "export * from './widget.js';",
+            [`${libDir}/dist/widgets/widget.d.ts`]: 'export declare class TestWidget extends BaseWidget {}',
+        };
+
+        vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = norm(p.toString());
+            if (pathStr in virtualFiles) return true;
+            return Object.keys(virtualFiles).some(f => f.startsWith(pathStr + '/'));
+        });
+        vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = norm(p.toString());
+            if (pathStr in virtualFiles) return virtualFiles[pathStr] as string & Buffer;
+            const err = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
+            (err as NodeJS.ErrnoException).code = 'ENOENT';
+            throw err;
+        });
+        vi.mocked(fs.writeFileSync).mockImplementation((p: fs.PathLike, content: string | NodeJS.ArrayBufferView) => {
+            writtenFiles.push({ path: norm(p.toString()), content: content.toString() });
+        });
+        vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as unknown as string);
+        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => norm(p.toString()) as string & Buffer);
+        vi.mocked(glob).mockImplementation(async (_pattern: string | string[], opts?: Record<string, unknown>) => {
+            const cwd = norm((opts?.cwd as string) || '');
+            return Object.keys(virtualFiles).filter(f => f.startsWith(cwd + '/') && f.endsWith('.ts') && !f.endsWith('.d.ts'));
+        });
+    });
+
+    it('keeps a class that is only re-exported through export * (resolved via the package-relative dist/index.d.ts)', async () => {
+        const result = await GenerateClassRegistrationsManifest({ outputPath, appDir, verbose: false, syncDependencies: false });
+
+        expect(result.success).toBe(true);
+        expect(result.classes.map(c => c.className)).toContain('TestWidget');
+        const manifest = writtenFiles.find(w => w.path === outputPath);
+        expect(manifest).toBeDefined();
+        expect(manifest!.content).toContain('TestWidget');
+    });
+});

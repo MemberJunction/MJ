@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
+import { BaseRealtimeClient, REQUESTED_TRACKS_SESSION_KEY } from '@memberjunction/ai-realtime-client';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
@@ -189,6 +191,12 @@ describe('session lifecycle, driven end to end with fakes', () => {
         }
     }
 
+    /** A driver whose socket is already gone: Disconnect throws, as a dead WebSocket can. */
+    @RegisterClass(BaseRealtimeClient, 'fake-throwing-disconnect')
+    class ThrowingDisconnectClient extends FakeRealtimeClient {
+        public override async Disconnect(): Promise<void> { throw new Error('socket already gone'); }
+    }
+
     /**
      * Records every GraphQL relay the runtime makes, so teardown can be asserted on.
      *
@@ -242,6 +250,38 @@ describe('session lifecycle, driven end to end with fakes', () => {
     /** The mutation names the runtime sent, for readable assertions. */
     function mutationNames(provider: RecordingProvider): string[] {
         return provider.Mutations.map((m) => m.match(/mutation (\w+)/)?.[1] ?? m.trim().slice(0, 20));
+    }
+
+    /**
+     * A provider whose `UploadRealtimeRecording` never answers until the test settles it — what the
+     * runtime sees when the tab closes while tens of MB of WAV are still on the wire. Every other
+     * relay answers at once. `UploadStarted` resolves the moment the upload mutation arrives, so
+     * tests never count microtask ticks.
+     */
+    class StalledUploadProvider extends RecordingProvider {
+        private markStarted: () => void = () => undefined;
+        public readonly UploadStarted = new Promise<void>((resolve) => { this.markStarted = resolve; });
+        private settleUpload: (outcome: { ok: boolean }) => void = () => undefined;
+        private readonly upload = new Promise<{ ok: boolean }>((resolve) => { this.settleUpload = resolve; });
+        public override async ExecuteGQL(query: string): Promise<unknown> {
+            this.Mutations.push(query);
+            if (/mutation UploadRealtimeRecording\(/.test(query)) {
+                this.markStarted();
+                const { ok } = await this.upload; // never settles unless the test calls Finish/Fail
+                if (!ok) { throw new Error('network gone'); }
+                return { UploadRealtimeRecording: { Success: true, FileID: 'file-1' } };
+            }
+            return {};
+        }
+        public FinishUpload(): void { this.settleUpload({ ok: true }); }
+        public FailUpload(): void { this.settleUpload({ ok: false }); }
+    }
+
+    function buildStalled(host: IRealtimeMediaHost = new FakeMediaHost()) {
+        const runtime = new RealtimeSessionRuntime(host);
+        const provider = new StalledUploadProvider();
+        runtime.Provider = provider as unknown as IMetadataProvider;
+        return { runtime, provider };
     }
 
     it('goes live through real driver resolution, then closes the server session once', async () => {
@@ -333,22 +373,250 @@ describe('session lifecycle, driven end to end with fakes', () => {
         expect(runtime.LastStartError).toBeNull();
         await runtime.EndRealtimeSession();
     });
+
+    describe('SendVideoFrame', () => {
+        /** A realtime client whose control channel opens on connect and that takes video frames, answering with `Accepts`. */
+        @RegisterClass(BaseRealtimeClient, 'fake-video-provider')
+        class FakeVideoClient extends FakeRealtimeClient {
+            public static Accepts = true;
+            public static Frames: Array<{ Base64: string; MimeType?: string }> = [];
+            public override async Connect(): Promise<void> {
+                this.emitStateChange('listening');
+            }
+            public override SendVideoFrame(base64Image: string, mimeType?: string): boolean {
+                FakeVideoClient.Frames.push({ Base64: base64Image, MimeType: mimeType });
+                return FakeVideoClient.Accepts;
+            }
+        }
+
+        it('returns false when no session is live', () => {
+            const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+            expect(runtime.SendVideoFrame('AAAA', 'image/jpeg')).toBe(false);
+        });
+
+        it('returns false when the client cannot take video frames', async () => {
+            const { runtime } = build(new FakeMediaHost());
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+            expect(runtime.SendVideoFrame('AAAA', 'image/jpeg')).toBe(false);
+            await runtime.EndRealtimeSession();
+        });
+
+        it("returns the live client's answer, and sends the frame", async () => {
+            FakeVideoClient.Frames = [];
+            const { runtime } = build(new FakeMediaHost());
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-video-provider'));
+
+            FakeVideoClient.Accepts = true;
+            expect(runtime.SendVideoFrame('AAAA', 'image/jpeg')).toBe(true);
+            FakeVideoClient.Accepts = false;
+            expect(runtime.SendVideoFrame('BBBB', 'image/png')).toBe(false);
+
+            expect(FakeVideoClient.Frames).toEqual([{ Base64: 'AAAA', MimeType: 'image/jpeg' }, { Base64: 'BBBB', MimeType: 'image/png' }]);
+            await runtime.EndRealtimeSession();
+        });
+    });
+
+    describe('a page that dies during the end-of-call upload (#5195)', () => {
+        it('closes the server session before the consolidated upload starts', async () => {
+            const { runtime, provider } = buildStalled();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+
+            void runtime.EndRealtimeSession();
+            await provider.UploadStarted;
+
+            const names = mutationNames(provider);
+            expect(names).toContain('CloseAgentSession');
+            expect(names.indexOf('CloseAgentSession')).toBeLessThan(names.indexOf('UploadRealtimeRecording'));
+        });
+
+        it('still closes the session when the driver fails to disconnect', async () => {
+            expect(ThrowingDisconnectClient).toBeDefined();
+            const { runtime, provider } = build(new FakeMediaHost());
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-throwing-disconnect'), { recordingConsent: true });
+
+            await runtime.EndRealtimeSession();
+
+            expect(mutationNames(provider)).toContain('CloseAgentSession');
+            expect(mutationNames(provider)).toContain('UploadRealtimeRecording');
+            expect(runtime.IsActive).toBe(false);
+            expect(runtime.CurrentAgentSessionId).toBeNull();
+        });
+    });
+
+    describe('SavingRecording$ (#5195)', () => {
+        it('reports saving before the first teardown await', async () => {
+            const { runtime } = buildStalled();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            void runtime.EndRealtimeSession();
+            // Synchronous: no await between End and the arm.
+            expect(runtime.IsSavingRecording).toBe(true);
+        });
+
+        it('stays saving while the upload is in flight and clears once it lands', async () => {
+            const { runtime, provider } = buildStalled();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            const ending = runtime.EndRealtimeSession();
+            await provider.UploadStarted;
+            expect(runtime.IsSavingRecording).toBe(true);
+            provider.FinishUpload();
+            await ending;
+            expect(runtime.IsSavingRecording).toBe(false);
+        });
+
+        it('disarms after a failed upload', async () => {
+            const { runtime, provider } = buildStalled();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            const ending = runtime.EndRealtimeSession();
+            await provider.UploadStarted;
+            provider.FailUpload();
+            await ending; // upload failures never reject teardown
+            expect(runtime.IsSavingRecording).toBe(false);
+        });
+
+        it('never reports saving for an unrecorded session', async () => {
+            const { runtime } = build(new FakeMediaHost());
+            const seen: boolean[] = [];
+            runtime.SavingRecording$.subscribe((s) => seen.push(s));
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider')); // no consent
+            await runtime.EndRealtimeSession();
+            expect(seen).toEqual([false]);
+        });
+
+        it('coalesced teardowns arm and clear once', async () => {
+            const { runtime } = build(new FakeMediaHost());
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            const seen: boolean[] = [];
+            runtime.SavingRecording$.subscribe((s) => seen.push(s));
+            await Promise.all([runtime.EndRealtimeSession(), runtime.EndRealtimeSession()]);
+            expect(seen).toEqual([false, true, false]);
+        });
+    });
+
+    describe('recording mixes the agent stream (#5153)', () => {
+        const agentStream = { getAudioTracks: () => [{}], getTracks: () => [] } as unknown as MediaStream;
+
+        /** A PCM-playback driver: publishes its playout output during Connect, as Gemini/ElevenLabs/xAI do. */
+        @RegisterClass(BaseRealtimeClient, 'fake-pcm-provider')
+        class FakePcmClient extends FakeRealtimeClient {
+            public override async Connect(): Promise<void> {
+                this.publishRemoteMediaStream(agentStream);
+            }
+        }
+
+        /** A WebRTC driver: the agent track lands after Connect resolves, as OpenAI's does. */
+        @RegisterClass(BaseRealtimeClient, 'fake-webrtc-provider')
+        class FakeWebRtcClient extends FakeRealtimeClient {
+            public static Last: FakeWebRtcClient | null = null;
+            public override async Connect(): Promise<void> {
+                FakeWebRtcClient.Last = this;
+            }
+            public LandTrack(stream: MediaStream): void {
+                this.publishRemoteMediaStream(stream);
+            }
+        }
+
+        it('hands a stream published at Connect to the recorder at Start', async () => {
+            expect(FakePcmClient).toBeDefined();
+            const host = new FakeMediaHost();
+            const { runtime } = build(host);
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-pcm-provider'), { recordingConsent: true });
+
+            expect(host.recorder?.Start).toHaveBeenCalledTimes(1);
+            expect(host.recorder?.Start.mock.calls[0][1]).toBe(agentStream);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('attaches a stream that lands after Connect to the recorder already running', async () => {
+            const host = new FakeMediaHost();
+            const { runtime } = build(host);
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-webrtc-provider'), { recordingConsent: true });
+            expect(host.recorder?.Start.mock.calls[0][1]).toBeNull();
+
+            FakeWebRtcClient.Last?.LandTrack(agentStream);
+
+            expect(host.recorder?.AttachRemoteStream).toHaveBeenCalledWith(agentStream);
+            await runtime.EndRealtimeSession();
+        });
+    });
+});
+
+describe('surface client tools run through the channel context', () => {
+    // Bracket access reaches the private method with its real return type, no cast needed.
+    const executeAppClientTool = (runtime: RealtimeSessionRuntime, name: string) => runtime['executeAppClientTool'](name, {});
+
+    /** A runtime with one registered surface tool whose handler returns `result`. */
+    function runtimeWithTool(result: unknown): RealtimeSessionRuntime {
+        const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+        runtime.RegisterAppClientTools([{ Name: 'AddPanel', Handler: async () => result }]);
+        return runtime;
+    }
+
+    it("reports a handler result with Success: false as a failure, with the handler's message and result", async () => {
+        const failed = { Success: false, ErrorMessage: 'The open dashboard changed.', Data: { panelId: 'A' } };
+
+        await expect(executeAppClientTool(runtimeWithTool(failed), 'AddPanel')).resolves.toEqual({
+            Success: false,
+            ErrorMessage: 'The open dashboard changed.',
+            Result: failed,
+        });
+    });
+
+    it('says "Tool failed" for a failed handler result without a message', async () => {
+        const failed = { Success: false, ErrorMessage: '  ' };
+
+        await expect(executeAppClientTool(runtimeWithTool(failed), 'AddPanel')).resolves.toEqual({ Success: false, ErrorMessage: 'Tool failed', Result: failed });
+    });
+
+    it('passes a succeeded handler result through unchanged', async () => {
+        const succeeded = { Success: true, Data: { panelId: 'panel-2' } };
+
+        await expect(executeAppClientTool(runtimeWithTool(succeeded), 'AddPanel')).resolves.toEqual({ Success: true, Result: succeeded });
+        await expect(executeAppClientTool(runtimeWithTool('navigated'), 'AddPanel')).resolves.toEqual({ Success: true, Result: 'navigated' });
+    });
 });
 
 describe('channel registry on a connect-only provider (#4887)', () => {
     // Bracket access reaches the private method with its real return type, no cast needed.
     const fetchChannelDefinitions = (runtime: RealtimeSessionRuntime) => runtime['fetchChannelDefinitions']();
 
-    it('returns no channels without touching AIEngineBase when the provider has no entity metadata', async () => {
+    // A connect-only provider has no entity metadata, so AIEngineBase cannot load — but the embed
+    // still needs its channels: without them Whiteboard/Media tools never reach the mint and the
+    // agent loses them (seen live on Caliber's widget). The registry is read over GraphQL instead.
+    const registryRow = (Name: string, IsActive: boolean) => ({
+        Data: JSON.stringify({ ID: `id-${Name}`, Name, ClientPluginClass: `${Name}Channel`, IsActive }),
+    });
+
+    it('reads the ACTIVE registry rows over GraphQL, without touching AIEngineBase, when the provider has no entity metadata', async () => {
         const spy = vi.spyOn(AIEngineBase, 'GetProviderInstance');
+        const ExecuteGQL = vi.fn().mockResolvedValue({
+            RunDynamicView: { Success: true, Results: [registryRow('Whiteboard', true), registryRow('Retired', false)] },
+        });
         try {
             const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
-            runtime.Provider = { Entities: [] } as never; // only Entities is read
+            runtime.Provider = { Entities: [], ExecuteGQL } as never; // Entities + ExecuteGQL are all it reads
 
-            await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([]);
+            await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([
+                { ID: 'id-Whiteboard', Name: 'Whiteboard', ClientPluginClass: 'WhiteboardChannel' },
+            ]);
+            expect(ExecuteGQL).toHaveBeenCalledTimes(1);
+            expect(ExecuteGQL.mock.calls[0][1]).toMatchObject({ input: { EntityName: 'MJ: AI Agent Channels' } });
             expect(spy).not.toHaveBeenCalled();
         } finally {
             spy.mockRestore();
+        }
+    });
+
+    it('degrades to no channels, with a warning, when the GraphQL registry read fails', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const ExecuteGQL = vi.fn().mockResolvedValue({ RunDynamicView: { Success: false, ErrorMessage: 'denied', Results: [] } });
+        try {
+            const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+            runtime.Provider = { Entities: [], ExecuteGQL } as never;
+
+            await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([]);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('Channel registry unavailable'), expect.stringContaining('denied'));
+        } finally {
+            warn.mockRestore();
         }
     });
 
@@ -367,5 +635,29 @@ describe('channel registry on a connect-only provider (#4887)', () => {
             spy.mockRestore();
             warn.mockRestore();
         }
+    });
+});
+
+describe('BuildClientConfig: the requested-tracks key has one home', () => {
+    // The drivers read the hint (Gemini) and strip it before the wire (OpenAI-protocol) through
+    // REQUESTED_TRACKS_SESSION_KEY; the writer must use the same constant, or a rename on either
+    // side silently breaks track negotiation and re-leaks the hint into OpenAI's session.update.
+    const session = (SessionConfigJson: string): StartRealtimeClientSessionResult =>
+        ({ AgentSessionId: 's', ConversationId: null, Provider: 'gemini', Model: 'm', EphemeralToken: 't', ExpiresAt: 'x', SessionConfigJson, ModelName: null }) as StartRealtimeClientSessionResult;
+
+    it('writes channel-sourced tracks under REQUESTED_TRACKS_SESSION_KEY, keeping the mint-supplied ones', () => {
+        const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+        const video = { Direction: 'Inbound', Modality: 'Video' } as const;
+        runtime['_activeChannels$'].next([{ GetSourcedTracks: () => [video] } as never]);
+        const minted = { Direction: 'Outbound', Modality: 'Video' };
+        const config = runtime.BuildClientConfig(session(JSON.stringify({ [REQUESTED_TRACKS_SESSION_KEY]: [minted] })));
+        const tracks = config.SessionConfig?.[REQUESTED_TRACKS_SESSION_KEY] as Array<{ Direction: string; Modality: string }>;
+        expect(tracks).toEqual(expect.arrayContaining([expect.objectContaining(video), expect.objectContaining(minted)]));
+    });
+
+    it('never spells the key as a string literal in the runtime source', () => {
+        const source = readFileSync(fileURLToPath(new URL('../session/RealtimeSessionRuntime.ts', import.meta.url)), 'utf8');
+        expect(source.length).toBeGreaterThan(0);
+        expect(source).not.toMatch(/['"`]requestedTracks['"`]/);
     });
 });

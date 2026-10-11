@@ -590,6 +590,7 @@ const result = await rv.RunView<{ID: string; Name: string; Status: string}>({
 - **`entity_object`**: Creates full BaseEntity subclass instances with getters/setters, validation, dirty tracking
 - **`simple`**: Returns plain JavaScript objects with just the data - much faster for read-only operations
 - **`Fields` parameter**: Reduces data transfer by excluding large columns (JSON blobs, text fields)
+- **Binary fields** (`varbinary`/`bytea`, base64 strings above the DB) are omitted from `RunView` unless `IncludeBinaryFields: true` or one is named in `Fields`; `Load()` always includes them. See [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md).
 
 #### Anti-Patterns
 ```typescript

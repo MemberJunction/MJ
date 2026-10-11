@@ -1,0 +1,135 @@
+import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { BaseAction } from "@memberjunction/actions";
+import { Metadata, LogError, RunView } from "@memberjunction/core";
+import { EscapeSQLString, RegisterClass } from "@memberjunction/global";
+import { FormScopeAllowedOnEntity, ParseClaimedFieldNames, type MJEntityFormContributionEntity } from "@memberjunction/core-entities";
+import { AddOutput, ContributionScopeFilter, Failure, GetStringParam, MetadataContributionsOn } from "./_shared";
+
+/** One contribution row, flattened for an agent or an apply flow to reason about. */
+export interface FormContributionSummary {
+    ContributionID: string;
+    ComponentID: string;
+    ComponentName: string | null;
+    ComponentVersion: string | null;
+    Name: string;
+    Scope: string;
+    Status: string;
+    Precedence: number;
+    Slot: string;
+    ContributionKey: string | null;
+    RelatedEntity: string | null;
+    RelatedJoinField: string | null;
+    ReplacesSectionKey: string | null;
+    /** The blocks it stands in for, when it replaces several. */
+    ReplacesSectionKeys: string[];
+    ReplacesFieldNames: string[];
+    /** The section it draws inside, replacing nothing. */
+    InSectionKey: string | null;
+    /** Where inside its section it draws. */
+    SectionPosition: 'start' | 'end' | null;
+    Inclusion: string | null;
+    Presentation: string;
+    Title: string | null;
+}
+
+/**
+ * Read-only: every `MJ: Entity Form Contributions` row that applies to (entity, caller),
+ * in every status, so an apply flow or agent can decide Create vs Modify and see what
+ * already exists. Companion of `Get Active Form For Entity`. On an identity or permission
+ * entity only the caller's own rows apply ({@link FormScopeAllowedOnEntity}), as on the form.
+ *
+ * Sorted Active first, then Pending, then Inactive; within a status, highest `Precedence`
+ * then highest `SortKey` — the order the renderer resolves them in.
+ *
+ * With metadata contributions switched off ({@link MetadataContributionsOn}) it lists none and
+ * reports `MetadataContributionsEnabled: false`.
+ */
+@RegisterClass(BaseAction, "__GetFormContributionsForEntity")
+export class GetFormContributionsForEntityAction extends BaseAction {
+
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        try {
+            const entityName = GetStringParam(params, "EntityName");
+            if (!entityName) return Failure("MISSING_PARAMETER", "Parameter 'EntityName' is required.");
+            const provider = params.Provider ?? Metadata.Provider;
+            if (!provider) return Failure("NO_PROVIDER", "No metadata provider available.");
+            const user = params.ContextUser;
+            if (!user) return Failure("NO_USER", "Action requires a ContextUser.");
+            const entity = provider.EntityByName(entityName);
+            if (!entity) return Failure("ENTITY_NOT_FOUND", `Entity '${entityName}' is not registered.`);
+
+            if (!(await MetadataContributionsOn(provider, user))) {
+                const off = { EntityName: entity.Name, MetadataContributionsEnabled: false, Contributions: [] };
+                AddOutput(params, "Result", off);
+                return { Success: true, ResultCode: "SUCCESS", Message: JSON.stringify(off) };
+            }
+
+            const rv = RunView.FromMetadataProvider(provider);
+            const rows = await rv.RunView<MJEntityFormContributionEntity>({
+                EntityName: "MJ: Entity Form Contributions",
+                ExtraFilter: ContributionScopeFilter(entity.ID, user),
+                OrderBy: "Precedence DESC, SortKey DESC",
+                ResultType: 'entity_object',
+            }, user);
+            if (!rows.Success) return Failure("QUERY_FAILED", rows.ErrorMessage ?? 'Contribution lookup failed.');
+
+            const applicable = (rows.Results ?? []).filter(r => FormScopeAllowedOnEntity(entity.Name, r.Scope));
+            const labels = await this.loadComponentLabels(rv, applicable, user);
+            if ('error' in labels) return Failure("QUERY_FAILED", `Component lookup failed: ${labels.error}`);
+            const components = labels.labels;
+
+            const statusRank = (s: string): number => (s === 'Active' ? 0 : s === 'Pending' ? 1 : 2);
+            const summaries: FormContributionSummary[] = applicable
+                .slice()
+                .sort((a, b) => statusRank(a.Status) - statusRank(b.Status) || (b.Precedence ?? 0) - (a.Precedence ?? 0))
+                .map(r => {
+                    const component = components.get(r.ComponentID.toLowerCase());
+                    return {
+                        ContributionID: r.ID, ComponentID: r.ComponentID,
+                        ComponentName: component?.Name ?? null,
+                        ComponentVersion: component?.Version ?? null,
+                        Name: r.Name, Scope: r.Scope, Status: r.Status, Precedence: r.Precedence ?? 0, Slot: r.Slot,
+                        ContributionKey: r.ContributionKey, RelatedEntity: r.RelatedEntity,
+                        RelatedJoinField: r.RelatedJoinField, ReplacesSectionKey: r.ReplacesSectionKey,
+                        ReplacesSectionKeys: ParseClaimedFieldNames(r.ReplacesSectionKeys),
+                        ReplacesFieldNames: ParseClaimedFieldNames(r.ReplacesFieldNames),
+                        InSectionKey: r.InSectionKey ?? null, SectionPosition: r.SectionPosition ?? null,
+                        Inclusion: r.Inclusion, Presentation: r.Presentation, Title: r.Title,
+                    };
+                });
+
+            const payload = { EntityName: entity.Name, MetadataContributionsEnabled: true, Contributions: summaries };
+            AddOutput(params, "Result", payload);
+            return { Success: true, ResultCode: "SUCCESS", Message: JSON.stringify(payload) };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            LogError(`GetFormContributionsForEntityAction: ${message}`);
+            return Failure("UNEXPECTED_ERROR", message);
+        }
+    }
+
+    /** Component name + version for each distinct ComponentID, in one query, or the query's error. */
+    private async loadComponentLabels(
+        rv: RunView,
+        rows: readonly MJEntityFormContributionEntity[],
+        user: NonNullable<RunActionParams['ContextUser']>,
+    ): Promise<{ labels: Map<string, { Name: string; Version: string }> } | { error: string }> {
+        const components = new Map<string, { Name: string; Version: string }>();
+        const componentIDs = [...new Set(rows.map(r => r.ComponentID))];
+        if (componentIDs.length === 0) return { labels: components };
+        const comps = await rv.RunView<{ ID: string; Name: string; Version: string }>({
+            EntityName: "MJ: Components",
+            ExtraFilter: `ID IN (${componentIDs.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
+            Fields: ['ID', 'Name', 'Version'], ResultType: 'simple',
+        }, user);
+        if (!comps.Success) return { error: comps.ErrorMessage || 'unknown error' };
+        for (const c of comps.Results ?? []) {
+            components.set(c.ID.toLowerCase(), { Name: c.Name, Version: c.Version });
+        }
+        return { labels: components };
+    }
+}
+
+export function LoadGetFormContributionsForEntityAction(): void {
+    if (false as boolean) { const _: unknown = GetFormContributionsForEntityAction; }
+}

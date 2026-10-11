@@ -70,7 +70,7 @@ export class ClusteringEngine {
             return this.buildEmptyResult(config, Date.now() - startTime);
         }
 
-        const vectorResult = this.cluster(vectors, config);
+        const vectorResult = await this.cluster(vectors, config);
         const projected = this.project(vectors, config);
         const result = this.buildResult(vectors, vectorResult, projected, config, startTime);
 
@@ -146,16 +146,20 @@ export class ClusteringEngine {
     // Pipeline steps
     // ================================================================
 
-    /** Run KMeans or DBSCAN over the supplied vectors. */
-    private cluster(vectors: ClusterInputVector[], config: ClusterConfig): VectorClusterResult {
+    /**
+     * Run KMeans or DBSCAN over the supplied vectors. Async so a server host can
+     * run it on a worker thread: clustering (and its O(n²) silhouette score) is
+     * the heaviest CPU work a request can trigger here.
+     */
+    private cluster(vectors: ClusterInputVector[], config: ClusterConfig): Promise<VectorClusterResult> {
         const svc = this.loadService(vectors);
         const metric = ToVectorMetric(config.DistanceMetric);
 
         if (config.Algorithm === 'dbscan') {
-            return svc.DBSCANCluster(config.Epsilon, config.MinPoints, metric);
+            return svc.DBSCANClusterAsync(config.Epsilon, config.MinPoints, metric);
         }
         const k = Math.min(Math.max(1, config.K), vectors.length);
-        return svc.KMeansCluster(k, 100, metric);
+        return svc.KMeansClusterAsync(k, 100, metric);
     }
 
     /** Project the vectors to 2D/3D coordinates. */
