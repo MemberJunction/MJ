@@ -44,6 +44,7 @@ import { UICommandHandlerService } from '../../services/ui-command-handler.servi
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
+import { BuildConversationTasksFilter, OwnTasksFilter } from '../../services/conversation-tasks-filter';
 import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
@@ -1012,29 +1013,22 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   /**
-   * Builds the SQL filter for tasks in conversations the user has access to
+   * Sets the tasks filter to the user's own tasks at once, then widens it to the tasks in the
+   * user's conversations when their IDs are read (see {@link BuildConversationTasksFilter}).
    */
   private buildTasksFilter(): void {
-    // Filter tasks by conversations the user owns or is a participant in, or tasks owned
-    // by the user
-    const md = this.ProviderToUse;
-    const cd = md.EntityByName('MJ: Conversation Details');
-    const c = md.EntityByName('MJ: Conversations');
-    if (!cd || !c) {
-      console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
-      this.TasksFilter = `ParentID IS NULL AND UserID = '${this.CurrentUser.ID}'`; // Fallback to user-owned tasks only
-      return;
-    }
+    this.TasksFilter = OwnTasksFilter(this.CurrentUser);
+    void this.widenTasksFilter();
+  }
 
-    this.TasksFilter = `ParentID IS NULL AND (UserID = '${this.CurrentUser.ID}' OR ConversationDetailID IN (
-      SELECT ID FROM [${cd.SchemaName}].[${cd.BaseView}] 
-      WHERE 
-      UserID ='${this.CurrentUser.ID}' OR 
-      ConversationID IN (
-        SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE UserID='${this.CurrentUser.ID}'
-      )
-    ))`;
-    console.log('📝 Conversations domain tasks filter built:', this.TasksFilter);
+  /** Widens the tasks filter to the tasks in the user's conversations. */
+  private async widenTasksFilter(): Promise<void> {
+    try {
+      this.TasksFilter = await BuildConversationTasksFilter(this.ProviderToUse, this.CurrentUser);
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Failed to build the conversation tasks filter:', error);
+    }
   }
 
   ngDoCheck() {

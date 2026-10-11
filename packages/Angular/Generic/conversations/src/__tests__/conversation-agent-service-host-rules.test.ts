@@ -18,19 +18,26 @@ const FLOOR = new Date('2026-09-01T12:00:00.000Z');
 
 type Fn = ReturnType<typeof vi.fn>;
 
+/** The parts of a RunView request these tests read. */
+interface ViewRequest {
+    EntityName?: string;
+    ExtraFilter?: string;
+}
+
 interface ServiceHarness {
     service: ConversationAgentService;
     runFromDetail: Fn;
-    runViewParams: Array<{ ExtraFilter?: string }>;
+    runViewParams: ViewRequest[];
 }
 
-function buildService(): ServiceHarness {
+/** A service whose RunView records each request and answers with the rows given for its entity. */
+function buildService(rows: Record<string, object[]> = {}): ServiceHarness {
     const runFromDetail = vi.fn(async () => ({ Success: true, Result: { success: true } }));
-    const runViewParams: Array<{ ExtraFilter?: string }> = [];
+    const runViewParams: ViewRequest[] = [];
     vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-        RunView: vi.fn(async (params: { ExtraFilter?: string }) => {
+        RunView: vi.fn(async (params: ViewRequest) => {
             runViewParams.push(params);
-            return { Success: true, Results: [] };
+            return { Success: true, Results: rows[params.EntityName ?? ''] ?? [] };
         }),
     } as unknown as RunView);
 
@@ -119,17 +126,32 @@ describe('ConversationAgentService — host rules on the wire', () => {
             const h = buildService();
             await h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID, FLOOR);
 
-            const filter = h.runViewParams[0].ExtraFilter ?? '';
-            expect(filter).toContain(`AND __mj_CreatedAt >= '2026-09-01T12:00:00.000Z'`);
-            // The floor narrows the replies (the inner detail query), not the artifact versions.
-            expect(filter.indexOf('__mj_CreatedAt')).toBeGreaterThan(filter.indexOf('[vwConversationDetails]'));
+            // The floor narrows the replies, which are read first, not the artifact versions.
+            expect(h.runViewParams[0].EntityName).toBe('MJ: Conversation Details');
+            expect(h.runViewParams[0].ExtraFilter).toContain(`AND __mj_CreatedAt >= '2026-09-01T12:00:00.000Z'`);
         });
 
-        it('without one, the query is unchanged', async () => {
+        it('without one, the replies are not narrowed by time', async () => {
             const h = buildService();
             await h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID);
 
             expect(h.runViewParams[0].ExtraFilter).not.toContain('__mj_CreatedAt');
+        });
+
+        it('reads the versions by the IDs of the replies, with no subquery over conversation messages', async () => {
+            const h = buildService({ 'MJ: Conversation Details': [{ ID: 'reply-1' }, { ID: 'reply-2' }] });
+            await h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID);
+
+            expect(h.runViewParams.map(p => p.EntityName)).toEqual(['MJ: Conversation Details', 'MJ: Artifact Versions']);
+            expect(h.runViewParams[1].ExtraFilter).toContain(`ConversationDetailID IN ('reply-1','reply-2')`);
+            expect(h.runViewParams.map(p => p.ExtraFilter ?? '').join(' ')).not.toContain('vwConversationDetails');
+        });
+
+        it('reads no versions when the agent has no reply in the conversation', async () => {
+            const h = buildService();
+
+            await expect(h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID)).resolves.toBeNull();
+            expect(h.runViewParams.map(p => p.EntityName)).toEqual(['MJ: Conversation Details']);
         });
     });
 });

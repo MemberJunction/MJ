@@ -17,7 +17,7 @@ import { RunAgentFromConversationDetailParams } from '@memberjunction/ai-agent-c
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
 import { MentionParserService } from './mention-parser.service';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 
 import { ConversationsRuntimeBootstrap } from './conversations-runtime-bootstrap.service';
 import {
@@ -679,7 +679,7 @@ ${compactHistory}${artifactContext}
    * plausible, and wrong: the same failure class as {@link FindLatestAgentOutputVersion},
    * closed the same way.
    *
-   * Two reads, not the four the old shape would have needed — see
+   * Three reads: the agent's replies, their Output versions, and the artifacts' names. See
    * {@link AgentArtifactSummary} for why dropping `runId` removes the join back to agent runs.
    *
    * @param historyFrom The chat's history floor, when set (see {@link FindAgentArtifacts}).
@@ -691,10 +691,14 @@ ${compactHistory}${artifactContext}
   ): Promise<AgentArtifactSummary[]> {
     type VersionRow = Pick<MJArtifactVersionEntity, 'ID' | 'ArtifactID' | 'VersionNumber' | 'Name'>;
 
+    const versionFilter = await this.agentOutputVersionFilter(conversationId, agentId, historyFrom);
+    if (!versionFilter) {
+      return [];
+    }
     const rv = RunView.FromMetadataProvider(this.Provider);
     const versionResult = await rv.RunView<VersionRow>({
       EntityName: 'MJ: Artifact Versions',
-      ExtraFilter: this.agentOutputVersionFilter(conversationId, agentId, historyFrom),
+      ExtraFilter: versionFilter,
       OrderBy: '__mj_CreatedAt DESC',
       MaxRows: MAX_AGENT_ARTIFACT_VERSIONS,
       Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name'],
@@ -747,7 +751,7 @@ ${compactHistory}${artifactContext}
    * again" exchanges where payload continuity matters most. A null payload is a LEGAL agent
    * input, so the failure is silent: the agent regenerates from scratch instead of modifying.
    *
-   * One round trip. The subquery walks details -> Output junctions, and versions carry
+   * Two reads: the agent's replies, then their newest Output version. Versions carry
    * `__mj_CreatedAt`, so "newest" is expressible without joining back for `Sequence`.
    *
    * @param historyFrom The chat's history floor. When set, only artifacts on replies written at
@@ -759,32 +763,58 @@ ${compactHistory}${artifactContext}
     agentId: string,
     historyFrom?: Date | null
   ): Promise<AgentPayloadSource | null> {
-    return this.runPayloadSourceQuery(
-      this.agentOutputVersionFilter(conversationId, agentId, historyFrom), '__mj_CreatedAt DESC'
-    );
+    const versionFilter = await this.agentOutputVersionFilter(conversationId, agentId, historyFrom);
+    return versionFilter ? this.runPayloadSourceQuery(versionFilter, '__mj_CreatedAt DESC') : null;
   }
 
   /**
    * `ArtifactVersion.ID IN (...)` for every OUTPUT artifact an agent produced in one
-   * conversation. Shared by {@link FindLatestAgentOutputVersion} and
-   * {@link findAllAgentArtifacts} so the two can never disagree about what "this agent's
-   * artifacts" means.
+   * conversation, or null when the agent has no reply there. Shared by
+   * {@link FindLatestAgentOutputVersion} and {@link findAllAgentArtifacts} so the two can never
+   * disagree about what "this agent's artifacts" means.
+   *
+   * The replies are read with their own RunView ({@link agentReplyIds}), so the row-level
+   * security on conversation messages applies. A subquery over their view would skip it, and the
+   * server refuses one for a user whose read of messages is row-filtered.
+   */
+  private async agentOutputVersionFilter(conversationId: string, agentId: string, historyFrom?: Date | null): Promise<string | null> {
+    const replyIds = await this.agentReplyIds(conversationId, agentId, historyFrom);
+    if (replyIds.length === 0) {
+      return null;
+    }
+    const inReplies = replyIds.map(id => `'${EscapeSQLString(id)}'`).join(',');
+    return `ID IN (
+        SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts]
+        WHERE Direction='Output' AND ConversationDetailID IN (${inReplies})
+      )`;
+  }
+
+  /**
+   * IDs of the agent's replies in one conversation, written at or after the history floor when
+   * one is set.
    *
    * Filters on the DETAIL's `Status <> 'Error'` rather than the agent run's
    * `Status = 'Completed'` (which is what the array scan this replaced used). Doing it on the
    * run would mean joining back to `MJ: AI Agent Runs` purely to restate a condition the
    * detail already carries.
    */
-  private agentOutputVersionFilter(conversationId: string, agentId: string, historyFrom?: Date | null): string {
+  private async agentReplyIds(conversationId: string, agentId: string, historyFrom?: Date | null): Promise<string[]> {
     const floor = historyFrom ? ` AND ${ConversationEngine.HistoryFromFilter(historyFrom)}` : '';
-    return `ID IN (
-        SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts]
-        WHERE Direction='Output' AND ConversationDetailID IN (
-          SELECT ID FROM [__mj].[vwConversationDetails]
-          WHERE ConversationID='${conversationId}' AND AgentID='${agentId}'
-            AND Role='AI' AND Status <> 'Error'${floor}
-        )
-      )`;
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const result = await rv.RunView<Pick<MJConversationDetailEntity, 'ID'>>({
+      EntityName: 'MJ: Conversation Details',
+      ExtraFilter: `ConversationID='${EscapeSQLString(conversationId)}' AND AgentID='${EscapeSQLString(agentId)}'` +
+        ` AND Role='AI' AND Status <> 'Error'${floor}`,
+      Fields: ['ID'],
+      ResultType: 'simple',
+      IgnoreMaxRows: true
+    }, this.Provider.CurrentUser ?? undefined);
+
+    if (!result.Success) {
+      console.error('Failed to load agent replies:', result.ErrorMessage);
+      return [];
+    }
+    return (result.Results || []).map(reply => reply.ID);
   }
 
   /**
