@@ -139,8 +139,12 @@ generates, so `AssertTemplateTreeIsSafe()` checks every parsed template first:
   dots.
 - A test name (`is defined`, `is none`) and an extension's registered name and method must not
   contain a quote, a backslash or a line break.
-- A filter, test, macro argument or call-block argument name must not be a name that every object
-  inherits, such as `toString` or `hasOwnProperty`.
+- A name that every object inherits (a member of `Object.prototype`, such as `toString`,
+  `hasOwnProperty` or `constructor`), or `prototype`, must not be used as a dictionary key, a keyword
+  argument, a macro or call-block argument, a `set`, loop, import, macro or block name, a literal member
+  name (`obj.name` or `obj["name"]`), or a filter or test name. A bare name such as `{{ constructor }}`
+  is still allowed; it reads only an own key of the render data (see below). The code generator also
+  refuses such a name as a dictionary key or keyword argument.
 - The name of a called member, such as `obj["key"]()`, must not contain a backslash or a line break.
 - A loop variable must not reuse an identifier that the generated loop code uses, such as `context`,
   `frame`, `runtime`, `env`, `cb`, `next`, `tasks` or `undefined`. A unit test compiles every kind of
@@ -155,13 +159,15 @@ generates, so `AssertTemplateTreeIsSafe()` checks every parsed template first:
   member that every object inherits. This also covers the test names that the `select` and `reject`
   filters receive while the template renders. Such a name must be text, a number or another simple
   value such as `none`; an object, a function or a symbol is refused.
-- The member names `constructor`, `prototype` and the `__define/lookup Getter/Setter__` accessors read
-  as empty unless they hold an object's own data that is not a function. `__proto__` always reads as
-  empty.
+- When a member name is computed while the template renders (`obj[key]`), the member names
+  `constructor`, `prototype` and the `__define/lookup Getter/Setter__` accessors read as empty unless
+  they hold an object's own data that is not a function. `__proto__` always reads as empty.
 - A bare name such as `{{ user }}` resolves only to a template variable, an own key of the render data,
   or an own environment global. It never resolves to a property that the data or the globals inherit,
-  such as `valueOf`. A macro argument is a template variable that nunjucks fills directly, and an
-  argument that a call leaves out reads as empty, because argument names cannot be inherited names.
+  such as `valueOf`.
+- A macro or call-block argument that a call leaves out is filled only from a keyword argument of the
+  same name that the call itself passes, never from a member that the keyword arguments inherit, so
+  otherwise it reads as empty. Keyword arguments must be a plain object literal with ordinary names.
 - A template must not read a member of the render context, an environment, a loader, a frame, a
   template or a nunjucks module. A lookup or call that would return one of them fails.
 - A template must not reach `Function` (or its async and generator variants), `eval`, `Object`,

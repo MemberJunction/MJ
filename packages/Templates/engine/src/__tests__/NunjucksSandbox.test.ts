@@ -22,8 +22,23 @@ interface RuntimeHooks {
     memberLookup: (obj: object, val: string) => object;
     contextOrFrameLookup: (context: object, frame: object, name: string) => object;
     callWrap: (obj: object, name: string, context: object, args: object[]) => object;
+    makeMacro: (argNames: string[], kwargNames: string[], func: (...args: never[]) => unknown) => (...args: unknown[]) => unknown;
+    makeKeywordArgs: (obj: object) => object;
 }
 const runtime = (nunjucks as unknown as { runtime: RuntimeHooks }).runtime;
+
+/** The nunjucks code generator. `compile` turns a parse tree into JavaScript source. */
+interface CompilerClass {
+    new (templateName?: string, throwOnUndefined?: boolean): { compile(node: object): void };
+    prototype: { compilePair: unknown };
+}
+
+/** A nunjucks parse-tree node class: the position, then the node's fields in order. */
+type NodeClass = new (lineno: number, colno: number, ...fields: unknown[]) => object;
+const { compiler, nodes } = nunjucks as unknown as {
+    compiler: { Compiler: CompilerClass };
+    nodes: Record<'Root' | 'Output' | 'Dict' | 'Pair' | 'Literal' | 'Symbol' | 'FunCall' | 'NodeList' | 'KeywordArgs', NodeClass>;
+};
 
 /** The nunjucks parser module and lexer, as the compiler uses them. */
 interface ParserModule {
@@ -46,6 +61,9 @@ const { Frame } = (nunjucks as unknown as { runtime: { Frame: new () => object }
 
 /** Names every plain object inherits, such as `hasOwnProperty`. */
 const INHERITED_NAMES = Object.getOwnPropertyNames(Object.prototype);
+
+/** Names a dictionary key or keyword argument may not have: the inherited names, and `prototype`. */
+const REFUSED_KEY_NAMES = [...INHERITED_NAMES, 'prototype'];
 
 function renderPlain(templateText: string, data: object = {}): string {
     return new nunjucks.Environment(null, { autoescape: false }).renderString(templateText, data);
@@ -95,12 +113,16 @@ describe('HardenNunjucksRuntime', () => {
         const installedParse = parser.parse;
         const environmentPrototype = (nunjucks as unknown as { Environment: { prototype: EnvironmentRegistries } }).Environment.prototype;
         const { getFilter, getTest, getGlobal } = environmentPrototype;
+        const { compilePair } = compiler.Compiler.prototype;
 
         HardenNunjucksRuntime();
 
         expect(runtime.memberLookup).toBe(installed.memberLookup);
         expect(runtime.contextOrFrameLookup).toBe(installed.contextOrFrameLookup);
         expect(runtime.callWrap).toBe(installed.callWrap);
+        expect(runtime.makeMacro).toBe(installed.makeMacro);
+        expect(runtime.makeKeywordArgs).toBe(installed.makeKeywordArgs);
+        expect(compiler.Compiler.prototype.compilePair).toBe(compilePair);
         expect(parser.parse).toBe(installedParse);
         expect(environmentPrototype.getFilter).toBe(getFilter);
         expect(environmentPrototype.getTest).toBe(getTest);
@@ -125,29 +147,32 @@ describe('HardenNunjucksRuntime', () => {
         try {
             HardenNunjucksRuntime();
             expect(runtime.memberLookup).not.toBe(guarded);
-            expect(renderPlain(`[{{ range.constructor }}]`)).toBe('[]');
+            expect(renderPlain('[{{ range[key] }}]', { key: 'constructor' })).toBe('[]');
         } finally {
             runtime.memberLookup = guarded;
         }
     });
 });
 
+/** Member names computed while rendering, which only the runtime guard sees. Literal names in this list do not compile. */
 describe('member access', () => {
     it.each(['constructor', 'prototype', '__defineGetter__', '__lookupGetter__'])(
         'reads own data stored under the restricted name %s',
         (name) => {
-            expect(renderPlain(`[{{ data["${name}"] }}]`, { data: JSON.parse(`{"${name}": "own value"}`) })).toBe('[own value]');
+            expect(renderPlain('[{{ data[key] }}]', { data: JSON.parse(`{"${name}": "own value"}`), key: name })).toBe('[own value]');
         },
     );
 
     it('never reads __proto__, even when the data defines it', () => {
-        expect(renderPlain('[{{ data["__proto__"] }}]', { data: JSON.parse('{"__proto__": "own value"}') })).toBe('[]');
+        expect(renderPlain('[{{ data[key] }}]', { data: JSON.parse('{"__proto__": "own value"}'), key: '__proto__' })).toBe('[]');
     });
 
     it('does not read a restricted name that holds a function, that the value inherits, or that a function owns', () => {
-        expect(renderPlain('[{{ data.constructor }}][{{ plain.constructor }}][{{ range.prototype }}]', {
+        expect(renderPlain('[{{ data[c] }}][{{ plain[c] }}][{{ range[p] }}]', {
             data: { constructor: () => 'own function' },
             plain: {},
+            c: 'constructor',
+            p: 'prototype',
         })).toBe('[][][]');
     });
 
@@ -244,6 +269,93 @@ describe('environment registries', () => {
         expect(typeof env.getGlobal('range')).toBe('function');
         expect(env.getFilter('toString')).toBe(ownFilter);
         expect(() => env.getFilter('notRegistered')).toThrow('filter not found: notRegistered');
+    });
+});
+
+describe('macro arguments and keyword arguments', () => {
+    /** Keyword arguments, marked as nunjucks marks them, that inherit `inherited` instead of owning it. */
+    function keywordArgumentsInheriting(inherited: object): object {
+        return Object.assign(Object.create(inherited), { __keywords: true });
+    }
+
+    /** A parse tree that prints one expression. It is built by hand, so the parse-time check never sees it. */
+    function treePrinting(expression: object): object {
+        return new nodes.Root(0, 0, [new nodes.Output(0, 0, [expression])]);
+    }
+
+    function pairNamed(key: string): object {
+        return new nodes.Pair(0, 0, new nodes.Literal(0, 0, key), new nodes.Literal(0, 0, 1));
+    }
+
+    function callWithKeywordArgument(key: string): object {
+        return new nodes.FunCall(0, 0, new nodes.Symbol(0, 0, 'm'), new nodes.NodeList(0, 0, [new nodes.KeywordArgs(0, 0, [pairNamed(key)])]));
+    }
+
+    it('fill an omitted macro argument only from keyword arguments the call owns', () => {
+        const echo = runtime.makeMacro(['a'], [], (a: unknown) => a);
+
+        expect(echo(keywordArgumentsInheriting({ a: 'inherited-marker' }))).toBeUndefined();
+        expect(runtime.makeMacro(['valueOf'], [], (value: unknown) => value)()).toBeUndefined();
+        expect(echo({ a: 'own', __keywords: true })).toBe('own');
+    });
+
+    it('keep an omitted macro argument empty when render data passes keyword arguments that inherit a value', () => {
+        expect(renderPlain('{% macro m(a) %}[{{ a }}]{% endmacro %}{{ m(kw) }}', { kw: keywordArgumentsInheriting({ a: 'MJ-MARKER' }) }))
+            .toBe('[]');
+    });
+
+    it('store extra positional values as own keyword arguments, whatever keyword-argument names the macro defines', () => {
+        const keywordArgumentsOf = runtime.makeMacro([], ['__proto__'], (kwargs: object) => kwargs);
+        const kwargs = keywordArgumentsOf({ marker: 'inherited-marker' }) as Record<string, unknown>;
+
+        expect(kwargs.marker).toBeUndefined();
+        expect(Object.hasOwn(kwargs, '__proto__')).toBe(true);
+    });
+
+    it('refuse keyword arguments that inherit from anything but Object.prototype, or that use an inherited name', () => {
+        expect(thrownBy(() => runtime.makeKeywordArgs(Object.create({ a: 1 })))).toBeInstanceOf(TemplateSandboxError);
+        expect(REFUSED_KEY_NAMES.filter((name) => !(thrownBy(() => runtime.makeKeywordArgs({ [name]: 'x' })) instanceof TemplateSandboxError)))
+            .toEqual([]);
+    });
+
+    it('mark ordinary keyword arguments as nunjucks does', () => {
+        const kwargs = { a: 1 };
+        expect(runtime.makeKeywordArgs(kwargs)).toBe(kwargs);
+        expect(kwargs).toEqual({ a: 1, __keywords: true });
+    });
+
+    it('refuse, while generating code, a dictionary key or keyword argument that every object inherits', () => {
+        const unrefused = REFUSED_KEY_NAMES
+            .flatMap((name) => [
+                [`dictionary key ${name}`, treePrinting(new nodes.Dict(0, 0, [pairNamed(name)]))],
+                [`keyword argument ${name}`, treePrinting(callWithKeywordArgument(name))],
+            ] as const)
+            .filter(([, tree]) => !(thrownBy(() => new compiler.Compiler(undefined, false).compile(tree)) instanceof TemplateSandboxError))
+            .map(([label]) => label);
+        expect(unrefused).toEqual([]);
+        expect(() => new compiler.Compiler(undefined, false).compile(treePrinting(new nodes.Dict(0, 0, [pairNamed('a')])))).not.toThrow();
+        expect(() => new compiler.Compiler(undefined, false).compile(treePrinting(callWithKeywordArgument('a')))).not.toThrow();
+    });
+
+    it('render ordinary dictionaries, keyword arguments, macros and call blocks as nunjucks does', () => {
+        const data = { items: [{ n: 'p' }, { n: 'q' }], kw: { a: 'own', __keywords: true } };
+
+        expect(renderPlain('{% set d = {a: 1, "b c": 2, nested: {x: "y"} } %}{{ d.a }}|{{ d["b c"] }}|{{ d.nested.x }}|{{ d | length }}|{{ d | dump }}'))
+            .toBe('1|2|y|3|{"a":1,"b c":2,"nested":{"x":"y"}}');
+        expect(renderPlain(
+            '{% macro m(a, b, c=3) %}[{{ a }}][{{ b }}][{{ c }}]{% endmacro %}' +
+            '{{ m(1) }}|{{ m(1, 2) }}|{{ m(a=5) }}|{{ m(1, c=9) }}|{{ m(b=2, a=1) }}|{{ m() }}|{{ m(1, 2, 3, 4) }}',
+        )).toBe('[1][][3]|[1][2][3]|[5][][3]|[1][][9]|[1][2][3]|[][][3]|[1][2][3]');
+        expect(renderPlain(
+            '{% macro w() %}<{{ caller(1, q=2) }}>{% endmacro %}{% call(p, q=0) w() %}{{ p }}{{ q }}{% endcall %}|' +
+            '{% macro v() %}<{{ caller() }}>{% endmacro %}{% call v() %}x{% endcall %}',
+        )).toBe('<12>|<x>');
+        expect(renderPlain(
+            '{{ [3, 1, 2] | sort(reverse=true) | join }}|{{ [3, 1, 2] | sort(true) | join }}|{{ "7" | int(default=0) }}|' +
+            '{{ "x" | int(default=5) }}|{{ items | join(",", "n") }}',
+            data,
+        )).toBe('321|321|7|5|p,q');
+        expect(renderPlain('{% macro m(a) %}[{{ a }}]{% endmacro %}{{ m({a: 1}) }}|{{ m(kw) }}', data)).toBe('[[object Object]]|[own]');
     });
 });
 
