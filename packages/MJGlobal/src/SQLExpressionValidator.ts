@@ -106,6 +106,12 @@ export const BLOCKED_SYSTEM_OBJECT_PATTERNS: RegExp[] = [
 ];
 
 /**
+ * The keywords a full query may open with. Without the `u` flag, the `i` flag matches ASCII letters
+ * only, so no other letter is case-mapped to S, E, L, C, T, W, I or H.
+ */
+const FULL_QUERY_OPENING_KEYWORD = /^(?:SELECT|WITH)$/i;
+
+/**
  * Replaces each SQL string literal with one space so that a keyword denylist can be applied to the
  * rest without tripping over keywords inside quoted data (e.g. `Comments LIKE '%--%'`). Quoted
  * identifiers and comments are left as written.
@@ -463,16 +469,14 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
     }
 
     // For full_query context, the first token (after comments) must be the unquoted keyword SELECT or
-    // WITH. SQL Server runs a batch that opens with any other name, quoted or not, as a procedure call.
-    if (options.context === 'full_query') {
-      const leadingWord = scan.LeadingWord?.toUpperCase();
-      if (leadingWord !== 'SELECT' && leadingWord !== 'WITH') {
-        return {
-          valid: false,
-          error: 'Ad-hoc query must start with SELECT or WITH',
-          suggestion: 'Only SELECT statements and CTEs (WITH ... AS) are allowed'
-        };
-      }
+    // WITH, compared in ASCII. SQL Server runs a batch that opens with any other name, quoted or not,
+    // as a procedure call.
+    if (options.context === 'full_query' && !FULL_QUERY_OPENING_KEYWORD.test(scan.LeadingWord ?? '')) {
+      return {
+        valid: false,
+        error: 'Ad-hoc query must start with SELECT or WITH',
+        suggestion: 'Only SELECT statements and CTEs (WITH ... AS) are allowed'
+      };
     }
 
     return { valid: true };

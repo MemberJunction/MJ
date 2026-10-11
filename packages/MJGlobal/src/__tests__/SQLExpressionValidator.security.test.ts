@@ -443,6 +443,25 @@ describe('SQLExpressionValidator - Security', () => {
       expect(validator.ValidateFullQuery(sql, 'sqlserver').valid).toBe(true);
       expect(validator.ValidateFullQuery(sql, 'postgresql').valid).toBe(true);
     });
+
+    const CASE_MAPPED_OPENERS: Array<[string, string]> = [
+      ['SELECT', '\u017Felect 1'],
+      ['WITH', 'w\u0131th x AS (SELECT 1 AS One) SELECT One FROM x'],
+    ];
+    for (const [label, dialect] of DIALECT_SETTINGS) {
+      it.each(CASE_MAPPED_OPENERS)(`refuses an opening word that matches %s only under Unicode case mapping (${label})`, (_keyword, sql) => {
+        const r = validator.ValidateFullQuery(sql, dialect);
+        expect(r.valid).toBe(false);
+        expect(r.error).toBe('Ad-hoc query must start with SELECT or WITH');
+      });
+    }
+
+    it('accepts SELECT and WITH in any ASCII case', () => {
+      for (const sql of ['SeLeCt 1 AS One', 'wItH cte AS (SELECT 1 AS One) SELECT One FROM cte']) {
+        expect(validator.ValidateFullQuery(sql, 'sqlserver').valid).toBe(true);
+        expect(validator.ValidateFullQuery(sql, 'postgresql').valid).toBe(true);
+      }
+    });
   });
 
   /**
