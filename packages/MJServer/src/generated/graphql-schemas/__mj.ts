@@ -81679,49 +81679,49 @@ export class MJSchemaInfoResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Scoped Notification Configs
 //****************************************************************************
-@ObjectType({ description: `A notification config at one scope: the level between a notification type\'s defaults and a recipient\'s preference where an application, a role, a user or the notice\'s origin can allow or deny a channel. Scoped by the same primary record + secondary dimensions as Scoped Prompt Configs. Resolution: most specific in-scope row wins per channel; at equal specificity Deny beats Allow; a locked Deny caps every level below it, the recipient\'s preference included.` })
+@ObjectType({ description: "A notification config at one scope: the level between a notification type's defaults and a recipient's preference where an application, a role, a user or the notice's origin can allow or deny a channel. Scoped by the same primary record + secondary dimensions as Scoped Prompt Configs. Resolution: most specific in-scope row wins per channel; at equal specificity Deny beats Allow; a locked Deny caps every level below it, the recipient's preference included." })
 export class MJScopedNotificationConfig_ {
     @Field() 
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true, description: `The notification type this config is for.`}) 
+    @Field({nullable: true, description: "The notification type this config is for."}) 
     @MaxLength(36)
     NotificationTypeID?: string;
         
-    @Field({nullable: true, description: `Why the row exists, for the administrator who finds it.`}) 
+    @Field({nullable: true, description: "Why the row exists, for the administrator who finds it."}) 
     Description?: string;
         
-    @Field({nullable: true, description: `The entity of the primary scope record (Applications, Roles, Users, Companies, ...). NULL with PrimaryScopeRecordID NULL = a global row.`}) 
+    @Field({nullable: true, description: "The entity of the primary scope record (Applications, Roles, Users, Companies, ...). NULL with PrimaryScopeRecordID NULL = a global row."}) 
     @MaxLength(36)
     PrimaryScopeEntityID?: string;
         
-    @Field({nullable: true, description: `The record ID within the primary scope entity this config is scoped to. NULL = global. In scope when it is the caller's primary scope record, the recipient, or a role the recipient holds.`}) 
+    @Field({nullable: true, description: "The record ID within the primary scope entity this config is scoped to. NULL = global. In scope when it is the caller's primary scope record, the recipient, or a role the recipient holds."}) 
     @MaxLength(100)
     PrimaryScopeRecordID?: string;
         
-    @Field({nullable: true, description: `JSON object of additional scope dimensions, e.g. {"origin":"System"}. Every dimension named must match the notice's scope for the row to apply. origin is Person, System (the Owner-type user) or Automation.`}) 
+    @Field({nullable: true, description: "JSON object of additional scope dimensions, e.g. {\"origin\":\"System\"}. Every dimension named must match the notice's scope for the row to apply. origin is Person, System (the Owner-type user) or Automation."}) 
     SecondaryScopes?: string;
         
-    @Field({nullable: true, description: `The in-app channel: Allow, Deny, or NULL to leave it to the next row.`}) 
+    @Field({nullable: true, description: "The in-app channel: Allow, Deny, or NULL to leave it to the next row."}) 
     @MaxLength(20)
     InApp?: string;
         
-    @Field({nullable: true, description: `The email channel: Allow, Deny, or NULL to leave it to the next row.`}) 
+    @Field({nullable: true, description: "The email channel: Allow, Deny, or NULL to leave it to the next row."}) 
     @MaxLength(20)
     Email?: string;
         
-    @Field({nullable: true, description: `The SMS channel: Allow, Deny, or NULL to leave it to the next row.`}) 
+    @Field({nullable: true, description: "The SMS channel: Allow, Deny, or NULL to leave it to the next row."}) 
     @MaxLength(20)
     SMS?: string;
         
-    @Field(() => Boolean, {nullable: true, description: `When set, a Deny on this row is absorbing: no less specific row and no recipient preference may turn the channel on. The way a notification type's AllowUserPreference caps the recipient today.`}) 
+    @Field(() => Boolean, {nullable: true, description: "When set, a Deny on this row is absorbing: no less specific row and no recipient preference may turn the channel on. The way a notification type's AllowUserPreference caps the recipient today."}) 
     IsLocked?: boolean;
         
-    @Field(() => Int, {nullable: true, description: `Tie-break for resolution. Higher wins when two rows tie on scope specificity and neither denies. Default 0.`}) 
+    @Field(() => Int, {nullable: true, description: "Tie-break for resolution. Higher wins when two rows tie on scope specificity and neither denies. Default 0."}) 
     Priority?: number;
         
-    @Field({nullable: true, description: `Lifecycle: Active (live), Provisional (staged; eligible), Archived (excluded from resolution).`}) 
+    @Field({nullable: true, description: "Lifecycle: Active (live), Provisional (staged; eligible), Archived (excluded from resolution)."}) 
     @MaxLength(20)
     Status?: string;
         
