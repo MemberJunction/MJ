@@ -25,6 +25,7 @@ vi.mock('../github/github-client.js', () => ({
     DownloadMigrations: vi.fn(),
     GetLatestVersion: vi.fn(),
     ValidateGitHubTag: vi.fn(),
+    ListGitHubTagNames: vi.fn(),
     // The orchestrator derives an optional in-repo subpath from the Source URL;
     // keep the real parser so single-app URLs resolve to `undefined` (root manifest).
     ParseGitHubUrl: (repoUrl: string) => {
@@ -53,6 +54,7 @@ vi.mock('../install/package-manager.js', () => ({
     RemoveAppPackages: vi.fn(),
     RunPackageInstall: vi.fn(),
     BumpPrefixedDependencies: vi.fn(),
+    FindDuplicateMemberJunctionPackages: vi.fn(() => []),
 }));
 vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),
@@ -89,10 +91,10 @@ vi.mock('@memberjunction/core', () => ({
 
 import { InstallApp, UpgradeApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTagNames, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
 import { CheckCanMigrateAppSchema, CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
-import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
+import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies, FindDuplicateMemberJunctionPackages } from '../install/package-manager.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, PruneDynamicPackagesNotInManifest } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
@@ -175,6 +177,7 @@ describe('InstallApp dependency orchestration', () => {
         // Dependency version resolution (B26): deps declare '^1.0.0'; offer a satisfying tag,
         // and let the pinned-version tag validation pass so the dep install proceeds.
         vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubTagNames).mockResolvedValue(['1.0.0']);
         vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(ValidateGitHubTag).mockResolvedValue({ Exists: true });
 
@@ -554,6 +557,97 @@ describe('InstallApp — post-install summary (B16: schema-only shell needs Code
         // No schema → no entity DDL → CodeGen guidance would be misleading. Restart/rebuild only.
         expect(result.Summary?.toLowerCase()).not.toContain('codegen');
         expect(result.Summary?.toLowerCase()).toContain('restart');
+    });
+});
+
+describe('InstallApp — warns when the package install leaves two copies of an MJ package', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(false);
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true, Added: [], Removed: [], InstallRoot: '/tmp/test-repo' });
+        vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
+        vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => `id-${manifest.name}`);
+        serveManifests({ 'https://github.com/test/cheese': manifestJSON('cheese', {}) });
+    });
+
+    /** The 'Packages' warnings the install raised about duplicate MJ versions. */
+    function duplicateWarnings(onWarn: ReturnType<typeof vi.fn>): string[] {
+        return onWarn.mock.calls
+            .filter(([phase, message]) => phase === 'Packages' && String(message).includes('more than one version'))
+            .map(([, message]) => String(message));
+    }
+
+    it('names each duplicated package, its versions and the host version — the install still succeeds', async () => {
+        vi.mocked(FindDuplicateMemberJunctionPackages).mockReturnValue([
+            { Name: '@memberjunction/core', Versions: ['6.1.5', '6.2.0-edge.3'] },
+            { Name: '@memberjunction/global', Versions: ['6.1.5', '6.2.0-edge.3'] },
+        ]);
+        const OnWarn = vi.fn();
+
+        const result = await InstallApp({ Source: 'https://github.com/test/cheese' }, { ...context, Callbacks: { OnWarn } });
+
+        expect(result.Success).toBe(true);
+        const [warning] = duplicateWarnings(OnWarn);
+        expect(warning).toContain('Installing cheese left 2 @memberjunction package(s) at more than one version');
+        expect(warning).toContain('@memberjunction/core (6.1.5, 6.2.0-edge.3), @memberjunction/global (6.1.5, 6.2.0-edge.3)');
+        expect(warning).toContain('This host runs MJ 5.37.0');
+        expect(warning).toContain('/tmp/test-repo/pnpm-workspace.yaml');
+    });
+
+    it('checks the lockfile where the install actually ran (an mj dev workspace parent)', async () => {
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true, Added: [], Removed: [], InstallRoot: '/tmp/parent', DevWorkspaceParent: '/tmp/parent' });
+        vi.mocked(FindDuplicateMemberJunctionPackages).mockReturnValue([]);
+
+        await InstallApp({ Source: 'https://github.com/test/cheese' }, context);
+
+        expect(FindDuplicateMemberJunctionPackages).toHaveBeenCalledWith('/tmp/parent');
+    });
+
+    it('lists the first eight duplicates and counts the rest', async () => {
+        vi.mocked(FindDuplicateMemberJunctionPackages).mockReturnValue(
+            Array.from({ length: 11 }, (_, i) => ({ Name: `@memberjunction/p${String(i).padStart(2, '0')}`, Versions: ['6.1.5', '6.2.0'] }))
+        );
+        const OnWarn = vi.fn();
+
+        await InstallApp({ Source: 'https://github.com/test/cheese' }, { ...context, Callbacks: { OnWarn } });
+
+        const [warning] = duplicateWarnings(OnWarn);
+        expect(warning).toContain('@memberjunction/p07 (6.1.5, 6.2.0), and 3 more');
+        expect(warning).not.toContain('@memberjunction/p08');
+    });
+
+    it('says nothing when every MJ package resolved to one version', async () => {
+        vi.mocked(FindDuplicateMemberJunctionPackages).mockReturnValue([]);
+        const OnWarn = vi.fn();
+
+        await InstallApp({ Source: 'https://github.com/test/cheese' }, { ...context, Callbacks: { OnWarn } });
+
+        expect(FindDuplicateMemberJunctionPackages).toHaveBeenCalledTimes(1);
+        expect(duplicateWarnings(OnWarn)).toEqual([]);
+    });
+
+    it('reports an unreadable lockfile as a warning instead of failing the install', async () => {
+        vi.mocked(FindDuplicateMemberJunctionPackages).mockImplementation(() => {
+            throw new Error('EACCES: permission denied');
+        });
+        const OnWarn = vi.fn();
+
+        const result = await InstallApp({ Source: 'https://github.com/test/cheese' }, { ...context, Callbacks: { OnWarn } });
+
+        expect(result.Success).toBe(true);
+        expect(OnWarn).toHaveBeenCalledWith('Packages', expect.stringContaining('EACCES: permission denied'));
     });
 });
 

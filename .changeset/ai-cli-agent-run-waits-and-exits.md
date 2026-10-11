@@ -1,0 +1,14 @@
+---
+"@memberjunction/ai-cli": patch
+"@memberjunction/cli": patch
+---
+
+`mj ai agents run` now waits for a Flow agent to finish, reports the run it created, and exits when it is done.
+
+- **Connection settings:** the `mj ai` commands, `mj ai audit agent-run` among them, read the database settings from `.env` and the environment (`DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `DB_TRUST_SERVER_CERTIFICATE`, `DB_INSTANCE_NAME`, `MJ_CORE_SCHEMA`) whenever `mj.config.cjs` does not set them, as MJAPI does. A workspace whose `mj.config.cjs` has its `db*` lines commented out, or that has no `mj.config.cjs`, now connects instead of failing with "Database configuration missing" or "No mj.config.cjs configuration found". The server certificate is trusted only when `DB_TRUST_SERVER_CERTIFICATE` (or `dbTrustServerCertificate`) says so; it used to be trusted always.
+- **Flow agents:** a Flow agent runs every step in the CLI process and prints its final output, as a Loop agent does. Before, the command returned at once with "Started … I'll follow up when it finishes". `--background` keeps that behavior: it hands the workflow to the task-graph dispatcher and returns with the run `Paused`.
+- **Run ID and status:** the output names the agent run and its final status, in text and in `--format json` (`AgentRunID`, `AgentRunStatus`, plus `FinalPayload` when the run produced one and `TimedOut` when it was stopped). Text output ends with the `mj ai audit agent-run <id>` command to inspect the run.
+- **Clean JSON:** progress and framework log lines go to stderr. Under `--format json`, stdout carries only the JSON document, also when the agent cannot be found or started (exit code 2, as in text mode), and `mj ai audit agent-run --verbose` no longer prints its tips after the document.
+- **`--timeout`:** the timeout (default 5 minutes, at least 1000 ms) is enforced; it used to be ignored. When it elapses the run is cancelled and the command fails with a message naming the run, or saying the run may still be going when it did not stop within 5 seconds. An agent that needs longer than 5 minutes now needs a larger `--timeout`.
+- **Exiting:** `mj ai agents run`, `mj ai prompts run` and `mj ai actions run` used to hang after printing their result, because the database connections stayed open. They now close them and exit by themselves, as do `mj ai agents list`, `mj ai prompts list`, `mj ai actions list` and `mj ai audit agent-run`, which used to force an immediate exit that could cut long piped output short. The exit code is 1 when the run, prompt or action failed.
+- **Audit:** `mj ai audit agent-run <id>` and `--errors` list the failed tasks of a workflow the run handed to the task-graph dispatcher, and the run's own error message, and count them as errors. `--list --status success` now finds completed runs (it matched nothing), and `--list --format json` no longer crashes.

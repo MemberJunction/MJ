@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { createMockFileSystem, createMockProcessRunner } from './mocks/adapters.js';
 import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import type { CodeGenContext } from '../phases/CodeGenPhase.js';
@@ -187,30 +188,160 @@ describe('CodeGenPhase', () => {
       await expect(phase.Run(ctx)).rejects.toThrow(InstallerError);
     });
 
-    it('should accept mj_generatedentities linked under apps/MJAPI/node_modules (pnpm layout, #4599 / #4707)', async () => {
-      // pnpm links workspace packages into each dependent and never creates the root entry
-      mockFs.DirectoryExists.mockImplementation(async (p: string) => {
-        if (!p.includes('mj_generatedentities')) return true;
-        return p.split(/[\\/]/).includes('MJAPI');
+    describe('mj_generatedentities is looked up the way MJAPI resolves it (R33)', () => {
+      const ROOT = '/test/install';
+      const MONOREPO_MARKER = path.join(ROOT, 'packages', 'MJCoreEntities');
+      // The lookup walks up from MJAPI to the RESOLVED install root, so its candidates are absolute:
+      // on Windows `path.resolve('/test/install')` gains a drive letter that `path.join` does not.
+      const RESOLVED_ROOT = path.resolve(ROOT);
+      const DIST_LINK = path.join(RESOLVED_ROOT, 'apps', 'MJAPI', 'node_modules', 'mj_generatedentities');
+      const MONOREPO_LINK = path.join(RESOLVED_ROOT, 'packages', 'MJAPI', 'node_modules', 'mj_generatedentities');
+      const ROOT_LINK = path.join(RESOLVED_ROOT, 'node_modules', 'mj_generatedentities');
+
+      /**
+       * DirectoryExists answers only for the given package link (plus the monorepo marker, when the
+       * layout is the monorepo). Every other `mj_generatedentities` path is absent, so a check that
+       * looks anywhere else fails instead of passing by accident.
+       */
+      function layout(link: string | null, monorepo: boolean): void {
+        mockFs.DirectoryExists.mockImplementation(async (p: string) => {
+          if (p === MONOREPO_MARKER) return monorepo;
+          if (p.includes('mj_generatedentities')) return p === link;
+          return true;
+        });
+      }
+
+      /** Every package-manager build issued during the run: `<pm> run build` and `turbo build` calls. */
+      function buildCalls(): string[][] {
+        return mockRunner.Run.mock.calls
+          .map((c: [string, string[]]) => c[1])
+          .filter((args: string[]) => (args[0] === 'run' && args[1] === 'build') || args.includes('turbo') && args.includes('build'));
+      }
+
+      it('passes the first attempt on a pnpm distribution install, where only apps/MJAPI/node_modules holds the link', async () => {
+        // The state pnpm leaves: MJAPI declares mj_generatedentities, so the link lives in its own
+        // node_modules from the moment `pnpm install` ran; the root node_modules never gets one.
+        layout(DIST_LINK, false);
+
+        const result = await phase.Run(makeContext({ PackageManager: 'pnpm' }));
+
+        expect(result.Success).toBe(true);
+        expect(result.RetryUsed).toBe(false);
+        expect(mockRunner.Run.mock.calls.filter((c: [string, string[]]) => c[1].includes('codegen'))).toHaveLength(1);
       });
 
-      const ctx = makeContext();
-      const result = await phase.Run(ctx);
+      it('passes the first attempt on a pnpm monorepo install, where MJAPI is packages/MJAPI', async () => {
+        layout(MONOREPO_LINK, true);
 
-      expect(result.Success).toBe(true);
-      expect(result.ArtifactsVerified).toBe(true);
+        const result = await phase.Run(makeContext({ PackageManager: 'pnpm' }));
+
+        expect(result.Success).toBe(true);
+        expect(result.RetryUsed).toBe(false);
+        expect(mockRunner.Run.mock.calls.filter((c: [string, string[]]) => c[1].includes('codegen'))).toHaveLength(1);
+      });
+
+      it('passes on an npm install, which hoists the link to the root node_modules (both layouts)', async () => {
+        layout(ROOT_LINK, false);
+        expect((await phase.Run(makeContext())).RetryUsed).toBe(false);
+
+        layout(ROOT_LINK, true);
+        expect((await phase.Run(makeContext())).RetryUsed).toBe(false);
+      });
+
+      it('does not accept a link in a sibling package that MJAPI would never resolve', async () => {
+        layout(path.join(RESOLVED_ROOT, 'apps', 'MJExplorer', 'node_modules', 'mj_generatedentities'), false);
+
+        await expect(phase.Run(makeContext({ PackageManager: 'pnpm' }))).rejects.toMatchObject({ Code: 'CODEGEN_FAILED' });
+      });
+
+      it('fails at once, without a rebuild, when MJAPI cannot resolve the package — only an install creates that link', async () => {
+        layout(null, false);
+        const { emitter, emitSpy } = createMockEmitter();
+
+        const error = await phase.Run(makeContext({ PackageManager: 'pnpm', Emitter: emitter })).catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(InstallerError);
+        expect((error as InstallerError).Code).toBe('CODEGEN_FAILED');
+        expect((error as InstallerError).message).toContain(
+          `mj_generatedentities is not resolvable from ${path.join('apps', 'MJAPI')} ` +
+            `(looked in ${path.join('apps', 'MJAPI', 'node_modules')}, ${path.join('apps', 'node_modules')}, node_modules)`
+        );
+        expect((error as InstallerError).SuggestedFix).toContain('pnpm install');
+        expect(mockRunner.Run.mock.calls.filter((c: [string, string[]]) => c[1].includes('codegen'))).toHaveLength(1);
+        expect(buildCalls()).toEqual([]);
+        expect(emittedEvents(emitSpy, 'warn')).toEqual([]);
+      });
+
+      it('names the monorepo MJAPI and its lookup chain in the failure', async () => {
+        layout(null, true);
+
+        await expect(phase.Run(makeContext({ PackageManager: 'pnpm' }))).rejects.toThrow(
+          `not resolvable from ${path.join('packages', 'MJAPI')} ` +
+            `(looked in ${path.join('packages', 'MJAPI', 'node_modules')}, ${path.join('packages', 'node_modules')}, node_modules)`
+        );
+      });
     });
 
-    it('should still accept mj_generatedentities at the repo-root node_modules (npm layout)', async () => {
-      mockFs.DirectoryExists.mockImplementation(async (p: string) => {
-        if (!p.includes('mj_generatedentities')) return true;
-        return !p.split(/[\\/]/).includes('MJAPI');
+    describe('rebuild before the retry', () => {
+      /** First codegen run crashes, the second succeeds; every other command succeeds. */
+      function crashFirstCodegen(): void {
+        let codegenRuns = 0;
+        mockRunner.Run.mockImplementation(async (_cmd: string, args: string[]) => {
+          if (args.includes('codegen') && ++codegenRuns === 1) {
+            return { ExitCode: 1, Stdout: '', Stderr: 'connection reset', TimedOut: false };
+          }
+          return { ExitCode: 0, Stdout: '', Stderr: '', TimedOut: false };
+        });
+      }
+
+      /** Index of the second codegen run in the recorded calls. */
+      function secondCodegenIndex(): number {
+        const calls = mockRunner.Run.mock.calls as Array<[string, string[]]>;
+        return calls.findIndex((c, i) => c[1].includes('codegen') && calls.slice(0, i).some((p) => p[1].includes('codegen')));
+      }
+
+      it('rebuilds only the generated packages in a distribution install — never the whole workspace or Explorer', async () => {
+        mockFs.DirectoryExists.mockImplementation(async (p: string) => !p.endsWith('MJCoreEntities'));
+        crashFirstCodegen();
+
+        const result = await phase.Run(makeContext({ PackageManager: 'pnpm' }));
+
+        expect(result.RetryUsed).toBe(true);
+        const beforeRetry = (mockRunner.Run.mock.calls as Array<[string, string[]]>).slice(1, secondCodegenIndex());
+        expect(beforeRetry).toEqual([
+          ['pnpm', ['exec', 'turbo', 'build', '--force', '--log-order=stream', '--filter=mj_generatedentities', '--filter=mj_generatedactions']],
+        ].map(([cmd, args]) => [cmd, args, expect.anything()]));
+        expect(mockRunner.Run.mock.calls.some((c: [string, string[]]) => c[1][0] === 'run' && c[1][1] === 'build')).toBe(false);
       });
 
-      const ctx = makeContext();
-      const result = await phase.Run(ctx);
+      it('still retries when that narrow rebuild fails — the retry regenerates both packages', async () => {
+        mockFs.DirectoryExists.mockImplementation(async (p: string) => !p.endsWith('MJCoreEntities'));
+        let codegenRuns = 0;
+        mockRunner.Run.mockImplementation(async (_cmd: string, args: string[]) => {
+          if (args.includes('codegen')) {
+            return ++codegenRuns === 1
+              ? { ExitCode: 1, Stdout: '', Stderr: 'boom', TimedOut: false }
+              : { ExitCode: 0, Stdout: '', Stderr: '', TimedOut: false };
+          }
+          return args.includes('turbo')
+            ? { ExitCode: 1, Stdout: 'Failed: mj_generatedentities#build', Stderr: '', TimedOut: false }
+            : { ExitCode: 0, Stdout: '', Stderr: '', TimedOut: false };
+        });
 
-      expect(result.ArtifactsVerified).toBe(true);
+        const result = await phase.Run(makeContext({ PackageManager: 'pnpm' }));
+
+        expect(result.Success).toBe(true);
+        expect(result.RetryUsed).toBe(true);
+      });
+
+      it('keeps the full workspace build in the monorepo, where the CLI running codegen is built from source', async () => {
+        crashFirstCodegen(); // DirectoryExists → true: monorepo layout
+
+        await phase.Run(makeContext({ PackageManager: 'pnpm' }));
+
+        const beforeRetry = (mockRunner.Run.mock.calls as Array<[string, string[]]>).slice(1, secondCodegenIndex());
+        expect(beforeRetry.map((c) => c[1])).toEqual([['run', 'build']]);
+      });
     });
 
     it('should fail when codegen exits 0 but never wrote entity_subclasses.ts (#4477)', async () => {

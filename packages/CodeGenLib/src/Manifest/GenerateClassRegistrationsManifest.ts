@@ -87,8 +87,9 @@ export interface GenerateManifestOptions {
 
     /**
      * When true (the default), compares manifest-imported packages against the
-     * app's `package.json` dependencies and automatically adds any that are
-     * missing. This prevents `MODULE_NOT_FOUND` errors after npm publish, since
+     * app's `package.json` dependencies and peerDependencies, and automatically
+     * adds any that are missing from both to `dependencies`. A package declared
+     * as a peer is left alone: the host provides it. This prevents `MODULE_NOT_FOUND` errors after npm publish, since
      * transitive packages discovered during the dependency walk may not be
      * declared as direct dependencies.
      *
@@ -1176,8 +1177,12 @@ function reconcileDependencies(
     const pkgText = fs.readFileSync(pkgPath, 'utf-8');
     const pkg = JSON.parse(pkgText);
     const currentDeps: Record<string, string> = pkg.dependencies || {};
+    // A peer is declared too: the host installs it. Adding it to `dependencies` at the version on
+    // disk would make every host on a later release install a second copy, and two copies of an
+    // MJ or Open App package split the ClassFactory registry.
+    const declared: Record<string, string> = { ...(pkg.peerDependencies || {}), ...currentDeps };
 
-    const missing = findMissingDependencies(manifestPackages, currentDeps, depTree);
+    const missing = findMissingDependencies(manifestPackages, declared, depTree);
 
     if (Object.keys(missing).length === 0) {
         log('All manifest-imported packages are already declared as dependencies.');

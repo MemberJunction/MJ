@@ -1,34 +1,37 @@
 #!/bin/bash
 # ==============================================================================
-# Citizen Agent Builder - Execution Trace & Diagnostic Tool
-# Inspects recent agent runs, step traces, and action execution errors via the
-# native MemberJunction CLI (mj ai audit agent-run).
+# Citizen Agent Builder - agent run history and traces
+#
+# Usage:
+#   ./scripts/query-run-history.sh                       # recent runs, all agents
+#   ./scripts/query-run-history.sh "<Agent Name>"        # recent runs of one agent
+#   ./scripts/query-run-history.sh <RunID>               # summary of one run
+#   ./scripts/query-run-history.sh <RunID> --errors      # only what failed
+#   ./scripts/query-run-history.sh <RunID> --step 1 --detail full
+#   ./scripts/query-run-history.sh <RunID> --format json
+#
+# A thin wrapper around `mj ai audit agent-run` inside the container.
 # ==============================================================================
-set -e
+set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
-# Ensure MJ container is running
-if ! docker compose ps --status running --format "{{.Service}}" 2>/dev/null | grep -q "mj"; then
-  echo "Error: MemberJunction container ('mj') is not running." >&2
-  echo "Start the workspace services with: docker compose up -d" >&2
+if ! docker compose ps --status running --services 2>/dev/null | grep -qx mj; then
+  echo "The MemberJunction container ('mj') is not running. Start it with: docker compose up -d" >&2
   exit 1
 fi
 
-# If specific arguments or flags are passed:
-# - If first arg starts with '-' (e.g. --list, --format json, --errors), pass through directly
-# - If first arg matches a UUID format, treat as RunID and pass through directly
-# - If first arg is non-empty string, treat as agent name filter: --list --agent "$1"
-# - If no args, list recent runs
+audit() {
+  docker compose exec -T mj mj ai audit agent-run "$@"
+}
+
 if [ $# -eq 0 ]; then
-  docker compose exec -T mj mj ai audit agent-run --list
-elif [[ "$1" == -* ]]; then
-  docker compose exec -T mj mj ai audit agent-run "$@"
-elif [[ "$1" =~ ^[0-9a-fA-F-]{36}$ ]]; then
-  docker compose exec -T mj mj ai audit agent-run "$@"
+  audit --list
+elif [[ "$1" == -* ]] || [[ "$1" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+  audit "$@"
 else
-  AGENT_NAME="$1"
+  agent_name="$1"
   shift
-  docker compose exec -T mj mj ai audit agent-run --list --agent "$AGENT_NAME" "$@"
+  audit --list --agent "$agent_name" "$@"
 fi

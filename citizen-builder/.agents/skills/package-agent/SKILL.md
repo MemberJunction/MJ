@@ -3,67 +3,56 @@ name: package-agent
 description: Validates, packages, and exports an agent into a promotion bundle with an AGENT_MANIFEST.md for admin review.
 ---
 
-# Skill: `package-agent` (Exporting for Promotion)
+# Skill: `package-agent` (exporting for promotion)
 
-Use this skill when the user is satisfied with their agent and wants to share, export, or submit it for promotion to staging or production.
+Use this skill when the user is satisfied with their agent and wants to share it or submit it for
+promotion to staging or production.
 
-## Step 1: Pre-Flight Safety Validation
-Inspect the agent's files and verify against the security rules:
-- [ ] `ModelSelectionMode: "Agent Type"` is set (no pinned provider models).
-- [ ] `ExposeAsAction: false` (or explicitly documented if true).
-- [ ] No hardcoded record IDs or personal names in prompts.
-- [ ] No API keys, credentials, or secrets embedded in metadata.
-- [ ] If Tier 2 Runtime Actions are included, ensure an explicit `allowedEntities` list is specified.
+## Step 1: Pre-flight checks
+- [ ] `ModelSelectionMode: "Agent Type"` (no pinned provider model).
+- [ ] `ExposeAsAction: false`, or the reason it is true is documented.
+- [ ] No hardcoded record IDs, people's names or recipient email addresses in prompts or steps.
+- [ ] No API keys, tokens or secrets anywhere in the metadata.
+- [ ] Every write or send has a confirmation step or the user's recorded approval.
+- [ ] Any schedule ships with `Status: "Pending"`, so installing the package does not start it.
+- [ ] Tier 2 runtime actions have an explicit `allowedEntities` list.
 
-## Step 2: Extract Last Successful Execution Receipt
-Run `./scripts/query-run-history.sh` to grab the ID and metrics of the latest successful run:
+## Step 2: Gather the test evidence
 ```bash
-# List recent runs for the agent
 ./scripts/query-run-history.sh "<Agent Name>"
-
-# Fetch structured JSON audit for the target RunID
 ./scripts/query-run-history.sh <RunID> --format json
 ```
-Record:
-- Timestamp of test run
-- Total tokens consumed
-- Verified actions executed (`actionsUsed`)
-- Sample input and generated output summary
+Record, for the latest successful run of **each** path you tested (CLI, Explorer chat, schedule): when
+it ran, **which user it ran as**, the model that served it, tokens, duration, the actions it used,
+and a sample input with a summary of the output.
 
-## Step 3: Generate `AGENT_MANIFEST.md`
-Create a clean manifest file documenting:
-1. **Agent Metadata**:
-   - Name & Description
-   - Author (User name) & Creation Date
-   - Agent Type (Flow vs Loop)
-2. **Tier Classification**:
-   - **Tier 1 (Declarative)**: Safe for immediate auto-approval.
-   - **Tier 2 (Runtime Action)**: Highlight any custom JavaScript files that require admin review.
-3. **Data Footprint**:
-   - Entities Read (e.g. `Orders`, `Customers`)
-   - Entities Written (e.g. `None` or `Invoices`)
-   - Actions and Tools Bound
-4. **Sample Test Results**:
-   - The verified test inputs and outputs from Step 2.
+## Step 3: Write `AGENT_MANIFEST.md`
+1. **Agent**: name, purpose, author, date, Flow or Loop.
+2. **Tier**: Tier 1 (declarative), or Tier 2 with each runtime action listed for code review.
+3. **Data footprint**: entities read, entities written, actions bound, anything it sends.
+4. **Who can run it**: the roles and permissions its users need, and which identities it was tested as.
+5. **Schedule and delivery**: when it runs, where results go, and whether the schedule ships enabled.
+6. **Test receipts**: from step 2, one per path.
+7. **Known gaps**: anything that does not work yet, and what is needed.
 
-## Step 4: Bundle into Archive
-Create the `dist/` directory and package the agent's files:
+## Step 4: Build the archive
+The package must install as is in another environment, so it keeps the folder layout and includes the
+`.mj-sync.json` files that set the entity and push order:
 ```bash
 mkdir -p dist
 AGENT_SLUG="<agent-slug>"
-PACKAGE_NAME="${AGENT_SLUG}-package.zip"
-
-# Create archive containing the manifest, metadata files, and prompt templates
-zip -r "dist/${PACKAGE_NAME}" \
+zip -r "dist/${AGENT_SLUG}-package.zip" \
   AGENT_MANIFEST.md \
+  metadata/.mj-sync.json \
+  metadata/*/.mj-sync.json \
   metadata/agents/.*"${AGENT_SLUG}"*.json \
   metadata/prompts/.*"${AGENT_SLUG}"*.json \
-  metadata/prompts/templates/"${AGENT_SLUG}"*.md \
-  2>/dev/null || tar -czf "dist/${AGENT_SLUG}-package.tar.gz" AGENT_MANIFEST.md metadata/
+  metadata/prompts/templates/"${AGENT_SLUG}"*.md
 ```
+Add any other folder the agent uses (saved queries, scheduled jobs) the same way, then list the
+archive (`unzip -l`) to check nothing is missing.
 
-## Step 5: Inform the User
-Provide the user with:
-1. The path to the export package (`dist/<package-name>`).
-2. A summary of `AGENT_MANIFEST.md`.
-3. Instructions on sharing the bundle with their organization's platform team or administrator.
+## Step 5: Tell the user
+1. The path to the package.
+2. A short summary of the manifest, including what users need to run it.
+3. That their platform team reviews and deploys it with `docs/PROMOTION_GUIDE.md`.

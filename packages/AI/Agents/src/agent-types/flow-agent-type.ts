@@ -34,7 +34,7 @@ import {
 import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';
 import { CompileFlowAgentToTaskGraph, FormatFlowCompileErrors, FormatFlowValidationErrors } from './flow-graph-executor';
 import { BaseAgentType, type AgentTypeExecutionRouting } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation, ToPromptTemplateValue } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
@@ -501,19 +501,23 @@ export class FlowAgentType extends BaseAgentType {
             prompt.data = {};
         }
         
-        // Inject standard payload
-        prompt.data[BaseAgentType.CURRENT_PAYLOAD_PLACEHOLDER] = payload || {};
+        // Inject standard payload. `ToPromptTemplateValue` lets a step's template read it every way an
+        // author writes it — `{{ _CURRENT_PAYLOAD.field }}`, `{{ _CURRENT_PAYLOAD | dump }}` and
+        // `{{ _CURRENT_PAYLOAD }}` (which printed `[object Object]` for a bare object). The task-graph
+        // dispatcher's prompt runner builds the same value, so a workflow's templates render the same
+        // whichever mode runs them.
+        prompt.data[BaseAgentType.CURRENT_PAYLOAD_PLACEHOLDER] = ToPromptTemplateValue(payload || {});
         
         // Add flow-specific context from our state tracking
         if (agentInfo.agentRunId) {
             const flowState = agentState as FlowExecutionState;
             if (agentState) {
-                prompt.data.flowContext = {
+                prompt.data.flowContext = ToPromptTemplateValue({
                     currentStepId: flowState.currentStepId,
                     completedSteps: Array.from(flowState.completedStepIds),
                     executionPath: flowState.executionPath,
                     stepCount: flowState.completedStepIds.size
-                };
+                });
             }
         }
     }

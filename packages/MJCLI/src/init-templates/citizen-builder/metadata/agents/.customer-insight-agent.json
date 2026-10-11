@@ -8,10 +8,8 @@
       "Status": "Active",
       "ExecutionOrder": 0,
       "ExposeAsAction": false,
-      "IconClass": "mj-icon-user-check",
-      "ArtifactCreationMode": "None",
-      "PayloadDownstreamPaths": "*",
-      "PayloadUpstreamPaths": "*",
+      "IconClass": "fa-solid fa-user-check",
+      "ArtifactCreationMode": "Never",
       "EnableContextCompression": false,
       "ModelSelectionMode": "Agent Type"
     },

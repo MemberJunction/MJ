@@ -221,6 +221,62 @@ export function ResolveInstallRoot(repoRoot: string, packageManager?: PackageMan
   return { Root: repoRoot, PackageManager: packageManager ?? DetectPackageManager(repoRoot) };
 }
 
+/** A package the install resolved at more than one version. */
+export interface DuplicatePackageVersions {
+  /** Package name, e.g. `@memberjunction/core`. */
+  Name: string;
+  /** Every version installed, sorted. */
+  Versions: string[];
+}
+
+/**
+ * One package key of a pnpm lockfile's top-level `packages:` section (lockfile v9 quoted keys, or
+ * v6 keys with a leading `/`). Group 1 is the `@memberjunction/*` name, group 2 the version — which
+ * stops at a `(` peer suffix.
+ */
+const LOCKFILE_MJ_PACKAGE_KEY = /^ {2}['"]?\/?(@memberjunction\/[^@\s'"(/]+)@(\d[0-9A-Za-z.+-]*)/;
+
+/**
+ * The `@memberjunction/*` packages an install root's `pnpm-lock.yaml` resolves at more than one
+ * version.
+ *
+ * Any one of them is a broken host: MJ packages pin each other exactly, so a second version of any
+ * MJ package arrives with its own `@memberjunction/core` and `global`, and two copies of those
+ * split MJ's class-factory registry — entities and resolvers stop registering without an error.
+ * The usual cause is an Open App whose packages declare an MJ range the host's version does not
+ * satisfy (`~6.1.5` on a 6.2 host, or any 6.1 range on a `6.2.0-edge.N` prerelease), with no
+ * `@memberjunction/*` overrides pinning the graph to the host.
+ *
+ * Only the lockfile's `packages:` section is read: those are installed packages. A repo whose MJ
+ * packages are linked from source (an `mj dev workspace`) records them as `link:` importers, so
+ * they never appear here.
+ *
+ * @param installRoot - Directory the install ran in (where `pnpm-lock.yaml` lives).
+ * @returns The duplicated packages, sorted by name; empty when there is no pnpm lockfile.
+ */
+export function FindDuplicateMemberJunctionPackages(installRoot: string): DuplicatePackageVersions[] {
+  const lockfilePath = resolve(installRoot, 'pnpm-lock.yaml');
+  if (!existsSync(lockfilePath)) {
+    return [];
+  }
+  const versions = new Map<string, Set<string>>();
+  let inPackages = false;
+  for (const line of readFileSync(lockfilePath, 'utf-8').split(/\r?\n/)) {
+    if (/^[^\s#]/.test(line)) {
+      inPackages = /^packages:\s*$/.test(line);
+      continue;
+    }
+    const match = inPackages ? LOCKFILE_MJ_PACKAGE_KEY.exec(line) : null;
+    if (match) {
+      versions.set(match[1], (versions.get(match[1]) ?? new Set<string>()).add(match[2]));
+    }
+  }
+  return [...versions]
+    .filter(([, installed]) => installed.size > 1)
+    .map(([name, installed]) => ({ Name: name, Versions: [...installed].sort() }))
+    .sort((a, b) => a.Name.localeCompare(b.Name));
+}
+
 /**
  * Checks if the pnpm-workspace.yaml has a catalog section.
  * Returns true if there's a `catalog:` or `catalogs:` key in the file.

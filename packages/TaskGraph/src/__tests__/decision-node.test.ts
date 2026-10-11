@@ -303,6 +303,7 @@ function dispatcherWith(runner: TaskDecisionRunner, promptRunner?: TaskPromptRun
         runStepLogs: new Map<string, Promise<void>>(),
         emittedGateVerdicts: new Map<string, Map<string, string>>(),
         ownerByParentID: new Map<string, string | null>(),
+        stepUserIDByGraph: new Map<string, string | null>(),
     };
     Object.setPrototypeOf(instance, TaskGraphDispatcher.prototype);
     if (!drivesDispatcher(instance)) throw new Error('TaskGraphDispatcher no longer has the methods these tests drive.');
@@ -358,6 +359,23 @@ describe('a Decision node on the dispatcher', () => {
         expect(Object.keys(runner.Calls[0].Questions)).toEqual(['intent', 'urgent']);
         expect(runner.Calls[0].State).toEqual(input.ticket);
         expect(runner.Calls[0].PromptID).toBe(DECISION_PROMPT_ID);
+    });
+
+    it('asks as the person who submitted the graph, not as the dispatcher', async () => {
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT });
+        const { Provider } = fakeProvider(null);
+        const parent: FakeParentTask = { InputPayload: JSON.stringify({ submittedByUserID: 'person-1' }), AgentRunID: null, Load: async () => true };
+        const provider: FakeProvider = {
+            ...Provider,
+            GetEntityObject: async (entityName: string) => (entityName === 'MJ: Tasks' ? parent : Provider.GetEntityObject(entityName)),
+        };
+        const submitter = Object.assign(new UserInfo(), { ID: 'person-1', Name: 'Pat', IsActive: true });
+        const dispatcher = dispatcherWith(runner);
+        Reflect.set(dispatcher, 'userResolver', { FindUserByID: async (id: string) => (id === 'person-1' ? submitter : undefined) });
+
+        await dispatcher.runTaskBody(decisionTask(), provider, input, new Map());
+
+        expect(runner.Calls[0].ContextUser).toBe(submitter);
     });
 
     it('writes the answers into its output under decisions.<step>, keeping the payload and earlier decisions', async () => {

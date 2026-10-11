@@ -43,9 +43,15 @@ vi.mock('@memberjunction/ai', () => {
         constructor(apiKey: string) {
             this._apiKey = apiKey;
         }
+        protected get apiKey(): string { return this._apiKey; }
     }
     class BaseLLM extends BaseModel {
         protected _additionalSettings: Record<string, unknown> = {};
+        // Mirrors @memberjunction/ai's BaseLLM: settings merge into what is already there.
+        public get AdditionalSettings(): Record<string, unknown> { return this._additionalSettings; }
+        public SetAdditionalSettings(settings: Record<string, unknown>): void {
+            this._additionalSettings = { ...this._additionalSettings, ...settings };
+        }
         public get SupportsStreaming(): boolean { return false; }
         // The trailing volatile-state seam, mirroring @memberjunction/ai's BaseLLM: the base test is
         // the metadata flag alone; AnthropicLLM's override adds its tag-literal fallback on top.
@@ -415,9 +421,12 @@ describe('AnthropicLLM', () => {
             // Reset streaming state first
             (instance as ReturnType<typeof Object.create>)['resetStreamingState']();
 
+            // The SDK's shape: thinking arrives inside a content_block_delta. (This test used to
+            // send a top-level `thinking_delta` event with `delta.text`, which the SDK never emits.)
             const chunk = {
-                type: 'thinking_delta',
-                delta: { text: 'Thinking about it...' }
+                type: 'content_block_delta',
+                index: 0,
+                delta: { type: 'thinking_delta', thinking: 'Thinking about it...' }
             };
             const result = callMethod(chunk);
             expect(result.content).toBe('');
@@ -664,8 +673,10 @@ describe('AnthropicLLM', () => {
                 const apiMessages = callArgs.messages;
                 const lastMessage = apiMessages[apiMessages.length - 1];
                 expect(lastMessage.role).toBe('assistant');
-                // The content is formatted through formatMessagesWithCaching, so check for the prefill text
-                expect(lastMessage.content).toEqual([{ type: 'text', text: '{"data":', cache_control: { type: 'ephemeral' } }]);
+                // The content is formatted through formatMessagesWithCaching. These params set
+                // enableCaching: false, which the request now honours on both paths, so no breakpoint.
+                // (The non-streaming path used to read `enableCaching || true`, which could never be false.)
+                expect(lastMessage.content).toEqual([{ type: 'text', text: '{"data":' }]);
             });
 
             it('should not add prefill message when assistantPrefill is not set', async () => {
@@ -1125,5 +1136,170 @@ describe('AnthropicLLM — native tool calling', () => {
             expect(sent.thinking).toEqual({ type: 'enabled', budget_tokens: 4096 });
             expect(sent.output_config).toBeUndefined();
         });
+    });
+});
+
+/**
+ * Regression for the streaming request diverging from the non-streaming one. The streaming path
+ * built its own request and sent no `max_tokens`, which the API requires: every streamed call was
+ * rejected with "max_tokens: Field required". Explorer chat always streams and the CLI never does,
+ * so the CLI's tests passed while every Claude chat in Explorer failed. Both paths now go through
+ * one builder; these tests pin them to the same request.
+ */
+describe('AnthropicLLM — streaming and non-streaming send the same request', () => {
+    type Instance = ReturnType<typeof Object.create>;
+    type Params = Record<string, unknown>;
+    let instance: AnthropicLLM;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        instance = new AnthropicLLM('test-api-key');
+        const finalMessage = vi.fn().mockResolvedValue({
+            content: [{ type: 'text', text: 'ok' }],
+            usage: { input_tokens: 1, output_tokens: 1 },
+            stop_reason: 'end_turn'
+        });
+        mockStream.mockReturnValue({ on: vi.fn().mockReturnValue({ finalMessage }) });
+        mockCreate.mockResolvedValue({});
+    });
+
+    /** The request each path sends for the same params, with the transport-only `stream` flag removed. */
+    async function requestsFor(params: Params): Promise<{ streaming: Params; nonStreaming: Params }> {
+        await (instance as Instance)['nonStreamingChatCompletion']({ ...params });
+        await (instance as Instance)['createStreamingRequest']({ ...params });
+        const { stream: _nonStreamingFlag, ...nonStreaming } = mockStream.mock.calls[0][0];
+        const { stream: streamingFlag, ...streaming } = mockCreate.mock.calls[0][0];
+        expect(streamingFlag).toBe(true);
+        return { streaming, nonStreaming };
+    }
+
+    const user = { role: ChatMessageRole.user, content: 'Hello' };
+
+    it('sends max_tokens on a streamed request that sets no output ceiling (the Explorer chat failure)', async () => {
+        const { streaming, nonStreaming } = await requestsFor({ model: 'claude-opus-5-5', messages: [user] });
+
+        expect(streaming.max_tokens).toBe(32000);
+        expect(streaming).toEqual(nonStreaming);
+    });
+
+    it.each([
+        ['adaptive thinking on a Claude 5 model', { model: 'claude-opus-5-5', effortLevel: 'high' }],
+        ['the default thinking budget on a budget-form model', { model: 'claude-haiku-4-5-20251001', effortLevel: '50' }],
+        ['a caller budget above the output ceiling', { model: 'claude-haiku-4-5-20251001', effortLevel: '50', reasoningBudgetTokens: 4096, maxOutputTokens: 1024 }],
+        ['every system message', { model: 'claude-sonnet-4-20250514', messages: [
+            { role: ChatMessageRole.system, content: 'First system message' },
+            { role: ChatMessageRole.system, content: 'Second system message' },
+            user
+        ] }],
+        ['sampling parameters', { model: 'claude-sonnet-4-20250514', temperature: 0.2, topP: 0.9, topK: 40, stopSequences: ['END'] }],
+        ['Claude Opus 4.5 thinking without its temperature', { model: 'claude-opus-4-5-20251101', effortLevel: 'high', temperature: 0.2 }],
+        ['a model-specific response format', { model: 'claude-sonnet-4-20250514', responseFormat: 'ModelSpecific', modelSpecificResponseFormat: { metadata: { user_id: 'u1' } } }],
+        ['an assistant prefill with caching off', { model: 'claude-sonnet-4-20250514', assistantPrefill: '{', enableCaching: false }]
+    ])('both paths send %s', async (_label, overrides: Params) => {
+        const { streaming, nonStreaming } = await requestsFor({ messages: [user], ...overrides });
+        expect(streaming).toEqual(nonStreaming);
+    });
+
+    it('raises max_tokens above the thinking budget on the streaming path too', async () => {
+        const { streaming } = await requestsFor({ model: 'claude-haiku-4-5-20251001', messages: [user], effortLevel: '50', reasoningBudgetTokens: 4096, maxOutputTokens: 1024 });
+
+        expect(streaming.thinking).toEqual({ type: 'enabled', budget_tokens: 4096 });
+        expect(streaming.max_tokens).toBe(5096);
+    });
+
+    it('sends every system message on the streaming path, not just the first', async () => {
+        const { streaming } = await requestsFor({ model: 'claude-sonnet-4-20250514', enableCaching: false, messages: [
+            { role: ChatMessageRole.system, content: 'First system message' },
+            { role: ChatMessageRole.system, content: 'Second system message' },
+            user
+        ] });
+
+        expect(JSON.stringify(streaming.system)).toContain('First system message');
+        expect(JSON.stringify(streaming.system)).toContain('Second system message');
+    });
+
+    it('raises a thinking budget below the API minimum to 1024 instead of sending it', async () => {
+        const { streaming } = await requestsFor({ model: 'claude-haiku-4-5-20251001', messages: [user], effortLevel: '50', reasoningBudgetTokens: 500 });
+
+        expect(streaming.thinking).toEqual({ type: 'enabled', budget_tokens: 1024 });
+    });
+
+    it('treats an explicit zero budget as thinking off, on both paths', async () => {
+        const { streaming, nonStreaming } = await requestsFor({ model: 'claude-haiku-4-5-20251001', messages: [user], effortLevel: '50', reasoningBudgetTokens: 0 });
+
+        expect(streaming.thinking).toBeUndefined();
+        expect(streaming.max_tokens).toBe(32000);
+        expect(streaming).toEqual(nonStreaming);
+    });
+
+    it("leaves thinking off and max_tokens unraised for effort 'none'", async () => {
+        const { streaming, nonStreaming } = await requestsFor({ model: 'claude-haiku-4-5-20251001', messages: [user], effortLevel: 'none', maxOutputTokens: 1024 });
+
+        expect(streaming.thinking).toBeUndefined();
+        expect(streaming.max_tokens).toBe(1024);
+        expect(streaming).toEqual(nonStreaming);
+    });
+
+    it('keeps streamed thinking out of the content and reports it on the result', () => {
+        const llm = instance as Instance;
+        llm['resetStreamingState']();
+        const chunks = [
+            { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } },
+            { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Weighing the ' } },
+            { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'options.' } },
+            { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } },
+            { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'The answer.' } }
+        ];
+        const content = chunks.map(chunk => llm['processStreamingChunk'](chunk).content).join('');
+        const result = llm['finalizeStreamingResponse'](content, null, null);
+
+        expect(content).toBe('The answer.');
+        expect(result.data.choices[0].message.thinking).toBe('Weighing the options.');
+    });
+});
+
+describe('AnthropicLLM — keys not scoped to a workspace', () => {
+    // Anthropic rejects a key that is not scoped to a workspace unless every request names one:
+    // "This API key is not scoped to a workspace, so this request must include the
+    // anthropic-workspace-id header". The driver sends it when a workspace is configured.
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.unstubAllEnvs();
+    });
+
+    it('sends no workspace header when none is configured', () => {
+        vi.stubEnv('ANTHROPIC_WORKSPACE_ID', '');
+        new AnthropicLLM('test-api-key');
+        expect(MockAnthropic).toHaveBeenCalledWith({ apiKey: 'test-api-key' });
+    });
+
+    it('names the workspace from ANTHROPIC_WORKSPACE_ID on every request', () => {
+        vi.stubEnv('ANTHROPIC_WORKSPACE_ID', ' wrkspc_01 ');
+        new AnthropicLLM('test-api-key');
+        expect(MockAnthropic).toHaveBeenCalledWith({
+            apiKey: 'test-api-key',
+            defaultHeaders: { 'anthropic-workspace-id': 'wrkspc_01' },
+        });
+    });
+
+    it('takes a workspaceId setting over the environment, and rebuilds the client with it', () => {
+        vi.stubEnv('ANTHROPIC_WORKSPACE_ID', 'wrkspc_env');
+        const llm = new AnthropicLLM('test-api-key');
+        const before = llm.AnthropicClient;
+        llm.SetAdditionalSettings({ workspaceId: 'wrkspc_setting' });
+        expect(MockAnthropic).toHaveBeenLastCalledWith({
+            apiKey: 'test-api-key',
+            defaultHeaders: { 'anthropic-workspace-id': 'wrkspc_setting' },
+        });
+        expect(llm.AnthropicClient).not.toBe(before);
+    });
+
+    it('keeps the client when a setting names no workspace', () => {
+        vi.stubEnv('ANTHROPIC_WORKSPACE_ID', '');
+        const llm = new AnthropicLLM('test-api-key');
+        const before = llm.AnthropicClient;
+        llm.SetAdditionalSettings({ workspaceId: '  ' });
+        expect(llm.AnthropicClient).toBe(before);
+        expect(MockAnthropic).toHaveBeenCalledTimes(1);
     });
 });

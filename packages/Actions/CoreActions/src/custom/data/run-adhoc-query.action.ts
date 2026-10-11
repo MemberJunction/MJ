@@ -10,6 +10,33 @@ import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
+/** One column of the result set, as reported by the database driver. */
+type QueryColumnInfo = { ColumnName: string; DataType: string; IsNullable: boolean };
+
+/**
+ * The output parameters this action declares in `metadata/actions/.run-adhoc-query.json`. A Flow
+ * step's ActionOutputMapping copies only declared Output params into the payload, so the rows and
+ * counts have to be here, not only in the Message and the returned object (the engine drops the
+ * object's extra fields).
+ */
+const OUTPUT_PARAM_NAMES = new Set(
+    ['Results', 'Columns', 'RowCount', 'ExecutionTimeMs', 'WasTruncated', 'ValidationWarnings', 'Analysis']
+        .map(name => name.toLowerCase())
+);
+
+/** The values a successful run publishes as output parameters. */
+interface AdhocQueryOutputs {
+    /** Untrimmed rows, or undefined when ReturnType excludes data. */
+    Rows: Record<string, unknown>[] | undefined;
+    Columns: QueryColumnInfo[];
+    RowCount: number;
+    ExecutionTimeMs: number;
+    WasTruncated: boolean;
+    ValidationWarnings: string[];
+    /** Undefined when no analysis was requested, or it could not be produced. */
+    Analysis: string | undefined;
+}
+
 /**
  * Action that executes read-only SQL SELECT queries for research purposes with
  * security validation.
@@ -58,6 +85,9 @@ export class RunAdhocQueryAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const startTime = Date.now();
+        // Outputs are set only on success. Clearing first means a params array reused from an
+        // earlier run can never hand a failed run's caller that run's rows.
+        this.clearOutputs(params);
 
         try {
             // Extract parameters
@@ -208,11 +238,14 @@ export class RunAdhocQueryAction extends BaseAction {
                     Query: limitedQuery
                 } as ActionResultSimple;
 
-                // Add data and/or analysis to results based on returnType
-                if (returnType === 'data only' || returnType === 'data and analysis') {
+                // Add data and/or analysis to results based on returnType. The same two flags decide
+                // the output parameters below, so the returned object and the outputs cannot disagree.
+                const includeData = returnType === 'data only' || returnType === 'data and analysis';
+                const includeAnalysis = returnType === 'analysis only' || returnType === 'data and analysis';
+                if (includeData) {
                     (resultData as any).Results = formattedData || results;
                 }
-                if (returnType === 'analysis only' || returnType === 'data and analysis') {
+                if (includeAnalysis) {
                     (resultData as any).Analysis = analysis;
                 }
                 // The data still stands; say why there is no analysis instead of leaving it silently empty.
@@ -221,6 +254,16 @@ export class RunAdhocQueryAction extends BaseAction {
                     withError.AnalysisError = analysisError;
                     withError.Message = `${withError.Message}\n\nThe analysis could not be produced: ${analysisError}`;
                 }
+
+                this.setSuccessOutputs(params, {
+                    Rows: includeData ? [...results] : undefined,
+                    Columns: columns,
+                    RowCount: results.length,
+                    ExecutionTimeMs: executionTimeMs,
+                    WasTruncated: wasTruncated,
+                    ValidationWarnings: warnings,
+                    Analysis: includeAnalysis ? analysis : undefined
+                });
 
                 return resultData;
 
@@ -537,6 +580,41 @@ export class RunAdhocQueryAction extends BaseAction {
             return isNaN(num) ? defaultValue : num;
         }
         return defaultValue;
+    }
+
+    /**
+     * Removes any of this action's output params already on the array, in place: the engine and its
+     * callers may hold a reference to `params.Params`.
+     */
+    private clearOutputs(params: RunActionParams): void {
+        for (let i = params.Params.length - 1; i >= 0; i--) {
+            const param = params.Params[i];
+            if (param.Type === 'Output' && OUTPUT_PARAM_NAMES.has(param.Name.trim().toLowerCase())) {
+                params.Params.splice(i, 1);
+            }
+        }
+    }
+
+    /**
+     * Publishes a successful run as output parameters. `Results` carries the full, untrimmed rows:
+     * DataFormat and ColumnMaxLength shape the copy in the Message for a model to read, not data a
+     * Flow passes on. `Results` and `Analysis` follow ReturnType, as the returned object does.
+     */
+    private setSuccessOutputs(params: RunActionParams, outputs: AdhocQueryOutputs): void {
+        const set = (name: string, value: unknown): void => {
+            params.Params.push({ Name: name, Type: 'Output', Value: value });
+        };
+        if (outputs.Rows) {
+            set('Results', outputs.Rows);
+        }
+        set('Columns', outputs.Columns);
+        set('RowCount', outputs.RowCount);
+        set('ExecutionTimeMs', outputs.ExecutionTimeMs);
+        set('WasTruncated', outputs.WasTruncated);
+        set('ValidationWarnings', outputs.ValidationWarnings);
+        if (outputs.Analysis !== undefined) {
+            set('Analysis', outputs.Analysis);
+        }
     }
 
     /**

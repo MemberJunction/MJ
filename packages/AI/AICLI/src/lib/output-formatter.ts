@@ -1,5 +1,7 @@
 import chalk from 'chalk';
 import { table } from 'table';
+import type { JSONValue } from '@memberjunction/ai';
+import type { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { TextFormatter } from './text-formatter';
 
 export type OutputFormat = 'compact' | 'json' | 'table';
@@ -34,7 +36,28 @@ export interface ExecutionResult {
   steps?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   executionId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   logFilePath?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /**
+   * The `MJ: AI Agent Runs` record this execution produced: the ID `mj ai audit agent-run` takes.
+   * Set for agent runs once the run record exists; never set for actions or prompts.
+   */
+  AgentRunID?: string;
+  /**
+   * The agent run's status when the command returned. `Paused` means the run handed its workflow to
+   * the task-graph dispatcher and is waiting on it; `Running` means the command stopped waiting
+   * before the run ended.
+   */
+  AgentRunStatus?: MJAIAgentRunEntity['Status'];
+  /**
+   * The run's final payload, when it produced one and {@link result} carries the agent's message
+   * instead. A Flow agent's output is its payload, so this is where that output appears.
+   */
+  FinalPayload?: JSONValue;
+  /** True when the command stopped waiting because its timeout elapsed. */
+  TimedOut?: boolean;
 }
+
+/** Longest final payload the human renderings print in full; `--format json` always carries all of it. */
+const MAX_RENDERED_PAYLOAD_CHARS = 4000;
 
 export class OutputFormatter {
   constructor(private format: OutputFormat) {}
@@ -307,7 +330,15 @@ export class OutputFormatter {
 
     tableData.push(['Status', result.success ? chalk.green('Success') : chalk.red('Failed')]);
     tableData.push([type, result.entityName]);
-    
+
+    if (result.AgentRunID) {
+      tableData.push(['Run ID', result.AgentRunID]);
+    }
+
+    if (result.AgentRunStatus) {
+      tableData.push(['Run Status', result.AgentRunStatus]);
+    }
+
     if (result.prompt) {
       tableData.push(['Prompt', result.prompt.length > 50 ? result.prompt.substring(0, 50) + '...' : result.prompt]);
     }
@@ -334,60 +365,119 @@ export class OutputFormatter {
   }
 
   private formatResultCompact(result: ExecutionResult, type: string): string {
-    let output = '';
+    return result.success
+      ? this.formatSuccessCompact(result, type)
+      : this.formatFailureCompact(result, type);
+  }
 
-    if (result.success) {
-      output += chalk.green(`✓ ${type} execution completed successfully\n`);
-      output += chalk.bold(`${type}:`) + ` ${result.entityName}\n`;
-      
-      if (result.prompt) {
-        output += chalk.bold('Prompt:') + ` ${result.prompt}\n`;
-      }
-      
-      output += chalk.bold('Duration:') + ` ${result.duration}ms\n`;
-      
-      if (result.steps) {
-        output += chalk.bold('Steps:') + ` ${result.steps}\n`;
-      }
+  private formatSuccessCompact(result: ExecutionResult, type: string): string {
+    let output = chalk.green(`✓ ${this.successHeadline(result, type)}\n`);
+    output += this.formatRunHeaderCompact(result, type);
 
-      if (result.result) {
-        output += chalk.bold('Result:') + '\n';
-        if (typeof result.result === 'string') {
-          const formatted = TextFormatter.formatText(result.result, {
-            MaxWidth: 80,
-            Indent: 2,
-            PreserveParagraphs: true
-          });
-          output += formatted + '\n';
-        } else {
-          output += TextFormatter.formatJSON(result.result, 2) + '\n';
-        }
-      }
-
-      if (result.logFilePath) {
-        output += chalk.dim(`\nDetailed logs: ${result.logFilePath}\n`);
-      }
-
-    } else {
-      output += chalk.red(`✗ ${type} execution failed\n`);
-      output += chalk.bold(`${type}:`) + ` ${result.entityName}\n`;
-      
-      if (result.prompt) {
-        output += chalk.bold('Prompt:') + ` ${result.prompt}\n`;
-      }
-      
-      output += chalk.bold('Duration:') + ` ${result.duration}ms\n`;
-      
-      if (result.error) {
-        output += chalk.bold('Error:') + ` ${chalk.red(result.error)}\n`;
-      }
-
-      if (result.logFilePath) {
-        output += chalk.dim(`\nError logs: ${result.logFilePath}\n`);
-      }
+    if (result.steps) {
+      output += chalk.bold('Steps:') + ` ${result.steps}\n`;
     }
 
+    if (result.result) {
+      output += chalk.bold('Result:') + '\n';
+      output += this.formatResultBody(result.result) + '\n';
+    }
+
+    output += this.formatFinalPayloadCompact(result.FinalPayload);
+
+    if (result.logFilePath) {
+      output += chalk.dim(`\nDetailed logs: ${result.logFilePath}\n`);
+    }
+    output += this.formatAuditHint(result);
+
     return output;
+  }
+
+  private formatFailureCompact(result: ExecutionResult, type: string): string {
+    let output = chalk.red(`✗ ${result.TimedOut ? `${type} execution timed out` : `${type} execution failed`}\n`);
+    output += this.formatRunHeaderCompact(result, type);
+
+    if (result.error) {
+      output += chalk.bold('Error:') + ` ${chalk.red(result.error)}\n`;
+    }
+
+    if (result.logFilePath) {
+      output += chalk.dim(`\nError logs: ${result.logFilePath}\n`);
+    }
+    output += this.formatAuditHint(result);
+
+    return output;
+  }
+
+  /**
+   * A run that handed its workflow to the task-graph dispatcher (`--background`) has started the
+   * work, not finished it, and the headline must not claim otherwise.
+   */
+  private successHeadline(result: ExecutionResult, type: string): string {
+    return result.AgentRunStatus === 'Paused'
+      ? 'Agent run started — its workflow continues on the task-graph dispatcher'
+      : `${type} execution completed successfully`;
+  }
+
+  /** The lines every compact rendering starts with: what ran, which run it was, and how long it took. */
+  private formatRunHeaderCompact(result: ExecutionResult, type: string): string {
+    let output = chalk.bold(`${type}:`) + ` ${result.entityName}\n`;
+
+    if (result.AgentRunID) {
+      output += chalk.bold('Run ID:') + ` ${result.AgentRunID}\n`;
+    }
+    if (result.AgentRunStatus) {
+      output += chalk.bold('Run status:') + ` ${result.AgentRunStatus}\n`;
+    }
+    if (result.prompt) {
+      output += chalk.bold('Prompt:') + ` ${result.prompt}\n`;
+    }
+
+    output += chalk.bold('Duration:') + ` ${result.duration}ms\n`;
+    return output;
+  }
+
+  private formatResultBody(content: ExecutionResult['result']): string {
+    if (typeof content === 'string') {
+      return TextFormatter.FormatText(content, {
+        MaxWidth: 80,
+        Indent: 2,
+        PreserveParagraphs: true
+      });
+    }
+    return TextFormatter.FormatJSON(content, 2);
+  }
+
+  /**
+   * Prints the final payload, cut at {@link MAX_RENDERED_PAYLOAD_CHARS} so a large one cannot bury
+   * the rest of the output. An empty object is a payload in name only and is skipped.
+   */
+  private formatFinalPayloadCompact(payload: JSONValue | undefined): string {
+    if (payload === undefined || payload === null || this.isEmptyObject(payload)) {
+      return '';
+    }
+
+    const json = JSON.stringify(payload, null, 2);
+    const shown = json.length > MAX_RENDERED_PAYLOAD_CHARS ? json.slice(0, MAX_RENDERED_PAYLOAD_CHARS) : json;
+    let output = chalk.bold('Final payload:') + '\n';
+    output += shown.split('\n').map((line) => `  ${line}`).join('\n') + '\n';
+    if (shown.length < json.length) {
+      output += chalk.dim(`  … ${json.length - shown.length} more characters. Use --format json for the whole payload.\n`);
+    }
+    return output;
+  }
+
+  private isEmptyObject(value: JSONValue): boolean {
+    return typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length === 0;
+  }
+
+  /** Tells the reader how to follow up on a run: the audit command, pointed at its errors when it failed. */
+  private formatAuditHint(result: ExecutionResult): string {
+    if (!result.AgentRunID) {
+      return '';
+    }
+    const errorsFlag = result.success ? '' : ' --errors';
+    return chalk.dim(`Audit this run: mj ai audit agent-run ${result.AgentRunID}${errorsFlag}\n`);
   }
 
   private formatPromptResultCompact(result: ExecutionResult): string {

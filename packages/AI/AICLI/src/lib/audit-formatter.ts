@@ -1,7 +1,8 @@
 import chalk from 'chalk';
 import { table } from 'table';
 import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
-import type { RunSummary, StepDetail, ErrorAnalysis } from '../services/AgentAuditService';
+import type { RunSummary, StepDetail, ErrorAnalysis, RunTokenUsage } from '../services/AgentAuditService';
+import type { WorkflowTaskInfo, WorkflowTaskSummary } from './workflow-tasks';
 
 export type AuditOutputFormat = 'compact' | 'json' | 'table' | 'markdown';
 
@@ -48,7 +49,7 @@ export class AuditFormatter {
       output += `  Started: ${run.StartedAt ? new Date(run.StartedAt).toLocaleString() : 'N/A'}\n\n`;
     });
 
-    output += chalk.dim('\n💡 Use: mj ai agent-audit <run-id> to see detailed audit\n');
+    output += chalk.dim('\n💡 Use: mj ai audit agent-run <run-id> to see detailed audit\n');
 
     return output;
   }
@@ -131,19 +132,26 @@ export class AuditFormatter {
     // Performance Metrics
     output += chalk.bold('Performance Metrics:\n');
     output += `  Total Steps:    ${summary.stepCount}\n`;
-    output += `  Total Tokens:   ${summary.totalTokens.toLocaleString()}\n`;
-    output += `  Estimated Cost: $${summary.estimatedCost.toFixed(4)}\n\n`;
+    for (const [label, value] of this.usageRows(summary)) {
+      output += `  ${`${label}:`.padEnd(16)}${value}\n`;
+    }
+    output += '\n';
 
     // Error Summary
     if (summary.hasErrors) {
       output += chalk.bold.red('⚠️  Errors Detected:\n');
       output += `  Error Count:    ${summary.errorCount}\n`;
+      if (summary.RunErrorMessage) {
+        output += `  Run Error:      ${chalk.red(summary.RunErrorMessage)}\n`;
+      }
       if (summary.firstError) {
         output += `  First Error:    Step ${summary.firstError.stepNumber} - ${summary.firstError.stepName}\n`;
         output += `  Error Message:  ${chalk.red(summary.firstError.message.substring(0, 100))}\n`;
       }
       output += '\n';
     }
+
+    output += this.formatWorkflowCompact(summary.Workflow);
 
     // Step List
     output += chalk.bold('Step Execution Summary:\n\n');
@@ -182,6 +190,33 @@ export class AuditFormatter {
   }
 
   /**
+   * The token and cost rows every run-summary format shows.
+   *
+   * Input is shown as its total with the buckets beside it. A prompt run's `TokensPrompt` counts
+   * UNCACHED input only, so with prompt caching it can read 4 for a prompt of several thousand
+   * tokens; a total that left out cache reads and writes understated what the models processed.
+   */
+  private usageRows(summary: RunSummary): Array<[string, string]> {
+    const rows: Array<[string, string]> = [['Total Tokens', this.totalTokensText(summary)]];
+    if (summary.Tokens) {
+      rows.push(['Input Tokens', this.inputTokensText(summary.Tokens)]);
+    }
+    rows.push([summary.CostSource === 'Recorded' ? 'Cost' : 'Estimated Cost', `$${summary.estimatedCost.toFixed(4)}`]);
+    return rows;
+  }
+
+  private totalTokensText(summary: RunSummary): string {
+    const total = summary.totalTokens.toLocaleString();
+    if (!summary.Tokens) return total;
+    return `${total} (input ${summary.Tokens.TotalInput.toLocaleString()} + output ${summary.Tokens.Output.toLocaleString()})`;
+  }
+
+  private inputTokensText(tokens: RunTokenUsage): string {
+    return `${tokens.TotalInput.toLocaleString()} = uncached ${tokens.UncachedInput.toLocaleString()}` +
+      ` + cache read ${tokens.CacheRead.toLocaleString()} + cache write ${tokens.CacheWrite.toLocaleString()}`;
+  }
+
+  /**
    * Format run summary as table
    */
   private formatRunSummaryTable(summary: RunSummary): string {
@@ -195,8 +230,8 @@ export class AuditFormatter {
       ['Status', this.formatStatusText(summary.status)],
       ['Duration', `${(summary.duration / 1000).toFixed(2)}s`],
       ['Total Steps', summary.stepCount.toString()],
-      ['Total Tokens', summary.totalTokens.toLocaleString()],
-      ['Est. Cost', `$${summary.estimatedCost.toFixed(4)}`],
+      ...this.usageRows(summary),
+      ...this.workflowTableRows(summary),
     ];
 
     output += table([metadataHeaders, ...metadataRows]);
@@ -244,18 +279,25 @@ export class AuditFormatter {
 
     md += `## Performance Metrics\n`;
     md += `- **Total Steps**: ${summary.stepCount}\n`;
-    md += `- **Total Tokens**: ${summary.totalTokens.toLocaleString()}\n`;
-    md += `- **Estimated Cost**: $${summary.estimatedCost.toFixed(4)}\n\n`;
+    for (const [label, value] of this.usageRows(summary)) {
+      md += `- **${label}**: ${value}\n`;
+    }
+    md += '\n';
 
     if (summary.hasErrors) {
       md += `## ⚠️ Errors Detected\n`;
       md += `- **Error Count**: ${summary.errorCount}\n`;
+      if (summary.RunErrorMessage) {
+        md += `- **Run Error**: ${summary.RunErrorMessage}\n`;
+      }
       if (summary.firstError) {
         md += `- **First Error**: Step ${summary.firstError.stepNumber} - ${summary.firstError.stepName}\n`;
         md += `- **Error Message**: ${summary.firstError.message}\n`;
       }
       md += '\n';
     }
+
+    md += this.formatWorkflowMarkdown(summary.Workflow);
 
     md += `## Step Execution Summary\n\n`;
     md += `| # | Step ID | Name | Type | Status | Duration | Tokens |\n`;
@@ -271,8 +313,8 @@ export class AuditFormatter {
 
     md += '\n';
     md += `### Next Steps\n`;
-    md += `- Use \`mj ai agent-audit ${summary.runId} --step <N>\` to see details for a specific step\n`;
-    md += `- Use \`mj ai agent-audit ${summary.runId} --errors\` to see only error information\n`;
+    md += `- Use \`mj ai audit agent-run ${summary.runId} --step <N>\` to see details for a specific step\n`;
+    md += `- Use \`mj ai audit agent-run ${summary.runId} --errors\` to see only error information\n`;
 
     return md;
   }
@@ -440,7 +482,12 @@ export class AuditFormatter {
     output += chalk.bold.red(`  Error Analysis: ${analysis.agentName}\n`);
     output += chalk.bold.red('═══════════════════════════════════════════════\n\n');
 
-    output += chalk.bold(`Found ${analysis.errorCount} failed step(s)\n\n`);
+    output += chalk.bold(`${this.describeErrorCounts(analysis)}\n\n`);
+
+    if (analysis.RunErrorMessage) {
+      output += chalk.bold('Run Error:\n');
+      output += chalk.red(`  ${analysis.RunErrorMessage}\n\n`);
+    }
 
     if (analysis.errorPattern) {
       output += chalk.bold('Common Error Pattern:\n');
@@ -463,6 +510,11 @@ export class AuditFormatter {
       output += '\n';
     });
 
+    if (analysis.FailedTasks && analysis.FailedTasks.length > 0) {
+      output += chalk.bold('\nFailed Workflow Tasks:\n');
+      output += this.formatFailedTasksCompact(analysis.FailedTasks);
+    }
+
     // Suggested fixes
     if (analysis.suggestedFixes.length > 0) {
       output += chalk.bold.green('\n💡 Suggested Fixes:\n');
@@ -481,7 +533,12 @@ export class AuditFormatter {
     let md = '';
 
     md += `# Error Analysis: ${analysis.agentName}\n\n`;
-    md += `Found ${analysis.errorCount} failed step(s)\n\n`;
+    md += `${this.describeErrorCounts(analysis)}\n\n`;
+
+    if (analysis.RunErrorMessage) {
+      md += `## Run Error\n`;
+      md += `${analysis.RunErrorMessage}\n\n`;
+    }
 
     if (analysis.errorPattern) {
       md += `## Common Error Pattern\n`;
@@ -505,6 +562,12 @@ export class AuditFormatter {
       md += '\n';
     });
 
+    if (analysis.FailedTasks && analysis.FailedTasks.length > 0) {
+      md += `## Failed Workflow Tasks\n\n`;
+      md += this.formatFailedTasksMarkdown(analysis.FailedTasks);
+      md += '\n';
+    }
+
     if (analysis.suggestedFixes.length > 0) {
       md += `## 💡 Suggested Fixes\n\n`;
       analysis.suggestedFixes.forEach((fix, index) => {
@@ -516,6 +579,84 @@ export class AuditFormatter {
     return md;
   }
 
+  /** "Found N failed step(s)", plus the failed workflow tasks when there are any. */
+  private describeErrorCounts(analysis: ErrorAnalysis): string {
+    const taskCount = analysis.FailedTasks?.length ?? 0;
+    return taskCount > 0
+      ? `Found ${analysis.failedSteps.length} failed step(s) and ${taskCount} failed workflow task(s)`
+      : `Found ${analysis.failedSteps.length} failed step(s)`;
+  }
+
+  /**
+   * The dispatched-workflow section of a compact summary: its status, its tasks by status, and each
+   * task that failed. Nothing when the run dispatched no workflow.
+   */
+  private formatWorkflowCompact(workflow: WorkflowTaskSummary | undefined): string {
+    if (!workflow) {
+      return '';
+    }
+    let output = chalk.bold('Dispatched Workflow:\n');
+    output += `  Status:         ${this.formatStatusText(workflow.Status)}\n`;
+    output += `  Tasks:          ${workflow.TaskCount}${this.formatStatusCounts(workflow.StatusCounts)}\n`;
+    if (workflow.FailedTasks.length > 0) {
+      output += this.formatFailedTasksCompact(workflow.FailedTasks);
+    }
+    return output + '\n';
+  }
+
+  private formatFailedTasksCompact(tasks: WorkflowTaskInfo[]): string {
+    return tasks.map(task => {
+      let output = chalk.red(`  ✗ ${task.Name}`) + chalk.dim(` (${task.StepType ?? 'Task'} task ${task.TaskID})`) + '\n';
+      output += chalk.red(`      ${task.ErrorMessage ?? 'No error message was recorded'}\n`);
+      if (task.AgentRunID) {
+        output += chalk.dim(`      Agent run ${task.AgentRunID}: mj ai audit agent-run ${task.AgentRunID} --errors\n`);
+      }
+      return output;
+    }).join('');
+  }
+
+  private formatWorkflowMarkdown(workflow: WorkflowTaskSummary | undefined): string {
+    if (!workflow) {
+      return '';
+    }
+    let md = `## Dispatched Workflow\n`;
+    md += `- **Status**: ${workflow.Status}\n`;
+    md += `- **Tasks**: ${workflow.TaskCount}${this.formatStatusCounts(workflow.StatusCounts)}\n\n`;
+    if (workflow.FailedTasks.length > 0) {
+      md += `### Failed Tasks\n\n`;
+      md += this.formatFailedTasksMarkdown(workflow.FailedTasks);
+      md += '\n';
+    }
+    return md;
+  }
+
+  private formatFailedTasksMarkdown(tasks: WorkflowTaskInfo[]): string {
+    return tasks.map((task, index) => {
+      const run = task.AgentRunID ? ` (agent run \`${task.AgentRunID}\`)` : '';
+      return `${index + 1}. **${task.Name}** — ${task.StepType ?? 'Task'} task \`${task.TaskID}\`${run}: ${task.ErrorMessage ?? 'No error message was recorded'}\n`;
+    }).join('');
+  }
+
+  /** The table summary's rows for a dispatched workflow, if the run had one. */
+  private workflowTableRows(summary: RunSummary): string[][] {
+    const rows: string[][] = [];
+    if (summary.RunErrorMessage) {
+      rows.push(['Run Error', summary.RunErrorMessage]);
+    }
+    if (summary.Workflow) {
+      rows.push(['Workflow Status', this.formatStatusText(summary.Workflow.Status)]);
+      rows.push(['Workflow Tasks', `${summary.Workflow.TaskCount}${this.formatStatusCounts(summary.Workflow.StatusCounts)}`]);
+      rows.push(['Failed Tasks', summary.Workflow.FailedTasks.map(task => `${task.Name}: ${task.ErrorMessage ?? 'no error message'}`).join('\n') || 'None']);
+    }
+    return rows;
+  }
+
+  /** ` (Complete 4, Failed 1)` — or nothing when there are no tasks. */
+  private formatStatusCounts(counts: Record<string, number>): string {
+    const parts = Object.entries(counts).map(([status, count]) => `${status} ${count}`);
+    return parts.length > 0 ? ` (${parts.join(', ')})` : '';
+  }
+
   /**
    * Format status with color coding
    */
@@ -523,6 +664,7 @@ export class AuditFormatter {
     switch (status.toLowerCase()) {
       case 'success':
       case 'completed':
+      case 'complete':
         return chalk.green('✓ Success');
       case 'failed':
       case 'error':

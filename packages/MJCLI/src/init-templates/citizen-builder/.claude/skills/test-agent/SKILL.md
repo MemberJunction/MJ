@@ -3,59 +3,53 @@ name: test-agent
 description: Executes tests for MemberJunction agents, queries database run traces, and diagnoses issues.
 ---
 
-# Skill: `test-agent` (Testing & Run Trace Diagnostics)
+# Skill: `test-agent` (testing and run diagnostics)
 
-Use this skill whenever the user wants to test an agent, reports an error, or asks why an agent produced unexpected output.
+Use this skill whenever the user wants to test an agent, reports an error, or asks why an agent
+produced unexpected output.
 
-## Method A: Headless Execution (Automated Verification)
-You can invoke the agent directly via the CLI to test basic functionality and input handling:
-
+## 1. Headless runs, while developing
 ```bash
-docker compose exec -T mj mj ai agents run -a "<Agent Name>" -p "<Test Prompt or Input>" --format json
+docker compose exec -T mj mj ai agents run -a "<Agent Name>" -p "<test input>" --format json
 ```
+It runs the agent to completion, Flow agents included, and prints the result and its run ID. It stops
+a run after 5 minutes: for a longer agent add `--timeout <milliseconds>` (`--timeout 900000` is 15
+minutes). Before running, predict the answer from the data yourself (a direct query), so you can tell
+a correct result from a plausible one.
 
-Options:
-- `--format json`: Machine-readable structured JSON result.
-- `-v` / `--verbose`: Detailed diagnostic logging.
+## 2. The user's path, before you call it done
+The CLI is not how the user will run the agent. The Explorer web app streams the model's response,
+runs as the signed-in user, and hands a Flow agent's steps to a background task runner (the CLI runs
+them itself), so a CLI pass proves none of those work. Before you say an agent works:
+1. Run it from Explorer chat (`http://localhost:<EXPLORER_PORT>`) as the owner, using the user's own
+   wording for the request, and confirm the result appears where the user will look.
+2. If other people will run it, run it as a user with only the basic `UI` role too, and record the
+   permissions they need.
+3. If it runs on a schedule, confirm the result reaches its delivery target.
 
-## Method B: User Interactive Testing (Explorer UI)
-Instruct the user to open their browser at `http://localhost:4202` to test interactively.
+If you cannot open the web app yourself, ask the user to try it and tell them exactly what to type
+and what they should see. Don't drive their own browser without asking.
 
----
-
-## Diagnosing Failures: Execution Trace Auditing
-
-When an execution fails, stalls, or behaves unexpectedly, **do not ask the user for console logs**. Audit the run trace via CLI:
-
+## 3. Diagnosing a failure
+Don't ask the user for logs. Read the trace:
 ```bash
-# List recent runs for the agent
-./scripts/query-run-history.sh "<Agent Name>"
-
-# Audit a specific run with full JSON trace
-./scripts/query-run-history.sh <RunID> --format json
-
-# Or inspect individual step details or errors
+./scripts/query-run-history.sh "<Agent Name>"           # recent runs
+./scripts/query-run-history.sh <RunID> --errors         # what failed, and where
 ./scripts/query-run-history.sh <RunID> --step 1 --detail full
-./scripts/query-run-history.sh <RunID> --errors
+docker compose exec -T mj pm2 logs mjapi --nostream --lines 100   # the API's own log
 ```
+Check:
+1. **Actions**: which ran, and that nothing ran the user did not approve (writes, sends, deletes).
+2. **Steps**: each step's input is what the previous step produced. An empty value usually means a
+   template reads a key the previous step never wrote (compare key names), or an action step has no
+   `ActionOutputMapping` for it.
+3. **Cost**: tokens and duration are reasonable, with no runaway loop.
 
-### Trace Verification Assertions:
-1. **Action Verification**:
-   - Confirm `actionsUsed` matches expected actions for the flow/loop.
-   - Confirm `actionsNotUsed` contains any restricted or sensitive actions.
-2. **Step Inspection**:
-   - Check input and output snippets for prompt drift or malformed arguments.
-   - Check error messages on individual failed steps.
-3. **Resource Consumption**:
-   - Check token consumption and duration to prevent runaway loops.
+Errors that point at the environment rather than the agent: "No suitable model found" (no usable AI
+key: see `mj doctor --scope ai`), `anthropic-workspace-id` (an Anthropic key not scoped to a
+workspace: set `ANTHROPIC_WORKSPACE_ID` in `.env`), "is not in the engine's metadata" (the API needs a restart: `./scripts/restart-api.sh`).
 
----
-
-## Iterating and Refining
-1. If the LLM misunderstood instructions, edit `metadata/prompts/templates/<slug>.template.md` to clarify formatting, edge cases, or instructions.
-2. If parameter mapping failed, update `ActionInputMapping` / `ActionOutputMapping` in `metadata/agents/.<slug>-agent.json`.
-3. Push changes:
-   ```bash
-   ./scripts/sync-metadata.sh
-   ```
-4. Re-run or ask the user to re-test.
+## 4. Iterate
+1. Fix the template, mapping or step.
+2. `./scripts/sync-metadata.sh` (pushes and restarts the API).
+3. Re-run, and tell the user what you changed and why.

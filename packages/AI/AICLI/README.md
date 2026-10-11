@@ -164,23 +164,20 @@ Direct SQL Server connection for:
 
 ## Configuration
 
-Configure via `mj.config.cjs`, `.mjrc`, or environment variables:
+Database settings come from `mj.config.cjs` in the current directory. Any setting the file leaves out (or sets to `undefined`) is read from the environment, or from a `.env` file in the current directory — the same variables MJAPI reads, so a workspace that keeps its credentials in `.env` needs nothing in `mj.config.cjs`:
 
-```javascript
-module.exports = {
-    databaseSettings: {
-        host: 'localhost',
-        port: 1433,
-        database: 'MemberJunction',
-        username: 'sa',
-        password: 'password'
-    }
-};
-```
+| `mj.config.cjs` key | Environment variable | Default |
+|---|---|---|
+| `dbHost` | `DB_HOST` | `localhost` |
+| `dbPort` | `DB_PORT` | `1433` |
+| `dbDatabase` | `DB_DATABASE` | required |
+| `dbUsername` | `DB_USERNAME` | required |
+| `dbPassword` | `DB_PASSWORD` | required |
+| `dbTrustServerCertificate` | `DB_TRUST_SERVER_CERTIFICATE` | `false` — set it for a server with a self-signed certificate |
+| `dbInstanceName` | `DB_INSTANCE_NAME` | none |
+| `coreSchema` (or `mjCoreSchema`) | `MJ_CORE_SCHEMA` | `__mj` |
 
-Required environment variables:
-- `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` -- Database connection
-- `AI_VENDOR_API_KEY__OPENAILLM` -- OpenAI API key (or other provider keys)
+AI provider keys come from the environment, for example `AI_VENDOR_API_KEY__OPENAILLM`.
 
 ## Dependencies
 

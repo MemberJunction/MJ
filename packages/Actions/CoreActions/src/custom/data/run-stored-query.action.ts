@@ -4,6 +4,17 @@ import { BaseAction } from "@memberjunction/actions";
 import { RunQuery, RunQueryParams, RunQueryResult } from "@memberjunction/core";
 
 /**
+ * The output parameters this action declares in `metadata/actions/.run-stored-query.json`. A Flow
+ * step's ActionOutputMapping copies only declared Output params into the payload, so the rows and
+ * counts have to be here, not only in the Message and the returned object (the engine drops the
+ * object's extra fields).
+ */
+const OUTPUT_PARAM_NAMES = new Set(
+    ['Results', 'RowCount', 'TotalRowCount', 'WasTruncated', 'ExecutionTimeMs', 'QuerySQL']
+        .map(name => name.toLowerCase())
+);
+
+/**
  * Action that executes a stored query by ID or name using the full query pipeline.
  * This includes composition resolution ({{query:"..."}} macros), Nunjucks parameter
  * templating, caching, and audit logging — the agent gets all of that for free.
@@ -18,6 +29,10 @@ import { RunQuery, RunQueryParams, RunQueryResult } from "@memberjunction/core";
 export class RunStoredQueryAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        // Outputs are set only on success. Clearing first means a params array reused from an
+        // earlier run can never hand a failed run's caller that run's rows.
+        this.clearOutputs(params);
+
         try {
             const queryId = this.getStringParam(params, "queryid");
             const queryName = this.getStringParam(params, "queryname");
@@ -89,6 +104,8 @@ export class RunStoredQueryAction extends BaseAction {
                 Results: formattedData
             };
 
+            this.setSuccessOutputs(params, results, executionTimeMs, result);
+
             return resultData;
 
         } catch (error) {
@@ -98,6 +115,49 @@ export class RunStoredQueryAction extends BaseAction {
                 ResultCode: "QUERY_EXECUTION_FAILED",
                 Message: `Run Stored Query failed: ${errorMessage}`
             } as ActionResultSimple;
+        }
+    }
+
+    /**
+     * Removes any of this action's output params already on the array, in place: the engine and its
+     * callers may hold a reference to `params.Params`.
+     */
+    private clearOutputs(params: RunActionParams): void {
+        for (let i = params.Params.length - 1; i >= 0; i--) {
+            const param = params.Params[i];
+            if (param.Type === 'Output' && OUTPUT_PARAM_NAMES.has(param.Name.trim().toLowerCase())) {
+                params.Params.splice(i, 1);
+            }
+        }
+    }
+
+    /**
+     * Publishes a successful run as output parameters. `Results` carries the full, untrimmed rows:
+     * DataFormat and ColumnMaxLength shape the copy in the Message for a model to read, not data a
+     * Flow passes on.
+     *
+     * With MaxRows set, RunQuery counts the whole result alongside the capped page, so
+     * `TotalRowCount` is the real total and `WasTruncated` is exact. A total below the rows actually
+     * returned cannot be right, so it falls back to the row count rather than report a negative gap.
+     */
+    private setSuccessOutputs(
+        params: RunActionParams,
+        rows: Record<string, unknown>[],
+        executionTimeMs: number,
+        queryResult: RunQueryResult
+    ): void {
+        const reportedTotal = queryResult.TotalRowCount;
+        const totalRowCount = Number.isFinite(reportedTotal) && reportedTotal >= rows.length ? reportedTotal : rows.length;
+        const set = (name: string, value: unknown): void => {
+            params.Params.push({ Name: name, Type: 'Output', Value: value });
+        };
+        set('Results', [...rows]);
+        set('RowCount', rows.length);
+        set('TotalRowCount', totalRowCount);
+        set('WasTruncated', totalRowCount > rows.length);
+        set('ExecutionTimeMs', executionTimeMs);
+        if (queryResult.RenderedSQL) {
+            set('QuerySQL', queryResult.RenderedSQL);
         }
     }
 

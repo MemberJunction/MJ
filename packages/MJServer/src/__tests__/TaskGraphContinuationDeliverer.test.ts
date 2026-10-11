@@ -18,7 +18,17 @@ vi.mock('@memberjunction/core', () => ({
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJConversationDetailEntity: class {},
+    MJConversationEntity: class {},
     MJAIAgentRunEntity: class {},
+}));
+
+/** The users the server's user cache holds; each test sets its own. */
+const cachedUsers: UserInfo[] = [];
+vi.mock('@memberjunction/generic-database-provider', () => ({
+    UserCache: { Instance: { get Users() { return cachedUsers; } } },
+}));
+vi.mock('@memberjunction/global', () => ({
+    UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase(),
 }));
 
 vi.mock('@memberjunction/ai-core-plus', () => ({ MJAIAgentEntityExtended: class {} }));
@@ -46,22 +56,51 @@ function detailRow(over: Partial<{ loads: boolean; saves: boolean; conversationI
     };
 }
 
-function harness(over: Parameters<typeof detailRow>[0] = {}) {
-    const rows: ReturnType<typeof detailRow>[] = [];
-    const provider = {
-        GetEntityObject: vi.fn().mockImplementation(async () => {
+const SERVICE_USER = { ID: 'service-user' } as UserInfo;
+const REQUESTER = { ID: 'requester-1' } as UserInfo;
+const OWNER = { ID: 'owner-1' } as UserInfo;
+
+interface HarnessOptions {
+    loads?: boolean;
+    saves?: boolean;
+    runLoads?: boolean;
+    agentLoads?: boolean;
+    /** The submitting run's UserID; null for a run that records none. */
+    runUserID?: string | null;
+}
+
+/**
+ * A provider that answers each entity by NAME, recording which user each row was requested as.
+ * Conversation details come out in order: the first is the source (loaded), the second the reply.
+ */
+function harness(over: HarnessOptions = {}) {
+    const { runLoads = true, agentLoads = true, runUserID = REQUESTER.ID } = over;
+    const details: ReturnType<typeof detailRow>[] = [];
+    const requestedAs: Array<{ Entity: string; UserID: string }> = [];
+    const rowFor: Record<string, () => object> = {
+        'MJ: Conversation Details': () => {
             const row = detailRow(over);
-            rows.push(row);
+            details.push(row);
             return row;
+        },
+        'MJ: AI Agent Runs': () => ({ ID: 'run-1', AgentID: 'agent-1', UserID: runUserID, Load: vi.fn().mockResolvedValue(runLoads) }),
+        'MJ: AI Agents': () => ({ ID: 'agent-1', Load: vi.fn().mockResolvedValue(agentLoads) }),
+        'MJ: Conversations': () => ({ UserID: OWNER.ID, Load: vi.fn().mockResolvedValue(true) }),
+    };
+    const provider = {
+        GetEntityObject: vi.fn().mockImplementation(async (entity: string, user: UserInfo) => {
+            requestedAs.push({ Entity: entity, UserID: user.ID });
+            return rowFor[entity]();
         }),
     };
     const providerFactory = { CreateProvider: vi.fn().mockResolvedValue(provider) };
-    const deliverer = new TaskGraphContinuationDeliverer(
-        providerFactory as never,
-        { ID: 'user-1' } as UserInfo,
-    );
-    // First row is the source detail (Load), second is the reply (Save).
-    return { deliverer, providerFactory, provider, rows, reply: () => rows[1] };
+    const deliverer = new TaskGraphContinuationDeliverer(providerFactory as never, SERVICE_USER);
+    return {
+        deliverer, providerFactory, provider, details, requestedAs,
+        reply: () => details[1],
+        /** Who the reply was created as. */
+        replyAuthor: () => requestedAs.filter((r) => r.Entity === 'MJ: Conversation Details')[1]?.UserID,
+    };
 }
 
 const params = (over: Partial<TaskContinuationParams> = {}): TaskContinuationParams => ({
@@ -78,7 +117,10 @@ const params = (over: Partial<TaskContinuationParams> = {}): TaskContinuationPar
     ...over,
 });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+    vi.clearAllMocks();
+    cachedUsers.splice(0, cachedUsers.length, REQUESTER, OWNER);
+});
 
 describe('posting the outcome', () => {
     it('writes an AI-role message into the graph\'s conversation', async () => {
@@ -138,6 +180,48 @@ describe('posting the outcome', () => {
     });
 });
 
+describe('posting as the person who started the run', () => {
+    // The conversation's access check refuses anyone who is not its owner or an editor. Posted as
+    // the service user, the outcome of a Flow agent started from chat never reached that chat.
+    it('posts the reply as the user who started the submitting run', async () => {
+        const h = harness();
+        await h.deliverer.PostMessage(params());
+        expect(h.replyAuthor()).toBe(REQUESTER.ID);
+    });
+
+    it("falls back to the conversation's owner when the run records no user", async () => {
+        const h = harness({ runUserID: null });
+        await h.deliverer.PostMessage(params());
+        expect(h.replyAuthor()).toBe(OWNER.ID);
+    });
+
+    it("falls back to the conversation's owner when the graph records no submitting run", async () => {
+        const h = harness();
+        await h.deliverer.PostMessage(params({ SubmittedByAgentRunID: null }));
+        expect(h.replyAuthor()).toBe(OWNER.ID);
+    });
+
+    it('uses the service user only when no user can be resolved, and still posts', async () => {
+        cachedUsers.splice(0, cachedUsers.length);
+        const h = harness();
+        await h.deliverer.PostMessage(params());
+        expect(h.replyAuthor()).toBe(SERVICE_USER.ID);
+        expect(h.reply().Save).toHaveBeenCalled();
+    });
+
+    it('matches the cached user regardless of UUID case', async () => {
+        const h = harness({ runUserID: REQUESTER.ID.toUpperCase() });
+        await h.deliverer.PostMessage(params());
+        expect(h.replyAuthor()).toBe(REQUESTER.ID);
+    });
+
+    it('runs a reinvoked turn as the user who started the run', async () => {
+        const h = harness();
+        await h.deliverer.Reinvoke(params());
+        expect(runAgent.mock.calls[0][0].contextUser).toBe(REQUESTER);
+    });
+});
+
 describe('it never throws — the dispatcher marks delivery inside a CAS guard', () => {
     it('does nothing for a headless graph, without treating it as an error', async () => {
         // A graph submitted by a schedule, an entity-change trigger or an API call has no
@@ -150,7 +234,7 @@ describe('it never throws — the dispatcher marks delivery inside a CAS guard',
     it('survives a conversation detail that will not load', async () => {
         const h = harness({ loads: false });
         await expect(h.deliverer.PostMessage(params())).resolves.toBeUndefined();
-        expect(h.rows.length).toBe(1); // never got as far as building a reply
+        expect(h.details.length).toBe(1); // never got as far as building a reply
     });
 
     it('survives a failed save', async () => {
@@ -161,45 +245,15 @@ describe('it never throws — the dispatcher marks delivery inside a CAS guard',
     it('survives a provider that throws outright', async () => {
         const deliverer = new TaskGraphContinuationDeliverer(
             { CreateProvider: vi.fn().mockRejectedValue(new Error('pool exhausted')) } as never,
-            { ID: 'user-1' } as UserInfo,
+            SERVICE_USER,
         );
         await expect(deliverer.PostMessage(params())).resolves.toBeUndefined();
     });
 });
 
 describe('Reinvoke — restarting the submitting agent', () => {
-    /** A provider that hands out loadable agent-run and agent rows, then the reply detail. */
-    function reinvokeHarness(over: { runLoads?: boolean; agentLoads?: boolean } = {}) {
-        const { runLoads = true, agentLoads = true } = over;
-        const rows: Array<Record<string, unknown>> = [];
-        let call = 0;
-        const provider = {
-            GetEntityObject: vi.fn().mockImplementation(async () => {
-                call++;
-                if (call === 1) {
-                    const run = { AgentID: 'agent-1', Load: vi.fn().mockResolvedValue(runLoads) };
-                    rows.push(run);
-                    return run;
-                }
-                if (call === 2) {
-                    const agent = { ID: 'agent-1', Load: vi.fn().mockResolvedValue(agentLoads) };
-                    rows.push(agent);
-                    return agent;
-                }
-                const detail = detailRow();
-                rows.push(detail as unknown as Record<string, unknown>);
-                return detail;
-            }),
-        };
-        const deliverer = new TaskGraphContinuationDeliverer(
-            { CreateProvider: vi.fn().mockResolvedValue(provider) } as never,
-            { ID: 'user-1' } as UserInfo,
-        );
-        return { deliverer, provider, rows };
-    }
-
     it('starts the submitting agent a fresh turn carrying the outcome', async () => {
-        const h = reinvokeHarness();
+        const h = harness();
         await h.deliverer.Reinvoke(params());
 
         expect(runAgent).toHaveBeenCalledTimes(1);
@@ -211,39 +265,39 @@ describe('Reinvoke — restarting the submitting agent', () => {
     it('stamps depth + 1 — the value that makes MAX_REINVOKE_DEPTH real', async () => {
         // Without this the next graph the restarted run submits begins the chain at zero again, and
         // the cap can never fire. It is the whole reason ContinuationDepth exists as a column.
-        const h = reinvokeHarness();
+        const h = harness();
         await h.deliverer.Reinvoke(params({ ReinvokeDepth: 3 }));
         expect(runAgent.mock.calls[0][0].continuationDepth).toBe(4);
     });
 
     it('starts a chain at 1, not 0 — depth 0 is "not a continuation"', async () => {
-        const h = reinvokeHarness();
+        const h = harness();
         await h.deliverer.Reinvoke(params({ ReinvokeDepth: 0 }));
         expect(runAgent.mock.calls[0][0].continuationDepth).toBe(1);
     });
 
     it('falls back to posting when the graph records no submitting run', async () => {
         // A schedule- or trigger-started graph has no turn to continue.
-        const h = reinvokeHarness();
+        const h = harness();
         await h.deliverer.Reinvoke(params({ SubmittedByAgentRunID: null }));
         expect(runAgent).not.toHaveBeenCalled();
     });
 
     it('falls back to posting when the submitting run cannot be loaded', async () => {
-        const h = reinvokeHarness({ runLoads: false });
+        const h = harness({ runLoads: false });
         await h.deliverer.Reinvoke(params());
         expect(runAgent).not.toHaveBeenCalled();
     });
 
     it('falls back to posting when the agent cannot be loaded', async () => {
-        const h = reinvokeHarness({ agentLoads: false });
+        const h = harness({ agentLoads: false });
         await h.deliverer.Reinvoke(params());
         expect(runAgent).not.toHaveBeenCalled();
     });
 
     it('never throws — the dispatcher marks delivery inside a CAS guard', async () => {
         runAgent.mockRejectedValueOnce(new Error('agent exploded'));
-        const h = reinvokeHarness();
+        const h = harness();
         await expect(h.deliverer.Reinvoke(params())).resolves.toBeUndefined();
     });
 });

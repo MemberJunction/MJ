@@ -21,6 +21,7 @@ vi.mock('../github/github-client.js', () => ({
     DownloadMigrations: vi.fn(),
     GetLatestVersion: vi.fn(),
     ValidateGitHubTag: vi.fn(),
+    ListGitHubTagNames: vi.fn(),
     ParseGitHubUrl: (u: string) => {
         const m = u.match(/github\.com\/([^/?#]+)\/([^/?#]+)((?:\/[^?#]+)*)/);
         if (!m) return null;

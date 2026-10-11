@@ -25,6 +25,8 @@ vi.mock('table', () => ({
 // Mock TextFormatter
 vi.mock('../lib/text-formatter', () => ({
     TextFormatter: {
+        FormatText: (text: string) => text,
+        FormatJSON: (obj: unknown) => JSON.stringify(obj, null, 2),
         formatText: (text: string) => text,
         formatJSON: (obj: unknown) => JSON.stringify(obj, null, 2),
     }
@@ -206,6 +208,110 @@ describe('OutputFormatter', () => {
             };
             const output = formatter.formatAgentResult(result);
             expect(JSON.parse(output).success).toBe(true);
+        });
+
+        // `mj ai audit agent-run <id>` needs the run ID, and the reader needs to know how the run ended.
+        it('should carry the run ID, run status and final payload in JSON', () => {
+            const formatter = new OutputFormatter('json');
+            const result: ExecutionResult = {
+                success: true,
+                entityName: 'Lead Intake Flow',
+                AgentRunID: 'run-123',
+                AgentRunStatus: 'Completed',
+                result: 'Flow completed - no more paths to follow',
+                FinalPayload: { leads: [{ name: 'Ada', score: 92 }] },
+                duration: 100,
+            };
+            const parsed = JSON.parse(formatter.FormatAgentResult(result));
+            expect(parsed.AgentRunID).toBe('run-123');
+            expect(parsed.AgentRunStatus).toBe('Completed');
+            expect(parsed.FinalPayload).toEqual({ leads: [{ name: 'Ada', score: 92 }] });
+        });
+
+        it('should show the run ID, status, and audit command in compact mode', () => {
+            const formatter = new OutputFormatter('compact');
+            const output = formatter.FormatAgentResult({
+                success: true,
+                entityName: 'Lead Intake Flow',
+                AgentRunID: 'run-123',
+                AgentRunStatus: 'Completed',
+                result: 'Flow completed - no more paths to follow',
+                FinalPayload: { leads: 3 },
+                duration: 100,
+            });
+            expect(output).toContain('Run ID: run-123');
+            expect(output).toContain('Run status: Completed');
+            expect(output).toContain('Final payload:');
+            expect(output).toContain('"leads": 3');
+            expect(output).toContain('mj ai audit agent-run run-123');
+            expect(output).not.toContain('--errors');
+        });
+
+        it('should point a failed run at the audit command with --errors', () => {
+            const formatter = new OutputFormatter('compact');
+            const output = formatter.FormatAgentResult({
+                success: false,
+                entityName: 'TestAgent',
+                AgentRunID: 'run-9',
+                AgentRunStatus: 'Failed',
+                error: 'Action failed',
+                duration: 50,
+            });
+            expect(output).toContain('Run ID: run-9');
+            expect(output).toContain('Run status: Failed');
+            expect(output).toContain('mj ai audit agent-run run-9 --errors');
+        });
+
+        it('should say a timeout timed out', () => {
+            const formatter = new OutputFormatter('compact');
+            const output = formatter.FormatAgentResult({
+                success: false,
+                entityName: 'TestAgent',
+                AgentRunID: 'run-9',
+                AgentRunStatus: 'Cancelled',
+                error: 'Timed out after 1000ms (--timeout).',
+                TimedOut: true,
+                duration: 1000,
+            });
+            expect(output).toContain('Agent execution timed out');
+            expect(output).toContain('Timed out after 1000ms');
+        });
+
+        // --background: the run started the workflow, it did not finish it.
+        it('should not claim a dispatched (Paused) run completed', () => {
+            const formatter = new OutputFormatter('compact');
+            const output = formatter.FormatAgentResult({
+                success: true,
+                entityName: 'Lead Intake Flow',
+                AgentRunID: 'run-1',
+                AgentRunStatus: 'Paused',
+                result: "Started **Lead Intake** — 3 task(s) running. I'll follow up when it finishes.",
+                duration: 100,
+            });
+            expect(output).toContain('its workflow continues on the task-graph dispatcher');
+            expect(output).not.toContain('completed successfully');
+        });
+
+        it('should skip an empty payload and cut a huge one short in compact mode', () => {
+            const formatter = new OutputFormatter('compact');
+            const empty = formatter.FormatAgentResult({ success: true, entityName: 'A', result: 'done', FinalPayload: {}, duration: 1 });
+            expect(empty).not.toContain('Final payload:');
+
+            const huge = formatter.FormatAgentResult({
+                success: true, entityName: 'A', result: 'done', FinalPayload: { text: 'x'.repeat(10000) }, duration: 1,
+            });
+            expect(huge).toContain('Final payload:');
+            expect(huge).toContain('more characters. Use --format json for the whole payload.');
+            expect(huge.length).toBeLessThan(6000);
+        });
+
+        it('should add run rows to the table rendering', () => {
+            const formatter = new OutputFormatter('table');
+            const output = formatter.FormatAgentResult({
+                success: true, entityName: 'A', AgentRunID: 'run-5', AgentRunStatus: 'Completed', duration: 1,
+            });
+            expect(output).toContain('Run ID | run-5');
+            expect(output).toContain('Run Status | Completed');
         });
     });
 

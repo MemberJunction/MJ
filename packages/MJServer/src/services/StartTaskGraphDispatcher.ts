@@ -27,6 +27,7 @@ import { TaskGraphAgentRunner } from './TaskGraphAgentRunner.js';
 import { randomBytes } from 'node:crypto';
 import { DurableEntityActionTaskSubmitter } from './DurableEntityActionTaskSubmitter.js';
 import { TaskGraphContinuationDeliverer } from './TaskGraphContinuationDeliverer.js';
+import { TaskGraphUserResolver } from './TaskGraphUserResolver.js';
 import { PubSubManager } from '../generic/PubSubManager.js';
 import { TaskGraphFrameBroadcaster } from '../resolvers/TaskGraphFrameResolver.js';
 
@@ -86,6 +87,13 @@ export async function StartTaskGraphDispatcher(
         // stalls on a task nothing can execute — which is why the shipped User Onboarding
         // Flow Agent could not run at all before this seam existed.
         new TaskGraphPromptRunner(),
+        // Decision nodes: the package default (one AIDecisionRunner call per node).
+        undefined,
+        // Who each step runs as. `contextUser` above is the service account the dispatcher reads
+        // and writes its own bookkeeping as; every prompt, action, agent and decision step runs as
+        // the person who submitted its graph, looked up here. Without this a graph a person
+        // submitted cannot run at all — it never falls back to the service account.
+        new TaskGraphUserResolver(),
     );
     await dispatcher.Start();
 

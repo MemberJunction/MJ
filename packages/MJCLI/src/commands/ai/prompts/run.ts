@@ -2,6 +2,7 @@ import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, ResolveLegacyFormat } from '../../../lib/format-compat.js';
+import { CloseAIProvider, EndAICommand, RouteConsoleToStderr } from '../../../lib/ai-command-lifecycle.js';
 
 export default class PromptsRun extends Command {
   static description = 'Execute a direct prompt with an AI model';
@@ -58,7 +59,9 @@ export default class PromptsRun extends Command {
   };
 
   async run(): Promise<void> {
-    const { PromptService, OutputFormatter } = await import('@memberjunction/ai-cli');
+    // stdout is this command's result; framework logging goes to stderr so --format json parses.
+    RouteConsoleToStderr();
+    const { PromptService, OutputFormatter, CloseMJProvider } = await import('@memberjunction/ai-cli');
 
     const { flags, metadata } = await this.parse(PromptsRun);
     const service = new PromptService();
@@ -70,6 +73,7 @@ export default class PromptsRun extends Command {
         Map: AI_FORMAT_MAP,
       }));
 
+    let exitCode = 0;
     try {
       const spinner = ora();
       
@@ -102,12 +106,13 @@ export default class PromptsRun extends Command {
 
       spinner.stop();
       this.log(formatter.formatPromptResult(result));
-
-      if (!result.success) {
-        this.exit(1);
-      }
+      exitCode = result.success ? 0 : 1;
     } catch (error) {
+      await CloseAIProvider(CloseMJProvider);
       this.error(error as Error);
     }
+
+    // Close the database pool so the process can exit; it used to hang here after printing.
+    await EndAICommand(CloseMJProvider, exitCode);
   }
 }

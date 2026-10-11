@@ -92,7 +92,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Format for data output: 'csv' (token efficient) or 'json' (structured). Default: csv.",
+            "Description": "Format of the data shown in the message: 'csv' (token efficient) or 'json' (structured). Default: csv. The Results output parameter is always an array of row objects, whatever this is set to.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -111,7 +111,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Maximum character length for column values. Values longer than this are trimmed with '...' suffix. Set to 0 for full values. Default: 50.",
+            "Description": "Maximum character length for column values. Values longer than this are trimmed with '...' suffix. Set to 0 for full values. Default: 50. It trims only the data shown in the message; the Results output parameter always carries full values.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -129,7 +129,7 @@
             "Type": "Output",
             "ValueType": "Other",
             "IsArray": true,
-            "Description": "Query results formatted according to DataFormat parameter.",
+            "Description": "The rows the query returned: an array of objects keyed by column name, with full, untrimmed values (DataFormat and ColumnMaxLength shape only the copy in the message). Map it into the payload to use the rows downstream, e.g. {\"Results\": \"rows\"}.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -161,6 +161,34 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "TotalRowCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total rows the query matches, ignoring MaxRows. Equal to RowCount unless MaxRows cut the result off. Useful for reporting 'showing N of M' or branching on whether the result is complete.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "519882C3-4C33-43B4-B056-31C34D0461D6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WasTruncated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "True when MaxRows cut the result off, i.e. TotalRowCount is greater than RowCount.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BBC4C298-8861-4251-A992-92B1EC3F07DB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "ExecutionTimeMs",
             "Type": "Output",
             "ValueType": "Scalar",
@@ -183,7 +211,7 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The resolved SQL that was executed (after composition and parameter substitution).",
+            "Description": "The resolved SQL that was executed (after composition and parameter substitution). Absent when the query pipeline does not report it.",
             "IsRequired": false
           },
           "primaryKey": {

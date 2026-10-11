@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * Engine-side logging behaviour for the Entity Action workflow extensions.
@@ -127,6 +127,7 @@ vi.mock('@memberjunction/actions-base', async (importOriginal) => {
 
 import { ActionEngineServer } from '../generic/ActionEngine';
 import { BaseAction } from '../generic/BaseAction';
+import { BaseEntitySaveQueue, UserInfo, WellKnownUserSource, type IMetadataProvider } from '@memberjunction/core';
 import type { ActionParam, RunActionParams } from '@memberjunction/actions-base';
 import type { MJActionParamEntity, MJEntityActionParamEntity } from '@memberjunction/core-entities';
 
@@ -421,5 +422,77 @@ describe('LoggingMode', () => {
         );
 
         expect(logRows).toHaveLength(0);
+    });
+});
+
+// ── Who the row is written as ────────────────────────────────────────────────────────────────────
+
+describe('the identity a log row is written as', () => {
+    const SYSTEM_USER = Object.assign(new UserInfo(), { ID: 'SYSTEM-1', Name: 'System' });
+    const RUN_USER = Object.assign(new UserInfo(), { ID: 'REQUESTER-1', Name: 'Ursula UI-Role' });
+
+    /** A well-known-user source answering with a fixed system user (or none). */
+    class FixedSystemUserSource extends WellKnownUserSource {
+        constructor(private readonly systemUser: UserInfo | null) { super(); }
+        public override async GetSystemUser(): Promise<UserInfo | null> { return this.systemUser; }
+    }
+
+    /** A provider whose log rows record the user they were requested — and so saved — as. */
+    function recordingProvider(saveSucceeds: boolean = true) {
+        const writtenAs: Array<UserInfo | undefined> = [];
+        const provider = {
+            GetEntityObject: async (_entityName: string, user?: UserInfo) => {
+                writtenAs.push(user);
+                const row = newLogRow();
+                row.Save = vi.fn().mockResolvedValue(saveSucceeds);
+                row.LatestResult = { CompleteMessage: 'User Ursula UI-Role does not have permission to Create MJ: Action Execution Logs records' };
+                return row;
+            }
+        };
+        return { Provider: provider as unknown as IMetadataProvider, WrittenAs: writtenAs };
+    }
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('writes the row as the system user while UserID names the user the action ran for', async () => {
+        vi.spyOn(WellKnownUserSource, 'Instance', 'get').mockReturnValue(new FixedSystemUserSource(SYSTEM_USER));
+        const { Provider, WrittenAs } = recordingProvider();
+
+        await engine().RunAction(runParams({ ContextUser: RUN_USER, Provider }));
+
+        expect(WrittenAs).toEqual([SYSTEM_USER]);
+        // The run's own user — not the engine singleton's ('test-user-id'), which is whoever last
+        // configured it and can belong to a concurrent run.
+        expect(logRows[0].UserID).toBe(RUN_USER.ID);
+    });
+
+    it('writes the row as the run\'s user when this process has no system user', async () => {
+        vi.spyOn(WellKnownUserSource, 'Instance', 'get').mockReturnValue(new FixedSystemUserSource(null));
+        const { Provider, WrittenAs } = recordingProvider();
+
+        await engine().RunAction(runParams({ ContextUser: RUN_USER, Provider }));
+
+        expect(WrittenAs).toEqual([RUN_USER]);
+        expect(logRows[0].UserID).toBe(RUN_USER.ID);
+    });
+
+    it('never lets a refused log write stop the action — and reports it rather than swallowing it', async () => {
+        // The pre-fix shape for a UI-role user: the row is refused. The action still runs and its
+        // result is returned; the refusal surfaces in the log queue's diagnostics.
+        vi.spyOn(WellKnownUserSource, 'Instance', 'get').mockReturnValue(new FixedSystemUserSource(null));
+        const { Provider } = recordingProvider(false);
+        const e = engine();
+        // The real fire-and-forget queue, not the synchronous recorder `engine()` installs.
+        const queue = new BaseEntitySaveQueue();
+        (e as unknown as { _logQueue: BaseEntitySaveQueue })._logQueue = queue;
+
+        const result = await e.RunAction(runParams({ ContextUser: RUN_USER, Provider }));
+        const flush = await queue.Flush();
+
+        expect(result.Success).toBe(true);
+        expect(bodyRunCount).toBe(1);
+        expect(flush.failures).toBeGreaterThan(0);
     });
 });

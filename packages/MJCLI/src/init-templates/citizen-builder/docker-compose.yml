@@ -1,5 +1,11 @@
-name: mj-citizen-builder
-
+# MemberJunction Citizen Agent Builder - local stack.
+#
+# Settings live in .env next to this file. `mj agent init` creates it.
+#
+# There is no top-level `name:`. Docker Compose names the project (and so the containers and
+# volumes) after COMPOSE_PROJECT_NAME in .env, which `mj agent init` makes unique per workspace,
+# or else after this folder. A fixed name would make every workspace on a machine share one
+# database.
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -8,57 +14,93 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${DB_PASSWORD:-TestPassword123!}"
+    # Every port is bound to this machine only: the database has a well-known default password, and
+    # anyone who signs in to Explorer is given the Developer role (scripts/workspace-settings.mjs).
     ports:
-      - "${DB_PORT:-1433}:1433"
+      - "127.0.0.1:${DB_PORT:-1433}:1433"
     healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C -No
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -C -No"]
       interval: 10s
       timeout: 5s
-      retries: 15
+      retries: 12
       start_period: 20s
     volumes:
       - sqlserver-data:/var/opt/mssql
 
-  mj:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      args:
-        # Required: the CLI and MemberJunction release inside the container must match the CLI
-        # that scaffolded this workspace. `mj agent init` writes it to .env.
-        MJ_VERSION: "${MJ_VERSION:?MJ_VERSION is not set in .env - re-run mj agent init, or set it to the MemberJunction version to install}"
+  # Creates the MemberJunction database if it does not exist, then exits. The headless installer
+  # never creates it, and SQL Server reports a missing database as "Login failed for user 'sa'".
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
     platform: linux/amd64
-    restart: unless-stopped
+    restart: "no"
     depends_on:
       sqlserver:
         condition: service_healthy
-    ports:
-      - "${API_PORT:-4000}:4000"
-      - "${EXPLORER_PORT:-4202}:4200"
     environment:
-      DB_HOST: "sqlserver"
-      DB_PORT: "1433"
-      DB_USERNAME: "sa"
+      SQLCMDPASSWORD: "${DB_PASSWORD:-TestPassword123!}"
+      DB_DATABASE: "${DB_DATABASE:-MemberJunction}"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -euo pipefail
+        if [[ ! "$${DB_DATABASE}" =~ ^[A-Za-z_][A-Za-z0-9_]*$$ ]]; then
+          echo "DB_DATABASE may only contain letters, digits and underscores: $${DB_DATABASE}" >&2
+          exit 1
+        fi
+        /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -No -b \
+          -Q "IF DB_ID(N'$${DB_DATABASE}') IS NULL CREATE DATABASE [$${DB_DATABASE}];"
+        echo "Database $${DB_DATABASE} is ready."
+
+  mj:
+    # Tagged with the release, so every workspace on the same release shares one built image.
+    image: "mj-citizen-builder:${MJ_VERSION:?MJ_VERSION is not set in .env - run mj agent init, or set it to the MemberJunction release to install}"
+    build:
+      context: ./docker
+      dockerfile: Dockerfile
+      args:
+        # The image installs @memberjunction/cli@MJ_VERSION, and the entrypoint installs the same
+        # release with `mj install --tag`. `mj agent init` sets it to the CLI that scaffolded this
+        # workspace.
+        MJ_VERSION: "${MJ_VERSION}"
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    # The API listens on API_PORT inside the container too: the browser calls it at
+    # http://localhost:API_PORT, so the two must match. Explorer always listens on 4200 inside.
+    # Bound to this machine only, like the database port above.
+    ports:
+      - "127.0.0.1:${API_PORT:-4000}:${API_PORT:-4000}"
+      - "127.0.0.1:${EXPLORER_PORT:-4202}:4200"
+    # Only the database connection and ports are set here. AI provider keys, the encryption key and
+    # sign-in settings are read from .env on every start (scripts/workspace-settings.mjs) and
+    # written into the files MemberJunction loads, so editing .env and restarting is enough.
+    environment:
+      DB_HOST: sqlserver
+      DB_PORT: 1433
+      DB_USERNAME: sa
       DB_PASSWORD: "${DB_PASSWORD:-TestPassword123!}"
       DB_DATABASE: "${DB_DATABASE:-MemberJunction}"
-      # Tells the entrypoint which MemberJunction release `mj install` must fetch
+      DB_TRUST_SERVER_CERTIFICATE: "1"
+      HOST_DB_PORT: "${DB_PORT:-1433}"
+      API_PORT: "${API_PORT:-4000}"
+      EXPLORER_PORT: "${EXPLORER_PORT:-4202}"
       MJ_VERSION: "${MJ_VERSION}"
-      MJ_BASE_ENCRYPTION_KEY: "${MJ_BASE_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef}"
-      # LLM Provider API Keys
-      AI_VENDOR_API_KEY__OpenAILLM: "${OPENAI_API_KEY:-}"
-      AI_VENDOR_API_KEY__AnthropicLLM: "${ANTHROPIC_API_KEY:-}"
-      AI_VENDOR_API_KEY__GeminiLLM: "${GEMINI_API_KEY:-}"
-      AI_VENDOR_API_KEY__GroqLLM: "${GROQ_API_KEY:-}"
-      AI_VENDOR_API_KEY__MistralLLM: "${MISTRAL_API_KEY:-}"
-      # Business Context Open App (More Cheese default or custom enterprise app)
       OPEN_APP_INSTALL_URL: "${OPEN_APP_INSTALL_URL:-https://github.com/MemberJunction/more-cheese}"
       GITHUB_TOKEN: "${GITHUB_TOKEN:-}"
     volumes:
       - mj-workspace:/workspace
-      - ./metadata:/work/metadata
-      - ./scripts:/work/scripts
-      - ./dist:/work/dist
+      # The workspace folder itself: metadata/, scripts/, dist/, .env and .mj-status.json.
+      - ./:/work
     entrypoint: ["/bin/bash", "/work/scripts/docker-entrypoint.sh"]
+    healthcheck:
+      # Healthy once setup has finished and both services answer (.mj-status.json says "ready").
+      test: ["CMD", "node", "-e", "process.exit(JSON.parse(require('fs').readFileSync('/work/.mj-status.json','utf8')).state === 'ready' ? 0 : 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120m
 
 volumes:
   sqlserver-data:

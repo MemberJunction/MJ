@@ -9,6 +9,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtemp, mkdir, writeFile, rm, readFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import AdmZip from 'adm-zip';
 import { DistributionAssembler, DistributionSourcePaths, type WriteOp } from '../distribution/DistributionAssembler.js';
 
@@ -388,5 +389,48 @@ describe('DistributionAssembler sinks', () => {
     } finally {
       await rm(zipDir, { recursive: true, force: true });
     }
+  });
+});
+
+/**
+ * The real `distribution.turbo.json`, which the assembler ships verbatim as every
+ * install's `turbo.json` (see ROOT_FILES). These pin the two properties an install
+ * depends on; the fixture-based tests above only check that the file is copied.
+ */
+describe('shipped distribution.turbo.json', () => {
+  /** The keys of a turbo task / root config these assertions read. */
+  interface TurboTaskConfig {
+    cache?: boolean;
+    persistent?: boolean;
+    env?: string[];
+    passThroughEnv?: string[];
+  }
+  interface TurboConfig {
+    envMode?: string;
+    globalPassThroughEnv?: string[];
+    tasks: Record<string, TurboTaskConfig>;
+  }
+
+  const SHIPPED_TURBO_JSON = fileURLToPath(new URL('../../../../distribution.turbo.json', import.meta.url));
+
+  async function loadShippedTurboConfig(): Promise<TurboConfig> {
+    return JSON.parse(await readFile(SHIPPED_TURBO_JSON, 'utf-8')) as TurboConfig;
+  }
+
+  it('passes the whole environment through to the persistent start task', async () => {
+    // turbo 2 runs tasks in strict env mode: without this, variables injected into the
+    // container (AI_VENDOR_API_KEY__*, DB_*, MJ_BASE_ENCRYPTION_KEY, auth, REDIS_*, …)
+    // are stripped before `turbo start` launches MJAPI.
+    const { tasks } = await loadShippedTurboConfig();
+    expect(tasks.start).toMatchObject({ cache: false, persistent: true, passThroughEnv: ['*'] });
+  });
+
+  it('keeps build in strict env mode, so its cache key and environment are unchanged', async () => {
+    const config = await loadShippedTurboConfig();
+    expect(config.envMode).toBeUndefined();
+    expect(config.globalPassThroughEnv).toBeUndefined();
+    expect(config.tasks.build.cache).toBe(true);
+    expect(config.tasks.build.env).toBeUndefined();
+    expect(config.tasks.build.passThroughEnv).toBeUndefined();
   });
 });

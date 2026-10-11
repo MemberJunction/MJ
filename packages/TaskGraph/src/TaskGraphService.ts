@@ -22,6 +22,7 @@ import {
     RunInEntityTransaction,
     RunView,
     UserInfo,
+    WellKnownUserSource,
     type EntityTransactionScope,
 } from '@memberjunction/core';
 import {
@@ -72,7 +73,11 @@ export type TaskGraphSubmitContext = {
     EnvironmentID: string;
     /** Conversation this graph answers, when submitted from a conversational channel. */
     ConversationDetailID?: string | null;
-    /** User the work runs as and is attributed to. */
+    /**
+     * The person the work is for. Steps run with this user's permissions, and it is recorded on the
+     * graph as `submittedByUserID`. The plan rows themselves are written by the platform, not by
+     * this user — see `TaskGraphService.Submit`.
+     */
     ContextUser: UserInfo;
     /** Provider to persist through. */
     Provider: IMetadataProvider;
@@ -510,6 +515,21 @@ export function FindCrossUserAssignments(spec: TaskGraphSpec, submitterUserID: s
 }
 
 /**
+ * Why a task's stored input may not be replaced, or `null` when it may.
+ *
+ * Only a step's input is editable. A graph's parent row is not a step: its `InputPayload` holds the
+ * graph's own settings, among them `submittedByUserID` — the person every step runs as. Letting an
+ * input edit rewrite that would let anyone able to retry a step choose whose permissions the
+ * workflow runs with, including the system user's (by erasing it).
+ */
+export function InputEditRefusal(task: Pick<MJTaskEntity, 'ParentID'>): string | null {
+    return task.ParentID
+        ? null
+        : `it is a workflow's own record rather than one of its steps, and its stored settings — including ` +
+          `whom the workflow runs for — cannot be edited`;
+}
+
+/**
  * Why a task cannot be retried, or `null` when it can.
  *
  * A `Failed` task can. So can a `Complete` Decision step that is holding an answer — one below its
@@ -651,7 +671,13 @@ export class TaskGraphService {
                 return { Success: false, ErrorMessage: promptIDsByName.ErrorMessage };
             }
 
-            const taskTypeID = await this.ensureTaskType(context);
+            // The plan rows are the platform's bookkeeping, written as the system user. The baseline
+            // UI role may only READ Tasks and Task Dependencies, so writing them as the submitter
+            // made every graph a UI-role user's agent produced fail here. The submitter is still the
+            // person the graph is for: it is recorded on the parent as `submittedByUserID`, a Human
+            // step is assigned to them, and the dispatcher runs every step with their permissions.
+            const writer = await this.resolvePlanWriter(context);
+            const taskTypeID = await this.ensureTaskType({ ...context, ContextUser: writer });
 
             // 3. Persist — ALL of it, or none of it.
             //
@@ -684,11 +710,11 @@ export class TaskGraphService {
                 async () => {
                     // Parent first so children have a ParentID, then children, then edges — edges
                     // last because they reference two child IDs that must both exist.
-                    const parentID = await this.persistParent(spec, taskTypeID, context);
+                    const parentID = await this.persistParent(spec, taskTypeID, context, writer);
                     const map = await this.persistChildren(
-                        spec, parentID, taskTypeID, agentIDsByName.Map!, actionIDsByName.Map!, promptIDsByName.Map!, context,
+                        spec, parentID, taskTypeID, agentIDsByName.Map!, actionIDsByName.Map!, promptIDsByName.Map!, context, writer,
                     );
-                    await this.persistDependencies(spec, map, context);
+                    await this.persistDependencies(spec, map, writer, context.Provider);
                     return { parentTaskID: parentID, taskIDMap: map };
                 },
             );
@@ -968,7 +994,7 @@ export class TaskGraphService {
             const editedInput = inputPayload === undefined
                 ? undefined
                 : typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload);
-            const refusal = RetryRefusal(task, editedInput);
+            const refusal = RetryRefusal(task, editedInput) ?? (editedInput !== undefined ? InputEditRefusal(task) : null);
             if (refusal) {
                 LogError(`[TaskGraphService] Cannot retry task ${taskID}: ${refusal}.`);
                 return false;
@@ -1314,6 +1340,16 @@ export class TaskGraphService {
         context: TaskGraphSubmitContext,
     ): Promise<{ Success: boolean; ErrorMessage?: string }> {
         try {
+            // ParentID never changes, so checking it before the guarded write cannot race it.
+            const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+            if (!(await task.Load(taskID))) {
+                return { Success: false, ErrorMessage: 'Only a workflow step that has not started can have its input edited.' };
+            }
+            const refusal = InputEditRefusal(task);
+            if (refusal) {
+                return { Success: false, ErrorMessage: `This input cannot be edited: ${refusal}.` };
+            }
+
             const typeID = await this.ensureTaskType(context);
             const json = typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload);
             const ok = await this.debugWrites.TryUpdateInputPayload(
@@ -1496,9 +1532,28 @@ export class TaskGraphService {
         return rows[0]?.ID ?? null;
     }
 
-    /** Writes the parent task that represents the graph as a whole. */
-    private async persistParent(spec: TaskGraphSpec, taskTypeID: string, context: TaskGraphSubmitContext): Promise<string> {
-        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+    /**
+     * The identity the plan rows are written as: the system user, when this process has one.
+     *
+     * Falls back to the submitter when no system user can be resolved (no server-side source loaded,
+     * a failed lookup) — the behaviour before this existed, which can fail for a user who may not
+     * write Tasks but never writes as anyone more privileged than the person asking.
+     */
+    private async resolvePlanWriter(context: TaskGraphSubmitContext): Promise<UserInfo> {
+        try {
+            return (await WellKnownUserSource.Instance.GetSystemUser(context.Provider)) ?? context.ContextUser;
+        } catch (e) {
+            LogError(`[TaskGraphService] Could not resolve the system user to write the plan as; writing as the submitter: ${e instanceof Error ? e.message : String(e)}`);
+            return context.ContextUser;
+        }
+    }
+
+    /**
+     * Writes the parent task that represents the graph as a whole, as `writer`. The submitter
+     * (`context.ContextUser`) is what the row records as `submittedByUserID`.
+     */
+    private async persistParent(spec: TaskGraphSpec, taskTypeID: string, context: TaskGraphSubmitContext, writer: UserInfo): Promise<string> {
+        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', writer);
         parent.NewRecord();
         parent.Name = spec.workflowName;
         parent.Description = spec.reasoning || 'Orchestrated workflow';
@@ -1550,7 +1605,10 @@ export class TaskGraphService {
         return parent.ID;
     }
 
-    /** Writes each child task, returning the tempId -> real ID mapping edges will need. */
+    /**
+     * Writes each child task as `writer`, returning the tempId -> real ID mapping edges will need.
+     * A Human step is still assigned to the submitter (`context.ContextUser`).
+     */
     private async persistChildren(
         spec: TaskGraphSpec,
         parentTaskID: string,
@@ -1559,6 +1617,7 @@ export class TaskGraphService {
         actionIDsByName: Map<string, string>,
         promptIDsByName: Map<string, string>,
         context: TaskGraphSubmitContext,
+        writer: UserInfo,
     ): Promise<Map<string, string>> {
         const map = new Map<string, string>();
         // Resolved ONCE over the whole graph: a rank is a node's position in the topology, so it
@@ -1570,7 +1629,7 @@ export class TaskGraphService {
             ),
         );
         for (const node of spec.tasks) {
-            const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+            const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', writer);
             task.NewRecord();
             task.Name = node.name;
             task.Description = node.description;
@@ -1685,11 +1744,12 @@ export class TaskGraphService {
         return FindUnrunnableKinds(spec);
     }
 
-    /** Writes the dependency edges, translating tempIds to persisted IDs. */
+    /** Writes the dependency edges as `writer`, translating tempIds to persisted IDs. */
     private async persistDependencies(
         spec: TaskGraphSpec,
         taskIDMap: Map<string, string>,
-        context: TaskGraphSubmitContext,
+        writer: UserInfo,
+        provider: IMetadataProvider,
     ): Promise<void> {
         for (const node of spec.tasks) {
             const taskID = taskIDMap.get(node.tempId);
@@ -1699,7 +1759,7 @@ export class TaskGraphService {
                 const dependsOnTaskID = taskIDMap.get(edge.tempId);
                 if (!dependsOnTaskID) continue; // validation already rejected unknown refs
 
-                const dep = await context.Provider.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', context.ContextUser);
+                const dep = await provider.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', writer);
                 dep.NewRecord();
                 dep.TaskID = taskID;
                 dep.DependsOnTaskID = dependsOnTaskID;

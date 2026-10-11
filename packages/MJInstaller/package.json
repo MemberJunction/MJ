@@ -9,7 +9,7 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc && tsc-alias -f",
+    "build": "tsc && tsc-alias -f && node scripts/write-lockstep-packages.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -15,6 +15,7 @@ vi.mock('../github/github-client.js', () => ({
     DownloadMigrations: vi.fn(),
     GetLatestVersion: vi.fn(),
     ValidateGitHubTag: vi.fn(),
+    ListGitHubTagNames: vi.fn(),
     ParseGitHubUrl: (u: string) => {
         const m = u.match(/github\.com\/([^/?#]+)\/([^/?#]+)((?:\/[^?#]+)*)/);
         if (!m) return null;
@@ -78,7 +79,7 @@ vi.mock('@memberjunction/core', () => ({
 
 import { InstallApp, UpgradeApp, RemoveApp, EnableApp, DisableApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTagNames, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
 import { CreateAppSchema, SchemaExists } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies, RemoveAppPackages } from '../install/package-manager.js';
@@ -149,6 +150,7 @@ function baseHappyPathStubs(): void {
     vi.mocked(ListInstalledApps).mockResolvedValue([]);
     vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
     vi.mocked(ListGitHubTags).mockResolvedValue([]);
+    vi.mocked(ListGitHubTagNames).mockResolvedValue([]);
     vi.mocked(ListGitHubReleases).mockResolvedValue([]);
     vi.mocked(ValidateGitHubTag).mockResolvedValue({ Exists: true });
     vi.mocked(FindDependentApps).mockResolvedValue([]);

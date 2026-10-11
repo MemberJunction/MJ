@@ -1,73 +1,86 @@
-# Enterprise Organization Setup: Real Schemas & Business Context
+# Organization setup: your schemas and business context
 
-This document explains how enterprise organizations—such as **Blue Cypress (BC)**—configure the MemberJunction Citizen Agent Builder so business users build agents against their **real entity schemas and business relationships** instead of generic defaults.
-
----
-
-## 1. The Two-App Architecture
-
-To provide an accurate, realistic authoring environment without exposing production customer data to personal machines, organizations publish two Open Apps:
-
-| Application | Description | Carries |
-|---|---|---|
-| **`<org>-platform`** (e.g. `bc-platform`) | Core schema & business logic | Custom entities, fields, relationships, standard actions, and queries. |
-| **`<org>-sampledata`** (e.g. `bc-sampledata`) | Realistic synthetic data | Loom-generated synthetic records mirroring production shapes and relational integrity. Depends on `<org>-platform`. |
-
-When a citizen builder boots their environment and installs `<org>-sampledata`, MemberJunction's Open App dependency engine automatically resolves and installs `<org>-platform` leaf-first.
-
-### Why This Model Works:
-1. **Identical Entity Shapes:** Entity and field names match production exactly. An agent written against `bc-sampledata` works on production without renaming a single field or query.
-2. **Zero PII Risk:** The data is 100% synthetic by construction. Compliance and security reviews pass automatically.
-3. **Seamless Promotion:** Promotion is simply deploying the agent's metadata to the production instance; no code rewrites or schema remapping are needed.
+How an organization configures the Citizen Agent Builder so its business users build agents against
+the organization's **real entity schemas and relationships** instead of the default sample data.
 
 ---
 
-## 2. Configuration for Citizen Builders
+## 1. Two Open Apps
 
-### Option A: Private GitHub Repository Access (Recommended)
-If your organization hosts `<org>-sampledata` in a private GitHub organization (e.g. `github.com/BlueCypress/`):
+To give builders a realistic environment without putting production data on personal machines, an
+organization publishes two Open Apps:
 
-1. Provide the user with a fine-grained, read-only GitHub Personal Access Token (PAT) with `Contents: Read` permission on the sample data and platform repositories.
-2. In the user's `.env`:
-   ```bash
-   # Enterprise Open App Target
-   OPEN_APP_INSTALL_URL=https://github.com/BlueCypress/bc-sampledata
-   
-   # Read-only GitHub PAT for private repo authentication
-   GITHUB_TOKEN=ghp_exampleTokenWithReadOnlyAccess
-   ```
-3. Run the bootstrap script:
-   ```bash
-   docker compose exec api /work/scripts/bootstrap.sh
-   ```
+| App | What it carries |
+|---|---|
+| **`<org>-platform`** | Your custom entities, fields, relationships, actions and queries. |
+| **`<org>-sampledata`** | Synthetic records in the same shapes as production, with referential integrity. Declares `<org>-platform` as a dependency. |
 
-### Option B: Local Directory Mount (Zero Token)
-If the user or team already has a local checkout of the platform app on their machine:
-1. Create a `docker-compose.override.yml`:
-   ```yaml
-   services:
-     api:
-       volumes:
-         - /path/to/local/bc-platform:/work/apps/bc-platform:ro
-   ```
-2. Run `mj app install /work/apps/bc-platform` inside the container.
+When a workspace installs `<org>-sampledata`, MemberJunction installs `<org>-platform` first.
+
+Why this works:
+1. **Same entity shapes as production.** An agent built against the sample data runs in production
+   without renaming a field.
+2. **No personal data on laptops.** The records are synthetic by construction.
+3. **Simple promotion.** Promoting an agent deploys its metadata; no code or schema mapping changes.
 
 ---
 
-## 3. Automated Capabilities Cataloging
+## 2. Set up once for your builders
 
-Once your organization's Open App is installed, run:
+Builders should not have to deal with GitHub access, sign-in configuration or provider keys. Give them
+a short settings sheet (or a pre-filled `.env`) with:
+
+| Setting in `.env` | What to provide |
+|---|---|
+| `OPEN_APP_INSTALL_URL` | Your sample-data app, e.g. `https://github.com/your-org/your-sampledata` |
+| `GITHUB_TOKEN` | Only if that repository is private: a fine-grained, read-only token with `Contents: Read` on the sample-data and platform repositories. |
+| `ENTRA_TENANT_ID` and `ENTRA_CLIENT_ID` (or `AUTH0_DOMAIN` and `AUTH0_CLIENT_ID`) | A single-page app registration for local builders, with `http://localhost:4202` registered as a redirect URI. One registration serves everyone. |
+| An AI provider key | Ideally an organization-managed key per team. For Anthropic, a key created inside a workspace works as it is; a key that is not scoped to one also needs `ANTHROPIC_WORKSPACE_ID`. |
+
+Each builder adds their own `OWNER_EMAIL` (the account they sign in with). A local builder gives
+everyone who signs in to it the Developer role, so they can run the agents they build; its ports
+accept connections only from that machine. An environment the agents are promoted to keeps its own
+roles.
+
+A builder then creates a workspace pointed at your app:
+```bash
+npx @memberjunction/cli@edge agent init ./my-agents --app https://github.com/your-org/your-sampledata
+```
+or, for an existing workspace, sets `OPEN_APP_INSTALL_URL` in `.env` and starts over with fresh
+volumes (`docker compose down -v`, then `docker compose up -d`; this deletes the workspace's data).
+
+### Using a local checkout instead of GitHub
+If builders have your platform app checked out locally, mount it into the container with a
+`docker-compose.override.yml` next to `docker-compose.yml`:
+```yaml
+services:
+  mj:
+    volumes:
+      - /path/to/your-org-platform:/opt/apps/your-org-platform:ro
+```
+Then install it from inside the container:
+```bash
+docker compose exec mj mj app install /opt/apps/your-org-platform
+```
+
+---
+
+## 3. Refresh the capabilities catalog
+
+After your app installs, run:
 ```bash
 ./scripts/generate-capabilities.sh
 ```
-This queries your local database's entity and action catalogs to update `CAPABILITIES.md`. Your coding agent immediately learns every custom entity, field, and action specific to your company (e.g. `BC: Association Members`, `BC: Committee Terms`, `BC: Invoices`).
+`CAPABILITIES.md` then lists your apps (with their install status), entities, fields and actions, so
+the coding agent builds with your real names.
 
 ---
 
-## 4. Packaging and Upstream Release of Sample Data
+## 4. Releasing new sample data
 
-When updating your organization's synthetic dataset:
-1. Generate synthetic records using Loom.
-2. Push them to a staging database using `mj sync push`.
-3. Capture the differential SQL emitted by `packages/MetadataSync/src/lib/sql-logger.ts` as the next `V<timestamp>__v<version>_Metadata_Sync.sql` migration in `<org>-sampledata`.
-4. Publish a release of `<org>-sampledata`. All citizen builders will receive the updated synthetic records on their next bootstrap.
+1. Generate synthetic records (for example with Loom).
+2. Push them to a staging database with `mj sync push`.
+3. Capture the SQL that `mj sync push` emits as the next `V<timestamp>__v<version>_Metadata_Sync.sql`
+   migration in `<org>-sampledata`.
+4. Publish a release of `<org>-sampledata`. New workspaces install it; existing ones get it with
+   `docker compose exec mj mj app upgrade <app-name>`.

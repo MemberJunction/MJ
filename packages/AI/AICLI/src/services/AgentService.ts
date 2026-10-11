@@ -1,16 +1,45 @@
-import { AgentRunner } from '@memberjunction/ai-agents';
+import { AgentRunner, type FlowAgentExecuteParams } from '@memberjunction/ai-agents';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import type { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { ExecutionLogger } from '../lib/execution-logger';
 import { InitializeMJProvider } from '../lib/mj-provider';
 import { AgentInfo, ExecutionResult } from '../lib/output-formatter';
 import { ConsoleManager } from '../lib/console-manager';
-import chalk from 'chalk';
+import { AgentProgressRenderer } from '../lib/progress-renderer';
+import { AwaitWithDeadline, CANCELLATION_GRACE_MS, DeadlineOutcome } from '../lib/run-deadline';
+import { AgentExecutionFacts, BuildAgentRunResult, BuildTimedOutResult } from '../lib/agent-run-result';
 
 export interface AgentExecutionOptions {
   verbose?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /**
+   * Stop waiting after this many milliseconds. The run is cancelled and the result is a failure
+   * with `TimedOut` set, naming the run. Omit to wait for the agent framework's own limit.
+   */
   timeout?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   conversationMessages?: Array<{ role: 'user' | 'assistant'; content: string }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /**
+   * Leave a Flow agent's workflow to the task-graph dispatcher instead of running its steps in this
+   * process. The run returns as soon as the workflow is submitted, with status `Paused`, and the
+   * workflow's output arrives later. Off by default. Other agent types ignore it.
+   */
+  Background?: boolean;
+}
+
+/** What a run reported about itself before it returned. */
+interface RunTracking {
+  /** Set when the runner reports the `MJ: AI Agent Runs` record it created. */
+  AgentRunID?: string;
+}
+
+/** Everything about one execution that its outcome is reported against. */
+interface ExecutionContext {
+  AgentName: string;
+  Prompt: string;
+  StartTime: number;
+  Logger: ExecutionLogger;
+  Tracking: RunTracking;
+  TimeoutMs?: number;
+  Verbose: boolean;
 }
 
 export class AgentService {
@@ -26,8 +55,14 @@ export class AgentService {
       this.metadata = new Metadata(); // global-provider-ok: CLI tool, single-provider context
       this.contextUser = await this.getContextUser();
       this.initialized = true;
-    } catch (error: any) {
-      throw new Error(`Failed to initialize Agent Service: ${error?.message || 'Unknown error'}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      // An already-formatted error (missing database settings, unreachable server) says what to
+      // fix; prefixing it would bury that under a second headline.
+      if (message.startsWith('❌')) {
+        throw error instanceof Error ? error : new Error(message);
+      }
+      throw new Error(`Failed to initialize Agent Service: ${message || 'Unknown error'}`);
     }
   }
 
@@ -109,244 +144,254 @@ For help with agent configuration, see the MJ documentation.`);
     return this.FindAgent(agentName);
   }
 
+  /**
+   * Runs an agent once and reports the outcome.
+   *
+   * A Flow agent runs its steps in this process and returns its final output, as a Loop agent does,
+   * unless `options.Background` asks for the task-graph dispatcher. The result names the agent run
+   * (`AgentRunID`) and its final status, so `mj ai audit agent-run` can follow up.
+   *
+   * Nothing is written to stdout while the run executes: progress goes to stderr, and console output
+   * from the framework is dropped (or, with `verbose`, sent to stderr). That keeps stdout for the
+   * caller's rendering of the result, which under `--format json` must parse. A run abandoned after
+   * a timeout can still log once this returns; a command that owns its process's stdout should route
+   * `console` to stderr for good, as `mj ai agents run` does.
+   *
+   * @throws when the agent cannot be found or started. A run that starts and fails, or times out,
+   *   is returned as a failed result rather than thrown.
+   */
   async ExecuteAgent(
-    agentName: string, 
-    prompt: string, 
+    agentName: string,
+    prompt: string,
     options: AgentExecutionOptions = {}
   ): Promise<ExecutionResult> {
-    await this.ensureInitialized();
+    const context: ExecutionContext = {
+      AgentName: agentName,
+      Prompt: prompt,
+      StartTime: Date.now(),
+      Logger: new ExecutionLogger(`agents:run`, agentName, undefined, prompt),
+      Tracking: {},
+      TimeoutMs: options.timeout,
+      Verbose: options.verbose === true,
+    };
+    const progress = new AgentProgressRenderer({ Verbose: context.Verbose });
 
-    const startTime = Date.now();
-    const logger = new ExecutionLogger(`agents:run`, agentName, undefined, prompt);
-    
+    if (context.Verbose) {
+      ConsoleManager.RedirectOutputToStderr();
+    } else {
+      ConsoleManager.SuppressOutput();
+    }
     try {
-      // Find the agent
-      logger.logStep('INFO', 'SYSTEM', 'Finding agent', { agentName });
-      const agent = await this.FindAgent(agentName);
-      
-      if (!agent) {
-        const suggestions = await this.getSimilarAgentNames(agentName);
-        const suggestionText = suggestions.length > 0 
-          ? `\n\nDid you mean one of these?\n${suggestions.map(s => `  - ${s}`).join('\n')}`
-          : '';
-        
-        throw new Error(`❌ Agent not found: "${agentName}"
+      return await this.executeAgentWithLogging(options, progress, context);
+    } finally {
+      progress.Stop();
+      ConsoleManager.RestoreOutput();
+    }
+  }
+
+  private async executeAgentWithLogging(
+    options: AgentExecutionOptions,
+    progress: AgentProgressRenderer,
+    context: ExecutionContext
+  ): Promise<ExecutionResult> {
+    try {
+      if (!this.initialized) {
+        progress.Status('Connecting to MemberJunction...');
+      }
+      await this.ensureInitialized();
+      const agent = await this.findAgentOrThrow(context.AgentName, context.Logger);
+      const outcome = await this.runAgentWithinTimeout(agent, context.Prompt, options, progress, context);
+      progress.Finish();
+      return this.reportOutcome(outcome, context);
+    } catch (error: unknown) {
+      progress.Finish();
+      throw this.describeExecutionFailure(error, context);
+    }
+  }
+
+  private async findAgentOrThrow(agentName: string, logger: ExecutionLogger): Promise<MJAIAgentEntityExtended> {
+    logger.LogStep('INFO', 'SYSTEM', 'Finding agent', { agentName });
+    const agent = await this.FindAgent(agentName);
+
+    if (!agent) {
+      const suggestions = await this.getSimilarAgentNames(agentName);
+      const suggestionText = suggestions.length > 0
+        ? `\n\nDid you mean one of these?\n${suggestions.map(s => `  - ${s}`).join('\n')}`
+        : '';
+
+      throw new Error(`❌ Agent not found: "${agentName}"
 
 Problem: No agent exists with the specified name
-Available agents: Use 'mj-ai agents:list' to see all agents${suggestionText}
+Available agents: Use 'mj ai agents list' to see all agents${suggestionText}
 
 Next steps:
 1. Check the agent name spelling
-2. Use 'mj-ai agents:list' to see available agents
+2. Use 'mj ai agents list' to see available agents
 3. Verify the agent is deployed and enabled`);
-      }
+    }
 
-      logger.logStep('SUCCESS', 'SYSTEM', 'Agent found', { 
-        agentId: agent.ID, 
-        agentName: agent.Name 
+    logger.LogStep('SUCCESS', 'SYSTEM', 'Agent found', { agentId: agent.ID, agentName: agent.Name });
+    return agent;
+  }
+
+  /**
+   * Starts the run and waits for it — for no longer than `options.timeout`, when one is set. On
+   * the deadline the run is cancelled through the runner's cancellation token and given
+   * {@link CANCELLATION_GRACE_MS} to stop and record that it was cancelled.
+   */
+  private async runAgentWithinTimeout(
+    agent: MJAIAgentEntityExtended,
+    prompt: string,
+    options: AgentExecutionOptions,
+    progress: AgentProgressRenderer,
+    context: ExecutionContext
+  ): Promise<DeadlineOutcome<ExecuteAgentResult>> {
+    context.Logger.LogStep('INFO', 'AGENT', 'Starting agent execution', {
+      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+      background: options.Background === true,
+    });
+
+    const cancellation = new AbortController();
+    const run = new AgentRunner().RunAgent(
+      this.buildRunParams(agent, prompt, options, progress, context.Tracking, cancellation.signal)
+    );
+
+    if (!options.timeout || options.timeout <= 0) {
+      return { Kind: 'Finished', Value: await run };
+    }
+
+    const outcome = await AwaitWithDeadline(run, options.timeout, () =>
+      cancellation.abort(`--timeout of ${options.timeout}ms elapsed`)
+    );
+    if (outcome.Kind === 'StillRunning') {
+      this.reportLateFailure(run, context.Tracking);
+    }
+    return outcome;
+  }
+
+  private buildRunParams(
+    agent: MJAIAgentEntityExtended,
+    prompt: string,
+    options: AgentExecutionOptions,
+    progress: AgentProgressRenderer,
+    tracking: RunTracking,
+    cancellationToken: AbortSignal
+  ): ExecuteAgentParams {
+    return {
+      agent,
+      conversationMessages: this.buildConversationMessages(prompt, options.conversationMessages),
+      contextUser: this.contextUser!,
+      onProgress: (update) => progress.Update(update),
+      onAgentRunCreated: (agentRunID: string) => {
+        tracking.AgentRunID = agentRunID;
+        progress.Status(`Agent run ${agentRunID} started`);
+      },
+      cancellationToken,
+      // The framework's own wall-clock limit (two hours by default) would cut a longer --timeout
+      // short. It is set just past ours, so ours fires first and names the timeout as the reason.
+      maxExecutionTimeMs: options.timeout ? options.timeout + CANCELLATION_GRACE_MS : undefined,
+      agentTypeParams: this.buildAgentTypeParams(options),
+    };
+  }
+
+  /**
+   * Asks a Flow agent to run its steps in this process.
+   *
+   * A top-level Flow run otherwise defaults to the task-graph dispatcher: it submits the workflow
+   * and returns before any step has run, so the CLI printed "Started … I'll follow up when it
+   * finishes" and nothing else. In-run execution walks the same graph, choosing paths with the same
+   * engine, and returns the final payload. Only the Flow agent type reads `agentTypeParams`.
+   * `dispatch` is never sent explicitly: leaving it out is how a top-level run gets it, and a
+   * sub-agent asked for it is refused.
+   */
+  private buildAgentTypeParams(options: AgentExecutionOptions): FlowAgentExecuteParams | undefined {
+    return options.Background ? undefined : { executionMode: 'inRun' };
+  }
+
+  /** The conversation so far (chat mode), with the new prompt as the last user message. */
+  private buildConversationMessages(
+    prompt: string,
+    history: AgentExecutionOptions['conversationMessages']
+  ): Array<{ role: 'user' | 'assistant'; content: string }> {
+    return [...(history ?? []), { role: 'user' as const, content: prompt }];
+  }
+
+  /**
+   * The run is still going after the command stopped waiting for it. If it fails before the
+   * process exits, say so rather than losing the error.
+   */
+  private reportLateFailure(run: Promise<ExecuteAgentResult>, tracking: RunTracking): void {
+    run.catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`Agent run ${tracking.AgentRunID ?? '(not recorded)'} failed after the command stopped waiting for it: ${message}\n`);
+    });
+  }
+
+  /** Builds the result for a run that returned or timed out, and closes the execution log. */
+  private reportOutcome(outcome: DeadlineOutcome<ExecuteAgentResult>, context: ExecutionContext): ExecutionResult {
+    const facts: AgentExecutionFacts = {
+      AgentName: context.AgentName,
+      Prompt: context.Prompt,
+      DurationMs: Date.now() - context.StartTime,
+      ExecutionID: context.Logger.GetExecutionId(),
+      LogFilePath: context.Logger.GetLogFilePath(),
+    };
+
+    const result = outcome.Kind === 'Finished'
+      ? BuildAgentRunResult(outcome.Value, facts)
+      : BuildTimedOutResult({
+          TimeoutMs: context.TimeoutMs ?? 0,
+          Run: outcome.Kind === 'StoppedAfterDeadline' ? outcome.Value : undefined,
+          AgentRunID: context.Tracking.AgentRunID,
+        }, facts);
+
+    this.logOutcome(result, context.Logger);
+    return result;
+  }
+
+  private logOutcome(result: ExecutionResult, logger: ExecutionLogger): void {
+    if (result.success) {
+      const resultContent = result.result;
+      logger.LogStep('SUCCESS', 'AGENT', 'Agent execution completed', {
+        agentRunId: result.AgentRunID,
+        status: result.AgentRunStatus,
+        result: typeof resultContent === 'string'
+          ? resultContent.substring(0, 200) + (resultContent.length > 200 ? '...' : '')
+          : resultContent,
       });
+      logger.Finalize('SUCCESS', resultContent);
+      return;
+    }
 
-      // Execute the agent
-      logger.logStep('INFO', 'AGENT', 'Starting agent execution', { 
-        prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : '')
-      });
+    const errorMessage = result.error || 'Unknown execution error';
+    logger.LogError(errorMessage, 'AGENT');
+    logger.Finalize(result.TimedOut ? 'CANCELLED' : 'FAILED', undefined, errorMessage);
+  }
 
-      const agentRunner = new AgentRunner();
-      
-      // Build conversation messages - always include the conversation history plus current message
-      let conversationMessages: Array<{ role: 'user' | 'assistant'; content: string }>;
-      
-      if (options.conversationMessages) {
-        // We have conversation history - clone it and append current message
-        conversationMessages = [...options.conversationMessages, {
-          role: 'user' as const,
-          content: prompt
-        }];
-      } else {
-        // No conversation history - create new conversation with just current message
-        conversationMessages = [{
-          role: 'user' as const,
-          content: prompt
-        }];
-      }
-      
-      // Prepare progress callbacks
-      let lastProgressOutput = '';
-      const callbacks = {
-        onProgress: ((progress) => {
-          const stepIcons: Record<string, string> = {
-            'initialization': '🚀',
-            'validation': '✓',
-            'prompt_execution': '💭',
-            'action_execution': '⚙️',
-            'subagent_execution': '🤖',
-            'decision_processing': '🧠',
-            'finalization': '✨'
-          };
-          
-          const icon = stepIcons[progress.step] || '→';
+  /**
+   * Turns an error thrown while finding or starting the agent into the error the CLI shows. An
+   * already-formatted error (it starts with ❌) is passed through unchanged.
+   */
+  private describeExecutionFailure(error: unknown, context: ExecutionContext): Error {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
 
-          // Use stepCount from metadata if available, otherwise fall back to percentage (deprecated)
-          let progressIndicator: string;
-          if (progress.metadata?.stepCount != null) {
-            progressIndicator = `Step ${progress.metadata.stepCount}`.padStart(7, ' ');
-          } else if (progress.percentage != null) {
-            progressIndicator = `${progress.percentage.toFixed(0).padStart(3, ' ')}%`;
-          } else {
-            progressIndicator = '   ';
-          }
+    context.Logger.LogError(error instanceof Error ? error : errorMessage, 'SYSTEM');
+    context.Logger.Finalize('FAILED', undefined, errorMessage);
 
-          if (options.verbose) {
-            // In verbose mode, show full progress updates
-            console.log(
-              chalk.blue(`\n  ${icon} [${progressIndicator}]`),
-              chalk.bold(progress.step.replace(/_/g, ' ')),
-              chalk.dim(`- ${progress.message}`)
-            );
+    if (errorMessage.startsWith('❌')) {
+      return error instanceof Error ? error : new Error(errorMessage);
+    }
 
-            if (progress.metadata && Object.keys(progress.metadata).length > 0) {
-              console.log(chalk.dim(`     ${JSON.stringify(progress.metadata)}`));
-            }
-          } else {
-            // In non-verbose mode, show truncated progress on the same line
-            const display = `${icon} [${progressIndicator}] ${progress.step.replace(/_/g, ' ')}: ${progress.message}`;
-            const truncated = display.substring(0, 80);
-            const finalDisplay = truncated + (display.length > 80 ? '...' : '');
+    const runLine = context.Tracking.AgentRunID
+      ? `\nAgent run: ${context.Tracking.AgentRunID} (inspect it with: mj ai audit agent-run ${context.Tracking.AgentRunID} --errors)`
+      : '';
+    const stackInfo = context.Verbose && stack ? `\n\nStack trace:\n${stack}` : '';
 
-            // Clear previous line and write new content
-            if (lastProgressOutput) {
-              process.stdout.write('\r' + ' '.repeat(lastProgressOutput.length) + '\r');
-            }
-            process.stdout.write(finalDisplay);
-            lastProgressOutput = finalDisplay;
-
-            // Add newline when finalizing
-            if (progress.step === 'finalization' && lastProgressOutput) {
-              process.stdout.write('\n');
-              lastProgressOutput = '';
-            }
-          }
-        }) as AgentExecutionProgressCallback
-      };
-
-      // Suppress console output during agent execution unless verbose
-      let executionResult: ExecuteAgentResult;
-      if (options.verbose) {
-        executionResult = await agentRunner.RunAgent({
-          agent: agent,
-          conversationMessages,
-          contextUser: this.contextUser!,
-          onProgress: callbacks.onProgress
-        });
-      } else {
-        executionResult = await ConsoleManager.withSuppressedOutput(async () => {
-          return await agentRunner.RunAgent({
-            agent: agent,
-            conversationMessages,
-            contextUser: this.contextUser!,
-            onProgress: callbacks.onProgress
-          });
-        });
-      }
-
-      const duration = Date.now() - startTime;
-
-      // Clear any remaining progress output
-      if (lastProgressOutput && !options.verbose) {
-        process.stdout.write('\r' + ' '.repeat(lastProgressOutput.length) + '\r');
-      }
-
-      if (executionResult && executionResult.success) {
-        // Get the result from Message field first, then FinalPayload if Message is empty
-        let resultContent: any = executionResult.agentRun.Message;
-        
-        if (!resultContent && executionResult.agentRun.FinalPayload) {
-          // Parse FinalPayload if Message is not available
-          try {
-            const finalPayload = JSON.parse(executionResult.agentRun.FinalPayload);
-            resultContent = finalPayload;
-          } catch {
-            resultContent = executionResult.agentRun.FinalPayload;
-          }
-        }
-        
-        // Use payload if neither Message nor FinalPayload has content
-        if (!resultContent && executionResult.payload) {
-          resultContent = executionResult.payload;
-        }
-
-        logger.logStep('SUCCESS', 'AGENT', 'Agent execution completed', {
-          result: typeof resultContent === 'string' 
-            ? resultContent.substring(0, 200) + (resultContent.length > 200 ? '...' : '')
-            : resultContent
-        });
-
-        const result: ExecutionResult = {
-          success: true,
-          entityName: agentName,
-          prompt,
-          result: resultContent,
-          duration,
-          executionId: logger.getExecutionId(),
-          logFilePath: logger.getLogFilePath()
-        };
-
-        logger.finalize('SUCCESS', resultContent);
-        return result;
-
-      } else {
-        const errorMessage = executionResult?.agentRun?.ErrorMessage || 'Unknown execution error';
-        logger.logError(errorMessage, 'AGENT');
-
-        const result: ExecutionResult = {
-          success: false,
-          entityName: agentName,
-          prompt,
-          error: errorMessage,
-          duration,
-          executionId: logger.getExecutionId(),
-          logFilePath: logger.getLogFilePath()
-        };
-
-        logger.finalize('FAILED', undefined, errorMessage);
-        return result;
-      }
-
-    } catch (error: any) {
-      const duration = Date.now() - startTime;
-      const errorMessage = error?.message || 'Unknown error';
-      
-      logger.logError(error, 'SYSTEM');
-
-      // Include stack trace in verbose mode
-      const errorDetails = options.verbose && error?.stack 
-        ? `${errorMessage}\n\nStack trace:\n${error.stack}`
-        : errorMessage;
-
-      const result: ExecutionResult = {
-        success: false,
-        entityName: agentName,
-        prompt,
-        error: errorDetails,
-        duration,
-        executionId: logger.getExecutionId(),
-        logFilePath: logger.getLogFilePath()
-      };
-
-      logger.finalize('FAILED', undefined, errorMessage);
-
-      // If it's already a formatted error, re-throw as is
-      if (errorMessage.startsWith('❌')) {
-        throw error;
-      } else {
-        const stackInfo = options.verbose && error?.stack
-          ? `\n\nStack trace:\n${error.stack}`
-          : '';
-        
-        throw new Error(`❌ Agent execution failed
+    return new Error(`❌ Agent execution failed
 
 Problem: ${errorMessage}
-Agent: ${agentName}
+Agent: ${context.AgentName}${runLine}
 Context: Running agent with user prompt
 
 Next steps:
@@ -355,9 +400,7 @@ Next steps:
 3. Review execution logs for detailed error information
 4. Try with a simpler prompt to test basic functionality
 
-Log file: ${logger.getLogFilePath()}${stackInfo}`);
-      }
-    }
+Log file: ${context.Logger.GetLogFilePath()}${stackInfo}`);
   }
 
   /** @deprecated Use {@link ExecuteAgent}. */

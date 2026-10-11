@@ -1,4 +1,4 @@
-import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
+import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider, WellKnownUserSource } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { BaseSingleton, MJGlobal, MJLruCache, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
@@ -697,11 +697,20 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true, inputSnapshot?: string): Promise<MJActionExecutionLogEntity> {
       // this is where the log entry for the action run will be created
       const md = params.Provider ?? new Metadata();
-      const logEntity = await md.GetEntityObject<MJActionExecutionLogEntity>('MJ: Action Execution Logs', this.ContextUser);
+      // The user the action ran for — the run's own user, not this singleton's, which is whoever last
+      // called Config() and can belong to a concurrent run.
+      const runUser = params.ContextUser ?? this.ContextUser;
+      // The row is WRITTEN as the system user: it is the platform's record of the run, and the
+      // baseline UI role may only read `MJ: Action Execution Logs`, so writing it as the run's user
+      // was refused for everyone without the Developer role. `UserID` still names `runUser`.
+      const logEntity = await md.GetEntityObject<MJActionExecutionLogEntity>(
+         'MJ: Action Execution Logs',
+         await this.ResolveLogWriter(params.Provider, runUser)
+      );
       logEntity.NewRecord();
       logEntity.ActionID = params.Action.ID;
       logEntity.StartedAt = new Date();
-      logEntity.UserID = this.ContextUser.ID;
+      logEntity.UserID = runUser.ID;
       // The as-called inputs. Written once and never overwritten — EndActionLog writes the final
       // merged set to ResultParams instead. `inputSnapshot` is supplied by RunAction; the fallback
       // covers callers that reach StartActionLog directly.
@@ -724,6 +733,24 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       }
 
       return logEntity;
+   }
+
+   /**
+    * The identity an execution-log row is written as: the system user, when this process has one.
+    *
+    * The log is the platform's record of a run rather than the run's own data — the same reason the
+    * agent framework records its pause requests, and task graphs their plans, as the system user.
+    * Falls back to the run's user when no system user can be resolved (a client-side provider, no
+    * server-side source loaded, a failed lookup), never to anyone more privileged.
+    */
+   protected async ResolveLogWriter(provider: IMetadataProvider | undefined, runUser: UserInfo): Promise<UserInfo> {
+      try {
+         const source = provider ?? Metadata.Provider;
+         return (source ? await WellKnownUserSource.Instance.GetSystemUser(source) : null) ?? runUser;
+      } catch (e) {
+         LogError(`ActionEngine: could not resolve the system user to write the execution log as; writing it as the run's user: ${e instanceof Error ? e.message : String(e)}`);
+         return runUser;
+      }
    }
 
    protected async EndActionLog(logEntity: MJActionExecutionLogEntity, params: RunActionParams, result: ActionResult): Promise<void> {
