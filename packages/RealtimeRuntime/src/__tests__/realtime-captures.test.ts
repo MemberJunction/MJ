@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { CHANNEL_INBOUND_VIDEO_TRACK, type RealtimeTrackDescriptor } from '@memberjunction/ai';
-import { VideoSourceArbiter, type MediaDevice, type SampledFrame } from '@memberjunction/ai-realtime-client';
+import { ChannelInboundVideoBridge, VideoSourceArbiter, type MediaDevice, type SampledFrame } from '@memberjunction/ai-realtime-client';
 import {
     RealtimeCaptures,
     type RealtimeCaptureAdmission,
@@ -30,16 +30,18 @@ function harness(
     const controller = new FakeController();
     const host = new ShareHost();
     const samplers: FakeSampler[] = [];
-    const createSampler: RealtimeFrameSamplerFactory = (s, rate, onFrame) => {
+    /** Whether the next samplers can start: `false` is a platform the sampler cannot take frames on. */
+    const sampling = { Starts: true };
+    const createSampler: RealtimeFrameSamplerFactory = (s, options) => {
         const sampler: FakeSampler = {
             Stream: s,
-            Rate: rate,
+            Rate: options.Rate,
             Running: false,
-            Push: (data) => onFrame({ Data: data, MimeType: 'image/jpeg', Width: 1, Height: 1, TimestampMs: Date.now() } satisfies SampledFrame),
+            Push: (data) => options.OnFrame({ Data: data, MimeType: 'image/jpeg', Width: 1, Height: 1, TimestampMs: Date.now() } satisfies SampledFrame),
         };
         samplers.push(sampler);
         return {
-            Start: () => (sampler.Running = true),
+            Start: () => (sampler.Running = sampling.Starts),
             Stop: () => {
                 sampler.Running = false;
             },
@@ -47,7 +49,7 @@ function harness(
     };
     const captures = new RealtimeCaptures({ Client: client, LocalMedia: controller, Host: host, CreateSampler: createSampler, Admit: admit, ...extra });
     const sources = () => VideoSourceArbiter.ForSink(client).GetSources().map((s) => ({ SourceID: s.SourceID, Label: s.Label, Kind: s.Kind }));
-    return { client, controller, host, samplers, captures, sources };
+    return { client, controller, host, samplers, sampling, captures, sources };
 }
 
 describe('RealtimeCaptures', () => {
@@ -99,6 +101,83 @@ describe('RealtimeCaptures', () => {
         expect(client.IsTrackEstablished('video', 'inbound')).toBe(true);
         captures.Stop('screen');
         expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+    });
+
+    it('keeps the track it added while a channel sends on it, and gives it back at a later stop once no source is left', async () => {
+        const { client, captures, sources } = harness();
+        await captures.Start('camera');
+        // A channel that started sending on the camera's track: the camera has the model's only stream.
+        const panel = new ChannelInboundVideoBridge(client, { GetLatestFrame: () => 'panel' }, { SourceID: 'Panel#1', Label: 'Panel' });
+        expect(panel.PushFrame('panel-1')).toBe(false);
+
+        captures.Stop('camera');
+        expect(client.Notes).toContain('[You can now see: Panel]');
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(true);
+        expect(panel.PushFrame('panel-2')).toBe(true);
+        expect(client.Frames).toEqual(['panel-2']);
+
+        panel.Stop();
+        await captures.Start('screen');
+        captures.Stop('screen');
+        expect(sources()).toEqual([]);
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+    });
+
+    describe('a sampler that cannot start (no DOM, and no sampler from the host)', () => {
+        it('fails the camera as unsupported: nothing listed or told to the model, the camera and the track let go', async () => {
+            const { client, controller, sampling, captures, sources } = harness();
+            sampling.Starts = false;
+            expect(await captures.Start('camera')).toEqual({ Status: 'failed', Failure: 'unsupported', Message: 'This app cannot show the agent your camera.' });
+            expect(captures.States.Camera).toMatchObject({ Status: 'failed', Failure: 'unsupported' });
+            expect(sources()).toEqual([]);
+            expect(client.Notes).toEqual([]);
+            expect(controller.StopCalls).toEqual(['camera']);
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+        });
+
+        it('fails a screen share the same way, and ends the share', async () => {
+            const { client, host, sampling, captures, sources } = harness();
+            const share = new FakeShare('window');
+            host.Next = { Status: 'started', Capture: share };
+            sampling.Starts = false;
+            expect(await captures.Start('screen')).toEqual({ Status: 'failed', Failure: 'unsupported', Message: 'This app cannot show the agent your screen.' });
+            expect(share.Stopped).toBe(true);
+            expect(sources()).toEqual([]);
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+        });
+
+        it('never tells the model it can see the capture, even while another source is on', async () => {
+            const { client, sampling, captures, sources } = harness(true, [{ ...CHANNEL_INBOUND_VIDEO_TRACK }]);
+            const panel = new ChannelInboundVideoBridge(client, { GetLatestFrame: () => 'panel' }, { SourceID: 'Panel#1', Label: 'Panel' });
+            panel.Register();
+            sampling.Starts = false;
+            await captures.Start('camera');
+            expect(client.Notes).toEqual([]);
+            expect(sources()).toEqual([{ SourceID: 'Panel#1', Label: 'Panel', Kind: 'surface' }]);
+            panel.Stop();
+        });
+
+        it("fails the camera at the user's confirm after the check, and checks again at the next start", async () => {
+            const { client, controller, sampling, captures, sources } = harness(true, [], undefined, { CameraCheck: true });
+            await captures.Start('camera');
+            sampling.Starts = false;
+            expect(captures.ConfirmCamera()).toEqual({ Status: 'failed', Failure: 'unsupported', Message: 'This app cannot show the agent your camera.' });
+            expect(controller.StopCalls).toEqual(['camera']);
+            expect(sources()).toEqual([]);
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+            sampling.Starts = true;
+            expect(await captures.Start('camera')).toMatchObject({ Status: 'starting', Checking: true });
+        });
+
+        it('the DOM default cannot start without a DOM, so a capture with no sampler given fails rather than reporting on', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const client = new VideoClient();
+            client.Negotiate(true);
+            const captures = new RealtimeCaptures({ Client: client, LocalMedia: new FakeController(), Host: new ShareHost() });
+            expect(await captures.Start('camera')).toMatchObject({ Status: 'failed', Failure: 'unsupported' });
+            expect(VideoSourceArbiter.ForSink(client).GetSources()).toEqual([]);
+            warn.mockRestore();
+        });
     });
 
     it('reports a refused camera with its reason, and gives the track back', async () => {

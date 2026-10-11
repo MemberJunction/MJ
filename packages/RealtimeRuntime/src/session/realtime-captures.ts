@@ -9,16 +9,19 @@
  *    (`AddTrack`; a session never requests video before anyone shares, so it is not billed or limited for it);
  * 2. the device or surface is opened: the camera through the host's `ILocalMediaController`, a screen, window or
  *    tab through the host's `RequestDisplayCapture`;
- * 3. it becomes a source of the session's video source arbiter, which decides what the model sees and tells it
- *    when that changes, and frames are sampled at the rate the track negotiated.
+ * 3. frames are sampled at the rate the track negotiated, by the host's sampler or the DOM default, and it becomes a
+ *    source of the session's video source arbiter, which decides what the model sees and tells it when that changes.
+ *    A sampler that cannot start fails the capture as `unsupported`: the capture does not report on, and the model is
+ *    never told it can see it.
  *
  * With the camera check on ({@link RealtimeCapturesOptions.CameraCheck}), the first camera start waits between 2 and 3:
  * the camera is open for the user to look at, and becomes a source only once the user confirms
  * ({@link RealtimeCaptures.ConfirmCamera}).
  *
- * Stopping undoes all three. The track is removed again only when this class added it and no capture is left, so
- * a video track the session was minted with (a channel's) stays. A camera that goes away (unplugged) or a share
- * the user ends from the browser's own bar stops the capture the same way.
+ * Stopping undoes all three. The track is removed again only when this class added it, no capture is left, and the
+ * arbiter has no other source: a video track the session was minted with (a channel's) stays, and so does one a channel
+ * started sending on while a capture was on. A camera that goes away (unplugged) or a share the user ends from the
+ * browser's own bar stops the capture the same way.
  *
  * @module @memberjunction/realtime-runtime
  */
@@ -32,12 +35,12 @@ import {
     type CapturedDisplaySurface,
     type DisplayCaptureFailure,
     type DisplayCaptureOptions,
+    type FrameSamplerOptions,
     type ILocalMediaController,
     type LocalMediaState,
     type MediaDevice,
-    type SampledFrame,
 } from '@memberjunction/ai-realtime-client';
-import type { IRealtimeMediaHost } from '../hosts/IRealtimeMediaHost';
+import type { IRealtimeFrameSampler, IRealtimeMediaHost } from '../hosts/IRealtimeMediaHost';
 
 /** What the user can show the agent besides a channel's surface. */
 export type RealtimeCaptureKind = 'camera' | 'screen';
@@ -109,12 +112,11 @@ export interface RealtimeCaptureOffers {
 /** Neither capture offered: what a host shows outside a call. */
 export const REALTIME_CAPTURE_OFFERS_NONE: RealtimeCaptureOffers = Object.freeze({ Camera: false, Screen: false });
 
-/** Samples frames from a stream; the default draws through the DOM, and a test passes one that needs none. */
-export type RealtimeFrameSamplerFactory = (
-    stream: MediaStream,
-    rate: number,
-    onFrame: (frame: SampledFrame) => void
-) => { Start(): boolean; Stop(): void };
+/**
+ * Creates the sampler for one capture, as {@link IRealtimeMediaHost.CreateFrameSampler} does: the runtime passes the
+ * host's; the default draws through the DOM; a test passes one that needs none.
+ */
+export type RealtimeFrameSamplerFactory = (stream: MediaStream, options: FrameSamplerOptions) => IRealtimeFrameSampler;
 
 /**
  * The session's policy for one capture: refused with a reason for the user, or admitted with the channel it belongs to
@@ -137,7 +139,10 @@ export interface RealtimeCapturesOptions {
     LocalMedia: ILocalMediaController | null;
     /** The host, for screen sharing (`RequestDisplayCapture`); without it there is no screen share. */
     Host: IRealtimeMediaHost;
-    /** Defaults to a DOM {@link FrameSampler}. */
+    /**
+     * Creates each capture's frame sampler: the host's ({@link IRealtimeMediaHost.CreateFrameSampler}), which the runtime
+     * passes here. Defaults to a DOM {@link FrameSampler}, which cannot start without a DOM.
+     */
     CreateSampler?: RealtimeFrameSamplerFactory;
     /** Asked before each start, before anything is added or opened. Default: admitted, visible, with no channel. */
     Admit?: (kind: RealtimeCaptureKind) => RealtimeCaptureAdmission;
@@ -169,6 +174,12 @@ export const REALTIME_CAPTURE_SOURCE_IDS: Readonly<Record<RealtimeCaptureKind, s
 /** The names the model is told it is looking at, and the "agent can see" list shows. A shared panel goes by its own. */
 const LABELS: Record<RealtimeCaptureKind, string> = { camera: 'Camera', screen: 'Shared screen' };
 
+/** What the user is told when frames cannot be taken from a capture for the agent: its sampler could not start. */
+const CANNOT_SAMPLE: Record<RealtimeCaptureKind, string> = {
+    camera: 'This app cannot show the agent your camera.',
+    screen: 'This app cannot show the agent your screen.',
+};
+
 /** What the model and the "agent can see" list call a capture: a named shared panel by its name, as "Whiteboard (shared panel)". */
 function sourceLabel(kind: RealtimeCaptureKind, panelLabel: string | undefined): string {
     return panelLabel ? `${panelLabel} (shared panel)` : LABELS[kind];
@@ -195,7 +206,7 @@ type Acquired =
 interface LiveCapture {
     Stream: MediaStream;
     /** Samples it for the agent; `null` while the user checks the camera. */
-    Sampler: { Stop(): void } | null;
+    Sampler: IRealtimeFrameSampler | null;
     Release: () => void;
 }
 
@@ -273,6 +284,9 @@ export class RealtimeCaptures {
             return this.setState('camera', { Status: 'starting', Checking: true, Stream: acquired.Stream, ...this.cameraDevices() });
         }
         const sampler = this.showToAgent(kind, acquired.Stream, sourceLabel(kind, acquired.PanelLabel));
+        if (!sampler) {
+            return this.failToShow(kind, acquired.Release);
+        }
         this.live[kind] = { Stream: acquired.Stream, Sampler: sampler, Release: acquired.Release };
         return this.setState(kind, {
             Status: 'on',
@@ -285,15 +299,21 @@ export class RealtimeCaptures {
 
     /**
      * The user checked the camera and turned it on: it is shown to the agent from now on, and later camera starts skip the
-     * check. Returns the camera's state; unless the camera is waiting for its check, nothing changes.
+     * check. Returns the camera's state; unless the camera is waiting for its check, nothing changes. When frames cannot be
+     * taken from the camera, it fails as `unsupported` and the camera is released.
      */
     public ConfirmCamera(): RealtimeCaptureState {
         const live = this.live.camera;
         if (!live || !this.States.Camera.Checking) {
             return this.States.Camera;
         }
+        const sampler = this.showToAgent('camera', live.Stream, LABELS.camera);
+        if (!sampler) {
+            this.live.camera = null;
+            return this.failToShow('camera', live.Release);
+        }
         this.cameraChecked = true;
-        live.Sampler = this.showToAgent('camera', live.Stream, LABELS.camera);
+        live.Sampler = sampler;
         return this.setState('camera', { Status: 'on', Stream: live.Stream, ...this.cameraDevices() });
     }
 
@@ -364,6 +384,18 @@ export class RealtimeCaptures {
         return this.setState(kind, { Status: 'failed', Failure: failure, Message: message });
     }
 
+    /**
+     * Fails a capture whose device or share opened but whose frames cannot be taken for the agent (its sampler could not
+     * start): lets go of what opened, reports `unsupported`, and gives the track back.
+     */
+    private failToShow(kind: RealtimeCaptureKind, release: () => void): RealtimeCaptureState {
+        release();
+        // Failed first, so this capture no longer counts as starting when the track is given back.
+        const failed = this.fail(kind, 'unsupported', CANNOT_SAMPLE[kind]);
+        this.releaseVideoTrack();
+        return failed;
+    }
+
     /** The camera in use and the cameras to choose from, as the host's controller reports them now. */
     private cameraDevices(): CameraDevices {
         return cameraDevicesOf(this.options.LocalMedia?.State);
@@ -399,10 +431,15 @@ export class RealtimeCaptures {
         return null;
     }
 
-    /** Removes the video track this class added, once no capture is on or starting. */
+    /**
+     * Removes the video track this class added, once no capture is on or starting and the arbiter has no other source.
+     * A channel that started sending on the track while a capture was on (one opened mid-call before it had a track of its
+     * own) is such a source: removing the track would leave it sending nothing, right after the model was told it can see
+     * that channel. The track then stays for the session, as a channel's own does.
+     */
     private releaseVideoTrack(): void {
         const busy = [this.states.value.Camera, this.states.value.Screen].some((s) => s.Status === 'on' || s.Status === 'starting');
-        if (!this.addedVideoTrack || busy) {
+        if (!this.addedVideoTrack || busy || VideoSourceArbiter.ForSink(this.options.Client).GetSources().length > 0) {
             return;
         }
         this.addedVideoTrack = false;
@@ -410,17 +447,26 @@ export class RealtimeCaptures {
     }
 
     /**
-     * Registers the capture with the arbiter under `label`, as its channel's and as visible as the policy allows, and
-     * samples it at the negotiated rate.
+     * Samples the capture at the negotiated rate and registers it with the arbiter under `label`, as its channel's and as
+     * visible as the policy allows. The sampler starts first: one that cannot start (no DOM, and no sampler from the host)
+     * leaves nothing registered, so the model is never told it can see a capture that would send it nothing.
+     *
+     * @returns The running sampler, or `null` when sampling could not start.
      */
-    private showToAgent(kind: RealtimeCaptureKind, stream: MediaStream, label: string): { Stop(): void } {
+    private showToAgent(kind: RealtimeCaptureKind, stream: MediaStream, label: string): IRealtimeFrameSampler | null {
         const arbiter = VideoSourceArbiter.ForSink(this.options.Client);
         const sourceId = REALTIME_CAPTURE_SOURCE_IDS[kind];
+        const create = this.options.CreateSampler ?? createDomSampler;
+        const sampler = create(stream, {
+            Rate: this.options.Client.InboundVideoRate ?? 1,
+            OnFrame: (frame) => arbiter.PushFrame(sourceId, frame.Data, frame.MimeType),
+        });
+        if (!sampler.Start()) {
+            sampler.Stop();
+            return null;
+        }
         const { ChannelKey, VisibleToAgent } = this.showing[kind];
         arbiter.RegisterSource({ SourceID: sourceId, Label: label, Kind: kind, Enabled: VisibleToAgent, ...(ChannelKey ? { ChannelKey } : {}) });
-        const create = this.options.CreateSampler ?? createDomSampler;
-        const sampler = create(stream, this.options.Client.InboundVideoRate ?? 1, (frame) => arbiter.PushFrame(sourceId, frame.Data, frame.MimeType));
-        sampler.Start();
         return sampler;
     }
 
@@ -496,9 +542,9 @@ function sameDevices(a: readonly MediaDevice[], b: readonly MediaDevice[]): bool
     return a.length === b.length && a.every((d, i) => d.DeviceID === b[i].DeviceID && d.Label === b[i].Label);
 }
 
-/** A DOM frame sampler at the given rate. */
-function createDomSampler(stream: MediaStream, rate: number, onFrame: (frame: SampledFrame) => void): FrameSampler {
-    return new FrameSampler(stream, { Rate: rate, OnFrame: onFrame });
+/** The default sampler: a DOM {@link FrameSampler}, whose `Start()` returns `false` without a DOM. */
+function createDomSampler(stream: MediaStream, options: FrameSamplerOptions): IRealtimeFrameSampler {
+    return new FrameSampler(stream, options);
 }
 
 /** A share failure as a capture failure: a panel the browser cannot narrow to is unsupported; a wrong one an error. */

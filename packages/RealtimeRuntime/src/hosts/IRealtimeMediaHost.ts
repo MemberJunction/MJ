@@ -35,7 +35,7 @@
  * client driver, whose `Connect()` already takes exactly this type.
  */
 
-import type { DisplayCaptureOptions, DisplayCaptureResult, ILocalMediaController } from '@memberjunction/ai-realtime-client';
+import type { DisplayCaptureOptions, DisplayCaptureResult, FrameSamplerOptions, ILocalMediaController } from '@memberjunction/ai-realtime-client';
 
 /**
  * The platform capabilities the realtime session runtime needs but cannot provide itself.
@@ -100,6 +100,19 @@ export interface IRealtimeMediaHost {
     RequestDisplayCapture?(options?: DisplayCaptureOptions): Promise<DisplayCaptureResult>;
 
     /**
+     * OPTIONAL: creates the sampler that takes still frames from a camera or a screen share for the agent: from `stream`,
+     * at `options.Rate` frames per second (the rate the model's video track negotiated), each handed to `options.OnFrame`
+     * as a base64 image. The runtime creates one per capture, starts it once the device or share is open, and stops it
+     * when the capture stops; the stream's tracks belong to the capture, not the sampler.
+     *
+     * A host without it gets `FrameSampler` from `@memberjunction/ai-realtime-client/media`, which draws through a hidden
+     * `<video>` and a `<canvas>`: what a browser host wants, so it can omit this. A host without a DOM (React Native, a
+     * native shell, a test harness) supplies its own here. When the sampler cannot start (`Start()` returns `false`, as
+     * the DOM default does without a DOM), the capture fails as `unsupported` and the agent is never told it can see it.
+     */
+    CreateFrameSampler?(stream: MediaStream, options: FrameSamplerOptions): IRealtimeFrameSampler;
+
+    /**
      * OPTIONAL: creates a recorder for this session's audio, when the platform can record and the
      * user has consented.
      *
@@ -112,6 +125,22 @@ export interface IRealtimeMediaHost {
      * once it knows whether the agent's remote stream is already available.
      */
     CreateRecorder?(): IRealtimeSessionRecorder | null;
+}
+
+/**
+ * A frame sampler a host supplies through {@link IRealtimeMediaHost.CreateFrameSampler}. `FrameSampler` from
+ * `@memberjunction/ai-realtime-client/media` is one.
+ */
+export interface IRealtimeFrameSampler {
+    /**
+     * Starts taking frames.
+     *
+     * @returns `false` when the sampler cannot take frames on this platform; the runtime then fails the capture.
+     */
+    Start(): boolean;
+
+    /** Stops taking frames and releases what the sampler holds. Never stops the stream's tracks. */
+    Stop(): void;
 }
 
 /**

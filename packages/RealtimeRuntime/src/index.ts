@@ -104,6 +104,7 @@ export {
 
 // The platform seam.
 export {
+    type IRealtimeFrameSampler,
     type IRealtimeMediaHost,
     type IRealtimeSessionRecorder,
 } from './hosts/IRealtimeMediaHost';

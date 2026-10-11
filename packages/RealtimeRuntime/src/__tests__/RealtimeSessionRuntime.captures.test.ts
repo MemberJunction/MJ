@@ -42,6 +42,56 @@ class AudioOnlyProviderClient extends VideoClient {
     }
 }
 
+/**
+ * A video model's driver that reports the call live once connected, as a real driver does when its connection opens, so
+ * a channel the agent opens mid-call is told the session started. Like the others it requests no video at connect: no
+ * channel open at the start sources any.
+ */
+@RegisterClass(BaseRealtimeClient, 'live-capture-provider')
+class LiveCaptureProviderClient extends VideoClient {
+    public override async Connect(_config: ClientRealtimeSessionConfig, _micStream: MediaStream): Promise<void> {
+        this.Negotiate(true);
+        this.emitStateChange('listening');
+    }
+}
+
+/** A chart the agent can look at, shown through the base class's visual perception; the agent opens it mid-call. */
+class PictureChannel extends BaseRealtimeChannelClient {
+    public Picture = 'picture-1';
+    public get ChannelName(): string {
+        return 'Picture';
+    }
+    public override GetDescriptor(): RealtimeChannelDescriptor {
+        return {
+            Key: 'Picture',
+            Version: REALTIME_CHANNEL_CONTRACT_VERSION,
+            DisplayName: 'Sales chart',
+            Instructions: 'A chart the agent can look at.',
+            Nouns: [],
+            Verbs: [],
+            DisplayPolicy: 'on-demand',
+            DefaultAvailability: 'opt-in',
+            MaxExposure: 'pixels',
+        };
+    }
+    protected override OnInitialize(): void {
+        this.EnableVisualPerception({ GetLatestFrame: async () => this.Picture });
+    }
+    /** The chart changed in front of the user. */
+    public Show(picture: string): Promise<void> {
+        this.Picture = picture;
+        return this.NotifyVisualChange();
+    }
+    /** The session's client, as the channel reaches it. */
+    public get SessionClient(): VideoClient {
+        const client = this.Context?.Client;
+        if (!(client instanceof VideoClient)) {
+            throw new Error('the channel has no video client');
+        }
+        return client;
+    }
+}
+
 /** A channel that fronts a capture, as the Camera and Screen Share channels do. */
 class CaptureChannel extends BaseRealtimeChannelClient {
     public Opened = 0;
@@ -121,7 +171,7 @@ function resolved(key: string, overrides: Partial<ResolvedRealtimeChannel> = {})
  * A session with the given channels. The host is a {@link ShareHost} (camera and screen sharing) unless the test gives
  * the runtime another one, built on the same fakes.
  */
-function build(channels: CaptureChannel[] = [], mediaHost?: (host: ShareHost) => IRealtimeMediaHost) {
+function build(channels: BaseRealtimeChannelClient[] = [], mediaHost?: (host: ShareHost) => IRealtimeMediaHost) {
     const host = new ShareHost();
     const runtime = new RealtimeSessionRuntime(mediaHost ? mediaHost(host) : host);
     const provider = new MintProvider();
@@ -427,6 +477,111 @@ describe('RealtimeSessionRuntime camera and screen share', () => {
         it('confirms nothing outside a call', () => {
             const { runtime } = build();
             expect(runtime.ConfirmCamera()).toEqual({ Status: 'failed', Failure: 'no-session', Message: 'There is no call to share with.' });
+        });
+    });
+
+    describe("the host's frame sampler", () => {
+        it("samples the camera with the host's sampler at the negotiated rate, and its frames reach the model", async () => {
+            const camera = new CaptureChannel('Camera', 'camera');
+            const { host, runtime, start } = build([camera]);
+            await start();
+            await runtime.StartCamera();
+            expect(host.Samplers).toHaveLength(1);
+            expect(host.Samplers[0]).toMatchObject({ Stream: host.Controllers[0].CameraStream, Rate: 2, Running: true });
+            host.Samplers[0].Push('camera-1');
+            const client = camera.ContextForTest?.Client;
+            expect(client instanceof VideoClient ? client.Frames : null).toEqual(['camera-1']);
+            runtime.StopCamera();
+            expect(host.Samplers[0].Running).toBe(false);
+            await runtime.EndRealtimeSession();
+        });
+
+        it("fails a capture as unsupported, listing no source, when the host's sampler cannot start", async () => {
+            const { host, runtime, start, sources } = build([new CaptureChannel('Camera', 'camera')]);
+            host.SamplersStart = false;
+            await start();
+            expect(await runtime.StartCamera()).toEqual({ Status: 'failed', Failure: 'unsupported', Message: 'This app cannot show the agent your camera.' });
+            expect(sources()).toEqual([]);
+            expect(host.Controllers[0].StopCalls).toContain('camera');
+            await runtime.EndRealtimeSession();
+        });
+
+        it('on a host with no sampler and no DOM, a capture fails as unsupported rather than reporting on with no frames', async () => {
+            vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const noSampler = (host: ShareHost): IRealtimeMediaHost => ({
+                AcquireMicrophone: () => host.AcquireMicrophone(),
+                CreateLocalMediaController: () => host.CreateLocalMediaController(),
+                RequestDisplayCapture: (options) => host.RequestDisplayCapture(options),
+            });
+            const { runtime, start, sources } = build([new CaptureChannel('Camera', 'camera'), new CaptureChannel('ScreenShare', 'screen')], noSampler);
+            await start();
+            expect(await runtime.StartCamera()).toMatchObject({ Status: 'failed', Failure: 'unsupported' });
+            expect(await runtime.StartScreenShare()).toMatchObject({ Status: 'failed', Failure: 'unsupported' });
+            expect(sources()).toEqual([]);
+            await runtime.EndRealtimeSession();
+        });
+    });
+
+    describe('a visual channel the agent opens mid-call, with no video track negotiated at connect', () => {
+        afterEach(() => vi.useRealTimers());
+
+        /** A live call on a one-stream video model, with the chart and the camera on demand, and a clock the test moves. */
+        async function liveCall() {
+            vi.useFakeTimers({ toFake: ['Date'] });
+            let now = Date.now();
+            const picture = new PictureChannel();
+            const call = build([picture, new CaptureChannel('Camera', 'camera')]);
+            call.provider.Driver = 'live-capture-provider';
+            await call.start();
+            // Past the pacing interval, so the next frame is not held back as too soon after the last.
+            const later = () => vi.setSystemTime((now += 5000));
+            const open = async () => {
+                expect((await call.runtime.OpenChannel('Picture')).Success).toBe(true);
+            };
+            return { ...call, picture, later, open };
+        }
+
+        it('keeps sending frames after the camera stops, when it was opened before the camera', async () => {
+            const { host, runtime, picture, later, open } = await liveCall();
+            await open();
+            const client = picture.SessionClient;
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(true);
+            await picture.Show('picture-1');
+            later();
+            await runtime.StartCamera();
+            host.Samplers[0].Push('camera-1');
+
+            later();
+            runtime.StopCamera();
+            await vi.waitFor(() => expect(client.Frames).toHaveLength(3));
+            expect(client.Notes).toContain('[You can now see: Sales chart]');
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(true);
+            later();
+            await picture.Show('picture-2');
+            expect(client.Frames).toEqual(['picture-1', 'camera-1', 'picture-1', 'picture-2']);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('keeps sending frames after the camera stops, when it was opened while the camera was on', async () => {
+            const { host, runtime, picture, later, open } = await liveCall();
+            await runtime.StartCamera();
+            host.Samplers[0].Push('camera-1');
+            later();
+            await open();
+            const client = picture.SessionClient;
+            // The camera has the model's only stream: the chart's frame is held back, and nothing says it was sent.
+            await picture.Show('picture-1');
+            expect(client.Frames).toEqual(['camera-1']);
+
+            later();
+            runtime.StopCamera();
+            await vi.waitFor(() => expect(client.Frames).toEqual(['camera-1', 'picture-1']));
+            expect(client.Notes).toContain('[You can now see: Sales chart]');
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(true);
+            later();
+            await picture.Show('picture-2');
+            expect(client.Frames).toEqual(['camera-1', 'picture-1', 'picture-2']);
+            await runtime.EndRealtimeSession();
         });
     });
 });

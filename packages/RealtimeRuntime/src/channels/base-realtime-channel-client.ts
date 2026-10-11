@@ -597,15 +597,37 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
 
   /**
    * Subclass hook invoked once the realtime session is connected and live (the client driver
-   * is created, connected, and media tracks negotiated). Channels that establish media bridges
-   * (e.g. video streaming) can start them here when `Context.Client` is available.
-   * Default: no-op.
+   * is created, connected, and media tracks negotiated), or when the channel is opened in a live
+   * session. Channels that establish media bridges (e.g. video streaming) can start them here when
+   * `Context.Client` is available.
+   * Default: a channel with visual perception adds the inbound video track it sources when the call
+   * has none (it was opened mid-call) and brings its frame bridge up; any other channel does nothing.
+   * An override that keeps visual perception calls `super.OnSessionStarted()`.
    */
   public OnSessionStarted(): void {
     // A channel with visual perception brings its frame bridge up now: the video track is only
     // negotiated once the session connects, so this is the first moment it can be established.
     if (this.visualFrameProvider) {
+      this.addVisualTrackMidCall();
       this.EnsureVideoBridge();
+    }
+  }
+
+  /**
+   * Adds the inbound video track this channel sources ({@link GetSourcedTracks}) when the call is live without one. A
+   * channel open when the call connected had its track negotiated then, so this does nothing for it. A channel opened
+   * mid-call (`on-demand`) was not part of that negotiation: without its own track it could only send on a track a camera
+   * or screen share added, which goes when that capture stops. Only on a model that takes inbound video.
+   */
+  private addVisualTrackMidCall(): void {
+    const client = this.Context?.Client;
+    if (!client?.SupportsInboundVideo || client.IsTrackEstablished('video', 'inbound')) {
+      return;
+    }
+    for (const track of this.GetSourcedTracks()) {
+      if (track.Direction === 'inbound' && String(track.Modality).trim().toLowerCase() === 'video') {
+        client.AddTrack(track);
+      }
     }
   }
 
@@ -1249,6 +1271,8 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    * private `videoBridge`, and a second private of the same name in the base class would stop them compiling.
    */
   protected VisualVideoBridge: ChannelInboundVideoBridge | null = null;
+  /** Stops refreshing the model's picture when the bridge's source is sent again; set while the bridge exists. */
+  private stopRefreshOnSourceActivated: (() => void) | null = null;
 
   /** Default frame cadence when the track negotiated none (1 fps — the Gemini Live ceiling). */
   private static readonly DEFAULT_VISUAL_CADENCE_MS = 1000;
@@ -1316,6 +1340,11 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
         Label: descriptor.DisplayName,
         Kind: 'surface',
         ChannelKey: descriptor.Key,
+      });
+      // The pump sends only on change, and a frame the arbiter refused (another source had the model's only stream, or
+      // this one was off) never reached the model: when the arbiter sends this source again, send the current picture.
+      this.stopRefreshOnSourceActivated = this.VisualVideoBridge.OnSourceActivated(() => {
+        void this.visualFramePump?.Refresh();
       });
       if (this.Exposure !== 'pixels') {
         this.VisualVideoBridge.SetSourceEnabled?.(false, false);
@@ -1393,6 +1422,8 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
     this.channelPerception = null;
     this.visualFramePump?.Dispose();
     this.visualFramePump = null;
+    this.stopRefreshOnSourceActivated?.();
+    this.stopRefreshOnSourceActivated = null;
     this.VisualVideoBridge?.Stop();
     this.VisualVideoBridge = null;
     this.channelEventsSubject.complete();
