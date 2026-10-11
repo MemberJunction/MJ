@@ -25,6 +25,7 @@ export * from './realtime-channel-exposure';
 export * from './realtime-channel-scope';
 export * from './realtime-session-policy';
 export * from './realtime-session-events';
+export * from './client-tool-media';
 export * from './artifact-tool-library';
 
 export * from './MJAIPromptEntityExtended';

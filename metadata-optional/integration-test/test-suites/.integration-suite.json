@@ -1302,6 +1302,39 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT108 - Cloudflare Clef Decision Models",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "65821289-4E59-4121-918A-235558EF39A8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT109 - Kev and System One Endpoint Decision Models",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8C476EC0-8B96-476D-81D0-1CDE84141CB7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT110 - Perplexity Decider Decision Model",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3D3B073E-4AE5-4B13-A3C1-62B4B96DFAD3"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT96 - Record Cloning",
             "Sequence": 71,
             "Status": "Active"

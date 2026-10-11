@@ -45,6 +45,21 @@ const REALTIME_GLOBAL_TOOL_OWNER = 'explorer.global';
 /** Owner key of the active surface's client tools in the realtime ContextTool registry (replaced on every surface change, cleared on an app switch). */
 const REALTIME_SURFACE_TOOL_OWNER = 'explorer.surface';
 
+import { CarryAdditionalContext, SurfaceContextTracker } from './app-context-snapshot';
+
+/**
+ * A surface tool result without its images (`Media`), for the realtime session: a voice model reads a
+ * tool result as text, and gets images as video frames instead. A copy keeps every other key, such as
+ * `Success`, `Data` and `ErrorMessage`. A result without `Media`, and a value that is not an object,
+ * come back as they are.
+ */
+export function WithoutMedia(result: unknown): unknown {
+  if (typeof result !== 'object' || result === null || Array.isArray(result) || !Object.hasOwn(result, 'Media')) {
+    return result;
+  }
+  return Object.fromEntries(Object.entries(result).filter(([key]) => key !== 'Media'));
+}
+
 @Component({
   standalone: false,
   selector: 'mj-explorer-app',
@@ -767,7 +782,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       ? navItems.find(n => n.Label === activeNavItemName)
       : navItems.find(n => n.isDefault) || navItems[0];
 
-    this.AppContextSnapshot = {
+    const rebuilt: AppContextSnapshot = {
       App: {
         Name: activeApp.Name,
         Description: activeApp.Description || ''
@@ -791,6 +806,8 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       // snapshot rebuilt on app/nav change never drops the surface tools (see currentToolManifest).
       Capabilities: { Tools: this.currentToolManifest }
     };
+    // The attached surface's context (SetAgentContext) survives an app or nav change, like its tools do.
+    this.AppContextSnapshot = CarryAdditionalContext(rebuilt, this.activeSurfaceContext.Context);
     // Publish to any embedded chat-area subscribers (Form Builder
     // cockpit, future domain dashboards). The floating overlay sees
     // the change directly via its [AppContext] template binding; this
@@ -815,18 +832,17 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   /**
    * Handle agent context/tools updates from resource components.
-   * Updates the AppContextSnapshot.DashboardContext so the next agent message
-   * includes the dashboard's current state. Also manages tool registration.
+   * Updates the AppContextSnapshot.AdditionalContext so the next agent message
+   * includes the attached surface's current state: a surface's report sets it, the
+   * detach of its tab clears it, and the reattach of a tab restores that tab's context.
+   * Also manages tool registration.
    */
   private handleAgentContextUpdate(update: AgentContextUpdate): void {
     const callerName = update.Caller?.constructor?.name ?? 'unknown';
 
     // Update AdditionalContext in the current snapshot
-    if (update.AgentContext !== undefined && this.AppContextSnapshot) {
-      this.AppContextSnapshot = {
-        ...this.AppContextSnapshot,
-        AdditionalContext: update.AgentContext,
-      };
+    if (this.trackSurfaceContext(update) && this.AppContextSnapshot) {
+      this.AppContextSnapshot = CarryAdditionalContext(this.AppContextSnapshot, this.activeSurfaceContext.Context);
       // Republish so any embedded chat-area subscribers (Form Builder
       // cockpit, future dashboards with their own AI pane) pick up the
       // new dashboard slice — the floating overlay sees it via the
@@ -866,7 +882,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       this.realtimeSession.RegisterAppClientTools(
         update.AgentClientTools.map(t => ({
           Name: t.Name,
-          Handler: t.Handler,
+          Handler: async (params: Record<string, unknown>) => WithoutMedia(await t.Handler(params)),
           Description: t.Description,
           InputSchema: t.ParameterSchema,
         })),
@@ -896,6 +912,28 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     }
   }
+
+  /**
+   * Applies an update to the attached surface's context (see {@link activeSurfaceContext}): a tab
+   * detach clears the context its surface reported, a tab reattach restores that tab's context, and a
+   * surface's report sets it. Returns true when the context changed.
+   */
+  private trackSurfaceContext(update: AgentContextUpdate): boolean {
+    if (update.Lifecycle === 'Detached') {
+      return this.activeSurfaceContext.Detach(update.Caller);
+    }
+    if (update.Lifecycle === 'Reattached') {
+      return this.activeSurfaceContext.Reattach(update.Caller);
+    }
+    return update.AgentContext !== undefined && this.activeSurfaceContext.Report(update.Caller, update.AgentContext);
+  }
+
+  /**
+   * The context the attached surface reported through SetAgentContext, kept so every snapshot
+   * (re)build carries it while that surface's tab is attached, as activeDashboardToolManifest
+   * keeps its tools. Cleared when the tab is detached, restored when it is reattached.
+   */
+  private readonly activeSurfaceContext = new SurfaceContextTracker();
 
   /** Names of currently registered dashboard-specific tools (for cleanup on switch) */
   private activeDashboardToolNames: string[] = [];

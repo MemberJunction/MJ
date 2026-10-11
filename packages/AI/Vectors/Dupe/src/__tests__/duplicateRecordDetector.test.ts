@@ -313,12 +313,21 @@ vi.mock('@memberjunction/ai-vector-sync', () => {
                 Parse: vi.fn().mockResolvedValue('parsed template text'),
             }),
         },
+        // Rendering's related-data step is covered by duplicateRecordDetectorTemplateText.test.ts;
+        // here each record renders its own values, as for a template with no Entity params.
+        EntityDocumentTemplateDataBuilder: class {
+            LoadRelatedData = vi.fn().mockResolvedValue([]);
+            MissingRelatedParams = vi.fn().mockReturnValue([]);
+            BuildTemplateData = vi.fn((_entity: unknown, record: Record<string, unknown>) => ({ ...record }));
+        },
         EntityVectorSyncer: class {
             CurrentUser = null;
             GetEntityDocument = vi.fn().mockResolvedValue(null);
             VectorizeEntity = vi.fn().mockResolvedValue(undefined);
         },
         VectorizeEntityParams: class {},
+        // No record filter: the filter's own behavior is covered by duplicateRecordDetectorRecordFilter.test.ts.
+        GetEntityDocumentRecordFilter: vi.fn().mockReturnValue(null),
     };
 });
 
