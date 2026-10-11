@@ -1,8 +1,9 @@
 /**
  * `ClientClauseScreen.CollectStatementReads` walks every client clause and ad-hoc statement, and
  * one request body can hold megabytes of SQL. Each test doubles the statement several times and
- * checks that the walk's time grows about linearly, well under the 4x per doubling of a walk that
- * copies the CTE names in scope for each CTE body or subquery. The statements read only constants.
+ * checks that the walk's CPU time grows about linearly, well under the 4x per doubling of a walk
+ * that copies the CTE names in scope for each CTE body or subquery. The statements read only
+ * constants.
  */
 import { describe, it, expect } from 'vitest';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
@@ -13,13 +14,25 @@ import { ClientClauseScreen } from '../clientClauseScreen';
 const RUNS = 5;
 /** Linear code grows about 2x per doubling; code that copies per item grows about 4x. */
 const MAX_GROWTH_PER_DOUBLING = 3;
-/** A generous limit for any one size. Linear code takes a small part of it. */
+/** A generous limit of CPU time for any one size. Linear code takes a small part of it. */
 const CEILING_MS = 1000;
-const TIMEOUT_MS = 60_000;
+/** A long timeout, and up to two more attempts after a failure. A quadratic regression fails every attempt. */
+const TEST_OPTIONS = { timeout: 60_000, retry: 2 };
 
 /**
- * The median time of `run` at each size, after one warm-up run. Stops after the first size whose
- * time passes {@link CEILING_MS}, so a quadratic regression fails fast.
+ * The CPU time of one call to `run`, in ms: user plus system time of this process. Unlike wall
+ * time, it does not grow when other processes share the CPU.
+ */
+function cpuMs(run: () => void): number {
+    const start = process.cpuUsage();
+    run();
+    const used = process.cpuUsage(start);
+    return (used.user + used.system) / 1000;
+}
+
+/**
+ * The median CPU time of `run` at each size, after one warm-up run. Stops after the first size
+ * whose time passes {@link CEILING_MS}, so a quadratic regression fails fast.
  */
 function timesBySize(sizes: readonly number[], makeRun: (size: number) => () => void): number[] {
     makeRun(sizes[0])();
@@ -28,9 +41,7 @@ function timesBySize(sizes: readonly number[], makeRun: (size: number) => () => 
         const run = makeRun(size);
         const times: number[] = [];
         for (let r = 0; r < RUNS; r++) {
-            const start = performance.now();
-            run();
-            times.push(performance.now() - start);
+            times.push(cpuMs(run));
             if (times[times.length - 1] > CEILING_MS) break;
         }
         times.sort((a, b) => a - b);
@@ -75,12 +86,12 @@ const cteList = (count: number): string => Array.from({ length: count }, (_, i) 
 const DIALECTS: Array<[string, SQLParserDialect]> = [['PostgreSQL', new PostgreSQLDialect()], ['SQL Server', new SQLServerDialect()]];
 
 describe.each(DIALECTS)('ClientClauseScreen.CollectStatementReads takes time linear in the statement (%s)', (_dialectName, dialect) => {
-    it('with many CTEs in one WITH list', () => {
+    it('with many CTEs in one WITH list', TEST_OPTIONS, () => {
         expectLinearWalk([2000, 4000, 8000, 16000], (count) => `WITH ${cteList(count)} SELECT a FROM c${count - 1}`, dialect);
-    }, TIMEOUT_MS);
+    });
 
-    it('with many subqueries that each declare a CTE, under a long WITH list', () => {
+    it('with many subqueries that each declare a CTE, under a long WITH list', TEST_OPTIONS, () => {
         const subqueries = (count: number): string => Array.from({ length: count }, () => '(WITH s AS (SELECT 1 AS a) SELECT a FROM s)').join(', ');
         expectLinearWalk([500, 1000, 2000, 4000], (count) => `WITH ${cteList(count)} SELECT ${subqueries(count)} FROM c0`, dialect);
-    }, TIMEOUT_MS);
+    });
 });

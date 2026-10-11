@@ -330,6 +330,10 @@ describe('ClientClauseScreen.CollectStatementReads — a FROM item is a CTE refe
                 .toEqual(['.x:cte', '.x:cte', '.x:table']);
             expect(reads('WITH x AS (SELECT 1 AS a), y AS (SELECT * FROM (WITH x AS (SELECT 2 AS a) SELECT a FROM x) s, x) SELECT * FROM y, x', dialect))
                 .toEqual(['.x:cte', '.x:cte', '.x:cte', '.y:cte']);
+            // The outer x is read after a nested WITH of the same name closes, so it is still in scope
+            // only if closing the nested WITH removes one declaration of x, not the name.
+            expect(reads('WITH x AS (SELECT 1 AS a) SELECT (SELECT a FROM (WITH x AS (SELECT 2 AS a) SELECT a FROM x) s) AS p, (SELECT a FROM x) AS q', dialect))
+                .toEqual(['.x:cte', '.x:cte']);
         }
     });
 

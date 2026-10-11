@@ -1,4 +1,4 @@
-import { RunView, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { RunView, type EntityInfo, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 
 /** The ExtraFilter for the top-level tasks a user owns. */
@@ -23,11 +23,19 @@ export async function BuildConversationTasksFilter(provider: IMetadataProvider, 
     return ownTasks;
   }
   const rv = RunView.FromMetadataProvider(provider);
-  const conversationIds = await readIds(rv, user, 'MJ: Conversations', `UserID = '${EscapeSQLString(user.ID)}'`);
+  const conversationIds = await readIds(rv, user, {
+    EntityName: 'MJ: Conversations',
+    ExtraFilter: `UserID = '${EscapeSQLString(user.ID)}'`,
+    Fields: ['ID'],
+  });
   if (conversationIds == null) {
     return ownTasks;
   }
-  const messageIds = await readIds(rv, user, 'MJ: Conversation Details', taskMessagesFilter(user, conversationIds, tasks));
+  const messageIds = await readIds(rv, user, {
+    EntityName: 'MJ: Conversation Details',
+    ExtraFilter: taskMessagesFilter(user, conversationIds, tasks),
+    Fields: ['ID'],
+  });
   if (messageIds == null || messageIds.length === 0) {
     return ownTasks;
   }
@@ -48,14 +56,14 @@ function taskMessagesFilter(user: UserInfo, conversationIds: readonly string[], 
   );
 }
 
-/** The IDs of the rows `filter` selects, with no row cap; null when the read fails. */
-async function readIds(rv: RunView, user: UserInfo, entityName: string, filter: string): Promise<string[] | null> {
-  const result = await rv.RunView<{ ID: string }>(
-    { EntityName: entityName, ExtraFilter: filter, Fields: ['ID'], ResultType: 'simple', IgnoreMaxRows: true },
-    user
-  );
+/**
+ * The IDs of the rows `read` selects, with no row cap; null when the read fails. Each caller names
+ * an MJ core entity in `read`, so its key column is `ID`.
+ */
+async function readIds(rv: RunView, user: UserInfo, read: Pick<RunViewParams, 'EntityName' | 'ExtraFilter' | 'Fields'>): Promise<string[] | null> {
+  const result = await rv.RunView<{ ID: string }>({ ...read, ResultType: 'simple', IgnoreMaxRows: true }, user);
   if (!result.Success) {
-    console.error(`Failed to read ${entityName} for the tasks filter:`, result.ErrorMessage);
+    console.error(`Failed to read ${read.EntityName} for the tasks filter:`, result.ErrorMessage);
     return null;
   }
   return (result.Results ?? []).map(row => row.ID);
