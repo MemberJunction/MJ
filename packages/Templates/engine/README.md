@@ -134,11 +134,18 @@ two points.
 **Before a template compiles.** The nunjucks compiler copies names from the template into the code it
 generates, so `AssertTemplateTreeIsSafe()` checks every parsed template first:
 
-- Variable, filter, test, loop, `set`, macro, import and block names must be plain names: letters,
-  digits, `_` and `$`. A filter name can also contain dots.
+- Variable, filter, loop, `set`, macro, import and block names must be plain names: letters,
+  combining marks, digits, connector characters such as `_`, and `$`. A filter name can also contain
+  dots.
+- A test name (`is defined`, `is none`) and an extension's registered name and method must not
+  contain a quote, a backslash or a line break.
 - The name of a called member, such as `obj["key"]()`, must not contain a backslash or a line break.
-- A loop variable must not reuse a name the generated code relies on, such as `context`, `frame`,
-  `runtime`, `env`, `cb` or `next`.
+- A loop variable must not reuse an identifier that the generated loop code uses, such as `context`,
+  `frame`, `runtime`, `env`, `cb`, `next`, `tasks` or `undefined`. A unit test compiles every kind of
+  loop body with nunjucks 3.2.4 and checks this list against the generated code, so a nunjucks upgrade
+  that adds an identifier fails the test.
+- The parse tree may hold only nunjucks nodes, plain values and regular expression literals. This
+  matters only for extensions, which build their own nodes.
 
 **While a template renders.**
 
