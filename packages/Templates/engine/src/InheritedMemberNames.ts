@@ -11,8 +11,8 @@ const INHERITED_MEMBER_NAMES: ReadonlySet<string> = new Set([...Object.getOwnPro
 
 /**
  * True for a name that a template may not use as a dictionary key, a keyword argument, a macro or call-block
- * argument, a variable, macro or block name, a literal member name, or a filter or test name. nunjucks reads
- * and writes such names on plain objects, where they reach inherited members or the object's prototype.
+ * argument, a variable, macro or block name, or a filter or test name. nunjucks reads and writes such names
+ * on plain objects, where they reach inherited members or the object's prototype.
  * @param name the name as nunjucks uses it
  */
 export function IsInheritedMemberName(name: string): boolean {
