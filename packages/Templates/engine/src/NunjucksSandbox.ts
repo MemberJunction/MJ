@@ -51,8 +51,8 @@ interface NunjucksEnvironmentRegistries {
     getGlobal: RegistryLookup;
 }
 
-/** `getFilter`, `getTest` and `getGlobal`, called on an environment. */
-type RegistryLookup = (this: NunjucksEnvironmentRegistries, name: string) => unknown;
+/** `getFilter`, `getTest` and `getGlobal`, called on an environment. nunjucks accepts any value as the name. */
+type RegistryLookup = (this: NunjucksEnvironmentRegistries, name: unknown) => unknown;
 
 /** The nunjucks parser module. The compiler calls its `parse` for every template it compiles. */
 interface NunjucksParser {
@@ -120,7 +120,7 @@ const installedGuards = new WeakSet<GuardableHook>();
  * Guards the nunjucks parser and runtime used by every nunjucks environment in this process. After this call:
  * - a template whose names could change the compiled code fails to compile (see `AssertTemplateTreeIsSafe`)
  * - a filter, test or global resolves only to a name the environment registered itself, never to a member
- *   that every object inherits (such as `hasOwnProperty`)
+ *   that every object inherits (such as `hasOwnProperty`); an object, a function or a symbol is refused as the name
  * - a member named `constructor`, `prototype`, `__proto__` or one of the `__define/lookup Getter/Setter__`
  *   accessors reads as `undefined`, unless it is an object's own data that is not a function;
  *   `__proto__` always reads as `undefined`
@@ -171,14 +171,22 @@ function guardParse(original: NunjucksParser['parse']): NunjucksParser['parse'] 
  * `env.getFilter(name)`, `env.getTest(name)` and `env.getGlobal(name)`. nunjucks keeps each registry in a
  * plain object, so a name such as `toString` would find the member every object inherits. Only a name the
  * environment registered itself resolves. A name that is not there at all still fails as nunjucks reports it.
+ *
+ * The `select` and `reject` filters pass a template value as the name. The name is converted to a key once,
+ * and nunjucks receives that same key, so it reads the key the guard checked. An object, a function or a
+ * symbol is refused before conversion, because converting it could run template code.
  */
 function guardRegistryLookup(registry: 'filters' | 'tests' | 'globals'): (original: RegistryLookup) => RegistryLookup {
-    return (original) => function guardedRegistryLookup(this: NunjucksEnvironmentRegistries, name: string): unknown {
-        const entries = this[registry];
-        if (name in entries && !Object.hasOwn(entries, name)) {
-            throw new TemplateSandboxError(`Templates may only use filters, tests and globals that the environment registered ("${name}")`);
+    return (original) => function guardedRegistryLookup(this: NunjucksEnvironmentRegistries, name: unknown): unknown {
+        if ((typeof name === 'object' && name !== null) || typeof name === 'function' || typeof name === 'symbol') {
+            throw new TemplateSandboxError('Templates may not use an object, a function or a symbol as the name of a filter, test or global');
         }
-        return original.call(this, name);
+        const key = String(name);
+        const entries = this[registry];
+        if (key in entries && !Object.hasOwn(entries, key)) {
+            throw new TemplateSandboxError(`Templates may only use filters, tests and globals that the environment registered ("${key}")`);
+        }
+        return original.call(this, key);
     };
 }
 
