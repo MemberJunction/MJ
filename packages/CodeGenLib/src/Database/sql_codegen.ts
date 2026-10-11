@@ -1466,8 +1466,12 @@ export class SQLCodeGenBase {
 
             // now, append the permissions to the return string IF we did NOT generate the base view - because if we generated the base view, that
             // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
+            // Pass the RAW body: generateCustomBaseViewRefreshAndPermissions applies the layered-view
+            // guard itself. Passing the already-guarded file copy wrapped the GRANTs twice — harmless
+            // inside SQL Server's sp_executesql literal, but on PostgreSQL the inner
+            // `DO $if_view_exists$` reuses the outer dollar-quote tag and the script fails to parse.
             if (!options.entity.BaseViewGenerated) {
-                sRet += this.generateCustomBaseViewRefreshAndPermissions(options.entity, permHeader, permBody);
+                sRet += this.generateCustomBaseViewRefreshAndPermissions(options.entity, permHeader, rawPermBody);
             }
 
             // CREATE SP

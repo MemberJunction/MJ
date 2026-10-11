@@ -20,5 +20,9 @@
   },
   "primaryKey": {
     "ID": "22569173-BB32-4977-8180-05C40DB1CD7C"
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:41.698Z",
+    "checksum": "f9805fc297021c78dc44885d5f705539fc3498c9d969cf7f5d58f64cf4db245e"
   }
 }

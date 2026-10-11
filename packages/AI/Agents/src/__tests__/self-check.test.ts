@@ -72,7 +72,6 @@ describe('agent self-check', () => {
             rubricId: 'rubric',
             subjectEntityName: 'MJ: AI Agent Runs',
             subjectRecordId: 'run-1',
-            evaluator: 'LLM',
             passThreshold: 0.6,
         }]);
         expect(done.step).toBe('Success');
@@ -109,7 +108,11 @@ describe('agent self-check', () => {
             async createDraft() { return { id: 'eval-fail', status: 'Draft' }; },
             async submit() { return score; },
             async fail() { throw new Error('should not fail the draft'); },
-        }, records, { async Run() { return JSON.stringify({ decisions: [{ key: 'accuracy', level: 'Miss', rationale: 'The figure is wrong.' }] }); } });
+        }, records, { Prompts: {
+            async Run() { return { Text: JSON.stringify({ decisions: [{ key: 'accuracy', level: 'Miss', rationale: 'The figure is wrong.' }] }) }; },
+            async RenderCriteria(input) { return input.Items.map(item => item.Criterion.Name); },
+            async Preview() { return ''; },
+        } });
         const done = await ExecuteSelfCheck({
             engine,
             link: { ...link, rubricId: 'rubric', passThreshold: null },
@@ -146,12 +149,31 @@ describe('agent self-check', () => {
             rubricId: 'rubric',
             subjectEntityName: 'MJ: AI Agent Runs',
             subjectRecordId: 'run-1',
-            evaluator: 'LLM',
             passThreshold: null,
             content: {
                 text: 'The answer is 4.',
                 data: { message: 'The answer is 4.', finalPayload: { rows: [1] } },
             },
         }]);
+    });
+
+    it('runs the evaluator the link names in its EvaluatorConfig', async () => {
+        const seen: { evaluatorConfig?: unknown }[] = [];
+        const engine: SelfCheckEngine = {
+            async EvaluateRecord(request) {
+                seen.push(request);
+                return { evaluationId: 'eval-decision', outcome: 'Passed', criteria: [] };
+            },
+        };
+        const config = '{"EvaluatorType":"AIPrompt","EvaluatorName":"Decision"}';
+        await ExecuteSelfCheck({
+            engine,
+            link: { ...link, rubricId: 'rubric', passThreshold: null, evaluatorConfig: config },
+            runId: 'run-1',
+            agentKind: 'flow',
+            attempt: 1,
+            record: () => undefined,
+        });
+        expect(seen[0].evaluatorConfig).toBe(config);
     });
 });

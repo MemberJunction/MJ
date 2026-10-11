@@ -528,6 +528,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

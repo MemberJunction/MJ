@@ -164,6 +164,11 @@
             "default": -1,
             "description": "Catalog narrowing for actions and skills. -1 (the default) or 0 turns it off, and the prompt describes every action and skill. A positive N: when the agent has more than N actions (or skills), one decision call per run judges which are most useful for the run's opening request, and the prompt describes those N plus any action with MinExecutionsPerRun set and the Find Candidate Actions / Find Candidate Agents actions, after a line saying how many it hides and how to reach them. Hidden skills are named; hidden actions are found with Find Candidate Actions, so actions are narrowed only when the agent has that action. Narrowing only hides: every permitted action and skill can still be used, and a failed decision shows them all. It is prose-only: with native tool calling, every action is still declared as a tool. Setting N adds one decision call to each run. Needs decisionsEnabled: true: without it the prompt describes every action and skill."
           },
+          "clientToolResultMaxChars": {
+            "type": "integer",
+            "default": -1,
+            "description": "Character cap for one client tool result in the conversation. -1 (the default) or 0 keeps the whole result. A positive N keeps the first N characters and adds a note saying how much was cut. Compaction and expiration still apply either way."
+          },
           "decisionDiscovery": {
             "type": "boolean",
             "default": false,
@@ -177,8 +182,8 @@
       "ID": "F7926101-5099-4FA5-836A-479D9707C818"
     },
     "sync": {
-      "lastModified": "2026-09-29T19:19:15.336Z",
-      "checksum": "b3af855410298521f63e4ed98fdd11ef3cc0a260bc8eed2987db7df179387939"
+      "lastModified": "2026-10-02T21:42:21.706Z",
+      "checksum": "fa346407e2f625313b13462e135e32f88c8c18722b9d280b615aa15dcfae95e2"
     }
   },
   {

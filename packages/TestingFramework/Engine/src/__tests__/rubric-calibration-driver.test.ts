@@ -45,7 +45,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
-import { RubricCalibrationTestDriver } from '../drivers/RubricCalibrationTestDriver.js';
+import { CalibrationEvaluatorConfig, RubricCalibrationTestDriver } from '../drivers/RubricCalibrationTestDriver.js';
 
 describe('RubricCalibrationTestDriver', () => {
     beforeEach(() => {
@@ -70,11 +70,20 @@ describe('RubricCalibrationTestDriver', () => {
         } as never);
         expect(evaluateRecord).toHaveBeenCalledTimes(1);
         expect(evaluateRecord.mock.calls[0][0]).toMatchObject({
-            evaluator: 'Deterministic',
+            evaluatorConfig: { EvaluatorName: 'Deterministic' },
             contextEntityName: 'MJ: Tests',
             contextRecordId: 'test-1',
             subjectRecordId: 'subject',
         });
         expect(result.oracleResults[0].details).toMatchObject({ meanAbsoluteError: 1, sampleSize: 1 });
+    });
+});
+
+describe('CalibrationEvaluatorConfig', () => {
+    it('reads the older type as the evaluator name and passes a selection through', () => {
+        expect(CalibrationEvaluatorConfig(undefined)).toBeUndefined();
+        expect(CalibrationEvaluatorConfig({ type: 'AI' })).toEqual({ EvaluatorName: 'AI' });
+        expect(CalibrationEvaluatorConfig({ EvaluatorName: 'Decision', ModelID: 'jev' })).toEqual({ EvaluatorName: 'Decision', ModelID: 'jev' });
+        expect(CalibrationEvaluatorConfig({ type: 'LLM', EvaluatorType: 'Agent' })).toEqual({ EvaluatorType: 'Agent' });
     });
 });

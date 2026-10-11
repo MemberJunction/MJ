@@ -2,8 +2,9 @@
  * @fileoverview An {@link IClusterVectorSource} backed by MJ Entity Record
  * Documents.
  *
- * Reads persisted embeddings from `MJ: Entity Record Documents.VectorJSON` via
- * RunView. Works anywhere a metadata provider is configured (server or client),
+ * Reads persisted embeddings from `MJ: Entity Record Documents` via RunView — the
+ * binary `VectorBinary` column (little-endian float32 bytes) when it holds a valid
+ * vector, else the JSON `VectorJSON` column. Works anywhere a metadata provider is configured (server or client),
  * because it goes through the standard RunView path rather than raw SQL.
  *
  * Supports both single-document and **multi-entity-document** clustering. When
@@ -19,6 +20,7 @@ import {
     MJEntityRecordDocumentEntity,
     MJEntityDocumentEntity,
 } from '@memberjunction/core-entities';
+import { DecodeVectorBinary } from '@memberjunction/ai-vectors-memory';
 import { ClusterConfig, ClusterInputVector, IClusterVectorSource } from '../types';
 
 /**
@@ -156,12 +158,12 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
         }
     }
 
-    /** Fetch the entity record documents that carry vector JSON for one document. */
+    /** Fetch the entity record documents that carry a vector (binary or JSON) for one document. */
     private async fetchRecords(
         entityDocumentID: string,
         config: ClusterConfig,
     ): Promise<MJEntityRecordDocumentEntity[]> {
-        const filterParts: string[] = [`EntityDocumentID = '${entityDocumentID}'`, `VectorJSON IS NOT NULL`];
+        const filterParts: string[] = [`EntityDocumentID = '${entityDocumentID}'`, `(VectorBinary IS NOT NULL OR VectorJSON IS NOT NULL)`];
         if (config.Filter && config.Filter.trim().length > 0) {
             filterParts.push(`(${config.Filter.trim()})`);
         }
@@ -173,6 +175,9 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
                 ExtraFilter: filterParts.join(' AND '),
                 MaxRows: config.MaxRecords && config.MaxRecords > 0 ? config.MaxRecords : 5000,
                 ResultType: 'simple',
+                // VectorBinary is a binary field, omitted from RunView unless asked for. Over the wire it is
+                // base64 (~5.3 chars per dimension), still far smaller than VectorJSON's decimal text.
+                IncludeBinaryFields: true,
             },
             this.contextUser,
         );
@@ -183,11 +188,11 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
         return result.Results;
     }
 
-    /** Convert record documents to input vectors, parsing VectorJSON. */
+    /** Convert record documents to input vectors: VectorBinary when valid, else VectorJSON. */
     private toInputVectors(records: MJEntityRecordDocumentEntity[]): ClusterInputVector[] {
         const vectors: ClusterInputVector[] = [];
         for (const r of records) {
-            const parsed = this.parseVector(r.VectorJSON);
+            const parsed = this.readVector(r);
             if (!parsed) {
                 continue;
             }
@@ -221,6 +226,19 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
                 `All selected documents must use the same embedding model.`,
             );
         }
+    }
+
+    /**
+     * Reads one record document's vector. The binary column is preferred — decoding is a copy, not a
+     * parse — and is rejected whole if it holds a non-finite value; the JSON column is the fallback for
+     * rows written before `VectorBinary` existed.
+     */
+    private readVector(record: MJEntityRecordDocumentEntity): number[] | null {
+        const binary = DecodeVectorBinary(record.VectorBinary);
+        if (binary) {
+            return Array.from(binary);
+        }
+        return this.parseVector(record.VectorJSON);
     }
 
     /** Parse a VectorJSON string into a number[] of finite values, or null. */

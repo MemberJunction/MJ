@@ -71,12 +71,12 @@ describe('AdhocQueryResolver scope guard placement', () => {
         expect(/\bIsScopeLimitedPrincipal\s*\(/.test(src)).toBe(true);
     });
 
-    it('refuses the principal BEFORE acquiring a data source', () => {
+    it('refuses the principal BEFORE acquiring the read-only provider', () => {
         // Authorization must gate the work, not run alongside it: if the guard landed after
-        // the pool were acquired (or the SQL executed), a scope-limited caller would already
+        // the provider were acquired (or the SQL executed), a scope-limited caller would already
         // have reached the database.
         const guardAt = src.indexOf('IsScopeLimitedPrincipal(');
-        const dataSourceAt = src.indexOf('GetReadOnlyDataSource(');
+        const dataSourceAt = src.indexOf('GetReadOnlyProvider(');
         expect(guardAt).toBeGreaterThan(-1);
         expect(dataSourceAt).toBeGreaterThan(-1);
         expect(guardAt).toBeLessThan(dataSourceAt);

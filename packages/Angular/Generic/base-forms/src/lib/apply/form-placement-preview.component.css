@@ -1,0 +1,37 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+/* Holds the scaled form. Its height is the form's height after scaling, so the column that
+   contains it scrolls the whole preview as one piece. */
+.mj-pp-viewport {
+  position: relative;
+  min-height: 240px;
+  overflow: hidden;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-page);
+}
+
+.mj-pp-record {
+  margin: 0 0 var(--mj-space-2);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+}
+
+.mj-pp-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+.mj-pp-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mj-bg-page);
+}

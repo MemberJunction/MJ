@@ -27,6 +27,7 @@ import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
 import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { FormAgentContext } from '@memberjunction/ng-base-forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComposerDraftStore } from '../../services/composer-draft-store';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
@@ -59,6 +60,7 @@ import {
   type DateJumpPeriod,
   type DateJumpOutcome
 } from '../../utils/date-jump';
+import { InjectFrameZone } from '../../util/frame-zone';
 import { MessageListComponent } from '../message/message-list.component';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -114,6 +116,16 @@ const RUN_LIST_TERMINAL_STATUSES: string[] = ['Completed', 'AwaitingFeedback', '
 
 /** Default width (percentage) for the artifact viewer pane */
 export const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
+
+/**
+ * ReadReplyFromTop: how long bottom-follow stays off after a turn lands at its top, so a status
+ * row or a repeated completion emit arriving right behind the landing cannot yank the reader
+ * back down. Re-armed per frame while a streamed reply grows beneath an anchored turn, so a turn
+ * that never settles (a cancelled run, a dropped socket) releases it a moment after its last delta.
+ */
+const POST_LANDING_FOLLOW_HOLD_MS = 1500;
+/** A scroll position this far from where the stream last pinned it means the reader moved. */
+const STREAM_ANCHOR_TOLERANCE_PX = 2;
 
 @Component({
   standalone: false,
@@ -1618,6 +1630,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * last progress updates must not fire and drag the reader back down.
    */
   private bottomFollowSuppressedUntil = 0;
+  /**
+   * ReadReplyFromTop while a reply streams: the scroll position the turn's top was last pinned
+   * to, `'declined'` once the reader has moved away (they are then left alone and completion
+   * decides as it always has), null before the turn's first delta. Reset where the turn opens.
+   */
+  private streamAnchor: number | 'declined' | null = null;
+  /**
+   * The turn's first message as rendered, and the clearance above it, resolved once per turn for
+   * the stream pin: both are stable across frames and finding them is a timeline walk plus a
+   * computed style, which is not work for a 60fps path. Re-resolved only if the node leaves the DOM.
+   */
+  private streamPin: { target: HTMLElement; clearance: number } | null = null;
+  private readonly ngZone = InjectFrameZone();
   private turnStartRetryHandle: ReturnType<typeof setTimeout> | null = null;
   /** Gap kept between the pane's top edge and the turn's first message. */
   private static readonly TURN_TOP_GAP_PX = 16;
@@ -2568,16 +2593,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   super();}
 
   /**
-   * Apply a form-role artifact's spec as an EntityFormOverride for the
-   * current user. The service handles the Create-vs-Modify decision (based
-   * on whether an Active override already exists), confirms via dialog,
-   * and surfaces success/failure via notification.
+   * Apply a form-role artifact's spec for the current user — an EntityFormOverride for a
+   * whole form, a form contribution for a panel. The service picks the path, handles the
+   * Create-vs-Modify decision, confirms via dialog, and notifies.
+   *
+   * The agent context names the record form the user has open (`AdditionalContext.Form`,
+   * published by the record tab). The service reads that form's full composition from the
+   * `FormCompositionRegistry`, to check a panel's placement against the live form and detect
+   * an installed contribution holding the same key. With no open form it asks the server for
+   * the composition instead.
    */
   async OnApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+    const additional = (this.AppContext?.['AdditionalContext'] ?? null) as { Form?: FormAgentContext } | null;
     await this.interactiveFormApplyService.ConfirmAndApply(
       event.spec as ComponentSpec,
       event.entityName,
       this.ProviderToUse,
+      additional?.Form ?? null,
     );
   }
 
@@ -3579,6 +3611,46 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private async restoreActiveTasks(conversationId: string): Promise<void> {
     // Intentionally empty - ActiveTasksService only tracks in-memory running tasks
     // Database tasks are loaded separately by TasksDropdownComponent
+  }
+
+  /**
+   * A streamed delta landed on an in-progress message (MessageInputComponent.MessageStreamed).
+   * Unlike {@link OnMessageSent} this does not replace the `messages` array: that rebuilt the
+   * whole timeline, re-measured the mounted range and armed a scroll-to-bottom timer on every
+   * delta, which is what made a streaming reply flash and jump. The bubble is refreshed in place
+   * and the viewport is kept steady. With `ReadReplyFromTop` the turn lands at its top once, on
+   * the first delta, and the reply grows beneath it; otherwise the bottom is pinned in the same
+   * frame as the DOM update, so the growth and the scroll paint together.
+   */
+  public OnMessageStreamed(message: MJConversationDetailEntity): void {
+    if (!this.isActiveConversation(message.ConversationID) || message.Status !== 'In-Progress') {
+      return;
+    }
+    const index = this.messages.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    if (index >= 0 && this.messages[index] !== message) {
+      if (this.isSettled(this.messages[index])) {
+        return; // a frame that outlived completion; the completion path owns the bubble
+      }
+      // Keep the array and the window pointing at the entity the stream mutates, in place: a new
+      // array reference would rebuild the timeline, which is the cost this path exists to avoid.
+      this.messages[index] = message;
+      this.windowStore.ApplyLocalDetail(message);
+    }
+    if (!this.messageListComponent?.RefreshRenderedMessage(message)) {
+      // The first delta can beat the bubble's own render; the full path handles that one update.
+      this.ngZone.run(() => void this.OnMessageSent(message));
+      return;
+    }
+    this.followTranscript('stream');
+  }
+
+  /** Drops a landing still queued or retrying, so it cannot resolve after a newer one. */
+  private cancelPendingLanding(): void {
+    this.pendingTurnStartMessageId = null;
+    if (this.turnStartRetryHandle) {
+      clearTimeout(this.turnStartRetryHandle);
+      this.turnStartRetryHandle = null;
+    }
   }
 
   async OnMessageSent(message: MJConversationDetailEntity): Promise<void> {
@@ -6434,19 +6506,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * a conversation from the composer sends the first message while the initial load is still
    * in flight.
    */
-  private followTranscript(change: 'load' | 'new' | 'update', message?: MJConversationDetailEntity): void {
+  private followTranscript(change: 'load' | 'new' | 'update' | 'stream', message?: MJConversationDetailEntity): void {
     if (change === 'load') {
       this.scrollToBottom = true;
+      return;
+    }
+    if (change === 'stream') {
+      this.followStream();
       return;
     }
     if (this.ReadReplyFromTop) {
       if (message?.Role === 'User' && message.ID && message.ID !== this.currentTurnStartMessageId) {
         this.currentTurnStartMessageId = message.ID;
+        this.streamAnchor = null;
+        this.streamPin = null;
       } else if (this.currentTurnStartMessageId && message?.Role === 'AI' && this.isSettled(message)) {
+        if (this.streamAnchor !== null) {
+          // The stream either pinned the turn's top or the reader took the viewport for this turn by
+          // scrolling during it. Either way completion must not land it again; keep the post-landing
+          // hold a normal landing gets so a status row right behind cannot yank the reader either.
+          this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
+          return;
+        }
         if (this.readerAtBottom) {
           this.pendingTurnStartMessageId = this.currentTurnStartMessageId;
           this.scrollToBottom = false;
-          this.bottomFollowSuppressedUntil = Date.now() + 1500;
+          this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
         }
         return;
       }
@@ -6464,6 +6549,64 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private isSettled(message: MJConversationDetailEntity): boolean {
     return message.Status === 'Complete' || message.Status === 'Error';
+  }
+
+  /**
+   * Where the viewport goes on a streamed delta, in the same frame as the DOM change so growth and
+   * scroll paint together. Without ReadReplyFromTop, or for a turn this component never saw open
+   * (a reload mid-stream), a reader at the bottom is followed there. With it, the turn's top is
+   * pinned as high as the content allows on every frame: the question rises to the top as the
+   * reply grows beneath it, and once the reader scrolls away the pin is released for the turn.
+   */
+  private followStream(): void {
+    const turnId = this.ReadReplyFromTop ? this.currentTurnStartMessageId : null;
+    if (!turnId) {
+      if (this.readerAtBottom) {
+        this.ScrollToBottomNow();
+      }
+      return;
+    }
+    if (this.streamAnchor === 'declined') {
+      return;
+    }
+    const container = this.scrollContainer?.nativeElement as HTMLElement | undefined;
+    if (!container) {
+      return;
+    }
+    const pin = this.resolveStreamPin(turnId, container);
+    if (!pin) {
+      return;
+    }
+    if (this.streamAnchor === null) {
+      if (!this.readerAtBottom) {
+        this.streamAnchor = 'declined';
+        return;
+      }
+      this.cancelPendingLanding();
+    } else if (Math.abs(container.scrollTop - this.streamAnchor) > STREAM_ANCHOR_TOLERANCE_PX) {
+      this.streamAnchor = 'declined';
+      return;
+    }
+    const turnTop = this.offsetWithinScroller(pin.target) - pin.clearance;
+    container.scrollTop = Math.max(0, Math.min(turnTop, container.scrollHeight - container.clientHeight));
+    // Read the position back: the browser clamps and rounds, and the next frame compares against
+    // what it will actually read, not what was asked for.
+    this.streamAnchor = container.scrollTop;
+    this.scrollToBottom = false;
+    this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
+    // The pin moves the viewport without a scroll event once the turn's top is reached, so the
+    // at-bottom state and the jump-to-bottom affordance would otherwise go stale for the stream.
+    this.CheckScroll();
+  }
+
+  /** The stream pin's target and clearance for this turn, resolved once and kept while the node is in the DOM. */
+  private resolveStreamPin(turnId: string, container: HTMLElement): { target: HTMLElement; clearance: number } | null {
+    if (this.streamPin && this.streamPin.target.isConnected) {
+      return this.streamPin;
+    }
+    const target = this.messageListComponent?.FindTimelineElement(turnId) ?? null;
+    this.streamPin = target ? { target, clearance: this.turnTopClearance(container) } : null;
+    return this.streamPin;
   }
 
   /**
@@ -6523,12 +6666,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private clearTurnTracking(): void {
     this.currentTurnStartMessageId = null;
-    this.pendingTurnStartMessageId = null;
+    this.streamAnchor = null;
+    this.streamPin = null;
     this.bottomFollowSuppressedUntil = 0;
-    if (this.turnStartRetryHandle) {
-      clearTimeout(this.turnStartRetryHandle);
-      this.turnStartRetryHandle = null;
-    }
+    this.cancelPendingLanding();
   }
 
   /**

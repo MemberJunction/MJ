@@ -475,6 +475,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

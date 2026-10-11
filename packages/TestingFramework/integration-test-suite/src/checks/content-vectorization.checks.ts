@@ -39,6 +39,7 @@ import { AutotagBaseEngine, FieldPathResolver } from '@memberjunction/content-au
 import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     KnowledgeHubMetadataEngine,
     type MJContentItemEntity,
@@ -254,12 +255,14 @@ async function loadChunks(ctx: IntegrationCheckContext, itemID: string): Promise
     return r.Results;
 }
 /**
- * Refresh the KH cache so a just-created source is visible to the engine. The fixture index needs no
- * reload: it is saved through BaseEntity, and AIEngineBase (which owns the Vector Indexes cache) picks
- * it up from the save event.
+ * Refresh the KH cache so a just-created source is visible to the engine, and AIEngineBase so a
+ * just-created fixture index is. AIEngineBase owns the Vector Indexes cache and overrides
+ * AdditionalLoading, so BaseEngine applies a save event to it only as a debounced full refresh,
+ * seconds later — the check would look the index up before it lands.
  */
 async function refreshEngines(ctx: IntegrationCheckContext): Promise<void> {
     await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+    await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider);
 }
 function resetCaptures(): void { S.Upserts.length = 0; S.DeletedVectorIds.length = 0; S.EmbedCalls.length = 0; }
 /** The single upserted vector record's metadata for a single-item run. */

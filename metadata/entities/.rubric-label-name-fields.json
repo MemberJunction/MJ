@@ -18,6 +18,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Scale Levels&Name=Label"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:45.417Z",
+            "checksum": "7eed61d7e6b053a30e312c82208b59beeffaa35465e6bbaf1ce6e42980f9884d"
           }
         }
       ]
@@ -42,6 +46,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Bands&Name=Label"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:45.447Z",
+            "checksum": "7eed61d7e6b053a30e312c82208b59beeffaa35465e6bbaf1ce6e42980f9884d"
           }
         }
       ]

@@ -1,0 +1,162 @@
+[
+  {
+    "fields": {
+      "Name": "Clef",
+      "Description": "Cloudflare's 27B open-weight decision model (Apache-2.0, released October 1, 2026). It answers Likelihood, Choice (2 to 255 options) and Score (2 to 10 levels) questions, up to 64 in one call, about a state of up to 65,536 tokens, and returns a probability for every allowed option. It writes no text. It takes the same System One request as Jev. Served only on Cloudflare Workers AI, as @cf/cloudflare/clef; Cloudflare reports a median latency of 209 ms. Workers AI also accepts images with the state, which MJ does not send yet. Its raw probabilities are not calibrated to MJ's data, so set thresholds on calibrated values.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 58,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 2,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxQuestionsPerCall": 64,
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 10,
+          "MaxStateTokens": 65536
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cloudflare",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "0A8BFF6D-B3EE-4A27-A955-0FEDA7348CDC"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cloudflare",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CloudflareDecision",
+            "APIName": "@cf/cloudflare/clef",
+            "MaxInputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "4CEAC156-6A17-4407-884E-002365443CC3"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cloudflare",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.24,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Clef on Cloudflare Workers AI, October 2026: $0.24 per million input tokens; output is free. Source: https://developers.cloudflare.com/workers-ai/models/clef/"
+          },
+          "primaryKey": {
+            "ID": "511E8D48-E7B7-4133-A90D-27310C4E3D1E"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9F37ABF7-C632-4181-BDFA-86BD36AA4AF3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clef-flash",
+      "Description": "Cloudflare's 9B open-weight decision model (Apache-2.0, released October 1, 2026), the smaller sibling of Clef. It answers Likelihood, Choice (2 to 255 options) and Score (2 to 10 levels) questions, up to 64 in one call, about a state of up to 65,536 tokens, and returns a probability for every allowed option. It writes no text. It takes the same System One request as Jev. Served only on Cloudflare Workers AI, as @cf/cloudflare/clef-flash; Cloudflare reports a median latency of 39 ms. Workers AI also accepts images with the state, which MJ does not send yet. Its raw probabilities are not calibrated to MJ's data, so set thresholds on calibrated values.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 54,
+      "IsActive": true,
+      "SpeedRank": 2,
+      "CostRank": 1,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxQuestionsPerCall": 64,
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 10,
+          "MaxStateTokens": 65536
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cloudflare",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "E19A8141-F667-4D74-A483-7DD507F869C3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cloudflare",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CloudflareDecision",
+            "APIName": "@cf/cloudflare/clef-flash",
+            "MaxInputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7B621499-7EF8-4B6E-9F29-42142D2ED16E"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cloudflare",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.09,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Clef-flash on Cloudflare Workers AI, October 2026: $0.09 per million input tokens; output is free. Source: https://developers.cloudflare.com/workers-ai/models/clef-flash/"
+          },
+          "primaryKey": {
+            "ID": "208CFBF9-FEE0-420F-9A19-33193ED67EC8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F43E962D-78D0-43CD-9A23-716DF441BCAD"
+    }
+  }
+]

@@ -65,6 +65,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluations"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:45.262Z",
+      "checksum": "19bd1eb45fab26b659bc4880e0bcb0137a1a58e21cd4fd0115fc8fcaf0b8d6c3"
     }
   },
   {
@@ -80,6 +84,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluation Scores"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:45.298Z",
+      "checksum": "f0e81335c2d15f27ad4575ca10a5e87b977af5c7fd2470b5e8e1837da4c625ec"
     }
   }
 ]

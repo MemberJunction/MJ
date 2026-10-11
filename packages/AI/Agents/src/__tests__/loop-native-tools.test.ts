@@ -17,7 +17,7 @@ const resultWithCalls = (calls: Array<{ name: string; arguments?: Record<string,
     ({ success: true, chatResult: { data: { choices: [{ message: { toolCalls: calls } }] } } } as unknown as AIPromptRunResult);
 
 const binding = (toolName: string, actionName: string): ActionToolBinding =>
-    ({ kind: 'action', toolName, action: { Name: actionName }, tool: { name: toolName, inputSchema: {} } } as unknown as ActionToolBinding);
+    ({ kind: 'action', toolName, action: { Name: actionName }, tool: { name: toolName, inputSchema: {} }, params: [] } as unknown as ActionToolBinding);
 
 const bindings = new Map([['run_ad_hoc_query', binding('run_ad_hoc_query', 'Run Ad-hoc Query')]]);
 
@@ -44,6 +44,17 @@ describe('LoopAgentType — native tool calls as an Actions step (plan §8.1)', 
             { name: 'run_ad_hoc_query', arguments: {} }, { name: 'get_weather', arguments: { city: 'Paris' } }
         ]), two);
         expect(step?.actions?.map((a) => a.name)).toEqual(['Run Ad-hoc Query', 'Get Weather']);
+    });
+
+    it('decodes a Simple Object argument the model sent as a JSON string before the Action sees it', () => {
+        const withObjectParam = new Map([['test_sql_statement', {
+            kind: 'action', toolName: 'test_sql_statement', action: { Name: 'Test SQL Statement' },
+            tool: { name: 'test_sql_statement', inputSchema: {} },
+            params: [{ Name: 'Parameters', ValueType: 'Simple Object', IsArray: false }]
+        } as unknown as ActionToolBinding]]);
+        const step = new Probe().Call(
+            resultWithCalls([{ name: 'test_sql_statement', arguments: { SQL: 'SELECT 1', Parameters: '{"TopCount": 10}' } }]), withObjectParam);
+        expect(step?.actions?.[0].params).toEqual({ SQL: 'SELECT 1', Parameters: { TopCount: 10 } });
     });
 
     it('defaults missing arguments to an empty params object', () => {
@@ -77,7 +88,7 @@ const resultWith = (calls: Array<{ name: string; arguments?: Record<string, unkn
     return { success: true, result: text, rawResult: text, promptRun: { ToolCallingMode: mode }, chatResult } as unknown as AIPromptRunResult;
 };
 const actionBinding = (toolName: string, actionName: string): NativeToolBinding =>
-    ({ kind: 'action', toolName, action: { Name: actionName }, tool: { name: toolName, inputSchema: {} } } as unknown as NativeToolBinding);
+    ({ kind: 'action', toolName, action: { Name: actionName }, tool: { name: toolName, inputSchema: {} }, params: [] } as unknown as NativeToolBinding);
 const subAgentBinding = (toolName: string, agentName: string): NativeToolBinding =>
     ({ kind: 'subAgent', toolName, agent: { Name: agentName }, tool: { name: toolName, inputSchema: {} } } as unknown as NativeToolBinding);
 const full = new Map<string, NativeToolBinding>([
@@ -85,7 +96,8 @@ const full = new Map<string, NativeToolBinding>([
     ['delegate_to_query_strategist', subAgentBinding('delegate_to_query_strategist', 'Query Strategist')],
     ['delegate_to_editor_agent', subAgentBinding('delegate_to_editor_agent', 'Editor Agent')],
     ['payload_change_request', { kind: 'payloadChange', toolName: 'payload_change_request', tool: { name: 'payload_change_request', inputSchema: {} } } as NativeToolBinding],
-    ['ask_user', { kind: 'askUser', toolName: 'ask_user', tool: { name: 'ask_user', inputSchema: {} } } as NativeToolBinding]
+    ['ask_user', { kind: 'askUser', toolName: 'ask_user', tool: { name: 'ask_user', inputSchema: {} } } as NativeToolBinding],
+    ['complete_task', { kind: 'complete', toolName: 'complete_task', tool: { name: 'complete_task', inputSchema: {} } } as NativeToolBinding]
 ]);
 
 describe('LoopAgentType — implicit control flow routing (spec §2.1)', () => {
@@ -144,6 +156,39 @@ describe('LoopAgentType — implicit control flow routing (spec §2.1)', () => {
         const step = P().Call(resultWith([{ name: 'payload_change_request', arguments: {} }, { name: 'payload_change_request', arguments: {} }], 'NativeImplicit'), full);
         expect(step?.step).toBe('Retry');
     });
+    it('complete_task → terminal Success carrying its payload change, message and call id (one turn, not two)', () => {
+        const change = { updateElements: { query: { sql: 'SELECT 1' } } };
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'Done.', payloadChangeRequest: change } }], 'NativeImplicit'), full);
+        expect(step).toMatchObject({ step: 'Success', terminate: true, message: 'Done.', payloadChangeRequest: change, payloadToolCallId: 'call_0' });
+    });
+    it('complete_task without a payload change → Success with no payloadChangeRequest', () => {
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'Answered.' } }], 'NativeImplicit'), full);
+        expect(step).toMatchObject({ step: 'Success', message: 'Answered.' });
+        expect(step?.payloadChangeRequest).toBeUndefined();
+    });
+    it('complete_task accepts a payloadChangeRequest the model JSON-encoded', () => {
+        const change = { newElements: { a: 1 } };
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'x', payloadChangeRequest: JSON.stringify(change) } }], 'NativeImplicit'), full);
+        expect(step).toMatchObject({ step: 'Success', payloadChangeRequest: change });
+    });
+    it.each(['', '   ', 'null'])('complete_task with payloadChangeRequest %j → Success, as if it were omitted', (value) => {
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'Done.', payloadChangeRequest: value } }], 'NativeImplicit'), full);
+        expect(step).toMatchObject({ step: 'Success', message: 'Done.' });
+        expect(step?.payloadChangeRequest).toBeUndefined();
+    });
+    it('complete_task with an unusable payloadChangeRequest → Retry naming the rule', () => {
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'x', payloadChangeRequest: 'not json' } }], 'NativeImplicit'), full);
+        expect(step?.step).toBe('Retry');
+        expect(step?.errorMessage).toMatch(/payloadChangeRequest must be an object/);
+    });
+    it('complete_task with any other call → Retry naming the rule', () => {
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'x' } }, { name: 'run_ad_hoc_query', arguments: {} }], 'NativeImplicit'), full);
+        expect(step?.step).toBe('Retry');
+        expect(step?.errorMessage).toMatch(/complete_task must be the only call/);
+    });
+    it('under the HYBRID mode complete_task is an undeclared tool → Retry', () => {
+        expect(P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'x' } }], 'Native'), full)?.step).toBe('Retry');
+    });
     it('under the HYBRID mode a control-tool call is an undeclared tool → Retry (it was stripped from the request)', () => {
         const step = P().Call(resultWith([{ name: 'ask_user', arguments: { message: 'x' } }], 'Native'), full);
         expect(step?.step).toBe('Retry');
@@ -165,6 +210,20 @@ describe('LoopAgentType — plain text completes under implicit control flow', (
     });
     it('a valid envelope under implicit is still honoured (fallback row)', async () => {
         const step = await probe.Decide(resultWith(undefined, 'NativeImplicit', '{"taskComplete":false,"nextStep":{"type":"Retry","reason":"x"}}'));
+        expect(step.step).toBe('Retry');
+    });
+    it('unreadable JSON under implicit → Retry pointing at complete_task, never a completion that drops its payload', async () => {
+        // Text that fails the envelope parse must not be accepted as the final answer, or its payload is lost.
+        const step = await probe.Decide(resultWith(undefined, 'NativeImplicit', '{ "reasoning": "Tested the query", "payloadChangeRequest": { "updateElements": '));
+        expect(step.step).toBe('Retry');
+        expect(step.errorMessage).toMatch(/complete_task/);
+    });
+    it.each(['```sql\nSELECT 1\n```', '{curly} braces open this sentence.'])('prose that merely starts with a fence or a brace still completes (%j)', async (text) => {
+        const step = await probe.Decide(resultWith(undefined, 'NativeImplicit', text));
+        expect(step).toMatchObject({ step: 'Success', message: text });
+    });
+    it('a fenced JSON block that cannot be read under implicit → the same Retry', async () => {
+        const step = await probe.Decide(resultWith(undefined, 'NativeImplicit', '```json\n{ "reasoning": "x"'));
         expect(step.step).toBe('Retry');
     });
     it('empty text and no call → the pre-existing Failed step ("Prompt execution failed"), even under implicit', async () => {

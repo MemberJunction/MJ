@@ -14,6 +14,7 @@ import { CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from '@memberjunction/ai';
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import type { NativeToolBinding } from '../native-tools/control-tools';
+import { CoerceActionArguments } from '../native-tools/action-tool-builder';
 import type { ChatToolCall } from '@memberjunction/ai';
 import { GetToolCallingDecision } from '@memberjunction/ai-prompts';
 
@@ -350,6 +351,10 @@ export class LoopAgentType extends BaseAgentType {
         if (askUser.length > 0) {
             return this.askUserStep(askUser[0], resolved.length);
         }
+        const completes = ofKind('complete');
+        if (completes.length > 0) {
+            return this.completeTaskStep(completes[0], resolved.length);
+        }
         if (payloads.length > 1) {
             return this.createRetryStep('Call payload_change_request at most once per turn; combine your changes into one call.');
         }
@@ -391,6 +396,64 @@ export class LoopAgentType extends BaseAgentType {
         return this.createNextStep('Chat', { message, terminate: true });
     }
 
+    /**
+     * `complete_task` → Success, carrying its payload change — the native twin of the envelope's
+     * `taskComplete: true` + `payloadChangeRequest`, so finishing costs one turn, not two.
+     *
+     * The call id rides on `payloadToolCallId`: if Success validation turns the step into a Retry,
+     * the loop answers this call with the validation feedback, exactly as it answers a
+     * payload-only turn.
+     */
+    private completeTaskStep(complete: ResolvedNativeCall<Extract<NativeToolBinding, { kind: 'complete' }>>, totalCalls: number): BaseAgentNextStep {
+        if (totalCalls > 1) {
+            return this.createRetryStep('complete_task must be the only call on its turn. Finish any other tool calls first, then call complete_task on its own.');
+        }
+        const message = typeof complete.call.arguments?.message === 'string' ? complete.call.arguments.message.trim() : '';
+        const payloadChangeRequest = this.decodePayloadChangeArgument(complete.call.arguments?.payloadChangeRequest);
+        if (payloadChangeRequest === null) {
+            return this.createRetryStep('complete_task.payloadChangeRequest must be an object (newElements / updateElements / replaceElements / removeElements), or be omitted.');
+        }
+        return this.createSuccessStep({
+            ...(message ? { message } : {}),
+            payloadChangeRequest,
+            payloadToolCallId: complete.call.id
+        });
+    }
+
+    /**
+     * Text that opens a JSON object with a quoted key, bare or in a json fence — an attempted
+     * structured answer, not prose. A code block or a sentence that merely starts with a brace
+     * is prose and still completes the task.
+     */
+    private looksLikeEnvelopeAttempt(text: string): boolean {
+        return /^(?:```(?:json)?\s*)?\{\s*(?:"|$)/i.test(text);
+    }
+
+    /**
+     * Reads `complete_task.payloadChangeRequest`: undefined when absent, null when unusable. Models
+     * occasionally JSON-encode a nested object argument, so a string that parses to one is accepted.
+     */
+    private decodePayloadChangeArgument(value: unknown): AgentPayloadChangeRequest | undefined | null {
+        if (value === undefined || value === null) {
+            return undefined;
+        }
+        // An empty or "null" string is the argument left out, not a malformed one.
+        if (typeof value === 'string' && (value.trim() === '' || value.trim() === 'null')) {
+            return undefined;
+        }
+        let candidate: unknown = value;
+        if (typeof value === 'string') {
+            try {
+                candidate = JSON.parse(value);
+            } catch {
+                return null;
+            }
+        }
+        return candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate)
+            ? candidate as AgentPayloadChangeRequest
+            : null;
+    }
+
     /** One sub-agent tool → `subAgent`; several → the parallel `subAgents[]` form. */
     private subAgentStep(
         subAgents: ResolvedNativeCall<Extract<NativeToolBinding, { kind: 'subAgent' }>>[],
@@ -424,7 +487,9 @@ export class LoopAgentType extends BaseAgentType {
                 // Downstream dispatch resolves Actions by NAME, so hand back the Action's real
                 // name rather than the sanitized tool name the model used.
                 name: binding.action.Name,
-                params: call.arguments ?? {},
+                // Object params the model sent JSON-encoded are decoded here, so the Action sees
+                // the same shape the envelope path would have given it.
+                params: CoerceActionArguments(binding.params, call.arguments),
                 toolCallId: call.id
             })),
             payloadChangeRequest,
@@ -442,7 +507,7 @@ export class LoopAgentType extends BaseAgentType {
             payloadChangeRequest,
             payloadToolCallId,
             retryReason: 'Payload change applied',
-            retryInstructions: 'Your payload change was applied. Continue: call another tool if there is more to do, or reply in plain text when the task is complete.'
+            retryInstructions: 'Your payload change was applied. Continue: call another tool if there is more to do, or call complete_task when the task is complete.'
         });
     }
 
@@ -493,6 +558,16 @@ export class LoopAgentType extends BaseAgentType {
                 if (promptResult.promptRun?.ToolCallingMode === 'NativeImplicit') {
                     const text = typeof promptResult.result === 'string' ? promptResult.result.trim()
                         : typeof promptResult.rawResult === 'string' ? promptResult.rawResult.trim() : '';
+                    if (this.looksLikeEnvelopeAttempt(text)) {
+                        // JSON the envelope parser could not read is an attempted structured answer, not
+                        // prose. Accepting it as the final answer would end the run with any payload it
+                        // carried silently dropped.
+                        return this.createRetryStep(
+                            'Your reply looks like a JSON response, but it could not be read and plain text ends the task. ' +
+                            'To finish, call complete_task with your answer in message and any payload writes in payloadChangeRequest. ' +
+                            'Write JSON only for the nextStep types listed in the response format.'
+                        );
+                    }
                     if (text.length > 0) {
                         LogStatusEx({ message: '✅ Loop Agent (implicit): plain-text completion. ' + text.slice(0, 120), verboseOnly: true });
                         return this.createSuccessStep({ message: text });

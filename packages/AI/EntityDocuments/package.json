@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/entity-documents",
   "type": "module",
-  "version": "6.2.0-edge.1",
+  "version": "6.2.0-edge.3",
   "description": "MemberJunction: Entity Documents - lightweight template parsing and caching engine for converting records into rich prompt context",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,10 +17,10 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.2.0-edge.1",
-    "@memberjunction/core-entities": "6.2.0-edge.1",
-    "@memberjunction/global": "6.2.0-edge.1",
-    "@memberjunction/templates": "6.2.0-edge.1"
+    "@memberjunction/core": "6.2.0-edge.3",
+    "@memberjunction/core-entities": "6.2.0-edge.3",
+    "@memberjunction/global": "6.2.0-edge.3",
+    "@memberjunction/templates": "6.2.0-edge.3"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

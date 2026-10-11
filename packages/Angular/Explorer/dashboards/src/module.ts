@@ -17,6 +17,7 @@ import { ListsDashboardsModule } from './lists-dashboards.module';
 import { RoutinesDashboardsModule } from './routines-dashboards.module';
 import { ComponentStudioDashboardsModule } from './component-studio-dashboards.module';
 import { ArchivingDashboardsModule } from './archiving-dashboards.module';
+import { WorkQueueDashboardsModule } from './work-queue-dashboards.module';
 import { DatabaseDesignerDashboardsModule } from './DatabaseDesigner/database-designer-dashboards.module';
 // Existing standalone modules
 import { MCPModule } from './MCP';
@@ -58,6 +59,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     RoutinesDashboardsModule,
     ComponentStudioDashboardsModule,
     ArchivingDashboardsModule,
+    WorkQueueDashboardsModule,
     DatabaseDesignerDashboardsModule,
     MCPModule,
     IntegrationModule,
@@ -89,6 +91,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     RoutinesDashboardsModule,
     ComponentStudioDashboardsModule,
     ArchivingDashboardsModule,
+    WorkQueueDashboardsModule,
     DatabaseDesignerDashboardsModule,
     MCPModule,
     IntegrationModule,

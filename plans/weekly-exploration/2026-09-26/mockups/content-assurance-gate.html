@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Assurance</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa; --mj-bg-surface: white; --mj-bg-surface-card: #f5f7fa; --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155; --mj-text-secondary: #64748b; --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF; --mj-brand-primary-soft: #eef2fb;
+    --mj-border-default: #e2e8f0; --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a; --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c; --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626; --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7; --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px; }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 7px; cursor: default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+  .btn-disabled { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); border-color: var(--mj-border-default); }
+  .content { padding: 22px 28px 40px; display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; }
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-header .hint { font-size: 11.5px; color: var(--mj-text-muted); }
+  .field-row { padding: 12px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .field-row .k { font-size: 11px; color: var(--mj-text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: .03em; margin-bottom: 5px; }
+  .field-row .v { font-size: 13.5px; }
+  .audience-chip { background: var(--mj-brand-primary-soft); color: var(--mj-brand-primary); font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 20px; display: inline-flex; align-items: center; gap: 6px; }
+  .email-body { padding: 16px 18px; font-size: 13px; color: var(--mj-text-primary); line-height: 1.7; }
+  .email-body .highlight { background: color-mix(in srgb, var(--mj-status-error) 14%, transparent); border-bottom: 2px solid var(--mj-status-error); border-radius: 3px; padding: 0 2px; }
+  .email-body .highlight-warn { background: color-mix(in srgb, var(--mj-status-warning) 14%, transparent); border-bottom: 2px solid var(--mj-status-warning); border-radius: 3px; padding: 0 2px; }
+  .assurance-item { display: flex; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--mj-border-subtle); align-items: flex-start; }
+  .assurance-item:last-child { border-bottom: none; }
+  .assurance-item .icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .icon-fail { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+  .icon-warn { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .icon-ok { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .assurance-item .name { font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .badge { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: .02em; }
+  .badge-blocked { background: var(--mj-status-error); color: white; }
+  .badge-flagged { background: var(--mj-status-warning); color: white; }
+  .badge-pass { background: var(--mj-status-success); color: white; }
+  .assurance-item .desc { font-size: 12px; color: var(--mj-text-secondary); margin-top: 4px; }
+  .side-summary { padding: 14px 18px; }
+  .side-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 12.5px; border-bottom: 1px dashed var(--mj-border-subtle); }
+  .side-row:last-child { border-bottom: none; }
+  .send-footer { padding: 16px 18px; display: flex; gap: 10px; align-items: center; }
+  .send-footer .note { font-size: 11.5px; color: var(--mj-status-error); flex: 1; }
+  .audit-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .audit-table th { text-align: left; padding: 8px 18px; color: var(--mj-text-muted); font-size: 10.5px; text-transform: uppercase; border-bottom: 1px solid var(--mj-border-default); }
+  .audit-table td { padding: 9px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .mono { font-family: ui-monospace, monospace; font-size: 11.5px; }
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="brand"><i class="fa-solid fa-cube"></i> MJ Explorer</div>
+  <div class="nav-section">Communication</div>
+  <div class="nav-item active"><i class="fa-solid fa-paper-plane"></i> New Communication</div>
+  <div class="nav-item"><i class="fa-solid fa-envelope-circle-check"></i> Content Assurance Log</div>
+  <div class="nav-item"><i class="fa-solid fa-ban"></i> Suppression List</div>
+  <div class="nav-section">Admin</div>
+  <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Tenant Isolation</div>
+  <div class="nav-item"><i class="fa-solid fa-magnifying-glass-chart"></i> Search Quality</div>
+  <div class="nav-item"><i class="fa-solid fa-database"></i> Backup Assurance</div>
+</div>
+<div class="main">
+  <div class="topbar">
+    <div>
+      <h1><i class="fa-solid fa-envelope-circle-check"></i> Send to Audience — Review</h1>
+      <div class="sub">Fall Appeal 2026 · drafted by AI Agent "Campaign Copilot" · Gated policy mode</div>
+    </div>
+    <span class="audience-chip"><i class="fa-solid fa-users"></i> 4,812 recipients</span>
+  </div>
+  <div class="content">
+    <div>
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-file-lines"></i> Rendered message</h2><div class="hint">Preview — merge fields resolved for a sample recipient</div></div>
+        <div class="field-row"><div class="k">Subject</div><div class="v">You made this year possible — thank you</div></div>
+        <div class="email-body">
+          Dear {{FirstName}},<br><br>
+          Because of supporters like you, we reached more families than ever this year. Your gift today is
+          <span class="highlight-warn">100% tax-deductible</span> and helps us keep every program running
+          into next spring.<br><br>
+          Recent activity on your account: <span class="highlight">"Case note: client requested no further contact after Sept 2 — see M. Alvarez file"</span><br><br>
+          With gratitude,<br>The Development Team
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-clock-rotate-left"></i> Content Assurance Log — recent sends</h2></div>
+        <table class="audit-table">
+          <tr><th>Date</th><th>Campaign</th><th>Checks</th><th>Decision</th></tr>
+          <tr><td class="mono">Sep 24</td><td>Membership Renewal Batch 3</td><td>6/6 pass</td><td>Sent</td></tr>
+          <tr><td class="mono">Sep 19</td><td>Event Invite — Gala</td><td>5/6, 1 flagged</td><td>Sent (advisory)</td></tr>
+          <tr><td class="mono">Sep 12</td><td>Lapsed Donor Win-back</td><td>4/6, 1 blocked</td><td>Held for approval</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-shield-halved"></i> Content Assurance</h2></div>
+        <div class="assurance-item">
+          <div class="icon icon-fail"><i class="fa-solid fa-xmark"></i></div>
+          <div>
+            <div class="name">PII / context leakage <span class="badge badge-blocked">Blocked</span></div>
+            <div class="desc">Body contains a case note referencing a different constituent record (M. Alvarez). Merge-field template pulled the wrong "recent activity" source.</div>
+          </div>
+        </div>
+        <div class="assurance-item">
+          <div class="icon icon-warn"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          <div>
+            <div class="name">Factual claim <span class="badge badge-flagged">Flagged — advisory</span></div>
+            <div class="desc">"100% tax-deductible" — this campaign's fund is only partially deductible per Finance's Q3 guidance. Review before sending.</div>
+          </div>
+        </div>
+        <div class="assurance-item">
+          <div class="icon icon-ok"><i class="fa-solid fa-check"></i></div>
+          <div>
+            <div class="name">Brand voice &amp; tone <span class="badge badge-pass">Pass</span></div>
+            <div class="desc">Consistent with configured rubric — warm, mission-aligned, no off-brand language detected.</div>
+          </div>
+        </div>
+        <div class="assurance-item">
+          <div class="icon icon-ok"><i class="fa-solid fa-check"></i></div>
+          <div>
+            <div class="name">Profanity / hate-speech baseline <span class="badge badge-pass">Pass</span></div>
+            <div class="desc">No violations detected.</div>
+          </div>
+        </div>
+        <div class="send-footer">
+          <span class="note"><i class="fa-solid fa-circle-info"></i> A blocked check routes this send to Universal Approval Gates.</span>
+        </div>
+        <div style="padding: 0 18px 18px; display:flex; gap:10px;">
+          <button class="btn btn-disabled" style="flex:1; justify-content:center;"><i class="fa-solid fa-lock"></i> Send (blocked)</button>
+          <button class="btn btn-primary" style="flex:1; justify-content:center;"><i class="fa-solid fa-paper-plane"></i> Route to Approver</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-sliders"></i> Policy mode</h2></div>
+        <div class="side-summary">
+          <div class="side-row"><span>Communication template</span><b>Fall Appeal 2026</b></div>
+          <div class="side-row"><span>Mode</span><b style="color:var(--mj-brand-primary)">Gated</b></div>
+          <div class="side-row"><span>AI-assisted content</span><b>Yes — Campaign Copilot</b></div>
+          <div class="side-row"><span>Checks run</span><b>4</b></div>
+          <div class="side-row"><span>Cost</span><b>Once per template, not per recipient</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
