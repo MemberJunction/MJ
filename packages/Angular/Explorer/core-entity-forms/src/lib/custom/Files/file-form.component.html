@@ -10,7 +10,9 @@
           <h1 class="mj-file-viewer-title" [title]="record.Name">{{ record.Name }}</h1>
           <div class="mj-file-viewer-badges">
             <span class="mj-file-badge mj-file-badge--type">{{ record.ContentType || 'Document' }}</span>
-            <span class="mj-file-badge mj-file-badge--size">{{ FormatFileSize(record.ContentLength) }}</span>
+            @if (FileSizeLabel; as size) {
+              <span class="mj-file-badge mj-file-badge--size">{{ size }}</span>
+            }
             @if (record.Status) {
               <span class="mj-file-badge mj-file-badge--status">{{ record.Status }}</span>
             }
@@ -111,7 +113,7 @@
             <div class="mj-file-viewer-fallback">
               <i [class]="FileIconClass" class="mj-file-fallback-icon"></i>
               <h3>{{ record.Name }}</h3>
-              <p class="mj-file-fallback-meta">{{ record.ContentType || 'Document' }} &bull; {{ FormatFileSize(record.ContentLength) }}</p>
+              <p class="mj-file-fallback-meta">{{ record.ContentType || 'Document' }}@if (FileSizeLabel; as size) { &bull; {{ size }}}</p>
               <p class="mj-file-fallback-desc">{{ record.Description || 'Preview is not available for this file type.' }}</p>
               @if (MediaUrl) {
                 <button type="button" mjButton variant="primary" (click)="OpenInExternalTab()">
@@ -151,10 +153,12 @@
                 <span class="mj-file-meta-label">MIME Type:</span>
                 <span class="mj-file-meta-val font-mono">{{ record.ContentType || 'Unknown' }}</span>
               </div>
-              <div class="mj-file-meta-row">
-                <span class="mj-file-meta-label">Size:</span>
-                <span class="mj-file-meta-val">{{ FormatFileSize(record.ContentLength) }}</span>
-              </div>
+              @if (FileSizeLabel; as size) {
+                <div class="mj-file-meta-row">
+                  <span class="mj-file-meta-label">Size:</span>
+                  <span class="mj-file-meta-val">{{ size }}</span>
+                </div>
+              }
               @if (record.Status) {
                 <div class="mj-file-meta-row">
                   <span class="mj-file-meta-label">Status:</span>
@@ -163,7 +167,7 @@
               }
               <div class="mj-file-meta-row">
                 <span class="mj-file-meta-label">Created:</span>
-                <span class="mj-file-meta-val">{{ record.CreatedAt | date:'short' }}</span>
+                <span class="mj-file-meta-val">{{ record.__mj_CreatedAt | date:'short' }}</span>
               </div>
             </div>
 
@@ -283,14 +287,6 @@
                 [ShowLabel]="true"
                 FieldName="ContentType"
                 Type="textbox"
-                [EditMode]="EditMode"
-                [FormContext]="formContext"
-            ></mj-form-field>
-            <mj-form-field 
-                [Record]="record"
-                [ShowLabel]="true"
-                FieldName="ContentLength"
-                Type="numeric"
                 [EditMode]="EditMode"
                 [FormContext]="formContext"
             ></mj-form-field>
