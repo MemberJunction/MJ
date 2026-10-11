@@ -25,22 +25,30 @@ interface NunjucksInternals {
 }
 const NUNJUCKS = nunjucks as unknown as NunjucksInternals;
 
-/** Letters, decimal digits, `_` and `$`. Safe inside a JavaScript string and as part of an identifier. */
-const PLAIN_NAME = /^[\p{L}\p{Nd}_$]+$/u;
+/**
+ * Letters, combining marks, decimal digits, connector punctuation (such as `_`) and `$`. Each one is
+ * safe inside a JavaScript string and can continue a JavaScript identifier.
+ */
+const PLAIN_NAME = /^[\p{L}\p{Mn}\p{Mc}\p{Nd}\p{Pc}$]+$/u;
 
 /** A filter name can also contain dots (`{{ x | ns.filter }}`). */
-const PLAIN_FILTER_NAME = /^[\p{L}\p{Nd}_$]+(?:\.[\p{L}\p{Nd}_$]+)*$/u;
+const PLAIN_FILTER_NAME = /^[\p{L}\p{Mn}\p{Mc}\p{Nd}\p{Pc}$]+(?:\.[\p{L}\p{Mn}\p{Mc}\p{Nd}\p{Pc}$]+)*$/u;
 
-/** Characters that let a called member's name end the string the compiler writes it into. */
+/** Characters that end a double-quoted JavaScript string, or escape out of it. */
+const UNSAFE_STRING_CHARACTERS = /["\\\r\n\u2028\u2029]/;
+
+/** The compiler escapes `"` in a called member's name, so only these characters can end that string. */
 const UNSAFE_CALL_NAME_CHARACTERS = /[\\\r\n\u2028\u2029]/;
 
 /**
- * Identifiers the generated code uses inside a loop body (nunjucks 3.2.4). An async loop binds its
- * loop variables as raw function parameters, so a loop variable with one of these names shadows them.
+ * Identifiers that the generated code of a loop body uses (nunjucks 3.2.4). An async loop binds its loop
+ * variables as raw function parameters, so a loop variable with one of these names shadows them.
+ * `NunjucksCompileGuard.test.ts` compiles every kind of loop body and checks this list against the
+ * generated code.
  */
 const RESERVED_LOOP_NAMES: ReadonlySet<string> = new Set([
-    'env', 'context', 'frame', 'runtime', 'cb', 'next', 'lineno', 'colno', 'output',
-    'parentTemplate', 'callerFrame', 'kwargs', 'Object', 'Math', 'Error',
+    'env', 'context', 'frame', 'runtime', 'cb', 'next', 'lineno', 'colno', 'output', 'tasks',
+    'parentTemplate', 'callerFrame', 'kwargs', 'Object', 'Math', 'Error', 'undefined', 'Infinity',
 ]);
 
 /** Prefixes of generated identifiers: temporaries (`t_3`, `macro_t_3`, `hole_0`), blocks (`b_`), macro arguments (`l_`). */
@@ -49,10 +57,13 @@ const RESERVED_LOOP_NAME_PREFIX = /^(?:t|macro_t|hole|b|l)_/;
 /**
  * Checks a parsed nunjucks template, and throws a {@link TemplateSandboxError} if a name in it could
  * change the code the compiler generates:
- * - every variable, filter, test, loop, `set`, macro, import and block name must be a plain name
- *   (letters, digits, `_` and `$`); a filter name can also contain dots
+ * - every variable, filter, loop, `set`, macro, import and block name must be a plain name (letters,
+ *   combining marks, digits, connector punctuation such as `_`, and `$`); a filter name can also contain dots
+ * - a test name, and an extension's registered name and method, must not contain a quote, a backslash or a line break
  * - the name of a called member must not contain a backslash or a line break
- * - a loop variable must not reuse a name the generated code relies on (`context`, `frame`, `runtime`, ...)
+ * - a loop variable must not reuse an identifier that the generated loop code uses (`context`, `frame`,
+ *   `runtime`, `tasks`, `undefined`, ...)
+ * - the tree must hold only nunjucks nodes, plain values and regular expression literals
  * @param tree the root node the nunjucks parser returns
  */
 export function AssertTemplateTreeIsSafe(tree: unknown): void {
@@ -67,18 +78,29 @@ class TemplateTreeCheck {
     private readonly visited = new WeakSet<TemplateNode>();
     private readonly filterNames = new WeakSet<TemplateNode>();
 
-    public Visit(value: unknown): void {
+    /**
+     * Checks a value of the tree and everything under it.
+     * @param owner the node whose field holds the value
+     * @param field the name of that field
+     */
+    public Visit(value: unknown, owner?: TemplateNode, field?: string): void {
         if (Array.isArray(value)) {
-            asArray(value).forEach((item) => this.Visit(item));
+            asArray(value).forEach((item) => this.Visit(item, owner, field));
             return;
         }
-        if (!isNode(value) || this.visited.has(value)) {
+        if (!isNode(value)) {
+            if (!isPlainValue(value) && !isPatternLiteral(value, owner, field)) {
+                throw refusal('Template parse trees may only hold nunjucks nodes, plain values and regular expressions', owner);
+            }
+            return;
+        }
+        if (this.visited.has(value)) {
             return;
         }
         this.visited.add(value);
         this.checkNode(value);
         for (const key of Object.keys(value)) {
-            this.Visit(property(value, key));
+            this.Visit(property(value, key), value, key);
         }
     }
 
@@ -90,7 +112,7 @@ class TemplateTreeCheck {
             case 'FilterAsync':
                 return this.checkFilterName(node);
             case 'Is':
-                return this.checkName(testName(node), node);
+                return this.checkTestName(node);
             case 'FunCall':
                 return this.checkCallName(node);
             case 'Set':
@@ -122,7 +144,7 @@ class TemplateTreeCheck {
     private checkName(nameNode: unknown, owner: TemplateNode, pattern: RegExp = PLAIN_NAME): void {
         const name = nameValue(nameNode);
         if (name === undefined || !pattern.test(name)) {
-            throw refusal('Templates may only use plain names (letters, digits, _ and $)', owner);
+            throw refusal('Templates may only use plain names (letters, marks, digits, _ and $)', owner);
         }
     }
 
@@ -132,6 +154,13 @@ class TemplateTreeCheck {
             this.filterNames.add(name);
         }
         this.checkName(name, node, PLAIN_FILTER_NAME);
+    }
+
+    /** The compiler writes the test name into a double-quoted string, as text and without escaping it. */
+    private checkTestName(node: TemplateNode): void {
+        if (UNSAFE_STRING_CHARACTERS.test(testName(node))) {
+            throw refusal('Templates may not use a test name that contains a quote, a backslash or a line break', node);
+        }
     }
 
     /** The compiler writes the called expression's name, built by its own `_getNodeName`, into a string. */
@@ -185,24 +214,38 @@ class TemplateTreeCheck {
         }
     }
 
-    /** An extension tag's registered name and method are copied into the generated call. */
+    /** The compiler writes an extension tag's registered name and method into double-quoted strings. */
     private checkExtensionCall(node: TemplateNode): void {
         for (const value of [property(node, 'extName'), property(node, 'prop')]) {
-            if (typeof value !== 'string' || !PLAIN_NAME.test(value)) {
-                throw refusal('Template extensions must have plain names', node);
+            if (typeof value !== 'string' || UNSAFE_STRING_CHARACTERS.test(value)) {
+                throw refusal('Template extensions must have names without a quote, a backslash or a line break', node);
             }
         }
     }
 }
 
-/** The test name, read the way the compiler reads it: the called name of `is test(...)`, else the test itself. */
-function testName(node: TemplateNode): unknown {
-    const right = property(node, 'right');
-    return property(right, 'name') || right;
+/**
+ * The test name as the compiler writes it: the text of the called name's value for `is test(...)`,
+ * else the text of the test's own value. `is none` gives `"null"`.
+ */
+function testName(node: TemplateNode): string {
+    const test = property(node, 'right');
+    const calledName = property(test, 'name');
+    return String(calledName ? property(calledName, 'value') : property(test, 'value'));
 }
 
 function isNode(value: unknown): value is TemplateNode {
     return value instanceof NUNJUCKS.nodes.Node;
+}
+
+/** `undefined`, `null`, a string, a number or a boolean. */
+function isPlainValue(value: unknown): boolean {
+    return value === undefined || value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
+/** A regular expression literal (`r/.../`), which the parser stores as the value of a Literal node. */
+function isPatternLiteral(value: unknown, owner: TemplateNode | undefined, field: string | undefined): boolean {
+    return value instanceof RegExp && owner?.typename === 'Literal' && field === 'value';
 }
 
 /** A node's field, or `undefined` when the value is not a node. */
@@ -223,6 +266,8 @@ function nameValue(node: unknown): string | undefined {
     return typeof value === 'string' ? value : undefined;
 }
 
-function refusal(reason: string, node: TemplateNode): TemplateSandboxError {
-    return new TemplateSandboxError(`${reason} (line ${node.lineno + 1}, column ${node.colno + 1})`);
+/** The error for a refused template, with the node's position when the node has one. */
+function refusal(reason: string, node: TemplateNode | undefined): TemplateSandboxError {
+    const hasPosition = node !== undefined && Number.isInteger(node.lineno) && Number.isInteger(node.colno);
+    return new TemplateSandboxError(hasPosition ? `${reason} (line ${node.lineno + 1}, column ${node.colno + 1})` : reason);
 }
