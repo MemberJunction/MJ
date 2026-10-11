@@ -265,6 +265,11 @@ export class SQLParser {
         return this._dialect;
     }
 
+    /** The SQL supplied at construction, as written. */
+    get SQL(): string {
+        return this._sql;
+    }
+
     /**
      * Fixes a known node-sql-parser bug where CAST(x AS NVARCHAR(MAX)) is
      * serialized as CAST(x AS NVARCHARmax). Applies to NVARCHAR, VARCHAR,

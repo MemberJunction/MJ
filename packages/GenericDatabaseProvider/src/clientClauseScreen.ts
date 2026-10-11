@@ -1,5 +1,5 @@
 import { EntityPermissionType, IsPlatformSQL, type EntityInfo, type PlatformSQL, type UserInfo } from '@memberjunction/core';
-import { IsKeyword, LexSQL, SignificantTokens, SQLParser } from '@memberjunction/sql-parser';
+import { FindForbiddenFunctionCalls, IsKeyword, LexSQL, SignificantTokens, SQLParser } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 
 /** A client-supplied SQL fragment: plain text, or a set of per-platform variants. */
@@ -47,6 +47,12 @@ export interface StatementRelation {
     TableName: string;
     /** The table function's name; empty when the item is not a function call. */
     FunctionName: string;
+    /**
+     * True when the item names a CTE that is in scope where it is read: an unqualified name that
+     * matches, by the dialect's identifier rules, a CTE declared by its own SELECT or an enclosing
+     * one. A schema, `dbo` included, always makes the item a real table or view.
+     */
+    IsCTEReference: boolean;
 }
 
 /** What {@link ClientClauseScreen.CollectStatementReads} found in a parse tree. */
@@ -55,8 +61,29 @@ export interface StatementReads {
     Relations: StatementRelation[];
     /** The SELECT nodes in the tree, each counted once. */
     SelectCount: number;
-    /** The names of the CTEs the statement defines, lowercased. */
-    CTENames: Set<string>;
+}
+
+/**
+ * How a dialect matches a FROM item to a CTE. Each function returns the name as the dialect
+ * compares it, or null when the screen cannot tell.
+ */
+interface CTENameRules {
+    /** The name a CTE declares, from its name node in the parse tree. */
+    DeclaredName(node: unknown): string | null;
+    /** The name an unqualified FROM item reads, from its text in the parse tree. */
+    ReferenceName(text: string): string | null;
+    /** Whether a CTE body sees its own CTE without RECURSIVE (SQL Server). */
+    BodySeesItself: boolean;
+}
+
+/** The state of one walk of a parse tree. */
+interface StatementWalk {
+    Reads: StatementReads;
+    Visited: WeakSet<object>;
+    Aliases: ReadonlyMap<string, string> | null;
+    Names: CTENameRules;
+    /** A FROM item node to leave out (the clause screen's parse wrapper). */
+    Skip: object | undefined;
 }
 
 /** One variant of a clause, with the dialect it would run under. */
@@ -69,10 +96,11 @@ interface ClauseVariant {
  * SECURITY — screens for SQL text that a client (or a client-saved record) supplies to RunView.
  *
  * {@link ClientClauseScreen.AssertClauseUsesEntityBaseViews} is the full screen: one statement,
- * parsed as a read-only fragment, whose table references are only entity base views the acting
- * user can read unscoped (no row filter and no denied fields). Base tables and system catalogs are
- * refused. Apply it at every point where client text enters RunView: the GraphQL and REST entry
- * points, ad-hoc list sources, and the clauses a saved view stores (at save and when the view runs).
+ * parsed as a read-only fragment, that calls no function the dialect forbids in caller SQL and
+ * whose table references are only entity base views the acting user can read unscoped (no row
+ * filter and no denied fields). Base tables and system catalogs are refused. Apply it at every
+ * point where client text enters RunView: the GraphQL and REST entry points, ad-hoc list sources,
+ * and the clauses a saved view stores (at save and when the view runs).
  *
  * {@link ClientClauseScreen.AssertSingleStatementFragment} is the light check the provider runs on
  * every RunView, server-internal ones included: no statement separator and no comment outside a
@@ -117,8 +145,10 @@ export class ClientClauseScreen {
      *
      * The reads come from a walk of the whole parse tree ({@link CollectStatementReads}), and the
      * clause is refused when that walk does not account for every SELECT in the text
-     * ({@link AssertEverySelectAccountedFor}). Only the parse wrapper's own FROM item is skipped.
-     * A name reserved for the parser is refused first ({@link AssertNoIdentifierAliasNames}).
+     * ({@link AssertEverySelectAccountedFor}). Only the parse wrapper's own FROM item is skipped,
+     * and no CTE reference is exempt. A name reserved for the parser
+     * ({@link AssertNoIdentifierAliasNames}) and a call to a function the dialect forbids
+     * ({@link AssertNoForbiddenFunctionCalls}) are refused first.
      */
     public static AssertClauseUsesEntityBaseViews(
         clause: string | null | undefined,
@@ -134,6 +164,7 @@ export class ClientClauseScreen {
 
         const fragment = ClientClauseScreen.toDialectQuoting(clause, dialect);
         ClientClauseScreen.AssertNoIdentifierAliasNames(fragment, dialect, label);
+        ClientClauseScreen.AssertNoForbiddenFunctionCalls(fragment, dialect, label);
         const wrapped =
             label === 'OrderBy'
                 ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${fragment}`
@@ -207,6 +238,21 @@ export class ClientClauseScreen {
         }
     }
 
+    /**
+     * Refuses a call to a function the dialect forbids in caller-supplied SQL
+     * ({@link SQLParserDialect.CallerSQLForbiddenFunctions}). Such a function runs SQL given as a
+     * string, reads files or other databases, acts on the server, or pauses the query, so the
+     * table check cannot see what it reads.
+     */
+    public static AssertNoForbiddenFunctionCalls(sql: string, dialect: SQLParserDialect, label: string): void {
+        const forbidden = FindForbiddenFunctionCalls(sql, dialect);
+        if (forbidden.length > 0) {
+            throw new Error(
+                `Invalid ${label}: may not call ${forbidden.join(', ')} — such a function runs SQL given as a string, reads files or other databases, acts on the server, or pauses the query, so what it reads cannot be checked`,
+            );
+        }
+    }
+
     /** True when a parsed AST contains a write or DDL node at any depth. */
     public static AstContainsWriteNode(node: unknown): boolean {
         if (!node || typeof node !== 'object') return false;
@@ -225,9 +271,9 @@ export class ClientClauseScreen {
         return name.replace(/^\[|\]$/g, '').replace(/^"|"$/g, '').replace(/^`|`$/g, '');
     }
 
-    /** True for a reference with no schema — which `SQLParser.ExtractTableRefs` reports as `dbo`. */
+    /** True for a reference written with no schema. A schema, `dbo` included, is matched as written. */
     public static IsUnqualifiedSchema(schema: string): boolean {
-        return !schema || schema.toLowerCase() === 'dbo';
+        return !schema;
     }
 
     /** Builds the base-view allow-list for a set of entities. */
@@ -249,10 +295,9 @@ export class ClientClauseScreen {
      * Resolves a table reference against the allow-list and returns its entity; throws when it is
      * not an entity base view, or when `user` is given and lacks CanRead on that entity.
      *
-     * A schema-qualified reference must match that exact schema. An unqualified one resolves only
-     * when the view name is unique across schemas, because the database's default-schema
-     * resolution, not this screen, would pick which view runs. An exact `dbo.<view>` entity wins
-     * first, since `dbo` is indistinguishable from "no schema" here.
+     * A schema-qualified reference, `dbo` included, must match an entity in that exact schema. An
+     * unqualified one resolves only when the view name is unique across schemas, because the
+     * database's default-schema resolution, not this screen, would pick which view runs.
      */
     public static AssertTableRefReadable(
         allowed: EntityBaseViewAllowList,
@@ -261,8 +306,9 @@ export class ClientClauseScreen {
         label: string,
         user?: UserInfo,
     ): EntityInfo {
-        const qualified = allowed.Qualified.get(`${schema}.${table}`.toLowerCase());
-        const entity = ClientClauseScreen.IsUnqualifiedSchema(schema) ? qualified ?? allowed.Bare.get(table.toLowerCase()) : qualified;
+        const entity = ClientClauseScreen.IsUnqualifiedSchema(schema)
+            ? allowed.Bare.get(table.toLowerCase())
+            : allowed.Qualified.get(`${schema}.${table}`.toLowerCase());
         const reference = `${schema ? schema + '.' : ''}${table}`;
         if (entity === null) {
             throw new Error(`Invalid ${label}: '${table}' is a base view in more than one schema — qualify it with its schema`);
@@ -296,36 +342,31 @@ export class ClientClauseScreen {
     }
 
     /**
-     * Every FROM item in a parsed statement, the number of SELECT nodes, and the CTE names. The
-     * walk visits every property of every node, so it finds a FROM list wherever the grammar puts
-     * one: a subquery in a CASE branch, HAVING, a window's ORDER BY or PARTITION BY, a function
-     * argument, IN, EXISTS, a set operation or a CTE body. Every FROM item is kept, even when its
-     * alias repeats. Names the fallback parse renamed are read back through
-     * {@link SQLParser.IdentifierAliases}, which holds only names the parser put in the tree, so
-     * the CTE names are the ones the statement declares. `skip` is a FROM item node to leave out
-     * (the screen's parse wrapper).
+     * Every FROM item in a parsed statement, and the number of SELECT nodes. The walk visits every
+     * property of every node, so it finds a FROM list wherever the grammar puts one: a subquery in a
+     * CASE branch, HAVING, a window's ORDER BY or PARTITION BY, a function argument, IN, EXISTS, a
+     * set operation or a CTE body. Every FROM item is kept, even when its alias repeats. Names the
+     * fallback parse renamed are read back through {@link SQLParser.IdentifierAliases}, which holds
+     * only names the parser put in the tree. `skip` is a FROM item node to leave out (the screen's
+     * parse wrapper).
+     *
+     * Each FROM item records whether it reads a CTE in scope there
+     * ({@link StatementRelation.IsCTEReference}). A WITH covers its own SELECT, everything below it,
+     * and the following set-operation branches unless its SELECT is a parenthesized branch. A CTE
+     * body sees the CTEs before it, itself on SQL Server, and every CTE of a PostgreSQL WITH
+     * RECURSIVE list. Names match by the dialect's identifier rules ({@link cteNameRules}).
      */
     public static CollectStatementReads(parser: SQLParser, skip?: object): StatementReads {
-        const reads: StatementReads = { Relations: [], SelectCount: 0, CTENames: new Set<string>() };
         const aliases = parser.IdentifierAliases;
-        const visited = new WeakSet<object>();
-        const visit = (node: unknown): void => {
-            if (!node || typeof node !== 'object' || visited.has(node)) return;
-            visited.add(node);
-            if (Array.isArray(node)) {
-                node.forEach((child) => visit(child));
-                return;
-            }
-            const record = node as Record<string, unknown>;
-            if (record.type === 'select') {
-                reads.SelectCount++;
-                ClientClauseScreen.addFromItems(record.from, skip, aliases, reads.Relations);
-            }
-            ClientClauseScreen.addCTENames(record.with, aliases, reads.CTENames);
-            Object.values(record).forEach((child) => visit(child));
+        const walk: StatementWalk = {
+            Reads: { Relations: [], SelectCount: 0 },
+            Visited: new WeakSet<object>(),
+            Aliases: aliases,
+            Names: ClientClauseScreen.cteNameRules(parser, aliases),
+            Skip: skip,
         };
-        visit(parser.AST);
-        return reads;
+        ClientClauseScreen.visitNode(walk, parser.AST, new Set<string>());
+        return walk.Reads;
     }
 
     /**
@@ -362,28 +403,124 @@ export class ClientClauseScreen {
         throw new Error(`Invalid ${label}: a subquery may read only entity base views, not ${source}`);
     }
 
-    /** Adds the relation each FROM item names. */
-    private static addFromItems(
-        from: unknown,
-        skip: object | undefined,
-        aliases: ReadonlyMap<string, string> | null,
-        relations: StatementRelation[],
-    ): void {
-        const items: unknown[] = Array.isArray(from) ? from : from ? [from] : [];
-        for (const item of items) {
-            if (!item || typeof item !== 'object' || item === skip) continue;
-            const relation = ClientClauseScreen.relationOf(item as Record<string, unknown>, aliases);
-            if (relation) relations.push(relation);
+    /** Visits one node of the parse tree, with the CTE names in scope there. */
+    private static visitNode(walk: StatementWalk, node: unknown, scope: ReadonlySet<string>): void {
+        if (!node || typeof node !== 'object' || walk.Visited.has(node)) return;
+        walk.Visited.add(node);
+        if (Array.isArray(node)) {
+            node.forEach((child) => ClientClauseScreen.visitNode(walk, child, scope));
+            return;
+        }
+        const record = node as Record<string, unknown>;
+        if (record.type === 'select') {
+            ClientClauseScreen.visitSelect(walk, record, scope);
+            return;
+        }
+        Object.values(record).forEach((child) => ClientClauseScreen.visitNode(walk, child, scope));
+    }
+
+    /**
+     * Visits a SELECT node: counts it, adds its FROM items, and visits its CTE bodies and every
+     * other property with the CTE names each one can see.
+     */
+    private static visitSelect(walk: StatementWalk, select: Record<string, unknown>, scope: ReadonlySet<string>): void {
+        walk.Reads.SelectCount++;
+        const ctes: unknown[] = Array.isArray(select.with) ? select.with : [];
+        const declared = ctes.map((cte) => walk.Names.DeclaredName(ClientClauseScreen.cteNameNode(cte)));
+        const inner = ClientClauseScreen.withNames(scope, declared);
+        ClientClauseScreen.addFromItems(walk, select.from, inner);
+        const recursive = ctes.some((cte) => ClientClauseScreen.isRecursiveCTE(cte));
+        ctes.forEach((cte, i) => {
+            const visible = recursive ? declared : declared.slice(0, walk.Names.BodySeesItself ? i + 1 : i);
+            ClientClauseScreen.visitNode(walk, cte, ClientClauseScreen.withNames(scope, visible));
+        });
+        const ownBranchOnly = ctes.length > 0 && select.parentheses_symbol === true;
+        for (const [key, child] of Object.entries(select)) {
+            if (key === 'with') continue;
+            ClientClauseScreen.visitNode(walk, child, key === '_next' && ownBranchOnly ? scope : inner);
         }
     }
 
-    /** Adds the names of the CTEs in a `with` list. */
-    private static addCTENames(ctes: unknown, aliases: ReadonlyMap<string, string> | null, names: Set<string>): void {
-        if (!Array.isArray(ctes)) return;
-        for (const cte of ctes) {
-            const name = cte && typeof cte === 'object' ? ClientClauseScreen.identifierText((cte as { name?: unknown }).name, aliases) : '';
-            if (name) names.add(name.toLowerCase());
+    /** Adds the relation each FROM item names, marking an unqualified reference to a CTE in `scope`. */
+    private static addFromItems(walk: StatementWalk, from: unknown, scope: ReadonlySet<string>): void {
+        const items: unknown[] = Array.isArray(from) ? from : from ? [from] : [];
+        for (const item of items) {
+            if (!item || typeof item !== 'object' || item === walk.Skip) continue;
+            const relation = ClientClauseScreen.relationOf(item as Record<string, unknown>, walk.Aliases);
+            if (!relation) continue;
+            const name = relation.TableName && !relation.SchemaName ? walk.Names.ReferenceName(relation.TableName) : null;
+            relation.IsCTEReference = name !== null && scope.has(name);
+            walk.Reads.Relations.push(relation);
         }
+    }
+
+    /** `scope` plus the readable names among `names`. */
+    private static withNames(scope: ReadonlySet<string>, names: readonly (string | null)[]): ReadonlySet<string> {
+        const readable = names.filter((name): name is string => !!name);
+        return readable.length === 0 ? scope : new Set<string>([...scope, ...readable]);
+    }
+
+    /** The name node of one item of a `with` list. */
+    private static cteNameNode(cte: unknown): unknown {
+        return cte && typeof cte === 'object' ? (cte as { name?: unknown }).name : undefined;
+    }
+
+    /** True for the item of a `with` list that carries RECURSIVE (the parser marks the first). */
+    private static isRecursiveCTE(cte: unknown): boolean {
+        return !!cte && typeof cte === 'object' && (cte as { recursive?: unknown }).recursive === true;
+    }
+
+    /**
+     * How the parser's dialect matches a FROM item to a CTE. SQL Server ignores case, and a CTE
+     * body reads its own CTE. PostgreSQL folds an unquoted name to lower case and matches a quoted
+     * one exactly ({@link postgresNameRules}). A dialect that quotes identifiers any other way
+     * matches no CTE.
+     */
+    private static cteNameRules(parser: SQLParser, aliases: ReadonlyMap<string, string> | null): CTENameRules {
+        const quote = parser.Dialect.QuoteIdentifier('x');
+        if (quote.startsWith('[')) {
+            return {
+                DeclaredName: (node) => ClientClauseScreen.asciiLower(ClientClauseScreen.identifierText(node, aliases)) || null,
+                ReferenceName: (text) => ClientClauseScreen.asciiLower(text) || null,
+                BodySeesItself: true,
+            };
+        }
+        if (quote.startsWith('"')) return ClientClauseScreen.postgresNameRules(parser, aliases);
+        return { DeclaredName: () => null, ReferenceName: () => null, BodySeesItself: false };
+    }
+
+    /**
+     * PostgreSQL's CTE name rules. A CTE name node says whether it was quoted. A FROM item's name
+     * does not, so its quoting comes from the SQL's tokens: a name with upper-case letters that the
+     * SQL writes only quoted is exact, one it writes only unquoted folds to lower case, and one it
+     * writes both ways, or not as a token at all, matches no CTE.
+     */
+    private static postgresNameRules(parser: SQLParser, aliases: ReadonlyMap<string, string> | null): CTENameRules {
+        const quoted = new Set<string>();
+        const bare = new Set<string>();
+        for (const token of LexSQL(parser.SQL, parser.Dialect)) {
+            if (token.Kind === 'word') bare.add(token.Text);
+            else if (token.Kind === 'identifier' && token.Text.startsWith('"')) quoted.add(token.Text.slice(1, -1).split('""').join('"'));
+        }
+        const referenceName = (text: string): string | null => {
+            const folded = ClientClauseScreen.asciiLower(text);
+            if (folded === text) return text || null;
+            if (quoted.has(text) && !bare.has(text)) return text;
+            if (bare.has(text) && !quoted.has(text)) return folded;
+            return null;
+        };
+        const declaredName = (node: unknown): string | null => {
+            const name = node && typeof node === 'object' ? (node as { type?: unknown; value?: unknown }) : null;
+            if (typeof name?.value === 'string' && name.type === 'double_quote_string') return name.value || null;
+            if (typeof name?.value === 'string' && name.type === 'default') return ClientClauseScreen.asciiLower(name.value) || null;
+            return referenceName(ClientClauseScreen.identifierText(node, aliases));
+        };
+        return { DeclaredName: declaredName, ReferenceName: referenceName, BodySeesItself: false };
+    }
+
+    /** `text` with ASCII upper-case letters in lower case: PostgreSQL's folding of an unquoted name. */
+    private static asciiLower(text: string): string {
+        return text.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
     }
 
     /**
@@ -395,21 +532,21 @@ export class ClientClauseScreen {
         if (table) {
             const database = ClientClauseScreen.identifierText(item.db, aliases);
             const schema = ClientClauseScreen.identifierText(item.schema, aliases);
-            return { SchemaName: schema ? `${database}.${schema}` : database, TableName: table, FunctionName: '' };
+            return { SchemaName: schema ? `${database}.${schema}` : database, TableName: table, FunctionName: '', IsCTEReference: false };
         }
         const expr = item.expr && typeof item.expr === 'object' ? (item.expr as { type?: unknown; ast?: unknown; name?: unknown }) : null;
         if (expr?.ast || expr?.type === 'values') return null;
         if (expr?.type === 'function') return ClientClauseScreen.functionRelation(expr.name, aliases);
-        return { SchemaName: '', TableName: '', FunctionName: '' };
+        return { SchemaName: '', TableName: '', FunctionName: '', IsCTEReference: false };
     }
 
     /** The relation a table function names. Leading name parts join the schema, so a qualified name never matches a built-in. */
     private static functionRelation(name: unknown, aliases: ReadonlyMap<string, string> | null): StatementRelation {
-        if (typeof name === 'string') return { SchemaName: '', TableName: '', FunctionName: name };
+        if (typeof name === 'string') return { SchemaName: '', TableName: '', FunctionName: name, IsCTEReference: false };
         const record = name && typeof name === 'object' ? (name as { name?: unknown; schema?: unknown }) : {};
         const parts = Array.isArray(record.name) ? record.name.map((part) => ClientClauseScreen.identifierText(part, aliases)) : [];
         const qualifiers = [ClientClauseScreen.identifierText(record.schema, aliases), ...parts.slice(0, -1)].filter(Boolean);
-        return { SchemaName: qualifiers.join('.'), TableName: '', FunctionName: parts[parts.length - 1] ?? '' };
+        return { SchemaName: qualifiers.join('.'), TableName: '', FunctionName: parts[parts.length - 1] ?? '', IsCTEReference: false };
     }
 
     /**

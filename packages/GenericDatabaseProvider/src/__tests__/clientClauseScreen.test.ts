@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import type { EntityInfo, UserInfo } from '@memberjunction/core';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { SQLParser } from '@memberjunction/sql-parser';
-import { ClientClauseScreen, IsClientClauseScreeningProvider, type ClientViewClauseSet } from '../clientClauseScreen';
+import { ClientClauseScreen, IsClientClauseScreeningProvider, type ClientViewClauseSet, type StatementRelation } from '../clientClauseScreen';
 
 const MSSQL = new SQLServerDialect();
 const PG = new PostgreSQLDialect();
@@ -34,6 +34,10 @@ const USER = { ID: 'u1' } as UserInfo;
 
 const BRACKET_STACKED = "1 = (SELECT 1 AS [a'])) ; SELECT 1 AS [x] ; SELECT 1 WHERE (1 = (SELECT 1 AS [b'])";
 const E_STRING_STACKED = "Name = E'\\'' ; SELECT 1 ; SELECT 1 WHERE Name = E'\\''";
+
+/** A FROM item as `schema.table:cte` or `schema.table:table`, or `fn:name` for a table function. */
+const describeRelation = (r: StatementRelation): string =>
+    r.TableName ? `${r.SchemaName}.${r.TableName}:${r.IsCTEReference ? 'cte' : 'table'}` : `fn:${r.FunctionName}`;
 
 const screen = (clause: string, label = 'ExtraFilter', dialect: SQLParserDialect = MSSQL) =>
     () => ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, label, ENTITIES, dialect, USER);
@@ -193,7 +197,7 @@ describe('ClientClauseScreen — every subquery position is screened', () => {
     it('refuses a table function in FROM unless it is a built-in that reads only its arguments', () => {
         expect(screenIn(`EXISTS (SELECT 1 FROM sys.dm_exec_sql_text(0x01))`, MSSQL)).toThrow(/table function 'sys.dm_exec_sql_text'/);
         expect(screenIn(`EXISTS (SELECT 1 FROM dbo.STRING_SPLIT('a,b', ','))`, MSSQL)).toThrow(/table function 'dbo.STRING_SPLIT'/);
-        expect(screenIn(`EXISTS (SELECT 1 FROM pg_ls_dir('.'))`, PG)).toThrow(/table function 'pg_ls_dir'/);
+        expect(screenIn(`EXISTS (SELECT 1 FROM pg_get_keywords())`, PG)).toThrow(/table function 'pg_get_keywords'/);
         expect(screenIn(`EXISTS (SELECT 1 FROM pg_catalog.generate_series(1, 2))`, PG)).toThrow(/table function/);
     });
 
@@ -227,26 +231,24 @@ describe('ClientClauseScreen.CollectStatementReads', () => {
     it('keeps the database of a three-part name, so it cannot match a view in this database', () => {
         const reads = ClientClauseScreen.CollectStatementReads(new SQLParser('SELECT 1 FROM otherdb.__mj.vwAccounts', MSSQL));
 
-        expect(reads.Relations).toEqual([{ SchemaName: 'otherdb.__mj', TableName: 'vwAccounts', FunctionName: '' }]);
+        expect(reads.Relations).toEqual([{ SchemaName: 'otherdb.__mj', TableName: 'vwAccounts', FunctionName: '', IsCTEReference: false }]);
     });
 
-    it('reads back the names the fallback parse renamed, and collects CTE names', () => {
+    it('reads back the names the fallback parse renamed, and marks the CTE reference', () => {
         // A bracket-quoted CTE name makes the T-SQL grammar fail, so the parser renames brackets and retries.
         const sql = `WITH [Recent Accounts] AS (SELECT ID FROM [__mj].[vwAccounts]) SELECT ID FROM [Recent Accounts]`;
 
         const reads = ClientClauseScreen.CollectStatementReads(new SQLParser(sql, MSSQL));
 
-        expect(reads.Relations.map((r) => `${r.SchemaName}.${r.TableName}`).sort()).toEqual(['.Recent Accounts', '__mj.vwAccounts']);
-        expect([...reads.CTENames]).toEqual(['recent accounts']);
+        expect(reads.Relations.map(describeRelation).sort()).toEqual(['.Recent Accounts:cte', '__mj.vwAccounts:table']);
     });
 
-    it('collects only the CTE names the statement declares, and reads each FROM item as written', () => {
+    it('marks a FROM item as a CTE reference only by a name the statement declares, read as written', () => {
         const sql = `WITH [a b] AS (SELECT 1 AS x), _mjid_1 AS (SELECT 1 AS y) SELECT * FROM [vwOrders]`;
 
         const reads = ClientClauseScreen.CollectStatementReads(new SQLParser(sql, MSSQL));
 
-        expect([...reads.CTENames].sort()).toEqual(['_mjid_1', 'a b']);
-        expect(reads.Relations.map((r) => `${r.SchemaName}.${r.TableName}`)).toEqual(['.vwOrders']);
+        expect(reads.Relations.map(describeRelation)).toEqual(['.vwOrders:table']);
     });
 });
 
@@ -276,7 +278,7 @@ describe('ClientClauseScreen — names reserved for the SQL parser', () => {
 
 describe('ClientClauseScreen.AssertEverySelectAccountedFor', () => {
     const check = (sql: string, selectCount: number) =>
-        () => ClientClauseScreen.AssertEverySelectAccountedFor(sql, MSSQL, { Relations: [], SelectCount: selectCount, CTENames: new Set<string>() }, 'ExtraFilter');
+        () => ClientClauseScreen.AssertEverySelectAccountedFor(sql, MSSQL, { Relations: [], SelectCount: selectCount }, 'ExtraFilter');
 
     it('refuses SQL with a SELECT the walk did not find', () => {
         expect(check('SELECT 1 FROM x WHERE (SELECT 1) = 1', 1)).toThrow(/could not account for every subquery/);
@@ -285,5 +287,105 @@ describe('ClientClauseScreen.AssertEverySelectAccountedFor', () => {
     it('counts only SELECT keywords outside literals, quoted identifiers and comments', () => {
         expect(check(`SELECT 1 FROM x WHERE Name = 'select' AND [select] = 1`, 1)).not.toThrow();
         expect(check('SELECT 1 FROM x WHERE (SELECT 1) = 1', 2)).not.toThrow();
+    });
+});
+
+describe('ClientClauseScreen.CollectStatementReads — a FROM item is a CTE reference only where that CTE is in scope', () => {
+    const reads = (sql: string, dialect: SQLParserDialect) =>
+        ClientClauseScreen.CollectStatementReads(new SQLParser(sql, dialect)).Relations.map(describeRelation).sort();
+
+    it('marks a reference in its own statement, a subquery, and every set-operation branch', () => {
+        const sql = 'WITH a AS (SELECT ID FROM t) SELECT ID FROM a WHERE ID IN (SELECT ID FROM a) UNION SELECT ID FROM a';
+        expect(reads(sql, MSSQL)).toEqual(['.a:cte', '.a:cte', '.a:cte', '.t:table']);
+        expect(reads(sql, PG)).toEqual(['.a:cte', '.a:cte', '.a:cte', '.t:table']);
+    });
+
+    it('never marks a schema-qualified reference, dbo included', () => {
+        expect(reads('WITH vwOrders AS (SELECT 1 AS y) SELECT * FROM dbo.vwOrders', MSSQL)).toEqual(['dbo.vwOrders:table']);
+        expect(reads('WITH "vwOrders" AS (SELECT 1 AS y) SELECT * FROM __mj."vwOrders"', PG)).toEqual(['__mj.vwOrders:table']);
+    });
+
+    it('does not carry a WITH out of its subquery, into a sibling, or past its parenthesized branch (PostgreSQL)', () => {
+        expect(reads('SELECT o.* FROM (WITH x AS (SELECT 1 AS a) SELECT * FROM x) s CROSS JOIN x o', PG)).toEqual(['.x:cte', '.x:table']);
+        expect(reads('SELECT 1 FROM t WHERE EXISTS (WITH x AS (SELECT 1 AS a) SELECT 1 FROM x) AND id IN (SELECT id FROM x)', PG))
+            .toEqual(['.t:table', '.x:cte', '.x:table']);
+        expect(reads('WITH a AS (WITH b AS (SELECT 1 AS x) SELECT * FROM b) SELECT * FROM a, b', PG)).toEqual(['.a:cte', '.b:cte', '.b:table']);
+        expect(reads('(WITH x AS (SELECT 1 AS a) SELECT a FROM x) UNION SELECT a FROM x', PG)).toEqual(['.x:cte', '.x:table']);
+    });
+
+    it('lets a CTE body see only the CTEs before it, plus itself on SQL Server, and every CTE of a RECURSIVE list on PostgreSQL', () => {
+        expect(reads('WITH a AS (SELECT * FROM b), b AS (SELECT * FROM b) SELECT * FROM a, b', PG))
+            .toEqual(['.a:cte', '.b:cte', '.b:table', '.b:table']);
+        expect(reads('WITH RECURSIVE a AS (SELECT * FROM b), b AS (SELECT 1 AS x UNION ALL SELECT x FROM b) SELECT * FROM a', PG))
+            .toEqual(['.a:cte', '.b:cte', '.b:cte']);
+        expect(reads('WITH a AS (SELECT * FROM b), b AS (SELECT ID FROM t UNION ALL SELECT ID FROM b) SELECT * FROM a', MSSQL))
+            .toEqual(['.a:cte', '.b:cte', '.b:table', '.t:table']);
+    });
+
+    it('folds unquoted names to lower case and matches quoted names exactly on PostgreSQL', () => {
+        expect(reads('WITH recent AS (SELECT 1 AS a) SELECT * FROM Recent, "recent"', PG)).toEqual(['.Recent:cte', '.recent:cte']);
+        expect(reads('WITH recent AS (SELECT 1 AS a) SELECT * FROM "Recent"', PG)).toEqual(['.Recent:table']);
+        expect(reads('WITH "Recent" AS (SELECT 1 AS a) SELECT * FROM Recent', PG)).toEqual(['.Recent:table']);
+        expect(reads('WITH "Recent" AS (SELECT 1 AS a) SELECT * FROM "Recent"', PG)).toEqual(['.Recent:cte']);
+    });
+
+    it('ignores case on SQL Server', () => {
+        expect(reads('WITH Recent AS (SELECT 1 AS a) SELECT * FROM RECENT, [recent]', MSSQL)).toEqual(['.RECENT:cte', '.recent:cte']);
+    });
+
+    it('leaves the clause screen exempting no CTE: a CTE reference must still be an entity view there', () => {
+        expect(screen(`ID IN (WITH x AS (SELECT "ID" FROM __mj."vwAccounts") SELECT "ID" FROM x)`, 'ExtraFilter', PG)).toThrow(/entity base view, not 'x'/);
+    });
+});
+
+describe('ClientClauseScreen — functions whose reads the screen cannot see', () => {
+    // These run SQL given as a string, read files or other databases, act on the server, or pause the
+    // query. The dialect's list of functions caller SQL may not call applies to every client clause.
+    const PG_CALLS = [
+        `length(CAST(table_to_xml('__mj."vwAccounts"', true, false, '') AS text)) > 0`,
+        `position('x' in CAST(query_to_xml('select 1', true, true, '') AS text)) > 0`,
+        `length(CAST(cursor_to_xml('c', 1, false, true, '') AS text)) > 0`,
+        `length(CAST(pg_catalog.query_to_xmlschema('select 1', true, true, '') AS text)) > 0`,
+        `length(CAST([table_to_xml]('x', true, false, '') AS text)) > 0`,
+        `ID IN (SELECT x FROM dblink('c', 'select 1') AS t(x int))`,
+        `length(pg_read_file('x')) > 0`,
+        `lo_import('x') > 0`,
+        `pg_sleep(0) IS NULL`,
+    ];
+    const SS_CALLS = [
+        `ID IN (SELECT 1 FROM OPENQUERY(srv, 'SELECT 1'))`,
+        `EXISTS (SELECT 1 FROM OPENROWSET('SQLNCLI', 'x', 'SELECT 1'))`,
+        `EXISTS (SELECT 1 FROM OPENDATASOURCE('SQLNCLI', 'x').db.dbo.t)`,
+        `EXISTS (SELECT 1 FROM OPENXML(1, '/x'))`,
+    ];
+
+    it('refuses them in a filter and a sort on PostgreSQL', () => {
+        for (const clause of PG_CALLS) {
+            expect(screen(clause, 'ExtraFilter', PG)).toThrow(/may not call/);
+        }
+        expect(screen(`CAST(query_to_xml('select 1', true, true, '') AS text)`, 'OrderBy', PG)).toThrow(/may not call query_to_xml/);
+    });
+
+    it('refuses the rowset functions on SQL Server', () => {
+        for (const clause of SS_CALLS) {
+            expect(screen(clause)).toThrow(/may not call/);
+        }
+    });
+
+    it('still allows ordinary functions, and a forbidden name in a literal or as a column', () => {
+        expect(screen(`lower([Name]) = 'table_to_xml(' AND length([Name]) > 0 AND [lo_size] > 0`, 'ExtraFilter', PG)).not.toThrow();
+        expect(screen(`LOWER([Name]) = 'OPENQUERY(' AND LEN([Name]) > 0`)).not.toThrow();
+    });
+});
+
+describe('ClientClauseScreen.AssertTableRefReadable — a schema written is the schema read', () => {
+    it('does not resolve a dbo-qualified reference through an entity in another schema', () => {
+        expect(screen(`ID IN (SELECT ID FROM dbo.vwAccounts)`)).toThrow(/entity base view, not 'dbo.vwAccounts'/);
+    });
+
+    it('still resolves a dbo-qualified reference to an entity in dbo, and an unqualified name unique across schemas', () => {
+        const withDbo = [...ENTITIES, entity('Things', 'dbo', 'vwThings')];
+        expect(() => ClientClauseScreen.AssertClauseUsesEntityBaseViews(`ID IN (SELECT ID FROM dbo.vwThings)`, 'ExtraFilter', withDbo, MSSQL, USER)).not.toThrow();
+        expect(screen(`ID IN (SELECT ID FROM vwAccounts)`)).not.toThrow();
     });
 });

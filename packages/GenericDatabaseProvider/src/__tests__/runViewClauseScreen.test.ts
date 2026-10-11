@@ -421,3 +421,15 @@ describe('RunViewCore — a stored clause is screened in every subquery position
         expect(result.ErrorMessage).toMatch(/'Orders' is row-level-security filtered/);
     });
 });
+
+describe('RunViewCore — a stored clause may not call a function whose reads the screen cannot see', () => {
+    it("refuses a saved view's stored WhereClause that calls table_to_xml on PostgreSQL, before any SQL runs", async () => {
+        const where = `length(CAST(table_to_xml('__mj."vwAccounts"', true, false, '') AS text)) > 0`;
+
+        const { result, sql } = await run(savedView({ WhereClause: where }), new PostgreSQLClauseScreenTestProvider());
+
+        expect(sql).toHaveLength(0);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/may not call table_to_xml/);
+    });
+});

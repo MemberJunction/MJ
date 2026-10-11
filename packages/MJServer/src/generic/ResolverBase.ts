@@ -945,11 +945,11 @@ export class ResolverBase {
   /**
    * SECURITY — screen for a FULL client-supplied SQL statement (ad-hoc query path). In addition
    * to the SELECT-only validation the caller performs, every table reference must resolve to an
-   * entity BaseView the acting user can read UNSCOPED. CTE names defined by the statement itself
-   * are excluded from the check. A name reserved for the SQL parser is refused before parsing
-   * (`ClientClauseScreen.AssertNoIdentifierAliasNames`), and the parser reads back only the names
-   * it renamed, so the exclusion covers only names the statement declares. Fails closed: no user,
-   * or an unresolvable reference, refuses.
+   * entity BaseView the acting user can read UNSCOPED. A reference is excluded only when it reads a
+   * CTE that is in scope there (`StatementRelation.IsCTEReference`): unqualified, declared by its
+   * own SELECT or an enclosing one, and matched by the dialect's identifier rules. A name reserved
+   * for the SQL parser is refused before parsing (`ClientClauseScreen.AssertNoIdentifierAliasNames`).
+   * Fails closed: no user, or an unresolvable reference, refuses.
    *
    * The references come from a walk of the whole parse tree
    * (`ClientClauseScreen.CollectStatementReads`). The statement is refused when that walk does not
@@ -984,7 +984,7 @@ export class ResolverBase {
     ClientClauseScreen.AssertEverySelectAccountedFor(sqlText, dialect, reads, label);
     const allowed = this.entityBaseViewAllowList(provider);
     for (const relation of reads.Relations) {
-      if (relation.TableName && this.isUnqualifiedSchema(relation.SchemaName) && reads.CTENames.has(relation.TableName.toLowerCase())) continue;
+      if (relation.IsCTEReference) continue;
       const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
       if (entity) this.assertUnscopedRead(entity, user, label);
     }
@@ -1039,11 +1039,6 @@ export class ResolverBase {
 
   private dialectForProvider(provider?: IMetadataProvider): SQLParserDialect {
     return ClientClauseScreen.DialectFor(provider);
-  }
-
-  /** True for a reference with no schema. */
-  private isUnqualifiedSchema(schema: string): boolean {
-    return ClientClauseScreen.IsUnqualifiedSchema(schema);
   }
 
   /** The entity base-view allow-list for a provider's entities. */

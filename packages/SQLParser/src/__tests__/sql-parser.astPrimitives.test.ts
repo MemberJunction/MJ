@@ -290,6 +290,14 @@ describe('SQLParser.ClearOrderBy', () => {
 // Preprocessing fallback (bracket-identifier aliasing + trailing OPTION)
 // ════════════════════════════════════════════════════════════════════
 
+describe('SQLParser.SQL', () => {
+    it('returns the SQL supplied at construction, whether or not it parsed', () => {
+        const sql = 'WITH [Active People] AS (SELECT 1 AS a) SELECT * FROM [Active People]';
+        expect(new SQLParser(sql, tsql).SQL).toBe(sql);
+        expect(new SQLParser('SELECT FROM WHERE', tsql).SQL).toBe('SELECT FROM WHERE');
+    });
+});
+
 describe('SQLParser preprocessing fallback', () => {
 
     it('parses a CTE whose name has a space, restoring it on ToSQL', () => {
