@@ -118,6 +118,8 @@ describe('TemplateEngineServer sandbox: names that could change the compiled cod
         ['a name inside a set block', '{% set v %}{{ a"b }}{% endset %}'],
         ['a second loop variable with a quote', '{% for k, "a\\"b" in x %}{% endfor %}'],
         ['a loop variable named like the generated code', '{% asyncEach runtime in x %}{% endeach %}'],
+        ['a loop variable named tasks', '{% asyncEach tasks in x %}{% endeach %}'],
+        ['a loop variable named undefined', '{% asyncEach undefined in x %}{% endeach %}'],
         ['a macro name with a quote', '{% macro "a\\"b"() %}{% endmacro %}'],
         ['a macro keyword argument with a quote', '{% macro m("a\\"b"=1) %}{% endmacro %}'],
         ['an import alias with a quote', '{% import "x" as "a\\"b" %}'],
@@ -145,6 +147,13 @@ describe('TemplateEngineServer sandbox: ordinary names still compile', () => {
     it('accepts letters from any script, digits, _ and $ in names', async () => {
         const result = await render('{{ città }}|{{ _x1 }}|{{ $y }}', { città: 'Roma', _x1: 1, $y: 2 });
         expect(result.Output).toBe('Roma|1|2');
+    });
+
+    it('accepts the none and null tests that prompts and query templates use', async () => {
+        const result = await render('{% if a is none %}empty{% endif %}|{% if b is not none %}set{% endif %}|{{ a is null }}', {
+            a: null, b: 1,
+        });
+        expect(result.Output).toBe('empty|set|true');
     });
 
     it('accepts a quoted is-test name and a called member with an ordinary key', async () => {
