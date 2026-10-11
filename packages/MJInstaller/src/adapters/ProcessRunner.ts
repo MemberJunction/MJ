@@ -284,7 +284,8 @@ export class ProcessRunner {
    *
    * - **Windows**: Uses `netstat -ano` to find listening PIDs, then
    *   `taskkill /F /T` to kill each process tree.
-   * - **Unix**: Uses `lsof -ti:<port> | xargs kill -9`.
+   * - **Unix**: Uses `lsof -ti tcp:<port> -sTCP:LISTEN | xargs kill -9` — listeners
+   *   only, so client connections to the port (the installer's own) are spared.
    *
    * @param port - TCP port number to scan for listening processes.
    */
@@ -310,7 +311,10 @@ export class ProcessRunner {
           } catch { /* already dead */ }
         }
       } else {
-        execSync(`lsof -ti:${port} | xargs kill -9 2>/dev/null || true`, { stdio: 'ignore' });
+        // Listeners only. A bare `-ti:<port>` also matches every client socket on the
+        // port — including the installer's own health-check connection — so the
+        // installer would SIGKILL itself mid-cleanup.
+        execSync(`lsof -ti tcp:${port} -sTCP:LISTEN | xargs kill -9 2>/dev/null || true`, { stdio: 'ignore' });
       }
     } catch {
       // No process on this port, or already killed
