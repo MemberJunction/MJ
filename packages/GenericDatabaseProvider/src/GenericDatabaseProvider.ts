@@ -2018,7 +2018,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // those are admin-authored (MJUserViewEntityServer's save gate restricts setting/
                 // changing them to Owner-type users) and may legitimately contain constructs the
                 // screens block. Auto-generated clauses (FilterState / SmartFilter / nested
-                // {%UserView%} templates) are written against entity base views, which the screens permit.
+                // {%UserView%} templates) are written against entity base views, which the screens
+                // permit when the running user reads each of those entities unscoped.
                 this.ScreenStoredViewWhereClause(viewEntity, renderedWhere, user);
                 const isCustomWhereClause = !!viewEntity.CustomWhereClause; // truthy — the DB may hand back true or 1
                 if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {

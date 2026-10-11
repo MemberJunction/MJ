@@ -18,6 +18,8 @@ const { mockRunViewFn, mockRunViewsFn, mockEntityList } = vi.hoisted(() => ({
         SchemaName: string;
         BaseView: string;
         GetUserPermisions: (u: unknown) => { CanRead: boolean };
+        GetEffectiveRowFilterWhereClause: () => string;
+        GetDeniedReadFields: () => Set<string>;
     }>,
 }));
 
@@ -51,9 +53,18 @@ const OK_RESULT = { Success: true, Results: [{ ID: '1' }] };
 beforeEach(() => {
     vi.clearAllMocks();
     mockEntityList.length = 0;
+    const unscoped = { GetEffectiveRowFilterWhereClause: () => '', GetDeniedReadFields: () => new Set<string>() };
     mockEntityList.push(
-        { Name: 'Customers', SchemaName: 'sales', BaseView: 'vwCustomers', GetUserPermisions: () => ({ CanRead: true }) },
-        { Name: 'Ledger', SchemaName: 'sales', BaseView: 'vwLedger', GetUserPermisions: () => ({ CanRead: false }) },
+        { Name: 'Customers', SchemaName: 'sales', BaseView: 'vwCustomers', GetUserPermisions: () => ({ CanRead: true }), ...unscoped },
+        { Name: 'Ledger', SchemaName: 'sales', BaseView: 'vwLedger', GetUserPermisions: () => ({ CanRead: false }), ...unscoped },
+        {
+            Name: 'Orders',
+            SchemaName: 'sales',
+            BaseView: 'vwOrders',
+            GetUserPermisions: () => ({ CanRead: true }),
+            GetEffectiveRowFilterWhereClause: () => "(OwnerID = 'user-1')",
+            GetDeniedReadFields: () => new Set<string>(),
+        },
     );
     mockRunViewFn.mockResolvedValue(OK_RESULT);
     mockRunViewsFn.mockResolvedValue([OK_RESULT]);
@@ -89,6 +100,14 @@ describe('ViewOperationsHandler — REST clause screen', () => {
             expect(outcome.success).toBe(false);
         }
         expect(mockRunViewFn).not.toHaveBeenCalled();
+    });
+
+    it('RunView refuses a subquery over an entity that is row-level-security filtered for the caller', async () => {
+        const outcome = await ViewOperationsHandler.RunView({ EntityName: 'Customers', ExtraFilter: `ID IN (SELECT CustomerID FROM sales.vwOrders)` }, USER);
+
+        expect(mockRunViewFn).not.toHaveBeenCalled();
+        expect(outcome.success).toBe(false);
+        expect(outcome.error).toMatch(/'Orders' is row-level-security filtered for you/);
     });
 
     it('RunView screens every variant of a platform-specific filter', async () => {

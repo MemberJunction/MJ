@@ -77,6 +77,8 @@ const CONTACTS = {
     SchemaName: 'crm',
     BaseView: 'vwContacts',
     GetUserPermisions: () => ({ CanRead: true }),
+    GetEffectiveRowFilterWhereClause: () => '',
+    GetDeniedReadFields: () => new Set<string>(),
 } as unknown as EntityInfo;
 
 /** A provider double that screens with the real `GenericDatabaseProvider.ScreenClientClause`. */

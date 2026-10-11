@@ -928,8 +928,10 @@ export class ResolverBase {
    * with the REST view routes, ad-hoc list sources, and the provider's saved-view checks.
    *
    * RLS is applied by RunView as an outer WHERE around the entity being queried, not compiled
-   * into the view. Subqueries against another entity's BaseView therefore do not inherit that
-   * entity's RLS; they are still restricted to the view (not the table).
+   * into the view, and RunView removes denied fields from its own result only. A subquery reads a
+   * base view directly with neither, so the screen refuses one over any entity the user reads under
+   * a row filter or with denied fields (`ClientClauseScreen.AssertUnscopedRead`), the queried
+   * entity included.
    */
   protected assertClientClauseUsesEntityBaseViews(
     clause: string | undefined | null,
@@ -982,18 +984,9 @@ export class ResolverBase {
     }
   }
 
-  /** Refuses an entity whose read is narrowed for this user by row-level security or field-level denials. */
+  /** Refuses an entity whose read is narrowed for this user; see `ClientClauseScreen.AssertUnscopedRead`. */
   private assertUnscopedRead(entity: EntityInfo, user: UserInfo, label: string): void {
-    if (entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '').length > 0) {
-      throw new Error(
-        `Invalid ${label}: entity '${entity.Name}' is row-level-security filtered for you — ad-hoc SQL cannot apply that filter; use RunView`,
-      );
-    }
-    if (entity.GetDeniedReadFields(user).size > 0) {
-      throw new Error(
-        `Invalid ${label}: entity '${entity.Name}' has fields you are not permitted to read — ad-hoc SQL cannot project them away; use RunView`,
-      );
-    }
+    ClientClauseScreen.AssertUnscopedRead(entity, user, label);
   }
 
   /** Walks a parsed AST collecting the names of CTEs the statement itself defines. */

@@ -38,6 +38,8 @@ function entity(name: string, schema: string, baseView: string): EntityInfo {
         BaseView: baseView,
         PrimaryKeys: [{ Name: 'ID' }],
         GetUserPermisions: () => ({ CanRead: true }),
+        GetEffectiveRowFilterWhereClause: () => '',
+        GetDeniedReadFields: () => new Set<string>(),
     } as unknown as EntityInfo;
 }
 

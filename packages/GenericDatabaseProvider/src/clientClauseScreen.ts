@@ -1,4 +1,4 @@
-import { IsPlatformSQL, type EntityInfo, type PlatformSQL, type UserInfo } from '@memberjunction/core';
+import { EntityPermissionType, IsPlatformSQL, type EntityInfo, type PlatformSQL, type UserInfo } from '@memberjunction/core';
 import { LexSQL, SQLParser } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 
@@ -46,9 +46,9 @@ interface ClauseVariant {
  *
  * {@link ClientClauseScreen.AssertClauseUsesEntityBaseViews} is the full screen: one statement,
  * parsed as a read-only fragment, whose table references are only entity base views the acting
- * user can read. Base tables and system catalogs are refused. Apply it at every point where client
- * text enters RunView: the GraphQL and REST entry points, ad-hoc list sources, and the clauses a
- * saved view stores (at save and when the view runs).
+ * user can read unscoped (no row filter and no denied fields). Base tables and system catalogs are
+ * refused. Apply it at every point where client text enters RunView: the GraphQL and REST entry
+ * points, ad-hoc list sources, and the clauses a saved view stores (at save and when the view runs).
  *
  * {@link ClientClauseScreen.AssertSingleStatementFragment} is the light check the provider runs on
  * every RunView, server-internal ones included: no statement separator and no comment outside a
@@ -77,7 +77,9 @@ export class ClientClauseScreen {
     /**
      * The full screen for one client clause fragment; throws when it refuses. The label `OrderBy`
      * screens the text as an ORDER BY list; any other label screens it as a WHERE predicate. When
-     * `user` is given, every entity the fragment reads must be readable by that user.
+     * `user` is given, every entity the fragment reads must be readable by that user, unscoped
+     * ({@link AssertUnscopedRead}). That includes the entity the clause filters: a subquery over
+     * its base view is outside the row filter RunView applies to the outer query.
      */
     public static AssertClauseUsesEntityBaseViews(
         clause: string | null | undefined,
@@ -109,7 +111,8 @@ export class ClientClauseScreen {
             const table = ClientClauseScreen.StripIdentifierQuotes(t.TableName);
             const schema = ClientClauseScreen.StripIdentifierQuotes(t.SchemaName);
             if (table.toLowerCase() === '__mj_clause_screen') continue;
-            ClientClauseScreen.AssertTableRefReadable(allowed, schema, table, label, user);
+            const entity = ClientClauseScreen.AssertTableRefReadable(allowed, schema, table, label, user);
+            if (user) ClientClauseScreen.AssertUnscopedRead(entity, user, label);
         }
     }
 
@@ -218,6 +221,25 @@ export class ClientClauseScreen {
             throw new Error(`Invalid ${label}: you do not have read permission on entity '${entity.Name}' referenced by '${reference}'`);
         }
         return entity;
+    }
+
+    /**
+     * Refuses an entity whose read `user` holds under a row filter (role row-level security or an
+     * API-key row filter) or with denied fields. SQL that reads the entity's base view directly, such
+     * as a subquery in a client clause or an ad-hoc query, applies neither; RunView on that entity
+     * does. For any other entity, a granted read covers every row and field of its base view.
+     */
+    public static AssertUnscopedRead(entity: EntityInfo, user: UserInfo, label: string): void {
+        if (entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '').length > 0) {
+            throw new Error(
+                `Invalid ${label}: entity '${entity.Name}' is row-level-security filtered for you — SQL that reads its base view directly cannot apply that filter; read that entity with RunView`,
+            );
+        }
+        if (entity.GetDeniedReadFields(user).size > 0) {
+            throw new Error(
+                `Invalid ${label}: entity '${entity.Name}' has fields you are not permitted to read — SQL that reads its base view directly cannot project them away; read that entity with RunView`,
+            );
+        }
     }
 
     /** The text variants of one clause; a platform-specific clause yields each of its variants. */

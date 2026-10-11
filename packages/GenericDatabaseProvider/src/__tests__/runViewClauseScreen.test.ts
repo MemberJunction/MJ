@@ -41,8 +41,20 @@ const BASE_TABLE_PROBE = `EXISTS (SELECT 1 FROM __mj.[User] WHERE [Type] = 'Owne
 const ACCOUNTS_ID = '3f1f6b9e-0000-4000-8000-0000000000a1';
 const CODES_ID = '3f1f6b9e-0000-4000-8000-0000000000a2';
 
-/** An entity the user may read, with no row-level security and no external data source. */
-function readableEntity(id: string, name: string, baseView: string, extraFields: Array<Record<string, unknown>> = []): EntityInfo {
+/** How the user's read of an entity is narrowed: a row filter, denied fields, or neither. */
+interface ReadScope {
+    RowFilter?: string;
+    DeniedFields?: string[];
+}
+
+/** An entity the user may read, with no external data source. `scope` narrows that read; by default it is unscoped. */
+function readableEntity(
+    id: string,
+    name: string,
+    baseView: string,
+    extraFields: Array<Record<string, unknown>> = [],
+    scope: ReadScope = {},
+): EntityInfo {
     const pk = { Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true };
     const fields = [pk, ...extraFields];
     return {
@@ -57,10 +69,11 @@ function readableEntity(id: string, name: string, baseView: string, extraFields:
         DatetimeFields: [],
         ExternalDataSourceID: null,
         UserViewMaxRows: 0,
-        EnableFieldLevelSecurity: false,
+        EnableFieldLevelSecurity: (scope.DeniedFields?.length ?? 0) > 0,
         FullTextSearchEnabled: false,
         GetUserPermisions: () => ({ CanRead: true }),
-        GetEffectiveRowFilterWhereClause: () => '',
+        GetEffectiveRowFilterWhereClause: () => scope.RowFilter ?? '',
+        GetDeniedReadFields: () => new Set(scope.DeniedFields ?? []),
     } as unknown as EntityInfo;
 }
 
@@ -142,6 +155,14 @@ class PostgreSQLClauseScreenTestProvider extends ClauseScreenTestProvider {
     protected override TransformExternalSQLClause(clause: string): string {
         return clause.replace(/\[(\w+)\]/g, '"$1"').replace(/\bOrder\b/g, '"Order"');
     }
+}
+
+/** The same double over a caller-chosen set of entities. */
+class EntitySetTestProvider extends ClauseScreenTestProvider {
+    constructor(private readonly entitySet: EntityInfo[]) {
+        super();
+    }
+    public override get Entities(): EntityInfo[] { return this.entitySet; }
 }
 
 const USER = new UserInfo(null as unknown as IMetadataProvider, { ID: 'U1', Email: 'u1@example.com' });
@@ -319,5 +340,60 @@ describe('RunViewCore — caller clause slots reject statement separators for ev
 
         expect(result.Success).toBe(true);
         expect(sql[0]).toContain(`WHERE (${filter})`);
+    });
+});
+
+describe('ScreenClientClause — a subquery reads an entity only when the user may read it unscoped', () => {
+    // A subquery reads the entity's base view directly. RunView applies neither that entity's row
+    // filter nor its denied-field projection there, so the screen refuses such an entity.
+    const ORDERS_ID = '3f1f6b9e-0000-4000-8000-0000000000a3';
+    const OWN_ROWS = "(OwnerID = 'U1')";
+    const ORDERS_SUBQUERY = `ID IN (SELECT AccountID FROM [__mj].[vwOrders] WHERE [Total] > 100)`;
+
+    const accounts = (scope: ReadScope = {}) =>
+        readableEntity(ACCOUNTS_ID, 'Accounts', 'vwAccounts', [{ Name: 'Name', CodeName: 'Name', Type: 'nvarchar', Length: 200 }], scope);
+    const orders = (scope: ReadScope = {}) =>
+        readableEntity(ORDERS_ID, 'Orders', 'vwOrders', [{ Name: 'Total', CodeName: 'Total', Type: 'decimal' }], scope);
+
+    /** Screens `clause` as a client clause for the first entity, over the given entity set. */
+    const screen = (clause: string, entities: EntityInfo[], label = 'ExtraFilter') =>
+        () => new EntitySetTestProvider(entities).ScreenClientClause(clause, label, USER, entities[0]);
+
+    it('refuses a subquery over an entity that is row-level-security filtered for the user', () => {
+        expect(screen(ORDERS_SUBQUERY, [accounts(), orders({ RowFilter: OWN_ROWS })])).toThrow(/'Orders' is row-level-security filtered for you/);
+    });
+
+    it('refuses a subquery over an entity with a field the user may not read', () => {
+        expect(screen(ORDERS_SUBQUERY, [accounts(), orders({ DeniedFields: ['total'] })])).toThrow(/'Orders' has fields you are not permitted to read/);
+    });
+
+    it('allows the same subquery when the user reads that entity unscoped', () => {
+        expect(screen(ORDERS_SUBQUERY, [accounts(), orders()])).not.toThrow();
+    });
+
+    it("refuses a subquery over the outer entity's own base view when the user's read of it is row-filtered", () => {
+        const ownView = `ID IN (SELECT ID FROM [__mj].[vwAccounts] WHERE [Name] LIKE 'A%')`;
+
+        expect(screen(ownView, [accounts({ RowFilter: OWN_ROWS }), orders()])).toThrow(/'Accounts' is row-level-security filtered for you/);
+    });
+
+    it('applies the same rule to a subquery in a sort', () => {
+        const sort = '(SELECT MAX([Total]) FROM [__mj].[vwOrders])';
+
+        expect(screen(sort, [accounts(), orders({ RowFilter: OWN_ROWS })], 'OrderBy')).toThrow(/Invalid OrderBy: entity 'Orders' is row-level-security filtered/);
+    });
+
+    it('does not apply the rule to a clause that reads no table', () => {
+        expect(screen(`[Name] = 'Acme'`, [accounts({ RowFilter: OWN_ROWS, DeniedFields: ['secret'] }), orders()])).not.toThrow();
+    });
+
+    it("refuses a saved view's stored subquery over a row-filtered entity, before any SQL runs", async () => {
+        const provider = new EntitySetTestProvider([ACCOUNTS, orders({ RowFilter: OWN_ROWS })]);
+
+        const { result, sql } = await run(savedView({ WhereClause: ORDERS_SUBQUERY }), provider);
+
+        expect(sql).toHaveLength(0);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/'Orders' is row-level-security filtered for you/);
     });
 });

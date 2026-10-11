@@ -11,8 +11,16 @@ import { ClientClauseScreen, IsClientClauseScreeningProvider, type ClientViewCla
 const MSSQL = new SQLServerDialect();
 const PG = new PostgreSQLDialect();
 
+/** An entity whose read, when granted, is unscoped: no row filter and no denied fields. */
 function entity(name: string, schema: string, baseView: string, canRead = true): EntityInfo {
-    return { Name: name, SchemaName: schema, BaseView: baseView, GetUserPermisions: () => ({ CanRead: canRead }) } as unknown as EntityInfo;
+    return {
+        Name: name,
+        SchemaName: schema,
+        BaseView: baseView,
+        GetUserPermisions: () => ({ CanRead: canRead }),
+        GetEffectiveRowFilterWhereClause: () => '',
+        GetDeniedReadFields: () => new Set<string>(),
+    } as unknown as EntityInfo;
 }
 
 const ENTITIES = [
