@@ -254,6 +254,25 @@ describe('ExecuteRealtimeSessionTool — run ids in Config', () => {
         expect(relayInput().ParentRunID).toBe(CO_RUN_ID);
         expect(relayInput().ResumeRunID).toBe(PAUSED_RUN_ID);
     });
+
+    it('stops passing run ids that stopped being records of this session since the last relay', async () => {
+        const rows = sessionRuns(CO_RUN_ID, PAUSED_RUN_ID);
+        makeProvider(makeSession({ targetAgentID: TARGET_ID, coAgentRunID: CO_RUN_ID, pendingFeedbackRunID: PAUSED_RUN_ID }), rows);
+        // The delegated run pauses again, so the session config still names it on the next relay.
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true, PausedRunID: PAUSED_RUN_ID });
+        const resolver = makeResolver();
+
+        await relay(resolver);
+        // Both runs are moved to another session between the relays.
+        rows['MJ: AI Agent Runs'] = [];
+        await relay(resolver);
+
+        const [first, second] = executeRelayedToolMock.mock.calls.map(([input]) => input as ExecuteRelayedToolInput);
+        expect(first.ParentRunID).toBe(CO_RUN_ID);
+        expect(first.ResumeRunID).toBe(PAUSED_RUN_ID);
+        expect(second.ParentRunID).toBeUndefined();
+        expect(second.ResumeRunID).toBeUndefined();
+    });
 });
 
 describe('prompt-run mirrors — promptRunID in Config', () => {

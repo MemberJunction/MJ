@@ -5,7 +5,7 @@
  * @module @memberjunction/server
  */
 import { IMetadataProvider, LogError, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, IsValidUUID, MJLruCache, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 const AGENT_RUN_ENTITY = 'MJ: AI Agent Runs';
@@ -49,17 +49,13 @@ type LookupRow = Partial<RunStepRow> & { ID: string };
  * own runs from its owner (a web-widget guest's delegated runs carry no `ConversationID`, which the
  * guest's run filter keys on).
  *
- * Successful lookups are cached per set of claims, so the frequent relays (transcript turns, usage
- * flushes, heartbeats) query once per session.
+ * Each call reads the database again (`BypassCache`) and keeps no result, because the links can
+ * change after a lookup: a run's `AgentSessionID` and a step's `AgentRunID` and `TargetLogID` are
+ * updatable.
  */
 export class SessionRunIDVerifier {
-    private readonly verified = new MJLruCache<string, SessionRunIDs>({
-        maxSize: 5_000,
-        ttlMs: 4 * 60 * 60 * 1000,
-    });
-
     /**
-     * Returns the subset of `claimed` that belongs to the session. Never throws: when a lookup
+     * Returns the subset of `claimed` that belongs to the session now. Never throws: when a lookup
      * fails, nothing is kept.
      *
      * @param sessionID The `MJ: AI Agent Sessions` id the claims were read from. The caller must have
@@ -79,16 +75,7 @@ export class SessionRunIDVerifier {
         if (!candidates.CoAgentRunID && !candidates.PendingFeedbackRunID) {
             return {};
         }
-        const key = this.cacheKey(sessionID, candidates);
-        const cached = this.verified.Get(key);
-        if (cached) {
-            return cached;
-        }
-        const owned = await this.lookUpOwned(sessionID.trim(), candidates, contextUser, provider);
-        if (owned) {
-            this.verified.Set(key, owned);
-        }
-        return owned ?? {};
+        return (await this.lookUpOwned(sessionID.trim(), candidates, contextUser, provider)) ?? {};
     }
 
     /** Drops every claim that is not a UUID. The prompt run and step need a co-agent run to hang off. */
@@ -104,12 +91,6 @@ export class SessionRunIDVerifier {
 
     private uuidOrUndefined(value: string | undefined): string | undefined {
         return value && IsValidUUID(value) ? value.trim() : undefined;
-    }
-
-    private cacheKey(sessionID: string, ids: SessionRunIDs): string {
-        return [sessionID, ids.CoAgentRunID, ids.PromptRunID, ids.CoAgentRunStepID, ids.PendingFeedbackRunID]
-            .map((id) => NormalizeUUID(id))
-            .join('|');
     }
 
     /** Runs the lookups; `null` when one of them fails. */
@@ -146,6 +127,7 @@ export class SessionRunIDVerifier {
             ExtraFilter: `AgentSessionID='${EscapeSQLString(sessionID)}' AND ID IN (${ids.join(', ')})`,
             Fields: ['ID'],
             ResultType: 'simple',
+            BypassCache: true,
         };
     }
 
@@ -166,6 +148,7 @@ export class SessionRunIDVerifier {
             ExtraFilter: `AgentRunID='${EscapeSQLString(candidates.CoAgentRunID)}' AND (${matches.join(' OR ')})`,
             Fields: ['ID', 'StepType', 'TargetLogID'],
             ResultType: 'simple',
+            BypassCache: true,
         };
     }
 
