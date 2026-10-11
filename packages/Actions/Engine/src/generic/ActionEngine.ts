@@ -159,17 +159,18 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    public get ContextUser(): UserInfo { return (this._contextUser ?? this.Base.ContextUser) as UserInfo; }
    public set ContextUser(value: UserInfo) { this._contextUser = value; }
 
-   private _readOnlyProviderFactory: ReadOnlyProviderFactory | null = null;
+   // No initializer, so running the constructor again on the live singleton keeps the registration.
+   private _readOnlyProviderFactory?: ReadOnlyProviderFactory;
 
    /**
     * Registers how the host opens a provider on its read-only database login. MJServer registers one
-    * at startup. It can be registered once: a second call throws, so the factory cannot be replaced
-    * or removed.
+    * at startup. A second registration through this setter throws; code running inside the server
+    * process can still replace it.
     * @throws Error when a factory is already registered
     */
    public SetReadOnlyProviderFactory(factory: ReadOnlyProviderFactory): void {
       if (this._readOnlyProviderFactory) {
-         throw new Error('A read-only provider factory is already registered with the action engine; it cannot be replaced.');
+         throw new Error('A read-only provider factory is already registered with the action engine; a second registration is not allowed.');
       }
       this._readOnlyProviderFactory = factory;
    }
@@ -183,16 +184,18 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       return this._readOnlyProviderFactory ? await this._readOnlyProviderFactory() : null;
    }
 
-   private _adhocSQLAuthorizer: AdhocSQLAuthorizer | null = null;
+   // No initializer, so running the constructor again on the live singleton keeps the registration.
+   private _adhocSQLAuthorizer?: AdhocSQLAuthorizer;
 
    /**
-    * Registers the host's checks for SQL a caller wrote. MJServer registers one at startup. It can be
-    * registered once: a second call throws, so the checks cannot be replaced or removed.
+    * Registers the host's checks for SQL a caller wrote. MJServer registers one at startup. A second
+    * registration through this setter throws; code running inside the server process can still
+    * replace it.
     * @throws Error when an authorizer is already registered
     */
    public SetAdhocSQLAuthorizer(authorizer: AdhocSQLAuthorizer): void {
       if (this._adhocSQLAuthorizer) {
-         throw new Error('An ad-hoc SQL authorizer is already registered with the action engine; it cannot be replaced.');
+         throw new Error('An ad-hoc SQL authorizer is already registered with the action engine; a second registration is not allowed.');
       }
       this._adhocSQLAuthorizer = authorizer;
    }
@@ -201,7 +204,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * The host's checks for SQL a caller wrote. Actions that run such SQL refuse when this is null.
     */
    public get AdhocSQLAuthorizer(): AdhocSQLAuthorizer | null {
-      return this._adhocSQLAuthorizer;
+      return this._adhocSQLAuthorizer ?? null;
    }
 
    /**
