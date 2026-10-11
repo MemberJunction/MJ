@@ -27,8 +27,9 @@ const NUNJUCKS = nunjucks as unknown as NunjucksInternals;
 
 /**
  * Letters, combining marks, decimal digits, connector punctuation (such as `_`) and `$`. Each one is safe
- * inside a JavaScript string. In a raw identifier, a character that cannot start or continue it (a leading
- * digit or mark, or U+2E2F) only makes the generated code fail with a SyntaxError.
+ * inside a JavaScript string. In a raw identifier, a character that cannot start it (a digit, a mark, or
+ * connector punctuation other than `_`) or cannot appear in it at all (U+2E2F) only makes the generated
+ * code fail with a SyntaxError.
  */
 const PLAIN_NAME = /^[\p{L}\p{Mn}\p{Mc}\p{Nd}\p{Pc}$]+$/u;
 
@@ -53,8 +54,9 @@ const RESERVED_LOOP_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Names that every plain object inherits, such as `hasOwnProperty`. nunjucks finds filters and tests in
- * plain objects, so a filter or test with one of these names would resolve to the inherited member.
+ * Names that every plain object inherits, such as `hasOwnProperty`. nunjucks finds filters and tests in plain
+ * objects, and fills an omitted macro argument from one, so a filter, test or argument with one of these
+ * names would resolve to the inherited member.
  */
 const INHERITED_MEMBER_NAMES: ReadonlySet<string> = new Set(Object.getOwnPropertyNames(Object.prototype));
 
@@ -67,7 +69,8 @@ const RESERVED_LOOP_NAME_PREFIX = /^(?:t|macro_t|hole|b|l)_/;
  * - every variable, filter, loop, `set`, macro, import and block name must be a plain name (letters,
  *   combining marks, digits, connector punctuation such as `_`, and `$`); a filter name can also contain dots
  * - a test name, and an extension's registered name and method, must not contain a quote, a backslash or a line break
- * - a filter or test name must not be a name that every object inherits (`toString`, `hasOwnProperty`, ...)
+ * - a filter, test, macro argument or call-block argument name must not be a name that every object
+ *   inherits (`toString`, `hasOwnProperty`, ...)
  * - the name of a called member must not contain a backslash or a line break
  * - a loop variable must not reuse an identifier that the generated loop code uses (`context`, `frame`,
  *   `runtime`, `tasks`, `undefined`, ...)
@@ -214,11 +217,23 @@ class TemplateTreeCheck {
         args.forEach((arg, index) => {
             const isKeywordArguments = index === args.length - 1 && isNode(arg) && (arg.typename === 'Dict' || arg.typename === 'KeywordArgs');
             if (!isKeywordArguments) {
-                this.checkName(arg, node);
+                this.checkArgumentName(arg, node);
                 return;
             }
-            asArray(property(arg, 'children')).forEach((pair) => this.checkName(property(pair, 'key'), node));
+            asArray(property(arg, 'children')).forEach((pair) => this.checkArgumentName(property(pair, 'key'), node));
         });
+    }
+
+    /**
+     * A macro or call-block argument. When a call leaves out a positional argument, nunjucks fills it with a
+     * plain property read, so an argument named after a member every object inherits would receive that member.
+     */
+    private checkArgumentName(nameNode: unknown, owner: TemplateNode): void {
+        this.checkName(nameNode, owner);
+        const name = nameValue(nameNode);
+        if (name !== undefined && INHERITED_MEMBER_NAMES.has(name)) {
+            throw refusal(`Templates may not use "${name}" as a macro or call-block argument name`, owner);
+        }
     }
 
     private checkImportedNames(node: TemplateNode): void {

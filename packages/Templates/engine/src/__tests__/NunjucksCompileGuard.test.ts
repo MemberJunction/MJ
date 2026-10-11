@@ -421,6 +421,24 @@ describe('compile guard: filter and test names', () => {
     });
 });
 
+describe('compile guard: macro and call-block arguments', () => {
+    it('refuses argument names that every object inherits, positional or with a default', () => {
+        const unrefused = Object.getOwnPropertyNames(Object.prototype)
+            .flatMap((name) => [
+                `{% macro m(${name}) %}{% endmacro %}`,
+                `{% macro m(${name}=1) %}{% endmacro %}`,
+                `{% macro m() %}{% endmacro %}{% call(${name}) m() %}{% endcall %}`,
+                `{% macro m() %}{% endmacro %}{% call(${name}=1) m() %}{% endcall %}`,
+            ])
+            .filter((templateText) => !(thrownBy(() => parser.parse(templateText)) instanceof TemplateSandboxError));
+        expect(unrefused).toEqual([]);
+    });
+
+    it('still accepts ordinary argument names, and an argument the call leaves out reads as empty', () => {
+        expect(renderPlain('{% macro m(a, b, c=3) %}[{{ a }}][{{ b }}][{{ c }}]{% endmacro %}{{ m(1) }}')).toBe('[1][][3]');
+    });
+});
+
 describe('compile guard: extensions', () => {
     /** A tag extension that renders "ok", registered under the given key. */
     function environmentWithExtension(key: string): nunjucks.Environment {

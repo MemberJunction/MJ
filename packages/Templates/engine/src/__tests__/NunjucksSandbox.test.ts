@@ -32,11 +32,11 @@ interface ParserModule {
 }
 const { parser, lexer } = nunjucks as unknown as { parser: ParserModule; lexer: { lex(src: string): object } };
 
-/** The environment methods that find a registered filter, test or global by name. */
+/** The environment methods that find a registered filter, test or global by name. nunjucks accepts any value as the name. */
 interface EnvironmentRegistries {
-    getFilter(name: string): unknown;
-    getTest(name: string): unknown;
-    getGlobal(name: string): unknown;
+    getFilter(name: unknown): unknown;
+    getTest(name: unknown): unknown;
+    getGlobal(name: unknown): unknown;
     addFilter(name: string, filter: (this: object, ...args: never[]) => unknown): void;
 }
 
@@ -213,6 +213,25 @@ describe('environment registries', () => {
             .flatMap((name) => [`{{ [1] | select("${name}") }}`, `{{ [1] | reject("${name}") }}`])
             .filter((templateText) => !isRefused(() => renderPlain(templateText)));
         expect(unrefused).toEqual([]);
+    });
+
+    it('refuse a name that is an object, before converting it, so nunjucks cannot read a key the guard did not check', () => {
+        const env = newRegistries();
+        let conversions = 0;
+        const changingName = { toString: (): string => (conversions++ < 2 ? 'odd' : 'hasOwnProperty') };
+
+        expect(thrownBy(() => env.getTest(changingName))).toBeInstanceOf(TemplateSandboxError);
+        expect(conversions).toBe(0);
+        expect(isRefused(() => renderPlain('{{ [1] | select(testName) }}', { testName: { toString: (): string => 'odd' } }))).toBe(true);
+    });
+
+    it('still resolve a name given as none or as a number, as nunjucks does', () => {
+        const env = newRegistries();
+        const numbered = (): string => 'numbered';
+        env.addFilter('42', numbered);
+
+        expect(renderPlain('{{ [none, 1] | select(none) | length }}|{{ [none, 1] | reject(none) | length }}')).toBe('1|1');
+        expect(env.getFilter(42)).toBe(numbered);
     });
 
     it('still resolve registered names, and report a missing name as nunjucks does', () => {
