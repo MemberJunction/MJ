@@ -101,9 +101,13 @@ export interface AdhocSQLAuthorizer {
    ClampTimeoutSeconds(requestedSeconds: number | undefined): number;
 }
 
-/** True when `value` is a class derived from {@link BaseAction}. */
-function isActionClass(value: unknown): value is typeof BaseAction {
-   return typeof value === 'function' && value.prototype instanceof BaseAction;
+/**
+ * True when `actionClass` declares `AuthorizesCaller = true` as its own static field. A subclass does
+ * not inherit the marker from its parent. The field is read by name, so a class built on another
+ * loaded copy of {@link BaseAction} qualifies too.
+ */
+function declaresAuthorizesCaller(actionClass: unknown): boolean {
+   return typeof actionClass === 'function' && Object.getOwnPropertyDescriptor(actionClass, 'AuthorizesCaller')?.value === true;
 }
 
 /**
@@ -159,9 +163,14 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
 
    /**
     * Registers how the host opens a provider on its read-only database login. MJServer registers one
-    * at startup. Pass null to remove it.
+    * at startup. It can be registered once: a second call throws, so the factory cannot be replaced
+    * or removed.
+    * @throws Error when a factory is already registered
     */
-   public SetReadOnlyProviderFactory(factory: ReadOnlyProviderFactory | null): void {
+   public SetReadOnlyProviderFactory(factory: ReadOnlyProviderFactory): void {
+      if (this._readOnlyProviderFactory) {
+         throw new Error('A read-only provider factory is already registered with the action engine; it cannot be replaced.');
+      }
       this._readOnlyProviderFactory = factory;
    }
 
@@ -176,8 +185,15 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
 
    private _adhocSQLAuthorizer: AdhocSQLAuthorizer | null = null;
 
-   /** Registers the host's checks for SQL a caller wrote. MJServer registers one at startup. Pass null to remove it. */
-   public SetAdhocSQLAuthorizer(authorizer: AdhocSQLAuthorizer | null): void {
+   /**
+    * Registers the host's checks for SQL a caller wrote. MJServer registers one at startup. It can be
+    * registered once: a second call throws, so the checks cannot be replaced or removed.
+    * @throws Error when an authorizer is already registered
+    */
+   public SetAdhocSQLAuthorizer(authorizer: AdhocSQLAuthorizer): void {
+      if (this._adhocSQLAuthorizer) {
+         throw new Error('An ad-hoc SQL authorizer is already registered with the action engine; it cannot be replaced.');
+      }
       this._adhocSQLAuthorizer = authorizer;
    }
 
@@ -189,17 +205,17 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    }
 
    /**
-    * True when the class that runs `action` declares {@link BaseAction.AuthorizesCaller}. The class
-    * is resolved the way {@link RunClassBasedAction} resolves it. A Runtime action, or one with no
-    * registered class, does not authorize its caller.
+    * True when the class that runs `action` declares {@link BaseAction.AuthorizesCaller} itself. The
+    * class is resolved the way {@link RunClassBasedAction} resolves it. A subclass that overrides a
+    * marked action does not inherit the marker. A Runtime action, or one with no registered class,
+    * does not authorize its caller.
     */
    public ActionAuthorizesCaller(action: MJActionEntity): boolean {
       if (action.Type === 'Runtime') {
          return false;
       }
       const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, action.DriverClass || action.Name);
-      const actionClass: unknown = registration?.SubClass;
-      return isActionClass(actionClass) && actionClass.AuthorizesCaller === true;
+      return declaresAuthorizesCaller(registration?.SubClass);
    }
 
    // ── Proxied cached collections (single source of truth: ActionEngineBase.Instance) ──
