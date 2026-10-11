@@ -201,4 +201,24 @@ describe('SplitTopLevelAndTerms', () => {
         expect(termsOf('(A = 1 OR B = 2) AND C = 3')).toEqual(['(A = 1 OR B = 2)', 'C = 3']);
         expect(termsOf('CASE WHEN A = 1 OR B = 2 THEN 1 END = 1 AND C = 3')).toEqual(['CASE WHEN A = 1 OR B = 2 THEN 1 END = 1', 'C = 3']);
     });
+
+    describe('PostgreSQL, where the lexer reads [ and ] as operators', () => {
+        const pgTermsOf = (fragment: string) => SplitTopLevelAndTerms(fragment, pg)?.map(t => t.trim()) ?? null;
+
+        it('does not split inside a bracket name outside parentheses', () => {
+            expect(pgTermsOf('[Profit and Loss] > 0 AND [IsActive] = 1')).toEqual(['[Profit and Loss] > 0', '[IsActive] = 1']);
+            expect(pgTermsOf('[Profit or Loss] > 0 AND [IsActive] = 1')).toEqual(['[Profit or Loss] > 0', '[IsActive] = 1']);
+        });
+
+        it('splits a chain the same way as on SQL Server', () => {
+            const chain = "(A = 1) AND (B = 'x AND y') AND [C AND D] = 2";
+            expect(pgTermsOf(chain)).toEqual(termsOf(chain));
+        });
+
+        it('still finds a top-level AND after a bracket left open inside parentheses', () => {
+            // A PreRunView hook ANDs its predicate after the caller's filter in parentheses; a
+            // bracket in the caller's filter must not hide that AND.
+            expect(pgTermsOf(`("Name" = [a) AND ("OrganizationID" = 't1')`)).toEqual(['("Name" = [a)', `("OrganizationID" = 't1')`]);
+        });
+    });
 });

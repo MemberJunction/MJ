@@ -4,7 +4,9 @@
  * filter (identifier quoting, T-SQL date functions, boolean literals), and that rewrite can change
  * the caller's part after the hook checked it. These tests run the real hook, the real PostgreSQL
  * rewrite and the real view query builder, with only ExecuteSQL recorded, and pin that the tenant
- * predicate stays a separate AND term whatever the rewrite does to the caller's term.
+ * predicate stays a separate AND term whatever the rewrite does to the caller's term. The last
+ * block runs the same path with no hook and pins that the per-term rewrite keeps a SQL Server
+ * bracket name whole.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
@@ -16,6 +18,8 @@ import {
     type IMetadataProvider,
 } from '@memberjunction/core';
 import { PostgreSQLDataProvider } from '@memberjunction/postgresql-dataprovider';
+import type { SQLParserDialect } from '@memberjunction/sql-dialect';
+import { IsBalancedSQLFragment, SplitTopLevelAndTerms } from '@memberjunction/sql-parser';
 import { CreateTenantPreRunViewHook } from '../multiTenancy/index.js';
 import type { MultiTenancyConfig } from '../config.js';
 
@@ -84,6 +88,16 @@ function whereOf(provider: RecordingPostgreSQLProvider): string {
     return sql.substring(sql.indexOf(' WHERE ') + ' WHERE '.length);
 }
 
+/**
+ * Whether `term` is one of the top-level AND terms inside the one pair of parentheses around
+ * `where`. Only then does it narrow every row the query returns.
+ */
+function isTopLevelAndTerm(where: string, term: string, dialect: SQLParserDialect): boolean {
+    const inner = where.slice(1, -1);
+    const wrapped = where.startsWith('(') && where.endsWith(')') && IsBalancedSQLFragment(inner, dialect).IsBalanced;
+    return wrapped && (SplitTopLevelAndTerms(inner, dialect) ?? []).some((t) => t.trim() === term);
+}
+
 describe('Multi-tenancy on PostgreSQL — the provider rewrite cannot reach the tenant predicate', () => {
     let provider: RecordingPostgreSQLProvider;
     let savedProvider: IMetadataProvider;
@@ -95,7 +109,7 @@ describe('Multi-tenancy on PostgreSQL — the provider rewrite cannot reach the 
         Metadata.Provider = provider;
         ClearAllDataHooks();
         RegisterDataHook('PreRunView', CreateTenantPreRunViewHook(tenantConfig()));
-        user = new UserInfo(null as unknown as IMetadataProvider, { ID: 'U1', Email: 'u1@example.com' });
+        user = new UserInfo(provider, { ID: 'U1', Email: 'u1@example.com' });
         user.TenantContext = { TenantID: 't1', Source: 'header' };
     });
 
@@ -114,6 +128,17 @@ describe('Multi-tenancy on PostgreSQL — the provider rewrite cannot reach the 
         expect(whereOf(provider)).toBe(`((("IsActive" = TRUE) AND ("IsActive" = TRUE)) AND ${TENANT_TERM})`);
     });
 
+    it('keeps the tenant predicate its own AND term after a quote the boolean rewrite drops, followed by a top-level OR', async () => {
+        // The rewrite drops the quote, so text the hook read inside a string literal becomes code
+        // with a top-level OR. The tenant predicate must still narrow every row.
+        const result = await provider.RunView({ EntityName: 'Customers', ExtraFilter: `"IsActive" = '1) OR (1=1) OR ("IsActive" = 1'` }, user);
+
+        expect(result.Success).toBe(true);
+        const where = whereOf(provider);
+        expect(isTopLevelAndTerm(where, TENANT_TERM, provider.Dialect), `tenant predicate is not a top-level AND term of ${where}`).toBe(true);
+        expect(where).toBe(`((("IsActive" = TRUE) OR (1=1) OR ("IsActive" = TRUE)) AND ${TENANT_TERM})`);
+    });
+
     it('refuses a caller term that the rewrite leaves unbalanced, and runs no SQL', async () => {
         const result = await provider.RunView({ EntityName: 'Customers', ExtraFilter: `"IsActive" = '1) AND (1 = 1'` }, user);
 
@@ -127,5 +152,30 @@ describe('Multi-tenancy on PostgreSQL — the provider rewrite cannot reach the 
 
         expect(result.Success).toBe(true);
         expect(whereOf(provider)).toBe(`((("IsActive" = TRUE OR "Name" = 'a')) AND ${TENANT_TERM})`);
+    });
+});
+
+describe('PostgreSQL ExtraFilter rewrite with no PreRunView hook', () => {
+    let provider: RecordingPostgreSQLProvider;
+    let savedProvider: IMetadataProvider;
+
+    beforeEach(() => {
+        provider = new RecordingPostgreSQLProvider([customersEntity()]);
+        savedProvider = Metadata.Provider;
+        Metadata.Provider = provider;
+        ClearAllDataHooks();
+    });
+
+    afterEach(() => {
+        Metadata.Provider = savedProvider;
+    });
+
+    it('keeps a SQL Server bracket name that contains AND whole when it rewrites each AND term', async () => {
+        const user = new UserInfo(provider, { ID: 'U1', Email: 'u1@example.com' });
+
+        const result = await provider.RunView({ EntityName: 'Customers', ExtraFilter: '[Profit and Loss] > 0 AND [IsActive] = 1' }, user);
+
+        expect(result.Success).toBe(true);
+        expect(whereOf(provider)).toBe('(("Profit and Loss" > 0) AND ("IsActive" = TRUE))');
     });
 });

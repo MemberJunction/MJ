@@ -69,9 +69,11 @@ export function IsBalancedSQLFragment(
 
 /**
  * Splits `fragment` at its top-level ANDs: those outside parentheses and outside CASE … END, other
- * than the AND of a BETWEEN. Returns the terms as written, or `null` when the fragment has a
- * top-level OR, because putting each term in its own parentheses would then change its meaning.
- * A fragment with no top-level AND comes back as its only term.
+ * than the AND of a BETWEEN. Where the lexer reads `[` and `]` as operators (PostgreSQL), an AND or
+ * OR between them outside parentheses is part of a bracket name, not a top-level one. Returns the
+ * terms as written, or `null` when the fragment has a top-level OR, because putting each term in
+ * its own parentheses would then change its meaning. A fragment with no top-level AND comes back as
+ * its only term.
  */
 export function SplitTopLevelAndTerms(fragment: string, dialect: SQLParserDialect): string[] | null {
     const ands = findTopLevelAnds(SignificantTokens(LexSQL(fragment, dialect)));
@@ -174,16 +176,24 @@ function endsWithSplittableE(token: SQLLexToken): boolean {
     return false;
 }
 
-/** The top-level AND tokens, or `null` when there is a top-level OR (see {@link SplitTopLevelAndTerms}). */
+/**
+ * The top-level AND tokens, or `null` when there is a top-level OR (see {@link SplitTopLevelAndTerms}).
+ * `[` and `]` operator tokens count only outside parentheses, so a bracket left open inside a
+ * parenthesized term cannot hide a top-level AND after it.
+ */
 function findTopLevelAnds(tokens: SQLLexToken[]): SQLLexToken[] | null {
     const ands: SQLLexToken[] = [];
     let depth = 0;
+    let bracketDepth = 0;
     let caseDepth = 0;
     let openBetweens = 0;
     for (const token of tokens) {
         if (token.Kind === 'open') depth++;
         else if (token.Kind === 'close') depth--;
         else if (depth !== 0) continue;
+        else if (isOperator(token, '[')) bracketDepth++;
+        else if (isOperator(token, ']')) bracketDepth = Math.max(0, bracketDepth - 1);
+        else if (bracketDepth > 0) continue;
         else if (IsKeyword(token, 'CASE')) caseDepth++;
         else if (IsKeyword(token, 'END') && caseDepth > 0) caseDepth--;
         else if (caseDepth > 0) continue;
@@ -193,4 +203,8 @@ function findTopLevelAnds(tokens: SQLLexToken[]): SQLLexToken[] | null {
         else if (IsKeyword(token, 'AND')) ands.push(token);
     }
     return ands;
+}
+
+function isOperator(token: SQLLexToken, text: string): boolean {
+    return token.Kind === 'operator' && token.Text === text;
 }
