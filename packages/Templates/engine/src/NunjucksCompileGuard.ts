@@ -26,8 +26,9 @@ interface NunjucksInternals {
 const NUNJUCKS = nunjucks as unknown as NunjucksInternals;
 
 /**
- * Letters, combining marks, decimal digits, connector punctuation (such as `_`) and `$`. Each one is
- * safe inside a JavaScript string and can continue a JavaScript identifier.
+ * Letters, combining marks, decimal digits, connector punctuation (such as `_`) and `$`. Each one is safe
+ * inside a JavaScript string. In a raw identifier, a character that cannot start or continue it (a leading
+ * digit or mark, or U+2E2F) only makes the generated code fail with a SyntaxError.
  */
 const PLAIN_NAME = /^[\p{L}\p{Mn}\p{Mc}\p{Nd}\p{Pc}$]+$/u;
 
@@ -51,6 +52,12 @@ const RESERVED_LOOP_NAMES: ReadonlySet<string> = new Set([
     'parentTemplate', 'callerFrame', 'kwargs', 'Object', 'Math', 'Error', 'undefined', 'Infinity',
 ]);
 
+/**
+ * Names that every plain object inherits, such as `hasOwnProperty`. nunjucks finds filters and tests in
+ * plain objects, so a filter or test with one of these names would resolve to the inherited member.
+ */
+const INHERITED_MEMBER_NAMES: ReadonlySet<string> = new Set(Object.getOwnPropertyNames(Object.prototype));
+
 /** Prefixes of generated identifiers: temporaries (`t_3`, `macro_t_3`, `hole_0`), blocks (`b_`), macro arguments (`l_`). */
 const RESERVED_LOOP_NAME_PREFIX = /^(?:t|macro_t|hole|b|l)_/;
 
@@ -60,6 +67,7 @@ const RESERVED_LOOP_NAME_PREFIX = /^(?:t|macro_t|hole|b|l)_/;
  * - every variable, filter, loop, `set`, macro, import and block name must be a plain name (letters,
  *   combining marks, digits, connector punctuation such as `_`, and `$`); a filter name can also contain dots
  * - a test name, and an extension's registered name and method, must not contain a quote, a backslash or a line break
+ * - a filter or test name must not be a name that every object inherits (`toString`, `hasOwnProperty`, ...)
  * - the name of a called member must not contain a backslash or a line break
  * - a loop variable must not reuse an identifier that the generated loop code uses (`context`, `frame`,
  *   `runtime`, `tasks`, `undefined`, ...)
@@ -154,12 +162,22 @@ class TemplateTreeCheck {
             this.filterNames.add(name);
         }
         this.checkName(name, node, PLAIN_FILTER_NAME);
+        this.checkRegistryName(nameValue(name), node);
     }
 
     /** The compiler writes the test name into a double-quoted string, as text and without escaping it. */
     private checkTestName(node: TemplateNode): void {
-        if (UNSAFE_STRING_CHARACTERS.test(testName(node))) {
+        const name = testName(node);
+        if (UNSAFE_STRING_CHARACTERS.test(name)) {
             throw refusal('Templates may not use a test name that contains a quote, a backslash or a line break', node);
+        }
+        this.checkRegistryName(name, node);
+    }
+
+    /** A filter or test name must not resolve to a member that every object inherits. */
+    private checkRegistryName(name: string | undefined, owner: TemplateNode): void {
+        if (name !== undefined && INHERITED_MEMBER_NAMES.has(name)) {
+            throw refusal(`Templates may not use "${name}" as a filter or test name`, owner);
         }
     }
 
