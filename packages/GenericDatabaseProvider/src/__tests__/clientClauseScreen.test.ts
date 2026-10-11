@@ -322,6 +322,17 @@ describe('ClientClauseScreen.CollectStatementReads — a FROM item is a CTE refe
             .toEqual(['.a:cte', '.b:cte', '.b:table', '.t:table']);
     });
 
+    it('keeps a name in scope while any WITH that declares it is open, and not after', () => {
+        for (const dialect of [PG, MSSQL]) {
+            expect(reads('WITH x AS (SELECT 1 AS a) SELECT * FROM (WITH x AS (SELECT 2 AS a) SELECT a FROM x) s, x', dialect))
+                .toEqual(['.x:cte', '.x:cte']);
+            expect(reads('SELECT * FROM (WITH x AS (SELECT 1 AS a) SELECT a FROM x) s1, (WITH x AS (SELECT 2 AS a) SELECT a FROM x) s2, x', dialect))
+                .toEqual(['.x:cte', '.x:cte', '.x:table']);
+            expect(reads('WITH x AS (SELECT 1 AS a), y AS (SELECT * FROM (WITH x AS (SELECT 2 AS a) SELECT a FROM x) s, x) SELECT * FROM y, x', dialect))
+                .toEqual(['.x:cte', '.x:cte', '.x:cte', '.y:cte']);
+        }
+    });
+
     it('folds unquoted names to lower case and matches quoted names exactly on PostgreSQL', () => {
         expect(reads('WITH recent AS (SELECT 1 AS a) SELECT * FROM Recent, "recent"', PG)).toEqual(['.Recent:cte', '.recent:cte']);
         expect(reads('WITH recent AS (SELECT 1 AS a) SELECT * FROM "Recent"', PG)).toEqual(['.Recent:table']);

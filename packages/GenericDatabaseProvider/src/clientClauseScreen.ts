@@ -84,6 +84,8 @@ interface StatementWalk {
     Names: CTENameRules;
     /** A FROM item node to leave out (the clause screen's parse wrapper). */
     Skip: object | undefined;
+    /** Each CTE name the walk has met, with the number of CTEs of that name in scope at the current node. */
+    InScope: Map<string, number>;
 }
 
 /** One variant of a clause, with the dialect it would run under. */
@@ -354,7 +356,8 @@ export class ClientClauseScreen {
      * ({@link StatementRelation.IsCTEReference}). A WITH covers its own SELECT, everything below it,
      * and the following set-operation branches unless its SELECT is a parenthesized branch. A CTE
      * body sees the CTEs before it, itself on SQL Server, and every CTE of a PostgreSQL WITH
-     * RECURSIVE list. Names match by the dialect's identifier rules ({@link cteNameRules}).
+     * RECURSIVE list. Names match by the dialect's identifier rules ({@link cteNameRules}). The walk
+     * keeps a count of the CTEs of each name in scope as it goes, so its time is linear in the tree.
      */
     public static CollectStatementReads(parser: SQLParser, skip?: object): StatementReads {
         const aliases = parser.IdentifierAliases;
@@ -364,8 +367,9 @@ export class ClientClauseScreen {
             Aliases: aliases,
             Names: ClientClauseScreen.cteNameRules(parser, aliases),
             Skip: skip,
+            InScope: new Map<string, number>(),
         };
-        ClientClauseScreen.visitNode(walk, parser.AST, new Set<string>());
+        ClientClauseScreen.visitNode(walk, parser.AST);
         return walk.Reads;
     }
 
@@ -403,61 +407,92 @@ export class ClientClauseScreen {
         throw new Error(`Invalid ${label}: a subquery may read only entity base views, not ${source}`);
     }
 
-    /** Visits one node of the parse tree, with the CTE names in scope there. */
-    private static visitNode(walk: StatementWalk, node: unknown, scope: ReadonlySet<string>): void {
+    /** Visits one node of the parse tree. */
+    private static visitNode(walk: StatementWalk, node: unknown): void {
         if (!node || typeof node !== 'object' || walk.Visited.has(node)) return;
         walk.Visited.add(node);
         if (Array.isArray(node)) {
-            node.forEach((child) => ClientClauseScreen.visitNode(walk, child, scope));
+            node.forEach((child) => ClientClauseScreen.visitNode(walk, child));
             return;
         }
         const record = node as Record<string, unknown>;
         if (record.type === 'select') {
-            ClientClauseScreen.visitSelect(walk, record, scope);
+            ClientClauseScreen.visitSelect(walk, record);
             return;
         }
-        Object.values(record).forEach((child) => ClientClauseScreen.visitNode(walk, child, scope));
+        Object.values(record).forEach((child) => ClientClauseScreen.visitNode(walk, child));
     }
 
     /**
      * Visits a SELECT node: counts it, adds its FROM items, and visits its CTE bodies and every
-     * other property with the CTE names each one can see.
+     * other property with the CTE names each one can see. The CTEs of its WITH are in scope from
+     * their place in the list until the walk leaves the SELECT.
      */
-    private static visitSelect(walk: StatementWalk, select: Record<string, unknown>, scope: ReadonlySet<string>): void {
+    private static visitSelect(walk: StatementWalk, select: Record<string, unknown>): void {
         walk.Reads.SelectCount++;
         const ctes: unknown[] = Array.isArray(select.with) ? select.with : [];
         const declared = ctes.map((cte) => walk.Names.DeclaredName(ClientClauseScreen.cteNameNode(cte)));
-        const inner = ClientClauseScreen.withNames(scope, declared);
-        ClientClauseScreen.addFromItems(walk, select.from, inner);
-        const recursive = ctes.some((cte) => ClientClauseScreen.isRecursiveCTE(cte));
-        ctes.forEach((cte, i) => {
-            const visible = recursive ? declared : declared.slice(0, walk.Names.BodySeesItself ? i + 1 : i);
-            ClientClauseScreen.visitNode(walk, cte, ClientClauseScreen.withNames(scope, visible));
-        });
+        ClientClauseScreen.enterScope(walk, declared);
+        ClientClauseScreen.addFromItems(walk, select.from);
+        ClientClauseScreen.leaveScope(walk, declared);
+        ClientClauseScreen.visitCTEBodies(walk, ctes, declared);
         const ownBranchOnly = ctes.length > 0 && select.parentheses_symbol === true;
         for (const [key, child] of Object.entries(select)) {
             if (key === 'with') continue;
-            ClientClauseScreen.visitNode(walk, child, key === '_next' && ownBranchOnly ? scope : inner);
+            const outsideWith = key === '_next' && ownBranchOnly;
+            if (outsideWith) ClientClauseScreen.leaveScope(walk, declared);
+            ClientClauseScreen.visitNode(walk, child);
+            if (outsideWith) ClientClauseScreen.enterScope(walk, declared);
         }
+        ClientClauseScreen.leaveScope(walk, declared);
     }
 
-    /** Adds the relation each FROM item names, marking an unqualified reference to a CTE in `scope`. */
-    private static addFromItems(walk: StatementWalk, from: unknown, scope: ReadonlySet<string>): void {
+    /**
+     * Visits the bodies of one WITH list, whose CTE names are `declared`. Body `i` sees the CTEs
+     * before it, itself too on SQL Server, and every CTE of a RECURSIVE list. Each CTE comes into
+     * scope once, at its place in the list, and all of them are in scope afterwards.
+     */
+    private static visitCTEBodies(walk: StatementWalk, ctes: readonly unknown[], declared: readonly (string | null)[]): void {
+        const recursive = ctes.some((cte) => ClientClauseScreen.isRecursiveCTE(cte));
+        let entered = 0;
+        ctes.forEach((cte, i) => {
+            const visible = recursive ? ctes.length : walk.Names.BodySeesItself ? i + 1 : i;
+            for (; entered < visible; entered++) ClientClauseScreen.countName(walk, declared[entered], 1);
+            ClientClauseScreen.visitNode(walk, cte);
+        });
+        for (; entered < ctes.length; entered++) ClientClauseScreen.countName(walk, declared[entered], 1);
+    }
+
+    /** Adds the relation each FROM item names, marking an unqualified reference to a CTE in scope. */
+    private static addFromItems(walk: StatementWalk, from: unknown): void {
         const items: unknown[] = Array.isArray(from) ? from : from ? [from] : [];
         for (const item of items) {
             if (!item || typeof item !== 'object' || item === walk.Skip) continue;
             const relation = ClientClauseScreen.relationOf(item as Record<string, unknown>, walk.Aliases);
             if (!relation) continue;
             const name = relation.TableName && !relation.SchemaName ? walk.Names.ReferenceName(relation.TableName) : null;
-            relation.IsCTEReference = name !== null && scope.has(name);
+            relation.IsCTEReference = name !== null && (walk.InScope.get(name) ?? 0) > 0;
             walk.Reads.Relations.push(relation);
         }
     }
 
-    /** `scope` plus the readable names among `names`. */
-    private static withNames(scope: ReadonlySet<string>, names: readonly (string | null)[]): ReadonlySet<string> {
-        const readable = names.filter((name): name is string => !!name);
-        return readable.length === 0 ? scope : new Set<string>([...scope, ...readable]);
+    /** Brings each readable name among `names` into scope once more. */
+    private static enterScope(walk: StatementWalk, names: readonly (string | null)[]): void {
+        for (const name of names) ClientClauseScreen.countName(walk, name, 1);
+    }
+
+    /** Takes each readable name among `names` out of scope once. */
+    private static leaveScope(walk: StatementWalk, names: readonly (string | null)[]): void {
+        for (const name of names) ClientClauseScreen.countName(walk, name, -1);
+    }
+
+    /**
+     * Adds `delta` to the in-scope count of `name` when it is readable. A count that drops to zero
+     * stays in the map: in V8, each delete of a key leaves an entry that later lookups of that key
+     * step over until the map is rebuilt.
+     */
+    private static countName(walk: StatementWalk, name: string | null, delta: 1 | -1): void {
+        if (name) walk.InScope.set(name, (walk.InScope.get(name) ?? 0) + delta);
     }
 
     /** The name node of one item of a `with` list. */

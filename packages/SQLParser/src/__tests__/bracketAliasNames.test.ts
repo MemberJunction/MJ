@@ -95,6 +95,48 @@ describe('SQLParser fallback renaming — a renamed name stays its own token', (
     });
 });
 
+describe('SQLParser fallback renaming — the prefix is the first one the SQL does not contain', () => {
+    /** The rule: the first of `_mjid_`, `_mjid1_`, `_mjid2_`, … that the SQL does not contain, ignoring case. */
+    function expectedPrefix(sql: string): string {
+        const text = sql.toLowerCase();
+        let prefix = '_mjid_';
+        for (let k = 1; text.includes(prefix); k++) prefix = `_mjid${k}_`;
+        return prefix;
+    }
+
+    /** A statement that takes the fallback, with `text` in a string literal, and the prefix the parser took. */
+    function prefixTaken(text: string): { sql: string; prefix: string } {
+        const sql = `WITH [c] AS (SELECT 1 AS v) SELECT v FROM [c] WHERE v <> '${text}'`;
+        const parser = new SQLParser(sql, ss);
+        const [name] = [...(parser.IdentifierAliases ?? new Map<string, string>()).keys()];
+        return { sql, prefix: (name ?? '').replace(/\d+$/, '') };
+    }
+
+    it('skips each prefix the SQL contains, in any case, also when two prefixes share an underscore', () => {
+        expect(prefixTaken('_mjid_ _MJID1_ x_mjid_mjid2_').prefix).toBe('_mjid3_');
+    });
+
+    it('takes the first free prefix, so a gap or a leading zero does not move it further', () => {
+        expect(prefixTaken('_mjid_ _mjid2_').prefix).toBe('_mjid1_');
+        expect(prefixTaken('_mjid_ _mjid01_ _mjid12_').prefix).toBe('_mjid1_');
+    });
+
+    it('follows the rule on generated text', () => {
+        const chunks = ['_mjid', '_MJID', '_Mjid', '_', '0', '1', '2', '3', 'x', ' '];
+        let seed = 7;
+        const next = (): number => {
+            seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+            return seed >>> 16;
+        };
+        for (let n = 0; n < 1500; n++) {
+            const length = next() % 14;
+            const text = Array.from({ length }, () => chunks[next() % chunks.length]).join('');
+            const { sql, prefix } = prefixTaken(text);
+            expect(prefix, text).toBe(expectedPrefix(sql));
+        }
+    });
+});
+
 describe('SQLParser.IsIdentifierAliasName', () => {
     it('matches every name the fallback renaming can give, ignoring case', () => {
         for (const name of ['_mjid_0', '_mjid_12', '_MJID_3', '_mjid1_0', '_Mjid27_4']) {

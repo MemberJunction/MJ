@@ -1763,6 +1763,12 @@ export class SQLParser {
     /** Every alias name {@link aliasPrefixFor} and {@link aliasBracketIdentifiers} can produce. */
     private static readonly ALIAS_NAME = /^_mjid\d*_\d+$/i;
 
+    /**
+     * An alias prefix in lower-case text, with its digits captured. The lookahead leaves the
+     * closing `_` unread, so a prefix that starts on that `_` is found too (`_mjid_mjid1_`).
+     */
+    private static readonly ALIAS_PREFIX_IN_TEXT = /_mjid(\d*)(?=_)/g;
+
     /** A character that would join an alias written next to it into one longer name. */
     private static readonly NAME_CHAR = /[\w@#$\u0080-\uffff]/;
 
@@ -1827,7 +1833,9 @@ export class SQLParser {
                     // Emit a BARE identifier — node-sql-parser rejects bracket-quoted
                     // CTE names entirely, so the alias must be unbracketed. sqlify
                     // re-quotes it ([_mjid_0]); restoreAliases handles every form.
-                    const before = out.length > 0 && SQLParser.NAME_CHAR.test(out[out.length - 1]) ? ' ' : '';
+                    // The character before the brackets comes from `sql`. A read from `out`, which
+                    // grows by `+=`, copies all of `out` each time.
+                    const before = i > 0 && SQLParser.NAME_CHAR.test(sql[i - 1]) ? ' ' : '';
                     const after = j < n && (SQLParser.NAME_CHAR.test(sql[j]) || sql[j] === '[') ? ' ' : '';
                     out += `${before}${alias}${after}`;
                 } else {
@@ -1844,12 +1852,14 @@ export class SQLParser {
     /**
      * The alias prefix for one SQL text: the first of `_mjid_`, `_mjid1_`, `_mjid2_`, … that does
      * not occur in it, ignoring case. No name the SQL writes can then equal or contain an alias.
+     * One scan of the text collects the digits of every prefix it contains.
      */
     private static aliasPrefixFor(sql: string): string {
-        const text = sql.toLowerCase();
-        let prefix = `${SQLParser.BRACKET_ALIAS_STEM}_`;
-        for (let k = 1; text.includes(prefix); k++) prefix = `${SQLParser.BRACKET_ALIAS_STEM}${k}_`;
-        return prefix;
+        const used = new Set<string>();
+        for (const match of sql.toLowerCase().matchAll(SQLParser.ALIAS_PREFIX_IN_TEXT)) used.add(match[1]);
+        let digits = '';
+        for (let k = 1; used.has(digits); k++) digits = String(k);
+        return `${SQLParser.BRACKET_ALIAS_STEM}${digits}_`;
     }
 
     /**
