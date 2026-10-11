@@ -4,11 +4,14 @@
  * The nunjucks 3.2.4 compiler copies template-controlled names into the JavaScript it generates
  * without escaping them. That covers variable, filter, test and loop names; the names that `set`,
  * `macro`, `import` and `from` bind; and the name of a called member. The generated code runs when
- * the template renders, so the runtime guard in `NunjucksSandbox.ts` never sees it.
+ * the template renders, so the runtime guard in `NunjucksSandbox.ts` never sees it. nunjucks also
+ * reads and writes template names as keys of plain objects, so a name that every object inherits is
+ * refused wherever template text names something other than a bare variable.
  * {@link AssertTemplateTreeIsSafe} checks a parsed template before it compiles.
  * @module @memberjunction/templates
  */
 import nunjucks from 'nunjucks';
+import { IsInheritedMemberName } from './InheritedMemberNames';
 import { TemplateSandboxError } from './TemplateSandboxError';
 
 /** A node of a parsed nunjucks template. nunjucks stores the node's fields as own properties. */
@@ -53,13 +56,6 @@ const RESERVED_LOOP_NAMES: ReadonlySet<string> = new Set([
     'parentTemplate', 'callerFrame', 'kwargs', 'Object', 'Math', 'Error', 'undefined', 'Infinity',
 ]);
 
-/**
- * Names that every plain object inherits, such as `hasOwnProperty`. nunjucks finds filters and tests in plain
- * objects, and fills an omitted macro argument from one, so a filter, test or argument with one of these
- * names would resolve to the inherited member.
- */
-const INHERITED_MEMBER_NAMES: ReadonlySet<string> = new Set(Object.getOwnPropertyNames(Object.prototype));
-
 /** Prefixes of generated identifiers: temporaries (`t_3`, `macro_t_3`, `hole_0`), blocks (`b_`), macro arguments (`l_`). */
 const RESERVED_LOOP_NAME_PREFIX = /^(?:t|macro_t|hole|b|l)_/;
 
@@ -69,8 +65,9 @@ const RESERVED_LOOP_NAME_PREFIX = /^(?:t|macro_t|hole|b|l)_/;
  * - every variable, filter, loop, `set`, macro, import and block name must be a plain name (letters,
  *   combining marks, digits, connector punctuation such as `_`, and `$`); a filter name can also contain dots
  * - a test name, and an extension's registered name and method, must not contain a quote, a backslash or a line break
- * - a filter, test, macro argument or call-block argument name must not be a name that every object
- *   inherits (`toString`, `hasOwnProperty`, ...)
+ * - a name that every object inherits (`toString`, `hasOwnProperty`, ...), or `prototype`, must not be a
+ *   dictionary key, a keyword argument, a macro or call-block argument, a `set`, loop, import, macro or
+ *   block name, a literal member name (`obj.name`, `obj["name"]`), or a filter or test name
  * - the name of a called member must not contain a backslash or a line break
  * - a loop variable must not reuse an identifier that the generated loop code uses (`context`, `frame`,
  *   `runtime`, `tasks`, `undefined`, ...)
@@ -119,6 +116,10 @@ class TemplateTreeCheck {
         switch (node.typename) {
             case 'Symbol':
                 return this.checkName(node, node, this.filterNames.has(node) ? PLAIN_FILTER_NAME : PLAIN_NAME);
+            case 'Pair':
+                return this.refuseInheritedName(nameValue(property(node, 'key')), node, 'a dictionary key or keyword argument');
+            case 'LookupVal':
+                return this.checkMemberName(node);
             case 'Filter':
             case 'FilterAsync':
                 return this.checkFilterName(node);
@@ -127,7 +128,7 @@ class TemplateTreeCheck {
             case 'FunCall':
                 return this.checkCallName(node);
             case 'Set':
-                return asArray(property(node, 'targets')).forEach((target) => this.checkName(target, node));
+                return asArray(property(node, 'targets')).forEach((target) => this.checkBindingName(target, node));
             case 'For':
             case 'AsyncEach':
             case 'AsyncAll':
@@ -136,11 +137,11 @@ class TemplateTreeCheck {
             case 'Caller':
                 return this.checkMacroNames(node);
             case 'Import':
-                return this.checkName(property(node, 'target'), node);
+                return this.checkBindingName(property(node, 'target'), node);
             case 'FromImport':
                 return this.checkImportedNames(node);
             case 'Block':
-                return this.checkName(property(node, 'name'), node);
+                return this.checkBindingName(property(node, 'name'), node);
             case 'Super':
                 return this.checkName(property(node, 'blockName'), node);
             case 'CallExtension':
@@ -159,13 +160,35 @@ class TemplateTreeCheck {
         }
     }
 
+    /** The one rule for every position that names something: a name that `IsInheritedMemberName` matches is refused. */
+    private refuseInheritedName(name: string | undefined, owner: TemplateNode, position: string): void {
+        if (name !== undefined && IsInheritedMemberName(name)) {
+            throw refusal(`Templates may not use "${name}" as ${position}`, owner);
+        }
+    }
+
+    /** A name that `set`, a loop, `import`, `from` or `macro` binds as a variable, or a block name. */
+    private checkBindingName(nameNode: unknown, owner: TemplateNode): void {
+        this.checkName(nameNode, owner);
+        this.refuseInheritedName(nameValue(nameNode), owner, 'a variable, macro or block name');
+    }
+
+    /** A literal member name (`obj.name`, `obj["name"]`). The runtime guard checks a name computed while rendering. */
+    private checkMemberName(node: TemplateNode): void {
+        const key = property(node, 'val');
+        if (isNode(key) && key.typename === 'Literal') {
+            this.refuseInheritedName(nameValue(key), node, 'a member name');
+        }
+    }
+
+    /** nunjucks finds a filter in a plain object, so a name it inherits would resolve to the inherited member. */
     private checkFilterName(node: TemplateNode): void {
         const name = property(node, 'name');
         if (isNode(name)) {
             this.filterNames.add(name);
         }
         this.checkName(name, node, PLAIN_FILTER_NAME);
-        this.checkRegistryName(nameValue(name), node);
+        this.refuseInheritedName(nameValue(name), node, 'a filter or test name');
     }
 
     /** The compiler writes the test name into a double-quoted string, as text and without escaping it. */
@@ -174,14 +197,7 @@ class TemplateTreeCheck {
         if (UNSAFE_STRING_CHARACTERS.test(name)) {
             throw refusal('Templates may not use a test name that contains a quote, a backslash or a line break', node);
         }
-        this.checkRegistryName(name, node);
-    }
-
-    /** A filter or test name must not resolve to a member that every object inherits. */
-    private checkRegistryName(name: string | undefined, owner: TemplateNode): void {
-        if (name !== undefined && INHERITED_MEMBER_NAMES.has(name)) {
-            throw refusal(`Templates may not use "${name}" as a filter or test name`, owner);
-        }
+        this.refuseInheritedName(name, node, 'a filter or test name');
     }
 
     /** The compiler writes the called expression's name, built by its own `_getNodeName`, into a string. */
@@ -202,7 +218,7 @@ class TemplateTreeCheck {
         const name = property(node, 'name');
         const loopNames = isNode(name) && name.typename === 'Array' ? asArray(property(name, 'children')) : [name];
         for (const loopName of loopNames) {
-            this.checkName(loopName, node);
+            this.checkBindingName(loopName, node);
             const value = nameValue(loopName) ?? '';
             if (RESERVED_LOOP_NAMES.has(value) || RESERVED_LOOP_NAME_PREFIX.test(value)) {
                 throw refusal(`Templates may not use "${value}" as a loop variable`, node);
@@ -212,7 +228,7 @@ class TemplateTreeCheck {
 
     /** Positional arguments, and the keys of a trailing keyword-argument dictionary, become names. */
     private checkMacroNames(node: TemplateNode): void {
-        this.checkName(property(node, 'name'), node);
+        this.checkBindingName(property(node, 'name'), node);
         const args = asArray(property(property(node, 'args'), 'children'));
         args.forEach((arg, index) => {
             const isKeywordArguments = index === args.length - 1 && isNode(arg) && (arg.typename === 'Dict' || arg.typename === 'KeywordArgs');
@@ -225,24 +241,22 @@ class TemplateTreeCheck {
     }
 
     /**
-     * A macro or call-block argument. When a call leaves out a positional argument, nunjucks fills it with a
-     * plain property read, so an argument named after a member every object inherits would receive that member.
+     * A macro or call-block argument. When a call leaves out a positional argument, nunjucks fills it from the
+     * call's keyword arguments, so an argument named after a member every object inherits would read that member.
      */
     private checkArgumentName(nameNode: unknown, owner: TemplateNode): void {
         this.checkName(nameNode, owner);
-        const name = nameValue(nameNode);
-        if (name !== undefined && INHERITED_MEMBER_NAMES.has(name)) {
-            throw refusal(`Templates may not use "${name}" as a macro or call-block argument name`, owner);
-        }
+        this.refuseInheritedName(nameValue(nameNode), owner, 'a macro or call-block argument');
     }
 
+    /** The names `from ... import` reads from the imported template, and the names it binds. */
     private checkImportedNames(node: TemplateNode): void {
         for (const entry of asArray(property(property(node, 'names'), 'children'))) {
             if (isNode(entry) && entry.typename === 'Pair') {
-                this.checkName(property(entry, 'key'), node);
-                this.checkName(property(entry, 'value'), node);
+                this.checkBindingName(property(entry, 'key'), node);
+                this.checkBindingName(property(entry, 'value'), node);
             } else {
-                this.checkName(entry, node);
+                this.checkBindingName(entry, node);
             }
         }
     }

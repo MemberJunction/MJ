@@ -11,7 +11,10 @@ import { HardenNunjucksRuntime } from '../NunjucksSandbox';
 import { TemplateSandboxError } from '../TemplateSandboxError';
 
 /** The nunjucks parser, as the compiler calls it. */
-const parser = (nunjucks as unknown as { parser: { parse(src: string): object } }).parser;
+const parser = (nunjucks as unknown as { parser: { parse(src: string, extensions?: object[]): object } }).parser;
+
+/** Names that every plain object inherits (the members of `Object.prototype`), and `prototype`. */
+const INHERITED_NAMES: readonly string[] = [...Object.getOwnPropertyNames(Object.prototype), 'prototype'];
 
 /** The nunjucks compiler. `compile` turns template text into JavaScript source; `Compiler` has one `compile<Node>` method per node type. */
 const compiler = (nunjucks as unknown as {
@@ -410,7 +413,7 @@ describe('compile guard: is-tests', () => {
 
 describe('compile guard: filter and test names', () => {
     it('refuses filter and test names that resolve to members every object inherits', () => {
-        const unrefused = Object.getOwnPropertyNames(Object.prototype)
+        const unrefused = INHERITED_NAMES
             .flatMap((name) => [`{{ 1 | ${name} }}`, `{% filter ${name} %}x{% endfilter %}`, `{{ 1 is ${name} }}`])
             .filter((templateText) => !(thrownBy(() => parser.parse(templateText)) instanceof TemplateSandboxError));
         expect(unrefused).toEqual([]);
@@ -423,7 +426,7 @@ describe('compile guard: filter and test names', () => {
 
 describe('compile guard: macro and call-block arguments', () => {
     it('refuses argument names that every object inherits, positional or with a default', () => {
-        const unrefused = Object.getOwnPropertyNames(Object.prototype)
+        const unrefused = INHERITED_NAMES
             .flatMap((name) => [
                 `{% macro m(${name}) %}{% endmacro %}`,
                 `{% macro m(${name}=1) %}{% endmacro %}`,
@@ -436,6 +439,79 @@ describe('compile guard: macro and call-block arguments', () => {
 
     it('still accepts ordinary argument names, and an argument the call leaves out reads as empty', () => {
         expect(renderPlain('{% macro m(a, b, c=3) %}[{{ a }}][{{ b }}][{{ c }}]{% endmacro %}{{ m(1) }}')).toBe('[1][][3]');
+    });
+});
+
+describe('compile guard: names every object inherits', () => {
+    /** Every place where template text names a key, an argument, a variable, a member, a filter or a test. */
+    const NAME_POSITIONS: ReadonlyArray<readonly [string, (name: string) => string]> = [
+        ['a dictionary key', (name) => `{{ {${name}: 1} }}`],
+        ['a quoted dictionary key', (name) => `{{ {"${name}": 1} }}`],
+        ['a keyword argument of a call', (name) => `{{ m(${name}=1) }}`],
+        ['a quoted keyword argument of a call', (name) => `{{ m("${name}"=1) }}`],
+        ['a keyword argument of a filter', (name) => `{{ 1 | default(${name}=1) }}`],
+        ['a keyword argument of caller()', (name) => `{% macro w() %}{{ caller(${name}=1) }}{% endmacro %}`],
+        ['a keyword argument of a call block', (name) => `{% call w(${name}=1) %}{% endcall %}`],
+        ['a keyword argument of an extension tag', (name) => `{% probesync ${name}=1 %}{% endprobesync %}`],
+        ['a macro argument', (name) => `{% macro m(${name}) %}{% endmacro %}`],
+        ['a macro argument with a default', (name) => `{% macro m(${name}=1) %}{% endmacro %}`],
+        ['a call-block argument', (name) => `{% call(${name}) w() %}{% endcall %}`],
+        ['a call-block argument with a default', (name) => `{% call(${name}=1) w() %}{% endcall %}`],
+        ['a set target', (name) => `{% set ${name} = 1 %}`],
+        ['a second set target', (name) => `{% set a, ${name} = 1 %}`],
+        ['a set block target', (name) => `{% set ${name} %}x{% endset %}`],
+        ['a loop variable', (name) => `{% for ${name} in [] %}{% endfor %}`],
+        ['a key-value loop variable', (name) => `{% for k, ${name} in {} %}{% endfor %}`],
+        ['an asyncEach variable', (name) => `{% asyncEach ${name} in [] %}{% endeach %}`],
+        ['an asyncAll variable', (name) => `{% asyncAll ${name} in [] %}{% endall %}`],
+        ['an import alias', (name) => `{% import "x" as ${name} %}`],
+        ['a from-import name', (name) => `{% from "x" import ${name} %}`],
+        ['a from-import alias', (name) => `{% from "x" import a as ${name} %}`],
+        ['a macro name', (name) => `{% macro ${name}() %}{% endmacro %}`],
+        ['a block name', (name) => `{% block ${name} %}{% endblock %}`],
+        ['a member name', (name) => `{{ x.${name} }}`],
+        ['a quoted member name', (name) => `{{ x["${name}"] }}`],
+        ['a called member name', (name) => `{{ x.${name}() }}`],
+        ['a filter name', (name) => `{{ 1 | ${name} }}`],
+        ['a filter block name', (name) => `{% filter ${name} %}x{% endfilter %}`],
+        ['a test name', (name) => `{{ 1 is ${name} }}`],
+    ];
+
+    /** Names that only resemble inherited ones. */
+    const ORDINARY_NAMES = ['proto', 'prototypes', 'ToString', 'valueof', 'toString2', '__init__', 'constructorName'];
+
+    /** What parsing the template throws (with the probe extension's tags), or `undefined` when it parses. */
+    function parseError(templateText: string): unknown {
+        return thrownBy(() => parser.parse(templateText, [PROBE_EXTENSION]));
+    }
+
+    /** nunjucks' own parser refuses to import a name that starts with `_`, before the guard sees the tree. */
+    function isUnderscoreImportRefusal(error: unknown): boolean {
+        return error instanceof Error && error.message.includes('names starting with an underscore cannot be imported');
+    }
+
+    it('refuses a name that every object inherits wherever a template names something', () => {
+        const unrefused = NAME_POSITIONS.flatMap(([position, write]) => INHERITED_NAMES
+            .filter((name) => {
+                const error = parseError(write(name));
+                return !(error instanceof TemplateSandboxError) && !isUnderscoreImportRefusal(error);
+            })
+            .map((name) => `${position}: ${name}`));
+        expect(unrefused).toEqual([]);
+    });
+
+    it('accepts ordinary names in the same places, including names that resemble inherited ones', () => {
+        const refused = NAME_POSITIONS.flatMap(([position, write]) => ORDINARY_NAMES
+            .filter((name) => {
+                const error = parseError(write(name));
+                return error !== undefined && !isUnderscoreImportRefusal(error);
+            })
+            .map((name) => `${position}: ${name}`));
+        expect(refused).toEqual([]);
+    });
+
+    it('still lets a bare name read an own render-data key that has an inherited name', () => {
+        expect(renderPlain('[{{ constructor }}]', { constructor: 'Acme Builders' })).toBe('[Acme Builders]');
     });
 });
 
