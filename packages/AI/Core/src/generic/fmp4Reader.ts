@@ -1,15 +1,17 @@
 /**
- * @fileoverview FRAGMENTED MP4 READER: reads the pieces of a fragmented MP4 stream as a realtime model sends them. A
- * Gemini Live avatar arrives as an init segment (`ftyp` + `moov`) followed by media fragments (`moof` + `mdat`), each
- * piece in its own part.
+ * @fileoverview FRAGMENTED MP4 READER: reads the pieces of a fragmented MP4 stream (ISO/IEC 14496-12) as a realtime
+ * model sends them: an init segment (`ftyp` + `moov`), then media fragments (`moof` + `mdat`), each piece in its own
+ * part. It follows the format, not one provider: a Gemini Live avatar is one such stream, and today the only one a
+ * driver produces. It reads codecs and decoder settings for H.264 (`avc1`, `avc3`) and AAC (`mp4a`); a track in
+ * another codec is listed without them.
  *
- * - {@link SniffFmp4Piece} says what a piece opens with, from the type of its first box alone. In an avatar session a
- *   part this recognizes is a piece of the avatar, whatever MIME type the part names.
+ * - {@link SniffFmp4Piece} says what a piece opens with, from the type of its first box alone, so a caller can tell an
+ *   MP4 piece whatever MIME type its part names.
  * - {@link ReadFmp4Init} reads the tracks an init segment declares: each one's id, its handler (`vide` for video,
  *   `soun` for audio), its codec as RFC 6381 writes it (`avc1.42c01f`, `mp4a.40.2`), its timescale and its sample
- *   defaults (`trex`). The browser client follows the handlers (does the video carry the voice?) and opens its Media
- *   Source buffer with the codecs. For a decoder it also reads an H.264 track's size and parameter sets (`avcC`) and an
- *   AAC track's AudioSpecificConfig (`esds`).
+ *   defaults (`trex`). A player can follow the handlers (does the video carry the voice?) and open its Media Source
+ *   buffer with the codecs. For a decoder it also reads an H.264 track's size and parameter sets (`avcC`) and an AAC
+ *   track's AudioSpecificConfig (`esds`).
  * - {@link Fmp4VideoSeconds} and {@link Fmp4AudioSeconds} say how many seconds of video or audio a piece carries, from
  *   its sample durations on the init's track of that kind. A session counts the avatar video it generated with the
  *   first; a meeting's floor gate counts how long an avatar piece speaks with the second.
