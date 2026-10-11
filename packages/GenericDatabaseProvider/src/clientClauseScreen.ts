@@ -118,6 +118,7 @@ export class ClientClauseScreen {
      * The reads come from a walk of the whole parse tree ({@link CollectStatementReads}), and the
      * clause is refused when that walk does not account for every SELECT in the text
      * ({@link AssertEverySelectAccountedFor}). Only the parse wrapper's own FROM item is skipped.
+     * A name reserved for the parser is refused first ({@link AssertNoIdentifierAliasNames}).
      */
     public static AssertClauseUsesEntityBaseViews(
         clause: string | null | undefined,
@@ -132,6 +133,7 @@ export class ClientClauseScreen {
         }
 
         const fragment = ClientClauseScreen.toDialectQuoting(clause, dialect);
+        ClientClauseScreen.AssertNoIdentifierAliasNames(fragment, dialect, label);
         const wrapped =
             label === 'OrderBy'
                 ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${fragment}`
@@ -188,6 +190,20 @@ export class ClientClauseScreen {
         if (token) {
             const found = token.Kind === 'semicolon' ? 'statement separators' : 'comments';
             throw new Error(`Invalid ${label}: ${found} are not permitted in a filter or sort clause`);
+        }
+    }
+
+    /**
+     * Refuses an identifier, quoted or bare, in the form of a name the SQL parser gives a bracket
+     * identifier it renames ({@link SQLParser.IsIdentifierAliasName}), in any case. Those names are
+     * reserved for the parser, so client SQL may not use them.
+     */
+    public static AssertNoIdentifierAliasNames(sql: string, dialect: SQLParserDialect, label: string): void {
+        const token = LexSQL(sql, dialect).find(
+            (t) => (t.Kind === 'word' || t.Kind === 'identifier') && SQLParser.IsIdentifierAliasName(ClientClauseScreen.StripIdentifierQuotes(t.Text).trim()),
+        );
+        if (token) {
+            throw new Error(`Invalid ${label}: '${token.Text}' is a name reserved for the SQL parser — use another name`);
         }
     }
 
@@ -285,8 +301,9 @@ export class ClientClauseScreen {
      * one: a subquery in a CASE branch, HAVING, a window's ORDER BY or PARTITION BY, a function
      * argument, IN, EXISTS, a set operation or a CTE body. Every FROM item is kept, even when its
      * alias repeats. Names the fallback parse renamed are read back through
-     * {@link SQLParser.IdentifierAliases}. `skip` is a FROM item node to leave out (the screen's
-     * parse wrapper).
+     * {@link SQLParser.IdentifierAliases}, which holds only names the parser put in the tree, so
+     * the CTE names are the ones the statement declares. `skip` is a FROM item node to leave out
+     * (the screen's parse wrapper).
      */
     public static CollectStatementReads(parser: SQLParser, skip?: object): StatementReads {
         const reads: StatementReads = { Relations: [], SelectCount: 0, CTENames: new Set<string>() };

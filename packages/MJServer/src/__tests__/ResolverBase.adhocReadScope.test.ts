@@ -2,7 +2,8 @@
 // Reflect.metadata polyfill at import time.
 import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { DatabasePlatform, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { RenderPipeline } from '@memberjunction/generic-database-provider';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
 /**
@@ -25,8 +26,9 @@ type EntityShape = {
     deniedFields?: string[];
 };
 
-function fakeProvider(entities: EntityShape[]): IMetadataProvider {
+function fakeProvider(entities: EntityShape[], platform?: DatabasePlatform): IMetadataProvider {
     return {
+        PlatformKey: platform,
         Entities: entities.map((e) => ({
             Name: e.Name,
             SchemaName: e.SchemaName,
@@ -43,6 +45,12 @@ const USER = { ID: 'U1', Email: 'u@example.com' } as unknown as UserInfo;
 class Probe extends ResolverBase {
     public Screen(sql: string, provider: IMetadataProvider, user: UserInfo | undefined = USER) {
         return this.assertFullQueryUsesReadableEntityViews(sql, provider, user, 'ad-hoc SQL');
+    }
+
+    /** Renders the SQL the way `ExecuteAdhocQuery` does, then screens the rendered text. */
+    public ScreenRendered(sql: string, platform: DatabasePlatform, provider: IMetadataProvider) {
+        const rendered = RenderPipeline.Run(sql, { Platform: platform, ContextUser: USER, RequireReadStatement: true });
+        return this.Screen(rendered.Trace.AfterTemplates, provider);
     }
 }
 
@@ -107,4 +115,47 @@ describe('assertFullQueryUsesReadableEntityViews', () => {
             new Probe().Screen('WITH x AS (SELECT ID FROM public.vwFoo) SELECT ID FROM x', fakeProvider([PUBLIC_FOO])),
         ).not.toThrow();
     });
+});
+
+describe('assertFullQueryUsesReadableEntityViews — CTE names', () => {
+    // The parser renames bracket identifiers it cannot read and maps the new names back. The CTE
+    // exemption must only cover names the statement declares, so a name of the renamed form,
+    // quoted or bare, is refused. Orders is row-filtered for the caller; Accounts is not.
+    const ACCOUNTS: EntityShape = { Name: 'Accounts', SchemaName: 'dbo', BaseView: 'vwAccounts' };
+    const ORDERS: EntityShape = { Name: 'Orders', SchemaName: 'dbo', BaseView: 'vwOrders', rowFilter: "(OwnerID = 'U1')" };
+    const DIALECTS: Array<{ Name: string; Platform: DatabasePlatform; Quote: (name: string) => string }> = [
+        { Name: 'SQL Server', Platform: 'sqlserver', Quote: (name) => `[${name}]` },
+        { Name: 'PostgreSQL', Platform: 'postgresql', Quote: (name) => `"${name}"` },
+    ];
+
+    for (const { Name, Platform, Quote } of DIALECTS) {
+        const provider = fakeProvider([ACCOUNTS, ORDERS], Platform);
+
+        it(`refuses a CTE name reserved for the SQL parser, before reading any view (${Name})`, () => {
+            const sql = `WITH ${Quote('a b')} AS (SELECT 1 AS x), _mjid_1 AS (SELECT 1 AS y) SELECT * FROM ${Quote('vwOrders')}`;
+
+            expect(() => new Probe().ScreenRendered(sql, Platform, provider)).toThrow(/reserved for the SQL parser/);
+        });
+
+        it(`refuses a reserved name in any case or quoting (${Name})`, () => {
+            for (const name of ['_MJID_1', Quote('_mjid_1'), '_mjid2_0']) {
+                const sql = `WITH ${Quote('a b')} AS (SELECT 1 AS x), ${name} AS (SELECT 1 AS y) SELECT * FROM ${Quote('vwAccounts')}`;
+                expect(() => new Probe().ScreenRendered(sql, Platform, provider)).toThrow(/reserved for the SQL parser/);
+            }
+        });
+
+        it(`still exempts an ordinary quoted CTE name and screens its body (${Name})`, () => {
+            const cte = Quote('Recent Accounts');
+            const reads = (view: string) => `WITH ${cte} AS (SELECT ID FROM ${Quote(view)}) SELECT ID FROM ${cte}`;
+
+            expect(() => new Probe().ScreenRendered(reads('vwAccounts'), Platform, provider)).not.toThrow();
+            expect(() => new Probe().ScreenRendered(reads('vwOrders'), Platform, provider)).toThrow(/'Orders' is row-level-security filtered/);
+        });
+
+        it(`still refuses a row-filtered view read next to an ordinary quoted CTE (${Name})`, () => {
+            const sql = `WITH ${Quote('a b')} AS (SELECT 1 AS x) SELECT * FROM ${Quote('vwOrders')}`;
+
+            expect(() => new Probe().ScreenRendered(sql, Platform, provider)).toThrow(/'Orders' is row-level-security filtered/);
+        });
+    }
 });

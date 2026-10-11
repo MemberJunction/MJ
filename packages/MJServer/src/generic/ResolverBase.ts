@@ -946,7 +946,10 @@ export class ResolverBase {
    * SECURITY — screen for a FULL client-supplied SQL statement (ad-hoc query path). In addition
    * to the SELECT-only validation the caller performs, every table reference must resolve to an
    * entity BaseView the acting user can read UNSCOPED. CTE names defined by the statement itself
-   * are excluded from the check. Fails closed: no user, or an unresolvable reference, refuses.
+   * are excluded from the check. A name reserved for the SQL parser is refused before parsing
+   * (`ClientClauseScreen.AssertNoIdentifierAliasNames`), and the parser reads back only the names
+   * it renamed, so the exclusion covers only names the statement declares. Fails closed: no user,
+   * or an unresolvable reference, refuses.
    *
    * The references come from a walk of the whole parse tree
    * (`ClientClauseScreen.CollectStatementReads`). The statement is refused when that walk does not
@@ -969,6 +972,7 @@ export class ResolverBase {
       throw new Error(`Invalid ${label}: no acting user resolved for ad-hoc SQL — refusing`);
     }
     const dialect = this.dialectForProvider(provider);
+    ClientClauseScreen.AssertNoIdentifierAliasNames(sqlText, dialect, label);
     const parser = new SQLParser(sqlText, dialect);
     if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
       throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);

@@ -35,7 +35,7 @@ const USER = { ID: 'u1' } as UserInfo;
 const BRACKET_STACKED = "1 = (SELECT 1 AS [a'])) ; SELECT 1 AS [x] ; SELECT 1 WHERE (1 = (SELECT 1 AS [b'])";
 const E_STRING_STACKED = "Name = E'\\'' ; SELECT 1 ; SELECT 1 WHERE Name = E'\\''";
 
-const screen = (clause: string, label = 'ExtraFilter', dialect = MSSQL) =>
+const screen = (clause: string, label = 'ExtraFilter', dialect: SQLParserDialect = MSSQL) =>
     () => ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, label, ENTITIES, dialect, USER);
 
 describe('ClientClauseScreen.DialectFor', () => {
@@ -117,7 +117,7 @@ describe('ClientClauseScreen.ScreenViewClauses', () => {
 });
 
 describe('ClientClauseScreen.AssertSingleStatementFragment', () => {
-    const check = (clause: string, dialect = MSSQL) => () => ClientClauseScreen.AssertSingleStatementFragment(clause, 'ExtraFilter', dialect);
+    const check = (clause: string, dialect: SQLParserDialect = MSSQL) => () => ClientClauseScreen.AssertSingleStatementFragment(clause, 'ExtraFilter', dialect);
 
     it('refuses a separator or comment hidden from the keyword denylist', () => {
         expect(check(BRACKET_STACKED)).toThrow(/statement separators/);
@@ -238,6 +238,39 @@ describe('ClientClauseScreen.CollectStatementReads', () => {
 
         expect(reads.Relations.map((r) => `${r.SchemaName}.${r.TableName}`).sort()).toEqual(['.Recent Accounts', '__mj.vwAccounts']);
         expect([...reads.CTENames]).toEqual(['recent accounts']);
+    });
+
+    it('collects only the CTE names the statement declares, and reads each FROM item as written', () => {
+        const sql = `WITH [a b] AS (SELECT 1 AS x), _mjid_1 AS (SELECT 1 AS y) SELECT * FROM [vwOrders]`;
+
+        const reads = ClientClauseScreen.CollectStatementReads(new SQLParser(sql, MSSQL));
+
+        expect([...reads.CTENames].sort()).toEqual(['_mjid_1', 'a b']);
+        expect(reads.Relations.map((r) => `${r.SchemaName}.${r.TableName}`)).toEqual(['.vwOrders']);
+    });
+});
+
+describe('ClientClauseScreen — names reserved for the SQL parser', () => {
+    // The parser renames bracket identifiers it cannot read and maps the new names back. Client SQL
+    // may not use a name of that form, quoted or bare, in any case.
+    const RESERVED = [`ID IN (SELECT ID FROM __mj._mjid_1)`, `[_mjid_1] = 1`, `"_MJID_2" = 1`, `ID = 1 OR _mjid3_0 = 1`];
+    const DIALECTS: Array<[string, SQLParserDialect]> = [['SQL Server', MSSQL], ['PostgreSQL', PG]];
+
+    for (const [dialectName, dialect] of DIALECTS) {
+        it(`refuses a reserved name in a filter or a sort (${dialectName})`, () => {
+            for (const clause of RESERVED) {
+                expect(screen(clause, 'ExtraFilter', dialect)).toThrow(/reserved for the SQL parser/);
+            }
+            expect(screen('_mjid_0 DESC', 'OrderBy', dialect)).toThrow(/reserved for the SQL parser/);
+        });
+
+        it(`still allows the reserved form inside a longer name or a string literal (${dialectName})`, () => {
+            expect(screen(`[Name] = '_mjid_1' AND [x_mjid_1] = 1`, 'ExtraFilter', dialect)).not.toThrow();
+        });
+    }
+
+    it('refuses a reserved name when the clause also makes the parser rename brackets (SQL Server)', () => {
+        expect(screen(`[a]]b] = 1 OR [vwAccounts] = 1 OR ID IN (SELECT ID FROM __mj._mjid_1)`)).toThrow(/reserved for the SQL parser/);
     });
 });
 
