@@ -94,6 +94,26 @@ describe('RunDynamicViewGeneric — a client subquery reads an entity only when 
         expect(captured.params).toBeNull();
     });
 
+    it('refuses a CASE-WHEN subquery over a row-filtered entity, before RunView', async () => {
+        const captured: Captured = { params: null };
+        const caseWhen = `CASE WHEN (SELECT COUNT(*) FROM [crm].[vwOrders] WHERE [Total] > 100) > 0 THEN 1 ELSE 0 END = 1`;
+
+        await expect(
+            new Probe().RunDynamic({ ExtraFilter: caseWhen }, fakeProvider(captured, { Orders: { RowFilter: OWN_ROWS } })),
+        ).rejects.toThrow(/'Orders' is row-level-security filtered for you/);
+        expect(captured.params).toBeNull();
+    });
+
+    it("refuses a subquery over a row-filtered entity in a window's ORDER BY, before RunView", async () => {
+        const captured: Captured = { params: null };
+        const window = `ID IN (SELECT ID FROM (SELECT ID, ROW_NUMBER() OVER (ORDER BY (SELECT COUNT(*) FROM [crm].[vwOrders])) AS rn FROM [crm].[vwAccounts]) x)`;
+
+        await expect(
+            new Probe().RunDynamic({ ExtraFilter: window }, fakeProvider(captured, { Orders: { RowFilter: OWN_ROWS } })),
+        ).rejects.toThrow(/'Orders' is row-level-security filtered for you/);
+        expect(captured.params).toBeNull();
+    });
+
     it('still passes an ordinary filter and sort on an entity the caller reads under a row filter', async () => {
         const captured: Captured = { params: null };
 

@@ -948,6 +948,11 @@ export class ResolverBase {
    * entity BaseView the acting user can read UNSCOPED. CTE names defined by the statement itself
    * are excluded from the check. Fails closed: no user, or an unresolvable reference, refuses.
    *
+   * The references come from a walk of the whole parse tree
+   * (`ClientClauseScreen.CollectStatementReads`). The statement is refused when that walk does not
+   * account for every SELECT in the text, or when a FROM item names no table (a table function or
+   * a row list).
+   *
    * Entity CanRead is not unscoped base-view read authority: RunView narrows a granted read with
    * row-level security and denied-field projection, and raw SQL applies neither. Rather than try
    * to rewrite arbitrary SQL (joins, CTEs) to compose that policy, this refuses any entity that
@@ -971,43 +976,19 @@ export class ResolverBase {
     if (this.astContainsWriteNode(parser.AST)) {
       throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
     }
-    const cteNames = new Set<string>();
-    this.collectCTENames(parser.AST, cteNames);
+    const reads = ClientClauseScreen.CollectStatementReads(parser);
+    ClientClauseScreen.AssertEverySelectAccountedFor(sqlText, dialect, reads, label);
     const allowed = this.entityBaseViewAllowList(provider);
-    const tables = SQLParser.ExtractTableRefs(sqlText, dialect);
-    for (const t of tables) {
-      const table = this.stripSqlIdent(t.TableName);
-      const schema = this.stripSqlIdent(t.SchemaName);
-      if (this.isUnqualifiedSchema(schema) && cteNames.has(table.toLowerCase())) continue;
-      const entity = this.assertTableRefReadable(allowed, schema, table, label, user);
-      this.assertUnscopedRead(entity, user, label);
+    for (const relation of reads.Relations) {
+      if (relation.TableName && this.isUnqualifiedSchema(relation.SchemaName) && reads.CTENames.has(relation.TableName.toLowerCase())) continue;
+      const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+      if (entity) this.assertUnscopedRead(entity, user, label);
     }
   }
 
   /** Refuses an entity whose read is narrowed for this user; see `ClientClauseScreen.AssertUnscopedRead`. */
   private assertUnscopedRead(entity: EntityInfo, user: UserInfo, label: string): void {
     ClientClauseScreen.AssertUnscopedRead(entity, user, label);
-  }
-
-  /** Walks a parsed AST collecting the names of CTEs the statement itself defines. */
-  private collectCTENames(node: unknown, names: Set<string>): void {
-    if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) {
-      for (const n of node) this.collectCTENames(n, names);
-      return;
-    }
-    const obj = node as Record<string, unknown>;
-    const withClause = obj.with;
-    if (Array.isArray(withClause)) {
-      for (const cte of withClause) {
-        const name = (cte as Record<string, unknown>)?.name;
-        if (typeof name === 'string') names.add(name.toLowerCase());
-        else if (name && typeof name === 'object' && typeof (name as Record<string, unknown>).value === 'string') {
-          names.add(((name as Record<string, unknown>).value as string).toLowerCase());
-        }
-      }
-    }
-    for (const v of Object.values(obj)) this.collectCTENames(v, names);
   }
 
   /**
@@ -1056,34 +1037,14 @@ export class ResolverBase {
     return ClientClauseScreen.DialectFor(provider);
   }
 
-  /** True for a reference with no schema — which `SQLParser.ExtractTableRefs` reports as `dbo`. */
+  /** True for a reference with no schema. */
   private isUnqualifiedSchema(schema: string): boolean {
     return ClientClauseScreen.IsUnqualifiedSchema(schema);
-  }
-
-  private stripSqlIdent(name: string | null | undefined): string {
-    return ClientClauseScreen.StripIdentifierQuotes(name);
   }
 
   /** The entity base-view allow-list for a provider's entities. */
   private entityBaseViewAllowList(provider?: IMetadataProvider): EntityBaseViewAllowList {
     return ClientClauseScreen.BuildEntityBaseViewAllowList(provider?.Entities ?? []);
-  }
-
-  /**
-   * SECURITY — resolves a table reference against the entity BaseView allow-list and, when an
-   * acting user is supplied, requires CanRead on the referenced entity. Base views do not embed
-   * RLS and entity permissions are otherwise checked only on the TOP entity of a request. See
-   * `ClientClauseScreen.AssertTableRefReadable` for the schema-resolution rules.
-   */
-  private assertTableRefReadable(
-    allowed: EntityBaseViewAllowList,
-    schema: string,
-    table: string,
-    label: string,
-    user?: UserInfo,
-  ): EntityInfo {
-    return ClientClauseScreen.AssertTableRefReadable(allowed, schema, table, label, user);
   }
 
   /**

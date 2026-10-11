@@ -147,6 +147,19 @@ describe('ConversationAgentService — host rules on the wire', () => {
             expect(h.runViewParams.map(p => p.ExtraFilter ?? '').join(' ')).not.toContain('vwConversationDetails');
         });
 
+        it('reads the replies again on every lookup, so a newer reply counts', async () => {
+            const rows: Record<string, object[]> = { 'MJ: Conversation Details': [{ ID: 'reply-1' }] };
+            const h = buildService(rows);
+
+            await h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID);
+            rows['MJ: Conversation Details'] = [{ ID: 'reply-1' }, { ID: 'reply-2' }];
+            await h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID);
+
+            const versionFilters = h.runViewParams.filter(p => p.EntityName === 'MJ: Artifact Versions').map(p => p.ExtraFilter ?? '');
+            expect(versionFilters).toHaveLength(2);
+            expect(versionFilters[1]).toContain(`ConversationDetailID IN ('reply-1','reply-2')`);
+        });
+
         it('reads no versions when the agent has no reply in the conversation', async () => {
             const h = buildService();
 

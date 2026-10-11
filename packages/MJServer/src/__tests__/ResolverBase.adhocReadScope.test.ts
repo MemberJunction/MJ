@@ -88,6 +88,20 @@ describe('assertFullQueryUsesReadableEntityViews', () => {
         ).toThrow(/'Bar' is row-level-security filtered/);
     });
 
+    it('applies the scope check to a CASE subquery in the select list', () => {
+        const provider = fakeProvider([PUBLIC_FOO, { Name: 'Bar', SchemaName: 'public', BaseView: 'vwBar', rowFilter: '(1=0)' }]);
+        expect(() =>
+            new Probe().Screen('SELECT CASE WHEN (SELECT COUNT(*) FROM public.vwBar) > 0 THEN 1 ELSE 0 END AS x FROM public.vwFoo', provider),
+        ).toThrow(/'Bar' is row-level-security filtered/);
+    });
+
+    it('applies the scope check to every FROM item when an alias repeats', () => {
+        const provider = fakeProvider([PUBLIC_FOO, { Name: 'Bar', SchemaName: 'public', BaseView: 'vwBar', rowFilter: '(1=0)' }]);
+        expect(() =>
+            new Probe().Screen('SELECT a.ID FROM public.vwBar a WHERE a.ID IN (SELECT a.ID FROM public.vwFoo a)', provider),
+        ).toThrow(/'Bar' is row-level-security filtered/);
+    });
+
     it('exempts CTE names the statement defines', () => {
         expect(() =>
             new Probe().Screen('WITH x AS (SELECT ID FROM public.vwFoo) SELECT ID FROM x', fakeProvider([PUBLIC_FOO])),

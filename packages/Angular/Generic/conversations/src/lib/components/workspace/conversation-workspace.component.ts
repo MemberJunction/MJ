@@ -529,7 +529,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
   private isLoadingSettings: boolean = false;
 
-  // Task filter for conversation-specific filtering
+  /** The user's own top-level tasks; the Tasks tab's fallback filter (see {@link TasksFilterResolver}). */
   public TasksFilter: string = '1=1';
 
   /** @deprecated Use {@link TasksFilter}. */
@@ -1013,23 +1013,24 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   /**
-   * Sets the tasks filter to the user's own tasks at once, then widens it to the tasks in the
-   * user's conversations when their IDs are read (see {@link BuildConversationTasksFilter}).
+   * Sets {@link TasksFilter} to the user's own tasks. The Tasks tab builds its full filter with
+   * {@link TasksFilterResolver} each time it loads.
    */
   private buildTasksFilter(): void {
     this.TasksFilter = OwnTasksFilter(this.CurrentUser);
-    void this.widenTasksFilter();
   }
 
-  /** Widens the tasks filter to the tasks in the user's conversations. */
-  private async widenTasksFilter(): Promise<void> {
-    try {
-      this.TasksFilter = await BuildConversationTasksFilter(this.ProviderToUse, this.CurrentUser);
-      this.cdr.markForCheck();
-    } catch (error) {
-      console.error('Failed to build the conversation tasks filter:', error);
-    }
+  /**
+   * Builds the Tasks tab filter (see {@link BuildConversationTasksFilter}). The tasks view calls it
+   * on every load and refresh, so a task linked to a message created after the workspace opened
+   * appears on the next refresh. The same function is returned every time, so the input binding
+   * does not change.
+   */
+  public get TasksFilterResolver(): () => Promise<string> {
+    this.tasksFilterResolver ??= () => BuildConversationTasksFilter(this.ProviderToUse, this.CurrentUser);
+    return this.tasksFilterResolver;
   }
+  private tasksFilterResolver: (() => Promise<string>) | null = null;
 
   ngDoCheck() {
     // Detect new unsaved conversation state changes

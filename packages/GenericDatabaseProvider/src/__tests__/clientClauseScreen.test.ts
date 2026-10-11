@@ -5,7 +5,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { EntityInfo, UserInfo } from '@memberjunction/core';
-import { PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
+import { SQLParser } from '@memberjunction/sql-parser';
 import { ClientClauseScreen, IsClientClauseScreeningProvider, type ClientViewClauseSet } from '../clientClauseScreen';
 
 const MSSQL = new SQLServerDialect();
@@ -141,5 +142,115 @@ describe('IsClientClauseScreeningProvider', () => {
         expect(IsClientClauseScreeningProvider({ ScreenClientClause: () => undefined })).toBe(true);
         expect(IsClientClauseScreeningProvider({ Entities: [] })).toBe(false);
         expect(IsClientClauseScreeningProvider(null)).toBe(false);
+    });
+});
+
+describe('ClientClauseScreen — every subquery position is screened', () => {
+    // A subquery can sit in a CASE branch, HAVING, or a window's ORDER BY / PARTITION BY, and a
+    // later FROM item can reuse an earlier one's alias. The screen must see the table read in each
+    // position: a base table or a row-filtered entity is refused there, an unscoped view allowed.
+    const ORDERS = {
+        Name: 'Orders',
+        SchemaName: '__mj',
+        BaseView: 'vwOrders',
+        GetUserPermisions: () => ({ CanRead: true }),
+        GetEffectiveRowFilterWhereClause: () => "(OwnerID = 'u1')",
+        GetDeniedReadFields: () => new Set<string>(),
+    } as unknown as EntityInfo;
+    const WITH_ORDERS = [...ENTITIES, ORDERS];
+
+    const POSITIONS: Array<[string, (table: string) => string]> = [
+        ['a CASE WHEN condition', (t) => `CASE WHEN (SELECT COUNT(*) FROM ${t}) > 0 THEN 1 ELSE 0 END = 1`],
+        ['a CASE THEN result', (t) => `ID = CASE WHEN 1 = 1 THEN (SELECT MAX(ID) FROM ${t}) END`],
+        ['a CASE ELSE result', (t) => `ID = CASE WHEN 1 = 0 THEN NULL ELSE (SELECT MAX(ID) FROM ${t}) END`],
+        ['HAVING', (t) => `ID IN (SELECT ID FROM __mj.vwAccounts GROUP BY ID HAVING (SELECT COUNT(*) FROM ${t}) > 0)`],
+        ['a window ORDER BY', (t) => `ID IN (SELECT ID FROM (SELECT ID, ROW_NUMBER() OVER (ORDER BY (SELECT COUNT(*) FROM ${t})) AS rn FROM __mj.vwAccounts) x)`],
+        // The PostgreSQL grammar parses a PARTITION BY subquery only inside a function call.
+        ['a window PARTITION BY', (t) => `ID IN (SELECT ID FROM (SELECT ID, SUM(1) OVER (PARTITION BY COALESCE((SELECT MAX(ID) FROM ${t}), ID)) AS rn FROM __mj.vwAccounts) x)`],
+        ['a FROM item whose alias a later FROM item reuses', (t) => `ID IN (SELECT a.ID FROM ${t} a) OR ID IN (SELECT a.ID FROM __mj.vwAccounts a)`],
+        ['a FROM item aliased as a later view name', (t) => `ID IN (SELECT vwAccounts.ID FROM ${t} vwAccounts) OR ID IN (SELECT ID FROM __mj.vwAccounts)`],
+    ];
+    const DIALECTS: Array<[string, SQLParserDialect]> = [['SQL Server', MSSQL], ['PostgreSQL', PG]];
+    const screenIn = (clause: string, dialect: SQLParserDialect) =>
+        () => ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, 'ExtraFilter', WITH_ORDERS, dialect, USER);
+
+    for (const [dialectName, dialect] of DIALECTS) {
+        for (const [position, clauseFor] of POSITIONS) {
+            it(`refuses a base table read from ${position} (${dialectName})`, () => {
+                expect(screenIn(clauseFor('__mj.[User]'), dialect)).toThrow(/entity base view/);
+            });
+
+            it(`refuses a row-filtered entity read from ${position} (${dialectName})`, () => {
+                expect(screenIn(clauseFor('__mj.vwOrders'), dialect)).toThrow(/'Orders' is row-level-security filtered/);
+            });
+
+            it(`allows an unscoped entity view read from ${position} (${dialectName})`, () => {
+                expect(screenIn(clauseFor('__mj.vwAccounts'), dialect)).not.toThrow();
+            });
+        }
+    }
+
+    it('refuses a table function in FROM unless it is a built-in that reads only its arguments', () => {
+        expect(screenIn(`EXISTS (SELECT 1 FROM sys.dm_exec_sql_text(0x01))`, MSSQL)).toThrow(/table function 'sys.dm_exec_sql_text'/);
+        expect(screenIn(`EXISTS (SELECT 1 FROM dbo.STRING_SPLIT('a,b', ','))`, MSSQL)).toThrow(/table function 'dbo.STRING_SPLIT'/);
+        expect(screenIn(`EXISTS (SELECT 1 FROM pg_ls_dir('.'))`, PG)).toThrow(/table function 'pg_ls_dir'/);
+        expect(screenIn(`EXISTS (SELECT 1 FROM pg_catalog.generate_series(1, 2))`, PG)).toThrow(/table function/);
+    });
+
+    it('allows an unqualified built-in table function that reads only its arguments, and a VALUES list', () => {
+        expect(screenIn(`ID IN (SELECT value FROM STRING_SPLIT('a,b', ','))`, MSSQL)).not.toThrow();
+        expect(screenIn(`EXISTS (SELECT 1 FROM generate_series(1, 2))`, PG)).not.toThrow();
+        expect(screenIn(`ID IN (SELECT x FROM (VALUES (1),(2)) v(x))`, MSSQL)).not.toThrow();
+    });
+
+    it('still screens a subquery inside an allowed table function', () => {
+        expect(screenIn(`ID IN (SELECT value FROM STRING_SPLIT((SELECT MAX(Name) FROM __mj.[User]), ','))`, MSSQL)).toThrow(/entity base view/);
+        expect(screenIn(`ID IN (SELECT * FROM unnest(ARRAY(SELECT ID FROM __mj.vwOrders)))`, PG)).toThrow(/'Orders' is row-level-security filtered/);
+    });
+
+    it('skips only the parse wrapper itself, not another read of a table with its name', () => {
+        expect(screenIn(`EXISTS (SELECT 1 FROM __mj_clause_screen)`, MSSQL)).toThrow(/entity base view/);
+        expect(screenIn(`EXISTS (SELECT 1 FROM __mj_clause_screen)`, PG)).toThrow(/entity base view/);
+    });
+});
+
+describe('ClientClauseScreen.CollectStatementReads', () => {
+    it('keeps every FROM item, even when an alias repeats, and counts each SELECT node', () => {
+        const sql = `SELECT 1 FROM x WHERE (ID IN (SELECT a.ID FROM s.t1 a) OR ID IN (SELECT a.ID FROM s.t2 a))`;
+
+        const reads = ClientClauseScreen.CollectStatementReads(new SQLParser(sql, MSSQL));
+
+        expect(reads.Relations.map((r) => `${r.SchemaName}.${r.TableName}`)).toEqual(['.x', 's.t1', 's.t2']);
+        expect(reads.SelectCount).toBe(3);
+    });
+
+    it('keeps the database of a three-part name, so it cannot match a view in this database', () => {
+        const reads = ClientClauseScreen.CollectStatementReads(new SQLParser('SELECT 1 FROM otherdb.__mj.vwAccounts', MSSQL));
+
+        expect(reads.Relations).toEqual([{ SchemaName: 'otherdb.__mj', TableName: 'vwAccounts', FunctionName: '' }]);
+    });
+
+    it('reads back the names the fallback parse renamed, and collects CTE names', () => {
+        // A bracket-quoted CTE name makes the T-SQL grammar fail, so the parser renames brackets and retries.
+        const sql = `WITH [Recent Accounts] AS (SELECT ID FROM [__mj].[vwAccounts]) SELECT ID FROM [Recent Accounts]`;
+
+        const reads = ClientClauseScreen.CollectStatementReads(new SQLParser(sql, MSSQL));
+
+        expect(reads.Relations.map((r) => `${r.SchemaName}.${r.TableName}`).sort()).toEqual(['.Recent Accounts', '__mj.vwAccounts']);
+        expect([...reads.CTENames]).toEqual(['recent accounts']);
+    });
+});
+
+describe('ClientClauseScreen.AssertEverySelectAccountedFor', () => {
+    const check = (sql: string, selectCount: number) =>
+        () => ClientClauseScreen.AssertEverySelectAccountedFor(sql, MSSQL, { Relations: [], SelectCount: selectCount, CTENames: new Set<string>() }, 'ExtraFilter');
+
+    it('refuses SQL with a SELECT the walk did not find', () => {
+        expect(check('SELECT 1 FROM x WHERE (SELECT 1) = 1', 1)).toThrow(/could not account for every subquery/);
+    });
+
+    it('counts only SELECT keywords outside literals, quoted identifiers and comments', () => {
+        expect(check(`SELECT 1 FROM x WHERE Name = 'select' AND [select] = 1`, 1)).not.toThrow();
+        expect(check('SELECT 1 FROM x WHERE (SELECT 1) = 1', 2)).not.toThrow();
     });
 });

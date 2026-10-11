@@ -267,6 +267,28 @@ describe('SearchService visibility scope', () => {
     expect(taskFilter).toContain("LOWER(Name) LIKE '%plan%'");
   });
 
+  it('reads the message IDs again on every task search', async () => {
+    const entities = { 'MJ: Tasks': { Name: 'MJ: Tasks', SchemaName: '__mj', BaseView: 'vwTasks' } } as unknown as Record<string, EntityInfo>;
+    rows['MJ: Conversations'] = [{ ID: 'c1' }];
+    rows['MJ: Conversation Details'] = [{ ID: 'd1' }];
+    service.Provider = CreateFakeProvider<object>({
+      runViewResults: (params) => {
+        queries.push(params);
+        return rows[params.EntityName ?? ''] ?? [];
+      },
+      entityByName: (name) => entities[name],
+    });
+    service.SetSearchFilter('tasks');
+
+    await service.Search('plan', 'env-1', USER);
+    rows['MJ: Conversation Details'] = [{ ID: 'd1' }, { ID: 'd2' }];
+    await service.Search('plan', 'env-1', USER);
+
+    const taskFilters = queriesFor('MJ: Tasks').map((q) => (typeof q.ExtraFilter === 'string' ? q.ExtraFilter : ''));
+    expect(taskFilters).toHaveLength(2);
+    expect(taskFilters[1]).toContain("ConversationDetailID IN ('d1','d2')");
+  });
+
   it('searches only artifacts the user can read', async () => {
     service.SetSearchFilter('artifacts');
 

@@ -241,6 +241,15 @@ export class SQLParser {
         return this._ast;
     }
 
+    /**
+     * The bracket identifiers the fallback parse renamed, as the name in {@link AST} mapped to the
+     * original bracketed text (for example `[My CTE]`). Null when the direct parse succeeded, so
+     * every identifier in the tree is as written.
+     */
+    get IdentifierAliases(): ReadonlyMap<string, string> | null {
+        return this._aliasMap;
+    }
+
     /** The dialect supplied at construction. */
     get Dialect(): SQLParserDialect {
         return this._dialect;

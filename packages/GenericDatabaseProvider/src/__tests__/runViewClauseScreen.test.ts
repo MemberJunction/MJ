@@ -397,3 +397,27 @@ describe('ScreenClientClause — a subquery reads an entity only when the user m
         expect(result.ErrorMessage).toMatch(/'Orders' is row-level-security filtered for you/);
     });
 });
+
+describe('RunViewCore — a stored clause is screened in every subquery position', () => {
+    it("refuses a saved view's stored CASE-WHEN subquery over a base table, before any SQL runs", async () => {
+        const where = `CASE WHEN (SELECT COUNT(*) FROM __mj.[User] WHERE [Type] = 'Owner') > 0 THEN 1 ELSE 0 END = 1`;
+
+        const { result, sql } = await run(savedView({ WhereClause: where }));
+
+        expect(sql).toHaveLength(0);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/entity base view/);
+    });
+
+    it("refuses a saved view's stored HAVING subquery over a row-filtered entity, before any SQL runs", async () => {
+        const orders = readableEntity('3f1f6b9e-0000-4000-8000-0000000000a3', 'Orders', 'vwOrders', [], { RowFilter: "(OwnerID = 'U1')" });
+        const provider = new EntitySetTestProvider([ACCOUNTS, orders]);
+        const where = `ID IN (SELECT ID FROM [__mj].[vwAccounts] GROUP BY ID HAVING (SELECT COUNT(*) FROM [__mj].[vwOrders]) > 0)`;
+
+        const { result, sql } = await run(savedView({ WhereClause: where }), provider);
+
+        expect(sql).toHaveLength(0);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/'Orders' is row-level-security filtered/);
+    });
+});
