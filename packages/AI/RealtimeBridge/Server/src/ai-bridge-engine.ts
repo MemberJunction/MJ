@@ -1473,9 +1473,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
     /**
      * The floor gate's verdict on one video frame. An fMP4 piece carries the voice on its audio track, so a fragment is
-     * counted by its audio's duration: that is how long the agent speaks. An init segment carries no speech: it is
-     * remembered (its audio track's timescale times the fragments) and passes. An encoded chunk or an image carries no
-     * voice (that comes through `OnOutput`, which is gated) and passes.
+     * counted by its audio's duration: that is how long the agent speaks. A fragment its driver marks `Idle` (the face an
+     * avatar shows between answers) counts as no speech, whatever its audio track holds; so does one with video only.
+     * Neither starts a burst or takes the floor (see {@link FullDuplexTurnGate.OnOutputDuration}). An init segment
+     * carries no speech: it is remembered (its audio track's timescale times the fragments) and passes. An encoded chunk
+     * or an image carries no voice (that comes through `OnOutput`, which is gated) and passes.
      */
     private gateVideoFrame(active: ActiveBridgeSession, frame: RealtimeVideoFrame): OutputVerdict {
         if (frame.Kind !== 'fmp4') {
@@ -1485,7 +1487,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             active.AvatarInit = ReadFmp4Init(frame.Data) ?? active.AvatarInit;
             return 'Forward';
         }
-        const speechSeconds = active.AvatarInit ? (Fmp4AudioSeconds(frame.Data, active.AvatarInit) ?? 0) : 0;
+        const speechSeconds = frame.Idle || !active.AvatarInit ? 0 : (Fmp4AudioSeconds(frame.Data, active.AvatarInit) ?? 0);
         return this.gateOutputDuration(active, speechSeconds * 1000);
     }
 

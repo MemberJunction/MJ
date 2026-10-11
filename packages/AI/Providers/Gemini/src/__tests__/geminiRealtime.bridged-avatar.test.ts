@@ -418,7 +418,7 @@ describe('a bridged Gemini session whose host publishes the avatar into a room',
             expect(driver.Connection?.RealtimeInputs.filter((input) => input.activityEnd)).toHaveLength(1);
         });
 
-        it('a tool call ends the answer: the video while the tool runs holds no context note, and the result goes out at once', async () => {
+        it('a tool call ends the answer: the video while the tool runs holds no context note, and the result goes out at once, closing the turn the note left open', async () => {
             driver = new BridgedGemini('enterprise');
             session = await driver.StartSession(params({ ...BEN, Delivery: 'room' }));
             driver.Content({ outputTranscription: { text: 'Let me check.' } });
@@ -428,8 +428,28 @@ describe('a bridged Gemini session whose host publishes the avatar into a room',
 
             session.SendContextNote?.('Still looking.');
             await session.SendToolResult('call-1', JSON.stringify({ status: 'shipped' }));
-            expect(driver.Connection?.ClientContents).toHaveLength(1);
+            expect(driver.Connection?.ClientContents.map((content) => content.turnComplete)).toEqual([false, true]);
             expect(driver.Connection?.ToolResponses).toHaveLength(1);
+        });
+
+        it("marks the video outside an answer Idle and the answer's not, so a room's floor gate counts only the answer as speech", async () => {
+            driver = new BridgedGemini('enterprise');
+            session = await driver.StartSession(params({ ...BEN, Delivery: 'room' }));
+            avatar = [];
+            session.OnVideoFrame?.((frame) => avatar.push(frame));
+            driver.Parts([mp4Part(INIT), mp4Part(fragment(1, 0, 3750))]); // before the model speaks
+            driver.Content({ outputTranscription: { text: 'Let me check.' } });
+            driver.Parts([mp4Part(fragment(1, 3750, 3750))]); // the answer
+            driver.Args?.OnMessage({ toolCall: { functionCalls: [{ id: 'call-1', name: 'LookUpOrder', args: {} }] } } as LiveServerMessage);
+            driver.Parts([mp4Part(fragment(1, 7500, 3750))]); // while the tool runs
+            driver.Content({ outputTranscription: { text: 'It shipped on Monday.' } });
+            driver.Parts([mp4Part(fragment(1, 11250, 3750))]); // the answer goes on
+            driver.Content({ generationComplete: true });
+            driver.Parts([mp4Part(fragment(1, 15000, 3750))]); // after its generation completed
+            driver.Content({ turnComplete: true });
+            driver.Parts([mp4Part(fragment(1, 18750, 3750))]); // between answers
+
+            expect(avatar.map((frame) => frame.Idle === true)).toEqual([true, true, false, true, false, true, true]);
         });
 
         it("the answer's video marks the model generating: a context note waits for the turn's end", async () => {

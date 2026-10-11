@@ -35,6 +35,8 @@ class FakeLiveSession implements GeminiLiveSession {
     public RealtimeInputs: Array<{ audio?: GeminiBlob; media?: GeminiBlob; text?: string; activityStart?: unknown; activityEnd?: unknown }> = [];
     public ClientContents: Array<{ turns?: Content[]; turnComplete?: boolean }> = [];
     public ToolResponses: Array<{ functionResponses: FunctionResponse[] | FunctionResponse }> = [];
+    /** Every send, in the order Google receives them. */
+    public Wire: Array<{ Method: 'sendRealtimeInput' | 'sendClientContent' | 'sendToolResponse'; Params: unknown }> = [];
     public Closed = false;
 
     /** The driver-supplied callback that translates inbound server messages. */
@@ -42,12 +44,15 @@ class FakeLiveSession implements GeminiLiveSession {
 
     public sendRealtimeInput(params: { audio?: GeminiBlob; media?: GeminiBlob; text?: string; activityStart?: unknown; activityEnd?: unknown }): void {
         this.RealtimeInputs.push(params);
+        this.Wire.push({ Method: 'sendRealtimeInput', Params: params });
     }
     public sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void {
         this.ClientContents.push(params);
+        this.Wire.push({ Method: 'sendClientContent', Params: params });
     }
     public sendToolResponse(params: { functionResponses: FunctionResponse[] | FunctionResponse }): void {
         this.ToolResponses.push(params);
+        this.Wire.push({ Method: 'sendToolResponse', Params: params });
     }
     public close(): void {
         this.Closed = true;
@@ -784,6 +789,85 @@ describe('GeminiRealtime', () => {
         it('throws if SendInput is used after Close', async () => {
             await session.Close();
             expect(() => session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' })).toThrow(/not open/);
+        });
+    });
+
+    /**
+     * A context note is client content with `turnComplete: false`, which tells Gemini more input is coming: Gemini then
+     * holds all generation, the continuation after a tool result included, until a `turnComplete: true` closes the turn.
+     */
+    describe('a client turn a context note left open, after a tool result', () => {
+        const NOTE = '[delegated agent] gathering the order history';
+        const noteSent = { Method: 'sendClientContent', Params: { turns: [{ role: 'user', parts: [{ text: NOTE }] }], turnComplete: false } };
+        const turnClosed = { Method: 'sendClientContent', Params: { turnComplete: true } };
+        const resultSent = (id: string) => ({ Method: 'sendToolResponse', Params: { functionResponses: [{ id, name: 'invoke_agent', response: { done: true } }] } });
+        const DONE = JSON.stringify({ done: true });
+
+        let session: IRealtimeSession;
+
+        /** Starts a session on `model`; returns where its sends start on the wire. */
+        async function start(model: string): Promise<number> {
+            session = await driver.StartSession(makeParams({ Model: model }));
+            return driver.Fake.Wire.length;
+        }
+
+        /** The model calls a tool for each id: a delegation each. */
+        function toolCalls(...ids: string[]): void {
+            driver.Fake.Emit({ toolCall: { functionCalls: ids.map((id) => ({ id, name: 'invoke_agent', args: {} })) } } as LiveServerMessage);
+        }
+
+        it('closes it right after the tool result, so the model speaks the result: the note, the result, then turnComplete', async () => {
+            const from = await start('gemini-3.8-live');
+            toolCalls('call-1');
+            session.SendContextNote?.(NOTE);
+            await session.SendToolResult('call-1', DONE);
+            expect(driver.Fake.Wire.slice(from)).toEqual([noteSent, resultSent('call-1'), turnClosed]);
+        });
+
+        it('adds no close when no note left the turn open', async () => {
+            const from = await start('gemini-3.8-live');
+            toolCalls('call-1');
+            await session.SendToolResult('call-1', DONE);
+            expect(driver.Fake.Wire.slice(from)).toEqual([resultSent('call-1')]);
+        });
+
+        it("adds no close once the model's turnComplete took the note in", async () => {
+            const from = await start('gemini-3.8-live');
+            session.SendContextNote?.(NOTE);
+            driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+            toolCalls('call-1');
+            await session.SendToolResult('call-1', DONE);
+            expect(driver.Fake.Wire.slice(from)).toEqual([noteSent, resultSent('call-1')]);
+        });
+
+        it('closes it once: a second result adds no second close', async () => {
+            const from = await start('gemini-3.8-live');
+            toolCalls('call-1', 'call-2');
+            session.SendContextNote?.(NOTE);
+            await session.SendToolResult('call-1', DONE);
+            await session.SendToolResult('call-2', DONE);
+            expect(driver.Fake.Wire.slice(from)).toEqual([noteSent, resultSent('call-1'), turnClosed, resultSent('call-2')]);
+        });
+
+        it("adds no close while the model is speaking, which the close would cut off: that turn's turnComplete takes the note in", async () => {
+            const from = await start('gemini-3.8-live');
+            toolCalls('call-1');
+            session.SendContextNote?.(NOTE);
+            const speech = Buffer.from(new Uint8Array([1])).toString('base64');
+            driver.Fake.Emit({
+                serverContent: { modelTurn: { role: 'model', parts: [{ inlineData: { data: speech, mimeType: 'audio/pcm;rate=24000' } }] } },
+            } as LiveServerMessage);
+            await session.SendToolResult('call-1', DONE);
+            driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+            expect(driver.Fake.Wire.slice(from)).toEqual([noteSent, resultSent('call-1')]);
+        });
+
+        it('adds no close on a model whose tools never block (Extended Thinking): it may still be reasoning, and the close would cut it off', async () => {
+            const from = await start('gemini-3.8-live-extended-thinking');
+            toolCalls('call-1');
+            session.SendContextNote?.(NOTE);
+            await session.SendToolResult('call-1', DONE);
+            expect(driver.Fake.Wire.slice(from)).toEqual([noteSent, resultSent('call-1')]);
         });
     });
 });

@@ -18,7 +18,9 @@
  *   {@link GeminiBridgedAvatarOutput.AnswerStarted}) or a PCM voice part that plays, until its `generationComplete`, the
  *   turn's `turnComplete`, a barge-in, a tool call, a resume or the session's close. Before a part of the answer goes to
  *   the host, {@link GeminiBridgedAvatarSinks.OnAnswer} says the model is answering, so the session holds its sends; the
- *   video outside an answer goes to the host as well (the avatar keeps its face), but marks nothing.
+ *   video outside an answer goes to the host as well (the avatar keeps its face), marked `Idle`, so a room's floor gate
+ *   doesn't count it as the agent speaking, whatever its audio track holds. An answer's first pieces can come before its
+ *   first transcribed words; they are marked `Idle` too.
  * - **Usage.** The seconds of avatar video generated in a turn (its video samples' durations, read from the fragments)
  *   are reported as deltas at the turn's end: `generationComplete`, `interrupted`, `turnComplete`, a resume, or the
  *   session's close. Video after `generationComplete` is forwarded (idle frames, if Google sends any) but not counted;
@@ -42,7 +44,7 @@ import {
 
 /** Where a bridged avatar session's media and usage go. */
 export interface GeminiBridgedAvatarSinks {
-    /** A piece of the avatar's fragmented MP4 as a frame, in the order the model sent it. */
+    /** A piece of the avatar's fragmented MP4 as a frame, in the order the model sent it; marked `Idle` outside an answer. */
     OnVideoFrame(frame: RealtimeVideoFrame): void;
     /** PCM voice: a turn's audio before any of its video arrived. */
     OnPcm(pcm: ArrayBuffer): void;
@@ -187,10 +189,11 @@ export class GeminiBridgedAvatarOutput {
     }
 
     /**
-     * Makes the piece a frame, counts its video seconds (before the host may take the buffer), then hands it on, saying
-     * first that the model is answering when the piece is the answer's. The frame is typed `video/mp4`, keeping the part's
-     * own type when it names `video/mp4` with its codecs: the room's bridge publishes a piece as the avatar only when its
-     * type is `video/mp4`, and every piece of the stream is. A piece that isn't MP4 is dropped, reported once per type.
+     * Makes the piece a frame, counts its video seconds (before the host may take the buffer), then hands it on: saying
+     * first that the model is answering when the piece is the answer's, or marking it `Idle` when it isn't. The frame is
+     * typed `video/mp4`, keeping the part's own type when it names `video/mp4` with its codecs: the room's bridge
+     * publishes a piece as the avatar only when its type is `video/mp4`, and every piece of the stream is. A piece that
+     * isn't MP4 is dropped, reported once per type.
      */
     private acceptAvatar(mimeType: string | undefined, data: ArrayBuffer): void {
         const frame = Fmp4PieceToVideoFrame(data, mimeType, this.init);
@@ -205,9 +208,11 @@ export class GeminiBridgedAvatarOutput {
             this.pendingVideoSeconds += Fmp4VideoSeconds(data, this.init) ?? 0;
         }
         this.turn.HasVideo = true;
-        if (this.answering) {
-            this.sinks.OnAnswer();
+        if (!this.answering) {
+            this.sinks.OnVideoFrame({ ...frame, Idle: true });
+            return;
         }
+        this.sinks.OnAnswer();
         this.sinks.OnVideoFrame(frame);
     }
 

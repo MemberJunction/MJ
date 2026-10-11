@@ -42,6 +42,12 @@ export interface RealtimeVideoFrameBase {
     Width?: number;
     /** The picture's height in pixels, when known. */
     Height?: number;
+    /**
+     * `true` when the frame is video the model streams between its answers (Vertex AI sends an avatar's face then too):
+     * it plays, but the agent is not speaking, whatever audio the frame carries, so a room's floor gate never counts it
+     * as speech. Set by a driver that can tell; absent when it can't, or when the frame is part of an answer.
+     */
+    Idle?: boolean;
 }
 
 /**
