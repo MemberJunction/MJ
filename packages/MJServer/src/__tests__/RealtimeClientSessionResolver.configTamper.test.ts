@@ -10,7 +10,7 @@
 // type-graphql decorators on the resolver need the reflect-metadata polyfill loaded first.
 import 'reflect-metadata';
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
 const hasPermissionMock = vi.fn(async (_agentID: string, _user?: unknown, _permission?: string): Promise<boolean> => true);
 vi.mock('@memberjunction/ai-engine-base', () => ({
@@ -33,8 +33,8 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 const executeRelayedToolMock = vi.fn();
-const appendPromptRunMessageMock = vi.fn(async (): Promise<boolean> => true);
-const accumulatePromptRunUsageMock = vi.fn(async (): Promise<boolean> => true);
+const appendPromptRunMessageMock = vi.fn<RealtimeClientSessionService['AppendPromptRunMessage']>(async () => true);
+const accumulatePromptRunUsageMock = vi.fn<RealtimeClientSessionService['AccumulatePromptRunUsage']>(async () => true);
 vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
     return {
@@ -74,8 +74,8 @@ vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
 
 import { RealtimeClientSessionResolver } from '../resolvers/RealtimeClientSessionResolver.js';
 import type { AppContext } from '../types.js';
-import type { RunViewParams, UserInfo } from '@memberjunction/core';
-import type { ExecuteRelayedToolInput } from '@memberjunction/ai-agents';
+import { IsPlatformSQL, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
+import type { ExecuteRelayedToolInput, RealtimeClientSessionService } from '@memberjunction/ai-agents';
 import type { PubSubEngine } from 'type-graphql';
 
 const SESSION_ID = 'c3c3c3c3-0000-4000-8000-000000000001';
@@ -103,6 +103,9 @@ interface FakeEntity {
 /** Rows the fake RunView returns, keyed by entity name. */
 type FakeRows = Record<string, Array<Record<string, unknown>>>;
 
+/** The fake provider's `RunView`: it returns the rows for the requested entity. */
+type FakeRunView = (params: RunViewParams) => Promise<RunViewResult<Record<string, unknown>>>;
+
 function makeSession(config: Record<string, unknown>, overrides: Partial<FakeEntity> = {}): FakeEntity {
     return {
         ID: SESSION_ID,
@@ -123,8 +126,8 @@ function makeDetail(): FakeEntity {
 }
 
 /** A provider serving the session plus view rows per entity name; `runView` records every view run. */
-function makeProvider(session: FakeEntity, rows: FakeRows = {}): { runView: ReturnType<typeof vi.fn> } {
-    const runView = vi.fn(async (params: RunViewParams) => {
+function makeProvider(session: FakeEntity, rows: FakeRows = {}): { runView: Mock<FakeRunView> } {
+    const runView = vi.fn<FakeRunView>(async (params) => {
         const results = rows[params.EntityName ?? ''] ?? [];
         return { Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length, ExecutionTime: 0, ErrorMessage: '' };
     });
@@ -175,8 +178,12 @@ function relayInput(): ExecuteRelayedToolInput {
     return executeRelayedToolMock.mock.calls[0][0] as ExecuteRelayedToolInput;
 }
 
-function issuedFilters(runView: ReturnType<typeof vi.fn>): string[] {
-    return runView.mock.calls.map(([params]) => (params as RunViewParams).ExtraFilter ?? '');
+/** The SQL text of each filter the fake RunView received, with every variant of a platform-specific filter. */
+function issuedFilters(runView: Mock<FakeRunView>): string[] {
+    return runView.mock.calls.map(([params]) => {
+        const filter = params.ExtraFilter;
+        return IsPlatformSQL(filter) ? [filter.default, filter.sqlserver, filter.postgresql].join('\n') : (filter ?? '');
+    });
 }
 
 beforeEach(() => {
