@@ -443,7 +443,7 @@ describe('compile guard: macro and call-block arguments', () => {
 });
 
 describe('compile guard: names every object inherits', () => {
-    /** Every place where template text names a key, an argument, a variable, a member, a filter or a test. */
+    /** Every place where template text names a key, an argument, a variable, a macro, a block, a filter or a test. */
     const NAME_POSITIONS: ReadonlyArray<readonly [string, (name: string) => string]> = [
         ['a dictionary key', (name) => `{{ {${name}: 1} }}`],
         ['a quoted dictionary key', (name) => `{{ {"${name}": 1} }}`],
@@ -469,9 +469,6 @@ describe('compile guard: names every object inherits', () => {
         ['a from-import alias', (name) => `{% from "x" import a as ${name} %}`],
         ['a macro name', (name) => `{% macro ${name}() %}{% endmacro %}`],
         ['a block name', (name) => `{% block ${name} %}{% endblock %}`],
-        ['a member name', (name) => `{{ x.${name} }}`],
-        ['a quoted member name', (name) => `{{ x["${name}"] }}`],
-        ['a called member name', (name) => `{{ x.${name}() }}`],
         ['a filter name', (name) => `{{ 1 | ${name} }}`],
         ['a filter block name', (name) => `{% filter ${name} %}x{% endfilter %}`],
         ['a test name', (name) => `{{ 1 is ${name} }}`],
@@ -512,6 +509,17 @@ describe('compile guard: names every object inherits', () => {
 
     it('still lets a bare name read an own render-data key that has an inherited name', () => {
         expect(renderPlain('[{{ constructor }}]', { constructor: 'Acme Builders' })).toBe('[Acme Builders]');
+    });
+
+    it('leaves literal member names to the runtime guard, which reads them as it reads computed ones', () => {
+        const refused = INHERITED_NAMES
+            .flatMap((name) => [`{{ x.${name} }}`, `{{ x["${name}"] }}`, `{{ x.${name}() }}`])
+            .filter((templateText) => parseError(templateText) !== undefined);
+        expect(refused).toEqual([]);
+        expect(renderPlain(
+            '{{ n.toLocaleString("en-US") }}|{{ s.toString() }}|{{ o.hasOwnProperty("a") }}|[{{ o.constructor }}][{{ range.constructor }}][{{ o.__proto__ }}]',
+            { n: 1234.5, s: 'x', o: { a: 1 } },
+        )).toBe('1,234.5|x|true|[][][]');
     });
 });
 

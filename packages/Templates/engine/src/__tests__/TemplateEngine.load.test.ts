@@ -34,7 +34,7 @@ describe('importing the template engine', () => {
 
     it('guards the nunjucks runtime before anything renders', () => {
         const env = new nunjucks.Environment(null, { autoescape: false });
-        expect(env.renderString('[{{ range[key] }}][{{ valueOf }}]', { key: 'constructor' })).toBe('[][]');
+        expect(env.renderString('[{{ range.constructor }}][{{ valueOf }}]', {})).toBe('[][]');
     });
 
     it('guards macro arguments, keyword arguments and dictionary keys before anything renders', () => {

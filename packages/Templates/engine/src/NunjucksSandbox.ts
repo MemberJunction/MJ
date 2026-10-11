@@ -133,14 +133,15 @@ const installedGuards = new WeakSet<GuardableHook>();
  * - a macro or call-block argument that a call leaves out is filled only from a keyword argument that the
  *   call itself passes under that name, never from a member the keyword arguments inherit, so otherwise it
  *   reads as empty
- * - keyword arguments must be an ordinary object literal: keyword arguments that inherit from anything but
- *   `Object.prototype`, or that use a name that every object inherits (or `prototype`), throw; the code
- *   generator refuses such a name as a dictionary key or keyword argument too
+ * - keyword arguments written at a call site must be an ordinary object literal: ones that inherit from anything
+ *   but `Object.prototype`, or that use a name that every object inherits (or `prototype`), throw, and the code
+ *   generator refuses such a name as a dictionary key or keyword argument too; keyword arguments passed as a
+ *   value (from render data, for example) are read through a copy of their own keys
  * - a filter, test or global resolves only to a name the environment registered itself, never to a member
  *   that every object inherits (such as `hasOwnProperty`); an object, a function or a symbol is refused as the name
  * - a member named `constructor`, `prototype`, `__proto__` or one of the `__define/lookup Getter/Setter__`
- *   accessors reads as `undefined`, unless it is an object's own data that is not a function;
- *   `__proto__` always reads as `undefined`
+ *   accessors, written literally or computed while rendering, reads as `undefined`, unless it is an object's
+ *   own data that is not a function; `__proto__` always reads as `undefined`
  * - a bare name resolves only to a template variable, an own key of the render data, or an own environment
  *   global, never to a property that the render data or the globals inherit
  * - a template may not read a member of the render context, an environment, a loader, a frame, a
@@ -240,7 +241,7 @@ function isKeywordArguments(value: unknown): value is object {
 }
 
 /**
- * `runtime.makeKeywordArgs`, which marks the object literal that a call passes as keyword arguments. It must
+ * `runtime.makeKeywordArgs`, which marks the object literal that a call site passes as keyword arguments. It must
  * inherit from `Object.prototype`, as an object literal does, and must not own a key that `IsInheritedMemberName` matches.
  */
 function guardMakeKeywordArgs(original: NunjucksRuntimeHooks['makeKeywordArgs']): NunjucksRuntimeHooks['makeKeywordArgs'] {
