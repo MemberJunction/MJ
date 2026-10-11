@@ -842,9 +842,26 @@ export class OpenAILiveSession implements IRealtimeSession {
         this._usageHandlers.push(handler);
     }
 
+    /**
+     * Drops all registered callback handlers and per-response bookkeeping so a closed session
+     * can't keep the caller's dispatch/UI context reachable through a stale closure. Mirrors
+     * `OpenAISession.clearHandlers()` in openAIRealtime.ts.
+     */
+    private clearHandlers(): void {
+        this._outputHandlers = [];
+        this._transcriptHandlers = [];
+        this._toolCallHandlers = [];
+        this._errorHandlers = [];
+        this._usageHandlers = [];
+        this._interruptionHandlers = [];
+        this._closeHandlers = [];
+        this._countedResponseIds.clear();
+    }
+
     public async Close(): Promise<void> {
         this._toolBatchBarrier.Clear();
         if (this._closed) {
+            this.clearHandlers();
             return;
         }
         this._closeRequested = true;
@@ -859,8 +876,9 @@ export class OpenAILiveSession implements IRealtimeSession {
         });
 
         // Race graceful server close against safety timer (5s)
+        let safetyTimer: ReturnType<typeof setTimeout> | undefined;
         const timeoutPromise = new Promise<void>((resolve) => {
-            setTimeout(() => {
+            safetyTimer = setTimeout(() => {
                 try {
                     this._socket.close(1000, 'Close timeout');
                 } catch {
@@ -870,8 +888,14 @@ export class OpenAILiveSession implements IRealtimeSession {
             }, 5000);
         });
 
-        await Promise.race([this._closePromise, timeoutPromise]);
-        this._closed = true;
+        try {
+            await Promise.race([this._closePromise, timeoutPromise]);
+        } finally {
+            // Don't leave the 5s safety timer armed (and pinning this session) once the graceful close won the race.
+            clearTimeout(safetyTimer);
+            this._closed = true;
+            this.clearHandlers();
+        }
     }
 }
 
