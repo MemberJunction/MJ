@@ -18,7 +18,7 @@
 // is recreated. Reading the file means a restart is enough.
 // ==============================================================================
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -448,6 +448,8 @@ function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// import.meta.url is the script's real path, so argv[1] is resolved the same way: on macOS the temp
+// directory is a symlink (/var -> /private/var), and comparing the unresolved path never matched there.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   process.exit(main());
 }
