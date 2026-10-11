@@ -1,5 +1,5 @@
-import { AuthorizationEvaluator, AuthorizationInfo, AuthorizationRoleType, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { AuthorizationInfo, AuthorizationRoleInfo, AuthorizationRoleType, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 /** The outcome of {@link EvaluateActionRunAuthorization}. */
 export interface ActionRunAuthorization {
@@ -8,6 +8,9 @@ export interface ActionRunAuthorization {
     /** Why the run is allowed or refused. */
     Reason: string;
 }
+
+/** One provider's authorization tree and the role grants on it. */
+export type AuthorizationMetadata = Pick<IMetadataProvider, 'Authorizations' | 'AuthorizationRoles'>;
 
 /**
  * True when the user is an Owner, MJ's superuser type. The column is nchar, so the stored value is
@@ -29,18 +32,21 @@ export function IsOwner(user: UserInfo): boolean {
  *   (`BaseAction.AuthorizesCaller`), so the action's own check decides. Otherwise it runs for
  *   Owners only.
  *
+ * The authorizations, their parents and their role grants are read only from `metadata`, never
+ * from the global provider. Pass the provider the `MJ: Action Authorizations` rows were read from.
+ *
  * Refuse scope-limited sessions before calling this; see `IsScopeLimitedPrincipal`.
  *
  * @param user the caller
  * @param actionAuthorizationIDs the AuthorizationID of each `MJ: Action Authorizations` row for the action
- * @param authorizations every authorization in metadata, for the ancestor walk
+ * @param metadata the provider whose authorizations and role grants decide
  * @param actionAuthorizesCaller true when the action's class authorizes its caller itself
  * @returns whether the run is allowed, and why
  */
 export function EvaluateActionRunAuthorization(
     user: UserInfo,
     actionAuthorizationIDs: readonly string[],
-    authorizations: AuthorizationInfo[],
+    metadata: AuthorizationMetadata,
     actionAuthorizesCaller: boolean
 ): ActionRunAuthorization {
     if (IsOwner(user)) {
@@ -51,13 +57,25 @@ export function EvaluateActionRunAuthorization(
             ? { Allowed: true, Reason: 'The action authorizes its caller itself.' }
             : { Allowed: false, Reason: 'No Action Authorization grants this action to any role, and the action does not authorize its caller itself; only an Owner may run it.' };
     }
+    const authorizations = metadata.Authorizations;
+    const userGrants = grantsToUserRoles(user, metadata.AuthorizationRoles);
     const granted = actionAuthorizationIDs
-        .map((id) => authorizations.find((auth) => UUIDsEqual(auth.ID, id)))
+        .map((id) => findAuthorization(authorizations, id))
         .filter((auth): auth is AuthorizationInfo => auth !== undefined)
-        .find((auth) => holdsLinkedAuthorization(auth, user, authorizations));
+        .find((auth) => holdsLinkedAuthorization(auth, authorizations, userGrants));
     return granted
         ? { Allowed: true, Reason: `The user holds the "${granted.Name}" authorization.` }
         : { Allowed: false, Reason: 'None of your roles holds an authorization this action requires.' };
+}
+
+/** The role grants that name one of the user's roles. */
+function grantsToUserRoles(user: UserInfo, grants: readonly AuthorizationRoleInfo[]): AuthorizationRoleInfo[] {
+    const userRoleIDs = (user.UserRoles ?? []).map((userRole) => userRole.RoleID);
+    return grants.filter((grant) => userRoleIDs.some((roleID) => UUIDsEqual(roleID, grant.RoleID)));
+}
+
+function findAuthorization(authorizations: readonly AuthorizationInfo[], id: string): AuthorizationInfo | undefined {
+    return authorizations.find((auth) => UUIDsEqual(auth.ID, id));
 }
 
 /**
@@ -65,17 +83,38 @@ export function EvaluateActionRunAuthorization(
  * it, and the user holds it directly or through an ancestor. The first two are checked on the linked
  * authorization itself, because the ancestor walk would otherwise grant it through the parent.
  */
-function holdsLinkedAuthorization(auth: AuthorizationInfo, user: UserInfo, authorizations: AuthorizationInfo[]): boolean {
-    if (!auth.IsActive || isDeniedToUser(auth, user)) {
+function holdsLinkedAuthorization(auth: AuthorizationInfo, authorizations: readonly AuthorizationInfo[], userGrants: readonly AuthorizationRoleInfo[]): boolean {
+    if (!auth.IsActive || grantTypes(auth, userGrants).includes(AuthorizationRoleType.Deny)) {
         return false;
     }
-    return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, authorizations);
+    return holdsDirectlyOrThroughAncestor(auth, authorizations, userGrants);
 }
 
-/** True when one of the user's roles has a Deny row on the authorization. */
-function isDeniedToUser(auth: AuthorizationInfo, user: UserInfo): boolean {
-    const userRoleIDs = (user.UserRoles ?? []).map((userRole) => userRole.RoleID);
-    return auth.Roles.some(
-        (authRole) => authRole.AuthorizationType() === AuthorizationRoleType.Deny && userRoleIDs.some((roleID) => UUIDsEqual(roleID, authRole.RoleID))
-    );
+/**
+ * True when the user holds the authorization or one of its ancestors, following `ParentID` within
+ * `authorizations`. This is the walk `AuthorizationEvaluator.UserCanExecuteWithAncestors` does, with
+ * the role grants taken from the same provider as the authorizations.
+ */
+function holdsDirectlyOrThroughAncestor(auth: AuthorizationInfo, authorizations: readonly AuthorizationInfo[], userGrants: readonly AuthorizationRoleInfo[]): boolean {
+    const visited = new Set<string>();
+    let node: AuthorizationInfo | undefined = auth;
+    while (node && !visited.has(NormalizeUUID(node.ID))) {
+        if (holdsDirectly(node, userGrants)) {
+            return true;
+        }
+        visited.add(NormalizeUUID(node.ID));
+        node = node.ParentID ? findAuthorization(authorizations, node.ParentID) : undefined;
+    }
+    return false;
+}
+
+/** True when the authorization is active and the user's roles have an Allow and no Deny on it. */
+function holdsDirectly(auth: AuthorizationInfo, userGrants: readonly AuthorizationRoleInfo[]): boolean {
+    const types = grantTypes(auth, userGrants);
+    return auth.IsActive && types.includes(AuthorizationRoleType.Allow) && !types.includes(AuthorizationRoleType.Deny);
+}
+
+/** Allow or Deny, for each of the user's role grants on the authorization. */
+function grantTypes(auth: AuthorizationInfo, userGrants: readonly AuthorizationRoleInfo[]): AuthorizationRoleType[] {
+    return userGrants.filter((grant) => UUIDsEqual(grant.AuthorizationID, auth.ID)).map((grant) => grant.AuthorizationType());
 }

@@ -239,7 +239,9 @@ export class ActionResolver extends ResolverBase {
 
   /**
    * Refuses the run unless the caller is authorized for the action — see
-   * {@link EvaluateActionRunAuthorization}.
+   * {@link EvaluateActionRunAuthorization}. The `MJ: Action Authorizations` rows, the authorization
+   * tree and the role grants all come from the request's provider, or all from the global provider
+   * when the request carries none.
    * @throws Error when the caller may not run the action
    */
   private async assertCanRunAction(action: MJActionEntityExtended, user: UserInfo, providers: Array<ProviderInfo>): Promise<void> {
@@ -248,9 +250,9 @@ export class ActionResolver extends ResolverBase {
     }
     const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
     const actionAuthorizationIDs = await this.loadActionAuthorizationIDs(action.ID, provider);
-    const authorizations = (provider ?? Metadata.Provider).Authorizations; // global-provider-ok: fallback only when the request carries no provider
+    const metadata = provider ?? Metadata.Provider; // global-provider-ok: fallback only when the request carries no provider
     const actionAuthorizesCaller = ActionEngineServer.Instance.ActionAuthorizesCaller(action);
-    const decision = EvaluateActionRunAuthorization(user, actionAuthorizationIDs, authorizations, actionAuthorizesCaller);
+    const decision = EvaluateActionRunAuthorization(user, actionAuthorizationIDs, metadata, actionAuthorizesCaller);
     if (!decision.Allowed) {
       throw new Error(`Not authorized to run action ${action.ID}: ${decision.Reason}`);
     }
