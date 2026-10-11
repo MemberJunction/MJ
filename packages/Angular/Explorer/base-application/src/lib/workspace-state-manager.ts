@@ -655,6 +655,27 @@ export class WorkspaceStateManager {
   }
 
   /**
+   * Pin a tab, idempotently. Used to PROMOTE a records-region preview tab the
+   * moment its form enters edit mode (VS Code's promote-on-modify): a promoted
+   * tab is pinned, so it is neither replaceable by the next plain open nor
+   * rendered italic. Unlike TogglePin this never unpins, and it emits NO
+   * configuration update when the tab is already pinned or does not exist —
+   * new-record tabs are born pinned and report edit mode on init, so a
+   * non-idempotent pin would persist workspace state on every new record.
+   */
+  PinTab(tabId: string): void {
+    const config = this.configuration$.value;
+    if (!config) return;
+    const tab = config.tabs.find(t => t.id === tabId);
+    if (!tab || tab.isPinned) return;
+
+    this.UpdateConfiguration({
+      ...config,
+      tabs: config.tabs.map(t => (t.id === tabId ? { ...t, isPinned: true } : t))
+    });
+  }
+
+  /**
    * Toggle pin state of a tab
    */
   TogglePin(tabId: string): void {

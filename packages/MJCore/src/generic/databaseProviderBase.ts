@@ -8,9 +8,10 @@ import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
+import { LocalCacheManager } from "./localCacheManager";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
+import { EscapeSQLString, FormatBinaryChangeValue, SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -236,6 +237,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 await this.ResetTransactionState();
             }
         }
+        // Belt and braces: whatever route the rollback took, this instance is going away, so it
+        // must not leave an entity-event batch behind. A batch whose owner is collected is
+        // unreachable while its entities keep counting as pending, which makes every cached read
+        // of them miss for the life of the process.
+        await LocalCacheManager.Instance.AbandonEntityEventBatch(this);
     }
 
     /** @deprecated Use {@link TransactionDepth}. */
@@ -350,6 +356,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const isNested = this.IsInTransaction || this.CurrentTransactionDepth > 0;
         await this.BeginTransaction();
         const depthAtBegin = this.CurrentTransactionDepth;
+        // Cache maintenance for the saves in this scope waits for the outermost settle: one rewrite
+        // per cached slot on commit instead of one per save, and nothing written for work that is
+        // rolled back. Nested scopes join the same batch.
+        LocalCacheManager.Instance.BeginEntityEventBatch(this);
 
         let settled = false;
         const settle = async (commit: boolean): Promise<void> => {
@@ -375,10 +385,16 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     `per-request providers (as MJServer does) or serialize the units of work.`,
                 );
             }
-            if (commit) {
-                await this.CommitTransaction();
-            } else {
-                await this.RollbackTransaction();
+            let settledAsCommit = false;
+            try {
+                if (commit) {
+                    await this.CommitTransaction();
+                    settledAsCommit = true;
+                } else {
+                    await this.RollbackTransaction();
+                }
+            } finally {
+                await LocalCacheManager.Instance.EndEntityEventBatch(this, settledAsCommit);
             }
         };
 
@@ -617,12 +633,25 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
             const bDiff = this.isFieldDifferent(f, oldData[key], newData[key]);
             if (bDiff) {
+                if (f.IsBinaryFieldType) {
+                    // A binary value (base64, possibly megabytes) is recorded by size, not content:
+                    // the record snapshot (FullRecordJSON) keeps the bytes for restore, so the diff
+                    // does not need to carry them twice more. Readers get a readable change either way.
+                    changes[key] = { field: key, oldValue: this.describeBinaryForDiff(oldData[key]), newValue: this.describeBinaryForDiff(newData[key]) };
+                    continue;
+                }
                 const o = this.escapeValueForDiff(oldData[key], quoteToEscape);
                 const n = this.escapeValueForDiff(newData[key], quoteToEscape);
                 changes[key] = { field: key, oldValue: o, newValue: n };
             }
         }
         return changes;
+    }
+
+    /** The diff entry for a binary field: its size, never its base64 (null and undefined pass through). */
+    private describeBinaryForDiff(value: unknown): unknown {
+        if (value === null || value === undefined) return value;
+        return FormatBinaryChangeValue(typeof value === 'string' ? value : String(value));
     }
 
     /**
@@ -1440,28 +1469,31 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const e = this.EntityByName(entityName);
         if (!e) throw new Error('Entity ' + entityName + ' not found');
 
-        // Collect ALL IsNameField fields in Sequence order for multi-field name support
-        // (e.g., FirstName + LastName → "Elizabeth Rodriguez")
-        const nameFields = e.Fields
-            .filter(f => f.IsNameField)
-            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
-
-        // Fall back to the single NameField if no IsNameField flags are set
+        const nameFields = this.RecordNameFieldsOf(e);
         if (nameFields.length === 0) {
-            const f = e.NameField;
-            if (!f) {
-                LogError('Entity ' + entityName + ' does not have a NameField, returning null');
-                return null;
-            }
-            nameFields.push(f);
+            LogError('Entity ' + entityName + ' does not have a NameField, returning null');
+            return null;
         }
 
         let where = '';
         for (const pkv of compositeKey.KeyValuePairs) {
             const pk = e.PrimaryKeys.find((pk) => pk.Name === pkv.FieldName);
-            const quotes = pk && pk.NeedsQuotes ? "'" : '';
             if (where.length > 0) where += ' AND ';
-            where += this.QuoteIdentifier(pkv.FieldName) + '=' + quotes + pkv.Value + quotes;
+            if (pk && pk.NeedsQuotes) {
+                // Key values arrive from remote callers — escape so a quote in the value cannot
+                // break out of the literal (same discipline as CompositeKey.ToWhereClause).
+                where += this.QuoteIdentifier(pkv.FieldName) + "='" + EscapeSQLString(String(pkv.Value)) + "'";
+            }
+            else {
+                // Unquoted (numeric) key column: the value is spliced in bare, so refuse anything
+                // that is not a plain number rather than letting it reach the SQL text.
+                const raw = String(pkv.Value);
+                if (!/^-?\d+(\.\d+)?$/.test(raw)) {
+                    LogError(`BuildEntityRecordNameSQL: non-numeric value provided for numeric key field ${pkv.FieldName} on entity ${entityName}`);
+                    return null;
+                }
+                where += this.QuoteIdentifier(pkv.FieldName) + '=' + raw;
+            }
         }
 
         // SELECT all name fields so InternalGetEntityRecordName can concatenate them
@@ -1470,8 +1502,43 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * The fields a record's display name is built from, in order: every `IsNameField` field by
+     * `Sequence` (so FirstName + LastName gives "Elizabeth Rodriguez"), else the entity's single
+     * `NameField`. Empty when the entity has neither.
+     */
+    protected RecordNameFieldsOf(entity: EntityInfo): EntityFieldInfo[] {
+        const nameFields = entity.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+        if (nameFields.length === 0 && entity.NameField) {
+            nameFields.push(entity.NameField);
+        }
+        return nameFields;
+    }
+
+    /**
+     * Whether a user may see this entity's record names: every field the name is built from must
+     * be readable to them. On an entity with field-level security on, a missing user may not,
+     * because there is nobody to check against.
+     */
+    protected CanUserReadRecordName(entity: EntityInfo, contextUser?: UserInfo): boolean {
+        if (!entity.EnableFieldLevelSecurity) {
+            return true;
+        }
+        if (!contextUser) {
+            return false;
+        }
+        const denied = entity.GetDeniedReadFields(contextUser);
+        return this.RecordNameFieldsOf(entity).every(f => !denied.has(f.Name.trim().toLowerCase()));
+    }
+
+    /**
      * Retrieves the display name for a single entity record.
      * Uses BuildEntityRecordNameSQL for dialect-neutral SQL generation.
+     *
+     * Answers with an empty string, without querying, when field-level security withholds any of
+     * the name fields from the acting user — the same answer as a record that does not exist, so
+     * the lookup cannot be used to tell the two apart.
      */
     protected async InternalGetEntityRecordName(
         entityName: string,
@@ -1479,6 +1546,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         contextUser?: UserInfo,
     ): Promise<string> {
         try {
+            const entity = this.EntityByName(entityName);
+            if (entity && !this.CanUserReadRecordName(entity, contextUser)) {
+                return '';
+            }
             const sql = this.BuildEntityRecordNameSQL(entityName, compositeKey);
             if (sql) {
                 const data = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
@@ -1544,6 +1615,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<{}> {
         const entityResult = new BaseEntityResult();
+        // Each suspend is matched by exactly one resume, whichever path (success, transaction
+        // callback, or catch) gets there first: providers count suspensions, so a stray resume
+        // would re-enable refresh while another save is still running.
+        let refreshSuspended = false;
+        const suspendRefresh = (): void => {
+            refreshSuspended = true;
+            this.OnSuspendRefresh();
+        };
+        const resumeRefresh = (): void => {
+            if (refreshSuspended) {
+                refreshSuspended = false;
+                this.OnResumeRefresh();
+            }
+        };
         try {
             entity.RegisterTransactionPreprocessing();
 
@@ -1667,7 +1752,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
                     entity.RaiseReadyForTransaction();
-                    this.OnSuspendRefresh();
+                    suspendRefresh();
 
                     const extraData = this.GetTransactionExtraData(entity);
                     if (sqlDetails.simpleSQL) {
@@ -1683,7 +1768,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                             sqlDetails.parameters ?? null,
                             extraData,
                             (transactionResult: Record<string, unknown>, success: boolean) => {
-                                this.OnResumeRefresh();
+                                resumeRefresh();
                                 entityResult.EndedAt = new Date();
                                 if (success && transactionResult) {
                                     this.OnAfterSaveExecute(entity, user, options, saveContext);
@@ -1699,7 +1784,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     return true;
                 } else {
                     // ---- Direct execution path ----
-                    this.OnSuspendRefresh();
+                    suspendRefresh();
 
                     let result: Record<string, unknown>[];
                     if (bReplay) {
@@ -1715,7 +1800,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         result = await this.PostProcessRows(rawResult, entity.EntityInfo, user);
                     }
 
-                    this.OnResumeRefresh();
+                    resumeRefresh();
                     entityResult.EndedAt = new Date();
 
                     if (result && result.length > 0) {
@@ -1742,7 +1827,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 return entity.GetAll(); // nothing to save
             }
         } catch (e) {
-            this.OnResumeRefresh();
+            resumeRefresh();
             entityResult.EndedAt = new Date();
             entityResult.Message = (e as Error).message;
             LogError(e);
@@ -2565,4 +2650,20 @@ export interface ExecuteSQLOptions {
    * pool read sees committed data only (#4514).
    */
   ignoreAmbientTransaction?: boolean;
+  /**
+   * Run the statement inside a read-only transaction that is always rolled back, for SQL a
+   * caller supplied. Writes fail, and any session setting the statement changes (`SET`,
+   * `set_config`) is undone before the connection goes back to the pool, so it cannot reach a
+   * later request. Inside an ambient transaction the statement runs in that transaction as usual.
+   * PostgreSQL honours it; SQL Server, whose read queries cannot change session settings, ignores it.
+   */
+  readOnlyTransaction?: boolean;
+  /**
+   * The longest this statement may run, in milliseconds. When it is exceeded the database cancels
+   * the statement and the call rejects with a timeout error, so the work stops rather than only
+   * the wait. Omitted or 0 means the connection's usual limit applies. It can only shorten that
+   * limit, never lengthen it. Ignored inside an ambient transaction, whose statements follow the
+   * transaction's own limits.
+   */
+  timeoutMs?: number;
 }

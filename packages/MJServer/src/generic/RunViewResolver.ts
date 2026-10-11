@@ -3,7 +3,7 @@ import { AppContext } from '../types.js';
 import { ResolverBase } from './ResolverBase.js';
 import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey } from '@memberjunction/core';
 
-import { UUIDsEqual } from '@memberjunction/global';
+import { ReplaceByteArraysWithBase64, UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
@@ -200,6 +200,13 @@ export class RunViewByIDInput {
       "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
   })
   DataSource?: 'Live' | 'Materialized';
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
+  })
+  IncludeBinaryFields?: boolean;
 }
 
 @InputType()
@@ -321,6 +328,13 @@ export class RunViewByNameInput {
       "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
   })
   DataSource?: 'Live' | 'Materialized';
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
+  })
+  IncludeBinaryFields?: boolean;
 }
 
 @InputType()
@@ -428,6 +442,13 @@ export class RunDynamicViewInput {
       "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
   })
   DataSource?: 'Live' | 'Materialized';
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
+  })
+  IncludeBinaryFields?: boolean;
 }
 
 @InputType()
@@ -564,6 +585,13 @@ export class RunViewGenericInput {
       "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
   })
   DataSource?: 'Live' | 'Materialized';
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
+  })
+  IncludeBinaryFields?: boolean;
 }
 
 //****************************************************************************
@@ -1219,6 +1247,11 @@ export class RunViewResolver extends ResolverBase {
           // DataSource must be forwarded on this transport too (same as the InternalRunView/RunViews maps):
           // otherwise a CacheLocal batch's DataSource:'Materialized' request silently reads the live view.
           DataSource: item.params.DataSource,
+          IncludeBinaryFields: item.params.IncludeBinaryFields,
+          // BypassCache likewise — the input type (RunDynamicViewInput) has always declared it, and its
+          // own description promises "the pre-check cache lookup is skipped". Dropping it here left the
+          // provider free to answer a deliberate database read from the server cache.
+          BypassCache: item.params.BypassCache,
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,
@@ -1322,7 +1355,9 @@ export class RunViewResolver extends ResolverBase {
       returnResult.push({
         PrimaryKey: primaryKey,
         EntityID: entityId,
-        Data: JSON.stringify(row),
+        // Binary columns arrive as base64 from the providers; this is the safety net for any
+        // row that still holds a byte array, which JSON.stringify would emit as {type,data}.
+        Data: JSON.stringify(ReplaceByteArraysWithBase64(row)),
       });
     }
     return returnResult;

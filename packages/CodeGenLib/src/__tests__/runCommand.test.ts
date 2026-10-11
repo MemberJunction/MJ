@@ -192,6 +192,22 @@ describe('RunCommandsBase', () => {
             expect(result.elapsedTime).toBeGreaterThanOrEqual(250);
         });
 
+        it('clears the timeout timer when the command finishes before the timeout', async () => {
+            // Regression: the timer used to survive a normal exit, then fire later,
+            // log "TIMED OUT" and tree-kill a dead (possibly recycled) PID.
+            const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+            const result = await runner.runCommand({
+                command: 'true',
+                args: [],
+                workingDirectory: '/tmp',
+                when: 'test',
+                timeout: 60000,
+            });
+            expect(result.success).toBe(true);
+            expect(clearSpy).toHaveBeenCalled();
+            clearSpy.mockRestore();
+        });
+
         it('still fails a non-daemon command that times out', async () => {
             const result = await runner.runCommand({
                 command: 'sleep 5',

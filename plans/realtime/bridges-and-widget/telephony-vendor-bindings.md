@@ -6,17 +6,19 @@
 
 ---
 
-## Status (audited 2026-06-28)
+## Status (audited 2026-06-28; corrected 2026-10-03)
 
 | Phase | Status | Notes |
 |---|---|---|
 | T0 — media-plane spike | ✅ **Done** | G.711 + resample + loopback test in `ai-bridge-base`. Codec landed in `BaseTelephonyBridge`, not the native SDK (minor deviation from the T0 note's stated split — works fine). |
-| T1 — Twilio end-to-end | ✅ **Done + live-proven** | Real SDK, ingress (webhook + media WSS), `PlaceTwilioCall`, config, 76 unit tests + 1 gated integration test. Inbound + outbound verified live against Sage `+18669016546` (see TESTING.md). |
-| T2 — Vonage | 🟡 **Code-complete, not live-verified** | Real bindings + ingress + `PlaceVonageCall` + 82 unit tests. **Blocker:** needs one Vonage account to run a live call; no integration test file yet. |
-| T3 — RingCentral | 🟡 **Code-complete, not live-verified** | Real bindings + ingress + `PlaceRingCentralCall` + 75 unit tests. **Blocker:** needs one RingCentral account to run a live call; no integration test file yet. |
-| T4 — shared hardening | 🟡 **Partial** | Per-vendor signature verification ✅ + media-upgrade dispatcher ✅. **Not built:** webhook idempotency on carrier retries, max-concurrent-calls-per-identity, SessionJanitor reuse for stuck calls. |
+| T1 — Twilio end-to-end | 🟡 **Code-complete; live proof is stale** | Real SDK, ingress (webhook + media WSS), `PlaceTwilioCall`, config, unit tests + 1 gated integration test. Inbound + outbound were verified live against Sage `+18669016546` in **June 2026, on the old MJServer-hosted ingress**. The ingress moved to `@memberjunction/telephony-adapters` on 2026-09-12 and was hardened afterwards (PR 1, below); **no live call has been recorded on the current code.** Re-verify with [`LIVE-CALL-CHECKLIST.md`](./LIVE-CALL-CHECKLIST.md). |
+| T2 — Vonage | 🟡 **Code-complete, not live-verified** | Real bindings + ingress + `PlaceVonageCall` + unit tests. **Never verified live**, and before PR 1 **outbound calls had no audio** (the outbound NCCO's media URI carried no call identity, and the media router closed sockets without one). Fixed in PR 1 (correlation id + token), still unverified live. **Blocker:** needs one Vonage account. |
+| T3 — RingCentral | 🟡 **Code-complete, not live-verified** | SIP-softphone transport + `PlaceRingCentralCall` + unit tests. **Never verified live.** **Blocker:** needs one RingCentral account. |
+| T4 — shared hardening | 🟡 **Partial** | Per-vendor webhook signature verification ✅ + media-upgrade dispatcher ✅. **PR 1 (safety) added:** configured inbound run-as user (no System/Owner fallback), per-call media-socket tokens, an outbound gate (agent-run permission + destination prefixes + per-process rate limit), Twilio status callbacks + async AMD, Vonage terminal-event handling + machine detection, immediate webhook answers with background session start, and a per-call length cap (`telephony.maxCallSeconds`). **Not built:** webhook idempotency on carrier retries, max-concurrent-calls-per-identity, a shared (cross-process) rate limiter, SessionJanitor reuse for stuck calls. |
 
-**Net:** the proving track (Twilio) is live. Vonage/RingCentral are one vendor account each away from the same. T4 abuse/cost guardrails are the only genuine code gap and are tracked below.
+**Net:** Twilio is the proving track but has **not been exercised live since the ingress moved packages and was hardened**; Vonage/RingCentral have never run a live call. Run the checklist before relying on any of it. Remaining T4 items are the genuine code gaps and are tracked below.
+
+> **Where the ingress lives:** `@memberjunction/telephony-adapters` (`packages/TelephonyAdapters`) — server extensions mounted by MJServer when `telephony.enabled` and a vendor block are configured.
 
 ---
 
@@ -127,7 +129,7 @@ Three real deliverables per provider: **(A)** the native SDK implementation, **(
 - [x] Confirm whether server-bridged media plane (program README §6 / "P5") is required, or whether the native SDK owning the carrier WS is sufficient on its own. For telephony the **native SDK owns the carrier socket directly**, so P5 is NOT a hard blocker — but the bridge still needs the realtime session's `SendInput/OnOutput` wired (verify `AIBridgeEngine` does this for an attached telephony bridge). — _Confirmed: native SDK owns the carrier socket; transport seam wired by `AIBridgeEngine`._
 - [x] **Acceptance:** a written audio-format/data-flow note checked into this folder; a passing loopback test that pipes synthetic μ-law in → PCM16 out → back, asserting round-trip fidelity. — _`ai-bridge-base/__tests__/g711.test.ts` passes._
 
-### Phase T1 — Twilio end-to-end (the proving track) ✅ live-proven
+### Phase T1 — Twilio end-to-end (the proving track) 🟡 live proof predates the 2026-09-12 move + PR 1 hardening
 **(A) Native SDK** — implement `ITwilioClientBindings` over the real `twilio` npm SDK + Media Streams:
 - [x] Add `twilio` to `optionalDependencies` of `@memberjunction/ai-bridge-twilio`; run `npm install` at repo root.
 - [x] Implement a `RealTwilioBindings` class behind `BindTwilioNativeCall`'s module loader (or wire `twilio-native-call-sdk.ts`'s `NativeModuleSpecifier` to a real module). Map each `ITwilioClientBindings` method to REST/Media-Streams per §2. — _`real-twilio-bindings.ts` + `twilio-rest-client.ts`._
@@ -148,22 +150,22 @@ Three real deliverables per provider: **(A)** the native SDK implementation, **(
 - [x] **Integration (credential-gated, `describe.skipIf(!env)`):** with real Twilio test credentials + a test DID, place an outbound call to a test number that auto-answers and echoes; assert the agent connected, exchanged audio, and the call ended cleanly. Document required env vars in the package README. These are **not** run in CI. — _`real-twilio-bindings.integration.test.ts` (self-skips without creds)._
 - [x] **Manual runbook:** step-by-step to dial in to the DID and talk to the agent; mirror `../gemini-meeting-live-test-runbook.md` format. — _Captured in `TESTING.md` (Tier 1) rather than a separate runbook file._
 
-**Acceptance (T1):** a real inbound call to the test DID reaches the pinned agent and holds a two-way voice conversation; an outbound `PlaceCall` mutation rings a real phone and connects the agent; unit tests pass in CI; integration tests pass locally with credentials. — ✅ **MET.** Inbound + outbound both verified live against Sage `+18669016546`.
+**Acceptance (T1):** a real inbound call to the test DID reaches the pinned agent and holds a two-way voice conversation; an outbound `PlaceCall` mutation rings a real phone and connects the agent; unit tests pass in CI; integration tests pass locally with credentials. — ⚠️ **Met in June 2026 on the pre-move ingress; to be re-met on current code** via [`LIVE-CALL-CHECKLIST.md`](./LIVE-CALL-CHECKLIST.md). Unit tests pass in CI.
 
 ### Phase T2 — Vonage (repeat with deltas) 🟡 code-complete, not live-verified
 - [x] Same A/B/C/D as T1 against `IVonageClientBindings`. Deltas: Vonage uses **NCCO** (not TwiML), a **WebSocket `connect`** action for media, and the **Voice API** for `createCall`/`transferCall`. Endpoints: `POST /telephony/vonage/event` + `POST /telephony/vonage/answer` (returns NCCO) + `WSS /telephony/vonage/media`. Signature/JWT verification per Vonage. — _`real-vonage-bindings.ts` + service/router/registry + `PlaceVonageCall` + 82 unit tests._
 - [x] `optionalDependencies`: `@vonage/server-sdk`.
-- [ ] **Acceptance:** same as T1 for Vonage. — ⚠️ **BLOCKED on a Vonage account.** Code path mirrors live-proven Twilio; no live call placed and no integration test file yet. Live-verify per `TESTING.md` Tier 2.
+- [ ] **Acceptance:** same as T1 for Vonage. — ⚠️ **BLOCKED on a Vonage account.** Code path mirrors Twilio, but no live call has ever been placed and there is no integration test file. Live-verify per `TESTING.md` Tier 2.
 
 ### Phase T3 — RingCentral (repeat with deltas) 🟡 code-complete, not live-verified
 - [x] Same pattern against `IRingCentralClientBindings`. Deltas: RingCentral **Call Control API** + its media stream; OAuth (JWT/3-legged) for auth; session-based vocabulary (`createSession/answerSession/dropSession/transferSession`). Endpoints under `/telephony/ringcentral/*`. Webhook validation via RingCentral validation token. — _`real-ringcentral-bindings.ts` + service/router/registry + `PlaceRingCentralCall` + 75 unit tests._
 - [x] `optionalDependencies`: `@ringcentral/sdk`.
-- [ ] **Acceptance:** same as T1 for RingCentral. — ⚠️ **BLOCKED on a RingCentral account.** Code path mirrors live-proven Twilio; no live call placed and no integration test file yet. Live-verify per `TESTING.md` Tier 2.
+- [ ] **Acceptance:** same as T1 for RingCentral. — ⚠️ **BLOCKED on a RingCentral account.** No live call has ever been placed and there is no integration test file. Live-verify per `TESTING.md` Tier 2.
 
 ### Phase T4 — Shared hardening 🟡 partial
 - [ ] Common ingress middleware: signature verification, idempotency on retried webhooks, structured logging of call lifecycle. — _Signature verification ✅ (per-vendor) + structured lifecycle logging ✅. **Webhook idempotency on carrier retries: NOT built** — genuine gap._
-- [ ] Concurrency + cost guardrails (max concurrent calls per agent identity; reuse `SessionJanitor` for stuck calls). — ⚠️ **NOT built.** No per-identity concurrency cap; no SessionJanitor reuse for stuck telephony calls. Genuine gap before high-volume production.
-- [x] Observability: confirm each call produces an `AIAgentSession` + bridge + participant rows and a co-agent run (the engine already does this — verify with a real call). — _Verified for Twilio (live); Vonage/RingCentral inherit the same engine path, unverified live._
+- [ ] Concurrency + cost guardrails (max concurrent calls per agent identity; reuse `SessionJanitor` for stuck calls). — ⚠️ **Partly built (PR 1):** per-call length cap (`telephony.maxCallSeconds`), outbound destination policy and a per-user hourly limit (in-memory, **per process**). **Still NOT built:** per-identity concurrency cap, a shared rate limiter across instances, SessionJanitor reuse for stuck telephony calls. Genuine gaps before high-volume production.
+- [x] Observability: confirm each call produces an `AIAgentSession` + bridge + participant rows and a co-agent run (the engine already does this — verify with a real call). — _Verified for Twilio live in June 2026 (pre-move ingress); not re-verified on current code. Vonage/RingCentral inherit the same engine path, unverified live._
 - [x] Update `metadata/ai-bridge-providers/` rows if any `Configuration` schema is added. — _Rows seeded; Twilio/Vonage/RingCentral Active._
 
 ---
@@ -193,8 +195,8 @@ Three real deliverables per provider: **(A)** the native SDK implementation, **(
 
 ## 6. Definition of done
 
-- [ ] Twilio, Vonage, RingCentral each: real inbound call reaches the agent; outbound `PlaceCall` connects the agent; DTMF + transfer work. — _Twilio ✅; Vonage/RingCentral blocked on a vendor account each._
+- [ ] Twilio, Vonage, RingCentral each: real inbound call reaches the agent; outbound `PlaceCall` connects the agent; DTMF + transfer work. — _Twilio proven June 2026 on the pre-move ingress, needs re-verification; Vonage/RingCentral never run live, blocked on a vendor account each._
 - [ ] Native-binding + ingress unit tests pass in CI; integration tests pass locally with credentials; manual runbooks written. — _Unit tests ✅ all three; Twilio integration test present (gated); Vonage/RingCentral integration tests not yet written; runbook lives in `TESTING.md`._
 - [x] Credentials resolve via MJ config; vendor SDKs in `optionalDependencies`; no secrets in code.
-- [ ] Each call yields the expected session/bridge/participant/run records. — _Verified for Twilio; others inherit the path, unverified live._
+- [ ] Each call yields the expected session/bridge/participant/run records. — _Verified for Twilio in June 2026; others inherit the path, unverified live._
 - [x] Touched packages build (`npm run build`) and unit tests pass (`npm run test`).

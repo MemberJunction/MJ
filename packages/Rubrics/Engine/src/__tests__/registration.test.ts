@@ -9,6 +9,7 @@ import { BaseRubricEvaluator } from '../RubricEvaluator.js';
 import { DeterministicRubricEvaluator } from '../DeterministicRubricEvaluator.js';
 import '../LLMRubricEvaluator.js';
 import '../AgentRubricEvaluator.js';
+import '../DecisionRubricEvaluator.js';
 import '../HumanRubricEvaluator.js';
 import { RubricContentRegistry, ShapeContent } from '../content.js';
 import { RubricEngine } from '../RubricEngine.js';
@@ -18,7 +19,7 @@ describe('rubric registration', () => {
         const created = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRubricEvaluator>(BaseRubricEvaluator, 'Deterministic');
         expect(created).toBeInstanceOf(DeterministicRubricEvaluator);
         expect(created?.EvaluatorName).toBe('Deterministic');
-        for (const key of ['LLM', 'Agent', 'Human']) {
+        for (const key of ['LLM', 'Decision', 'Agent', 'Human']) {
             expect(MJGlobal.Instance.ClassFactory.CreateInstance(BaseRubricEvaluator, key)).toBeTruthy();
         }
     });

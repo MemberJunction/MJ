@@ -1,5 +1,5 @@
 import '@memberjunction/ai-agents';
-import { RubricCommands as RubricCatalog } from '@memberjunction/rubrics';
+import { RubricCommands as RubricCatalog, type RubricEvaluatorSettings } from '@memberjunction/rubrics';
 import { CloseMJProvider, GetContextUser, GetMJProvider, InitializeMJProvider } from '../lib/mj-provider';
 
 /** Opens the provider, runs the command in `@memberjunction/rubrics`, and closes the provider. */
@@ -35,10 +35,10 @@ export class RubricCommands {
         RubricCatalog.Validate(file);
     }
 
-    public async Evaluate(ref: string, entity: string, record: string, evaluator: string | undefined): Promise<void> {
+    public async Evaluate(ref: string, entity: string, record: string, evaluator: string | undefined, settings: RubricEvaluatorSettings = {}): Promise<void> {
         try {
             const catalog = await this.catalog();
-            await catalog.Evaluate(ref, entity, record, evaluator);
+            await catalog.Evaluate(ref, entity, record, evaluator, settings);
         } finally {
             await CloseMJProvider();
         }

@@ -17,6 +17,7 @@ import { AnLLMModelID, LoadMediaCatalog, USAGE_TYPE } from './__fixtures__/media
 import type { MediaCatalogSpec } from './__fixtures__/media-runner.catalog';
 import { AITextToSpeechRunner } from '../audio/AITextToSpeechRunner';
 import type { AITextToSpeechRunParams } from '../audio/audio-runner.types';
+import type { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 // ---------------------------------------------------------------------------
 // Mocks: the engine, the default provider, keys and credentials all come from the shared harness.
@@ -221,6 +222,22 @@ describe('AITextToSpeechRunner', () => {
 
   it('requires TTS models', () => {
     expect(runner.RequiredModelType).toBe('TTS');
+  });
+
+  it('passes CredentialScope through to the base runner params (BaseMediaRunner.buildPromptParams)', () => {
+    // Dropped here, a RuntimeOnly media run would gate and resolve credentials as 'Any' and spend platform keys.
+    const prompt = { ID: PROMPT_ID, Name: 'Default Text To Speech' } as unknown as MJAIPromptEntityExtended;
+    const build = (runner as unknown as {
+      buildPromptParams(params: AITextToSpeechRunParams, prompt: MJAIPromptEntityExtended): AIPromptParams;
+    }).buildPromptParams.bind(runner);
+    const apiKeys = [{ driverClass: DRIVER_A, apiKey: 'caller-key' }];
+
+    const scoped = build(speechParams({ APIKeys: apiKeys, CredentialScope: 'RuntimeOnly' }), prompt);
+    expect(scoped.CredentialScope).toBe('RuntimeOnly');
+    expect(scoped.apiKeys).toBe(apiKeys);
+    expect(scoped.prompt).toBe(prompt);
+
+    expect(build(speechParams(), prompt).CredentialScope).toBeUndefined();
   });
 
   describe('a successful call', () => {

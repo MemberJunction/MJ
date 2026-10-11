@@ -57,6 +57,17 @@ RUN pnpm install
 # Remove build tools to reduce image size
 RUN apt-get purge -y build-essential && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
+# Headless Chromium for server-side rendering (Create Mermaid Diagram); without it that action
+# returns BROWSER_UNAVAILABLE. Installed through the playwright-core the workspace resolved, so the
+# browser revision is the one Playwright launches. Adds ~650 MB; build with
+# --build-arg INSTALL_CHROMIUM=false to leave it out.
+ARG INSTALL_CHROMIUM=true
+RUN if [ "$INSTALL_CHROMIUM" = "true" ]; then \
+      for cli in node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/cli.js; do \
+        [ -e "$cli" ] || continue; node "$cli" install --with-deps --only-shell chromium; \
+      done && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 # Copy necessary files and directories for the build
 COPY packages/GeneratedActions ./packages/GeneratedActions/
 COPY packages/GeneratedEntities ./packages/GeneratedEntities/

@@ -85,7 +85,7 @@ function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof ParseQuer
     const allDeterministicParams = MergePassthroughParams(parseResult.DeterministicParams, passthroughParams);
 
     // Entity metadata (for LLM context and entity sync)
-    const entityMetadata = ExtractEntityMetadataFromSQL(ctx.sql, parseResult.TableRefs, md);
+    const entityMetadata = ExtractEntityMetadataFromSQL(ctx.sql, parseResult.TableRefs, md, ctx.platform);
 
     // Field resolution: try SELECT * expansion first (uses entity metadata), fall back to explicit SELECT columns
     const resolvedFields = BuildFieldsForSelectStar(ctx.sql, parseResult.TableRefs, parseResult.SelectColumns, md)

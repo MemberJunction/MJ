@@ -109,11 +109,42 @@ widget: {
 // Gate on ANY configured vendor so one block can carry several.
 telephony: {
   enabled: !!(process.env.TWILIO_ACCOUNT_SID || process.env.VONAGE_APPLICATION_ID || process.env.RINGCENTRAL_SIP_USERNAME),
+
+  // REQUIRED for inbound calls (all carriers). The user inbound calls run as — see "Inbound run-as user" below.
+  // Point it at a DEDICATED, LEAST-PRIVILEGE account. There is no fallback: unset / unknown / inactive / the
+  // system user ⇒ every inbound call is rejected with a polite message and a logged error.
+  inboundRunAsUserEmail: process.env.TELEPHONY_INBOUND_RUN_AS_USER_EMAIL || undefined,
+  // Hard cap on one call's length, in seconds (default 1800 = 30 min). The session is stopped at the cap.
+  maxCallSeconds: 1800,
+  // Most calls (all carriers, both directions) carried at once (default 25). Set it at or BELOW the realtime
+  // model plan's concurrent-session limit — see "Concurrency cap, caller identity and call recovery" below.
+  maxConcurrentCalls: 25,
+  // Where the agent may transfer a live call, BY NAME — see "Transfer directory" below. Empty/absent ⇒ the agent
+  // cannot transfer at all, even on a carrier that supports it.
+  transferTargets: [
+    // { name: 'Front desk', number: '+14155550100', description: 'general enquiries and anything the agent cannot answer' },
+  ],
+  // Outbound (`Place*Call`) policy — defaults shown. Applies on top of the caller's right to run the agent.
+  outbound: {
+    allowedPrefixes: ['+1'],               // E.164 prefixes a call may go to; [] refuses everything
+    // Always refused, even if an allowed prefix matches. OMIT this to get the built-in list (shown): NANP
+    // premium-rate +1900/+1976 plus the Caribbean +1 countries abused for toll fraud. Setting it REPLACES the list.
+    blockedPrefixes: [
+      '+1900', '+1976',
+      '+1242', '+1246', '+1264', '+1268', '+1284', '+1345', '+1441', '+1473', '+1649', '+1658',
+      '+1664', '+1721', '+1758', '+1767', '+1784', '+1809', '+1829', '+1849', '+1868', '+1869', '+1876',
+    ],
+    maxCallsPerUserPerHour: 20,            // in-memory sliding window — PER PROCESS (N instances ⇒ N× the limit)
+  },
+
   twilio: process.env.TWILIO_ACCOUNT_SID ? {
     accountSid: process.env.TWILIO_ACCOUNT_SID,
     authToken: process.env.TWILIO_AUTH_TOKEN,         // also the HMAC key for webhook signature verify
     streamPublicUrl: process.env.TWILIO_STREAM_PUBLIC_URL, // wss://<public-host>/telephony/twilio/media
-    webhookSigningSecret: process.env.TWILIO_WEBHOOK_SIGNING_SECRET || undefined,
+    webhookSigningSecret: process.env.TWILIO_WEBHOOK_SIGNING_SECRET || undefined, // reserved — currently unused (see below)
+    // onMachine: 'hangup' (default) | 'continue' — what to do when answering-machine detection says a machine
+    // or fax answered an OUTBOUND call. 'hangup' ends the session; 'continue' only logs the verdict.
+    // statusCallbackUrl / amdStatusCallbackUrl default to <MJAPI_PUBLIC_URL>/telephony/twilio/{status,amd}.
   } : undefined,
 
   // Vonage — Voice API auth is application-scoped (Application ID + RSA private key → signed JWTs).
@@ -130,7 +161,8 @@ telephony: {
     apiSecret: process.env.VONAGE_API_SECRET || undefined,
     signatureSecret: process.env.VONAGE_SIGNATURE_SECRET || process.env.VONAGE_API_SECRET || undefined,
     mediaPublicUrl: process.env.VONAGE_MEDIA_PUBLIC_URL, // wss://<public-host>/telephony/vonage/media
-    eventUrl: process.env.VONAGE_EVENT_URL || undefined,
+    eventUrl: process.env.VONAGE_EVENT_URL || undefined, // defaults to <MJAPI_PUBLIC_URL>/telephony/vonage/event
+    // onMachine: 'hangup' (default) | 'continue' — Vonage's machine_detection for OUTBOUND calls.
   } : undefined,
 
   // RingCentral — SIP softphone (the ONLY RingCentral transport that carries bidirectional call audio;
@@ -149,6 +181,75 @@ telephony: {
 },
 ```
 
+### Outbound toll fraud: block Caribbean +1 and enable carrier geographic permissions
+
+`+1` is not just the US and Canada: the North American Numbering Plan also covers Jamaica, the Dominican Republic,
+the Bahamas and other Caribbean countries whose numbers are billed at international rates and are the classic
+destinations of toll-fraud (IRSF) schemes. The built-in `blockedPrefixes` therefore refuse those area codes while
+leaving US territories (Puerto Rico, USVI, Guam, ...) allowed. Operators can override the list with
+`telephony.outbound.blockedPrefixes` (the override replaces the built-in list entirely). This is a second line of
+defence: also **enable geographic permissions in the carrier console** (Twilio Voice Geographic Permissions /
+Vonage geo-permissions) and allow only the countries you actually call.
+
+### Inbound run-as user (required) and what protects the telephony endpoints
+
+A phone caller is anonymous — there is no MJ session to inherit a user from — yet the call still needs a
+principal to create its agent session and run the agent. Earlier builds fell back to the **system user** (or the
+first Owner), so every stranger who dialed a number ran an agent with the platform's highest privileges. There is
+**no such fallback any more**: inbound calls run as the user named by `telephony.inboundRunAsUserEmail`.
+
+- Create a **dedicated, least-privilege** user (not the system user, not an Owner) with only what the pinned
+  agents need, and put its email in `TELEPHONY_INBOUND_RUN_AS_USER_EMAIL`.
+- If it is unset, matches no user, names an inactive user, or names the system user, the call is **rejected**
+  (Twilio: a short spoken apology + hang-up; Vonage: a `talk` NCCO; RingCentral: the SIP INVITE is declined) and
+  an error naming the dialed number is logged. After upgrading, inbound calls stop working until this is set.
+- An **Owner** is allowed but logs a startup-time warning (once per process): every anonymous caller would run agents
+  with Owner privileges. Use a dedicated least-privilege user instead.
+
+The carrier media websockets are authenticated per call. MJ mints a random token when it accepts or places a call
+and embeds it in the TwiML `<Parameter name="mjToken">` (Twilio) or the websocket URI `mj_token` (Vonage); a socket
+that names an unknown call, presents the wrong/no token, or targets a call that already has a socket is closed and
+logged. `webhookSigningSecret` is **reserved and currently unused** — the voice/status webhooks are authenticated by
+`X-Twilio-Signature` / the Vonage signed-webhook JWT, and the media sockets by the per-call token.
+
+### Concurrency cap, caller identity and call recovery
+
+- **`telephony.maxConcurrentCalls` (default 25)** caps simultaneous calls across every carrier and both directions.
+  Every call holds a live realtime-model session and the model plan has its own concurrent-session limit; past it
+  calls fail or degrade for everyone, not just the newest. **Set the cap at or below that limit.** Over the cap an
+  inbound caller hears "all of our agents are busy right now" (Twilio/Vonage answer, RingCentral declines the INVITE)
+  and `Place*Call` is refused with a clear error (`at-capacity`) without spending the caller's hourly outbound
+  budget. There is no queue yet — a refusal is the whole answer. The slot frees when the call's session ends or
+  fails to start. The cap is per process (N instances ⇒ N× the cap).
+- **Transfer directory (`telephony.transferTargets`).** The `transfer_call` tool takes the NAME of an entry here,
+  never a number. A free-form destination — even one inside `telephony.outbound.allowedPrefixes` — would let any
+  unverified caller say "transfer me to +1…" and get free call forwarding to any US/Canada number at your expense.
+  Each entry is `{ name, number, description? }`; the model sees the names and descriptions (not the numbers) and
+  the tool's schema enumerates the names. At startup every number is checked with the same E.164 and allow/block
+  rules as an outbound dial, and an invalid, duplicate or nameless entry is **dropped and logged**. The number is
+  checked again when a transfer runs. **With no entries the tool is not offered and the agent is not told it can
+  transfer.** Entries may also name a person (`kind: 'user'`) or another agent (`kind: 'agent'`); those work only for calls
+  that arrive in a LiveKit room (§6c "Transfer target kinds"). Queues and routing strategies come later and extend this directory.
+- **Barge-in and cancelling work.** When the caller talks over the agent, queued spoken progress is dropped but
+  delegated work **keeps running** — the same policy as the browser (the user keeps talking while work runs, and
+  backchannels like "mm-hm" are common). A phone has no per-job cancel button, so the agent has a
+  `cancel_pending_work` tool, used only when the caller says never mind / stop that / cancel.
+- **Caller identity.** The agent is told the caller's number and that it is an **unverified** caller ID. To say
+  more (a name, membership status), register a subclass of `BaseCallerIdentityResolver`
+  (`@memberjunction/telephony-adapters`) with `@RegisterClass(BaseCallerIdentityResolver, 'TelephonyCallerIdentity')`
+  in your own package; it replaces the default for the process. MJ core knows nothing about contacts or CRMs, so
+  this is the only seam. Return `Verified: true` only when the caller was verified some other way — a caller-ID
+  match alone is not verification. A resolver that throws is logged and the caller is treated as anonymous.
+- **Model-connection drops.** If the realtime model's connection drops mid-call the engine reopens it **once**,
+  carrying the conversation so far. If that also fails the caller hears a short apology at the carrier (Twilio
+  `<Say>`+`<Hangup>`, Vonage `talk`; RingCentral has no server-side speech and just hangs up) and the call ends.
+- **Orphans.** At startup, and every 10 minutes after, bridge rows left `Connected` by a previous boot of the same
+  host are closed as `Janitor`. Live calls heartbeat their agent session every 5 minutes so the host session
+  janitor (15 minute idle cutoff) does not close a long call mid-conversation.
+- **RingCentral health.** `HealthCheck` reports unhealthy when SIP registration failed or has been pending for over
+  a minute, with the reason in `Details` (`registration`, `reason`). Previously it reported healthy whenever the
+  service object existed, even if registration had failed.
+
 The widget **reuses the magic-link RS256 key + auth provider**, initialized idempotently inside
 `createWidgetHandler` even when `magicLink.enabled` is `false`. So the widget stands on its own — you
 do NOT need to enable magic-link unless you want the guest→verified **upgrade** path (then set
@@ -166,7 +267,8 @@ signing secret or public URL (it needs no ngrok). See §6b for where the five SI
 | `AI_VENDOR_API_KEY__OpenAIRealtime` | **voice (widget + telephony)** | **driverClass-specific** — the realtime driver is `OpenAIRealtime`, NOT `OpenAILLM`. A key under the wrong name → "no usable Realtime model". |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | Twilio | live = billable; test creds only work with magic numbers |
 | `TWILIO_STREAM_PUBLIC_URL` | Twilio media | `wss://<ngrok-host>/telephony/twilio/media` |
-| `MJAPI_PUBLIC_URL` | Twilio/Vonage inbound | MUST match the ngrok host — the inbound webhook signature is verified against the full public URL |
+| `TELEPHONY_INBOUND_RUN_AS_USER_EMAIL` | **all carriers (inbound)** | **REQUIRED** — email of the dedicated least-privilege user inbound calls run as. Unset ⇒ inbound calls are rejected (no System/Owner fallback). Feeds `telephony.inboundRunAsUserEmail`. |
+| `MJAPI_PUBLIC_URL` | Twilio/Vonage | MUST match the ngrok host — Twilio webhook signatures are verified against this URL's **origin** (scheme + host + port) plus the request path; any path on it (e.g. `/graphql`) is ignored, since extension routes mount at the app root — **and** the outbound status / AMD / event callback URLs are derived from it |
 | `TWILIO_TEST_ACCOUNT_SID` / `_AUTH_TOKEN` / `_FROM` / `_TO` | the credential-gated integration test | absent → test self-skips |
 | `VONAGE_APPLICATION_ID` | Vonage | the Voice app UUID — also the `enabled` gate for the Vonage block |
 | `VONAGE_PRIVATE_KEY_PATH` | Vonage | absolute path to the app's `private.key` (PEM). Read into config at boot — keeps the multi-line key out of `.env`. (`VONAGE_PRIVATE_KEY` with the inline PEM is the fallback.) |
@@ -188,6 +290,10 @@ signing secret or public URL (it needs no ngrok). See §6b for where the five SI
    `MJAPI_PUBLIC_URL` and the `wss://…/telephony/twilio/media` in `TWILIO_STREAM_PUBLIC_URL`. **These
    cycle** every ngrok restart — re-point all three (env + the Twilio number's webhook).
 2. **Twilio number** → set its Voice webhook to `https://<public-host>/telephony/twilio/voice` (POST).
+   Outbound calls need nothing in the console: MJ passes the status callback (`…/telephony/twilio/status`) and the
+   async answering-machine callback (`…/telephony/twilio/amd`) on each `calls.create`. Optionally also set the
+   number's **Status Callback URL** to `…/telephony/twilio/status` so an INBOUND call that ends before its media
+   socket connects still ends its session (a connected call ends on the stream `stop` frame regardless).
 3. **OpenAI Realtime** API key under the env name in §5.
 
 The widget needs none of this — it's same-origin-to-MJAPI over normal HTTPS.
@@ -199,7 +305,9 @@ Same ngrok in §6.1 applies (point it at MJAPI's port). Then:
 1. **Create a Voice application** — Dashboard → Applications → *Create*, enable **Voice**. Set:
    - **Answer URL** → `https://<public-host>/telephony/vonage/answer`, **method POST** (Vonage defaults
      answer to GET — you MUST switch it to POST or the ingress 404s the GET).
-   - **Event URL** → `https://<public-host>/telephony/vonage/event`, **method POST**.
+   - **Event URL** → `https://<public-host>/telephony/vonage/event`, **method POST**. MJ ends a call's session on
+     a terminal event here (busy / failed / rejected / timeout / cancelled / unanswered / completed) — an
+     unanswered outbound call never opens a media socket, so this is what stops it.
 
    This yields the **Application ID** and a one-time **`private.key`** download → save it and point
    `VONAGE_PRIVATE_KEY_PATH` at it. (Scriptable instead of the dashboard: `POST
@@ -258,6 +366,124 @@ provisioning. **Note:** `sip-provision` is the *wrong* endpoint (that's the brow
 > ③ The **"VoIP Calling" scope** sometimes isn't selectable and needs a RingCentral **support ticket** —
 > only relevant for the API route; the console-manual route sidesteps it. ④ Default codec is `OPUS/16000`
 > (wideband 16 kHz); the bridge sets its carrier sample rate to match automatically.
+
+### 6c. Phone calls into LiveKit rooms, and bringing a person in (LiveKit SIP + Twilio Elastic SIP trunk)
+
+> **Status (PR 3): not exercised against a real LiveKit SIP project or a real Twilio trunk.** Everything here is
+> built and unit-tested against fakes. The LiveKit SIP API details and the Twilio trunk settings below were written
+> from documentation; confirm them with `LIVE-CALL-CHECKLIST.md` rows 22-29.
+
+**What it is.** Every conversation lives in a LiveKit room. A phone call is just another participant: the carrier's SIP trunk
+hands the call to LiveKit SIP, LiveKit places the caller in a room named `call-<...>`, and MJ starts the agent in that room the same
+way it does for a web room. Because the call is in a room, the agent can bring a person (or another agent) into the *same* room
+instead of forwarding the call. Routing lives in MJ; the carrier sits behind a narrow interface (`ISipTrunkCarrier`), and nothing
+here is model-native SIP. This runs **alongside** the Twilio / Vonage / RingCentral media-stream bridges; it does not replace them.
+
+**1. LiveKit.** Use LiveKit Cloud, or a self-hosted LiveKit with the SIP service enabled. The same credentials the Meet room uses
+(`LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`) are used here.
+
+**2. Twilio Elastic SIP Trunk** (Voice > Manage > Elastic SIP Trunking), one trunk for both directions:
+
+| Setting | Value |
+|---|---|
+| Origination > Origination SIP URI | your LiveKit SIP endpoint, e.g. `sip:<project>.sip.livekit.cloud` (priority 1, weight 1). Calls from the phone network are sent here. |
+| Numbers | associate every number the deployment answers with the trunk |
+| Termination > Termination SIP URI | `<name>.pstn.twilio.com` (or the regional form). **Needed only to dial out.** |
+| Termination > Authentication | a credential list (LiveKit presents it) **or** an IP access control list containing LiveKit's egress addresses |
+
+**3. LiveKit trunks.** Either create them yourself in the LiveKit dashboard (an **inbound** trunk for the same numbers, and an
+**outbound** trunk that uses the Twilio termination URI and credentials) and put the ids in config, or set `autoProvision: true` and let
+MJ create the inbound trunk and an `individual` dispatch rule (one new room per caller, prefix `call-`) at startup. Provisioning is
+idempotent: it lists first and creates only what is missing. The **outbound** trunk is never created for you (it needs your carrier
+credentials); without `outboundTrunkId`, dialing out (an outbound call, a fallback leg, a transfer to a number) is off.
+
+**4. LiveKit project webhook.** Point a LiveKit project webhook at `https://<public-host>/telephony/livekit-sip/webhook`. MJ verifies
+the signature with the API secret (a bad or missing signature is a 401). The webhook is how MJ learns that a SIP participant joined a room.
+
+**5. Config** (`mj.config.cjs`, inside `telephony`):
+
+```js
+telephony: {
+  enabled: true,
+  inboundRunAsUserEmail: process.env.TELEPHONY_INBOUND_RUN_AS_USER_EMAIL,   // the same required run-as user as the other carriers
+  maxConcurrentCalls: 25, maxCallSeconds: 1800,                              // shared with every carrier
+
+  livekitSip: {
+    // serverUrl / apiKey / apiSecret default to LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET
+    roomPrefix: 'call-',                       // rooms whose name does not start with this are not phone calls
+    numbers: ['+14155550100'],                 // numbers this deployment answers; each routes to the agent identity registered for it
+    autoProvision: true,                       // create the inbound trunk + dispatch rule if missing (or set inboundTrunkId)
+    allowedAddresses: ['54.172.60.0/30'],      // the carrier's SIP signalling addresses (used when provisioning)
+    outboundTrunkId: 'ST_xxxx',                // LiveKit OUTBOUND trunk; dialing out is off without it
+    outboundFromNumber: '+14155550100',
+    carrier: {                                 // configuration checks only; no Twilio API is called
+      type: 'twilio-elastic-sip',
+      originationUri: 'sip:myproject.sip.livekit.cloud',
+      terminationUri: 'mytrunk.pstn.twilio.com',
+      terminationAuth: 'credential-list',
+      numbers: ['+14155550100'],
+    },
+  },
+
+  transferTargets: [ /* see "Transfer target kinds" below */ ],
+}
+```
+
+**6. Agent identity per number.** Register each answered number as an `MJ: AI Bridge Agent Identities` row on the **`LiveKitBridge`**
+provider (the same shape as the Twilio identity rows: `IdentityValue` is the E.164 number, plus the agent). An inbound call is hung up
+(the LiveKit SIP path cannot speak a refusal first) when its number has no identity row, when the capacity cap is reached, or when no
+run-as user is configured.
+
+**Outbound.** `PlaceLiveKitSipCall` (GraphQL mutation) goes through the same outbound gate as the other carriers
+(`telephony.outbound` allowed/blocked prefixes, the caller's right to run the agent, the hourly limit, the concurrency cap).
+Answering-machine detection is not available on this path.
+
+#### Transfer target kinds
+
+`telephony.transferTargets` is the **only** place the agent may send a conversation, and it names targets by name (the model sees the
+names and descriptions, never a number or an email). There are three kinds, validated at startup (an invalid, duplicate or nameless
+entry is dropped and logged); a number is re-validated when a transfer runs. The directory is shared by every carrier, but a call that
+arrived on a Twilio / Vonage / RingCentral media stream can only use `number` targets (it is not in a room); a call in a LiveKit room can
+use all three.
+
+```js
+transferTargets: [
+  // number: a phone number. On a carrier call this is the carrier's transfer; in a room it is a SIP dial-out (needs outboundTrunkId).
+  { name: 'Front desk', number: '+14155550100', description: 'general enquiries' },
+
+  // user: offer the conversation to a person at an Explorer console (warm transfer to a human).
+  { name: 'Duty manager', kind: 'user', userEmail: 'manager@example.com', description: 'complaints and escalations',
+    fallbackNumber: '+14155550111' },            // optional: dialed into the room if the person declines or does not answer
+
+  // agent: hand over to another AI agent, with a short brief.
+  { name: 'Billing', kind: 'agent', agentName: 'Billing Specialist', description: 'invoices and payments' },
+],
+```
+
+- **Warm transfer to a person (`user`).** The agent asks to transfer; MJ creates an **offer** for that user and tells them two ways: a
+  live push to their open Explorer (the **Conversation Console**) and a notification (the existing "Live Room Invite" type, routed to
+  the console). The person accepts in the console, which joins them to the **same room**; the agent gives the person a one- or
+  two-sentence brief, then leaves. The caller never changes line.
+- **Decline or timeout.** The offer lasts 45 seconds. If the person declines or does not answer, MJ dials `fallbackNumber` into the room
+  by SIP (the person's phone) when one is configured and the outbound trunk is set; otherwise the agent is told nobody is available and
+  carries on with the caller.
+- **Blind transfer.** The same, but the agent does not brief: it leaves as soon as the person is in the room. (The agent chooses `warm`
+  or `blind` per transfer.)
+- **AI-to-AI (`agent`).** The second agent joins the same room with a short brief on the conversation so far; the first agent then
+  leaves. The target must name an active agent.
+- **What this is not.** There are no queues, routing strategies or business hours here; those come later as an Open App that
+  extends the directory. Offers are backed durably by `MJ: Interaction Offers` with cluster pub/sub fan-out across instances
+  and compare-and-set status resolution on accept/decline.
+- **Who can see an offer.** Only its target user: listing, accepting, declining and the live subscription are all scoped to the
+  signed-in user, and a stranger's attempt answers exactly like a missing offer.
+
+#### Web escalation
+
+A web visitor is already in a LiveKit room, so the same handoff works for them with no phone involved. Start the agent with
+`EnableHandoff` (the `mj-livekit-agent-room` component has an `EnableHandoff` input; the `StartLiveKitAgentRoomSession` mutation has the
+matching field) and the agent gets the same transfer tools: a `user` target is offered the conversation in the console and joins the
+visitor's room. Without `EnableHandoff` nothing changes. Note that any signed-in user can already mint a token for any room name
+(`MintLiveKitClientToken`); handoff does not widen that.
 
 ---
 
@@ -327,6 +553,15 @@ The things that cost real time during bring-up — each is now either fixed in c
 | **Vonage: can't buy a number (`number/buy` 401)** | free-trial accounts get one number but can't provision more via API, and only interact with verified numbers | use the trial number; verify your cell as a test number; test inbound, not outbound (§6a trial note) |
 | Twilio **31920** / WS upgrade **400** | two `WebSocketServer({server})` (GraphQL + media) fight over the HTTP `upgrade` event in ws 8.x | fixed in code — single path-routing upgrade dispatcher + `noServer:true` |
 | Audio **deep / slowed down** | model PCM is 24 kHz, Twilio Media Streams are 8 kHz μ-law — played at the wrong rate | fixed in code — `BaseTelephonyBridge` resamples both legs |
+| **Inbound call: "unable to take your call right now"**, log says `inboundRunAsUserEmail … not configured / does not match any user / inactive / is the system user` | `telephony.inboundRunAsUserEmail` is unset or unusable — inbound calls are deliberately refused rather than run as a privileged user | create a dedicated least-privilege user and set `TELEPHONY_INBOUND_RUN_AS_USER_EMAIL` (§4) |
+| Media socket closed immediately; log says `refusing media socket … unknown-call / bad-token / already-attached` | the socket named a call MJ never registered, presented the wrong/no per-call token, or the call already has a socket | expected for scanners/replays. For a real call it means the carrier is not echoing the token: check the TwiML `<Parameter name="mjToken">` (Twilio) / the websocket URI query (Vonage) reaches the carrier unmodified |
+| Inbound caller hears "all of our agents are busy" / `Place*Call` says "All agent lines are busy" (`at-capacity`) | `telephony.maxConcurrentCalls` reached | expected under load; raise the cap only if the realtime model plan's concurrent-session limit allows it (§4) |
+| RingCentral extension reports **unhealthy**, `Details.registration` is `failed` / `pending` | SIP registration failed (bad credentials/proxy) or is stuck; `Start()` only logs the failure | read `Details.reason` and the `[Telephony][RingCentral] softphone start failed` log line; fix the SIP values (§6b) and restart |
+| `PlaceTwilioCall` etc. returns "outside the allowed calling ranges" / "blocked range" / "limit reached" / "permission to run this agent" | the outbound gate refused the call | adjust `telephony.outbound` (§4) or the caller's agent run permission; every refusal is logged with the masked destination |
+| LiveKit SIP: the caller hears ringing, then the call drops with no agent | the answered number has no `MJ: AI Bridge Agent Identities` row on the `LiveKitBridge` provider, the capacity cap is reached, or no run-as user is set | the LiveKit SIP path can only hang up (no spoken apology); read the `[Telephony][LiveKitSip] inbound call in <room> ...` log line for the reason (§6c) |
+| LiveKit webhook returns **401** | the project webhook is signed with a different API key/secret than `telephony.livekitSip` uses | use the same key pair for the webhook and the config (§6c step 4) |
+| Handoff to a person: nothing appears in the console | the person's Explorer user does not match the target user, or the offer expired (45s TTL) | verify the target user ID and check `MJ: Interaction Offers` in the database (§6c) |
+| A fallback leg or a transfer to a number does nothing in a room | `telephony.livekitSip.outboundTrunkId` is not set, or the LiveKit outbound trunk's Twilio termination credentials are wrong | create the outbound trunk and set the id (§6c step 3) |
 | Outbound rejected, Twilio **21210** | caller-ID (the agent identity's number) isn't provisioned on the Twilio account | use a number you own on the account as the agent identity's `IdentityValue` |
 | entity-permissions push fails on `@lookup …RLS Filters` | pushed before the RLS-filter migration ran | migrate first, then push metadata (§2 ordering) |
 | Guest tokens won't validate | `widget.audience` ≠ `magicLink.audience` | keep both `mj-magic-link` (§4) |

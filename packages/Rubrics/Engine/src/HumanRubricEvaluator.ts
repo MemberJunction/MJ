@@ -1,5 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseRubricEvaluator } from './RubricEvaluator.js';
+import type { RubricEvaluatorRun, RubricEvaluatorType } from './evaluatorServices.js';
 
 export interface DraftEvaluationInput {
     versionId: string;
@@ -29,13 +30,24 @@ export class HumanRubricEvaluator extends BaseRubricEvaluator {
     public get EvaluatorName(): string {
         return 'Human';
     }
-    private readonly evaluations: EvaluationDraftStore;
-    private readonly tasks: RubricTaskStore;
 
-    public constructor(evaluations: EvaluationDraftStore, tasks: RubricTaskStore) {
+    public get EvaluatorType(): RubricEvaluatorType {
+        return 'Human';
+    }
+
+    /** A person completes this evaluation, so the engine never runs it. */
+    public override get IsAutomated(): boolean {
+        return false;
+    }
+
+    /** Always throws. Use {@link Start}, or submit the answers with Submit Human Rubric. */
+    public async EvaluateRubric(): Promise<RubricEvaluatorRun> {
+        throw new Error('A human evaluation is started and then submitted by a person. The engine does not run it.');
+    }
+
+    /** The class factory passes no stores. {@link Start} needs both. */
+    public constructor(private readonly evaluations?: EvaluationDraftStore, private readonly tasks?: RubricTaskStore) {
         super();
-        this.evaluations = evaluations;
-        this.tasks = tasks;
     }
 
     /**
@@ -43,6 +55,7 @@ export class HumanRubricEvaluator extends BaseRubricEvaluator {
      * names the rubric so the assignee can find it.
      */
     public async Start(input: DraftEvaluationInput & { rubricName: string }): Promise<{ evaluationId: string; taskId: string }> {
+        if (!this.evaluations || !this.tasks) throw new Error('Starting a human evaluation requires a draft store and a task store.');
         const draft = await this.evaluations.createDraft(input);
         const task = await this.tasks.create({
             assigneeId: input.assigneeId,

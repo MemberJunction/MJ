@@ -7,6 +7,7 @@ import { DraftTitle, NodesFromDescription, NodesFromMatrix } from './architect.j
 import type { RubricSubjectContent } from './content.js';
 import { ProviderRubricEngine, SubmitHumanEvaluation, type HumanScoreAnswer } from './providerRecords.js';
 import type { ConsensusResult } from './statistics.js';
+import { ListRubricEvaluators, NormalizeRubricEvaluatorName } from './evaluatorRegistry.js';
 
 /**
  * The engine for this run. A caller may pass one on the context. Otherwise the
@@ -50,13 +51,16 @@ function nodeInput(params: RunActionParams): RubricNodeSnapshot[] {
     return parsed as RubricNodeSnapshot[];
 }
 
-const EVALUATORS = new Set(['LLM', 'Deterministic']);
-
-function evaluatorInput(params: RunActionParams): 'LLM' | 'Deterministic' | undefined {
+/**
+ * The Evaluator input as a registered evaluator name. Any evaluator the engine can run is accepted,
+ * including a custom one. Human is not, because a person completes it.
+ */
+function evaluatorInput(params: RunActionParams): string | undefined {
     const value = textValue(params, 'Evaluator');
     if (value === undefined) return undefined;
-    if (!EVALUATORS.has(value)) throw new Error(`Evaluator ${value} is not accepted.`);
-    return value as 'LLM' | 'Deterministic';
+    const known = ListRubricEvaluators().find(item => item.Name.toLowerCase() === NormalizeRubricEvaluatorName(value).toLowerCase());
+    if (!known || !known.IsAutomated) throw new Error(`Evaluator ${value} is not accepted.`);
+    return known.Name;
 }
 
 function passThresholdInput(params: RunActionParams): number | null {

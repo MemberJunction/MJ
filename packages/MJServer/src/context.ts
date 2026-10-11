@@ -10,7 +10,8 @@ import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { AuthCache } from './cache.js';
-import { userEmailMap, apiKey, mj_core_schema } from './config.js';
+import { userEmailMap, apiKey, mj_core_schema, configInfo } from './config.js';
+import { BuildPostgreSQLConnectionConfig, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials } from './postgresqlPoolSettings.js';
 import { BuildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, UserPayload } from './types.js';
@@ -831,15 +832,10 @@ async function createPerRequestProviders(
  */
 async function createPostgresProvider(): Promise<DatabaseProviderBase> {
   const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
-  const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
-  const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
-  const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
-  const pgPass = process.env.PG_PASSWORD || process.env.DB_PASSWORD || '';
-  const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
 
   const pgProvider = new PostgreSQLDataProvider();
   const pgConfig = new PostgreSQLProviderConfigData(
-    { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgUser, Password: pgPass },
+    BuildPostgreSQLConnectionConfig(ResolvePostgreSQLEndpoint(), configInfo.databaseSettings, 'api'),
     mj_core_schema,
     0,
     undefined,
@@ -859,39 +855,30 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
 }
 
 /**
- * Attempts to create a read-only PostgreSQL provider using DB_READ_ONLY_USERNAME/PASSWORD.
- * Shares the connection pool from the primary provider. Returns null if no read-only credentials are configured.
+ * Creates a read-only PostgreSQL per-request provider on the read-only pool MJAPI opened at
+ * startup with the read-only login. Returns null when no read-only login is configured, so the
+ * caller never falls back to the read-write pool.
  */
 async function tryCreateReadOnlyPostgresProvider(): Promise<DatabaseProviderBase | null> {
-  const roUser = process.env.PG_READ_ONLY_USERNAME || process.env.DB_READ_ONLY_USERNAME;
-  const roPass = process.env.PG_READ_ONLY_PASSWORD || process.env.DB_READ_ONLY_PASSWORD;
-  if (!roUser || !roPass) {
+  const readOnlyPool = PostgreSQLReadOnlyPool.Instance.Pool;
+  const credentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
+  if (!readOnlyPool || !credentials) {
     return null;
   }
 
   try {
     const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
-    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
-    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
-    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
 
     const roProvider = new PostgreSQLDataProvider();
     const roConfig = new PostgreSQLProviderConfigData(
-      { Host: pgHost, Port: pgPort, Database: pgDatabase, User: roUser, Password: roPass },
+      BuildPostgreSQLConnectionConfig({ ...ResolvePostgreSQLEndpoint(), ...credentials }, configInfo.databaseSettings, 'read-only'),
       mj_core_schema,
       0,
       undefined,
       undefined,
       false,
     );
-
-    const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (share primary provider's PG pool with the read-only provider)
-    if (primaryProvider?.DatabaseConnection) {
-      await roProvider.ConfigWithSharedPool(roConfig, primaryProvider.DatabaseConnection);
-    } else {
-      await roProvider.Config(roConfig);
-    }
-
+    await roProvider.ConfigWithSharedPool(roConfig, readOnlyPool);
     return roProvider;
   } catch (_err) {
     return null;

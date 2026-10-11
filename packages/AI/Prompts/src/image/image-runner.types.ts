@@ -7,6 +7,7 @@
 import type { UserInfo } from '@memberjunction/core';
 import type {
   AIAPIKey,
+  AICredentialScope,
   ImageEditParams,
   ImageGenerationParams,
   ImageGenerationResult,
@@ -44,6 +45,13 @@ export interface AIImageRunOptions {
    * credential type, wins over them.
    */
   APIKeys?: AIAPIKey[];
+
+  /**
+   * Passed through as the base runner's `CredentialScope`. `'RuntimeOnly'` restricts the run to
+   * {@link APIKeys}: a candidate whose driver class has no key there is skipped, never run on the
+   * platform's credentials.
+   */
+  CredentialScope?: AICredentialScope;
 
   /** A parent `MJ: AI Prompt Runs` row, recorded as this run's `ParentID`. */
   ParentRunID?: string;
