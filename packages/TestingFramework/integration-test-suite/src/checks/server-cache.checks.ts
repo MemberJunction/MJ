@@ -586,37 +586,45 @@ export const ServerCacheChecks: NamedCheck[] = [
     },
     {
         Id: 'server-cache.S25',
-        Name: 'S25: TrustServerCacheCompletely=false entities never touch the server cache (real metadata, read-only)',
+        Name: 'S25: TrustServerCacheCompletely=false entities never touch the server cache (in-memory AllowCaching, read-only)',
         Fn: async (ctx): Promise<void> => {
             const rv = new RunView();
-            // 'MJ: Audit Logs' has AllowCaching=true but TrustServerCacheCompletely=false in
-            // this DB (rows arrive via raw SQL, so event-driven invalidation cannot be
-            // trusted) — a DIFFERENT eligibility branch than AllowCaching (S24).
+            // 'MJ: Audit Logs' ships TrustServerCacheCompletely=false (event-driven invalidation
+            // cannot be trusted for it) and AllowCaching=false. With AllowCaching off, the
+            // AllowCaching branch (S24) would refuse the cache before the trust branch is reached,
+            // so this check enables caching on the server's IN-MEMORY metadata only, for its own
+            // duration, and restores it. Nothing is written to the database.
             const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             const info = md.EntityByName('MJ: Audit Logs');
             Assert(!!info, 'MJ: Audit Logs must exist');
-            Assert(info!.AllowCaching === true && info!.TrustServerCacheCompletely === false,
-                `precondition: AllowCaching=true + TrustServerCacheCompletely=false (got ${info!.AllowCaching}/${info!.TrustServerCacheCompletely})`);
+            Assert(info!.TrustServerCacheCompletely === false,
+                `precondition: TrustServerCacheCompletely=false (got ${info!.TrustServerCacheCompletely})`);
 
-            ctx.Storage.ResetCounts();
-            const first = await rv.RunView({
-                EntityName: 'MJ: Audit Logs',
-                ExtraFilter: "'tag-s25' <> 'never'",
-                Fields: ['ID'],
-                MaxRows: 5,
-                ResultType: 'simple'
-            }, ctx.User);
-            Assert(first.Success, `first failed: ${first.ErrorMessage}`);
-            const second = await rv.RunView({
-                EntityName: 'MJ: Audit Logs',
-                ExtraFilter: "'tag-s25' <> 'never'",
-                Fields: ['ID'],
-                MaxRows: 5,
-                ResultType: 'simple'
-            }, ctx.User);
-            Assert(second.Success, `second failed: ${second.ErrorMessage}`);
-            AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0, 'Trust=0 entity must never write the server cache');
-            AssertEqual(ctx.Storage.GetCount('RunViewCache'), 0, 'Trust=0 entity must never read the server cache');
+            const originalAllowCaching = info!.AllowCaching;
+            info!.AllowCaching = true;
+            try {
+                ctx.Storage.ResetCounts();
+                const first = await rv.RunView({
+                    EntityName: 'MJ: Audit Logs',
+                    ExtraFilter: "'tag-s25' <> 'never'",
+                    Fields: ['ID'],
+                    MaxRows: 5,
+                    ResultType: 'simple'
+                }, ctx.User);
+                Assert(first.Success, `first failed: ${first.ErrorMessage}`);
+                const second = await rv.RunView({
+                    EntityName: 'MJ: Audit Logs',
+                    ExtraFilter: "'tag-s25' <> 'never'",
+                    Fields: ['ID'],
+                    MaxRows: 5,
+                    ResultType: 'simple'
+                }, ctx.User);
+                Assert(second.Success, `second failed: ${second.ErrorMessage}`);
+                AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0, 'Trust=0 entity must never write the server cache');
+                AssertEqual(ctx.Storage.GetCount('RunViewCache'), 0, 'Trust=0 entity must never read the server cache');
+            } finally {
+                info!.AllowCaching = originalAllowCaching;
+            }
         }
     },
     {

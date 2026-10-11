@@ -23,6 +23,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Clone Logs&Name=PlanJSON"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:44.967Z",
+            "checksum": "670ffb3e1d8889320e991f77fdc1a984e6f9bb407af6eb235266920fecbaabfb"
           }
         }
       ]

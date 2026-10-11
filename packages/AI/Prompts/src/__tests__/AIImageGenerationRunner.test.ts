@@ -23,6 +23,7 @@ import {
 } from '@memberjunction/unit-testing';
 import { AIImageGenerationRunner } from '../image/AIImageGenerationRunner';
 import type { AIImageEditRunParams, AIImageGenerationRunParams } from '../image/image-runner.types';
+import type { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 // ---------------------------------------------------------------------------
 // Hoisted mock state and AIEngine mock (the shape AIDecisionRunner.test.ts uses)
@@ -627,6 +628,22 @@ describe('AIImageGenerationRunner', () => {
       expect(result.ErrorMessage).toMatch(/No Image Generator model has credentials available/);
       expect(driver.GenerateCalls).toHaveLength(0);
       expect(lastPromptRun).toBeNull();
+    });
+
+    it('passes CredentialScope through to the base runner params', () => {
+      // Dropped here, a RuntimeOnly image run would gate and resolve credentials as 'Any' and spend platform keys.
+      const prompt = { ID: 'image-prompt', Name: 'Image Prompt' } as unknown as MJAIPromptEntityExtended;
+      const build = (runner as unknown as {
+        buildPromptParams(params: AIImageGenerationRunParams, prompt: MJAIPromptEntityExtended): AIPromptParams;
+      }).buildPromptParams.bind(runner);
+      const apiKeys = [{ driverClass: DRIVER, apiKey: 'caller-key' }];
+
+      const scoped = build(generationParams({ APIKeys: apiKeys, CredentialScope: 'RuntimeOnly' }), prompt);
+      expect(scoped.CredentialScope).toBe('RuntimeOnly');
+      expect(scoped.apiKeys).toBe(apiKeys);
+      expect(scoped.prompt).toBe(prompt);
+
+      expect(build(generationParams(), prompt).CredentialScope).toBeUndefined();
     });
 
     it('passes APIKeys through as the base runner apiKeys', async () => {

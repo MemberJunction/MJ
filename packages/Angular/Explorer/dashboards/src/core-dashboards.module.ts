@@ -38,7 +38,7 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { MJWorkspaceTabStripComponent } from '@memberjunction/ng-ui-components';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
-import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
+import { DashboardViewerModule, DashboardNameDialogComponent } from '@memberjunction/ng-dashboard-viewer';
 import { VersionsModule } from '@memberjunction/ng-versions';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { NgTreesModule } from '@memberjunction/ng-trees';
@@ -48,6 +48,7 @@ import { SharedPipesModule } from './shared/shared-pipes.module';
 // Core components — eagerly loaded, most-visited pages
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
 import { HomeDashboardComponent } from './Home/home-dashboard.component';
+import { HomeDashboardSwitcherComponent } from './Home/home-dashboard-switcher.component';
 import { ActionPinConfigDialogComponent } from './Home/action-pin-config-dialog.component';
 import { ActionPinRunnerDialogComponent } from './Home/action-pin-runner-dialog.component';
 // HomeApplication is a non-Angular class registered via @RegisterClass(BaseApplication, 'HomeApplication').
@@ -81,6 +82,8 @@ import { AdminMonitoringComponent } from './Admin/admin-monitoring.component';
 import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-resource.component';
 import { DashboardBrowserResourceComponent } from './DashboardBrowser/dashboard-browser-resource.component';
 import { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-share-dialog.component';
+import { DashboardsCategoriesResourceComponent } from './DashboardBrowser/dashboards-categories-resource.component';
+import { DashboardEditorComponent } from './DashboardEditor/dashboard-editor.component';
 // API Keys
 import { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
 import { APIKeyCreateDialogComponent } from './APIKeys/api-key-create-dialog.component';
@@ -93,6 +96,7 @@ import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
 import { ApplicationRolesResourceComponent } from './ApplicationRoles/application-roles-resource.component';
 // Realtime Recordings (recorded realtime sessions — replay audio + transcript)
 import { RealtimeRecordingsDashboardComponent } from './RealtimeRecordings/realtime-recordings-dashboard.component';
+import { TelephonyOperationsDashboardComponent } from './TelephonyOperations/telephony-operations-dashboard.component';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
 import { AngularSplitModule } from 'angular-split';
 // Permissions (Phase 2a/b/c — unified permissions admin); three independent resources
@@ -107,7 +111,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
 
 /**
  * CoreDashboardsModule — eagerly loaded core features: Home, EntityAdmin,
- * SystemDiagnostics, QueryBrowser, DashboardBrowser, APIKeys, VersionHistory.
+ * SystemDiagnostics, QueryBrowser, the Dashboards app pages (Library, Categories),
+ * the shared dashboard editor, APIKeys, VersionHistory.
  */
 @NgModule({
   declarations: [
@@ -116,6 +121,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     BulkOperationsRunHistoryComponent,
     EntityAdminDashboardComponent,
     HomeDashboardComponent,
+    HomeDashboardSwitcherComponent,
     ThemeStudioDashboardComponent,
     ThemeStudioResourceComponent,
     ThemeManagerDashboardComponent,
@@ -139,6 +145,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     QueryBrowserResourceComponent,
     DashboardBrowserResourceComponent,
     DashboardShareDialogComponent,
+    DashboardsCategoriesResourceComponent,
+    DashboardEditorComponent,
     // API Keys
     APIKeysResourceComponent,
     APIKeyCreateDialogComponent,
@@ -151,6 +159,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ApplicationRolesResourceComponent,
     // Realtime Recordings
     RealtimeRecordingsDashboardComponent,
+    // Telephony Operations Dashboard
+    TelephonyOperationsDashboardComponent,
     // Permissions admin — three independent resource tabs
     PermissionsUserAccessResourceComponent,
     PermissionsResourceAccessResourceComponent,
@@ -203,6 +213,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     EntityRelationshipDiagramModule,
     QueryViewerModule,
     DashboardViewerModule,
+    DashboardNameDialogComponent,
     VersionsModule,
     ExportServiceModule,
     NgTreesModule,
@@ -238,6 +249,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     QueryBrowserResourceComponent,
     DashboardBrowserResourceComponent,
     DashboardShareDialogComponent,
+    DashboardsCategoriesResourceComponent,
+    DashboardEditorComponent,
     APIKeysResourceComponent,
     APIKeyCreateDialogComponent,
     APIKeyEditPanelComponent,
@@ -247,6 +260,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     APIUsagePanelComponent,
     ApplicationRolesResourceComponent,
     RealtimeRecordingsDashboardComponent,
+    TelephonyOperationsDashboardComponent,
     PermissionsUserAccessResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsAuditLogResourceComponent,
@@ -262,6 +276,9 @@ export class CoreDashboardsModule { }
 // Re-export types needed by consumers via subpath import
 export type { ShareDialogResult } from './DashboardBrowser/dashboard-share-dialog.component';
 export { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-share-dialog.component';
+export { DashboardEditorComponent } from './DashboardEditor/dashboard-editor.component';
+export { DashboardViewerFactory } from './DashboardEditor/dashboard-viewer-factory';
+export * from './DashboardEditor/dashboard-editor.types';
 
 // Re-export HomeApplication so it's reachable from this subpath for lazy loading.
 // The @RegisterClass decorator fires on import, registering it with ClassFactory.

@@ -9,6 +9,8 @@
  * @since 2.49.0
  */
 
+import './rubric-evaluation-agent-runner.js';
+
 export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';
@@ -66,6 +68,7 @@ export * from './ClientToolRequestManager';
 export * from './realtime/realtime-session-runner';
 export * from './realtime/bridge-realtime-session-factory';
 export * from './realtime/bridge-room-transcript-sink';
+export * from './realtime/bridge-session-transcript-sink';
 export * from './realtime/realtime-turn-moderator';
 // Broker-unique exports. The shared tool-execution contract (INVOKE_TARGET_AGENT_TOOL_NAME,
 // DelegateToTargetRequest, DelegatedResult, ToolExecutionResult, loggers) is surfaced via the
@@ -76,6 +79,9 @@ export * from './realtime/realtime-client-session-service';
 export * from './realtime/realtime-coagent-config';
 export * from './realtime/realtime-vendor-resolution';
 export * from './realtime/realtime-narration';
+export * from './realtime/realtime-delegation-narrator';
+export * from './realtime/realtime-coagent-resolution';
+export * from './realtime/bridge-host-params';
 export * from './realtime/realtime-channel-server-host';
 export * from './realtime/whiteboard-channel-server';
 export * from './realtime/client-context-channel-server';

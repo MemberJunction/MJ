@@ -13,12 +13,47 @@
  * @module @memberjunction/livekit-room-server
  */
 
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { IRealtimeSession } from '@memberjunction/ai';
-import { AlwaysAddressedMatcher, RegexAddressedMatcher, type BridgeDisconnectReason, type BridgeTurnMode } from '@memberjunction/ai-bridge-base';
-import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
+import { ResolveIsModelFullDuplex, type IRealtimeSession, type RealtimeToolDefinition } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
+import {
+  AlwaysAddressedMatcher,
+  RegexAddressedMatcher,
+  TURN_TAKING_TOOL_DEFINITIONS,
+  type BridgeDisconnectReason,
+  type BridgeTurnMode,
+  type TurnAddressingMode,
+} from '@memberjunction/ai-bridge-base';
+import {
+  AIBridgeEngine,
+  type BridgeTranscriptSink,
+  type BridgeTurnTakingToolHandler,
+  type RoomTurnSnapshot,
+} from '@memberjunction/ai-bridge-server';
 import { LiveKitTokenService } from './livekit-token-service';
+import { ResolveLiveKitNativeModuleSpecifier } from './livekit-native-module';
+
+/**
+ * Static capability map for known realtime drivers when resolving full-duplex capability before session connect.
+ * Avoids class-name substring heuristics.
+ */
+const DRIVER_STATIC_CAPABILITIES: Record<string, { FullDuplex?: boolean }> = {
+  OpenAILiveRealtime: { FullDuplex: true },
+};
+
+function GetDriverStaticCapabilities(driverClass?: string | null): { FullDuplex?: boolean } | null {
+  if (!driverClass) {
+    return null;
+  }
+  const key = driverClass.trim().toLowerCase();
+  for (const [cls, caps] of Object.entries(DRIVER_STATIC_CAPABILITIES)) {
+    if (cls.toLowerCase() === key) {
+      return caps;
+    }
+  }
+  return null;
+}
 
 /** The subset of {@link AIBridgeEngine} the coordinator drives — an injectable seam for unit testing. */
 export type BridgeOps = Pick<AIBridgeEngine, 'Config' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'StopBridgeSession' | 'ReconfigureSessionToMeeting'>;
@@ -53,7 +88,58 @@ export interface RealtimeSessionStartContext {
   MeetingMode?: boolean;
   /** The names the agent answers to (display name + aliases) — phrasing for the meeting prompt. */
   SelfNames?: string[];
+  /** Tools the host declares and executes itself (call control, handoff). Added to the model's tool set. */
+  HostTools?: RealtimeToolDefinition[];
+  /**
+   * Optional callback allowing the coordinator to resolve host tools dynamically based on
+   * the model and driver class context actually resolved for the session, before session opening.
+   */
+  ResolveHostTools?: (resolved: { ModelID?: string; ModelVendorID?: string; DriverClass?: string }) => RealtimeToolDefinition[] | undefined;
+  /** Host-authored instructions appended to the system prompt (for example the phone framing). */
+  HostFraming?: string;
+  /** Role-tagged transcript so far, framed into the prompt when a lost model session is re-opened mid-call. */
+  PriorTranscript?: string;
+  /** The `MJ: Conversations` row the session writes to — stamped on the co-agent observability run. */
+  ConversationID?: string;
 }
+
+/**
+ * What a HOST that owns the call (a phone call arriving in a room, a web room with handoff tools) adds to an agent's
+ * room session beyond the plain "join the room" the coordinator does for the Meet UI. All optional: a session started
+ * without it behaves exactly as before.
+ */
+export interface AgentRoomHostOptions {
+  /** Tools the host executes itself. */
+  HostTools?: RealtimeToolDefinition[];
+  /** Instructions appended to the agent's system prompt. */
+  HostFraming?: string;
+  /** The conversation the session's transcript belongs to. */
+  ConversationID?: string;
+  /**
+   * Called with every model session opened for this agent (the first one, and any re-opened after a drop) so the host
+   * can attach its tool handler to each.
+   */
+  OnModelSession?: (session: IRealtimeSession) => void;
+  /** Where this session's final transcript lines go (instead of the shared room transcript). */
+  TranscriptSink?: BridgeTranscriptSink;
+  /** The participant talked over the agent (a true barge-in). */
+  OnBargeIn?: () => void;
+  /** Re-open the model session once, with the conversation so far, if it drops mid-call. */
+  RecoverModelSession?: boolean;
+  /** Called once when the session has fully ended, for the host's own bookkeeping. */
+  OnSessionEnded?: (reason: BridgeDisconnectReason) => void | Promise<void>;
+  /** How the agent got into the room. Default `'OnDemand'`. */
+  JoinMethod?: 'InboundRoute' | 'OnDemand' | 'Invite';
+  /** Whether the agent was called into the room or placed the call. Default: not stated. */
+  Direction?: 'Inbound' | 'Outbound';
+}
+
+/**
+ * Installs the engine's turn-taking tool handler on a model session — the seam that lets this package stay free
+ * of the agent runtime. Production binds it to `GetBridgeRealtimeRuntime(session)?.SetLocalToolHandler(handler)`
+ * (`@memberjunction/ai-agents`); a test binds a spy.
+ */
+export type TurnToolBinder = (session: IRealtimeSession, handler: BridgeTurnTakingToolHandler) => void;
 
 /**
  * Opens a realtime model session for the agent. Production binds this to the real model-resolution path;
@@ -80,18 +166,28 @@ export interface StartAgentRoomSessionParams {
   RealtimeModelID?: string;
   /** Optional per-session VOICE override (provider-native voice id) — gives this agent a distinct voice. */
   RealtimeVoice?: string;
+  /** Explicit override for whether the model is full-duplex. When omitted, resolved from model metadata or driver capabilities. */
+  FullDuplex?: boolean;
   /** Extra aliases the agent answers to (for Passive turn-taking). */
   AgentAliases?: string[];
   /** Turn-taking mode. Default: `'Passive'` (speak only when addressed). */
   TurnMode?: BridgeTurnMode;
+  /**
+   * How the agent decides it was addressed. `'Auto'` (the default) uses the MODEL's own judgement when its model is
+   * full-duplex and falls back to name matching otherwise; `'ModelSide'` / `'Regex'` force one. A room in moderator
+   * mode (gated meeting) always uses `'Regex'`.
+   */
+  TurnAddressing?: TurnAddressingMode;
   /** The user the session runs as. */
   ContextUser?: UserInfo;
   /** The metadata provider for the session. */
   MetadataProvider?: IMetadataProvider;
+  /** What a host that owns the call adds (tools, framing, transcript, recovery). Absent for a plain Meet room. */
+  Host?: AgentRoomHostOptions;
 }
 
 /** One agent's membership in a room's roster (for multi-agent meeting detection). */
-interface RoomAgentEntry {
+export interface RoomAgentEntry {
   /** The MJ agent-session id of this agent in the room. */
   AgentSessionID: string;
   /** The durable bridge row id — the key {@link LiveKitAgentRoomCoordinator.StopAgentRoomSession} removes by. */
@@ -128,6 +224,8 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
    */
   private roomRosters = new Map<string, RoomAgentEntry[]>();
   private bridgeOps: BridgeOps = AIBridgeEngine.Instance;
+  private turnToolBinder?: TurnToolBinder;
+  private turnStateSource: (roomKey: string) => RoomTurnSnapshot | null = (roomKey) => AIBridgeEngine.Instance.GetRoomTurnSnapshot(roomKey);
   private sessionFactory: RealtimeSessionFactory = () => {
     throw new Error(
       'LiveKitAgentRoomCoordinator has no realtime-session factory bound. Call SetSessionFactory(...) ' +
@@ -153,6 +251,38 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
    */
   public SetSessionFactory(factory: RealtimeSessionFactory): void {
     this.sessionFactory = factory;
+  }
+
+  /**
+   * Binds the seam that installs the engine's turn-taking tool handler on a model session. Without it a
+   * full-duplex model's `i_am_addressed` / `yield_turn` calls cannot be executed (the room's floor gate still
+   * protects against overlap; the model just cannot reserve the floor or hand it to a named agent).
+   *
+   * @param binder The binder, or `undefined` to clear it.
+   */
+  public SetTurnToolBinder(binder: TurnToolBinder | undefined): void {
+    this.turnToolBinder = binder;
+  }
+
+  /**
+   * Overrides where a room's turn-taking snapshot comes from (an injectable seam for unit testing; production
+   * reads the process-wide {@link AIBridgeEngine}).
+   *
+   * @param source Returns the snapshot for a room key, or `null` when the room holds no agents.
+   */
+  public SetTurnStateSource(source: (roomKey: string) => RoomTurnSnapshot | null): void {
+    this.turnStateSource = source;
+  }
+
+  /**
+   * A room's live turn-taking state — floor holder, whether a person is speaking, any pending hand-off, the
+   * agent-to-agent loop-cap progress, the most recent floor events, and who is seated. Read-only.
+   *
+   * @param roomName The LiveKit room name (the bridge's room key).
+   * @returns The snapshot, or `null` when the room holds no agents.
+   */
+  public GetRoomTurnState(roomName: string): RoomTurnSnapshot | null {
+    return this.turnStateSource(roomName.trim());
   }
 
   /**
@@ -210,30 +340,117 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     // (gated meeting mode + LLM router) for controlled scenarios (webinars, large rooms, weaker models).
     const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
     const isMeeting = moderatorMode && existingAgents.length > 0;
+    const addressing: TurnAddressingMode = isMeeting ? 'Regex' : params.TurnAddressing ?? 'Auto';
 
-    const session = await this.sessionFactory({
-      AgentID: params.AgentID,
-      AgentName: params.AgentName,
-      TargetAgentID: params.TargetAgentID,
-      RealtimeModelID: params.RealtimeModelID,
-      RealtimeVoice: params.RealtimeVoice,
-      RoomName: params.RoomName,
-      ContextUser: params.ContextUser,
-      MetadataProvider: params.MetadataProvider,
-      // So the co-agent observability run groups under THIS agent session (parity with native chat).
-      AgentSessionID: params.AgentSessionID,
-      MeetingMode: isMeeting || undefined,
-      SelfNames: isMeeting ? selfNames : undefined,
-    });
+    let resolvedFullDuplex: boolean | undefined = params.FullDuplex;
+    if (resolvedFullDuplex === undefined && params.RealtimeModelID) {
+      resolvedFullDuplex = this.resolveIsModelFullDuplexFromId(params.RealtimeModelID);
+    }
 
+    const host = params.Host;
+    const buildToolsForFullDuplex = (isFd: boolean): RealtimeToolDefinition[] | undefined => {
+      const turnTakingTools = isFd || addressing === 'Regex' ? [] : [...TURN_TAKING_TOOL_DEFINITIONS];
+      return (host?.HostTools?.length ?? 0) > 0 || turnTakingTools.length > 0
+        ? [...(host?.HostTools ?? []), ...turnTakingTools]
+        : undefined;
+    };
+
+    let activeTurnHandler: BridgeTurnTakingToolHandler | undefined = undefined;
+    const openModelSession = async (priorTranscript?: string): Promise<IRealtimeSession> => {
+      const initialTools = buildToolsForFullDuplex(resolvedFullDuplex ?? false);
+      const opened = await this.sessionFactory({
+        AgentID: params.AgentID,
+        AgentName: params.AgentName,
+        TargetAgentID: params.TargetAgentID,
+        RealtimeModelID: params.RealtimeModelID,
+        RealtimeVoice: params.RealtimeVoice,
+        RoomName: params.RoomName,
+        ContextUser: params.ContextUser,
+        MetadataProvider: params.MetadataProvider,
+        // So the co-agent observability run groups under THIS agent session (parity with native chat).
+        AgentSessionID: params.AgentSessionID,
+        MeetingMode: isMeeting || undefined,
+        SelfNames: isMeeting ? selfNames : undefined,
+        HostTools: initialTools,
+        HostFraming: host?.HostFraming,
+        ConversationID: host?.ConversationID,
+        PriorTranscript: priorTranscript,
+        ResolveHostTools: (resolved) => {
+          if (resolvedFullDuplex === undefined) {
+            if (resolved.ModelID) {
+              const effective = AIEngine.Instance.GetEffectiveModelConfiguration(resolved.ModelID, resolved.ModelVendorID);
+              const model = (AIEngine.Instance.Models ?? []).find(m => UUIDsEqual(m.ID, resolved.ModelID!));
+              const staticCaps = GetDriverStaticCapabilities(resolved.DriverClass);
+              resolvedFullDuplex = ResolveIsModelFullDuplex(effective ?? model?.ModelConfigurationObject, staticCaps);
+            } else if (resolved.DriverClass) {
+              const staticCaps = GetDriverStaticCapabilities(resolved.DriverClass);
+              resolvedFullDuplex = staticCaps?.FullDuplex === true;
+            }
+          }
+          return buildToolsForFullDuplex(resolvedFullDuplex ?? false);
+        },
+      });
+      const declaredTurnToolsInitially = !resolvedFullDuplex && addressing !== 'Regex';
+      if (resolvedFullDuplex === undefined) {
+        resolvedFullDuplex = opened.Capabilities?.FullDuplex === true;
+      } else if (opened.Capabilities?.FullDuplex !== undefined && opened.Capabilities.FullDuplex !== resolvedFullDuplex) {
+        LogStatus(
+          `[LiveKitAgentRoomCoordinator] WARNING: Session factory opened with Capabilities.FullDuplex=${opened.Capabilities.FullDuplex}, ` +
+          `which disagrees with pre-open resolved FullDuplex=${resolvedFullDuplex}. Initial tools may mismatch.`
+        );
+      }
+
+      // If full duplex is active, but turn-taking tools were declared to the session initially
+      // (e.g. because full-duplex was only discovered after open, or custom factory ignored ResolveHostTools):
+      if (resolvedFullDuplex && declaredTurnToolsInitially) {
+        const desiredTools = buildToolsForFullDuplex(true);
+        try {
+          await opened.RegisterTools(desiredTools ?? []);
+        } catch (err) {
+          LogError(
+            `[LiveKitAgentRoomCoordinator] Failed to reconfigure tools after discovering FullDuplex: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+        // Explicitly bind a no-op handler so any in-flight or model-cached turn-taking tool calls return a clear "not available" result
+        if (this.turnToolBinder) {
+          const noopTurnHandler: BridgeTurnTakingToolHandler = {
+            Handles(toolName: string): boolean {
+              return TURN_TAKING_TOOL_DEFINITIONS.some(t => t.Name === toolName);
+            },
+            async Execute(call: { ToolName: string; Arguments: string }): Promise<string> {
+              return JSON.stringify({
+                success: false,
+                error: `Tool '${call.ToolName}' is not available: session is running in full-duplex mode.`,
+              });
+            },
+          };
+          this.turnToolBinder(opened, noopTurnHandler);
+        }
+      }
+
+      host?.OnModelSession?.(opened);
+      if (activeTurnHandler) {
+        this.bindTurnTools(opened, activeTurnHandler, botName, resolvedFullDuplex);
+      }
+      return opened;
+    };
+    const session = await openModelSession();
+    const finalFullDuplex = resolvedFullDuplex ?? false;
+
+    // The bridge id is known only after the engine starts the session, but the end-of-session hook is registered at start,
+    // so it reaches the id through this holder.
+    const started: { SessionBridgeID?: string } = {};
     const active = await this.bridgeOps.StartBridgeSession({
       AgentSessionID: params.AgentSessionID,
       AgentID: params.AgentID,
       Provider: provider,
       RealtimeSession: session,
+      FullDuplex: finalFullDuplex,
       Address: botToken.ServerUrl,
-      JoinMethod: 'OnDemand',
+      JoinMethod: host?.JoinMethod ?? 'OnDemand',
+      Direction: host?.Direction,
       TurnMode: params.TurnMode ?? 'Passive',
+      TurnAddressing: addressing,
       // Meeting: gate speech to ADDRESSED turns (RegexAddressedMatcher on the agent's names) AND tell the
       // engine the model's auto-response is off so the bridge becomes the sole trigger. Solo 1:1: respond to
       // ALL the user's speech (AlwaysAddressedMatcher) with the model's own auto-response — Passive's
@@ -259,9 +476,23 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       },
       ContextUser: params.ContextUser,
       MetadataProvider: params.MetadataProvider,
+      // Host-owned call: its own transcript, barge-in policy, model recovery and end-of-session bookkeeping.
+      TranscriptSink: host?.TranscriptSink,
+      OnBargeIn: host?.OnBargeIn,
+      RecoverRealtimeSession: host?.RecoverModelSession ? (request) => openModelSession(request.PriorTranscript) : undefined,
+      OnSessionEnded: async (reason) => {
+        // An agent that leaves on its own (every human gone, the model lost, a handoff) must drop off the room's roster too.
+        if (started.SessionBridgeID) {
+          this.removeFromRoster(started.SessionBridgeID);
+        }
+        await host?.OnSessionEnded?.(reason);
+      },
     });
+    started.SessionBridgeID = active.SessionBridgeID;
 
     this.addToRoster(roomKey, { AgentSessionID: params.AgentSessionID, SessionBridgeID: active.SessionBridgeID, Names: selfNames });
+    activeTurnHandler = active.TurnTakingToolHandler;
+    this.bindTurnTools(session, active.TurnTakingToolHandler, botName, finalFullDuplex);
 
     // The room just became (or stayed) multi-agent → retroactively re-gate the agents already in it into
     // meeting mode so the whole room takes turns, not just the newcomers. Capability-gated in the engine:
@@ -278,6 +509,48 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
         `(bridge ${active.SessionBridgeID}, ${isMeeting ? 'MEETING — addressed-only' : 'solo 1:1'})`,
     );
     return { SessionBridgeID: active.SessionBridgeID, RoomName: params.RoomName, ServerUrl: botToken.ServerUrl };
+  }
+
+  /** Installs the engine's turn-taking tool handler on the model session, when the session has one (a turn-based model in a room). */
+  private bindTurnTools(session: IRealtimeSession, handler: BridgeTurnTakingToolHandler | undefined, botName: string, isFullDuplex: boolean): void {
+    if (!handler) {
+      return;
+    }
+    // Full-duplex models never get turn-taking tools; do not bind turn-taking handlers to them
+    if (isFullDuplex) {
+      return;
+    }
+    if (!this.turnToolBinder) {
+      LogError(
+        `[LiveKitAgentRoomCoordinator] ${botName} has turn-taking tools but no turn-tool binder is set (SetTurnToolBinder); ` +
+          'its i_am_addressed / yield_turn calls will not execute.',
+      );
+      return;
+    }
+    this.turnToolBinder(session, handler);
+  }
+
+  /**
+   * Resolves whether the model with the given ID is full duplex from model metadata and static driver capabilities.
+   */
+  private resolveIsModelFullDuplexFromId(modelId: string): boolean | undefined {
+    try {
+      const model = (AIEngine.Instance.Models ?? []).find(m => UUIDsEqual(m.ID, modelId));
+      if (!model) {
+        return undefined;
+      }
+      const vendors = (AIEngine.Instance.ModelVendorsByModelID?.get(NormalizeUUID(model.ID)) ??
+        (AIEngine.Instance.ModelVendors ?? []).filter(mv => UUIDsEqual(mv.ModelID, model.ID)))
+        .filter(v => v.DriverClass != null && (v.Status === undefined || v.Status === 'Active'))
+        .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+      const primaryVendor = vendors[0];
+      const effective = AIEngine.Instance.GetEffectiveModelConfiguration(model.ID, primaryVendor?.ID);
+      const staticCaps = GetDriverStaticCapabilities(primaryVendor?.DriverClass);
+      return ResolveIsModelFullDuplex(effective ?? model.ModelConfigurationObject, staticCaps);
+    } catch (err) {
+      LogError(`[LiveKitAgentRoomCoordinator] resolveIsModelFullDuplexFromId failed: ${err instanceof Error ? err.message : String(err)}`);
+      return undefined;
+    }
   }
 
   /** Appends an agent to a room's roster (creating the room's list on first join). */
@@ -306,20 +579,13 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     }
   }
 
-  /** The default native room-client wrapper specifier — the @livekit/rtc-node package this repo ships. */
-  private static readonly DEFAULT_NATIVE_MODULE = '@memberjunction/ai-bridge-livekit-native';
-
   /**
-   * Resolves the native LiveKit room-client module specifier for the bridge session. Prefers the
-   * `LIVEKIT_NATIVE_MODULE` env override (e.g. a deployment's custom-sample-rate wrapper), else the default
-   * {@link DEFAULT_NATIVE_MODULE}. Overridable in tests via {@link SetNativeModuleSpecifier}.
+   * Resolves the native LiveKit room-client module specifier for the bridge session (see
+   * {@link ResolveLiveKitNativeModuleSpecifier}: the test override, else `LIVEKIT_NATIVE_MODULE`, else the default
+   * `@memberjunction/ai-bridge-livekit-native`). Overridable in tests via {@link SetNativeModuleSpecifier}.
    */
   private resolveNativeModuleSpecifier(): string {
-    return (
-      this.nativeModuleSpecifierOverride ??
-      process.env.LIVEKIT_NATIVE_MODULE ??
-      LiveKitAgentRoomCoordinator.DEFAULT_NATIVE_MODULE
-    );
+    return ResolveLiveKitNativeModuleSpecifier(this.nativeModuleSpecifierOverride);
   }
 
   /**
@@ -384,5 +650,28 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     const bridgeIDs = (this.roomRosters.get(roomKey) ?? []).map((e) => e.SessionBridgeID);
     await Promise.all(bridgeIDs.map((id) => this.StopAgentRoomSession(id, reason, contextUser, provider)));
     return bridgeIDs.length;
+  }
+
+  /**
+   * Looks up the room name associated with a session bridge ID if present in the coordinator's active rosters.
+   *
+   * @param sessionBridgeID The `MJ: AI Agent Session Bridges` row id.
+   * @returns The room name, or `undefined` if not tracked in the active rosters.
+   */
+  public GetRoomForBridge(sessionBridgeID: string): string | undefined {
+    for (const [roomKey, roster] of this.roomRosters) {
+      if (roster.some((e) => e.SessionBridgeID === sessionBridgeID)) {
+        return roomKey;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Returns the agent sessions currently active in the given room.
+   */
+  public GetAgentsInRoom(roomName: string): ReadonlyArray<RoomAgentEntry> {
+    const roomKey = roomName.trim().toLowerCase();
+    return this.roomRosters.get(roomKey) ?? [];
   }
 }

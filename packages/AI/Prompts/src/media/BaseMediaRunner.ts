@@ -207,7 +207,7 @@ export abstract class BaseMediaRunner<
 
   /**
    * The base runner reads its settings from `AIPromptParams`, so the media params are mapped onto
-   * one: the carrier prompt, the context user, the keys, the parent run, the agent and its
+   * one: the carrier prompt, the context user, the keys and credential scope, the parent run, the agent and its
    * run-created hook, the timeout and cancellation token, and the runner's provider.
    */
   private buildPromptParams(params: TParams, prompt: MJAIPromptEntityExtended): AIPromptParams {
@@ -215,6 +215,7 @@ export abstract class BaseMediaRunner<
     promptParams.prompt = prompt;
     promptParams.contextUser = params.ContextUser;
     promptParams.apiKeys = params.APIKeys;
+    promptParams.CredentialScope = params.CredentialScope;
     promptParams.parentPromptRunId = params.ParentRunID;
     promptParams.agentId = params.AgentID;
     promptParams.onPromptRunCreated = params.OnPromptRunCreated;

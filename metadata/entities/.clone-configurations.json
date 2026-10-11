@@ -14,6 +14,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Logs"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.104Z",
+      "checksum": "a48ad55393953f06ca82bbac9f9c275cac0f14dfc31fc0871a98abe0cc33b26b"
     }
   },
   {
@@ -31,6 +35,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Log Items"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.129Z",
+      "checksum": "5028358b4bf32274cd14b6ea0a9689c5c37dae8e0ecef57c6611ee901e11020f"
     }
   },
   {
@@ -235,6 +243,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Users"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.160Z",
+      "checksum": "e48ea3d7085311b94d636da2618aa28ec769d84d6cb8c5fe6883e989ca3538fc"
     }
   },
   {
@@ -308,6 +320,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompts"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.191Z",
+      "checksum": "0b818d7a11887b1f37f948f445f3d980530342dafe64f0695482c84e56354f82"
     }
   },
   {
@@ -345,6 +361,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Templates"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.225Z",
+      "checksum": "a2ce4182fcd65bfc5c19656de1898c77e5ec2d7892b7cc6de48d72e618b6c704"
     }
   },
   {
@@ -495,6 +515,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agents"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.256Z",
+      "checksum": "3bba23ee73f50b7e9536d088ba64e5828773581290423b068346bf1d62e8dd1e"
     }
   },
   {
@@ -513,6 +537,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Notes"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.285Z",
+      "checksum": "f741d34308e8cbfd6d0b741de1239ffb0e6e01a51f5ec8facee9b1f7f045454c"
     }
   },
   {
@@ -531,6 +559,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Examples"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.313Z",
+      "checksum": "f8264a72f33a205d50798b847fcd813147aef6d6afd24a645f00ae4a0e60512e"
     }
   },
   {
@@ -549,6 +581,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Learning Cycles"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.342Z",
+      "checksum": "773b185afde5ae5d0d9e24358508c5988ae434173ee1696a2b4b3fce15c97bb5"
     }
   },
   {
@@ -567,6 +603,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.376Z",
+      "checksum": "020b4a5271f5bfdae2968c84bf106485c746c78d2ef7671c78a82ab24ff43454"
     }
   },
   {
@@ -584,6 +624,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Credentials"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.423Z",
+      "checksum": "99f95c5729636b0879f8d9de3a694d297b03f5f3098370a7baad85b2c0fb152d"
     }
   },
   {
@@ -601,6 +645,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Company Integrations"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.466Z",
+      "checksum": "e7d3c0af6af5a6978d5ffccad5b146217cfb58dc8033cb442c81106ade6509b5"
     }
   },
   {
@@ -700,6 +748,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Actions"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.519Z",
+      "checksum": "8ff245f7bef69bc15d9ce3dd9765d0296000bab414e0970e136db8d7de1feab7"
     }
   },
   {
@@ -777,6 +829,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Queries"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.559Z",
+      "checksum": "1209a2efa46d723399bf856d8cf777b2277d3c556104286564d138a8d2a9a7d2"
     }
   },
   {
@@ -838,6 +894,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Scheduled Jobs"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.593Z",
+      "checksum": "1d175395b1bf45cdcff9aa98bb80c6ea66985a378149418a1ece52336509e414"
     }
   },
   {
@@ -856,6 +916,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Action Execution Logs"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.629Z",
+      "checksum": "614ef8f06894dfb862df3b5d21bb8ad3d1d286f48ac7905bd218c3afffb2fea8"
     }
   },
   {
@@ -874,6 +938,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Scheduled Job Runs"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.676Z",
+      "checksum": "c0768684eae6090f923c1fc5e33ae969fdba75c8ee4838e3e96213d5beaaa57d"
     }
   },
   {
@@ -892,6 +960,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Query Dependencies"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.716Z",
+      "checksum": "e09be0d4c9a5174c088ed0be86be653f009eea43a8b2f735ab8375b1dc7e1d63"
     }
   },
   {
@@ -958,6 +1030,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Dashboards"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.752Z",
+      "checksum": "000ab1f39e7ce042b177694d2961ae661c773a818f317cf25d1934623d7dde6b"
     }
   },
   {
@@ -1009,6 +1085,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User Views"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.792Z",
+      "checksum": "4329d0a5caac18364e8865a8f27d0d8410e63aaa62a83dea88ed86aaf905b286"
     }
   },
   {
@@ -1065,6 +1145,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Lists"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.828Z",
+      "checksum": "bc694a18c150d29aca2b16bdef8cbf9774518a74c765f09e374c2b65888d265d"
     }
   },
   {
@@ -1087,6 +1171,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: List Details"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.876Z",
+      "checksum": "9923b2ecff1d554a91769a52318ad8564db1cbcd009f1fd06b7f733a5edfa9c3"
     }
   },
   {
@@ -1122,6 +1210,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Themes"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.923Z",
+      "checksum": "a506971e523d3fdb9d641c72a1a6fc3d08c2c7afded88b512ae5ad0a73074b3e"
     }
   },
   {
@@ -1166,6 +1258,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Data Contexts"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:42.971Z",
+      "checksum": "121407a1ed444348384a901b1880484e166ec97501debc3ab6141776f67f3eaf"
     }
   },
   {
@@ -1188,6 +1284,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Data Context Items"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.005Z",
+      "checksum": "c84dae4cd9ded4f323a6794e64041c75107f76f1ea2aa2db0534b32a2d73e9f6"
     }
   },
   {
@@ -1206,6 +1306,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Dashboard User Preferences"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.035Z",
+      "checksum": "33b91c47be3154b619637129ed6f6050f19ed5c941437f42617d775cf635cd92"
     }
   },
   {
@@ -1224,6 +1328,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Dashboard User States"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.062Z",
+      "checksum": "65b7fec5b79640bfd76a2d96684158f0b8f44320c68f5cf5701473065b214047"
     }
   },
   {
@@ -1242,6 +1350,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User View Runs"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.090Z",
+      "checksum": "296b6c47e9f46855729644b66514cb613e16dcd60a74f4a511b4f41294721f7b"
     }
   },
   {
@@ -1260,6 +1372,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User View Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.116Z",
+      "checksum": "f13ea064b473191c8810578b43f55158b6c891eda10b9e1cb7aaed3fa27a404d"
     }
   },
   {
@@ -1328,6 +1444,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Applications"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.144Z",
+      "checksum": "36e52a7c486799b8c363be539935ccb77262f5dc0d7693dcda8d83fd5cb63bd9"
     }
   },
   {
@@ -1359,6 +1479,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Application Entities"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.176Z",
+      "checksum": "a94eacca91f1b59b2a94ee5bc356cbc44a56ed30a9820cb18e682a66fb92ed80"
     }
   },
   {
@@ -1385,6 +1509,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Application Settings"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.209Z",
+      "checksum": "892f6e4f9de4ff63615b3d0ae6f2fb38bd8c73e1db5d53339b33874a4d4c0a86"
     }
   },
   {
@@ -1469,6 +1597,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Roles"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.242Z",
+      "checksum": "97811e5d6ca2abe297d8712a75cf1b9f9afe3246e6ca334abd469dc016bb9dea"
     }
   },
   {
@@ -1520,6 +1652,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Components"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.278Z",
+      "checksum": "cef462b2576965c12f2774811823406912b4e4e3f076fc459c615ca257ec368d"
     }
   },
   {
@@ -1551,6 +1687,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Component Dependencies"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.309Z",
+      "checksum": "8e76f307f2442d7859dc01c651851c7eecfe1e9767145b49ac119c039fa4696a"
     }
   },
   {
@@ -1577,6 +1717,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Component Library Links"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.343Z",
+      "checksum": "4d0aa827dc0caeba3c7cf37e5637000ee458b676286a8014c46245ae674b22b6"
     }
   },
   {
@@ -1632,6 +1776,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Processes"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.373Z",
+      "checksum": "5648039ae89cf75e512ebfce6398c55a63b737cdb131c77c9baf003b36790b5b"
     }
   },
   {
@@ -1650,6 +1798,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Process Runs"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.404Z",
+      "checksum": "fd4127353cc487483918fb092bbe01e5b583819fe9d8f8b53d52d9f3df2a74e8"
     }
   },
   {
@@ -1668,6 +1820,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Process Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.437Z",
+      "checksum": "d9cc78cbdd8d1e01d526848941c60baf6efa58ee936e52c0d7a8bf99cd848f86"
     }
   },
   {
@@ -1686,6 +1842,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Process Watermarks"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.467Z",
+      "checksum": "684b7ada816ae01cef4c2eb4b20dfbb05ba2918e66976ae0ce44027d834ec897"
     }
   },
   {
@@ -1703,6 +1863,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User Applications"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.500Z",
+      "checksum": "3ffec88e9286a3756bfee48e836a38d2fb1a3c9c8ea29f3086800c145d0844d9"
     }
   },
   {
@@ -1720,6 +1884,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User Roles"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.535Z",
+      "checksum": "9411cadc7504f1c867df411b79b65ac2ba5e6850097ec263c3ea1aab396bd3f6"
     }
   },
   {
@@ -1738,6 +1906,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Employee Roles"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.570Z",
+      "checksum": "c82bd7df4d199f7565129ae80866987fd2c8481f4f09e70534fb1a8e16c36627"
     }
   },
   {
@@ -1756,6 +1928,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invite Roles"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.606Z",
+      "checksum": "0c2125e5d65abcd6d2d3931bbf0dac679cac1648ab8f9f7470ebd54e99c914e4"
     }
   },
   {
@@ -1774,6 +1950,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Entities"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.647Z",
+      "checksum": "c7844f6e26017b64fd093b9a39d05cb46bbad36427a838d94e64e89f17db190c"
     }
   },
   {
@@ -1792,6 +1972,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Entity Fields"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.700Z",
+      "checksum": "feeda442cbe7b94fb47aa277b3b18f3dbd26a71996104bb841fefe292c7f428b"
     }
   },
   {
@@ -1810,6 +1994,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Entity Relationships"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.743Z",
+      "checksum": "432c3d348c8587bfb39b16810afa9630b5beba308ccb1f44e519ded70b90907a"
     }
   },
   {
@@ -1828,6 +2016,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Entity Field Values"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.783Z",
+      "checksum": "8062f68ec4f564dbe7d8e2b66d5cba4a24582f0d7add22fe09137b533d138662"
     }
   },
   {
@@ -1846,6 +2038,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Changes"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.834Z",
+      "checksum": "82fae40b7d6e27869f74c1f375289cd0696902e9916b0ec166b3eab4a73a1463"
     }
   },
   {
@@ -1864,6 +2060,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Audit Logs"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.883Z",
+      "checksum": "8ba2f71d3250b342cac19bb3befc237aab845574ee1dd5ae1347eaae36becfa5"
     }
   },
   {
@@ -1882,6 +2082,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Error Logs"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.934Z",
+      "checksum": "e708ca615b44817723bacfe7c1b00dc38b103a8a025180c6b45ab1df9b90f7a2"
     }
   },
   {
@@ -1900,6 +2104,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User Record Logs"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:43.984Z",
+      "checksum": "f9c48c3b2a5fbb2823bf19de0891a1cae24428e968a39a9cd1f8191d506fbbd5"
     }
   },
   {
@@ -1918,6 +2126,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Logs"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:44.016Z",
+      "checksum": "c599e9cf0f2cbf7ab2484ea037a0a4c36e2a6b0739e765b1d7444ee1b0fe986d"
     }
   },
   {
@@ -1936,6 +2148,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Deletion Logs"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:44.045Z",
+      "checksum": "670c90505894720750214c0c59c7d61cb0e1d69e122139d9f01c611eccdda47d"
     }
   },
   {
@@ -1954,6 +2170,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Tasks"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:44.083Z",
+      "checksum": "e2ee7b1e96fe77172c7f1a1b8afcb14777bf025ae3727a1a40fbc968ecb9b159"
     }
   },
   {
@@ -1972,6 +2192,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Task Dependencies"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:44.125Z",
+      "checksum": "4393bd97b907c55f07b5c1501f673d75b37a219f6001e6a9f90e4b1ad9939aac"
     }
   },
   {
@@ -1990,6 +2214,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: API Keys"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:44.171Z",
+      "checksum": "4adc6b02227c8fb0779e79646c0ef138198e51ceac8612216f420a6b6b018884"
     }
   },
   {
@@ -2008,6 +2236,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Credentials"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:44.216Z",
+      "checksum": "cadcca7d423f793ff76ce5fa0335ba991bbd3e107fa76e6bb71a004dde5dc8a5"
     }
   },
   {
@@ -2026,6 +2258,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Encryption Keys"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:44.252Z",
+      "checksum": "4e86ab37d0bb3d2de0909e2de28953d73c87fd180be54ec7867f10994da38dbd"
     }
   },
   {
@@ -2044,6 +2280,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: O Auth Tokens"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:44.287Z",
+      "checksum": "51755c909939302e934e901787ccf23629525a40e9d05247b0907a1143fd0b73"
     }
   },
   {
@@ -2062,6 +2302,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invites"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:44.318Z",
+      "checksum": "b55f275d16955f77e53269891a08b1c2e3637330a076cfcdaa3ffc657c65865c"
     }
   },
   {
@@ -2080,6 +2324,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversations"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:44.350Z",
+      "checksum": "2d26ba6d6fedc86b5e85559f2e2e9c6386c779564e4a42dd433d630c1982222d"
     }
   },
   {
@@ -2098,6 +2346,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Details"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:44.382Z",
+      "checksum": "65a5a9ef92f85a2f3591b4d97bdc299e09f5e5318898f0fd0ff94f48989f8602"
     }
   }
 ]

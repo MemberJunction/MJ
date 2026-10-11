@@ -95,6 +95,11 @@ export interface VertexAICredentials {
 export class VertexLLM extends GeminiLLM {
   private _credentials: VertexAICredentials;
 
+  /** Thought signatures minted by Vertex AI do not validate on Google AI Studio, and vice versa. */
+  protected override get ThoughtSignatureEndpoint(): string {
+    return 'vertex';
+  }
+
   /**
    * Create a new VertexLLM instance
    *

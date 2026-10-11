@@ -95,6 +95,12 @@ export type JSONObject = { [key: string]: JSONValue };
  * @param message The diagnostic message, already prefixed by the caller (e.g. `[GeminiRealtime][diag] …`).
  */
 export function RealtimeDiagLog(message: string): void {
+    // Browser client drivers (e.g. GeminiRealtimeClient's transport handlers) call this too, and a
+    // browser has no `process`: an unguarded read throws and aborts the caller before it can surface
+    // the provider's close/error. No `process` means no MJ_VERBOSE, so diagnostics stay dark.
+    if (typeof process === 'undefined' || !process.env) {
+        return;
+    }
     const v = (process.env.MJ_VERBOSE ?? '').toLowerCase();
     if (v === 'true' || v === '1' || v === 'yes') {
         // Strip all control characters (C0/C1, incl. CR/LF/VT/FF/ESC/NEL) plus Unicode
@@ -331,6 +337,14 @@ export interface RealtimeSessionCapabilities {
      * Whether delegation mode can be reconfigured mid-session.
      */
     CanReconfigureDelegationMode?: boolean;
+
+    /**
+     * Whether the model is **full-duplex**: it keeps listening while it speaks, can emit short
+     * backchannel acknowledgements, and judges for itself whether speech was directed at it. A bridge uses
+     * this to prefer the model's own addressing judgement over a name-pattern match and to treat the room's
+     * floor coordinator as a safety net rather than the primary gate. Absent/`false` = turn-based.
+     */
+    FullDuplex?: boolean;
 
     /**
      * Whether the provider emits a discrete user-interruption signal when user barge-in occurs.

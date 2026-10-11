@@ -106,6 +106,12 @@ import { EntityCloneConfigEditorComponent } from "../panels/record-clone/entity-
 import { ClonePlanTreeComponent } from "@memberjunction/ng-record-clone";
 import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissions";
 import { MLModelFormComponentExtended, LoadMLModelFormComponentExtended } from "./MLModels/ml-model-form.component";
+import { RubricsModule } from "@memberjunction/ng-rubrics";
+import { MJRubricFormComponentExtended } from "./Rubrics/rubric-form.component";
+import { RubricAuthorPanel, RubricDiffPanel, RubricPublishPanel, RubricVersionsPanel } from "./Rubrics/rubric-form.panels";
+import { MJRubricEvaluationFormComponentExtended, RubricEvaluationComparePanel, RubricEvaluationResultPanel } from "./Rubrics/evaluation-form.component";
+import { MJRubricScaleFormComponentExtended, RubricScaleLevelsPanel } from "./Rubrics/scale-form.component";
+import { MJAIAgentRubricFormComponentExtended, MJRubricBandFormComponentExtended, MJRubricCategoryFormComponentExtended, MJRubricCriterionFormComponentExtended, MJRubricEvaluationScoreFormComponentExtended, MJRubricScaleLevelFormComponentExtended, MJRubricVersionFormComponentExtended, RubricVersionSummaryPanel } from "./Rubrics/record-forms.component";
 import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
 
 @NgModule({
@@ -152,6 +158,16 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
         MJListFormComponentExtended,
+        MJRubricFormComponentExtended,
+        MJRubricEvaluationFormComponentExtended,
+        MJRubricScaleFormComponentExtended,
+        MJRubricVersionFormComponentExtended,
+        MJRubricCriterionFormComponentExtended,
+        MJRubricEvaluationScoreFormComponentExtended,
+        MJRubricScaleLevelFormComponentExtended,
+        MJRubricBandFormComponentExtended,
+        MJRubricCategoryFormComponentExtended,
+        MJAIAgentRubricFormComponentExtended,
         // ContentSource-specific BaseFormPanel slot components (no custom form override).
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
@@ -175,6 +191,15 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
     ],
     imports: [
         CommonModule,
+        RubricsModule,
+        RubricAuthorPanel,
+        RubricDiffPanel,
+        RubricPublishPanel,
+        RubricVersionsPanel,
+        RubricVersionSummaryPanel,
+        RubricEvaluationResultPanel,
+        RubricEvaluationComparePanel,
+        RubricScaleLevelsPanel,
         FormsModule,
         ReactiveFormsModule,
         DragDropModule,

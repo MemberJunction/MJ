@@ -156,6 +156,13 @@
               (RecordOpenRequested)="OnInvocationOpenRequested($event)">
             </mj-agent-invocations>
           </div>
+          <div class="agent-pane agent-pane--rubrics" [class.agent-pane--hidden]="ActiveFormTab !== 'rubrics'">
+            <mj-agent-rubrics
+              [Provider]="Provider"
+              [AgentID]="record.ID"
+              [Active]="ActiveFormTab === 'rubrics'">
+            </mj-agent-rubrics>
+          </div>
         }
 
         <!-- Single Pane Layout with Expander Panels -->

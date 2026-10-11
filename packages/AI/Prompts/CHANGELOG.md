@@ -1,5 +1,137 @@
 # @memberjunction/ai-prompts
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 0a75bb2: A Loop agent run that declares no tools renders its system prompt again. The Loop system prompt reads `_NATIVE_TOOL_CALLING` and `_NATIVE_CONTROL_FLOW` on its first line, so template parameter extraction marks both required, but `AIPromptRunner` set them only when tools were declared, and every such run failed with "Parameter \_NATIVE_TOOL_CALLING is required". The runner now sets both on every hierarchical run, to the envelope path's values (`false`, `'envelope'`) when no tools are declared and the caller supplied none.
+- 29b6ec3: fix: native tool calling — object action params, a one-turn `complete_task` finish, an implicit-mode Loop prompt, and Gemini thought signatures across failover
+
+  Found running Skip's Query Writer on Gemini 3 Flash with native implicit control flow. `Simple Object` action params are declared as `object` and a JSON-string argument is decoded before the Action runs (`Other` stays `string`). A new `complete_task` control tool applies the final payload change and completes in one turn; its `payloadChangeRequest` is a JSON string because the forced final turn is schema-constrained and an open object decodes as `{}`, and the final permitted turn now forces `complete_task` instead of `'none'` (downgraded to `'none'` for hybrid models). The Loop system prompt's implicit mode no longer tells the model to answer in a JSON envelope, and unreadable JSON text is a Retry rather than a final answer that drops its payload. The Gemini driver records where a thought signature was minted and replays it only there, so a failover between Google AI Studio and Vertex AI no longer fails with a 400 "Corrupted thought signature." A model that rejects a forced tool choice gets `'auto'` instead: Claude Opus 5.5 and Sonnet 5.5 through a new catalog flag, `LLM.SupportsForcedToolChoice: false`, and any Claude request using budget thinking in the Anthropic driver. Envelope and hybrid prompts render byte-identically.
+
+- bea2386: A run can now be restricted to the credentials its caller supplied, so a customer's work never silently runs on the platform's AI keys.
+
+  Key resolution matched per driver class and fell back to the platform for any class the run did not key. A host running work on a customer's own key had no way to say "only these keys": when the customer's Google key was rejected, failover moved to Vertex, found no customer key, and finished the run on the platform's account — reporting success. Internal prompts that dropped `apiKeys` (AI JSON repair, the parallel result selector) reached the platform key the same way with no failover at all.
+  - **`CredentialScope: 'Any' | 'RuntimeOnly'`** (`AICredentialScope` in `@memberjunction/ai`) on `ExecuteAgentParams` and `AIModelRunParams` (so `AIPromptParams`). Omitting the parameter means `'Any'`, which resolves keys as before (the fixes below change some defaults regardless). `'RuntimeOnly'` allows only `apiKeys` and a prompt's per-request `credentialId`: every platform source — `AICredentialBinding`s, the vendor's default credential and `AI_VENDOR_API_KEY__*` — is skipped.
+  - Every scope decision goes through `CredentialScopeAllows(scope, source)` in `@memberjunction/ai`, where `source` is an `AICredentialSource` — `'Runtime'`, `'PlatformCredential'` or `'Environment'`. Its exhaustive switch makes a new scope value a compile error until it is answered, and an unknown value at runtime throws rather than falling back to the platform.
+  - Enforced in `BaseModelRunner.HasCredentialsAvailable` and `ResolveCredentialForExecution`, which every runner shares. Because candidate selection uses the first, failover stays on vendors the caller keyed; a run they do not cover fails with "No suitable model found … credential scope is RuntimeOnly" instead of running on the platform's key.
+  - `BaseAgent` carries the scope to every prompt, sub-agent, action, realtime delegate and realtime session in the run. `GetAIAPIKey` and `MakeAIAPIKeyResolver` take an optional `scope`; `RealtimeClientSessionService` drops its `getAPIKeyForDriver` seam under `'RuntimeOnly'`; image and media runner params gain `CredentialScope`.
+  - `@memberjunction/actions-base`: `RunActionParams.CredentialScope` (`RuntimeCredentialScope`). Under `'RuntimeOnly'` the `RuntimeAPIKeyResolver`'s answer is final. `Generate Image` honours it, and Summarize Content, Run Ad-hoc Query, Execute AI Prompt and Execute Agent forward it to the prompt or agent they run — they are not handed the run's keys, so under `'RuntimeOnly'` they fail rather than spend the platform's.
+  - Decision calls (FinishIf, decision requests, discovery, catalog narrowing, the payload change check) carry the run's execution scope through `AgentDecisionService` (`AgentDecisionAskParams.ExecutionScope`) to `AIDecisionRunner`, and `LLMDecision`'s own chat prompt runs under it (`LLMDecision.ExecutionScope`). Self-check rubrics do too: `ProviderRubricEngine`, `ProviderPromptService` and `ProviderDecisionService` take an optional execution scope, and the rubric evaluation agent runs under it.
+  - A model driver is never constructed without a key under a scope that rules out environment keys: the OpenAI and Anthropic SDKs read `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` themselves when handed none, which parallel prompt tasks could reach.
+  - Not covered by the scope: retrieval reranking and embeddings outside a prompt run (platform infrastructure), and agent-harness credential grants.
+  - **Prompts started on a run's behalf now run under its scope** — user, provider, configuration, `apiKeys`, `credentialId`, `CredentialScope` — via the new `PickPromptExecutionScope` / `AIPromptExecutionScope`: AI JSON repair, the parallel `PromptSelector` judge, `BaseAgent`'s summarize-range and message-compaction sub-calls, conversation compaction (`CompactIfNeededInput.ExecutionScope`) and conversation naming. Each forwarded `contextUser` at most, so each ran on platform keys and the default configuration inside a customer's run. This applies whatever the scope.
+  - `ErrorAnalyzer` classifies Google's invalid-key and expired-key responses ("API key not valid" / `API_KEY_INVALID`, "API key expired" / `API_KEY_EXPIRED`, HTTP 400) as `Authentication`. It fell through to `VendorValidationError`, so an invalid key failed over to another vendor instead of failing.
+  - **A failed streaming call keeps its driver's classification.** `BaseLLM` rejects a failed stream with its `ChatResult`, not an `Error`. The prompt runner analyzed that object afresh, so an invalid key the driver classified `Authentication`/`Fatal` became `Unknown`/`Transient` with no message: failover continued onto the same dead key, agents retried the step up to their consecutive-failure limit, and every run recorded "Unknown error". `ErrorAnalyzer` now returns an `errorInfo` the value already carries, and the runner records a rejected `ChatResult` as an `Error` with its real message; any other rejected value is classified as itself before it is wrapped. Affects any streamed prompt with a non-retryable error, whatever the credential scope.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [28df136]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/aiengine@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/ai-engine-base@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/templates@6.2.0-edge.3
+  - @memberjunction/credentials@6.2.0-edge.3
+  - @memberjunction/templates-base-types@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 79279f2: Text-to-speech, speech-to-text and video now have runners, like chat, embeddings and images.
+  - **`AITextToSpeechRunner`** (`TTS` models), **`AISpeechToTextRunner`** (`Speech to Text` models) and **`AIVideoRunner`** (`Video` models) select a model from a carrier prompt's bindings, or a pinned `ModelID`, resolve its credential, fail over, and record every call as an AI Prompt Run. The run row never holds audio or video. Text-to-speech records the characters sent in the `Characters` measure unless the driver reports its own quantity; speech-to-text records the audio's seconds when the provider reports them; video records seconds only when a driver reports them, which HeyGen's does not. They share their lifecycle through a new `BaseMediaRunner`.
+  - New metadata: the `Default Text To Speech`, `Default Speech To Text` and `Default Video Generation` prompts, which the runners use when no prompt is named.
+  - **`BaseAudioGenerator` is split** into `BaseTextToSpeech` and `BaseSpeechToText`. `BaseAudioGenerator` is deprecated but keeps working: it implements both, and every driver still extends it and stays registered against it under the same key. `OpenAIAudioGenerator` also registers against both new classes, `ElevenLabsAudioGenerator` against `BaseTextToSpeech`, and `GroqAudioGenerator` against `BaseSpeechToText`. The split-and-join transcription loop is also exported as `TranscribeAudioWithSplitting`.
+  - `VideoResult` gains an optional `usage`, for a driver that reports the video's length.
+  - `SpeechResult` and `VideoResult` gain an optional `errorInfo`. The OpenAI, ElevenLabs, Groq and HeyGen audio and video drivers now fill it from the error their SDK threw, keeping its HTTP status, so a caller can tell a rejected request from an outage. The runners fail over on it: a 400 or 422 no longer fails over to every other candidate.
+  - The media runners take `TimeoutMS` and `CancellationToken`, which bound each driver call as `timeoutMS` and `cancellationToken` bound a chat call.
+  - `BaseModelRunner` gains `ResolveUsageToRecord` and `ApplyUsageToRunRecord`, which the image runner now uses too, so every non-chat runner records units the same way.
+
+  Nothing called the audio or video drivers before, so no existing caller changes behavior.
+
+- 3fbda62: Add `AIDecisionRunner`, which runs typed decisions (Likelihood, Choice, Score) on `Decision`-type models with model selection, failover, model limits and prompt-run telemetry, together with the `LLM Decision` model (under the `MemberJunction` vendor) and the `Default Decision` prompt. A higher-priority model skipped for lack of a credential is logged once per process, naming the `AI_VENDOR_API_KEY__<DRIVERCLASS>` variable that would enable it.
+- ff00d60: Image generation now runs through a new `AIImageGenerationRunner`, which records every call as an AI Prompt Run and fails over between the image models that the new `Default Image Generation` prompt binds. Each run records the images it returned, so the models' existing `Per Image` cost rows price it. Run rows also record the calling agent. The Generate Image action uses the runner. With no Model named, the prompt's bindings choose; their first choice is the model the action picked before, and failover can reach the other vendor with the run's own key. A named Model is pinned, and fails over only between its own vendors. The action's key now ranks as it does for chat prompts: a credential binding, or a default credential of the vendor's credential type, wins over it. A call with no key the action can resolve now reaches the runner, where a binding may still apply. If none does, it fails with `GENERATION_FAILED` instead of `ACTION_FAILED`.
+- 861cbf0: Follow-ups from the image runner review:
+  - **Prompt model pinning**: Set `RequireSpecificModels: true` on the `Default Image Generation` carrier prompt (`metadata/prompts/.default-image-generation-prompt.json`), ensuring `AIImageGenerationRunner` only selects models explicitly bound to the prompt with supported drivers rather than falling back to unbound image models.
+  - **`ResolveImageGenerationAPIKey` JSDoc**: Marked `ResolveImageGenerationAPIKey` in `@memberjunction/core-actions` as `@deprecated` with updated documentation clarifying it is retained for backwards compatibility, pointing callers to `BuildImageGenerationAPIKeys`.
+
+- e51ce8a: Add `LLMDecision`, a `BaseDecision` driver that answers typed decision questions (Likelihood, Choice, Score) with a chat model through an MJ prompt, and the `LLM Decision` prompt it runs, bound to GPT-OSS-120B on Cerebras and Groq with GPT 5.5 Instant as the fallback. Choice and Score replies are normalised into probability distributions before `BaseDecision` validates them. A missing option or level counts as 0, but a value the model wrote that is not a usable number (such as `"80%"`, `null`, a negative, or a Likelihood of `85`) fails the decision instead of being guessed at.
+- 14e2a3a: Retires the AI Prompt "Job Function and Seniority Derivation" (`7C46041F`) from MJ core (#4918). bizapps-common ships the same prompt with the same ID, so installing common on MJ 6.2 failed with a duplicate primary key. The prompt and its template, template content and template parameter are marked `deleteRecord`; the next metadata sync deletes them, and the prompt's two AI Prompt Models go with it through `spDeleteAIPrompt`'s cascade.
+
+  Known gap: a database that already has bizapps-common 5.47 installed cannot upgrade to 6.2, because `V202609221852__v6.2.x__Metadata_Sync.sql` inserts a prompt model that duplicates common's on `UQ_AIPromptModel_Prompt_Model_Vendor_ConfigID` before this delete can run. Don't work around it by deleting common's prompt model, and don't fix it by guarding that migration's inserts alone. Once the migration completes on such a database, it overwrites common's prompt with MJ's version, and the metadata sync's `spDeleteAIPrompt` then deletes it: the prompt, its prompt models, prompt runs and result cache. It also sets `PromptID` to NULL on common's record processes. Tracked in #4939.
+
+### Patch Changes
+
+- eaa9455: Introduce `AIEmbeddingRunner` extending `BaseModelRunner` with `RequiredModelType = 'Embeddings'`.
+  - Implement credential resolution, failover across candidate models/vendors, retry handling, and `MJAIPromptRun` persistence.
+  - Deprecate `AIModelRunner.RunEmbedding` and delegate transparently to `AIEmbeddingRunner`.
+  - Migrate embedding call sites in `@memberjunction/tag-engine`, `@memberjunction/ai-vector-dupe`, `@memberjunction/ai-vector-sync`, `@memberjunction/content-autotagging`, and `@memberjunction/search-engine` to use `AIEmbeddingRunner`.
+  - `AIEmbeddingRunner` runs a driver that needs no API key (`LocalEmbedding`, `OllamaEmbedding`) with no key configured, and follows the prompt's `FailoverStrategy` (`SameModelDifferentVendor` never switches models).
+  - With no Embedding prompt, the runner embeds under an unsaved stand-in and writes no run row. `EmbeddingRunParams.SkipRunRecord` skips the row on demand.
+  - `TagEngine` embeds tags, queries and new tags with one model (the Tag Semantic Matching prompt's, else the smallest) and persists that ID.
+  - Vector search keys its query-embedding cache by model and dimension, not by driver.
+- 660ef45: Add a `RunDecision` GraphQL mutation and `GraphQLAIClient.RunDecision`, so browser code can run a typed decision in one round trip, under the same authorization as `RunAIPrompt`: the API-key `prompt:execute` scope is checked against the ID of the prompt that runs. The mutation refuses scope-limited sessions, and bounds the state and question sizes and the model-call timeout on the server. The `Run Decision` action's question validation moves unchanged to `ParseDecisionQuestions` in `@memberjunction/ai-prompts`, which the action and the mutation now share.
+- 35ffb95: A decision answered by `LLMDecision` now carries its chat model's cost: the chat prompt's run is a child of the decision's run, and its cost is recorded as the decision run's `DescendantCost` and `TotalCost`, so an agent's `MaxCostPerRun` counts it. The cost is booked as a descendant only when the chat run was actually linked as a child; when the decision run's own INSERT failed, it stays the decision run's own `Cost`. When a decision fails over, every linked attempt's cost is kept, not only the answering attempt's. Once the chat run is saved, its saved cost is the one reported, so a runner-reported cost of 0 that the server reprices no longer overwrites the rollup.
+- 5148534: A rerank answered by `LLMReranker` now carries its chat model's cost: the chat prompt's run is a child of the rerank's run, and its cost is recorded as the rerank run's `DescendantCost` and `TotalCost`. `RerankResponse` gains an optional `Usage`, which a reranker driver sets when it knows its call's tokens and cost.
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/templates@6.2.0-edge.2
+  - @memberjunction/credentials@6.2.0-edge.2
+  - @memberjunction/templates-base-types@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Minor Changes

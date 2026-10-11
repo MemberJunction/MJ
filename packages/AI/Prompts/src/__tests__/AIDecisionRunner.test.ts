@@ -4,6 +4,7 @@ import { UserInfo } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
   BaseDecision,
+  BaseSystemOneDecision,
   DecisionParams,
   DecisionResult,
   DecisionQuestion,
@@ -756,6 +757,33 @@ describe('AIDecisionRunner', () => {
     });
   });
 
+  it("7d. an LLMDecision driver carries the decision's execution scope, so its chat prompt spends the decision's credentials", () => {
+    const testUser = { ID: 'user-scope-1', Name: 'Scope User' } as unknown as UserInfo;
+    vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockImplementation(
+      (_baseClass: unknown, _driverClass: string | null = null, ...args: unknown[]) =>
+        new LLMDecision(args[0] as string, args[1] as string, args[2] as UserInfo) as never
+    );
+    const apiKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+    const params = new AIDecisionParams();
+    params.contextUser = testUser;
+    params.configurationId = 'config-1';
+    params.apiKeys = apiKeys;
+    params.CredentialScope = 'RuntimeOnly';
+    const candidate = { driverClass: LLM_DRIVER, apiName: 'Decision System Chat Prompt' };
+    const createDriver = (runner as unknown as {
+      createDriver(candidate: { driverClass: string; apiName: string }, apiKey: string, params: AIDecisionParams): BaseDecision | string;
+    }).createDriver.bind(runner);
+
+    const driver = createDriver(candidate, '', params);
+
+    expect(driver).toBeInstanceOf(LLMDecision);
+    const scope = (driver as LLMDecision).ExecutionScope;
+    expect(scope?.apiKeys).toBe(apiKeys);
+    expect(scope?.configurationId).toBe('config-1');
+    expect(scope?.CredentialScope).toBe('RuntimeOnly');
+    expect(scope?.contextUser).toBe(testUser);
+  });
+
   // 8. Driver dispatch and answer mapping: verifies Likelihood, Choice, and Score answers are correctly mapped into AIDecisionRunResult
   it('8. dispatches driver and maps Likelihood, Choice, and Score answers into AIDecisionRunResult', async () => {
     const prompt = makeDecisionPrompt();
@@ -915,6 +943,42 @@ describe('AIDecisionRunner', () => {
     ];
     return SECONDARY_MODEL_ID;
   }
+
+  it("9e. a System One driver's configuration error fails over to the next candidate instead of stopping the loop", async () => {
+    // The real base class, missing its endpoint: what a fallback Clef with no account ID, or a Kev
+    // size with no endpoint bound, returns before any request.
+    class UnconfiguredSystemOneDecision extends BaseSystemOneDecision {
+      protected get ServiceName(): string { return 'Unconfigured System One'; }
+      protected get DefaultModel(): string { return 'unconfigured'; }
+      protected GetEndpointURL(): string { return ''; }
+      protected GetConfigurationError() {
+        return { ErrorType: 'NoCredentials' as const, Message: 'Unconfigured System One has no base URL' };
+      }
+    }
+    const prompt = makeDecisionPrompt({ FailoverStrategy: 'NextInList', MaxFailoverAttempts: 3 });
+    const secondaryId = addSecondaryCandidate(prompt.ID);
+    let callCount = 0;
+    mockDriver.decideOverride = async (p: DecisionParams) => {
+      callCount++;
+      if (callCount === 1) {
+        return new UnconfiguredSystemOneDecision('').Decide(p);
+      }
+      const success = new DecisionResult(true, new Date(), new Date());
+      success.Answers = { q_likelihood: { Kind: 'Likelihood', Probability: 0.7 } };
+      return success;
+    };
+    const params = new AIDecisionParams();
+    params.prompt = prompt;
+    params.Questions = { q_likelihood: { Kind: 'Likelihood', Instructions: 'Is ok?' } };
+    params.State = 'State to test failover';
+    params.provider = fakeProvider;
+
+    const result = await runner.ExecuteDecision(params);
+
+    expect(callCount).toBe(2);
+    expect(result.success).toBe(true);
+    expect(result.modelInfo?.modelId).toBe(secondaryId);
+  });
 
   it('9b. a limit breach on the first model fails over to the next, which answers', async () => {
     h.state.modelConfigs.set(DECISION_MODEL_ID.toLowerCase(), { Decision: { MaxQuestionsPerCall: 1 } });
