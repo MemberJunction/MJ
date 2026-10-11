@@ -32,8 +32,43 @@ interface ParserModule {
 }
 const { parser, lexer } = nunjucks as unknown as { parser: ParserModule; lexer: { lex(src: string): object } };
 
+/** The environment methods that find a registered filter, test or global by name. */
+interface EnvironmentRegistries {
+    getFilter(name: string): unknown;
+    getTest(name: string): unknown;
+    getGlobal(name: string): unknown;
+    addFilter(name: string, filter: (this: object, ...args: never[]) => unknown): void;
+}
+
+/** nunjucks classes whose instances only nunjucks itself uses. */
+const { Template, Loader } = nunjucks as unknown as { Template: new (src: string) => object; Loader: new () => object };
+const { Frame } = (nunjucks as unknown as { runtime: { Frame: new () => object } }).runtime;
+
+/** Names every plain object inherits, such as `hasOwnProperty`. */
+const INHERITED_NAMES = Object.getOwnPropertyNames(Object.prototype);
+
 function renderPlain(templateText: string, data: object = {}): string {
     return new nunjucks.Environment(null, { autoescape: false }).renderString(templateText, data);
+}
+
+function newRegistries(): EnvironmentRegistries {
+    return new nunjucks.Environment(null, { autoescape: false }) as unknown as EnvironmentRegistries;
+}
+
+/** What the callback throws, or `undefined` when it does not throw. */
+function thrownBy(callback: () => unknown): unknown {
+    try {
+        callback();
+    } catch (error) {
+        return error;
+    }
+    return undefined;
+}
+
+/** True when the callback throws a sandbox refusal, directly or wrapped by nunjucks. */
+function isRefused(callback: () => unknown): boolean {
+    const error = thrownBy(callback);
+    return error instanceof TemplateSandboxError || (error instanceof Error && error.message.includes(TemplateSandboxError.name));
 }
 
 beforeAll(() => {
@@ -58,6 +93,8 @@ describe('HardenNunjucksRuntime', () => {
     it('is idempotent: hardening again keeps the installed guards', () => {
         const installed = { ...runtime };
         const installedParse = parser.parse;
+        const environmentPrototype = (nunjucks as unknown as { Environment: { prototype: EnvironmentRegistries } }).Environment.prototype;
+        const { getFilter, getTest, getGlobal } = environmentPrototype;
 
         HardenNunjucksRuntime();
 
@@ -65,6 +102,9 @@ describe('HardenNunjucksRuntime', () => {
         expect(runtime.contextOrFrameLookup).toBe(installed.contextOrFrameLookup);
         expect(runtime.callWrap).toBe(installed.callWrap);
         expect(parser.parse).toBe(installedParse);
+        expect(environmentPrototype.getFilter).toBe(getFilter);
+        expect(environmentPrototype.getTest).toBe(getTest);
+        expect(environmentPrototype.getGlobal).toBe(getGlobal);
     });
 
     it('guards the parser again after something replaces it with an unguarded one', () => {
@@ -152,5 +192,71 @@ describe('restricted values', () => {
     it('refuses a call that returns the render context', () => {
         const returnsThis = function (this: object): object { return this; };
         expect(() => renderPlain('{{ leak().env.opts.autoescape }}', { leak: returnsThis })).toThrow(TemplateSandboxError.name);
+    });
+});
+
+describe('environment registries', () => {
+    it('resolve a filter, test or global only to a name the environment registered itself', () => {
+        const env = newRegistries();
+        const unrefused = INHERITED_NAMES.flatMap((name) => [
+            [`filter ${name}`, () => env.getFilter(name)],
+            [`test ${name}`, () => env.getTest(name)],
+            [`global ${name}`, () => env.getGlobal(name)],
+        ] as const)
+            .filter(([, lookup]) => !(thrownBy(lookup) instanceof TemplateSandboxError))
+            .map(([label]) => label);
+        expect(unrefused).toEqual([]);
+    });
+
+    it('refuse an inherited test name that a template passes to select or reject while it renders', () => {
+        const unrefused = INHERITED_NAMES
+            .flatMap((name) => [`{{ [1] | select("${name}") }}`, `{{ [1] | reject("${name}") }}`])
+            .filter((templateText) => !isRefused(() => renderPlain(templateText)));
+        expect(unrefused).toEqual([]);
+    });
+
+    it('still resolve registered names, and report a missing name as nunjucks does', () => {
+        const env = newRegistries();
+        const ownFilter = (): string => 'own';
+        env.addFilter('toString', ownFilter);
+
+        expect(typeof env.getFilter('upper')).toBe('function');
+        expect(typeof env.getTest('odd')).toBe('function');
+        expect(typeof env.getGlobal('range')).toBe('function');
+        expect(env.getFilter('toString')).toBe(ownFilter);
+        expect(() => env.getFilter('notRegistered')).toThrow('filter not found: notRegistered');
+    });
+});
+
+describe('nunjucks objects', () => {
+    it('refuse member reads on the render context, so a render cannot change what a later render sees', () => {
+        const env = newRegistries();
+        env.addFilter('currentContext', function currentContext(this: object): object {
+            return this;
+        });
+        const environment = env as unknown as nunjucks.Environment;
+
+        expect(isRefused(() => environment.renderString('{{ (1 | currentContext).env.addGlobal("mjPlanted", "planted") and "" }}', {})))
+            .toBe(true);
+        expect(environment.renderString('[{{ mjPlanted }}]', {})).toBe('[]');
+    });
+
+    it('refuse member reads on, and lookups that return, an environment, a frame, a template, a loader or the runtime module', () => {
+        const data = {
+            environment: new nunjucks.Environment(null),
+            frame: new Frame(),
+            template: new Template('x'),
+            loader: new Loader(),
+            runtimeModule: runtime,
+        };
+        const unrefused = Object.keys(data)
+            .flatMap((key) => [`{{ ${key}.opts }}`, `[{{ ${key} }}]`])
+            .filter((templateText) => !isRefused(() => renderPlain(templateText, data)));
+        expect(unrefused).toEqual([]);
+    });
+
+    it('refuse a call that returns the environment', () => {
+        const env = new nunjucks.Environment(null);
+        expect(isRefused(() => renderPlain('{{ environmentOf().opts }}', { environmentOf: () => env }))).toBe(true);
     });
 });
