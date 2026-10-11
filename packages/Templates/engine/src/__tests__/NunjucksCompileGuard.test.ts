@@ -89,6 +89,8 @@ const LOOP_BODY_CONSTRUCTS = [
     '{% extends "parent" %}', '{% block blk %}body{% endblock %}', '{% block blk2 %}{{ super() }}{% endblock %}',
     '{% probesync item, 1 %}body {{ item }}{% endprobesync %}', '{% probeasync item %}body {{ item }}{% endprobeasync %}',
     '{% macro m() %}{% asyncEach inner in items %}{{ inner }}{% endeach %}{% endmacro %}',
+    '{% macro mm(a) %}{% asyncEach inner in items %}{{ a }}{% endeach %}{% endmacro %}',
+    '{% block blk3 %}{% asyncEach inner in items %}{{ super() }}{% endeach %}{% endblock %}',
     '{% set y %}{% asyncEach inner in items %}{{ inner }}{% endeach %}{% endset %}',
     '{% probesync %}{% asyncEach inner in items %}{{ inner }}{% endeach %}{% endprobesync %}',
     '{{ range(3) }}{{ cycler(1, 2).next() }}{{ joiner()() }}{{ loop.index }}{{ loop.first }}', '{% raw %}{{ item }}{% endraw %}',
@@ -403,6 +405,19 @@ describe('compile guard: is-tests', () => {
         ['a quote, written as a regular expression', '{{ 1 is r/a"b/ }}'],
     ])('refuses an is-test name with %s', (_name, templateText) => {
         expect(() => renderPlain(templateText)).toThrow(TemplateSandboxError.name);
+    });
+});
+
+describe('compile guard: filter and test names', () => {
+    it('refuses filter and test names that resolve to members every object inherits', () => {
+        const unrefused = Object.getOwnPropertyNames(Object.prototype)
+            .flatMap((name) => [`{{ 1 | ${name} }}`, `{% filter ${name} %}x{% endfilter %}`, `{{ 1 is ${name} }}`])
+            .filter((templateText) => !(thrownBy(() => parser.parse(templateText)) instanceof TemplateSandboxError));
+        expect(unrefused).toEqual([]);
+    });
+
+    it('still compiles registered filters and tests, including dotted filter names', () => {
+        expect(renderPlain('{{ "a" | upper }}|{{ "b" | ns.upper }}|{{ 3 is odd }}|{% filter upper %}c{% endfilter %}')).toBe('A|B|true|C');
     });
 });
 

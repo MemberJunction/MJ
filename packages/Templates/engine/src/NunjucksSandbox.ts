@@ -7,12 +7,13 @@
  *   checked by `AssertTemplateTreeIsSafe` (`NunjucksCompileGuard.ts`) before it compiles.
  * - **Render time.** Every compiled template resolves bare names, member access and calls through
  *   three functions on nunjucks' shared runtime module: `contextOrFrameLookup`, `memberLookup` and
- *   `callWrap`. Unguarded, a template can walk from any value to `Function`, or call `valueOf()` to get
- *   the render context and change the shared environment. {@link HardenNunjucksRuntime} wraps those
- *   three functions in place.
+ *   `callWrap`. It finds filters and tests with the environment's `getFilter` and `getTest`, which read
+ *   plain objects. Unguarded, a template can walk from any value to `Function`, or reach the render
+ *   context and change the shared environment. {@link HardenNunjucksRuntime} wraps those functions in place.
  *
- * The parser and runtime modules are shared by every nunjucks environment in the process, so the guard
- * covers all of them, including templates loaded through `include` and `import`.
+ * The parser, the runtime module and the `Environment` prototype are shared by every nunjucks
+ * environment in the process, so the guard covers all of them, including templates loaded through
+ * `include` and `import`.
  * @module @memberjunction/templates
  */
 import nunjucks from 'nunjucks';
@@ -40,10 +41,36 @@ interface NunjucksRuntimeHooks {
     callWrap: (obj: unknown, name: string, context: NunjucksRenderContext, args: unknown[]) => unknown;
 }
 
+/** The registries of a nunjucks environment, and the methods that find a name in them. */
+interface NunjucksEnvironmentRegistries {
+    filters: object;
+    tests: object;
+    globals: object;
+    getFilter: RegistryLookup;
+    getTest: RegistryLookup;
+    getGlobal: RegistryLookup;
+}
+
+/** `getFilter`, `getTest` and `getGlobal`, called on an environment. */
+type RegistryLookup = (this: NunjucksEnvironmentRegistries, name: string) => unknown;
+
 /** The nunjucks parser module. The compiler calls its `parse` for every template it compiles. */
 interface NunjucksParser {
     parse: (src: string, extensions?: unknown, opts?: unknown) => unknown;
 }
+
+/** The nunjucks modules and classes the guard wraps or recognizes. */
+interface NunjucksInternals {
+    parser: NunjucksParser;
+    runtime: NunjucksRuntimeHooks & { Frame: { prototype: object } };
+    Environment: { prototype: NunjucksEnvironmentRegistries };
+    Template: { prototype: object };
+    lib: object;
+    compiler: object;
+    lexer: object;
+    nodes: object;
+}
+const NUNJUCKS = nunjucks as unknown as NunjucksInternals;
 
 /** Any function a guard can replace. */
 type GuardableHook = (...args: never[]) => unknown;
@@ -72,28 +99,49 @@ const RESTRICTED_VALUES: ReadonlySet<unknown> = new Set<unknown>([
     globalThis.process,
 ].filter((value) => value !== undefined && value !== null));
 
+/** nunjucks' base `Obj` class, which render contexts and templates extend. */
+const NUNJUCKS_OBJ_PROTOTYPE: object = Object.getPrototypeOf(NUNJUCKS.Template.prototype);
+
+/** nunjucks' base `EmitterObj` class, which environments and loaders extend. */
+const NUNJUCKS_EMITTER_PROTOTYPE: object = Object.getPrototypeOf(NUNJUCKS.Environment.prototype);
+
+/** Prototypes of the objects nunjucks uses to render: contexts and templates, environments and loaders, and frames. */
+const NUNJUCKS_OBJECT_PROTOTYPES: readonly object[] = [NUNJUCKS_OBJ_PROTOTYPE, NUNJUCKS_EMITTER_PROTOTYPE, NUNJUCKS.runtime.Frame.prototype];
+
+/** The nunjucks module and its submodules. */
+const NUNJUCKS_MODULES: ReadonlySet<unknown> = new Set<unknown>([
+    nunjucks, NUNJUCKS.runtime, NUNJUCKS.parser, NUNJUCKS.lib, NUNJUCKS.compiler, NUNJUCKS.lexer, NUNJUCKS.nodes,
+]);
+
 /** Guards this module installed, so hardening again does not wrap a guard in another guard. */
 const installedGuards = new WeakSet<GuardableHook>();
 
 /**
  * Guards the nunjucks parser and runtime used by every nunjucks environment in this process. After this call:
  * - a template whose names could change the compiled code fails to compile (see `AssertTemplateTreeIsSafe`)
+ * - a filter, test or global resolves only to a name the environment registered itself, never to a member
+ *   that every object inherits (such as `hasOwnProperty`)
  * - a member named `constructor`, `prototype`, `__proto__` or one of the `__define/lookup Getter/Setter__`
  *   accessors reads as `undefined`, unless it is an object's own data that is not a function;
  *   `__proto__` always reads as `undefined`
- * - a bare name resolves only to a template variable, a key of the render data, or an environment global,
- *   never to a property the render data inherits (such as `valueOf`)
+ * - a bare name resolves only to a template variable, an own key of the render data, or an own environment
+ *   global, never to a property that the render data or the globals inherit
+ * - a template may not read a member of the render context, an environment, a loader, a frame, a
+ *   template or a nunjucks module, and a lookup or call that would return one of them throws
  * - a lookup or call that would produce or use `Function` (or its async and generator variants), `eval`,
- *   `Object`, `Reflect`, `globalThis`, `process` or the render context throws a {@link TemplateSandboxError}
+ *   `Object`, `Reflect`, `globalThis` or `process` throws a {@link TemplateSandboxError}
  *
  * Safe to call any number of times: a hook that already carries the guard is left as it is.
  */
 export function HardenNunjucksRuntime(): void {
-    const { parser, runtime } = nunjucks as unknown as { parser: NunjucksParser; runtime: NunjucksRuntimeHooks };
+    const { parser, runtime, Environment } = NUNJUCKS;
     installGuard(parser, 'parse', guardParse);
     installGuard(runtime, 'memberLookup', guardMemberLookup);
     installGuard(runtime, 'contextOrFrameLookup', guardContextOrFrameLookup);
     installGuard(runtime, 'callWrap', guardCallWrap);
+    installGuard(Environment.prototype, 'getFilter', guardRegistryLookup('filters'));
+    installGuard(Environment.prototype, 'getTest', guardRegistryLookup('tests'));
+    installGuard(Environment.prototype, 'getGlobal', guardRegistryLookup('globals'));
 }
 
 /** Replaces one hook with its guarded version, unless the hook is already a guard. */
@@ -120,6 +168,21 @@ function guardParse(original: NunjucksParser['parse']): NunjucksParser['parse'] 
 }
 
 /**
+ * `env.getFilter(name)`, `env.getTest(name)` and `env.getGlobal(name)`. nunjucks keeps each registry in a
+ * plain object, so a name such as `toString` would find the member every object inherits. Only a name the
+ * environment registered itself resolves. A name that is not there at all still fails as nunjucks reports it.
+ */
+function guardRegistryLookup(registry: 'filters' | 'tests' | 'globals'): (original: RegistryLookup) => RegistryLookup {
+    return (original) => function guardedRegistryLookup(this: NunjucksEnvironmentRegistries, name: string): unknown {
+        const entries = this[registry];
+        if (name in entries && !Object.hasOwn(entries, name)) {
+            throw new TemplateSandboxError(`Templates may only use filters, tests and globals that the environment registered ("${name}")`);
+        }
+        return original.call(this, name);
+    };
+}
+
+/**
  * `obj.key` and `obj[key]`. The key is converted to a string once, so a computed key cannot change
  * between the check and the read. The member is checked before nunjucks reads it again; templates
  * cannot define accessors (the accessor helpers are restricted names), so both reads see the same value.
@@ -130,6 +193,9 @@ function guardMemberLookup(original: NunjucksRuntimeHooks['memberLookup']): Nunj
             return undefined;
         }
         const key = String(val);
+        if (isNunjucksObject(obj)) {
+            throw new TemplateSandboxError(`Templates may not read members of the render context or other nunjucks objects (reading "${key}")`);
+        }
         if (RESTRICTED_MEMBER_NAMES.has(key) && !isOwnDataValue(obj, key)) {
             return undefined;
         }
@@ -139,17 +205,18 @@ function guardMemberLookup(original: NunjucksRuntimeHooks['memberLookup']): Nunj
     };
 }
 
-/** A bare name such as `{{ user }}`: a template variable, then the render data, then the environment globals. */
-function guardContextOrFrameLookup(original: NunjucksRuntimeHooks['contextOrFrameLookup']): NunjucksRuntimeHooks['contextOrFrameLookup'] {
+/**
+ * A bare name such as `{{ user }}`: a template variable, then an own key of the render data, then an own
+ * environment global. The guard resolves the name itself, because nunjucks would also return members
+ * that the render data or the globals inherit.
+ */
+function guardContextOrFrameLookup(): NunjucksRuntimeHooks['contextOrFrameLookup'] {
     return (context, frame, name) => {
         if (name === '__proto__') {
             return undefined;
         }
-        const value = original(context, frame, name);
-        if (value === undefined || !isOwnBinding(context, frame, name)) {
-            return undefined;
-        }
-        if (RESTRICTED_MEMBER_NAMES.has(name) && typeof value === 'function') {
+        const value = ownBinding(context, frame, name);
+        if (value === undefined || (RESTRICTED_MEMBER_NAMES.has(name) && typeof value === 'function')) {
             return undefined;
         }
         assertAllowed(value, `the name "${name}"`, context);
@@ -167,11 +234,18 @@ function guardCallWrap(original: NunjucksRuntimeHooks['callWrap']): NunjucksRunt
     };
 }
 
-/** True when a bare name is a template variable, a key of the render data, or an environment global. */
-function isOwnBinding(context: NunjucksRenderContext, frame: NunjucksFrame, name: string): boolean {
-    return frame.lookup(name) !== undefined
-        || Object.hasOwn(context.getVariables(), name)
-        || Object.hasOwn(context.env.globals, name);
+/** The value of a bare name: a template variable, else an own key of the render data, else an own environment global. */
+function ownBinding(context: NunjucksRenderContext, frame: NunjucksFrame, name: string): unknown {
+    const variable = frame.lookup(name);
+    if (variable !== undefined) {
+        return variable;
+    }
+    const data = context.getVariables();
+    if (Object.hasOwn(data, name)) {
+        return readMember(data, name);
+    }
+    const globals = context.env.globals;
+    return Object.hasOwn(globals, name) ? readMember(globals, name) : undefined;
 }
 
 /**
@@ -186,13 +260,22 @@ function isOwnDataValue(obj: unknown, key: string): boolean {
         && typeof readMember(obj, key) !== 'function';
 }
 
+/** True for the render context, an environment, a loader, a frame, a template or a nunjucks module. */
+function isNunjucksObject(value: unknown): boolean {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+    return NUNJUCKS_MODULES.has(value) || NUNJUCKS_OBJECT_PROTOTYPES.some((prototype) => prototype.isPrototypeOf(value));
+}
+
 /** Reads a member the way a template does, including members of primitive strings and numbers. */
 function readMember(obj: unknown, key: string): unknown {
     return (obj as { readonly [member: string]: unknown })[key];
 }
 
+/** Throws when a lookup or call would give a template a restricted value, the render context or another nunjucks object. */
 function assertAllowed(value: unknown, subject: string, context?: NunjucksRenderContext): void {
-    if (RESTRICTED_VALUES.has(value) || (context !== undefined && value === context)) {
+    if (RESTRICTED_VALUES.has(value) || isNunjucksObject(value) || (context !== undefined && value === context)) {
         throw new TemplateSandboxError(`Templates may not access ${subject}`);
     }
 }

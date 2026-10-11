@@ -19,4 +19,9 @@ describe('importing the template engine', () => {
         const env = new nunjucks.Environment(null, { autoescape: false });
         expect(env.renderString('[{{ range.constructor }}][{{ valueOf }}]', {})).toBe('[][]');
     });
+
+    it('guards the environment lookups before anything renders', () => {
+        const env = new nunjucks.Environment(null) as unknown as { getFilter(name: string): unknown };
+        expect(() => env.getFilter('hasOwnProperty')).toThrow(TemplateSandboxError);
+    });
 });

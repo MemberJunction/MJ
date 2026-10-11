@@ -92,6 +92,7 @@ describe('TemplateEngineServer sandbox: templates cannot reach the shared render
     it.each([
         ['valueOf() on the render context', '{% set c = valueOf() %}{{ c.env.addGlobal("mjPlanted", "planted") and "" }}'],
         ['concat() after re-parenting the render data', '{% set __proto__ = [] %}{{ concat()[0].env.addGlobal("mjPlanted", "planted") and "" }}'],
+        ['a filter name that every object inherits', '{{ (1 | valueOf).env.addGlobal("mjPlanted", "planted") and "" }}'],
     ])('does not let a template plant a global through %s', async (_route, templateText) => {
         await render(templateText);
         const later = await engine.RenderTemplateSimple('[{{ mjPlanted }}]', {});

@@ -139,23 +139,31 @@ generates, so `AssertTemplateTreeIsSafe()` checks every parsed template first:
   dots.
 - A test name (`is defined`, `is none`) and an extension's registered name and method must not
   contain a quote, a backslash or a line break.
+- A filter or test name must not be a name that every object inherits, such as `toString` or
+  `hasOwnProperty`.
 - The name of a called member, such as `obj["key"]()`, must not contain a backslash or a line break.
 - A loop variable must not reuse an identifier that the generated loop code uses, such as `context`,
   `frame`, `runtime`, `env`, `cb`, `next`, `tasks` or `undefined`. A unit test compiles every kind of
-  loop body with nunjucks 3.2.4 and checks this list against the generated code, so a nunjucks upgrade
-  that adds an identifier fails the test.
+  loop body with nunjucks 3.2.4, including loops inside macros and blocks, and checks this list against
+  the generated code, so a nunjucks upgrade that adds an identifier fails the test.
 - The parse tree may hold only nunjucks nodes, plain values and regular expression literals. This
   matters only for extensions, which build their own nodes.
 
 **While a template renders.**
 
+- A filter, test or global resolves only to a name that the environment registered itself, never to a
+  member that every object inherits. This also covers the test names that the `select` and `reject`
+  filters receive while the template renders.
 - The member names `constructor`, `prototype` and the `__define/lookup Getter/Setter__` accessors read
   as empty unless they hold an object's own data that is not a function. `__proto__` always reads as
   empty.
-- A bare name such as `{{ user }}` resolves only to a template variable, a key of the render data, or
-  an environment global. It never resolves to a property the data inherits, such as `valueOf`.
+- A bare name such as `{{ user }}` resolves only to a template variable, an own key of the render data,
+  or an own environment global. It never resolves to a property that the data or the globals inherit,
+  such as `valueOf`.
+- A template must not read a member of the render context, an environment, a loader, a frame, a
+  template or a nunjucks module. A lookup or call that would return one of them fails.
 - A template must not reach `Function` (or its async and generator variants), `eval`, `Object`,
-  `Reflect`, `globalThis`, `process` or the render context.
+  `Reflect`, `globalThis` or `process`.
 
 A template that breaks one of these rules fails with a `TemplateSandboxError`.
 
