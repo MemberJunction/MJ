@@ -1009,6 +1009,43 @@ describe('ActionEngineServer', () => {
             expect(mockClassFactory.GetRegistration).toHaveBeenNthCalledWith(1, BaseAction, '__CalculateExpression');
             expect(mockClassFactory.GetRegistration).toHaveBeenNthCalledWith(2, BaseAction, 'Create Entity');
         });
+
+        it('is false for an override of a marked action that does not declare the marker itself', () => {
+            class UnmarkedOverride extends SelfAuthorizingAction {}
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: UnmarkedOverride });
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Create Entity' }))).toBe(false);
+        });
+
+        it('is true for an override that declares the marker itself', () => {
+            class MarkedOverride extends SelfAuthorizingAction {
+                public static readonly AuthorizesCaller = true;
+            }
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: MarkedOverride });
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Create Entity' }))).toBe(true);
+        });
+
+        it('is not switched on for unmarked actions when BaseAction.AuthorizesCaller is changed at run time', () => {
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: TestAction });
+            Reflect.set(BaseAction, 'AuthorizesCaller', true);
+            try {
+                expect(engine.ActionAuthorizesCaller(action({ Name: 'Calculate Expression' }))).toBe(false);
+            } finally {
+                Reflect.set(BaseAction, 'AuthorizesCaller', false);
+            }
+        });
+
+        it('is true for a marked class built on another loaded copy of BaseAction', () => {
+            // ClassFactory matches base classes by name, so it also returns classes that extend a second copy of this package
+            class SecondCopyBaseAction {}
+            class SecondCopyMarkedAction extends SecondCopyBaseAction {
+                public static readonly AuthorizesCaller = true;
+            }
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: SecondCopyMarkedAction });
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Create Entity' }))).toBe(true);
+        });
     });
 
     // ========================================================================
@@ -1027,11 +1064,12 @@ describe('ActionEngineServer', () => {
             expect(engine.AdhocSQLAuthorizer).toBe(authorizer);
         });
 
-        it('is null again once it is cleared', () => {
+        it('keeps the first authorizer: a second registration throws and changes nothing', () => {
+            const replacement = { Authorize: vi.fn().mockReturnValue(null), ClampTimeoutSeconds: vi.fn().mockReturnValue(600) };
             engine.SetAdhocSQLAuthorizer(authorizer);
-            engine.SetAdhocSQLAuthorizer(null);
 
-            expect(engine.AdhocSQLAuthorizer).toBeNull();
+            expect(() => engine.SetAdhocSQLAuthorizer(replacement)).toThrow(/already registered/i);
+            expect(engine.AdhocSQLAuthorizer).toBe(authorizer);
         });
     });
 
@@ -1060,11 +1098,11 @@ describe('ActionEngineServer', () => {
             expect(await engine.GetReadOnlyProvider()).toBeNull();
         });
 
-        it('resolves null again once the factory is cleared', async () => {
+        it('keeps the first factory: a second registration throws and changes nothing', async () => {
             engine.SetReadOnlyProviderFactory(vi.fn().mockResolvedValue(readOnlyProvider));
-            engine.SetReadOnlyProviderFactory(null);
 
-            expect(await engine.GetReadOnlyProvider()).toBeNull();
+            expect(() => engine.SetReadOnlyProviderFactory(vi.fn().mockResolvedValue(null))).toThrow(/already registered/i);
+            expect(await engine.GetReadOnlyProvider()).toBe(readOnlyProvider);
         });
     });
 
