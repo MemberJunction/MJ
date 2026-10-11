@@ -136,7 +136,7 @@ describe('SessionRunIDVerifier.Verify', () => {
         expect(result.PendingFeedbackRunID).toBe(PAUSED_RUN_ID);
     });
 
-    it('reuses a successful lookup for the same claims', async () => {
+    it('looks up the same claims again on every call', async () => {
         const { provider, runViews } = makeProvider({ 'MJ: AI Agent Runs': [{ ID: CO_RUN_ID }] });
         const verifier = new SessionRunIDVerifier();
 
@@ -144,7 +144,17 @@ describe('SessionRunIDVerifier.Verify', () => {
         const second = await verifier.Verify(SESSION_ID, { CoAgentRunID: CO_RUN_ID }, USER, provider);
 
         expect(second.CoAgentRunID).toBe(CO_RUN_ID);
-        expect(runViews).toHaveBeenCalledTimes(1);
+        expect(runViews).toHaveBeenCalledTimes(2);
+    });
+
+    it('reads the runs and steps from the database, not from a cached view', async () => {
+        const { provider, runViews } = makeProvider({ 'MJ: AI Agent Runs': [{ ID: CO_RUN_ID }] });
+
+        await new SessionRunIDVerifier().Verify(SESSION_ID, { CoAgentRunID: CO_RUN_ID, PromptRunID: PROMPT_RUN_ID }, USER, provider);
+
+        const views = issuedViews(runViews);
+        expect(views.map((view) => view.EntityName)).toEqual(['MJ: AI Agent Runs', 'MJ: AI Agent Run Steps']);
+        expect(views.every((view) => view.BypassCache === true)).toBe(true);
     });
 
     it('keeps nothing when a lookup fails, and looks up again next time', async () => {
@@ -162,5 +172,80 @@ describe('SessionRunIDVerifier.Verify', () => {
         const provider = { RunViews: vi.fn(async () => { throw new Error('connection lost'); }) } as unknown as IMetadataProvider;
 
         await expect(new SessionRunIDVerifier().Verify(SESSION_ID, { CoAgentRunID: CO_RUN_ID }, USER, provider)).resolves.toEqual({});
+    });
+});
+
+/**
+ * A run's `AgentSessionID` and a step's `AgentRunID` and `TargetLogID` can change after a lookup (the
+ * generated update mutations accept them), so each call must decide from what the rows say now.
+ */
+describe('SessionRunIDVerifier.Verify — relationships that change between calls', () => {
+    const CLAIMS = { CoAgentRunID: CO_RUN_ID, PromptRunID: PROMPT_RUN_ID, CoAgentRunStepID: STEP_ID, PendingFeedbackRunID: PAUSED_RUN_ID };
+
+    /** Both runs are records of the session, and the step is the co-agent run's Prompt step for the prompt run. */
+    function linkedRows(): Rows {
+        return {
+            'MJ: AI Agent Runs': [{ ID: CO_RUN_ID }, { ID: PAUSED_RUN_ID }],
+            'MJ: AI Agent Run Steps': [{ ID: STEP_ID, StepType: 'Prompt', TargetLogID: PROMPT_RUN_ID }],
+        };
+    }
+
+    it('drops runs that stopped being records of the session since the last call', async () => {
+        const rows = linkedRows();
+        const { provider } = makeProvider(rows);
+        const verifier = new SessionRunIDVerifier();
+        const first = await verifier.Verify(SESSION_ID, CLAIMS, USER, provider);
+
+        // The runs were moved to another session, unlinked or deleted.
+        rows['MJ: AI Agent Runs'] = [];
+        const second = await verifier.Verify(SESSION_ID, CLAIMS, USER, provider);
+
+        expect(first).toEqual(CLAIMS);
+        expect(second).toEqual({ CoAgentRunID: undefined, PromptRunID: undefined, CoAgentRunStepID: undefined, PendingFeedbackRunID: undefined });
+    });
+
+    it('drops the prompt run and step once the step is no longer linked to the co-agent run', async () => {
+        const rows = linkedRows();
+        const { provider } = makeProvider(rows);
+        const verifier = new SessionRunIDVerifier();
+        const first = await verifier.Verify(SESSION_ID, CLAIMS, USER, provider);
+
+        rows['MJ: AI Agent Run Steps'] = [];
+        const second = await verifier.Verify(SESSION_ID, CLAIMS, USER, provider);
+
+        expect(first).toEqual(CLAIMS);
+        expect(second).toEqual({ ...CLAIMS, PromptRunID: undefined, CoAgentRunStepID: undefined });
+    });
+
+    it('still keeps a relationship that has not changed on the next call', async () => {
+        const { provider } = makeProvider(linkedRows());
+        const verifier = new SessionRunIDVerifier();
+
+        await verifier.Verify(SESSION_ID, CLAIMS, USER, provider);
+        const second = await verifier.Verify(SESSION_ID, CLAIMS, USER, provider);
+
+        expect(second).toEqual(CLAIMS);
+    });
+});
+
+describe('SessionRunIDVerifier.Verify — lookups as the acting user', () => {
+    it('does not give a user the result of a lookup made for another user', async () => {
+        // No system user is cached, so each lookup runs as the acting user, and only USER can see the run.
+        const otherUser = { ID: 'd3d3d3d3-0000-4000-8000-0000000000bb' } as unknown as UserInfo;
+        const runViews = vi.fn(async (paramsList: RunViewParams[], user: UserInfo) =>
+            paramsList.map((params) => {
+                const visible = user === USER && params.EntityName === 'MJ: AI Agent Runs';
+                return { Success: true, Results: visible ? [{ ID: CO_RUN_ID }] : [], ErrorMessage: '' };
+            }),
+        );
+        const provider = { RunViews: runViews } as unknown as IMetadataProvider;
+        const verifier = new SessionRunIDVerifier();
+
+        const forUser = await verifier.Verify(SESSION_ID, { CoAgentRunID: CO_RUN_ID }, USER, provider);
+        const forOtherUser = await verifier.Verify(SESSION_ID, { CoAgentRunID: CO_RUN_ID }, otherUser, provider);
+
+        expect(forUser.CoAgentRunID).toBe(CO_RUN_ID);
+        expect(forOtherUser.CoAgentRunID).toBeUndefined();
+        expect(runViews.mock.calls[1]?.[1]).toBe(otherUser);
     });
 });
