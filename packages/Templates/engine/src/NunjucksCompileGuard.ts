@@ -6,7 +6,7 @@
  * `macro`, `import` and `from` bind; and the name of a called member. The generated code runs when
  * the template renders, so the runtime guard in `NunjucksSandbox.ts` never sees it. nunjucks also
  * reads and writes template names as keys of plain objects, so a name that every object inherits is
- * refused wherever template text names something other than a bare variable.
+ * refused as a key, an argument or a binding. Bare names and member reads are left to the runtime guard.
  * {@link AssertTemplateTreeIsSafe} checks a parsed template before it compiles.
  * @module @memberjunction/templates
  */
@@ -67,7 +67,7 @@ const RESERVED_LOOP_NAME_PREFIX = /^(?:t|macro_t|hole|b|l)_/;
  * - a test name, and an extension's registered name and method, must not contain a quote, a backslash or a line break
  * - a name that every object inherits (`toString`, `hasOwnProperty`, ...), or `prototype`, must not be a
  *   dictionary key, a keyword argument, a macro or call-block argument, a `set`, loop, import, macro or
- *   block name, a literal member name (`obj.name`, `obj["name"]`), or a filter or test name
+ *   block name, or a filter or test name
  * - the name of a called member must not contain a backslash or a line break
  * - a loop variable must not reuse an identifier that the generated loop code uses (`context`, `frame`,
  *   `runtime`, `tasks`, `undefined`, ...)
@@ -118,8 +118,6 @@ class TemplateTreeCheck {
                 return this.checkName(node, node, this.filterNames.has(node) ? PLAIN_FILTER_NAME : PLAIN_NAME);
             case 'Pair':
                 return this.refuseInheritedName(nameValue(property(node, 'key')), node, 'a dictionary key or keyword argument');
-            case 'LookupVal':
-                return this.checkMemberName(node);
             case 'Filter':
             case 'FilterAsync':
                 return this.checkFilterName(node);
@@ -171,14 +169,6 @@ class TemplateTreeCheck {
     private checkBindingName(nameNode: unknown, owner: TemplateNode): void {
         this.checkName(nameNode, owner);
         this.refuseInheritedName(nameValue(nameNode), owner, 'a variable, macro or block name');
-    }
-
-    /** A literal member name (`obj.name`, `obj["name"]`). The runtime guard checks a name computed while rendering. */
-    private checkMemberName(node: TemplateNode): void {
-        const key = property(node, 'val');
-        if (isNode(key) && key.typename === 'Literal') {
-            this.refuseInheritedName(nameValue(key), node, 'a member name');
-        }
     }
 
     /** nunjucks finds a filter in a plain object, so a name it inherits would resolve to the inherited member. */

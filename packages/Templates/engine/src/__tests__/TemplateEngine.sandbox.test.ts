@@ -216,6 +216,13 @@ describe('TemplateEngineServer sandbox: ordinary templates still render', () => 
         expect(result.Output).toBe('ADA|x-y|2');
     });
 
+    it('calls methods that every object inherits, such as toLocaleString and toString', async () => {
+        const result = await render('{{ amount.toLocaleString("en-US") }}|{{ id.toString() }}|{{ row.hasOwnProperty("Name") }}', {
+            amount: 1234.5, id: 42, row: { Name: 'Ada' },
+        });
+        expect(result.Output).toBe('1,234.5|42|true');
+    });
+
     it('reads MJ system fields', async () => {
         const result = await render('{{ record.__mj_CreatedAt }}', { record: { __mj_CreatedAt: '2026-10-08' } });
         expect(result.Output).toBe('2026-10-08');

@@ -147,33 +147,35 @@ describe('HardenNunjucksRuntime', () => {
         try {
             HardenNunjucksRuntime();
             expect(runtime.memberLookup).not.toBe(guarded);
-            expect(renderPlain('[{{ range[key] }}]', { key: 'constructor' })).toBe('[]');
+            expect(renderPlain(`[{{ range.constructor }}]`)).toBe('[]');
         } finally {
             runtime.memberLookup = guarded;
         }
     });
 });
 
-/** Member names computed while rendering, which only the runtime guard sees. Literal names in this list do not compile. */
+/** Each test reads a member by a literal name and by a name computed while rendering. Both reach the same runtime rule. */
 describe('member access', () => {
     it.each(['constructor', 'prototype', '__defineGetter__', '__lookupGetter__'])(
         'reads own data stored under the restricted name %s',
         (name) => {
-            expect(renderPlain('[{{ data[key] }}]', { data: JSON.parse(`{"${name}": "own value"}`), key: name })).toBe('[own value]');
+            expect(renderPlain(`[{{ data["${name}"] }}][{{ data[key] }}]`, { data: JSON.parse(`{"${name}": "own value"}`), key: name }))
+                .toBe('[own value][own value]');
         },
     );
 
     it('never reads __proto__, even when the data defines it', () => {
-        expect(renderPlain('[{{ data[key] }}]', { data: JSON.parse('{"__proto__": "own value"}'), key: '__proto__' })).toBe('[]');
+        expect(renderPlain('[{{ data["__proto__"] }}][{{ data[key] }}]', { data: JSON.parse('{"__proto__": "own value"}'), key: '__proto__' }))
+            .toBe('[][]');
     });
 
     it('does not read a restricted name that holds a function, that the value inherits, or that a function owns', () => {
-        expect(renderPlain('[{{ data[c] }}][{{ plain[c] }}][{{ range[p] }}]', {
+        expect(renderPlain('[{{ data.constructor }}][{{ plain.constructor }}][{{ range.prototype }}]|[{{ data[c] }}][{{ plain[c] }}][{{ range[p] }}]', {
             data: { constructor: () => 'own function' },
             plain: {},
             c: 'constructor',
             p: 'prototype',
-        })).toBe('[][][]');
+        })).toBe('[][][]|[][][]');
     });
 
     it('still reads ordinary members, including MJ system fields', () => {
