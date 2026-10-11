@@ -58,6 +58,7 @@ import {
   type RealtimeCaptureKind,
   type RealtimeCaptureState,
   type RealtimeCaptureStates,
+  type RealtimeFrameSamplerFactory,
 } from './realtime-captures';
 import { REALTIME_MICROPHONE_NONE, ReadMicrophoneState, SameMicrophoneState, type RealtimeMicrophoneState } from './realtime-microphone';
 import { RealtimeSessionEventHub, type IRealtimeSessionEventSource, type RealtimeSessionStreamEvent } from './session-event-hub';
@@ -1729,12 +1730,23 @@ export class RealtimeSessionRuntime {
       Client: client,
       LocalMedia: this.localMedia,
       Host: this.mediaHost,
+      CreateSampler: this.hostFrameSampler(),
       Admit: (kind) => this.admitCapture(kind),
       CameraCheck: cameraCheck,
     });
     this.captures = captures;
     this.capturesSubscription = captures.States$.subscribe((states) => this._captures$.next(states));
     this.refreshCaptureOffers();
+  }
+
+  /**
+   * The host's frame sampler for the captures ({@link IRealtimeMediaHost.CreateFrameSampler}), or `undefined` when it offers
+   * none and the captures use the DOM default.
+   */
+  private hostFrameSampler(): RealtimeFrameSamplerFactory | undefined {
+    const host = this.mediaHost;
+    const create = host.CreateFrameSampler;
+    return create ? (stream, options) => create.call(host, stream, options) : undefined;
   }
 
   /** Stops the camera and screen share, if any, and reports both off. */

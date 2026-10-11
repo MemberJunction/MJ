@@ -1,7 +1,7 @@
 /**
  * Fakes for the camera and screen-share tests: a client that negotiates the tracks a test gives it, a
  * camera-and-microphone controller the test drives, a share the test can end as the browser would, and a host that
- * offers both. No DOM, no devices.
+ * offers both, with a frame sampler the test feeds. No DOM, no devices.
  */
 import { BehaviorSubject, type Observable } from 'rxjs';
 import { DEFAULT_REALTIME_AUDIO_TRACKS, type ClientRealtimeSessionConfig, type RealtimeTrackDescriptor } from '@memberjunction/ai';
@@ -10,6 +10,7 @@ import {
     type DisplayCapture,
     type DisplayCaptureOptions,
     type DisplayCaptureResult,
+    type FrameSamplerOptions,
     type ILocalMediaController,
     type LocalMediaFailure,
     type LocalMediaKind,
@@ -17,7 +18,7 @@ import {
     type LocalMediaState,
     type MediaDevice,
 } from '@memberjunction/ai-realtime-client';
-import type { IRealtimeMediaHost } from '../hosts/IRealtimeMediaHost';
+import type { IRealtimeFrameSampler, IRealtimeMediaHost } from '../hosts/IRealtimeMediaHost';
 
 /** A stream the captures only pass around. */
 export const stream = (name: string): MediaStream =>
@@ -167,10 +168,39 @@ export class FakeShare implements DisplayCapture {
     }
 }
 
-/** A host that can share a screen and open a camera; the test sets what the picker returns. */
+/** A frame sampler that takes no frames by itself: the test hands it frames with {@link FakeFrameSampler.Push}. */
+export class FakeFrameSampler implements IRealtimeFrameSampler {
+    public Running = false;
+    constructor(
+        public readonly Stream: MediaStream,
+        private readonly options: FrameSamplerOptions,
+        private readonly starts: boolean
+    ) {}
+    /** The rate the runtime asked for: the one the video track negotiated. */
+    public get Rate(): number {
+        return this.options.Rate;
+    }
+    public Start(): boolean {
+        this.Running = this.starts;
+        return this.starts;
+    }
+    public Stop(): void {
+        this.Running = false;
+    }
+    /** One frame taken from the stream, as the sampler would deliver it. */
+    public Push(data: string): void {
+        this.options.OnFrame({ Data: data, MimeType: 'image/jpeg', Width: 1, Height: 1, TimestampMs: Date.now() });
+    }
+}
+
+/** A host that can share a screen, open a camera and sample frames; the test sets what the picker returns. */
 export class ShareHost implements IRealtimeMediaHost {
     public readonly Requests: Array<DisplayCaptureOptions | undefined> = [];
     public readonly Controllers: FakeController[] = [];
+    /** The samplers the runtime created, one per capture start. */
+    public readonly Samplers: FakeFrameSampler[] = [];
+    /** Whether the next samplers can start: `false` is a platform the sampler cannot take frames on. */
+    public SamplersStart = true;
     public Next: DisplayCaptureResult = { Status: 'started', Capture: new FakeShare('window') };
     public async AcquireMicrophone(): Promise<MediaStream> {
         return stream('mic');
@@ -183,5 +213,10 @@ export class ShareHost implements IRealtimeMediaHost {
     public async RequestDisplayCapture(options?: DisplayCaptureOptions): Promise<DisplayCaptureResult> {
         this.Requests.push(options);
         return this.Next;
+    }
+    public CreateFrameSampler(captured: MediaStream, options: FrameSamplerOptions): IRealtimeFrameSampler {
+        const sampler = new FakeFrameSampler(captured, options, this.SamplersStart);
+        this.Samplers.push(sampler);
+        return sampler;
     }
 }
