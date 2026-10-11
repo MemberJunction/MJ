@@ -67,7 +67,7 @@ function slugify(value: string): string {
     return value
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
+        .replace(/^-|-$/g, '');
 }
 
 /** Deterministic djb2 hash rendered in base 36; stable across sessions and tenants for the same input. */
