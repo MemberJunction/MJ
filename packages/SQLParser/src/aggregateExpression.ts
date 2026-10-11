@@ -1,4 +1,4 @@
-import type { SQLParserDialect } from '@memberjunction/sql-dialect';
+import { IdentifierMatches, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { SQLParser } from './sql-parser.js';
 import { LexSQL, SignificantTokens } from './sqlLexer.js';
 
@@ -75,6 +75,7 @@ const BRANCH_KEYS = new Set(['cond', 'result']);
 const CAST_KEYS = new Set(['expr', 'target']);
 const SEPARATOR_KEYS = new Set(['delimiter']);
 const TYPE_KEYS = new Set(['suffix']);
+const CONSTANT_KEYS = new Set(['value']);
 
 /** The only table the expression is parsed against. */
 const SCREEN_TABLE = '__mj_aggregate_screen';
@@ -106,7 +107,8 @@ type ASTNode = Record<string, unknown>;
  *
  * @param expression The caller-supplied aggregate expression
  * @param dialect The dialect the expression runs under
- * @param columns The entity's column names (its base view's columns), matched case-insensitively
+ * @param columns The entity's column names (its base view's columns). A reference matches a column
+ * by `IdentifierMatches` from `@memberjunction/sql-dialect`, the field-level security gate's rule.
  */
 export function CheckAggregateExpression(expression: string, dialect: SQLParserDialect, columns: Iterable<string>): AggregateExpressionCheck {
     if (typeof expression !== 'string' || expression.trim().length === 0) return refuse('it is empty');
@@ -135,9 +137,8 @@ function refuseWith(reason: string): never {
 
 /**
  * Refuses comments, statement separators and backslashes inside quoted spans, and requires
- * `name(…)` with nothing outside its parentheses. The parser reads `\'` inside `'…'` as an escaped
- * quote and the database does not, so a backslash is the one way the two could disagree about
- * where a quoted span ends.
+ * `name(…)` with nothing outside its parentheses. The parser and the database engines read
+ * backslashes inside plain string literals differently, so a quoted span with a backslash is refused.
  */
 function checkTokens(expression: string, dialect: SQLParserDialect): string | null {
     const tokens = LexSQL(expression, dialect);
@@ -228,6 +229,7 @@ function operatorOf(node: ASTNode, allowed: ReadonlySet<string>): string {
 
 /** Rebuilds a constant: numbers re-checked, strings re-quoted, NULL and booleans as keywords. */
 function renderConstant(node: ASTNode): string {
+    assertRead(node, CONSTANT_KEYS);
     switch (node.type) {
         case 'number':
         case 'bigint': return renderNumber(node.value);
@@ -304,10 +306,10 @@ function callArguments(node: ASTNode, upperName: string): unknown[] {
  * the rebuilt SQL keeps the parse tree's grouping.
  */
 class AggregateRenderer {
-    private readonly columns = new Map<string, string>();
+    private readonly columns: string[];
 
     constructor(private readonly dialect: SQLParserDialect, columns: Iterable<string>) {
-        for (const column of columns) this.columns.set(column.trim().toLowerCase(), column.trim());
+        this.columns = Array.from(columns, column => column.trim()).filter(column => column.length > 0);
     }
 
     /** Rebuilds the top-level aggregate call. */
@@ -351,12 +353,15 @@ class AggregateRenderer {
         switch (node.type) {
             case 'column_ref': return this.renderColumn(node);
             // A T-SQL "x" is a quoted identifier.
-            case 'double_quote_string': return this.renderColumnName(node.value);
+            case 'double_quote_string':
+                assertRead(node, CONSTANT_KEYS);
+                return this.renderColumnName(node.value);
             case 'binary_expr': return parenthesize(this.renderBinary(node), operand);
             case 'unary_expr': return parenthesize(this.renderUnary(node), operand);
             case 'case': return this.renderCase(node);
             case 'cast': return this.renderCast(node);
-            case 'function': return this.renderScalarCall(node);
+            // The parser reads `NOT (x)` as a call; as an operand it needs its own parentheses.
+            case 'function': return parenthesize(this.renderScalarCall(node), operand && callName(node)?.toUpperCase() === 'NOT');
             case 'aggr_func': return refuseWith('aggregate functions cannot be nested');
             default: return renderConstant(node);
         }
@@ -370,10 +375,21 @@ class AggregateRenderer {
 
     private renderColumnName(name: unknown): string {
         if (typeof name !== 'string') return refuseWith('it contains a column reference the parser could not read');
-        const column = this.columns.get(name.trim().toLowerCase());
-        return column === undefined
-            ? refuseWith(`it references "${name}", which is not a column of this entity`)
-            : this.dialect.QuoteIdentifier(column);
+        return this.dialect.QuoteIdentifier(this.resolveColumn(name));
+    }
+
+    /**
+     * The entity column `name` refers to. Every column is compared with {@link IdentifierMatches},
+     * the rule the field-level security gate reports with, so a reference resolves only to a column
+     * the gate reports in the caller's text. An exact spelling only chooses between columns that
+     * both match.
+     */
+    private resolveColumn(name: string): string {
+        const matches = this.columns.filter(column => IdentifierMatches(name, column));
+        if (matches.length === 1) return matches[0];
+        if (matches.length === 0) return refuseWith(`it references "${name}", which is not a column of this entity`);
+        const exact = matches.find(column => column === name.trim());
+        return exact ?? refuseWith(`it references "${name}", which matches more than one column of this entity`);
     }
 
     private renderBinary(node: ASTNode): string {

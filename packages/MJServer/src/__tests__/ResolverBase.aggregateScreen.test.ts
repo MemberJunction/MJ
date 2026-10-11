@@ -14,13 +14,12 @@ import type { AppContext, UserPayload } from '../types.js';
  * OrderBy, OverrideExcludeFilter): one statement, no writes, and subqueries only against entity
  * base views the caller can read.
  *
- * The payloads below are harmless (`SELECT 1`). They use a quote inside a `[bracket]` identifier,
- * which a quote-only literal stripper reads as the start of a string, hiding the `;` after it.
+ * The payloads below are harmless (`SELECT 1`).
  */
 
 const ENTITY_NAME = 'MJ: Users';
 
-/** A second statement hidden behind a quote inside a bracket identifier. */
+/** An aggregate that carries a second statement. */
 const STACKED_AGGREGATE = "COUNT(*) AS [a'] ; SELECT 1 AS [b'], COUNT(*)";
 
 /** A subquery against a base table rather than an entity base view. */
@@ -77,7 +76,7 @@ class Probe extends ResolverBase {
 }
 
 describe('ResolverBase.screenClientViewClauses — aggregate expressions', () => {
-    it('rejects an aggregate that hides a second statement behind a quote inside a bracket identifier', () => {
+    it('rejects an aggregate that carries a second statement', () => {
         expect(() =>
             new Probe().ScreenAll({ aggregates: [{ expression: STACKED_AGGREGATE }] }, fakeProvider({ params: null })),
         ).toThrow(/Invalid Aggregate: multiple statements/);

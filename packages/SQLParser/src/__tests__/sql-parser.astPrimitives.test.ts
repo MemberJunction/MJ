@@ -388,6 +388,10 @@ describe('SQLParser.HasStackedStatements', () => {
         expect(SQLParser.HasStackedStatements('SELECT $$a;b$$ AS s', pg)).toBe(false);
     });
 
+    it('is true when the separator follows a PostgreSQL dollar quote whose tag has a non-ASCII letter', () => {
+        expect(SQLParser.HasStackedStatements("SELECT $\u00e9$'$\u00e9$ ; SELECT 1 --'", pg)).toBe(true);
+    });
+
     it('does not flag a semicolon inside a nested block comment, which both databases nest', () => {
         expect(SQLParser.HasStackedStatements('SELECT 1 /* a /* b */ ; SELECT 2 */', tsql)).toBe(false);
     });
