@@ -144,7 +144,10 @@ export interface GeminiLiveSession {
         activityStart?: ActivityStart;
         activityEnd?: ActivityEnd;
     }): void;
-    /** Appends client content (used to seed initial context) to the conversation. */
+    /**
+     * Appends client content to the conversation: the initial context and context notes (`turnComplete: false`), or a
+     * bare `turnComplete: true` that closes the turn a note left open.
+     */
     sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void;
     /** Replies to a server tool call with one or more function responses. */
     sendToolResponse(params: { functionResponses: FunctionResponse[] | FunctionResponse }): void;
@@ -1262,6 +1265,14 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private queuedSends: Array<() => void> = [];
 
     /**
+     * Whether a context note left the client turn open. {@link SendContextNote} sends `turnComplete: false`, which tells
+     * Gemini more input is coming, and Gemini then holds all generation, the continuation after a tool result included,
+     * until a `turnComplete: true` arrives. Set when a note goes out; cleared when {@link SendToolResult} closes the
+     * turn, at the model's `turnComplete` (its generation took the note in), and on {@link Close}.
+     */
+    private openClientTurn = false;
+
+    /**
      * Whether this session runs in MEETING mode — Gemini's automatic activity detection is disabled, so the
      * model never auto-responds to room audio. The bridge drives turns manually instead: an `activityStart`
      * opens an input window on the first audio, and `RequestSpokenUpdate` sends `activityEnd` to commit the
@@ -1337,9 +1348,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
 
     /**
      * Records what became of the session's avatar request. A granted one (a server-side session whose host publishes the
-     * avatar into a room) sends the model's MP4 pieces as frames to {@link OnVideoFrame}, keeps PCM to turns without
-     * video, marks the model generating for its answer's media only, and reports the avatar's video seconds through
-     * {@link OnUsage}. Called by the driver before {@link Open}.
+     * avatar into a room) sends the model's MP4 pieces as frames to {@link OnVideoFrame} (marked `Idle` outside an
+     * answer), keeps PCM to turns without video, marks the model generating for its answer's media only, and reports the
+     * avatar's video seconds through {@link OnUsage}. Called by the driver before {@link Open}.
      *
      * @param status The avatar status, or `undefined` when the session asked for no avatar.
      * @param encoding The avatar's MSE type from the model's profile.
@@ -1752,6 +1763,10 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * cache entry is cleared once the response is sent. While the session moves to a new
      * connection, the result waits and goes out on the new one.
      *
+     * When a context note left the client turn open, the result is followed by a bare
+     * `turnComplete: true` that closes it (see {@link closeOpenClientTurn}): Gemini holds the
+     * continuation after a tool result while that turn is open, and the model stays silent.
+     *
      * @param callID The originating tool call's id.
      * @param output The tool's result as a JSON-stringified string.
      */
@@ -1771,7 +1786,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
         };
 
         const send = (): void => {
-            this.requireLive().sendToolResponse({ functionResponses: [functionResponse] });
+            const live = this.requireLive();
+            live.sendToolResponse({ functionResponses: [functionResponse] });
+            this.closeOpenClientTurn(live);
             this.pendingToolCallNames.delete(callID);
             this.endTurnIfToolResultsIn();
         };
@@ -1780,6 +1797,20 @@ class GeminiRealtimeSession implements IRealtimeSession {
             return;
         }
         send();
+    }
+
+    /**
+     * Closes the client turn a context note left open, right after a tool result, so the model speaks the result. Not
+     * while an answer is being generated: a `turnComplete: true` would cut it off, and that turn takes the note in at its
+     * own `turnComplete`. Not on a model whose tools never block (Extended Thinking): it may still be reasoning when the
+     * result arrives, which this session can't see, and the close would cut that off too.
+     */
+    private closeOpenClientTurn(live: GeminiLiveSession): void {
+        if (!this.openClientTurn || !this.profile.Tooling.SupportsBlockingExecution || this.responseActive) {
+            return;
+        }
+        live.sendClientContent({ turnComplete: true });
+        this.openClientTurn = false;
     }
 
     /**
@@ -1813,11 +1844,15 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * **Collision behavior: queue.** Any client content sent mid-turn interrupts in-flight
      * generation on Gemini Live, so the send is deferred until the active turn completes.
      *
+     * `turnComplete: false` leaves the client turn open: Gemini holds the continuation after a
+     * tool result until the turn is closed, which {@link SendToolResult} does.
+     *
      * @param text The context note to append to the conversation.
      */
     public SendContextNote(text: string): void {
         this.enqueueOrRun(() => {
             this.requireLive().sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: false });
+            this.openClientTurn = true;
         });
     }
 
@@ -2088,8 +2123,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
         }
         if (content.turnComplete) {
             this.avatarOutput?.TurnComplete();
-            // Before the drain: a queued send that starts a new turn opens it again.
+            // Before the drain: a queued send that starts a new turn opens it again, and a queued note opens a client turn.
             this.endTurnUnlessToolCallPending();
+            this.openClientTurn = false; // the model's turn took in any note that left the client turn open
             this.completeTurn();
         }
         if (content.inputTranscription) {
@@ -2289,6 +2325,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.pendingToolCallNames.clear();
         this.queuedSends = [];
         this.responseActive = false;
+        this.openClientTurn = false;
         this.pendingThoughtText = '';
     }
 

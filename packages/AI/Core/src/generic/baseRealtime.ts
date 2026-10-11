@@ -67,7 +67,10 @@ export type JSONObject = { [key: string]: JSONValue };
  *    {@link IRealtimeSession.SendToolResult} must EVENTUALLY be voiced/processed by the
  *    model and must never be dropped. If the provider rejects overlapping generation
  *    triggers, the driver queues the result's trigger behind the in-flight response and
- *    flushes it at the next turn boundary.
+ *    flushes it at the next turn boundary. The result must also trigger generation where
+ *    the provider holds it: Gemini continues after a tool result on its own, unless a
+ *    context note's client content (`turnComplete: false`) left the turn open; then the
+ *    driver closes the turn after the result, or the model stays silent.
  * 6. **Token/credential expiry surfaces as a FATAL error.** When the session's credential
  *    dies (ephemeral token expiry, auth revocation), the driver must surface it through
  *    {@link IRealtimeSession.OnError} with `Fatal: true` so the consumer finalizes cleanly
@@ -631,9 +634,10 @@ export interface IRealtimeSession {
      * ({@link RealtimeAvatarSettings.Delivery} `'room'`) sends the avatar's MP4 pieces here.
      *
      * An fMP4 piece may carry the voice on its audio track; while it does, the voice does not also come through
-     * {@link OnOutput}. After {@link OnInterruption} the host drops video not yet shown, and the driver drops the
-     * interrupted turn's late frames. The seconds of video the model generated reach {@link OnUsage}
-     * (`OutputTokenDetails.VideoSeconds`).
+     * {@link OnOutput}. A driver that can tell the model's answer from the video it streams between answers marks the
+     * latter `Idle` (see {@link RealtimeVideoFrame}): the host plays it, but never counts it as the agent speaking.
+     * After {@link OnInterruption} the host drops video not yet shown, and the driver drops the interrupted turn's late
+     * frames. The seconds of video the model generated reach {@link OnUsage} (`OutputTokenDetails.VideoSeconds`).
      *
      * Optional: audio-only drivers don't implement it; call it null-safely (`session.OnVideoFrame?.(...)`).
      *

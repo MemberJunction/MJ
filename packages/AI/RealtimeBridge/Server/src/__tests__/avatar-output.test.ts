@@ -68,6 +68,11 @@ class AvatarSession implements IRealtimeSession {
         if (frame?.Piece === 'init') this.init = ReadFmp4Init(data) ?? this.init;
         if (frame) this.videoFrameHandler?.(frame);
     }
+    /** The model sends a fragment between its answers, which a driver that can tell marks `Idle`. */
+    public IdlePiece(data: ArrayBuffer): void {
+        const frame = Fmp4PieceToVideoFrame(data, 'video/mp4', this.init);
+        if (frame) this.videoFrameHandler?.({ ...frame, Idle: true });
+    }
     /** The model sends any video frame. */
     public Frame(frame: RealtimeVideoFrame): void { this.videoFrameHandler?.(frame); }
     /** The model speaks `ms` of PCM. */
@@ -333,6 +338,69 @@ describe('AIBridgeEngine — the floor gate counts an avatar piece by its audio'
         avatar.Piece(AvatarFragmentPiece(AUDIO_TRACK, 2000)); // cut at once
         avatar.Piece(AvatarInitPiece());
         expect(avatarSent(b)).toHaveLength(2);
+    });
+
+    it("plays the avatar's idle video between answers without taking the floor: no turn is counted, and the other agent may speak", async () => {
+        const avatar = new AvatarSession(true);
+        const other = new AvatarSession(true);
+        const a = await seat('idle-a', avatar);
+        const b = await seat('idle-b', other);
+        avatar.Piece(AvatarInitPiece());
+        avatar.Piece(AvatarFragmentPiece(VIDEO_TRACK, 41.7)); // its face between answers: no audio
+        expect(avatarSent(a)).toHaveLength(2);
+        const room = engine().RoomCoordinator;
+        expect(a.HoldsFloor).toBe(false);
+        expect(room.GetRoomState(a.RoomKey!)!.ConsecutiveAgentTurns).toBe(0);
+
+        other.Say(2000); // the other agent answers at length: it takes the floor, and none of it is cut
+        expect(room.IsFloorHolder(b.RoomKey!, b.AgentSessionID)).toBe(true);
+    });
+
+    it('takes no floor for a piece its driver marks idle, though its audio track has samples; the answer still takes it', async () => {
+        const avatar = new AvatarSession(true);
+        const a = await seat('marked-a', avatar);
+        await seat('marked-b', new AvatarSession(true));
+        const room = engine().RoomCoordinator;
+        avatar.Piece(AvatarInitPiece());
+        avatar.IdlePiece(AvatarFragmentPiece(AUDIO_TRACK, 400)); // between answers, with silence on its audio track
+        expect(room.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(false);
+        expect(avatarSent(a)).toHaveLength(2);
+
+        avatar.Piece(AvatarFragmentPiece(AUDIO_TRACK, 300)); // the answer
+        expect(room.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(true);
+        expect(avatarSent(a)).toHaveLength(3);
+    });
+
+    it('keeps no cut burst open with idle video: once its speech has paused, the avatar plays again and its next answer takes the floor', async () => {
+        // The clock is set before the agents are seated: each floor gate keeps the Date.now it was created with.
+        let clock = Date.now();
+        vi.setSystemTime(clock);
+        try {
+            const holder = new AvatarSession(true);
+            const avatar = new AvatarSession(true);
+            await seat('reopen-a', holder);
+            const b = await seat('reopen-b', avatar);
+            holder.Say(300); // the first agent takes the floor
+            avatar.Piece(AvatarInitPiece());
+            avatar.Piece(AvatarFragmentPiece(AUDIO_TRACK, 2000)); // talks over it: cut at once
+            holder.Final('assistant', 'A full answer that held the floor for a while'); // frees the floor
+
+            for (let i = 0; i < 10; i++) {
+                clock += 200; // its face between answers, every 200 ms
+                vi.setSystemTime(clock);
+                avatar.Piece(AvatarFragmentPiece(VIDEO_TRACK, 41.7));
+            }
+            expect(avatarSent(b)).toHaveLength(1 + 4); // the init, then the idle face once the cut burst's speech paused past the gap
+
+            clock += 200;
+            vi.setSystemTime(clock);
+            const answer = AvatarFragmentPiece(AUDIO_TRACK, 400);
+            avatar.Piece(answer);
+            expect(engine().RoomCoordinator.IsFloorHolder(b.RoomKey!, b.AgentSessionID)).toBe(true);
+            expect(avatarSent(b).at(-1)?.Bytes).toBe(answer);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });
 

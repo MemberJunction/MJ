@@ -178,6 +178,22 @@ describe('GeminiRealtime server-bridged session resumption', () => {
             expect(errors[0].Fatal).toBe(true);
             expect(errors[0].Message).toContain('could not be resumed');
         });
+
+        it('sends a tool result that came during the move on the new connection, then closes the turn a note left open', async () => {
+            driver.EmitOn(0, TOOL_CALL('call-1'));
+            session.SendContextNote?.('The order agent is still looking.'); // the tool call let it out at once
+            driver.EmitOn(0, RESUMABLE('h1'));
+            driver.AutoConfirmSetup = false;
+            driver.CloseOn(0);
+            await vi.advanceTimersByTimeAsync(0);
+            await session.SendToolResult('call-1', '{"status":"shipped"}');
+            expect(driver.Connections[0].Fake.ToolResponses).toEqual([]);
+
+            driver.ConfirmSetupOn(1);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(driver.Connections[1].Fake.ToolResponses).toHaveLength(1);
+            expect(driver.Connections[1].Fake.ClientContents).toEqual([{ turnComplete: true }]);
+        });
     });
 
     describe('meeting mode', () => {
