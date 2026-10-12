@@ -165,6 +165,8 @@ export interface NormalizedClonePreset {
     Description?: string;
     Options?: CloneRequestOptions;
     Relationships?: Record<string, { Policy: 'Deep' | 'Reference' | 'Skip' }>;
+    /** Boolean field on the root entity the source record must have set for this preset to apply. */
+    TemplateSourceField?: string;
 }
 
 /**
@@ -186,6 +188,7 @@ export function NormalizeClonePresets(presets: unknown): NormalizedClonePreset[]
             Relationships: p.Relationships && typeof p.Relationships === 'object'
                 ? (p.Relationships as NormalizedClonePreset['Relationships'])
                 : undefined,
+            TemplateSourceField: typeof p.TemplateSourceField === 'string' && p.TemplateSourceField ? p.TemplateSourceField : undefined,
         };
     };
     if (Array.isArray(presets)) {
