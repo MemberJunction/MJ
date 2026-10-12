@@ -1,5 +1,5 @@
 import { IsForkingSettingOn, MAX_BRANCH_DEPTH, type ConversationBranchRow, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, NormalizeUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 
 /** Main: the conversation's trunk, shared by everyone. */
 export interface MainOpenView {
@@ -106,12 +106,12 @@ export function ParentForkIdOf(view: ConversationOpenView, rows: ReadonlyArray<F
 export function ForkChainOf(branchId: string | null, rows: ReadonlyArray<ForkChainRow>): string[] {
     const chain: string[] = [];
     const seen = new Set<string>();
+    const byId = IndexByUUID(rows);
     let id = branchId;
     while (id && !seen.has(NormalizeUUID(id)) && chain.length < MAX_BRANCH_DEPTH) {
         seen.add(NormalizeUUID(id));
         chain.unshift(id);
-        const current = id;
-        id = rows.find(r => UUIDsEqual(r.ID, current))?.ParentBranchID ?? null;
+        id = byId.Get(id)?.ParentBranchID ?? null;
     }
     return chain;
 }
@@ -562,9 +562,10 @@ export function ForkOriginText(summary: ForkSummary): string {
  * forks the person started or wrote in.
  */
 export function BuildForkListRows(summaries: ReadonlyArray<ForkSummary>, filter: ForkListFilter, userId: string, now: Date): ForkListRow[] {
+    const me = NormalizeUUID(userId);
     const kept = filter === 'All'
         ? [...summaries]
-        : summaries.filter(s => UUIDsEqual(s.StartedByUserID, userId) || s.AuthorUserIDs.some(id => UUIDsEqual(id, userId)));
+        : summaries.filter(s => NormalizeUUID(s.StartedByUserID) === me || s.AuthorUserIDs.some(id => NormalizeUUID(id) === me));
     const keptIds = new Set(kept.map(s => NormalizeUUID(s.Branch.ID)));
     const newestFirst = (a: ForkSummary, b: ForkSummary) => b.LastActivityAt.getTime() - a.LastActivityAt.getTime();
     const children = new Map<string, ForkSummary[]>();
@@ -694,7 +695,8 @@ export function ForkDependsOnRows(
         return false;
     }
     const first = Math.min(...rows.map(r => r.Sequence));
+    const rowIds = new UUIDSet(rows.map(r => r.ID));
     return branches.some(b =>
         (b.ForkFromSequence != null && b.ForkFromSequence >= first && UUIDsEqual(b.ParentBranchID ?? null, branchId))
-        || (b.SourceDetailID != null && rows.some(r => UUIDsEqual(r.ID, b.SourceDetailID))));
+        || (b.SourceDetailID != null && rowIds.Has(b.SourceDetailID)));
 }

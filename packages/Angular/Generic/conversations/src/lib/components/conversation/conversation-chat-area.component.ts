@@ -5363,11 +5363,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (!cache || cache.Messages !== this.messages) {
       return;
     }
-    for (const rows of [cache.Rows, cache.Split.Inherited, cache.Split.Own]) {
-      const index = rows === this.messages ? -1 : rows.findIndex(m => UUIDsEqual(m.ID, message.ID));
-      if (index >= 0) {
-        rows[index] = message;
-      }
+    this.replaceRowIn(cache.Rows, message);
+    this.replaceRowIn(cache.Split.Inherited, message);
+    this.replaceRowIn(cache.Split.Own, message);
+  }
+
+  /** Puts `message` in place of the row with its id in `rows`; leaves `messages` itself alone. */
+  private replaceRowIn(rows: MJConversationDetailEntity[], message: MJConversationDetailEntity): void {
+    if (rows === this.messages) {
+      return;
+    }
+    const index = rows.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    if (index >= 0) {
+      rows[index] = message;
     }
   }
 
