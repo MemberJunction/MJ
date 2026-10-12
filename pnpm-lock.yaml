@@ -11929,6 +11929,9 @@ importers:
       '@memberjunction/query-gen':
         specifier: 6.2.0-edge.3
         version: link:../QueryGen
+      '@memberjunction/record-cloning':
+        specifier: 6.2.0-edge.3
+        version: link:../RecordCloning/engine
       '@memberjunction/redis-provider':
         specifier: 6.2.0-edge.3
         version: link:../RedisProvider
@@ -12789,6 +12792,9 @@ importers:
       mssql:
         specifier: ^12.2.0
         version: 12.7.0
+      pg:
+        specifier: ^8.13.3
+        version: 8.18.0
       simple-git:
         specifier: ^3.30.0
         version: 3.30.0
@@ -12799,6 +12805,9 @@ importers:
       '@types/mssql':
         specifier: ^9.1.9
         version: 9.1.9
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
       tsc-alias:
         specifier: ^1.8.15
         version: 1.8.16
@@ -13058,6 +13067,9 @@ importers:
       '@memberjunction/queue':
         specifier: 6.2.0-edge.3
         version: link:../MJQueue
+      '@memberjunction/record-cloning':
+        specifier: 6.2.0-edge.3
+        version: link:../RecordCloning/engine
       '@memberjunction/record-comparison':
         specifier: 6.2.0-edge.3
         version: link:../RecordComparison
@@ -13791,6 +13803,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.3
         version: link:../../MJGlobal
+      '@memberjunction/record-cloning':
+        specifier: 6.2.0-edge.3
+        version: link:../../RecordCloning/engine
       '@memberjunction/sql-dialect':
         specifier: 6.2.0-edge.3
         version: link:../../SQLDialect
