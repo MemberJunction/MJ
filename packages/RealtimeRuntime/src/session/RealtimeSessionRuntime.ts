@@ -1769,7 +1769,9 @@ export class RealtimeSessionRuntime {
           delivered++;
         }
       }
-      this.pendingShardsDrained = generation === this.drainGeneration;
+      // Done only when everything listed was delivered: a drain during an outage (or with a shard the
+      // server refuses) must not stop the next session start or recovery from trying again.
+      this.pendingShardsDrained = generation === this.drainGeneration && delivered === pending.length;
       if (pending.length > 0) {
         console.log(`[RealtimeSession] Re-uploaded ${delivered}/${pending.length} stored recording shard(s) from earlier calls.`);
       }
@@ -1793,6 +1795,9 @@ export class RealtimeSessionRuntime {
     if (!transport) {
       console.warn(`[RealtimeSession] No recording transport for session ${sessionId} (provider has no REST configuration); shards are kept in the local store only.`);
     }
+    // True once the queue gave up on a shard and until an upload succeeds again: that first success
+    // re-sends what the queue dropped meanwhile (see recoverStoredShardsAfterOutage).
+    let shardsGivenUp = false;
     this.recordingShards = {
       SessionID: sessionId,
       Window: new RecordingShardWindow(),
@@ -1805,11 +1810,30 @@ export class RealtimeSessionRuntime {
         const acked = await transport.UploadShard(sessionId, shard);
         if (acked) {
           await this.deleteStoredShard(sessionId, shard.Index);
+          if (shardsGivenUp) {
+            shardsGivenUp = false;
+            this.recoverStoredShardsAfterOutage(sessionId);
+          }
         }
         return acked;
+      }, () => {
+        shardsGivenUp = true;
       }),
     };
     this.shardFlushTimer = setInterval(() => { void this.flushRecordingShards(); }, RealtimeSessionRuntime.recordingShardFlushMs);
+  }
+
+  /**
+   * Uploads succeed again after failing: re-sends, from the local store, the shards the queue gave up
+   * on during the outage. The queue's attempts run out after about 10 s of a dead network (or an
+   * expired token), and without this those shards would wait for a later page load — which a widget
+   * guest never makes — leaving a permanent gap. Runs in the background, outside any page-lifecycle
+   * handler, so the IndexedDB read is allowed. Never rejects.
+   */
+  private recoverStoredShardsAfterOutage(sessionId: string): void {
+    console.log(`[RealtimeSession] Recording uploads for session ${sessionId} recovered; re-sending stored shards.`);
+    this.rearmPendingShardDrain();
+    void this.DrainPendingRecordingShards();
   }
 
   /** Stops the periodic shard flush. */

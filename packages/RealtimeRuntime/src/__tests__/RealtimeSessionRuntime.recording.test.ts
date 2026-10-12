@@ -142,6 +142,25 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         await runtime.EndRealtimeSession();
     });
 
+    it('re-sends, during the call, shards an outage made the queue give up on, once uploads succeed again', async () => {
+        const { runtime, store, transport, recorder } = await startRecorded();
+        transport.Offline = true;
+        for (let tick = 0; tick < 4; tick++) {
+            recorder.Capture(WINDOW - 2);
+            await vi.advanceTimersByTimeAsync(FLUSH_MS);
+        }
+        // Shards 0 and 1 used up their attempts; they are only in the store now.
+        expect(store.Keys).toEqual(['session-1/0', 'session-1/1', 'session-1/2', 'session-1/3']);
+
+        transport.Offline = false;
+        recorder.Capture(WINDOW - 2);
+        await vi.advanceTimersByTimeAsync(FLUSH_MS);
+
+        // Every shard reached the server before End, so the terminal finds nothing missing.
+        expect(store.Keys).toEqual([]);
+        await runtime.EndRealtimeSession();
+    });
+
     it('puts each shard in the store before its upload starts and deletes it only after the ack', async () => {
         const { runtime, recorder, log } = await startRecorded();
         recorder.Capture(WINDOW);
@@ -191,6 +210,15 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         runtime.Transport = new FakeRecordingTransport([], ['refused']);
         await expect(runtime.DrainPendingRecordingShards()).resolves.toBe(0);
         expect(store.Keys).toEqual(['old/0']);
+    });
+
+    it('a drain that could not deliver everything stays armed, so a later call tries again', async () => {
+        const store = new FakeShardStore();
+        await store.Put({ SessionID: 'old', Index: 0, Bytes: new Uint8Array([9]), SavedAt: 1 });
+        const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), store, new FakeRecordingTransport([], ['network-error']));
+        await expect(runtime.DrainPendingRecordingShards()).resolves.toBe(0);
+        await expect(runtime.DrainPendingRecordingShards()).resolves.toBe(1);
+        expect(store.Keys).toEqual([]);
     });
 
     it('drains at session start, after the constructor found no transport', async () => {

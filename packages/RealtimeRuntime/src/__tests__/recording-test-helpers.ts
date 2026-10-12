@@ -116,6 +116,8 @@ export class FakeRecordingTransport implements IRecordingTransport {
     public readonly Uploads: FakeUpload[] = [];
     public readonly Terminals: FakeTerminal[] = [];
     public TerminalAck = true;
+    /** While true every upload fails on the wire, like a browser that has lost the network. */
+    public Offline = false;
     /** When set, the next upload waits on it and answers with the outcome it resolves to. */
     public HoldNextUpload: Promise<FakeUploadOutcome> | null = null;
     private heldTerminal: Promise<boolean> | null = null;
@@ -133,6 +135,9 @@ export class FakeRecordingTransport implements IRecordingTransport {
     ): Promise<boolean> {
         this.Log.push(`upload${options?.Keepalive ? '(keepalive)' : ''}:${sessionID}/${shard.Index}`);
         this.Uploads.push({ SessionID: sessionID, Index: shard.Index, Bytes: shard.Bytes });
+        if (this.Offline) {
+            throw new Error('offline');
+        }
         const held = this.HoldNextUpload;
         this.HoldNextUpload = null;
         const outcome = held ? await held : (this.script.shift() ?? 'stored');

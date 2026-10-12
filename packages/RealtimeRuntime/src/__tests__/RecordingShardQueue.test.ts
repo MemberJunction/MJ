@@ -165,12 +165,15 @@ describe('RecordingShardQueue', () => {
 
   it('drops a shard after MAX_SHARD_UPLOAD_ATTEMPTS failures, warns that it stays in the store, and keeps later indexes', async () => {
     const { Upload, Calls } = recordingUpload((call) => call.Index !== 0);
-    const queue = new RecordingShardQueue(Upload);
+    const gaveUp = vi.fn<(shards: RecordingShard[]) => void>();
+    const queue = new RecordingShardQueue(Upload, gaveUp);
     await queue.Flush([shardOf(0)]);
     for (let i = 1; i < MAX_SHARD_UPLOAD_ATTEMPTS; i++) {
       await queue.Flush([]);
     }
     expect(queue.RetainedCount).toBe(0);
+    // The owner is told, so it can re-send the shard from the store once uploads work again.
+    expect(gaveUp.mock.calls.map((c) => c[0].map((shard) => shard.Index))).toEqual([[0]]);
     const dropWarning = warn.mock.calls.map((c) => String(c[0])).find((m) => m.includes('Dropping'));
     expect(dropWarning).toBeDefined();
     expect(dropWarning).toContain('shard 0');
@@ -295,13 +298,15 @@ describe('RecordingShardQueue', () => {
 
     it('caps retained shards at MAX_RETAINED_SHARDS, dropping the oldest with a warn', async () => {
       const gate = createDeferred<boolean>();
-      const queue = new RecordingShardQueue(() => gate.Promise);
+      const gaveUp = vi.fn<(shards: RecordingShard[]) => void>();
+      const queue = new RecordingShardQueue(() => gate.Promise, gaveUp);
       const flushes = [queue.Flush([shardOf(0)]), queue.Flush([shardOf(1)])];
       await settle();
       for (let i = 2; i < 2 + MAX_RETAINED_SHARDS + 3; i++) {
         await queue.Flush([shardOf(i)]);
       }
       expect(queue.RetainedCount).toBe(MAX_RETAINED_SHARDS);
+      expect(gaveUp.mock.calls.map((c) => c[0].map((shard) => shard.Index))).toEqual([[2], [3], [4]]);
       const dropWarnings = warn.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('dropped oldest'));
       expect(dropWarnings).toHaveLength(3);
       expect(dropWarnings[0]).toContain('shard(s) 2 ');

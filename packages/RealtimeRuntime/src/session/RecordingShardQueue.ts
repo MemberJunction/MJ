@@ -6,7 +6,8 @@
  * upload was never retried, so a single transient error left a permanent gap in the recovered
  * recording (#5197). The queue keeps failed shards and resends them, oldest first, on later
  * flushes — bounded so a dead server cannot grow memory without limit. A shard the queue gives up on
- * is not lost: it stays in the IndexedDB store and is drained on a later load.
+ * is not lost: it stays in the IndexedDB store, and the owner is told so it can re-send it from there
+ * once uploads succeed again (or a later load drains it).
  *
  * @module @memberjunction/realtime-runtime
  */
@@ -14,6 +15,12 @@ import type { RecordingShard } from './RecordingShardWindow';
 
 /** Resolves true when the server stored the shard; false or a throw are both failures. */
 export type ShardUpload = (shard: RecordingShard) => Promise<boolean>;
+
+/**
+ * Told about shards the queue stops retrying while the recording is live (attempts used up, or the
+ * retry list overflowed). They are still in the store; the owner re-sends them once uploads work.
+ */
+export type ShardsGivenUp = (shards: RecordingShard[]) => void;
 
 /** Total upload attempts per shard (the first try plus retries) before it is dropped. */
 export const MAX_SHARD_UPLOAD_ATTEMPTS = 3;
@@ -66,7 +73,11 @@ export class RecordingShardQueue {
   /** Set by {@link Close} when the recording ends; nothing is sent or retained after it. */
   private closed = false;
 
-  constructor(private readonly upload: ShardUpload) {}
+  /**
+   * @param upload sends one shard
+   * @param onGivenUp told about every shard dropped while the recording is live (not on {@link Close})
+   */
+  constructor(private readonly upload: ShardUpload, private readonly onGivenUp: ShardsGivenUp = () => undefined) {}
 
   /** Shards awaiting a retry (for tests and diagnostics). */
   public get RetainedCount(): number {
@@ -130,8 +141,9 @@ export class RecordingShardQueue {
     if (overflow > 0) {
       const dropped = this.retained.splice(0, overflow);
       console.warn(
-        `[RealtimeSession] Retry queue over ${MAX_RETAINED_SHARDS} shards; dropped oldest shard(s) ${dropped.map((p) => p.Shard.Index).join(', ')} from memory — they stay in the local IndexedDB store and are drained on the next load.`,
+        `[RealtimeSession] Retry queue over ${MAX_RETAINED_SHARDS} shards; dropped oldest shard(s) ${dropped.map((p) => p.Shard.Index).join(', ')} from memory — they stay in the local IndexedDB store and are re-sent from it once uploads succeed again.`,
       );
+      this.onGivenUp(dropped.map((p) => p.Shard));
     }
   }
 
@@ -180,9 +192,10 @@ export class RecordingShardQueue {
     }
     if (pending.Attempts >= MAX_SHARD_UPLOAD_ATTEMPTS) {
       console.warn(
-        `[RealtimeSession] Dropping recording shard ${shard.Index} from the retry queue after ${pending.Attempts}/${MAX_SHARD_UPLOAD_ATTEMPTS} failed uploads (${describeFailure(failure)}); it stays in the local store and is drained later:`,
+        `[RealtimeSession] Dropping recording shard ${shard.Index} from the retry queue after ${pending.Attempts}/${MAX_SHARD_UPLOAD_ATTEMPTS} failed uploads (${describeFailure(failure)}); it stays in the local store and is re-sent from it once uploads succeed again:`,
         failure,
       );
+      this.onGivenUp([shard]);
       return;
     }
     console.warn(
