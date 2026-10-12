@@ -2127,6 +2127,10 @@ class AffinityProvider extends RecordingProvider {
         return this.IsCallerInAmbientTransaction();
     }
 
+    public get CallerDedupScope(): string {
+        return this.RunViewDedupScope;
+    }
+
     override async ExecuteSQL<T>(sql?: string, params?: unknown[], options?: { connectionSource?: unknown }): Promise<Array<T>> {
         this.memberAtSQL.push(this.IsCallerInAmbientTransaction());
         return super.ExecuteSQL<T>(sql, params, options);
@@ -2992,5 +2996,27 @@ describe('TransactionFrameTracker', () => {
             t.EndEpoch('committed');
         }
         expect(t.Resolve(first, false).Kind).toBe('drop');
+    });
+});
+
+describe('GenericDatabaseProvider RunView dedup scope follows transaction membership (#4786)', () => {
+    it('a member is scoped to its transaction, a non-member is not, and the scope ends with the transaction', async () => {
+        const p = new AffinityProvider();
+        let outsiderScope: string | null = null;
+        let release!: () => void;
+        const opened = new Promise<void>((resolve) => { release = resolve; });
+        const outsider = (async () => { await opened; outsiderScope = p.CallerDedupScope; })();
+        expect(p.CallerDedupScope).toBe('');
+        await p.BeginTransaction();
+        const memberScope = p.CallerDedupScope;
+        release();
+        await outsider;
+        expect(memberScope).not.toBe('');
+        expect(outsiderScope).toBe('');
+        await p.CommitTransaction();
+        expect(p.CallerDedupScope).toBe('');
+        await p.BeginTransaction();
+        expect(p.CallerDedupScope).not.toBe(memberScope);
+        await p.RollbackTransaction();
     });
 });

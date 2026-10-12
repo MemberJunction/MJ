@@ -6231,6 +6231,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return this._affinity.IsCallerMember;
     }
 
+    /** Members of the open transaction share RunViews only with each other (see {@link ProviderBase.RunViewDedupScope}). */
+    protected override get RunViewDedupScope(): string {
+        return this.IsCallerInAmbientTransaction() ? `tx:${this._affinity.CurrentEpoch}` : '';
+    }
+
     /**
      * True when the driver has a begun physical transaction object.
      * Must be truthful: a published-but-unbegun handle is a poison state.
