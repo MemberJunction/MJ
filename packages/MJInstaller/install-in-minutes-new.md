@@ -6,8 +6,10 @@ MemberJunction is a platform designed to help organizations efficiently manage d
 
 Before running the installer, make sure you have the following ready:
 
-1. **SQL Server** — SQL Server 2022 or above. Can be a local SQL Server instance (including Docker) or Azure SQL. You do **not** need to create a database ahead of time — the installer creates it, along with the SQL logins MemberJunction uses, when you give it an administrator login such as `sa`.
-   > **Note:** If using a local SQL Server with a self-signed certificate (common with Docker or default installations), the installer will ask if you want to trust the server certificate. Azure SQL handles encryption automatically, so this step is not needed for Azure SQL.
+1. **A supported database** — Choose one:
+   - **SQL Server** — SQL Server 2022 or above. Can be a local SQL Server instance (including Docker) or Azure SQL. You do **not** need to create a database ahead of time — the installer creates it, along with the SQL logins MemberJunction uses, when you give it an administrator login such as `sa`.
+     > **Note:** If using a local SQL Server with a self-signed certificate (common with Docker or default installations), the installer will ask if you want to trust the server certificate. Azure SQL handles encryption automatically, so this step is not needed for Azure SQL.
+   - **PostgreSQL** — a local PostgreSQL instance (including Docker) or a managed PostgreSQL service. The installer has been verified against PostgreSQL 16. You do **not** need to create a database ahead of time — the installer creates it, along with the PostgreSQL roles MemberJunction uses, when you give it a superuser login such as `postgres`. For non-interactive installs, set `MJ_INSTALL_DB_PLATFORM=postgresql`.
 
 2. **Node.js 22 or above** (Node.js 24 recommended) — Install from [nodejs.org](https://nodejs.org). Verify with:
    ```
@@ -67,17 +69,18 @@ During the configure step, the installer will ask for:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Database hostname | `localhost` | Your SQL Server address |
-| Database port | `1433` | SQL Server TCP port |
-| Database name | `MemberJunction` | Target database name |
-| Trust self-signed certificate | No | Set to Yes for local SQL Server instances |
-| CodeGen login | `MJ_CodeGen` | A privileged SQL login for schema management |
-| CodeGen password | *(none)* | Password for the CodeGen login |
-| API login | `MJ_Connect` | A SQL login for application data access |
-| API password | *(none)* | Password for the API login |
-| GraphQL API port | `4000` | Port for the MJAPI server |
-| Explorer UI port | `4201` | Port for the MJExplorer dev server |
-| Authentication provider | None | Choose Microsoft Entra (MSAL), Auth0, or skip for now |
+| **Database platform** | SQL Server | Choose SQL Server or PostgreSQL |
+| **Database hostname** | `localhost` | Your database server address |
+| **Database port** | `1433` (SQL Server) or `5432` (PostgreSQL) | Database TCP port (auto-set based on platform) |
+| **Database name** | `MemberJunction` | Target database name |
+| **Trust self-signed certificate** | No | Set to Yes for local SQL Server instances (SQL Server only) |
+| **CodeGen login** | `MJ_CodeGen` | A privileged role/login for schema management |
+| **CodeGen password** | *(none)* | Password for the CodeGen role/login |
+| **API login** | `MJ_Connect` | A role/login for application data access |
+| **API password** | *(none)* | Password for the API role/login |
+| **GraphQL API port** | `4000` | Port for the MJAPI server |
+| **Explorer UI port** | `4201` | Port for the MJExplorer dev server |
+| **Authentication provider** | None | Choose Microsoft Entra (MSAL), Auth0, or skip for now |
 
 If you choose an authentication provider, you'll also be prompted for the provider-specific settings (Client ID, Tenant ID, etc.).
 
@@ -85,19 +88,26 @@ If you choose an authentication provider, you'll also be prompted for the provid
 
 ### 3. Setting Up the Database
 
-The installer first signs in as the CodeGen and API logins you chose. If both work, the database is already set up and it moves on.
+The installer first signs in as the CodeGen and API logins/roles you chose. If both work, the database is already set up and it moves on.
 
 If they don't, it asks how to set the database up:
 
-- **Set it up now (recommended)** — enter a SQL login that can create databases and logins (for example `sa`, or any login with the `sysadmin` role). The installer creates the database, the `__mj` schema, both logins, the database users, and their permissions, then signs in as both logins to confirm it worked. The administrator login is used for this one step only and is never written to `.env`, the install state, or the diagnostic report.
-- **I'll run it myself** — the installer waits while you run `mj-db-setup.sql` from your working directory in SQL Server Management Studio (SSMS), Azure Data Studio, or any SQL client, connected as an administrator. It checks both logins again when you continue.
+- **Set it up now (recommended)** — Enter an administrator login (for SQL Server, try `sa`; for PostgreSQL, try `postgres`). The installer creates the database, the `__mj` schema, both logins/roles, and their permissions, then signs in as both to confirm it worked. The administrator login is used for this one step only and is never written to `.env`, the install state, or the diagnostic report.
+- **I'll run it myself** — The installer waits while you run `mj-db-setup.sql` from your working directory in SQL Server Management Studio (SSMS), Azure Data Studio (for SQL Server or PostgreSQL), psql (for PostgreSQL), or any database client, connected as an administrator. It checks both logins again when you continue.
 
 Either way, two scripts are saved in your working directory so you can see exactly what runs:
 
-- **`mj-db-setup.sql`** — creates the database (if it doesn't exist), the `__mj` schema, the SQL Server logins, database users, and permissions. It is safe to run more than once.
-- **`mj-db-validate.sql`** — verifies that the setup was applied correctly.
+- **`mj-db-setup.sql`** — Creates the database (if it doesn't exist), the `__mj` schema, the logins/roles, and permissions. It is safe to run more than once on the platform it targets.
+- **`mj-db-validate.sql`** — Verifies that the setup was applied correctly.
 
-> **Azure SQL:** `mj-db-setup.sql` uses `USE` to switch databases, which Azure SQL Database does not support. Create the database and logins with the Azure portal or your usual tooling, then run the installer; it will find them already set up.
+> **SQL Server Notes:**
+> - Azure SQL Database does not support `USE` statements. Create the database and logins with the Azure portal or your usual tooling, then run the installer; it will find them already set up.
+>
+> **PostgreSQL Notes:**
+> - `mj-db-setup.sql` is a `psql` script (it uses `\connect` and `\gexec`); run it with `psql -h <host> -p <port> -U postgres -d postgres -f mj-db-setup.sql`. The installer itself sends the same statements one at a time through the driver.
+> - The CodeGen and API logins are PostgreSQL login roles with no special attributes (no `CREATEDB`, `CREATEROLE`, or superuser). The CodeGen role owns the `__mj` schema and may create schemas in the database; the API role can read and write the tables, use the sequences, and execute the routines the CodeGen role creates.
+> - The administrator also creates the `pgcrypto` and `uuid-ossp` extensions and the `cdp_BI`, `cdp_CodeGen`, `cdp_Developer`, `cdp_Integration`, and `cdp_UI` group roles that MemberJunction's migrations grant permissions to.
+> - `.env` gets `DB_PLATFORM='postgresql'` and the same `DB_*` / `CODEGEN_DB_*` keys as SQL Server, so `mj migrate` and CodeGen use the CodeGen login and MJAPI uses the API login.
 
 ### 4. Verify Your Installation
 
@@ -239,6 +249,7 @@ You can also provide configuration via environment variables (useful for CI/CD):
 
 | Variable | Maps To |
 |----------|---------|
+| `MJ_INSTALL_DB_PLATFORM` | `sqlserver` (default) or `postgresql` |
 | `MJ_INSTALL_DB_HOST` | Database hostname |
 | `MJ_INSTALL_DB_PORT` | Database port |
 | `MJ_INSTALL_DB_NAME` | Database name |
@@ -247,7 +258,7 @@ You can also provide configuration via environment variables (useful for CI/CD):
 | `MJ_INSTALL_CODEGEN_PASSWORD` | CodeGen password |
 | `MJ_INSTALL_API_USER` | API SQL login |
 | `MJ_INSTALL_API_PASSWORD` | API password |
-| `MJ_INSTALL_DB_ADMIN_USER` | SQL administrator login used once to create the database and logins (never saved) |
+| `MJ_INSTALL_DB_ADMIN_USER` | Administrator login used once to create the database and logins (SQL Server: e.g. `sa`; PostgreSQL: a superuser such as `postgres`; never saved) |
 | `MJ_INSTALL_DB_ADMIN_PASSWORD` | Password for that administrator login (never saved) |
 | `MJ_INSTALL_API_PORT` | GraphQL API port |
 | `MJ_INSTALL_EXPLORER_PORT` | Explorer UI port |

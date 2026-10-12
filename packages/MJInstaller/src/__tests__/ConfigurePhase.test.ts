@@ -1114,4 +1114,119 @@ describe('ConfigurePhase', () => {
       expect(result.Config.DatabasePort).toBe(1433);
     });
   });
+
+  // ─── Database platform ─────────────────────────────────────────────
+
+  describe('database platform', () => {
+    function pgConfig(): InstallConfig {
+      return {
+        ...sampleConfig(),
+        DatabasePlatform: 'postgresql',
+        DatabaseHost: 'pg.local',
+        DatabasePort: 5433,
+        DatabaseName: 'mj_pg',
+        CodeGenUser: 'mj_codegen',
+        CodeGenPassword: 'cg_secret',
+        APIUser: 'mj_api',
+        APIPassword: 'api_secret',
+      } as InstallConfig;
+    }
+
+    function rootEnv(): string {
+      const calls = mockFs.WriteText.mock.calls as [string, string][];
+      return calls.find(([p]) => p.endsWith('.env') && !p.includes('MJAPI'))?.[1] ?? '';
+    }
+
+    it('PostgreSQL .env: DB_PLATFORM plus separate CodeGen and API logins, no PG_USERNAME', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      await phase.Run(makeContext({ Config: pgConfig(), Yes: true }));
+
+      const env = rootEnv();
+      expect(env).toContain(
+        "#Database Setup\nDB_PLATFORM='postgresql'\nDB_HOST='pg.local'\nDB_PORT=5433\n"
+          + "CODEGEN_DB_USERNAME='mj_codegen'\nCODEGEN_DB_PASSWORD='cg_secret'\n"
+          + "DB_USERNAME='mj_api'\nDB_PASSWORD='api_secret'\nDB_DATABASE='mj_pg'\n"
+      );
+      expect(env).not.toMatch(/^PG_(USERNAME|PASSWORD|HOST|PORT|DATABASE)=/m);
+      expect(env).not.toContain('DB_TRUST_SERVER_CERTIFICATE');
+
+      const mjapiEnv = (mockFs.WriteText.mock.calls as [string, string][]).find(([p]) => p.includes('MJAPI') && p.endsWith('.env'))?.[1];
+      expect(mjapiEnv).toContain("DB_PLATFORM='postgresql'");
+      expect(mjapiEnv).toContain("DB_USERNAME='mj_api'");
+    });
+
+    it('PostgreSQL mj.config.cjs pins dbPlatform', async () => {
+      await phase.Run(makeContext({ Config: pgConfig(), Yes: true }));
+
+      const configContent = findWrittenContent('mj.config.cjs');
+      expect(configContent).toContain("module.exports = {\n  dbPlatform: 'postgresql',\n  settings: {");
+      expect(configContent).toContain('port: 5433');
+    });
+
+    it('SQL Server output is unchanged: no DB_PLATFORM in .env, no dbPlatform in mj.config.cjs', async () => {
+      const config = sampleConfig();
+      config.DatabasePlatform = 'sqlserver';
+      await phase.Run(makeContext({ Config: config, Yes: true }));
+
+      expect(rootEnv()).toMatch(/^#Database Setup\nDB_HOST=/);
+      expect(rootEnv()).not.toContain('DB_PLATFORM');
+      expect(findWrittenContent('mj.config.cjs')).not.toContain('dbPlatform');
+    });
+
+    it('--yes without a platform resolves to SQL Server', async () => {
+      const result = await phase.Run(makeContext({ Config: sampleConfig(), Yes: true }));
+
+      expect(result.Config.DatabasePlatform).toBe('sqlserver');
+      expect(rootEnv()).not.toContain('DB_PLATFORM');
+    });
+
+    it('PostgreSQL defaults the port to 5432 and never sets the SQL Server trust-certificate flag', async () => {
+      const config = pgConfig() as Partial<InstallConfig>;
+      delete config.DatabasePort;
+      config.DatabaseTrustCert = true;
+
+      const result = await phase.Run(makeContext({ Config: config as InstallConfig, Yes: true }));
+
+      expect(result.Config.DatabasePort).toBe(5432);
+      expect(result.Config.DatabaseTrustCert).toBe(false);
+      expect(rootEnv()).toContain('DB_PORT=5432');
+      expect(rootEnv()).not.toContain('DB_TRUST_SERVER_CERTIFICATE');
+    });
+
+    it('interactive: asks for the platform first and offers 5432 for PostgreSQL', async () => {
+      const config = { ...sampleConfig() } as Partial<InstallConfig>;
+      delete config.DatabasePlatform;
+      delete config.DatabasePort;
+      delete config.DatabaseTrustCert;
+
+      const { emitter } = createMockEmitter();
+      const prompts: Array<{ Id: string; Default?: string }> = [];
+      emitter.On('prompt', (prompt) => {
+        prompts.push({ Id: prompt.PromptId, Default: prompt.Default });
+        prompt.Resolve(prompt.PromptId === 'db-platform' ? 'postgresql' : prompt.Default ?? '');
+      });
+
+      const result = await phase.Run(makeContext({ Config: config as InstallConfig, Yes: false, Emitter: emitter }));
+
+      expect(prompts[0].Id).toBe('db-platform');
+      expect(prompts.find((p) => p.Id === 'db-port')?.Default).toBe('5432');
+      expect(prompts.some((p) => p.Id === 'db-trust-cert')).toBe(false);
+      expect(result.Config.DatabasePlatform).toBe('postgresql');
+    });
+
+    it('syncs DB_PLATFORM from the root .env into an existing MJAPI .env', async () => {
+      mockFs.FileExists.mockResolvedValue(true);
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      const root = "DB_PLATFORM='postgresql'\nDB_HOST='localhost'\n";
+      const mjapi = "DB_HOST='localhost'\n";
+      mockFs.ReadText.mockImplementation(async (p: string) =>
+        p.includes('MJAPI') && p.endsWith('.env') ? mjapi : p.endsWith('.env') ? root : '',
+      );
+
+      await phase.Run(makeContext({ Config: pgConfig(), Yes: true }));
+
+      const written = (mockFs.WriteText.mock.calls as [string, string][]).find(([p]) => p.includes('MJAPI') && p.endsWith('.env'))?.[1];
+      expect(written).toContain("DB_PLATFORM='postgresql'");
+    });
+  });
 });

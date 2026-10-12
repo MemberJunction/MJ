@@ -95862,6 +95862,9 @@ export class MJUser_ {
     @MaxLength(100)
     UserImageIconClass?: string;
         
+    @Field(() => Boolean, {nullable: true, description: "When true, this user is a template: its configuration (pinned apps, views, settings, dashboards, conversations) is copied to new users through the template clone preset or userHandling.newUserTemplate. Template users are for setting things up, not for everyday use; Explorer shows a banner while one is signed in."}) 
+    IsTemplate?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(101)
     FirstLast?: string;
@@ -95938,6 +95941,9 @@ export class CreateMJUserInput {
     @Field({ nullable: true })
     UserImageIconClass: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    IsTemplate?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -95989,6 +95995,9 @@ export class UpdateMJUserInput {
 
     @Field({ nullable: true })
     UserImageIconClass?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsTemplate?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
