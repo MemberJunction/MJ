@@ -34,7 +34,7 @@ import { MJThemeEntityExtended } from '../custom/MJThemeEntityExtended';
 type TestTheme = MJThemeEntityExtended & { Values: Record<string, string | null>; DirtyFields: Set<string>; BaseErrors: ValidationErrorInfo[] };
 
 function theme(values: Record<string, string | null>, dirty: string[]): TestTheme {
-    const t = new MJThemeEntityExtended() as TestTheme;
+    const t = new (MJThemeEntityExtended as unknown as new () => TestTheme)();
     t.Values = values;
     t.DirtyFields = new Set(dirty);
     return t;
