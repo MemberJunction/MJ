@@ -206,7 +206,7 @@ Even if you're currently developing against only one database platform, using `U
 `packages/MJGlobal/src/__tests__/UUIDCompliance.test.ts` scans all `packages/` source and fails on:
 
 1. **Direct comparisons** — `.ID ===` / `!==` / `.includes(x.ID)` patterns that should use `UUIDsEqual()` or a `UUIDSet`. A legitimate non-UUID comparison (e.g. a numeric ID) goes in `KNOWN_EXCEPTIONS`.
-2. **Nested scans** — a `.some` / `.every` / `.find` / `.findIndex` / `.filter` calling `UUIDsEqual` inside the callback of another array iteration or inside a loop (Pattern 8). Detection uses the TypeScript AST, so chaining (`list.filter(…).find(…)`) is not flagged. Sites that predate the check are recorded per file in `NESTED_SCAN_BASELINE`, which is a ratchet: a file may not gain sites, and when you fix one the check makes you lower the number.
+2. **Nested scans** — a `.some` / `.every` / `.find` / `.findIndex` / `.filter` calling `UUIDsEqual` inside the callback of another array iteration or inside a loop (Pattern 8). Detection uses the TypeScript AST, so chaining (`list.filter(…).find(…)`) is not flagged. It only sees a **direct** `UUIDsEqual` call: a scan wrapped in a helper function and called from inside the iteration (for example `rows.filter(r => isChild(r))`, where `isChild` runs `.some(UUIDsEqual)`) is not detected, so review such helpers by hand. Sites that predate the check are recorded per file in `NESTED_SCAN_BASELINE`, which is a ratchet: a file may not gain sites, and when you fix one the check makes you lower the number.
 
 It runs uncached in the `Source guards` CI job. To run it locally:
 

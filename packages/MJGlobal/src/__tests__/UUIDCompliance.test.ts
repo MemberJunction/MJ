@@ -195,6 +195,11 @@ describe('UUID Comparison Compliance', () => {
  * `UUIDsEqual`, when that call sits inside the callback of an outer array iteration or inside a
  * loop body. A single `.find(x => UUIDsEqual(x.ID, id))` at the top level is fine and not flagged.
  *
+ * KNOWN LIMITATION: only a DIRECT `UUIDsEqual` call is seen. A scan hidden one call away — a
+ * helper such as `const isChild = (r) => childIds.some(id => UUIDsEqual(id, r.ID))` invoked from
+ * inside `.filter(...)` — is not flagged, because the walker does not follow calls into other
+ * functions. Treat a passing check as "no direct nested scans", not "no quadratic matching".
+ *
  * NESTED_SCAN_BASELINE records the sites that predate this check, per file. It is a ratchet: a file
  * may not gain sites, and when a file's count drops the baseline must be lowered to match, so fixed
  * sites cannot quietly come back. Burn it down; don't grow it.
