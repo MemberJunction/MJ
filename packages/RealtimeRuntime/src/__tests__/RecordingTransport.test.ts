@@ -25,6 +25,20 @@ describe('FetchRecordingTransport', () => {
         expect(init.keepalive).toBeUndefined();
     });
 
+    it('posts a shard with keepalive when asked (a pagehide handler sealed it)', async () => {
+        const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+        await make(fetchMock).UploadShard('s', { Index: 1, StartSample: 0, SampleCount: 1, Bytes: new Uint8Array(1) }, { Keepalive: true });
+        expect(fetchMock.mock.calls[0][1].keepalive).toBe(true);
+    });
+
+    it('returns false and logs when the browser refuses a keepalive request over its budget', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const fetchMock = vi.fn().mockRejectedValue(new TypeError('keepalive budget exceeded'));
+        const ok = await make(fetchMock).UploadShard('s', { Index: 3, StartSample: 0, SampleCount: 1, Bytes: new Uint8Array(1) }, { Keepalive: true });
+        expect(ok).toBe(false);
+        expect(String(warn.mock.calls[0][0])).toContain('s/3');
+    });
+
     it('accepts a pending (stored) shard', async () => {
         const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
         await make(fetchMock).UploadShard('s', { SessionID: 's', Index: 2, Bytes: new Uint8Array(1), SavedAt: 1 });

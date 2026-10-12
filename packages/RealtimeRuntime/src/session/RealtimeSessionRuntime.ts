@@ -78,6 +78,13 @@ import { FetchRecordingTransport, RecordingBaseURLFromGraphQLURL, type IRecordin
 export const RECORDING_TERMINAL_ACK_TIMEOUT_MS = 3000;
 
 /**
+ * How long teardown waits for the recorder to stop and flush its encoder. `Stop()` runs BEFORE
+ * `CloseAgentSession`, so a wedged encoder must not be able to hold the End of a call (and the
+ * server session) open; past this the recording ends at the packets already encoded.
+ */
+export const RECORDER_STOP_TIMEOUT_MS = 2000;
+
+/**
  * Cap on stored shards one page load re-uploads from a previous, interrupted call. Bounds the work a
  * fresh page does at startup; anything left over is drained by the next load.
  */
@@ -765,8 +772,13 @@ export class RealtimeSessionRuntime {
   private static readonly recordingShardFlushMs = 5000;
   /** The durable local shard store, created on first use and shared by every recording of this runtime. */
   private shardStore: IRecordingShardStore | null = null;
-  /** True once a drain ran with a transport; the drain then does nothing for the rest of this instance. */
+  /**
+   * True once a drain ran with a transport; the drain then does nothing until a recording ends and
+   * re-arms it ({@link rearmPendingShardDrain}).
+   */
   private pendingShardsDrained = false;
+  /** Bumped by every re-arm, so a drain already in flight cannot mark itself done over a re-arm. */
+  private drainGeneration = 0;
   /** The drain in flight, so overlapping callers share it instead of uploading the same shards twice. */
   private drainInFlight: Promise<number> | null = null;
 
@@ -1711,7 +1723,8 @@ export class RealtimeSessionRuntime {
    * network), each under its OWN session id and index, oldest first, at most
    * {@link MAX_DRAINED_SHARDS_PER_LOAD} per runtime. A shard is deleted only on the server's ack.
    *
-   * Runs once per runtime instance. When there is no transport yet (no provider configuration, e.g.
+   * Runs once per runtime instance, re-armed whenever a recording ends (which may leave shards behind
+   * for the next session start on the same page). When there is no transport yet (no provider configuration, e.g.
    * before login) it returns 0 WITHOUT marking itself done, so a later call — session start — drains
    * instead of the shards being skipped for this page. Concurrent calls share one run. Never rejects.
    *
@@ -1727,8 +1740,16 @@ export class RealtimeSessionRuntime {
     return this.drainInFlight;
   }
 
+  /** Makes the next {@link DrainPendingRecordingShards} call run again, even one already in flight. */
+  private rearmPendingShardDrain(): void {
+    this.pendingShardsDrained = false;
+    this.drainGeneration++;
+  }
+
   /** The body of {@link DrainPendingRecordingShards}. */
   private async drainPendingShards(): Promise<number> {
+    // A re-arm while this run is in flight must win over this run marking itself done.
+    const generation = this.drainGeneration;
     try {
       const transport = this.createRecordingTransport();
       if (!transport) {
@@ -1748,7 +1769,7 @@ export class RealtimeSessionRuntime {
           delivered++;
         }
       }
-      this.pendingShardsDrained = true;
+      this.pendingShardsDrained = generation === this.drainGeneration;
       if (pending.length > 0) {
         console.log(`[RealtimeSession] Re-uploaded ${delivered}/${pending.length} stored recording shard(s) from earlier calls.`);
       }
@@ -1912,11 +1933,16 @@ export class RealtimeSessionRuntime {
    * different bytes). No-op when nothing is recording, there is no session id or no transport, or
    * nothing was captured. Never throws.
    *
-   * Deliberately opens NO IndexedDB transaction, not even for a full window `Append` happens to seal
-   * here: a `pagehide` handler gets a few milliseconds, and a store write could not complete during
-   * unload anyway. Such windows go straight to the upload queue (fire-and-forget). If the call
-   * continues and this terminal is refused, the tail is handed to the queue too, so it is retried as
-   * an ordinary shard.
+   * Deliberately opens NO IndexedDB transaction inside the handler: a `pagehide` handler gets a few
+   * milliseconds, and a store write started there could not complete during unload anyway. Instead:
+   * - a full window `Append` happens to seal here is uploaded with `keepalive`, dispatched BEFORE the
+   *   terminal, so it survives the tab closing. If the browser refuses it (keepalive budget) or the
+   *   server does, it falls back to the ordinary queue under the same index.
+   * - those windows, and a tail whose terminal is refused, are written to the store from a
+   *   `setTimeout(0)` task after the handler returns. On a page that is merely hidden (the call goes
+   *   on) that restores the durable copy, so a frozen background tab that exhausts the queue's
+   *   attempts still leaves them for the next-load drain; on a page that is unloading the task just
+   *   never runs. A refused tail is also retried through the queue as an ordinary shard.
    */
   public SendRecordingTerminal(): void {
     const recorder = this.recorder;
@@ -1925,23 +1951,55 @@ export class RealtimeSessionRuntime {
       return;
     }
     try {
+      const transport = pipeline.Transport;
+      const sessionId = pipeline.SessionID;
       const sealed = pipeline.Window.Append(recorder.TakeEncodedPackets());
-      if (sealed.length > 0) {
-        void pipeline.Queue.Flush(sealed);
-      }
       const tail = pipeline.Window.SealTail();
       if (pipeline.Window.LastSealedIndex < 0) {
         return;
       }
-      void this.sendRecordingTerminal(pipeline, tail).then((acked) => {
+      const windowsStored = sealed.length > 0 ? this.storeShardsLater(sessionId, sealed) : Promise.resolve();
+      for (const shard of sealed) {
+        void transport
+          .UploadShard(sessionId, shard, { Keepalive: true })
+          .catch((error: unknown) => {
+            console.warn(`[RealtimeSession] Keepalive upload of recording shard ${sessionId}/${shard.Index} failed: ${describeRecordingFailure(error)}`, error);
+            return false;
+          })
+          .then(async (acked) => {
+            // Wait for the deferred Put first, so a fast ack's Delete cannot run before it and
+            // leave an orphan row behind (and the queue's own ack-Delete likewise).
+            await windowsStored;
+            if (acked) {
+              await this.deleteStoredShard(sessionId, shard.Index);
+            } else {
+              await pipeline.Queue.Flush([shard]);
+            }
+          });
+      }
+      void this.sendRecordingTerminal(pipeline, tail).then(async (acked) => {
         if (!acked && tail) {
+          await this.storeShardsLater(sessionId, [tail]);
           // A Flush on a closed queue (the recording ended meanwhile) is a logged no-op.
-          void pipeline.Queue.Flush([tail]);
+          await pipeline.Queue.Flush([tail]);
         }
       });
     } catch (error) {
       console.warn(`[RealtimeSession] Failed to send the recording terminal for session ${pipeline.SessionID}:`, error);
     }
+  }
+
+  /**
+   * Stores shards from a `setTimeout(0)` task rather than now — the path for shards sealed inside a
+   * page-lifecycle handler, which must not open an IndexedDB transaction itself. Resolves once they
+   * are stored (never, if the page unloads first). Never rejects.
+   */
+  private storeShardsLater(sessionId: string, shards: RecordingShard[]): Promise<void> {
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        void this.storeShards(sessionId, shards).then(resolve);
+      }, 0);
+    });
   }
 
   /**
@@ -1995,12 +2053,7 @@ export class RealtimeSessionRuntime {
       return null;
     }
     try {
-      let capturedSamples: number | null = null;
-      try {
-        capturedSamples = await recorder.Stop();
-      } catch (error) {
-        console.warn(`[RealtimeSession] Recorder failed to stop for session ${pipeline.SessionID}; ending the recording at the packets already encoded:`, error);
-      }
+      const capturedSamples = await this.stopRecorder(recorder, pipeline.SessionID);
       const sealed = pipeline.Window.Append(recorder.TakeEncodedPackets());
       await this.storeShards(pipeline.SessionID, sealed);
       void pipeline.Queue.Flush(sealed);
@@ -2023,9 +2076,35 @@ export class RealtimeSessionRuntime {
       });
       return { Pipeline: pipeline, Acked: acked };
     } catch (error) {
-      console.warn(`[RealtimeSession] Failed to finish the call recording for session ${pipeline.SessionID}; stored shards are drained on a later load:`, error);
+      console.warn(`[RealtimeSession] Failed to finish the call recording for session ${pipeline.SessionID}; stored shards are drained at the next session start or load:`, error);
       pipeline.Queue.Close();
+      this.rearmPendingShardDrain();
       return null;
+    }
+  }
+
+  /**
+   * Stops the recorder, bounded by {@link RECORDER_STOP_TIMEOUT_MS}. Resolves the captured sample
+   * count, or null when the recorder threw or did not finish in time (logged) — the caller then ends
+   * the recording at the packets already encoded. Never rejects.
+   */
+  private async stopRecorder(recorder: IRealtimeSessionRecorder, sessionId: string): Promise<number | null> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), RECORDER_STOP_TIMEOUT_MS);
+    });
+    try {
+      const outcome = await Promise.race([recorder.Stop(), timedOut]);
+      if (outcome === 'timeout') {
+        console.warn(`[RealtimeSession] Recorder did not stop within ${RECORDER_STOP_TIMEOUT_MS}ms for session ${sessionId}; ending the recording at the packets already encoded.`);
+        return null;
+      }
+      return outcome;
+    } catch (error) {
+      console.warn(`[RealtimeSession] Recorder failed to stop for session ${sessionId}; ending the recording at the packets already encoded:`, error);
+      return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -2051,6 +2130,12 @@ export class RealtimeSessionRuntime {
     } finally {
       clearTimeout(timer);
       pending.Pipeline.Queue.Close();
+      // The recording may have left shards in the store (an unacknowledged tail, windows the queue
+      // still held or had on the wire at Close), so re-arm the drain for the next session start on
+      // this page. Re-armed here, after the wait, so it never races the recording's own terminal;
+      // and unconditionally, because whether a fire-and-forget upload landed is not known here and
+      // a drain of an empty store costs one read.
+      this.rearmPendingShardDrain();
     }
   }
 

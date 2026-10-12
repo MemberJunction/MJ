@@ -35,6 +35,7 @@ export { RealtimeSessionRuntime } from './session/RealtimeSessionRuntime';
 export {
     REALTIME_RECORDING_CONSENT_KEY,
     RECORDING_TERMINAL_ACK_TIMEOUT_MS,
+    RECORDER_STOP_TIMEOUT_MS,
     MAX_DRAINED_SHARDS_PER_LOAD,
     type RealtimeConnectionState,
     type RealtimeCaption,
@@ -163,4 +164,5 @@ export {
     type FetchRecordingTransportConfig,
     type IRecordingTransport,
     type RecordingTerminalInput,
+    type RecordingUploadOptions,
 } from './session/RecordingTransport';

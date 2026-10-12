@@ -5,6 +5,7 @@ import type { IMetadataProvider } from '@memberjunction/core';
 import { ParseRecordingShard, RECORDING_FRAME_SAMPLES, RECORDING_SHARD_WINDOW_PACKETS } from '@memberjunction/ai-core-plus';
 import {
     MAX_DRAINED_SHARDS_PER_LOAD,
+    RECORDER_STOP_TIMEOUT_MS,
     RECORDING_TERMINAL_ACK_TIMEOUT_MS,
     RealtimeSessionRuntime,
     type StartRealtimeClientSessionResult,
@@ -258,22 +259,51 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         expect(provider.MutationNames.filter((n) => n.startsWith('UploadRealtimeRecording'))).toEqual([]);
     });
 
-    it('SendRecordingTerminal sends synchronously without stopping the recorder or touching the store', async () => {
-        const { runtime, store, transport, recorder } = await startRecorded();
+    it('SendRecordingTerminal sends a sealed full window with keepalive before the terminal, synchronously, without stopping the recorder', async () => {
+        const { runtime, store, transport, recorder, log } = await startRecorded();
         recorder.Capture(WINDOW + 7);
-        const storeCallsBefore = store.Log.length;
+        const logBefore = log.length;
 
         runtime.SendRecordingTerminal();
 
-        expect(transport.Terminals).toHaveLength(1);
+        // Both requests are dispatched inside the handler, the full window first.
+        expect(log.slice(logBefore)).toEqual(['upload(keepalive):session-1/0', 'terminal:session-1/1']);
         const { Input } = transport.Terminals[0];
         expect(Input.LastShardIndex).toBe(1);
         expect(Input.CapturedSamples).toBe((WINDOW + 7) * RECORDING_FRAME_SAMPLES);
         expect(ParseRecordingShard(Input.Tail!).PacketCount).toBe(7);
         expect(recorder.StopCalls).toBe(0);
+        // No IndexedDB work ran inside the handler.
+        expect(store.Log.slice(logBefore).filter((e) => e.startsWith('put:'))).toEqual([]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('SendRecordingTerminal stores the shards it sealed only after the handler returns, and keeps them while nothing acknowledges them', async () => {
+        // The tail's terminal is refused and its queue retry refused too, so the tail must stay stored.
+        const { runtime, store, transport, recorder, log } = await startRecorded(['refused']);
+        recorder.Capture(WINDOW + 7);
+        transport.TerminalAck = false;
+        transport.HoldNextUpload = new Promise(() => undefined); // the keepalive window never answers
+        const logBefore = log.length;
+
+        runtime.SendRecordingTerminal();
+        for (let i = 0; i < 20; i++) {
+            await Promise.resolve(); // microtasks alone (no timer turn) must not reach the store
+        }
+        expect(store.Log.slice(logBefore).filter((e) => e.startsWith('put:'))).toEqual([]);
+
         await vi.advanceTimersByTimeAsync(0);
-        expect(transport.Uploads.map((u) => u.Index)).toEqual([0]); // the full window went to the queue
-        expect(store.Log.slice(storeCallsBefore).filter((e) => e.startsWith('put:'))).toEqual([]);
+        expect(store.Keys).toEqual(['session-1/0', 'session-1/1']);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('a keepalive window that is refused falls back to the queue under the same index', async () => {
+        const { runtime, store, transport, recorder } = await startRecorded(['refused']);
+        recorder.Capture(WINDOW + 7);
+        runtime.SendRecordingTerminal();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(transport.Uploads.map((u) => u.Index)).toEqual([0, 0]);
+        expect(store.Keys).toEqual([]); // window acked through the queue, tail acked by the terminal
         await runtime.EndRealtimeSession();
     });
 
@@ -296,6 +326,38 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), new FakeShardStore(), transport);
         runtime.SendRecordingTerminal();
         expect(transport.Terminals).toEqual([]);
+    });
+
+    it(`stops waiting for a wedged recorder after ${RECORDER_STOP_TIMEOUT_MS} ms, still closes the session, and ends the recording`, async () => {
+        const { runtime, provider, transport, recorder } = await startRecorded();
+        recorder.Capture(9);
+        recorder.StopHangs = true;
+        let ended = false;
+        void runtime.EndRealtimeSession().then(() => {
+            ended = true;
+        });
+        await vi.advanceTimersByTimeAsync(RECORDER_STOP_TIMEOUT_MS - 1);
+        expect(provider.MutationNames).not.toContain('CloseAgentSession');
+        await vi.advanceTimersByTimeAsync(1);
+        expect(provider.MutationNames).toContain('CloseAgentSession');
+        expect(transport.Terminals[0].Input.CapturedSamples).toBe(9 * RECORDING_FRAME_SAMPLES);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(ended).toBe(true);
+    });
+
+    it('drains at the next session start what the previous teardown left in the store', async () => {
+        const { runtime, store, transport, recorder } = await startRecorded();
+        recorder.Capture(5);
+        transport.TerminalAck = false;
+        await runtime.EndRealtimeSession();
+        expect(store.Keys).toEqual(['session-1/0']);
+
+        transport.TerminalAck = true;
+        await runtime.StartRealtimeSessionFromResult(mintedSession('session-2'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(transport.Uploads.map((u) => `${u.SessionID}/${u.Index}`)).toEqual(['session-1/0']);
+        expect(store.Keys).toEqual([]);
+        await runtime.EndRealtimeSession();
     });
 
     it('falls back to the packets it holds when the recorder fails to stop', async () => {

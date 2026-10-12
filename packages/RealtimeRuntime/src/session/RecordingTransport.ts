@@ -17,9 +17,19 @@ export interface RecordingTerminalInput {
     CapturedSamples: number;
 }
 
+/** Per-upload options for {@link IRecordingTransport.UploadShard}. */
+export interface RecordingUploadOptions {
+    /**
+     * Send with `keepalive` so the request survives page unload. Only for shards sealed inside a
+     * `pagehide`/`visibilitychange` handler: the browser caps in-flight keepalive bodies (64 KiB per
+     * page), and a request over that budget is refused — which resolves false like any failure.
+     */
+    Keepalive?: boolean;
+}
+
 /** Sends recording bytes to the server. Both methods resolve true only on a server ack. */
 export interface IRecordingTransport {
-    UploadShard(sessionID: string, shard: RecordingShard | PendingRecordingShard): Promise<boolean>;
+    UploadShard(sessionID: string, shard: RecordingShard | PendingRecordingShard, options?: RecordingUploadOptions): Promise<boolean>;
     /** Sent with `keepalive` so it survives page unload. */
     SendTerminal(sessionID: string, input: RecordingTerminalInput): Promise<boolean>;
 }
@@ -45,9 +55,9 @@ export function RecordingBaseURLFromGraphQLURL(url: string): string {
 export class FetchRecordingTransport implements IRecordingTransport {
     constructor(private readonly config: FetchRecordingTransportConfig) {}
 
-    public UploadShard(sessionID: string, shard: RecordingShard | PendingRecordingShard): Promise<boolean> {
+    public UploadShard(sessionID: string, shard: RecordingShard | PendingRecordingShard, options?: RecordingUploadOptions): Promise<boolean> {
         const url = `${this.config.BaseURL}/realtime/recording/${encodeURIComponent(sessionID)}/shard/${shard.Index}`;
-        return this.post(url, shard.Bytes, false, `shard ${sessionID}/${shard.Index}`);
+        return this.post(url, shard.Bytes, options?.Keepalive === true, `shard ${sessionID}/${shard.Index}`);
     }
 
     public SendTerminal(sessionID: string, input: RecordingTerminalInput): Promise<boolean> {

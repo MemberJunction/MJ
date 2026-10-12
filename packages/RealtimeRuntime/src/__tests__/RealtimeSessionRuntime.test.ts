@@ -548,8 +548,11 @@ describe('session lifecycle, driven end to end with fakes', () => {
             const hostB = runtime['recorder'] as FakeRecorder;
             hostB.Capture(WINDOW_PACKETS);
             await runtime['flushRecordingShards']();
-            // A's refused shard is never resent, least of all under session B; B starts at its own index 0.
-            expect(transport.Uploads.map((u) => `${u.SessionID}/${u.Index}`)).toEqual(['session-1/0', 'session-B/0']);
+            // A's refused shard is only ever resent under A's own id (by the drain B's start re-ran),
+            // never under session B; B starts at its own index 0.
+            const sent = transport.Uploads.map((u) => `${u.SessionID}/${u.Index}`);
+            expect(sent.filter((s) => s.startsWith('session-B/'))).toEqual(['session-B/0']);
+            expect(new Set(sent.filter((s) => !s.startsWith('session-B/')))).toEqual(new Set(['session-1/0']));
             await runtime.EndRealtimeSession();
         });
     });

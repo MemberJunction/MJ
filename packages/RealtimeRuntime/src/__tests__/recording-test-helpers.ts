@@ -2,7 +2,7 @@ import { vi, type Mock } from 'vitest';
 import { RECORDING_FRAME_SAMPLES } from '@memberjunction/ai-core-plus';
 import type { IRealtimeMediaHost, IRealtimeSessionRecorder } from '../hosts/IRealtimeMediaHost';
 import type { IRecordingShardStore, PendingRecordingShard } from '../session/RecordingShardStore';
-import type { IRecordingTransport, RecordingTerminalInput } from '../session/RecordingTransport';
+import type { IRecordingTransport, RecordingTerminalInput, RecordingUploadOptions } from '../session/RecordingTransport';
 import type { RecordingShard } from '../session/RecordingShardWindow';
 import { RealtimeSessionRuntime } from '../session/RealtimeSessionRuntime';
 
@@ -25,6 +25,8 @@ export class FakeRecorder implements IRealtimeSessionRecorder {
     public PaddingSamples = 0;
     /** When set, {@link Stop} rejects with it. */
     public StopError: Error | null = null;
+    /** When true, {@link Stop} never settles (a wedged encoder). */
+    public StopHangs = false;
     private pending: Uint8Array[] = [];
     private produced = 0;
 
@@ -46,6 +48,9 @@ export class FakeRecorder implements IRealtimeSessionRecorder {
         this.StopCalls++;
         if (this.StopError) {
             throw this.StopError;
+        }
+        if (this.StopHangs) {
+            return new Promise<number>(() => undefined);
         }
         this.Capture(this.PacketsFlushedOnStop);
         this.PacketsFlushedOnStop = 0;
@@ -121,8 +126,12 @@ export class FakeRecordingTransport implements IRecordingTransport {
         private readonly script: FakeUploadOutcome[] = [],
     ) {}
 
-    public async UploadShard(sessionID: string, shard: RecordingShard | PendingRecordingShard): Promise<boolean> {
-        this.Log.push(`upload:${sessionID}/${shard.Index}`);
+    public async UploadShard(
+        sessionID: string,
+        shard: RecordingShard | PendingRecordingShard,
+        options?: RecordingUploadOptions,
+    ): Promise<boolean> {
+        this.Log.push(`upload${options?.Keepalive ? '(keepalive)' : ''}:${sessionID}/${shard.Index}`);
         this.Uploads.push({ SessionID: sessionID, Index: shard.Index, Bytes: shard.Bytes });
         const held = this.HoldNextUpload;
         this.HoldNextUpload = null;
