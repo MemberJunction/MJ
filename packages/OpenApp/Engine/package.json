@@ -18,6 +18,7 @@
   "dependencies": {
     "@memberjunction/core": "6.2.0-edge.3",
     "@memberjunction/core-entities": "6.2.0-edge.3",
+    "@memberjunction/record-cloning": "6.2.0-edge.3",
     "@memberjunction/global": "6.2.0-edge.3",
     "@memberjunction/sql-dialect": "6.2.0-edge.3",
     "@octokit/rest": "^21.1.1",

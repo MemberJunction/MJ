@@ -160,6 +160,25 @@ const hooksSchema = z.object({
     preRemoveModule: z.string().optional(),
 });
 
+// ── Template User ─────────────────────────────────────────
+
+/**
+ * A template user the app ships (`User.IsTemplate`, seeded by the app's migrations): a configured
+ * account (pinned apps, views, dashboards, conversations) meant to be copied. After install the
+ * engine offers to create the installer's own user as a copy of it, and to make it the template for
+ * everyone who signs in later (`userHandling.newUserTemplate` in mj.config.cjs).
+ */
+const templateUserSchema = z.object({
+    /** Email of the template user the app's migrations create. */
+    email: z.string().email(),
+    /** What a copy gets, shown when the engine offers it (e.g. "the demo dashboards and conversations"). */
+    description: z.string().max(300).optional(),
+    /** MJ: Users clone preset to copy with. Default `template`. */
+    preset: z.string().optional(),
+    /** Make it the template for later sign-ins: ask (`offer`, default), do it unasked (`always`), or don't (`never`). */
+    newUsers: z.enum(['offer', 'always', 'never']).optional(),
+});
+
 // ── Full Manifest ─────────────────────────────────────────
 
 /**
@@ -242,6 +261,9 @@ export const MjAppManifestSchema = z.object({
 
     // Lifecycle Hooks
     hooks: hooksSchema.optional(),
+
+    // Template user the app ships, offered to the installer after install
+    templateUser: templateUserSchema.optional(),
 
     // Discovery (MJ Central)
     categories: z.array(z.string()).max(5).optional(),
