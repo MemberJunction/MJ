@@ -972,7 +972,9 @@ export interface RealtimeAvatarSettings {
  * - `'decoder-missing'`: the meeting host has no usable decoder (no ffmpeg, one too old, or one without the H.264 and
  *   AAC decoders), so the meeting session asked for audio;
  * - `'decoder-failed'`: the meeting bot's decoders kept failing, so the avatar was taken down mid-meeting;
- * - `'publish-failed'`: the meeting room refused the bot's video track.
+ * - `'publish-failed'`: the meeting room refused the bot's video track;
+ * - `'video-off'`: the call picked an avatar (a voice that comes with one), and the voiced agent's own video setting is
+ *   off, so the session asked the model for none.
  */
 export type RealtimeAvatarUnavailableReason =
     | 'endpoint'
@@ -985,7 +987,8 @@ export type RealtimeAvatarUnavailableReason =
     | 'browser'
     | 'decoder-missing'
     | 'decoder-failed'
-    | 'publish-failed';
+    | 'publish-failed'
+    | 'video-off';
 
 /**
  * Whether a session asked for a live avatar and got one, and why not when it didn't. The mint returns it
@@ -993,7 +996,7 @@ export type RealtimeAvatarUnavailableReason =
  * ({@link IRealtimeSession.AvatarStatus}), so a call or a meeting that shows no avatar can say why.
  */
 export interface RealtimeAvatarStatus {
-    /** Whether the session asked for an avatar: the voiced agent's video setting is on. */
+    /** Whether the session asked for an avatar: the voiced agent's video setting is on, or the call picked one. */
     Requested: boolean;
     /** Whether the model renders the avatar in this session. */
     Granted: boolean;

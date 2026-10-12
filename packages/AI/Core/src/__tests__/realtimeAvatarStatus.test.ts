@@ -14,6 +14,7 @@ const EVERY_REASON: RealtimeAvatarUnavailableReason[] = [
     'decoder-missing',
     'decoder-failed',
     'publish-failed',
+    'video-off',
 ];
 
 describe('ParseRealtimeAvatarStatus', () => {

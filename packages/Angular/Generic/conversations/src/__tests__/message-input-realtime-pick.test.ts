@@ -44,12 +44,12 @@ function pick(overrides: Partial<RealtimeAgentPick>): RealtimeAgentPick {
 }
 
 describe('MessageInputComponent.OnRealtimeAgentPicked', () => {
-    it('sends the picked voice and its avatar, with video turned on', async () => {
+    it("sends the picked voice and its avatar, leaving video to the agent's setting", async () => {
         const { component, starts } = harness();
         await component.OnRealtimeAgentPicked(pick({ PreferredAvatarId: 'Avery' }));
         expect(starts).toHaveLength(1);
         expect(JSON.parse(starts[0][OVERRIDES_ARG] as string)).toEqual({
-            realtime: { modelPreference: 'model-a', voice: { default: { voice: 'Puck' } }, video: { enabled: true, avatarId: 'Avery' } },
+            realtime: { modelPreference: 'model-a', voice: { default: { voice: 'Puck' } }, video: { avatarId: 'Avery' } },
         });
     });
 

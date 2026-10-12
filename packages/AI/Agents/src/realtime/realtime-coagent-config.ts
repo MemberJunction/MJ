@@ -158,8 +158,9 @@ export interface RealtimeVideoConfig {
     /**
      * The avatar to show instead of the one the agents' personas give: the `APIName` of one of the model's Active Video
      * persona bindings (`MJ: AI Persona Vendors`) on the session's vendor, matched without regard to case, such as
-     * Google's preset `Ben`. Read only when {@link enabled} is `true` (the call's avatar picker sets both). A name with
-     * no such binding gives the call no avatar (reason `unknown-avatar`). The avatar's settings (`Kind`, `Resolution`,
+     * Google's preset `Ben`. Read only when {@link enabled} is `true`, which the call's avatar picker (a runtime override)
+     * sets this key without and can't turn on: a picked avatar with the agent's setting off gives the call no avatar
+     * (reason `video-off`). A name with no such binding gives the call no avatar (reason `unknown-avatar`). The avatar's settings (`Kind`, `Resolution`,
      * `Background`) are that binding's `VendorSettings.Avatar`.
      */
     avatarId?: string;
@@ -606,6 +607,10 @@ export function ParseRealtimeTypeConfiguration(json: string | null | undefined):
  * (Sage, Marketing Agent, …) carry its own persisted voice/model that the shared co-agent then speaks with;
  * it wins over the co-agent's defaults but yields to an explicit per-session runtime override.
  *
+ * One key is the agents' alone: the runtime override can't turn `realtime.video.enabled` on (it can turn it off), so a
+ * picked avatar (`realtime.video.avatarId`) shows only when the layers below it already have video on. A picked
+ * avatar's billed video is the agent's call, not the caller's.
+ *
  * @param typeDefaultJson The agent TYPE's `DefaultConfiguration` JSON (base layer).
  * @param agentJson The CO-AGENT's `TypeConfiguration` JSON (shared per-co-agent layer).
  * @param overridesJson Runtime overrides JSON (per-session layer; already authorization-gated by the caller).
@@ -632,7 +637,7 @@ export function ResolveEffectiveRealtimeConfig(
     const agentLayer = ParseRealtimeTypeConfiguration(agentJson);
     const targetLayer = ParseRealtimeTypeConfiguration(targetAgentJson);
     const appLayer = ParseRealtimeTypeConfiguration(appSettingsJson);
-    const overrideLayer = ParseRealtimeTypeConfiguration(overridesJson);
+    const overrideLayer = withoutVideoTurnedOn(ParseRealtimeTypeConfiguration(overridesJson));
 
     // Scalar fields: merge order = precedence (later wins):
     //   type-default < co-agent < target < app < runtime-override.
@@ -661,6 +666,20 @@ export function ResolveEffectiveRealtimeConfig(
     }
 
     return config;
+}
+
+/**
+ * A runtime-override layer without a `realtime.video.enabled: true`, which only the layers below it may set (see
+ * {@link ResolveEffectiveRealtimeConfig}). The layer is copied, never changed; any other value of the key stays.
+ */
+function withoutVideoTurnedOn(layer: JSONObjectLike | null): JSONObjectLike | null {
+    const realtime = realtimeSectionOf(layer);
+    const video = realtime?.['video'];
+    if (!layer || !realtime || !isPlainObject(video) || video['enabled'] !== true) {
+        return layer;
+    }
+    const { enabled: _ignored, ...rest } = video;
+    return { ...layer, realtime: { ...realtime, video: rest } };
 }
 
 /** The raw `realtime` section of a parsed layer, or `undefined` when the layer has none. */
@@ -1516,15 +1535,16 @@ export function BuildVoiceMannerSection(config: RealtimeCoAgentConfig | null | u
  * two are kept in lockstep by `realtime-convergence-drift.test.ts`); the
  * server-bridged hosts (LiveKit, Zoom/Teams) build it here so both funnel into the one override slot.
  *
- * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}},"video":{"enabled":true,"avatarId":"<a>"}}}`.
+ * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}},"video":{"avatarId":"<a>"}}}`.
  *
  * The voice is filed PROVIDER-AGNOSTICALLY, which is what lets a host carry a voice at all: the vendor
  * is not known here (and on the default-model path is not known to the caller at any point before the
  * session is prepared), so naming one would be a guess. {@link GetProviderVoiceSettings} files this onto
  * whichever driver the framework resolves. See issue #3530.
  *
- * A picked avatar also turns the session's video on (`enabled: true`): picking a face is asking for one, whatever the
- * agent's own video setting. The session still accepts it only when it names a Video binding on the resolved vendor.
+ * A picked avatar leaves video to the agent: it shows only when the voiced agent's own video setting is on (a runtime
+ * override can't turn it on), and only when it names a Video binding on the resolved vendor. With the setting off the
+ * call says why (reason `video-off`).
  *
  * @param modelId The `MJ: AI Models` Name or ID to prefer, or null/empty for none.
  * @param voice The provider-native voice id (e.g. `echo`), or null/empty for none.
@@ -1542,7 +1562,7 @@ export function BuildRealtimeOverridesJson(
     if (m.length === 0 && v.length === 0 && a.length === 0) {
         return null;
     }
-    const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { enabled: true; avatarId: string } } = {};
+    const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { avatarId: string } } = {};
     if (m.length > 0) {
         realtime.modelPreference = m;
     }
@@ -1550,7 +1570,7 @@ export function BuildRealtimeOverridesJson(
         realtime.voice = { default: { voice: v } };
     }
     if (a.length > 0) {
-        realtime.video = { enabled: true, avatarId: a };
+        realtime.video = { avatarId: a };
     }
     return JSON.stringify({ realtime });
 }

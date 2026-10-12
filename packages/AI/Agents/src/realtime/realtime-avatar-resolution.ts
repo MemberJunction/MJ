@@ -9,6 +9,9 @@
  * 3. else the co-agent's personas, the same way;
  * 4. else none. The model's own first persona is never used: an agent with no persona gets no face.
  *
+ * A call's avatar pick (the runtime override's `realtime.video.avatarId`) can't turn the video setting on: with the
+ * setting off the session asks for none, and says why (reason `video-off`), since the pick asked for one.
+ *
  * Where the session runs can rule the avatar out before any of that: nobody sees an avatar on a phone call (reason
  * `phone`), or in an app that shows no agent video (reason `host`: the app said so at mint), so such a session asks for
  * none ({@link WithoutUnseenAvatar}) and keeps only the persona's voice.
@@ -51,6 +54,11 @@ export interface RealtimeAvatarResolutionInput {
      * `endpoint`. `'supported'`, `'unstated'` or absent leave it to the driver's endpoint profile at the mint.
      */
     VideoOutputRow?: RealtimeVideoOutputRow;
+    /**
+     * Whether the call picked an avatar (its runtime override names `realtime.video.avatarId`). With the agent's video
+     * setting off, the pick is dropped with reason `video-off`; absent or `false`, the session asks for nothing then.
+     */
+    AvatarPicked?: boolean;
 }
 
 /**
@@ -72,11 +80,12 @@ export interface RealtimeAvatarResolution {
      */
     Voice?: string;
     /**
-     * Why there is no avatar although the video setting is on: nobody in the session would see it (`phone`, `host`), the
-     * model's Video/Output row turns video off (`endpoint`), the requested avatar is not a face the model has on the vendor
-     * (`unknown-avatar`), or no persona has one (`no-binding`).
+     * Why there is no avatar although the video setting is on or the call picked one: nobody in the session would see it
+     * (`phone`, `host`), the call picked one and the agent's video setting is off (`video-off`), the model's Video/Output
+     * row turns video off (`endpoint`), the requested avatar is not a face the model has on the vendor (`unknown-avatar`),
+     * or no persona has one (`no-binding`).
      */
-    Reason?: RealtimeAvatarUnseenReason | Extract<RealtimeAvatarUnavailableReason, 'endpoint' | 'unknown-avatar' | 'no-binding'>;
+    Reason?: RealtimeAvatarUnseenReason | Extract<RealtimeAvatarUnavailableReason, 'video-off' | 'endpoint' | 'unknown-avatar' | 'no-binding'>;
 }
 
 /** What says, before any model is asked, whether anyone in a session could see an avatar. */
@@ -145,7 +154,8 @@ export interface RealtimeBridgedAvatarStatusInput {
  * decided. A session whose prep asked for none because the video setting is off keeps the driver's status (none).
  * Otherwise the driver had nothing to report, because the prep asked it for no avatar for a reason, or because it renders
  * no avatar and ignored the request, so the status says why, asked for and not granted:
- * 1. `phone` (or `host`): nobody would see the avatar, whatever renders it;
+ * 1. `phone` (or `host`): nobody would see the avatar, whatever renders it; or `video-off`: the agent's video setting
+ *    dropped the call's pick;
  * 2. `bridged` when the host publishes no avatar into a room, which is what a driver asked there says (the LiveKit room
  *    then names its own reason, such as `decoder-missing`);
  * 3. `endpoint` when the model shows no avatar, as a browser call says ({@link ResolveRealtimeAvatarStatus});
@@ -175,7 +185,7 @@ function bridgedAudioOnlyReason(
     prepReason: RealtimeAvatarResolution['Reason'],
     input: RealtimeBridgedAvatarStatusInput,
 ): RealtimeAvatarUnavailableReason | undefined {
-    if (prepReason && isUnseenReason(prepReason)) {
+    if (prepReason && standsWhateverModel(prepReason)) {
         return prepReason;
     }
     if (!input.RoomDelivery) {
@@ -190,6 +200,14 @@ function isUnseenReason(reason: NonNullable<RealtimeAvatarResolution['Reason']>)
 }
 
 /**
+ * Whether a resolution's reason stands whatever model or host serves the session: nobody would see the avatar, or the
+ * agent's video setting dropped the call's pick (`video-off`).
+ */
+function standsWhateverModel(reason: NonNullable<RealtimeAvatarResolution['Reason']>): boolean {
+    return isUnseenReason(reason) || reason === 'video-off';
+}
+
+/**
  * Resolves the avatar a session asks for (see the file header for the order).
  *
  * @param input The session's configuration, agents, model and vendor.
@@ -198,7 +216,7 @@ function isUnseenReason(reason: NonNullable<RealtimeAvatarResolution['Reason']>)
 export function ResolveRealtimeAvatar(input: RealtimeAvatarResolutionInput, personas: RealtimeAvatarPersonaSource): RealtimeAvatarResolution {
     const video = input.EffectiveConfig?.realtime?.video;
     if (video?.enabled !== true) {
-        return {};
+        return input.AvatarPicked ? { Reason: 'video-off' } : {};
     }
     if (input.VideoOutputRow === 'unsupported') {
         return { Reason: 'endpoint' };
@@ -249,8 +267,9 @@ export interface RealtimeAvatarStatusInput {
 
 /**
  * The status a call gets about the avatar its agent asked for. Nothing when the agent asked for none (its video
- * setting is off). Otherwise audio only when nobody in the session would see it ({@link RealtimeAvatarUnseenReason}),
- * whatever the model renders; then `endpoint` when the model shows no avatar (its Video/Output row turns video off, or it
+ * setting is off, and the call picked none). Otherwise audio only when nobody in the session would see it
+ * ({@link RealtimeAvatarUnseenReason}) or the agent's video setting dropped the call's pick (`video-off`), whatever the
+ * model renders; then `endpoint` when the model shows no avatar (its Video/Output row turns video off, or it
  * renders none on its endpoint), whatever driver serves it; then the resolution's reason (`unknown-avatar`,
  * `no-binding`); else the driver's own decision (granted, or `custom-disabled` and the like).
  *
@@ -262,7 +281,7 @@ export function ResolveRealtimeAvatarStatus(input: RealtimeAvatarStatusInput): R
     if (!avatar && !reason) {
         return undefined;
     }
-    if (reason && isUnseenReason(reason)) {
+    if (reason && standsWhateverModel(reason)) {
         return { Requested: true, Granted: false, Reason: reason };
     }
     if (!input.ModelSupportsAvatarOutput) {

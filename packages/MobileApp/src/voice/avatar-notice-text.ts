@@ -13,6 +13,7 @@ export const AVATAR_NOTICE_TEXT: Record<RealtimeAvatarUnavailableReason, string>
     'no-binding': 'Audio only: this agent has no avatar for this voice model',
     'unknown-avatar': "Audio only: the chosen avatar wasn't found",
     'custom-disabled': "Audio only: custom avatars aren't turned on",
+    'video-off': "Audio only: this agent's avatar isn't turned on",
     host: "Audio only: this app can't show the avatar",
     browser: "Audio only: this browser can't play the avatar",
     bridged: "Audio only for {Agent}: the avatar can't be shown in this meeting",

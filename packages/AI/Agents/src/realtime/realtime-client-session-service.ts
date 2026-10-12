@@ -2847,7 +2847,9 @@ export class RealtimeClientSessionService {
 
     /**
      * The live avatar this session asks for, if any: from the voiced agent's persona, or `realtime.video.avatarId`,
-     * when the agent's video setting is on (see `ResolveRealtimeAvatar`). A model whose `MJ: AI Model Modalities`
+     * when the agent's video setting is on (see `ResolveRealtimeAvatar`). A call that picked an avatar (its runtime
+     * override names `realtime.video.avatarId`) while that setting is off asks for none, with reason `video-off`. A model
+     * whose `MJ: AI Model Modalities`
      * Video/Output row turns video off asks for none (reason `endpoint`, one log line); otherwise whether the session can
      * render it is the driver's call. A seam so tests can supply a resolution without the engine's persona metadata.
      *
@@ -2864,19 +2866,29 @@ export class RealtimeClientSessionService {
         modelID: string | undefined,
         modelVendorID: string | undefined,
     ): RealtimeAvatarResolution {
-        if (!modelID || effectiveConfig?.realtime?.video?.enabled !== true) {
+        const videoOn = effectiveConfig?.realtime?.video?.enabled === true;
+        const avatarPicked = !!ResolveEffectiveRealtimeConfig(null, null, input.ConfigOverridesJson).realtime?.video?.avatarId;
+        if (!modelID || (!videoOn && !avatarPicked)) {
             return {};
         }
         const vendorID = modelVendorID ? AIEngine.Instance.ModelVendors.find((mv) => UUIDsEqual(mv.ID, modelVendorID))?.VendorID : undefined;
         const videoOutputRow = ReadRealtimeVideoOutputRow(modelID, AIEngine.Instance);
-        if (videoOutputRow === 'unsupported') {
+        if (videoOn && videoOutputRow === 'unsupported') {
             LogStatus(
                 `[RealtimeCoAgent] No avatar asked for: the Video/Output modality row of '${this.findModelByID(modelID)?.Name ?? modelID}' ` +
                     'turns video off (IsSupported false). The call is audio only. Reason: endpoint.',
             );
         }
         return ResolveRealtimeAvatar(
-            { EffectiveConfig: effectiveConfig, TargetAgentID: input.TargetAgentID, CoAgentID: coAgent.ID, ModelID: modelID, VendorID: vendorID, VideoOutputRow: videoOutputRow },
+            {
+                EffectiveConfig: effectiveConfig,
+                TargetAgentID: input.TargetAgentID,
+                CoAgentID: coAgent.ID,
+                ModelID: modelID,
+                VendorID: vendorID,
+                VideoOutputRow: videoOutputRow,
+                AvatarPicked: avatarPicked,
+            },
             AIEngine.Instance,
         );
     }

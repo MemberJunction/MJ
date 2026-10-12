@@ -814,6 +814,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
             'decoder-missing': 'the meeting host has no usable video decoder',
             'decoder-failed': "the meeting bot's decoders kept failing",
             'publish-failed': 'the meeting room refused the video track',
+            'video-off': "the agent's video setting is off",
         };
         const persona = request.PersonaName ? ` (persona ${request.PersonaName})` : '';
         return `[GeminiRealtime] Avatar "${request.AvatarID}"${persona} not used: ${why[reason]}. The call is audio only. Reason: ${reason}.`;

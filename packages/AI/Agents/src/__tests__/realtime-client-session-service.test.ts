@@ -3169,8 +3169,8 @@ function cacheVideoOutputRow(modelID: string, isSupported: boolean): void {
 describe("RealtimeClientSessionService.ResolveSessionAvatar: the model's Video/Output row", () => {
     /** Exposes the real avatar resolution (the engine's persona metadata is empty here). */
     class GateService extends TestableService {
-        public CallResolveSessionAvatar(config: RealtimeCoAgentConfig | undefined): RealtimeAvatarResolution {
-            return this.ResolveSessionAvatar(makePrepInput(), makeCoAgent(), config, 'm1', undefined);
+        public CallResolveSessionAvatar(config: RealtimeCoAgentConfig | undefined, configOverridesJson?: string): RealtimeAvatarResolution {
+            return this.ResolveSessionAvatar(makePrepInput({ ConfigOverridesJson: configOverridesJson }), makeCoAgent(), config, 'm1', undefined);
         }
     }
     const VIDEO_ON: RealtimeCoAgentConfig = { realtime: { video: { enabled: true } } };
@@ -3201,6 +3201,13 @@ describe("RealtimeClientSessionService.ResolveSessionAvatar: the model's Video/O
     it('reads nothing and logs nothing while the video setting is off', () => {
         cacheVideoOutputRow('m1', false);
         expect(new GateService().CallResolveSessionAvatar({})).toEqual({});
+        expect(vetoLines()).toEqual([]);
+    });
+
+    it("drops a call's avatar pick while the agent's video setting is off, saying why (video-off), and logs no veto", () => {
+        cacheVideoOutputRow('m1', false);
+        const pick = '{"realtime":{"video":{"avatarId":"Ben"}}}';
+        expect(new GateService().CallResolveSessionAvatar({ realtime: { video: { avatarId: 'Ben' } } }, pick)).toEqual({ Reason: 'video-off' });
         expect(vetoLines()).toEqual([]);
     });
 });

@@ -863,7 +863,7 @@ describe('FindIgnoredRealtimeConfigKeys', () => {
         const VALID_SAMPLE: { [K in keyof Required<RealtimeConfigSection>]: unknown } = {
             modelPreference: 'GPT Realtime',
             voice: { default: { tone: 'warm' } },
-            video: { enabled: true },
+            video: { avatarId: 'Ben' }, // an override can't turn video on, so the sample is a pick
             allowUserModelOverride: false,
             narration: { paceMs: 5000 },
             turnTaking: { mode: 'proactive' },

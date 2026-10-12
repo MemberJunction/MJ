@@ -157,17 +157,44 @@ describe('ResolveRealtimeAvatar', () => {
         }
     });
 
-    it("asks for the avatar a picker override names, even when the voiced agent's video setting is off", () => {
+    it("asks for the avatar a picker override names when the voiced agent's video setting is on", () => {
         // The picker's override (voice + the avatar that comes with it) is the top layer of the effective config.
-        const target = JSON.stringify({ realtime: { video: { enabled: false } } });
+        const target = JSON.stringify({ realtime: { video: { enabled: true } } });
         const effective = ResolveEffectiveRealtimeConfig(null, null, BuildRealtimeOverridesJson(MODEL, 'Puck', 'Ben'), target);
-        const result = ResolveRealtimeAvatar({ EffectiveConfig: effective, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX }, source());
+        const result = ResolveRealtimeAvatar(
+            { EffectiveConfig: effective, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX, AvatarPicked: true }, source());
         expect(result.Avatar).toEqual({ AvatarID: 'Ben', PersonaName: 'Ben', Source: 'override', Kind: 'preset', Resolution: 'standard' });
+    });
+
+    it("drops a picker's avatar when the voiced agent's video setting is off: no avatar, reason video-off, no persona read", () => {
+        const s = source();
+        const target = JSON.stringify({ realtime: { video: { enabled: false } } });
+        // A crafted override that turns video on itself is held to the agent's setting too.
+        const crafted = JSON.stringify({ realtime: { video: { enabled: true, avatarId: 'Ben' } } });
+        for (const overrides of [BuildRealtimeOverridesJson(MODEL, 'Puck', 'Ben'), crafted]) {
+            for (const targetJson of [target, undefined]) {
+                const effective = ResolveEffectiveRealtimeConfig(null, null, overrides, targetJson);
+                expect(effective.realtime?.video?.enabled).not.toBe(true);
+                const result = ResolveRealtimeAvatar(
+                    { EffectiveConfig: effective, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX, AvatarPicked: true }, s);
+                expect(result).toEqual({ Reason: 'video-off' });
+            }
+        }
+        expect(s.VendorsAsked).toEqual([]);
     });
 });
 
 describe('ResolveRealtimeAvatarStatus', () => {
     const BEN = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' as const };
+
+    it("says video-off for a picked avatar the agent's video setting dropped, whatever the model and driver say", () => {
+        const videoOff = { Requested: true, Granted: false, Reason: 'video-off' };
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'video-off' }, ModelSupportsAvatarOutput: false })).toEqual(videoOff);
+        expect(ResolveRealtimeAvatarStatus({ Resolution: { Reason: 'video-off' }, ModelSupportsAvatarOutput: true, DriverStatus: { Requested: true, Granted: true } })).toEqual(videoOff);
+        for (const roomDelivery of [true, false]) {
+            expect(ResolveBridgedAvatarStatus({ Resolution: { Reason: 'video-off' }, RoomDelivery: roomDelivery, ModelShowsAvatar: () => false, DriverStatus: undefined })).toEqual(videoOff);
+        }
+    });
 
     it('says nothing when the session asked for no avatar, whatever the model and driver say', () => {
         expect(ResolveRealtimeAvatarStatus({ Resolution: {}, ModelSupportsAvatarOutput: true, DriverStatus: { Requested: true, Granted: true } })).toBeUndefined();

@@ -26,6 +26,7 @@ const KNOWN_REASONS: Readonly<Record<RealtimeAvatarUnavailableReason, true>> = {
     'decoder-missing': true,
     'decoder-failed': true,
     'publish-failed': true,
+    'video-off': true,
 };
 
 /** Whether a JSON value is a reason this version knows. */

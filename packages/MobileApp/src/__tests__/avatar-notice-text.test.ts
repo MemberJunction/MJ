@@ -19,13 +19,14 @@ describe('AvatarNoticeText', () => {
         ['unknown-avatar', "Audio only: the chosen avatar wasn't found"],
         ['custom-disabled', "Audio only: custom avatars aren't turned on"],
         ['browser', "Audio only: this browser can't play the avatar"],
+        ['video-off', "Audio only: this agent's avatar isn't turned on"],
     ] as const)('says the same as the web for %s', (reason, sentence) => {
         expect(AvatarNoticeText(reason)).toBe(sentence);
     });
 
     it('covers exactly the reasons the runtime reports, each opening "Audio only"', () => {
         expect(Object.keys(AVATAR_NOTICE_TEXT).sort()).toEqual(
-            ['bridged', 'browser', 'custom-disabled', 'decoder-failed', 'decoder-missing', 'endpoint', 'host', 'no-binding', 'phone', 'publish-failed', 'unknown-avatar'],
+            ['bridged', 'browser', 'custom-disabled', 'decoder-failed', 'decoder-missing', 'endpoint', 'host', 'no-binding', 'phone', 'publish-failed', 'unknown-avatar', 'video-off'],
         );
         for (const sentence of Object.values(AVATAR_NOTICE_TEXT)) {
             expect(sentence.startsWith('Audio only')).toBe(true);
