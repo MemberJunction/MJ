@@ -17,6 +17,7 @@ import {
     PassesSemanticFloor,
 } from '@memberjunction/ng-search';
 import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud';
+import { ENTITY_FACET_CATEGORY, MergeSearchResults, ServerEntityNames } from './search-entity-facets';
 
 @RegisterClass(BaseResourceComponent, 'SearchResultsResource')
 @Component({
@@ -421,8 +422,20 @@ export class SearchResultsResource extends BaseResourceComponent {
     CloudItems: WordCloudItem[] = [];
     IsLoadingCloud = false;
 
-    /** All results from the last search (before client-side filtering) */
+    /**
+     * All results of the current search (before client-side filtering): the broad search's results,
+     * followed by whatever the Entity facets' background fetches added (see search-entity-facets.ts).
+     */
     private allResults: SearchResultItem[] = [];
+
+    /**
+     * Incremented by every new search (search box, refresh, relevance re-query). A response from an
+     * earlier search — broad or entity-filtered — is dropped instead of merged.
+     */
+    private searchGeneration = 0;
+
+    /** Entity names the current search has already fetched (or is fetching) the top N for. */
+    private fetchedEntityNames = new Set<string>();
 
     /** Selected scope IDs from the search bar (empty = unscoped/global). */
     private scopeIDs: string[] = [];
@@ -539,7 +552,13 @@ export class SearchResultsResource extends BaseResourceComponent {
             ...this.ActiveFilters,
             [event.Category]: event.SelectedValues
         };
+        // Narrow what is already loaded right away; ticked entities also fetch their own top N in the
+        // background, which is merged in when it arrives. Unticking needs no request: the merged set
+        // still holds the broad results.
         this.applyClientFilters();
+        if (event.Category === ENTITY_FACET_CATEGORY) {
+            void this.fetchSelectedEntities();
+        }
     }
 
     OnFiltersCleared(): void {
@@ -667,16 +686,10 @@ export class SearchResultsResource extends BaseResourceComponent {
         this.cdr.detectChanges();
 
         this.ServerMinScorePercent = this.MinScorePercent;
-        const request: SearchRequest = {
-            Query: query,
-            MaxResults: 50,
-            ActiveFilters: {},
-            IncludeSources: ['vector', 'fulltext', 'entity', 'storage'],
-            MinScore: this.MinScorePercent / 100
-        };
-        if (this.scopeIDs.length > 0) {
-            request.ScopeIDs = [...this.scopeIDs];
-        }
+        // A new search starts a new result set; anything still in flight for the old one is dropped.
+        const generation = ++this.searchGeneration;
+        this.fetchedEntityNames.clear();
+        const request = this.buildSearchRequest(query, []);
 
         if (this.EnableStreaming) {
             this.executeStreamingSearch(query, request);
@@ -684,18 +697,65 @@ export class SearchResultsResource extends BaseResourceComponent {
         }
 
         const response: SearchResponse = await this.searchService.ExecuteSearch(request);
+        if (generation !== this.searchGeneration) return; // superseded by a newer search
 
         this.allResults = [...response.Results].sort((a, b) => b.Score - a.Score);
         this.ServerResultCount = this.allResults.length;
         this.TotalCount = response.TotalCount;
         this.ElapsedMs = response.ElapsedMs;
-        this.Filters = response.Filters;
-        this.FilteredResults = [...this.allResults];
 
         this.IsSearching = false;
         this.HasSearched = true;
-        this.emitAgentContext();
-        this.cdr.detectChanges();
+        // Re-apply the ticked facets, sort and text filter (this also builds the facet list, emits
+        // the agent context and runs change detection), then fetch any ticked entities' top N.
+        this.applyClientFilters();
+        void this.fetchSelectedEntities();
+    }
+
+    /** The search request for `query`; `entityNames` restricts it to those entities (empty = all). */
+    private buildSearchRequest(query: string, entityNames: string[]): SearchRequest {
+        const request: SearchRequest = {
+            Query: query,
+            MaxResults: 50,
+            // SearchService maps ActiveFilters.Entity to the GraphQL filters.EntityNames.
+            ActiveFilters: entityNames.length > 0 ? { [ENTITY_FACET_CATEGORY]: [...entityNames] } : {},
+            IncludeSources: ['vector', 'fulltext', 'entity', 'storage'],
+            MinScore: this.ServerMinScorePercent / 100
+        };
+        if (this.scopeIDs.length > 0) {
+            request.ScopeIDs = [...this.scopeIDs];
+        }
+        return request;
+    }
+
+    /**
+     * Fetch, in the background, the top N within the ticked entities this search has not fetched yet,
+     * and merge the reply into the result set: results already loaded stay where they are, new ones
+     * are appended, duplicates are skipped. Nothing on screen is hidden or replaced meanwhile. Waits
+     * for an in-flight broad search, which calls this again when it lands.
+     */
+    private async fetchSelectedEntities(): Promise<void> {
+        const missing = ServerEntityNames(this.ActiveFilters).filter(n => !this.fetchedEntityNames.has(n));
+        if (missing.length === 0 || !this.CurrentQuery || this.IsSearching) return;
+
+        missing.forEach(n => this.fetchedEntityNames.add(n));
+        const generation = this.searchGeneration;
+        let response: SearchResponse | null = null;
+        try {
+            response = await this.searchService.ExecuteSearch(this.buildSearchRequest(this.CurrentQuery, missing));
+        } catch {
+            response = null;
+        }
+        if (generation !== this.searchGeneration) return; // a newer search started; this reply is stale
+        if (!response?.Success) {
+            missing.forEach(n => this.fetchedEntityNames.delete(n)); // let a later tick retry
+            return;
+        }
+
+        const incoming = [...response.Results].sort((a, b) => b.Score - a.Score);
+        this.allResults = MergeSearchResults(this.allResults, incoming);
+        this.ServerResultCount = this.allResults.length;
+        this.applyClientFilters();
     }
 
     /**
@@ -763,6 +823,7 @@ export class SearchResultsResource extends BaseResourceComponent {
                 this.HasSearched = true;
                 this.emitAgentContext();
                 this.cdr.detectChanges();
+                void this.fetchSelectedEntities();
             },
         });
     }
@@ -811,7 +872,9 @@ export class SearchResultsResource extends BaseResourceComponent {
                 break;
             case 'score':
             default:
-                results = [...results].sort((a, b) => b.Score - a.Score);
+                // allResults is already in relevance order: the broad results by score, then each
+                // entity fetch's additions by score. Scores from different searches are normalised
+                // per search and aren't comparable, so the additions are appended, not interleaved.
                 break;
         }
 
@@ -972,6 +1035,8 @@ export class SearchResultsResource extends BaseResourceComponent {
                 Handler: async (params: Record<string, unknown>) => {
                     const query = String(params['query'] ?? '');
                     this.CurrentQuery = query;
+                    // A new query starts unfiltered, like OnRefineSearch.
+                    this.ActiveFilters = {};
                     await this.executeSearch(query);
                     return { Success: true, Data: { ResultCount: this.TotalCount, ElapsedMs: this.ElapsedMs } };
                 }
