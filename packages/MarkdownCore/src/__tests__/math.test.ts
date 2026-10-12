@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Token, TokensList } from 'marked';
 import { MarkdownEngine } from '../engine/markdown-engine.js';
-import type { MathToken } from '../extensions/math.extension.js';
+import type { MathToken, MathMLToken } from '../extensions/math.extension.js';
 
 const html = (markdown: string): string => new MarkdownEngine().ParseToHtml(markdown);
 
@@ -129,6 +129,58 @@ describe('math extension: the TeX reaches the renderer unchanged', () => {
     expect(out).not.toContain('<img');
     expect(out).not.toContain('<b>');
     expect(mathIn(out)).toEqual(['a<b><img src=x onerror=alert(1)>']);
+  });
+});
+
+describe('math extension: MathML markup', () => {
+  // Shaped like the JATS MathML in Optica's article XML: prefixed, pretty-printed, with comments.
+  const jatsInline = '<mml:math display="inline">\n   <mml:mrow>\n      <mml:mn>7</mml:mn>\n   </mml:mrow>\n   <mml:mo>×<!-- × --></mml:mo>\n   <mml:msup>\n      <mml:mn>10</mml:mn>\n      <mml:mn>13</mml:mn>\n   </mml:msup>\n</mml:math>';
+  const jatsBlock = '<mml:math display="block">\n  <mml:msub>\n    <mml:mi>τ</mml:mi>\n    <mml:mi>z</mml:mi>\n  </mml:msub>\n\n        <mml:mo>=</mml:mo>\n  <mml:mn>2</mml:mn>\n</mml:math>';
+
+  it('a prefixed inline formula stays inside its sentence, prefixes removed', () => {
+    const out = html(`Loss was ${jatsInline} per pulse.`);
+    expect(out).toMatch(/^<p>Loss was <math display="inline">[\s\S]*<msup>[\s\S]*<\/math> per pulse\.<\/p>/);
+    expect(out).not.toMatch(/mml:/);
+  });
+
+  it('a pretty-printed display formula is one block, even across a blank line and deep indentation', () => {
+    const out = html(`Before.\n\n${jatsBlock}\n\nAfter.`);
+    expect(out).toContain('<div class="mj-math-block"><math display="block">');
+    expect(out).not.toContain('<pre>');
+    expect((out.match(/<math\b/g) ?? []).length).toBe(1);
+    expect(out).toContain('<p>After.</p>');
+  });
+
+  it('markdown never reaches inside the markup', () => {
+    const out = html('so <math><mi>a</mi><mo>*</mo><mi>b</mi><mo>*</mo><msub><mi>x</mi><mi>i_j</mi></msub></math> holds');
+    expect(out).not.toContain('<em>');
+    expect(out).toContain('<mi>i_j</mi>');
+  });
+
+  it('MathML shown as code stays code', () => {
+    const out = html('JATS writes `<mml:math>` for formulas.');
+    expect(out).toContain('<code>&lt;mml:math&gt;</code>');
+    expect(out).not.toContain('<math');
+  });
+
+  it('an unclosed <math> is left to the normal HTML handling and stays linear', () => {
+    const started = performance.now();
+    html('text <math><mi>x</mi> and more\n\n'.repeat(2000));
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it('is off with the rest of math when enableMath is false', () => {
+    const engine = new MarkdownEngine();
+    engine.ConfigureMarked({ enableMath: false });
+    expect(engine.ParseToHtml(`x ${jatsInline} y`)).not.toContain('<math');
+  });
+
+  it('the token path carries the unprefixed markup and the display mode', () => {
+    const tokens: TokensList = new MarkdownEngine().ParseToTokens(jatsBlock);
+    const block = tokens.find((t: Token) => t.type === 'mathmlBlock') as MathMLToken;
+    expect(block.displayMode).toBe(true);
+    expect(block.text).toMatch(/^<math display="block">[\s\S]*<\/math>$/);
+    expect(block.text).not.toContain('mml:');
   });
 });
 

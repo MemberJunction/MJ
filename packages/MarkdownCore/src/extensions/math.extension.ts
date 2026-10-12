@@ -20,6 +20,39 @@ export interface MathToken extends Tokens.Generic {
   displayMode: boolean;
 }
 
+/**
+ * The token for MathML written as markup, such as a formula carried over from a JATS article.
+ * `text` is the markup with namespace prefixes removed (`<mml:mi>` becomes `<mi>`): the HTML parser
+ * only recognizes unprefixed MathML and treats `<mml:math>` as an unknown element.
+ */
+export interface MathMLToken extends Tokens.Generic {
+  /** `mathmlBlock` for an element on its own lines, `mathml` for one inside a paragraph. */
+  type: 'mathml' | 'mathmlBlock';
+  /** The original matched markdown source. */
+  raw: string;
+  /** The MathML markup, prefixes removed. */
+  text: string;
+  /** `display="block"` on the `<math>` element. */
+  displayMode: boolean;
+}
+
+// A whole <math> element, optionally namespace-prefixed (JATS writes <mml:math>), matched as one
+// piece so markdown never reaches inside it: pretty-printed MathML is indented and spans lines, which
+// markdown would turn into code blocks, and `*` or `_` between its tags would become emphasis. The
+// content can't contain another opener, so an unclosed one fails at the next instead of scanning on.
+const MATHML_ELEMENT = String.raw`<(?<prefix>(?:[A-Za-z][\w.-]*:)?)math\b(?:[^>"']|"[^"]*"|'[^']*')*>(?:(?!<(?:[A-Za-z][\w.-]*:)?math\b)[\s\S])*?<\/\k<prefix>math\s*>`;
+const MATHML_INLINE_RULE = new RegExp(`^${MATHML_ELEMENT}`);
+const MATHML_BLOCK_RULE = new RegExp(String.raw`^ {0,3}(?<markup>${MATHML_ELEMENT})[ \t]*(?:\n+|$)`);
+const MATHML_OPENER = /<(?:[A-Za-z][\w.-]*:)?math\b/;
+
+function matchMathML(src: string, rule: RegExp, type: MathMLToken['type']): MathMLToken | undefined {
+  const match = rule.exec(src);
+  if (!match) return undefined;
+  const text = (match.groups?.markup ?? match[0]).trim().replace(/<(\/?)[A-Za-z][\w.-]*:(?=[A-Za-z])/g, '<$1');
+  const displayMode = /^<math\b(?:[^>"']|"[^"]*"|'[^']*')*?\sdisplay\s*=\s*["']?block/.test(text);
+  return { type, raw: match[0], text, displayMode };
+}
+
 // Content runs: a backslash always takes the next character with it, so an escaped delimiter
 // (`\$`) never closes. A run can't contain its own opening or closing delimiter, so two formulas on
 // one line stay two formulas, and an unclosed opener fails at the next opener instead of scanning
@@ -80,9 +113,9 @@ function renderPlaceholder(token: MathToken): string {
 }
 
 /**
- * Creates a marked extension that recognizes TeX math, the way language models write it:
+ * Creates a marked extension that recognizes math: TeX the way language models write it,
  * `$…$` and `\(…\)` inline, `$$…$$` and `\[…\]` for display math (on their own lines or
- * inside a paragraph).
+ * inside a paragraph), and MathML markup.
  *
  * The extension only tokenizes. Typesetting needs a math engine, which this
  * framework-agnostic package doesn't carry, so the HTML path emits a placeholder:
@@ -91,6 +124,10 @@ function renderPlaceholder(token: MathToken): string {
  * <code class="mj-math">x^2</code>                                         <!-- inline -->
  * <div class="mj-math-block"><code class="mj-math mj-math-display">…</code></div>  <!-- block -->
  * ```
+ *
+ * MathML markup (`<math>…</math>`, or `<mml:math>` as JATS articles write it) is matched as one
+ * element and emitted with its namespace prefixes removed. Like any raw HTML in markdown it is passed
+ * through as markup, and the host's sanitizer decides what survives (ng-markdown's allows MathML).
  *
  * Recognizing the math up front also protects it from the rest of the markdown grammar:
  * `a_i` and `b_j` in one formula no longer turn into emphasis, and `*` is no longer bold.
@@ -144,6 +181,42 @@ export function CreateMathExtension(): MarkedExtension {
         },
         renderer(token) {
           return renderPlaceholder(token as MathToken);
+        },
+      },
+      {
+        name: 'mathmlBlock',
+        level: 'block',
+        start(src: string) {
+          // Same paragraph-bounded search as mathBlock above.
+          const paragraphEnd = src.search(/\n[ \t]*\n/);
+          const scope = paragraphEnd === -1 ? src : src.slice(0, paragraphEnd + 1);
+          const candidates = new RegExp(`^ {0,3}${MATHML_OPENER.source}`, 'gm');
+          let found: RegExpExecArray | null;
+          while ((found = candidates.exec(scope)) !== null) {
+            if (MATHML_BLOCK_RULE.test(src.slice(found.index))) return found.index;
+          }
+          return undefined;
+        },
+        tokenizer(src: string) {
+          return matchMathML(src, MATHML_BLOCK_RULE, 'mathmlBlock');
+        },
+        renderer(token) {
+          const mathml = token as MathMLToken;
+          return mathml.displayMode ? `<div class="mj-math-block">${mathml.text}</div>\n` : `<p>${mathml.text}</p>\n`;
+        },
+      },
+      {
+        name: 'mathml',
+        level: 'inline',
+        start(src: string) {
+          const index = src.search(MATHML_OPENER);
+          return index === -1 ? undefined : index;
+        },
+        tokenizer(src: string) {
+          return matchMathML(src, MATHML_INLINE_RULE, 'mathml');
+        },
+        renderer(token) {
+          return (token as MathMLToken).text;
         },
       },
     ],

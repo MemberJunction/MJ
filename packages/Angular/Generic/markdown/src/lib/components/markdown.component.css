@@ -492,6 +492,8 @@
    ============================================ */
 .mj-markdown-container .mj-math-block {
   margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 /* A wide display formula scrolls instead of widening the message. */

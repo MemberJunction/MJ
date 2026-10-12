@@ -24,9 +24,10 @@ export interface MarkdownConfig {
   enableMermaid?: boolean;
 
   /**
-   * Enable TeX math: `$…$` and `\(…\)` inline, `$$…$$` and `\[…\]` for display math.
-   * The core only recognizes it (see `CreateMathExtension`); typesetting is the
-   * renderer's job — ng-markdown typesets it as MathML with KaTeX, loaded on first use.
+   * Enable math: TeX (`$…$` and `\(…\)` inline, `$$…$$` and `\[…\]` for display) and MathML
+   * markup (`<math>`, or `<mml:math>` as JATS writes it). The core only recognizes it (see
+   * `CreateMathExtension`); rendering is the host's job. ng-markdown typesets TeX as MathML with
+   * KaTeX, loaded on first use, and its sanitizer lets MathML through.
    * @default true
    */
   enableMath?: boolean;

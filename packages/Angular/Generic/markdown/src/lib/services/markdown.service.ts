@@ -49,8 +49,10 @@ import 'prismjs/components/prism-graphql';
  * into other packages' DOMPurify usage, and so the configuration is parsed once instead
  * of on every render.
  *
- * Profile: HTML + SVG + SVG filters, which keeps structural markup, inline styles, data
- * attributes and inline vector graphics and removes the script vectors. Deviations from
+ * Profile: HTML + SVG + SVG filters + MathML, which keeps structural markup, inline styles, data
+ * attributes, inline vector graphics and formulas written as MathML, and removes the script vectors.
+ * MathML is DOMPurify's own profile, with its namespace checks (the mXSS class of bypasses through
+ * `<math>` is what those checks exist for). Deviations from
  * DOMPurify's defaults, each deliberate:
  * - FORCE_BODY: a document that starts with `<style>` keeps it (otherwise the parser hoists
  *   a leading style element into <head> and it is dropped); agent-authored mockups start
@@ -60,6 +62,10 @@ import 'prismjs/components/prism-graphql';
  *   heading ids produce. This app does not read globals off `window` by element id, so
  *   DOM clobbering has no effect here, and heading anchors matter.
  * - `target` on links is kept, with `rel="noopener noreferrer"` enforced when it is set.
+ * - `columnalign` and `columnspacing` are added: DOMPurify's MathML list spells the first
+ *   `columnsalign` and lacks the second, so every MathML table lost its layout. Both are
+ *   presentational. (`form` on `<mo>` stays out: on HTML it associates an element with a form, and
+ *   MathML infers an operator's form without it.)
  * - `<use>` is allowed only with a same-document reference (`#id`); external references
  *   are removed. SMIL `<animate>`/`<set>` stay disallowed: they can rewrite `href`.
  */
@@ -71,9 +77,9 @@ function getPurifier(): ReturnType<typeof DOMPurify> | null {
   const instance = DOMPurify(window);
   if (!instance.isSupported) return null;
   instance.setConfig({
-    USE_PROFILES: { html: true, svg: true, svgFilters: true },
+    USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
     ADD_TAGS: ['use'],
-    ADD_ATTR: ['target'],
+    ADD_ATTR: ['target', 'columnalign', 'columnspacing'],
     FORCE_BODY: true,
     SANITIZE_DOM: false,
   });
@@ -447,7 +453,8 @@ export class MarkdownService {
 
   /**
    * Typeset TeX math in a container: every `code.mj-math` placeholder that markdown-core's
-   * math extension emitted. Call this after the HTML has been inserted into the DOM.
+   * math extension emitted. Call this after the HTML has been inserted into the DOM. MathML that
+   * arrived as markup is already rendered by the browser; it only gets the letter fix below.
    *
    * The output is MathML, which current browsers lay out natively, so hosts need no KaTeX
    * stylesheet or fonts. KaTeX builds the nodes itself from the TeX text (no HTML string is
@@ -460,9 +467,13 @@ export class MarkdownService {
    * guide to the container in hand. Without math enabled at parse time there are no placeholders.
    *
    * @param container The DOM element containing the math placeholders
-   * @returns true if at least one formula was typeset
+   * @returns true if at least one TeX formula was typeset
    */
   public async RenderMath(container: HTMLElement): Promise<boolean> {
+    // MathML that arrived as markup (a formula from a JATS article) needs the same Chrome fix as
+    // KaTeX's output, and no engine.
+    useUnicodeMathLetters(container);
+
     // Find the placeholders BEFORE touching the engine: no math, no chunk fetch.
     const placeholders = container.querySelectorAll<HTMLElement>('code.mj-math');
     if (placeholders.length === 0) return false;

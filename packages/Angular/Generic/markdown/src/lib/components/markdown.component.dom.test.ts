@@ -116,6 +116,13 @@ describe('MarkdownComponent (DOM)', () => {
       expect(c.querySelector('annotation')?.textContent).toBe('x_i + y_j');
     });
 
+    it('renders a JATS MathML formula and fixes its styled letters', async () => {
+      const f = render({ data: 'Field <mml:math><mml:mi mathvariant="bold">E</mml:mi></mml:math> here' });
+      const c = container(f);
+      await vi.waitFor(() => expect(c.querySelector('mi')?.textContent).toBe('𝐄'));
+      expect(c.querySelector('math')?.namespaceURI).toBe('http://www.w3.org/1998/Math/MathML');
+    });
+
     it('EnableMath=false leaves the dollars as text', async () => {
       const f = render({ data: '$x^2$', EnableMath: false });
       await Promise.resolve();

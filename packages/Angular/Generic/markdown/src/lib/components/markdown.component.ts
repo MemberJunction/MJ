@@ -496,7 +496,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     // Check for mermaid and code blocks
     this.hasMermaid = html.includes('language-mermaid') || html.includes('class="mermaid"');
     this.hasCodeBlocks = html.includes('<pre>') && html.includes('<code');
-    this.hasMath = html.includes('class="mj-math');
+    this.hasMath = html.includes('class="mj-math') || html.includes('<math');
 
     // Sanitize if enabled
     // Note: We bypass Angular's sanitizer when SVG renderer or HTML passthrough is enabled

@@ -313,6 +313,52 @@ describe('MarkdownService (DOM)', () => {
     });
   });
 
+  describe('MathML markup', () => {
+    const MATHML_NS = 'http://www.w3.org/1998/Math/MathML';
+    const mount = (markdown: string): HTMLElement => {
+      const container = document.createElement('div');
+      container.innerHTML = service.Parse(markdown);
+      return container;
+    };
+
+    it('keeps a JATS formula as real MathML elements, prefixes removed', () => {
+      const c = mount('Loss <mml:math display="inline"><mml:mn>7</mml:mn><mml:mo>×</mml:mo><mml:msup><mml:mn>10</mml:mn><mml:mn>13</mml:mn></mml:msup></mml:math> per pulse.');
+      const msup = c.querySelector('msup');
+      expect(msup?.namespaceURI).toBe(MATHML_NS);
+      expect(msup?.textContent).toBe('1013');
+      expect(c.textContent).toContain('per pulse.');
+    });
+
+    it('keeps a table\'s column alignment and spacing (DOMPurify misspells one, lacks the other)', () => {
+      const c = mount('<math display="block"><mtable columnalign="right left" columnspacing="0em 2em"><mtr><mtd><mi>a</mi></mtd><mtd><mo>=</mo><mi>b</mi></mtd></mtr></mtable></math>');
+      const table = c.querySelector('mtable');
+      expect(table?.getAttribute('columnalign')).toBe('right left');
+      expect(table?.getAttribute('columnspacing')).toBe('0em 2em');
+    });
+
+    it('spells styled letters with Unicode math characters, as for typeset TeX', async () => {
+      const c = mount('<math><mi mathvariant="bold">E</mi><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mn>3</mn></msup></math>');
+      await service.RenderMath(c);
+      expect(Array.from(c.querySelectorAll('mi')).map((n) => n.textContent)).toEqual(['𝐄', 'ℝ']);
+    });
+
+    // Known DOMPurify bypass shapes through MathML, plus the plain attribute and handler routes.
+    it.each([
+      ['javascript: href on a MathML element', '<math href="javascript:alert(1)"><mi xlink:href="javascript:alert(1)">x</mi></math>'],
+      ['maction with a script link', '<math><maction actiontype="statusline" xlink:href="javascript:alert(1)"><mi>x</mi></maction></math>'],
+      ['HTML inside annotation-xml', '<math><annotation-xml encoding="text/html"><img src="x" onerror="alert(1)"></annotation-xml></math>'],
+      ['mglyph/style namespace confusion', '<math><mtext><table><mglyph><style><img src="x" onerror="alert(1)">'],
+      ['form/math nesting confusion', '<form><math><mtext></form><form><mglyph><style></math><img src="x" onerror="alert(1)">'],
+      ['handlers on MathML elements', '<math onclick="alert(1)"><mi onmouseover="alert(1)">x</mi></math>'],
+    ])('strips %s', (_name, payload) => {
+      const c = mount(payload);
+      const attributes = Array.from(c.querySelectorAll('*')).flatMap((el) => Array.from(el.attributes));
+      expect(attributes.filter((a) => a.name.startsWith('on'))).toEqual([]);
+      expect(attributes.filter((a) => /javascript:/i.test(a.value))).toEqual([]);
+      expect(c.querySelector('script')).toBeNull();
+    });
+  });
+
   describe('parse sanitizes unless scripts are explicitly enabled', () => {
     it('strips handlers and script from passthrough HTML', () => {
       const out = service.parse('<div><img src="x" onerror="alert(1)"><script>alert(2)</script></div>', { enableHtml: true });

@@ -131,8 +131,9 @@ function renderBlock(token: Token, key: string): React.ReactNode {
         }
 
         case 'mathBlock':
-            // TeX math (markdown-core's math extension). No typesetter on mobile yet: show the
-            // source, delimiters included, as code.
+        case 'mathmlBlock':
+            // TeX or MathML (markdown-core's math extension). No typesetter on mobile yet: show
+            // the source as code.
             return <CodeBlock key={key} code={(token as Tokens.Generic).raw.trim()} />;
 
         case 'def':
@@ -173,6 +174,7 @@ function renderInline(tokens: Token[] | undefined, keyPrefix: string): React.Rea
             case 'codespan':
                 return <Text key={key} style={styles.codespan}>{decodeEntities((token as Tokens.Codespan).text)}</Text>;
             case 'math':
+            case 'mathml':
                 return <Text key={key} style={styles.codespan}>{(token as Tokens.Generic).raw}</Text>;
             case 'link': {
                 const l = token as Tokens.Link;
