@@ -231,9 +231,13 @@ export interface EntityDocumentPipelineConfig {
 
 export interface EntityDocumentRecordFilterConfig {
     /**
-     * Additional SQL filter predicate appended to the WHERE clause when
-     * fetching records to vectorize. Uses the same syntax as RunView's
-     * ExtraFilter (e.g. "Status = 'Active' AND IsDeleted = 0").
+     * A SQL predicate a record must satisfy to be vectorized, to be checked by a batch
+     * duplicate-detection run, and to be offered as a candidate (a single-record or
+     * entry-time check still checks the record it is given). Uses the same syntax as
+     * RunView's ExtraFilter (e.g. "Status = 'Active' AND IsDeleted = 0"); keep to plain
+     * comparisons so it also runs on PostgreSQL (see the package README).
+     * A record that fails it stays readable everywhere else. Read through
+     * {@link GetEntityDocumentRecordFilter}.
      */
     extraFilter?: string;
 

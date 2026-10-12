@@ -1,0 +1,40 @@
+[
+  {
+    "fields": {
+      "Name": "Dashboards Expert",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+      "Description": "Builds and changes the Config dashboard open in the user's tab through browser tools: reads the layout, finds artifacts, views and queries, adds, removes, moves, resizes and configures panels, and asks the user to confirm saves and pins. Works in text chat and voice. Layout and composition only; it does not edit what is inside a component.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "ExposeAsAction": false,
+      "InvocationMode": "Any",
+      "IconClass": "fa-solid fa-table-cells-large",
+      "TypeConfiguration": {
+        "realtime": {
+          "modelPreference": "Gemini 3.8 Live"
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Dashboards Expert - Main Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "754AF484-210C-439A-8CEC-E591C0A98491"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "264C9C35-2B80-40D9-A641-66F67345E7AB"
+    }
+  }
+]

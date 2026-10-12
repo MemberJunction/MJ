@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-betty",
   "type": "module",
-  "version": "6.2.0-edge.2",
+  "version": "6.2.0-edge.3",
   "description": "MemberJunction provider for Betty — the MJ-native, organization-scoped assistant (Betty Public API v1)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,9 +18,9 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.2.0-edge.2",
-    "@memberjunction/global": "6.2.0-edge.2",
-    "@memberjunction/network-utils": "6.2.0-edge.2",
+    "@memberjunction/ai": "6.2.0-edge.3",
+    "@memberjunction/global": "6.2.0-edge.3",
+    "@memberjunction/network-utils": "6.2.0-edge.3",
     "env-var": "^7.5.0"
   },
   "repository": {

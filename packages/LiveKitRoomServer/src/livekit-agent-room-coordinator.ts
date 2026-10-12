@@ -13,9 +13,10 @@
  * @module @memberjunction/livekit-room-server
  */
 
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { IRealtimeSession, RealtimeToolDefinition } from '@memberjunction/ai';
+import { ResolveIsModelFullDuplex, type IRealtimeSession, type RealtimeToolDefinition } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
 import {
   AlwaysAddressedMatcher,
   RegexAddressedMatcher,
@@ -32,6 +33,27 @@ import {
 } from '@memberjunction/ai-bridge-server';
 import { LiveKitTokenService } from './livekit-token-service';
 import { ResolveLiveKitNativeModuleSpecifier } from './livekit-native-module';
+
+/**
+ * Static capability map for known realtime drivers when resolving full-duplex capability before session connect.
+ * Avoids class-name substring heuristics.
+ */
+const DRIVER_STATIC_CAPABILITIES: Record<string, { FullDuplex?: boolean }> = {
+  OpenAILiveRealtime: { FullDuplex: true },
+};
+
+function GetDriverStaticCapabilities(driverClass?: string | null): { FullDuplex?: boolean } | null {
+  if (!driverClass) {
+    return null;
+  }
+  const key = driverClass.trim().toLowerCase();
+  for (const [cls, caps] of Object.entries(DRIVER_STATIC_CAPABILITIES)) {
+    if (cls.toLowerCase() === key) {
+      return caps;
+    }
+  }
+  return null;
+}
 
 /** The subset of {@link AIBridgeEngine} the coordinator drives — an injectable seam for unit testing. */
 export type BridgeOps = Pick<AIBridgeEngine, 'Config' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'StopBridgeSession' | 'ReconfigureSessionToMeeting'>;
@@ -68,6 +90,11 @@ export interface RealtimeSessionStartContext {
   SelfNames?: string[];
   /** Tools the host declares and executes itself (call control, handoff). Added to the model's tool set. */
   HostTools?: RealtimeToolDefinition[];
+  /**
+   * Optional callback allowing the coordinator to resolve host tools dynamically based on
+   * the model and driver class context actually resolved for the session, before session opening.
+   */
+  ResolveHostTools?: (resolved: { ModelID?: string; ModelVendorID?: string; DriverClass?: string }) => RealtimeToolDefinition[] | undefined;
   /** Host-authored instructions appended to the system prompt (for example the phone framing). */
   HostFraming?: string;
   /** Role-tagged transcript so far, framed into the prompt when a lost model session is re-opened mid-call. */
@@ -139,6 +166,8 @@ export interface StartAgentRoomSessionParams {
   RealtimeModelID?: string;
   /** Optional per-session VOICE override (provider-native voice id) — gives this agent a distinct voice. */
   RealtimeVoice?: string;
+  /** Explicit override for whether the model is full-duplex. When omitted, resolved from model metadata or driver capabilities. */
+  FullDuplex?: boolean;
   /** Extra aliases the agent answers to (for Passive turn-taking). */
   AgentAliases?: string[];
   /** Turn-taking mode. Default: `'Passive'` (speak only when addressed). */
@@ -311,19 +340,24 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     // (gated meeting mode + LLM router) for controlled scenarios (webinars, large rooms, weaker models).
     const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
     const isMeeting = moderatorMode && existingAgents.length > 0;
-    // A full-duplex model judges for itself whether it was addressed and uses the turn-taking tools; a gated
-    // meeting (moderator mode) decides addressing by name in the engine, so the tools would only confuse it.
     const addressing: TurnAddressingMode = isMeeting ? 'Regex' : params.TurnAddressing ?? 'Auto';
 
+    let resolvedFullDuplex: boolean | undefined = params.FullDuplex;
+    if (resolvedFullDuplex === undefined && params.RealtimeModelID) {
+      resolvedFullDuplex = this.resolveIsModelFullDuplexFromId(params.RealtimeModelID);
+    }
+
     const host = params.Host;
-    const turnTakingTools = addressing === 'Regex' ? [] : [...TURN_TAKING_TOOL_DEFINITIONS];
-    const combinedHostTools: RealtimeToolDefinition[] | undefined =
-      (host?.HostTools?.length ?? 0) > 0 || turnTakingTools.length > 0
+    const buildToolsForFullDuplex = (isFd: boolean): RealtimeToolDefinition[] | undefined => {
+      const turnTakingTools = isFd || addressing === 'Regex' ? [] : [...TURN_TAKING_TOOL_DEFINITIONS];
+      return (host?.HostTools?.length ?? 0) > 0 || turnTakingTools.length > 0
         ? [...(host?.HostTools ?? []), ...turnTakingTools]
         : undefined;
+    };
 
     let activeTurnHandler: BridgeTurnTakingToolHandler | undefined = undefined;
     const openModelSession = async (priorTranscript?: string): Promise<IRealtimeSession> => {
+      const initialTools = buildToolsForFullDuplex(resolvedFullDuplex ?? false);
       const opened = await this.sessionFactory({
         AgentID: params.AgentID,
         AgentName: params.AgentName,
@@ -337,18 +371,71 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
         AgentSessionID: params.AgentSessionID,
         MeetingMode: isMeeting || undefined,
         SelfNames: isMeeting ? selfNames : undefined,
-        HostTools: combinedHostTools,
+        HostTools: initialTools,
         HostFraming: host?.HostFraming,
         ConversationID: host?.ConversationID,
         PriorTranscript: priorTranscript,
+        ResolveHostTools: (resolved) => {
+          if (resolvedFullDuplex === undefined) {
+            if (resolved.ModelID) {
+              const effective = AIEngine.Instance.GetEffectiveModelConfiguration(resolved.ModelID, resolved.ModelVendorID);
+              const model = (AIEngine.Instance.Models ?? []).find(m => UUIDsEqual(m.ID, resolved.ModelID!));
+              const staticCaps = GetDriverStaticCapabilities(resolved.DriverClass);
+              resolvedFullDuplex = ResolveIsModelFullDuplex(effective ?? model?.ModelConfigurationObject, staticCaps);
+            } else if (resolved.DriverClass) {
+              const staticCaps = GetDriverStaticCapabilities(resolved.DriverClass);
+              resolvedFullDuplex = staticCaps?.FullDuplex === true;
+            }
+          }
+          return buildToolsForFullDuplex(resolvedFullDuplex ?? false);
+        },
       });
+      const declaredTurnToolsInitially = !resolvedFullDuplex && addressing !== 'Regex';
+      if (resolvedFullDuplex === undefined) {
+        resolvedFullDuplex = opened.Capabilities?.FullDuplex === true;
+      } else if (opened.Capabilities?.FullDuplex !== undefined && opened.Capabilities.FullDuplex !== resolvedFullDuplex) {
+        LogStatus(
+          `[LiveKitAgentRoomCoordinator] WARNING: Session factory opened with Capabilities.FullDuplex=${opened.Capabilities.FullDuplex}, ` +
+          `which disagrees with pre-open resolved FullDuplex=${resolvedFullDuplex}. Initial tools may mismatch.`
+        );
+      }
+
+      // If full duplex is active, but turn-taking tools were declared to the session initially
+      // (e.g. because full-duplex was only discovered after open, or custom factory ignored ResolveHostTools):
+      if (resolvedFullDuplex && declaredTurnToolsInitially) {
+        const desiredTools = buildToolsForFullDuplex(true);
+        try {
+          await opened.RegisterTools(desiredTools ?? []);
+        } catch (err) {
+          LogError(
+            `[LiveKitAgentRoomCoordinator] Failed to reconfigure tools after discovering FullDuplex: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+        // Explicitly bind a no-op handler so any in-flight or model-cached turn-taking tool calls return a clear "not available" result
+        if (this.turnToolBinder) {
+          const noopTurnHandler: BridgeTurnTakingToolHandler = {
+            Handles(toolName: string): boolean {
+              return TURN_TAKING_TOOL_DEFINITIONS.some(t => t.Name === toolName);
+            },
+            async Execute(call: { ToolName: string; Arguments: string }): Promise<string> {
+              return JSON.stringify({
+                success: false,
+                error: `Tool '${call.ToolName}' is not available: session is running in full-duplex mode.`,
+              });
+            },
+          };
+          this.turnToolBinder(opened, noopTurnHandler);
+        }
+      }
+
       host?.OnModelSession?.(opened);
       if (activeTurnHandler) {
-        this.bindTurnTools(opened, activeTurnHandler, botName);
+        this.bindTurnTools(opened, activeTurnHandler, botName, resolvedFullDuplex);
       }
       return opened;
     };
     const session = await openModelSession();
+    const finalFullDuplex = resolvedFullDuplex ?? false;
 
     // The bridge id is known only after the engine starts the session, but the end-of-session hook is registered at start,
     // so it reaches the id through this holder.
@@ -358,6 +445,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       AgentID: params.AgentID,
       Provider: provider,
       RealtimeSession: session,
+      FullDuplex: finalFullDuplex,
       Address: botToken.ServerUrl,
       JoinMethod: host?.JoinMethod ?? 'OnDemand',
       Direction: host?.Direction,
@@ -404,7 +492,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
 
     this.addToRoster(roomKey, { AgentSessionID: params.AgentSessionID, SessionBridgeID: active.SessionBridgeID, Names: selfNames });
     activeTurnHandler = active.TurnTakingToolHandler;
-    this.bindTurnTools(session, active.TurnTakingToolHandler, botName);
+    this.bindTurnTools(session, active.TurnTakingToolHandler, botName, finalFullDuplex);
 
     // The room just became (or stayed) multi-agent → retroactively re-gate the agents already in it into
     // meeting mode so the whole room takes turns, not just the newcomers. Capability-gated in the engine:
@@ -423,19 +511,46 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     return { SessionBridgeID: active.SessionBridgeID, RoomName: params.RoomName, ServerUrl: botToken.ServerUrl };
   }
 
-  /** Installs the engine's turn-taking tool handler on the model session, when the session has one (a full-duplex model in a room). */
-  private bindTurnTools(session: IRealtimeSession, handler: BridgeTurnTakingToolHandler | undefined, botName: string): void {
+  /** Installs the engine's turn-taking tool handler on the model session, when the session has one (a turn-based model in a room). */
+  private bindTurnTools(session: IRealtimeSession, handler: BridgeTurnTakingToolHandler | undefined, botName: string, isFullDuplex: boolean): void {
     if (!handler) {
+      return;
+    }
+    // Full-duplex models never get turn-taking tools; do not bind turn-taking handlers to them
+    if (isFullDuplex) {
       return;
     }
     if (!this.turnToolBinder) {
       LogError(
-        `[LiveKitAgentRoomCoordinator] ${botName} is full-duplex but no turn-tool binder is set (SetTurnToolBinder); ` +
-          'its i_am_addressed / yield_turn calls will not execute. The room floor gate still prevents overlap.',
+        `[LiveKitAgentRoomCoordinator] ${botName} has turn-taking tools but no turn-tool binder is set (SetTurnToolBinder); ` +
+          'its i_am_addressed / yield_turn calls will not execute.',
       );
       return;
     }
     this.turnToolBinder(session, handler);
+  }
+
+  /**
+   * Resolves whether the model with the given ID is full duplex from model metadata and static driver capabilities.
+   */
+  private resolveIsModelFullDuplexFromId(modelId: string): boolean | undefined {
+    try {
+      const model = (AIEngine.Instance.Models ?? []).find(m => UUIDsEqual(m.ID, modelId));
+      if (!model) {
+        return undefined;
+      }
+      const vendors = (AIEngine.Instance.ModelVendorsByModelID?.get(NormalizeUUID(model.ID)) ??
+        (AIEngine.Instance.ModelVendors ?? []).filter(mv => UUIDsEqual(mv.ModelID, model.ID)))
+        .filter(v => v.DriverClass != null && (v.Status === undefined || v.Status === 'Active'))
+        .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+      const primaryVendor = vendors[0];
+      const effective = AIEngine.Instance.GetEffectiveModelConfiguration(model.ID, primaryVendor?.ID);
+      const staticCaps = GetDriverStaticCapabilities(primaryVendor?.DriverClass);
+      return ResolveIsModelFullDuplex(effective ?? model.ModelConfigurationObject, staticCaps);
+    } catch (err) {
+      LogError(`[LiveKitAgentRoomCoordinator] resolveIsModelFullDuplexFromId failed: ${err instanceof Error ? err.message : String(err)}`);
+      return undefined;
+    }
   }
 
   /** Appends an agent to a room's roster (creating the room's list on first join). */

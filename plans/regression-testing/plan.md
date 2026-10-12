@@ -747,7 +747,7 @@ ExpectedOutcomes:
 
 #### T20: Dashboard Browser
 ```
-Goal: Navigate to Data Explorer > Dashboards and open a dashboard
+Goal: Navigate to Dashboards > Library and open a dashboard
 to verify it renders correctly.
 StartUrl: http://localhost:4200
 Auth: (same as T01)
