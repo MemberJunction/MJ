@@ -49,7 +49,7 @@ export class RealtimeSessionService extends RealtimeSessionRuntime {
     constructor() {
         super(new BrowserRealtimeMediaHost());
         if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-            this.wireRecordingTerminalTriggers(window, document);
+            this.WireRecordingTerminalTriggers(window, document);
         }
     }
 
@@ -71,7 +71,7 @@ export class RealtimeSessionService extends RealtimeSessionRuntime {
      * @param page the page-lifecycle event target (`window`)
      * @param visibility the visibility source (`document`)
      */
-    protected wireRecordingTerminalTriggers(page: PageHideEventTarget, visibility: VisibilityEventSource): void {
+    protected WireRecordingTerminalTriggers(page: PageHideEventTarget, visibility: VisibilityEventSource): void {
         page.addEventListener('pagehide', () => this.SendRecordingTerminal());
         visibility.addEventListener('visibilitychange', () => {
             if (visibility.visibilityState === 'hidden') {

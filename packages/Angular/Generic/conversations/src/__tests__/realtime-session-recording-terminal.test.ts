@@ -16,7 +16,7 @@ import type { IOpusPacketEncoder } from '../lib/services/recording/opus-packet-e
 /** Exposes the protected wiring so a node test can hand it fake `window` / `document` targets. */
 class TestableSessionService extends RealtimeSessionService {
     public Wire(page: PageHideEventTarget, visibility: VisibilityEventSource): void {
-        this.wireRecordingTerminalTriggers(page, visibility);
+        this.WireRecordingTerminalTriggers(page, visibility);
     }
 }
 
