@@ -22,7 +22,7 @@ vi.mock('@memberjunction/storage', () => ({
 
 import {
     AssembleOpusRecordingPcm, AssembleRealtimeRecordingFromLedger, ComputeRecordingPeaks, EncodePcm16Wav, CreateLibopusDecoder,
-    IOpusPacketDecoder, RecordingGap, MAX_ASSEMBLY_SHARDS, MAX_ASSEMBLY_SAMPLES,
+    IOpusPacketDecoder, RecordingGap, MAX_ASSEMBLY_SHARDS, MAX_ASSEMBLY_SAMPLES, FillGapsFromPreviousRecording, ParseCanonicalRecordingWav,
 } from '../realtime/realtime-recording-opus-assembly';
 import { FinishAssemblyInput, IRealtimeRecordingLedger, LedgerShard, LedgerShardMetadata, RecordShardResult } from '../realtime/realtime-recording-ledger';
 
@@ -51,6 +51,18 @@ function encodeTone(totalSamples: number): Uint8Array[] {
 }
 
 let fixtureShards: RecordingShardContents[];
+/** Six full 1 s shards of one continuous stream: a call that went on after a first terminal at 4 shards. */
+let continuedShards: RecordingShardContents[];
+const CONTINUED_COUNT = 6;
+
+beforeAll(() => {
+    const continued = encodeTone(CONTINUED_COUNT * SHARD_SAMPLES);
+    const per = SHARD_SAMPLES / RECORDING_FRAME_SAMPLES;
+    continuedShards = Array.from({ length: CONTINUED_COUNT }, (_, index) => {
+        const packets = continued.slice(index * per, (index + 1) * per);
+        return { ShardIndex: index, StartSample: index * SHARD_SAMPLES, SampleCount: SHARD_SAMPLES, PacketCount: packets.length, Packets: packets };
+    });
+});
 
 beforeAll(() => {
     const packets = encodeTone(CAPTURED);
@@ -282,6 +294,11 @@ class FakeBucket {
         this.OnPut?.(key);
         this.Objects.set(key, { bytes, contentType });
         return true;
+    }
+    public async GetObject(p: { fullPath: string }): Promise<Buffer> {
+        const object = this.Objects.get(p.fullPath);
+        if (!object) throw new Error(`no such object ${p.fullPath}`);
+        return object.bytes;
     }
 }
 
@@ -518,6 +535,8 @@ describe('AssembleRealtimeRecordingFromLedger', () => {
         row.RecordingStatus = 'Partial';
         row.RecordingGaps = stored;
         row.RecordingFileID = 'file-0';
+        provider.Files.set('file-0', { ProviderKey: `${FOLDER}/recording.wav`, ProviderID: 'prov-1', ContentType: 'audio/wav' });
+        bucket.Objects.set(`${FOLDER}/recording.wav`, { bytes: EncodePcm16Wav(new Int16Array(CAPTURED), 48000), contentType: 'audio/wav' });
         fixtureShards.filter(s => s.ShardIndex !== 1).forEach(s => ledger.Put(s));
         const { outcome } = await claimAndAssemble();
 
@@ -656,5 +675,122 @@ describe('AssembleRealtimeRecordingFromLedger', () => {
         expect(row.RecordingStatus).toBe('Assembling');
         expect(row.RecordingAssemblyVersion).toBe(version);
         expect(messages(errorSpy).some(m => m.includes(SESSION) && m.includes(`version ${version}`) && m.includes('db gone'))).toBe(true);
+    });
+});
+
+describe('FillGapsFromPreviousRecording / ParseCanonicalRecordingWav', () => {
+    it('copies a gap from the previous recording, keeps its old gaps inside, and leaves the part beyond it a gap', () => {
+        // New timeline: shard 0 missing [0, 1920), shard 1 present [1920, 2880), shard 2 missing [2880, 4800).
+        const assembled = AssembleOpusRecordingPcm([fakeShard(1, 1920, 960)], 3, 4800, new ConstantDecoder(7));
+        expect(assembled.Gaps).toHaveLength(2);
+        const previous = { Pcm: new Int16Array(3840).fill(3), Gaps: [{ startSample: 960, sampleCount: 480, indexes: [9] }] };
+        previous.Pcm.fill(0, 960, 1440);
+
+        const filled = FillGapsFromPreviousRecording(assembled, previous);
+        expect(filled.Gaps).toEqual([
+            { startSample: 960, sampleCount: 480, indexes: [9] },
+            { startSample: 3840, sampleCount: 960, indexes: [2] },
+        ]);
+        expect(filled.Pcm[0]).toBe(3);
+        expect(filled.Pcm[1920]).toBe(7);
+        expect(filled.Pcm[3000]).toBe(3);
+        expect(allZero(filled.Pcm, 3840, 4800)).toBe(true);
+        expect(filled.Complete).toBe(false);
+        expect([...pcmFromWav(filled.Wav)]).toEqual([...filled.Pcm]);
+    });
+
+    it('is Complete when the previous recording covers every gap and had none of its own', () => {
+        const assembled = AssembleOpusRecordingPcm([fakeShard(1, 960, 960)], 2, 1920, new ConstantDecoder());
+        const filled = FillGapsFromPreviousRecording(assembled, { Pcm: new Int16Array(960).fill(4), Gaps: [] });
+        expect(filled.Gaps).toEqual([]);
+        expect(filled.Complete).toBe(true);
+    });
+
+    it('accepts only the canonical 48 kHz mono PCM16 layout', () => {
+        const samples = new Int16Array([1, -2, 3]);
+        expect([...(ParseCanonicalRecordingWav(EncodePcm16Wav(samples, 48000)) ?? [])]).toEqual([1, -2, 3]);
+        expect(ParseCanonicalRecordingWav(EncodePcm16Wav(samples, 24000))).toBeNull();
+        const truncated = EncodePcm16Wav(samples, 48000).subarray(0, 48);
+        expect(ParseCanonicalRecordingWav(truncated)).toBeNull();
+        expect(ParseCanonicalRecordingWav(Buffer.from('not a wav at all, definitely not one, nope!!'))).toBeNull();
+    });
+});
+
+describe('AssembleRealtimeRecordingFromLedger after a Complete recording is re-opened', () => {
+    const S = SHARD_SAMPLES;
+
+    /** First terminal at 4 shards: Complete, which deletes the rows. Returns the first WAV. */
+    async function completeFirstFour(): Promise<Buffer> {
+        row.RecordingExpectedShards = 4;
+        row.RecordingCapturedSamples = 4 * S;
+        continuedShards.slice(0, 4).forEach(s => ledger.Put(s));
+        const { outcome } = await claimAndAssemble();
+        expect(outcome).toBe('Complete');
+        expect(ledger.Shards.size).toBe(0);
+        return Buffer.from(storedWav());
+    }
+
+    /** The call went on: shards 4 and 5 arrive and a strictly higher terminal re-opens the session. */
+    function continueCall(): void {
+        continuedShards.slice(4).forEach(s => ledger.Put(s));
+        row.RecordingExpectedShards = CONTINUED_COUNT;
+        row.RecordingCapturedSamples = CONTINUED_COUNT * S;
+        row.RecordingStatus = 'Pending';
+    }
+
+    it('reproduces the first recording for the deleted range plus the new audio: Complete, no gaps, same file', async () => {
+        const first = pcmFromWav(await completeFirstFour());
+        continueCall();
+        const { outcome } = await claimAndAssemble();
+
+        expect(outcome).toBe('Complete');
+        expect(ledger.Finishes[1]).toMatchObject({ Status: 'Complete', Gaps: [], FileID: 'file-1' });
+        expect(uploads).toHaveLength(1);
+        const second = pcmFromWav(storedWav());
+        expect(second.length).toBe(CONTINUED_COUNT * S);
+        expect([...second.subarray(0, 4 * S)]).toEqual([...first]);
+        expect(allZero(second, 4 * S, 4 * S + 960)).toBe(false);
+        expect(allZero(second, CONTINUED_COUNT * S - 960, CONTINUED_COUNT * S)).toBe(false);
+        expect(ledger.Deletes).toEqual([4, CONTINUED_COUNT]);
+    });
+
+    it('carries the previous Partial gaps inside the reused range into the new gap list', async () => {
+        row.RecordingExpectedShards = 4;
+        row.RecordingCapturedSamples = 4 * S;
+        [0, 2, 3].forEach(i => ledger.Put(continuedShards[i]));
+        expect((await claimAndAssemble(true)).outcome).toBe('Partial');
+        const first = pcmFromWav(Buffer.from(storedWav()));
+        // The rows behind that Partial are gone (as after a Complete), so only the WAV holds their audio.
+        ledger.Shards.clear();
+        continueCall();
+        const { outcome } = await claimAndAssemble(true);
+
+        expect(outcome).toBe('Partial');
+        expect(ledger.Finishes[1].Gaps).toEqual([{ startSample: S, sampleCount: S, indexes: [1] }]);
+        const second = pcmFromWav(storedWav());
+        expect([...second.subarray(0, 4 * S)]).toEqual([...first]);
+        expect(allZero(second, S, 2 * S)).toBe(true);
+    });
+
+    it('does not reuse an existing file that is not a canonical recording WAV: logged, ranges silent and listed', async () => {
+        await completeFirstFour();
+        const key = `${FOLDER}/recording.wav`;
+        bucket.Objects.set(key, { bytes: EncodePcm16Wav(new Int16Array(4 * S).fill(9), 24000), contentType: 'audio/wav' });
+        continueCall();
+        const { outcome } = await claimAndAssemble(true);
+
+        expect(outcome).toBe('Partial');
+        expect(ledger.Finishes[1].Gaps).toEqual([{ startSample: 0, sampleCount: 4 * S, indexes: [0, 1, 2, 3] }]);
+        expect(allZero(pcmFromWav(storedWav()), 0, 4 * S)).toBe(true);
+        expect(messages(errorSpy).some(m => m.includes(SESSION) && m.includes('not a canonical'))).toBe(true);
+    });
+
+    it('un-forced with an unusable previous recording: Deferred, nothing written', async () => {
+        await completeFirstFour();
+        bucket.Objects.set(`${FOLDER}/recording.wav`, { bytes: Buffer.from('garbage'), contentType: 'audio/wav' });
+        continueCall();
+        const { outcome } = await claimAndAssemble();
+        expect(outcome).toBe('Deferred');
+        expect(bucket.Objects.get(`${FOLDER}/recording.wav`)?.bytes.toString()).toBe('garbage');
     });
 });
