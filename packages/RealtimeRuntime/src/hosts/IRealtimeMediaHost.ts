@@ -89,25 +89,20 @@ export interface IRealtimeMediaHost {
 /**
  * The recording capability a host may optionally provide.
  *
- * Mirrors the browser recorder's existing surface so the runtime's call sites are unchanged by the
- * extraction. Every method is best-effort by contract: a recorder that fails mid-session must
- * degrade to "no recording" rather than failing the call, because audio capture is never worth
- * dropping a live conversation over.
+ * The host captures the call (mic + agent mix) at **48 kHz** and runs ONE continuous Opus encoder
+ * for the whole call: mono, 32 kbps, 20 ms frames (960 samples). The runtime pulls the encoded
+ * packets every few seconds, cuts them into indexed `MJOPUS1` shards, keeps each one in a durable
+ * local store until the server acknowledges it, and sends a terminal request when the call ends.
+ * The host never builds a container (no WAV, no Ogg) and never base64-encodes anything: the server
+ * assembles the final `recording.wav` from the shards.
+ *
+ * Every method is best-effort by contract: a recorder that fails mid-session must degrade to
+ * "no recording" rather than failing the call, because audio capture is never worth dropping a live
+ * conversation over.
  */
 export interface IRealtimeSessionRecorder {
-    /** `false` when capture could not start (unsupported platform, no permission). */
+    /** `false` when capture could not start (unsupported platform, no permission, no encoder). */
     readonly IsRecording: boolean;
-
-    /** Capture sample rate, used to label the header-less PCM16 crash-recovery shards. */
-    readonly SampleRate: number;
-
-    /**
-     * Container MIME type of the FINAL consolidated recording.
-     *
-     * Read it BEFORE {@link StopAndEncode} — implementations are permitted to clear it on stop,
-     * which is why the runtime captures it first.
-     */
-    readonly MimeType: string;
 
     /**
      * Begins capture of the microphone, mixing in the agent's audio when it is already available.
@@ -120,28 +115,26 @@ export interface IRealtimeSessionRecorder {
     /** Mixes the agent's audio in once its track arrives, so the recording carries both sides. */
     AttachRemoteStream(stream: MediaStream): void;
 
-    /** Milliseconds into the recording, used to stamp per-turn cue offsets into a seekable file. */
+    /**
+     * Milliseconds into the recording, derived from the samples captured so far on the 48 kHz
+     * sample clock (never wall clock), used to stamp per-turn cue offsets into the assembled file.
+     */
     NowOffsetMs(): number;
 
-    /** Waveform peaks computed during capture; survives {@link StopAndEncode}. */
-    GetPeaks(): number[];
+    /**
+     * Returns the 20 ms Opus packets encoded since the previous call, in capture order, and forgets
+     * them; an empty array when none are ready. Synchronous and cheap: it hands over what the
+     * encoder already produced and never encodes on the caller's thread — the runtime calls it from
+     * `pagehide`, where there is no time to wait for an encoder.
+     */
+    TakeEncodedPackets(): Uint8Array[];
 
     /**
-     * Returns audio captured since the previous snapshot, **already base64-encoded**, or `null`
-     * when nothing new is pending.
-     *
-     * Encoding lives behind this seam deliberately: browsers reach for `Blob` + `FileReader`,
-     * React Native reads a file off disk, and a test harness may hold bytes in memory. The runtime
-     * only forwards the string to the server, so it should never learn which of those it is.
-     *
-     * Shards are header-less raw little-endian PCM16 — recovery is concatenate-in-order then
-     * WAV-wrap. The canonical seekable file is the consolidated {@link StopAndEncode} upload.
+     * Stops capture, flushes the encoder (its last packets become available to
+     * {@link TakeEncodedPackets}), and resolves the total number of samples captured at 48 kHz. That
+     * count may be less than `packets × 960` when the encoder padded its last frame; the runtime
+     * trims the final shard to it. Idempotent: a second call resolves the same count.
      */
-    SnapshotNewSegmentBase64(): Promise<string | null>;
-
-    /**
-     * Stops capture and returns the consolidated recording **already base64-encoded**, or `null`
-     * when nothing was captured. Idempotent.
-     */
-    StopAndEncode(): Promise<string | null>;
+    Stop(): Promise<number>;
 }
+

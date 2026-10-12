@@ -11,6 +11,7 @@ import {
     type IRealtimeSessionRecorder,
     type StartRealtimeClientSessionResult,
 } from '../index';
+import { FakeRecorder, FakeRecordingRuntime, FakeRecordingTransport, FakeShardStore, type FakeUploadOutcome } from './recording-test-helpers';
 
 /**
  * A media host backed by nothing at all.
@@ -37,24 +38,6 @@ class FakeMediaHost implements IRealtimeMediaHost {
     public CreateRecorder(): IRealtimeSessionRecorder | null {
         this.recorder = new FakeRecorder();
         return this.recorder;
-    }
-}
-
-class FakeRecorder implements IRealtimeSessionRecorder {
-    public IsRecording = true;
-    public SampleRate = 24000;
-    public MimeType = 'audio/wav';
-    public StopCalls = 0;
-    public Start = vi.fn();
-    public AttachRemoteStream = vi.fn();
-    public NowOffsetMs = () => 0;
-    public GetPeaks = () => [0.1, 0.2];
-    public async SnapshotNewSegmentBase64(): Promise<string | null> {
-        return 'c2VnbWVudA==';
-    }
-    public async StopAndEncode(): Promise<string | null> {
-        this.StopCalls++;
-        return 'cmVjb3JkaW5n';
     }
 }
 
@@ -99,10 +82,9 @@ describe('RealtimeSessionRuntime', () => {
             const host = new FakeMediaHost();
             const recorder = host.CreateRecorder();
             expect(recorder).not.toBeNull();
-            // The runtime only ever receives already-encoded bytes — never a Blob.
-            await expect(recorder!.SnapshotNewSegmentBase64()).resolves.toBe('c2VnbWVudA==');
-            await expect(recorder!.StopAndEncode()).resolves.toBe('cmVjb3JkaW5n');
-            expect(typeof recorder!.MimeType).toBe('string');
+            // The runtime only ever receives already-encoded Opus packets and a sample count — never a Blob.
+            expect(recorder!.TakeEncodedPackets()).toEqual([]);
+            await expect(recorder!.Stop()).resolves.toBe(0);
         });
 
         it('surfaces microphone acquisition through the host, not navigator', async () => {
@@ -253,35 +235,20 @@ describe('session lifecycle, driven end to end with fakes', () => {
     }
 
     /**
-     * A provider whose `UploadRealtimeRecording` never answers until the test settles it — what the
-     * runtime sees when the tab closes while tens of MB of WAV are still on the wire. Every other
-     * relay answers at once. `UploadStarted` resolves the moment the upload mutation arrives, so
-     * tests never count microtask ticks.
+     * A recorded session whose terminal request never answers until the test settles it — what the
+     * runtime sees when the server is slow to confirm the end of a recording. The recorder has
+     * already encoded a few packets, so the end of the call has a tail to send.
      */
-    class StalledUploadProvider extends RecordingProvider {
-        private markStarted: () => void = () => undefined;
-        public readonly UploadStarted = new Promise<void>((resolve) => { this.markStarted = resolve; });
-        private settleUpload: (outcome: { ok: boolean }) => void = () => undefined;
-        private readonly upload = new Promise<{ ok: boolean }>((resolve) => { this.settleUpload = resolve; });
-        public override async ExecuteGQL(query: string): Promise<unknown> {
-            this.Mutations.push(query);
-            if (/mutation UploadRealtimeRecording\(/.test(query)) {
-                this.markStarted();
-                const { ok } = await this.upload; // never settles unless the test calls Finish/Fail
-                if (!ok) { throw new Error('network gone'); }
-                return { UploadRealtimeRecording: { Success: true, FileID: 'file-1' } };
-            }
-            return {};
-        }
-        public FinishUpload(): void { this.settleUpload({ ok: true }); }
-        public FailUpload(): void { this.settleUpload({ ok: false }); }
-    }
-
-    function buildStalled(host: IRealtimeMediaHost = new FakeMediaHost()) {
-        const runtime = new RealtimeSessionRuntime(host);
-        const provider = new StalledUploadProvider();
+    async function startHeldTerminal(clientKey = 'fake-provider') {
+        const host = new FakeMediaHost();
+        const transport = new FakeRecordingTransport();
+        transport.HoldTerminal();
+        const runtime = new FakeRecordingRuntime(host, new FakeShardStore(), transport);
+        const provider = new RecordingProvider();
         runtime.Provider = provider as unknown as IMetadataProvider;
-        return { runtime, provider };
+        await runtime.StartRealtimeSessionFromResult(mintedSession(clientKey), { recordingConsent: true });
+        host.recorder!.Capture(5);
+        return { runtime, provider, transport };
     }
 
     it('goes live through real driver resolution, then closes the server session once', async () => {
@@ -416,28 +383,30 @@ describe('session lifecycle, driven end to end with fakes', () => {
         });
     });
 
-    describe('a page that dies during the end-of-call upload (#5195)', () => {
-        it('closes the server session before the consolidated upload starts', async () => {
-            const { runtime, provider } = buildStalled();
-            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+    describe('a page that dies while the end of the recording is being confirmed (#5195)', () => {
+        it('sends CloseAgentSession while the terminal is still unacknowledged', async () => {
+            const { runtime, provider, transport } = await startHeldTerminal();
 
-            void runtime.EndRealtimeSession();
-            await provider.UploadStarted;
+            const ending = runtime.EndRealtimeSession();
+            await vi.waitFor(() => expect(mutationNames(provider)).toContain('CloseAgentSession'));
 
-            const names = mutationNames(provider);
-            expect(names).toContain('CloseAgentSession');
-            expect(names.indexOf('CloseAgentSession')).toBeLessThan(names.indexOf('UploadRealtimeRecording'));
+            // The close went out before the terminal wait ended: teardown is still waiting on it.
+            expect(transport.Terminals).toHaveLength(1);
+            expect(runtime.IsSavingRecording).toBe(true);
+            transport.ReleaseTerminal(true);
+            await ending;
         });
 
-        it('still closes the session when the driver fails to disconnect', async () => {
+        it('still closes the session, and ends the recording, when the driver fails to disconnect', async () => {
             expect(ThrowingDisconnectClient).toBeDefined();
-            const { runtime, provider } = build(new FakeMediaHost());
-            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-throwing-disconnect'), { recordingConsent: true });
+            const { runtime, provider, transport } = await startHeldTerminal('fake-throwing-disconnect');
+            transport.ReleaseTerminal(true);
 
             await runtime.EndRealtimeSession();
 
             expect(mutationNames(provider)).toContain('CloseAgentSession');
-            expect(mutationNames(provider)).toContain('UploadRealtimeRecording');
+            expect(transport.Terminals).toHaveLength(1);
+            expect(mutationNames(provider).filter((n) => n.startsWith('UploadRealtimeRecording'))).toEqual([]);
             expect(runtime.IsActive).toBe(false);
             expect(runtime.CurrentAgentSessionId).toBeNull();
         });
@@ -445,31 +414,30 @@ describe('session lifecycle, driven end to end with fakes', () => {
 
     describe('SavingRecording$ (#5195)', () => {
         it('reports saving before the first teardown await', async () => {
-            const { runtime } = buildStalled();
-            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
-            void runtime.EndRealtimeSession();
+            const { runtime, transport } = await startHeldTerminal();
+            const ending = runtime.EndRealtimeSession();
             // Synchronous: no await between End and the arm.
             expect(runtime.IsSavingRecording).toBe(true);
+            transport.ReleaseTerminal(true);
+            await ending;
         });
 
-        it('stays saving while the upload is in flight and clears once it lands', async () => {
-            const { runtime, provider } = buildStalled();
-            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+        it('stays saving while the terminal is unacknowledged and clears once it is', async () => {
+            const { runtime, transport } = await startHeldTerminal();
             const ending = runtime.EndRealtimeSession();
-            await provider.UploadStarted;
+            await vi.waitFor(() => expect(transport.Terminals).toHaveLength(1));
             expect(runtime.IsSavingRecording).toBe(true);
-            provider.FinishUpload();
+            transport.ReleaseTerminal(true);
             await ending;
             expect(runtime.IsSavingRecording).toBe(false);
         });
 
-        it('disarms after a failed upload', async () => {
-            const { runtime, provider } = buildStalled();
-            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+        it('disarms after a refused terminal', async () => {
+            const { runtime, transport } = await startHeldTerminal();
             const ending = runtime.EndRealtimeSession();
-            await provider.UploadStarted;
-            provider.FailUpload();
-            await ending; // upload failures never reject teardown
+            await vi.waitFor(() => expect(transport.Terminals).toHaveLength(1));
+            transport.ReleaseTerminal(false);
+            await ending; // a refused terminal never rejects teardown
             expect(runtime.IsSavingRecording).toBe(false);
         });
 
@@ -492,159 +460,81 @@ describe('session lifecycle, driven end to end with fakes', () => {
         });
     });
 
-    describe('crash-recovery shard uploads (#5197)', () => {
-        /** A recorder whose every snapshot is a distinct window, so a resent shard is recognisable. */
-        let nextWindow = 0;
-        class SequencedRecorder extends FakeRecorder {
-            public override async SnapshotNewSegmentBase64(): Promise<string | null> {
-                return btoa(`window-${nextWindow++}`);
-            }
-        }
-        class SequencedHost extends FakeMediaHost {
-            public override CreateRecorder(): IRealtimeSessionRecorder | null {
-                this.recorder = new SequencedRecorder();
-                return this.recorder;
-            }
-        }
+    describe('recording shard retries (#5197)', () => {
+        /** One full 5 s shard window of packets. */
+        const WINDOW_PACKETS = 250;
 
-        type ShardUpload = { agentSessionId: string; segmentIndex: number; audioBase64: string };
-        /** What a shard upload does on the server: store it, refuse it (`false`), or throw on the wire. */
-        type ShardOutcome = 'stored' | 'refused' | 'network-error';
-
-        /**
-         * A provider that records every shard upload attempt and, per attempt, answers with the next
-         * scripted outcome (then `stored` once the script runs out). `Stored` is what the server
-         * folder ends up holding: index → bytes.
-         */
-        class ShardProvider extends RecordingProvider {
-            public Attempts: ShardUpload[] = [];
-            /** When set, the next attempt waits on it and then answers with the outcome it resolves to. */
-            public HoldNextAttempt: Promise<ShardOutcome> | null = null;
-            public Stored = new Map<number, string>();
-            constructor(private readonly script: ShardOutcome[] = []) {
-                super();
-            }
-            public override async ExecuteGQL(query: string, variables?: ShardUpload): Promise<unknown> {
-                if (!/mutation UploadRealtimeRecordingSegment\(/.test(query) || !variables) {
-                    return super.ExecuteGQL(query);
-                }
-                this.Attempts.push({
-                    agentSessionId: variables.agentSessionId,
-                    segmentIndex: variables.segmentIndex,
-                    audioBase64: variables.audioBase64,
-                });
-                const held = this.HoldNextAttempt;
-                this.HoldNextAttempt = null;
-                const outcome = held ? await held : (this.script.shift() ?? 'stored');
-                if (outcome === 'network-error') {
-                    throw new Error('network blip');
-                }
-                if (outcome === 'refused') {
-                    // What the resolver answers when its ownership load hits a transient SQL error.
-                    return { UploadRealtimeRecordingSegment: false };
-                }
-                this.Stored.set(variables.segmentIndex, variables.audioBase64);
-                return { UploadRealtimeRecordingSegment: true };
-            }
-        }
-
-        async function startRecorded(script: ShardOutcome[] = []) {
-            nextWindow = 0;
-            const runtime = new RealtimeSessionRuntime(new SequencedHost());
-            const provider = new ShardProvider(script);
-            runtime.Provider = provider as unknown as IMetadataProvider;
+        async function startRecorded(script: FakeUploadOutcome[] = []) {
+            const host = new FakeMediaHost();
+            const transport = new FakeRecordingTransport([], script);
+            const runtime = new FakeRecordingRuntime(host, new FakeShardStore(), transport);
+            runtime.Provider = new RecordingProvider() as unknown as IMetadataProvider;
             await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
-            // Bracket access drives the private flush the 15 s interval would call, without timers.
-            const flush = () => runtime['flushRecordingSegment']();
-            return { runtime, provider, flush };
+            const recorder = host.recorder!;
+            // Encodes one window, then drives the private tick the 5 s interval would call, without timers.
+            const flush = () => {
+                recorder.Capture(WINDOW_PACKETS);
+                return runtime['flushRecordingShards']();
+            };
+            return { runtime, transport, flush };
         }
 
-        /** The stored shards in index order, decoded. */
-        const storedWindows = (provider: ShardProvider) =>
-            [...provider.Stored.entries()].sort(([a], [b]) => a - b).map(([index, b64]) => `${index}:${atob(b64)}`);
+        /** Uploaded shard indexes, in attempt order. */
+        const indexes = (transport: FakeRecordingTransport) => transport.Uploads.map((u) => u.Index);
 
-        it('resends a shard the server refused, under its own index, so the folder has no gap', async () => {
-            const { runtime, provider, flush } = await startRecorded(['stored', 'refused']);
-            for (let i = 0; i < 4; i++) {
+        it('resends a shard the server refused, under its own index and with the same bytes', async () => {
+            const { runtime, transport, flush } = await startRecorded(['stored', 'refused']);
+            for (let i = 0; i < 3; i++) {
                 await flush();
             }
-            expect(storedWindows(provider)).toEqual(['0:window-0', '1:window-1', '2:window-2', '3:window-3']);
+            expect(indexes(transport)).toEqual([0, 1, 1, 2]);
+            expect(transport.Uploads[2].Bytes).toEqual(transport.Uploads[1].Bytes);
             await runtime.EndRealtimeSession();
         });
 
         it('resends a shard whose upload threw, under its own index', async () => {
-            const { runtime, provider, flush } = await startRecorded(['network-error']);
-            for (let i = 0; i < 3; i++) {
-                await flush();
-            }
-            expect(storedWindows(provider)).toEqual(['0:window-0', '1:window-1', '2:window-2']);
-            await runtime.EndRealtimeSession();
-        });
-
-        it.each([
-            ['null', null],
-            ['an empty object', {}],
-            ['a missing field', { somethingElse: true }],
-        ])('treats a GraphQL result of %s as a failure and retries it under the same index', async (_label, result) => {
-            const { runtime, provider, flush } = await startRecorded();
-            const original = provider.ExecuteGQL.bind(provider);
-            let answered = false;
-            provider.ExecuteGQL = async (query: string, variables?: ShardUpload) => {
-                if (!answered && variables && /mutation UploadRealtimeRecordingSegment\(/.test(query)) {
-                    answered = true;
-                    provider.Attempts.push({
-                        agentSessionId: variables.agentSessionId,
-                        segmentIndex: variables.segmentIndex,
-                        audioBase64: variables.audioBase64,
-                    });
-                    return result;
-                }
-                return original(query, variables);
-            };
+            const { runtime, transport, flush } = await startRecorded(['network-error']);
             await flush();
             await flush();
-            expect(provider.Attempts.map((a) => a.segmentIndex)).toEqual([0, 0, 1]);
-            expect(storedWindows(provider)).toEqual(['0:window-0', '1:window-1']);
+            expect(indexes(transport)).toEqual([0, 0, 1]);
             await runtime.EndRealtimeSession();
         });
 
         it('never rejects a flush, even when every upload throws', async () => {
-            const { runtime, flush } = await startRecorded(Array(20).fill('network-error'));
+            const { runtime, flush } = await startRecorded(Array<FakeUploadOutcome>(20).fill('network-error'));
             for (let i = 0; i < 5; i++) {
                 await expect(flush()).resolves.toBeUndefined();
             }
             await runtime.EndRealtimeSession();
         });
 
-        it('releases the shard queue, and the audio it retained, when the recording ends', async () => {
+        it('releases the shard pipeline, and the audio its queue retained, when the recording ends', async () => {
             const { runtime, flush } = await startRecorded(['refused', 'refused', 'refused']);
             await flush();
             await flush();
-            expect(runtime['shardQueue']?.RetainedCount).toBe(2);
+            expect(runtime['recordingShards']?.Queue.RetainedCount).toBe(2);
             await runtime.EndRealtimeSession();
-            expect(runtime['shardQueue']).toBeNull();
+            expect(runtime['recordingShards']).toBeNull();
         });
 
         it('a flush in flight at hang-up sends nothing more once the recording has ended', async () => {
-            const { runtime, provider, flush } = await startRecorded(['refused']);
+            const { runtime, transport, flush } = await startRecorded(['refused']);
             await flush(); // shard 0 refused and retained
-            let release!: (outcome: ShardOutcome) => void;
-            provider.HoldNextAttempt = new Promise<ShardOutcome>((resolve) => {
+            let release!: (outcome: FakeUploadOutcome) => void;
+            transport.HoldNextUpload = new Promise<FakeUploadOutcome>((resolve) => {
                 release = resolve;
             });
-            const inFlight = flush(); // shard 0's resend is held on the wire
+            const inFlight = flush(); // shard 0's resend is held on the wire; shard 1 waits behind it
             await runtime.EndRealtimeSession();
             release('refused');
             await inFlight;
-            // No new window (shard 1) after the end-of-call upload, and shard 0 is not retained again.
-            expect(provider.Attempts.map((a) => a.segmentIndex)).toEqual([0, 0]);
+            expect(indexes(transport)).toEqual([0, 0]);
         });
 
-        // Regression guard for the per-recording queue (it passes on the pre-fix code too), not a repro.
-        it("a flush still in flight when a new session starts does not touch the new session's shard indexes", async () => {
-            const { runtime, provider, flush } = await startRecorded();
-            let release!: (outcome: ShardOutcome) => void;
-            provider.HoldNextAttempt = new Promise<ShardOutcome>((resolve) => {
+        it("a flush still in flight when a new session starts keeps its own session id and indexes", async () => {
+            const { runtime, transport, flush } = await startRecorded();
+            let release!: (outcome: FakeUploadOutcome) => void;
+            transport.HoldNextUpload = new Promise<FakeUploadOutcome>((resolve) => {
                 release = resolve;
             });
             const sessionAFlush = flush();
@@ -655,11 +545,11 @@ describe('session lifecycle, driven end to end with fakes', () => {
             );
             release('refused');
             await sessionAFlush;
-            await runtime['flushRecordingSegment']();
-            const sessionBAttempts = provider.Attempts.filter((a) => a.agentSessionId === 'session-B');
-            expect(sessionBAttempts.map((a) => a.segmentIndex)).toEqual([0]);
-            // A's refused bytes (window-0) must never be resent under session B.
-            expect(sessionBAttempts.every((a) => atob(a.audioBase64) !== 'window-0')).toBe(true);
+            const hostB = runtime['recorder'] as FakeRecorder;
+            hostB.Capture(WINDOW_PACKETS);
+            await runtime['flushRecordingShards']();
+            // A's refused shard is never resent, least of all under session B; B starts at its own index 0.
+            expect(transport.Uploads.map((u) => `${u.SessionID}/${u.Index}`)).toEqual(['session-1/0', 'session-B/0']);
             await runtime.EndRealtimeSession();
         });
     });

@@ -34,6 +34,8 @@ export { RealtimeSessionRuntime } from './session/RealtimeSessionRuntime';
 // Session-facing types a host or UI binds to.
 export {
     REALTIME_RECORDING_CONSENT_KEY,
+    RECORDING_TERMINAL_ACK_TIMEOUT_MS,
+    MAX_DRAINED_SHARDS_PER_LOAD,
     type RealtimeConnectionState,
     type RealtimeCaption,
     type RealtimeDelegationProgress,
@@ -146,6 +148,8 @@ export {
 } from './narration/narration-template';
 
 // Recording shard durability + transport (IndexedDB queue, fetch upload to MJAPI's REST routes).
+// `RecordingShard` is exported because `IRecordingTransport.UploadShard` takes one.
+export { type RecordingShard } from './session/RecordingShardWindow';
 export {
     CreateRecordingShardStore,
     NullRecordingShardStore,

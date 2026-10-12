@@ -64,24 +64,47 @@ import {
   type RealtimeSessionStartOptions
 } from './channel-session-scope';
 import { RecordingShardQueue } from './RecordingShardQueue';
-import type { RecordingShard } from './RecordingShardWindow';
+import { RecordingShardWindow, type RecordingShard } from './RecordingShardWindow';
+import { CreateRecordingShardStore, type IRecordingShardStore } from './RecordingShardStore';
+import { FetchRecordingTransport, RecordingBaseURLFromGraphQLURL, type IRecordingTransport } from './RecordingTransport';
 
-// Replaced in Task 5 (Opus shard wiring): temporary base64 <-> bytes bridge for the legacy PCM shards.
-const BASE64_CHUNK = 0x8000;
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += BASE64_CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + BASE64_CHUNK));
-  }
-  return btoa(binary);
+/**
+ * How long teardown waits for the server to acknowledge the recording's terminal request, measured
+ * from after `CloseAgentSession`. The terminal is `keepalive`, so it completes even if the page goes
+ * away; the wait only keeps `SavingRecording$` (and so a host's "don't close yet" guard) up while the
+ * server has not confirmed. Bounded so a dead server can never hold the End of a call hostage —
+ * unacknowledged shards stay in the local store and the server janitor assembles what arrived.
+ */
+export const RECORDING_TERMINAL_ACK_TIMEOUT_MS = 3000;
+
+/**
+ * Cap on stored shards one page load re-uploads from a previous, interrupted call. Bounds the work a
+ * fresh page does at startup; anything left over is drained by the next load.
+ */
+export const MAX_DRAINED_SHARDS_PER_LOAD = 50;
+
+function describeRecordingFailure(failure: unknown): string {
+  return failure instanceof Error ? failure.message : String(failure);
 }
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
+
+/**
+ * The shard pipeline of ONE recording. Created when recording starts and captured by value by every
+ * async step, so a flush or upload still running when the next session starts keeps using its own
+ * session id, window and queue instead of reading the runtime's current ones.
+ */
+interface RecordingShardPipeline {
+  SessionID: string;
+  Window: RecordingShardWindow;
+  Queue: RecordingShardQueue;
+  /** Null when the provider has no REST configuration: shards are then only kept in the store. */
+  Transport: IRecordingTransport | null;
+}
+
+/** A terminal request that teardown started before closing the session and awaits after it. */
+interface PendingRecordingTerminal {
+  Pipeline: RecordingShardPipeline;
+  /** Resolves true on a server ack; never rejects. */
+  Acked: Promise<boolean>;
 }
 
 /**
@@ -197,11 +220,6 @@ export interface RealtimeChannelFocusEvent {
   Focused: boolean;
 }
 
-/** The `UploadRealtimeRecordingSegment` mutation result; `true` only when the server stored the shard. */
-interface UploadRecordingSegmentResult {
-  UploadRealtimeRecordingSegment?: boolean;
-}
-
 /**
  * The narrow projection of an `MJ: AI Agent Channels` registry row the service reads at session
  * start from {@link AIEngineBase}'s cached `AgentChannels`. Inactive rows are kept: `IsActive = false`
@@ -296,14 +314,6 @@ export interface RealtimeThoughtNarration {
   Text: string;
   /** Whether this emission represents the complete finalized thought turn. */
   IsFinal?: boolean;
-}
-
-/** A finished call recording, encoded and ready for `UploadRealtimeRecording`. */
-interface StoppedRecording {
-  MimeType: string;
-  /** Consolidated WAV, base64. */
-  AudioBase64: string;
-  Peaks: number[];
 }
 
 /**
@@ -464,11 +474,22 @@ export interface RealtimeSessionRunOptions {
 export class RealtimeSessionRuntime {
   /**
    * @param mediaHost the platform's media capabilities. The runtime never touches `navigator`,
-   *                  `Blob` or `FileReader` itself — microphone acquisition and audio recording
-   *                  are the host's, because both are platform-specific product decisions
-   *                  (permission UX, container format, where the bytes live).
+   *                  `Blob` or `FileReader` itself — microphone acquisition and audio capture/encoding
+   *                  are the host's, because both are platform-specific (permission UX, which
+   *                  encoder the platform offers).
    */
-  constructor(protected readonly mediaHost: IRealtimeMediaHost) {}
+  constructor(protected readonly mediaHost: IRealtimeMediaHost) {
+    // Re-upload shards a previous, interrupted call left in the local store. Deferred a tick so a
+    // host can assign `Provider` right after construction; when it still has no transport the drain
+    // defers itself and session start tries again. Unref'd so it never holds a Node process open.
+    const drainTimer: unknown = setTimeout(() => {
+      void this.DrainPendingRecordingShards();
+    }, 0);
+    // Node returns a Timeout object with unref(); browsers return a number.
+    if (typeof drainTimer === 'object' && drainTimer !== null && 'unref' in drainTimer && typeof drainTimer.unref === 'function') {
+      drainTimer.unref();
+    }
+  }
 
   // ── Reactive UI state ──────────────────────────────────────────────────────
   private _connectionState$ = new BehaviorSubject<RealtimeConnectionState>('closed');
@@ -536,10 +557,11 @@ export class RealtimeSessionRuntime {
 
   /**
    * True while the end-of-call recording is being saved: from the first statement of a teardown
-   * that holds a recorder until that teardown settles. False at construction and for unrecorded
-   * sessions. Exists for #5195: the page must stay open until the consolidated upload lands, or
-   * the recording is lost. The runtime is platform-free, so hosts own the reaction (a browser
-   * `beforeunload` guard, a "saving" indicator, etc.).
+   * that holds a recorder until that teardown settles — which includes waiting (at most
+   * {@link RECORDING_TERMINAL_ACK_TIMEOUT_MS}) for the server to acknowledge the recording's terminal
+   * request. False at construction and for unrecorded sessions. Exists for #5195; the runtime is
+   * platform-free, so hosts own the reaction (a browser `beforeunload` guard, a "saving" indicator,
+   * etc.).
    */
   public readonly SavingRecording$: Observable<boolean> = this._savingRecording$.asObservable();
 
@@ -724,27 +746,29 @@ export class RealtimeSessionRuntime {
   // ── Browser-side call recording ────────────────────────────────────────────
   /**
    * The active session's audio recorder (mic + agent mix), or `null` when the user didn't
-   * consent or the browser can't record. Created after the client connects; stopped + uploaded
-   * at teardown.
+   * consent or the browser can't record. Created after the client connects; its packets are
+   * shipped as 5 s shards during the call, and it is stopped at teardown.
    */
   private recorder: IRealtimeSessionRecorder | null = null;
   /** ISO timestamp of when recording started — sent to the server on session start. */
   private recordingStartedAtIso: string | null = null;
-  /** Interval that flushes ~15s crash-recovery shards to the server during a recording. */
-  private segmentTimer: ReturnType<typeof setInterval> | null = null;
+  /** Interval that cuts and uploads a shard every {@link recordingShardFlushMs} during a recording. */
+  private shardFlushTimer: ReturnType<typeof setInterval> | null = null;
   /**
-   * Owns shard indexing and retry for the current recording: it assigns each shard its index and
-   * keeps failed shards to resend under that same index. A fresh queue per recording keeps a flush
-   * still in flight from a previous session off this session's indexes. Null when not recording.
-   * A recording that ends discards its queue, and any retained shard with it: the consolidated
-   * end-of-call upload supersedes them, and if that upload is lost too, server-side recovery
-   * (#5196) fills the gap with silence.
+   * The current recording's shard pipeline (window → store → queue → transport), or null when not
+   * recording. A fresh pipeline per recording keeps a flush still in flight from a previous session
+   * off this session's indexes. Its queue is closed when the recording ends; anything it had not
+   * delivered stays in the local store for the next-load drain.
    */
-  private shardQueue: RecordingShardQueue | null = null;
-  /** Replaced in Task 5 (Opus shard wiring). Per-recording so a late flush never touches a newer session's indexes. */
-  private legacyShardCounter: { Next: number } | null = null;
-  /** How often crash-recovery shards are flushed during a recording. */
-  private static readonly segmentFlushMs = 15000;
+  private recordingShards: RecordingShardPipeline | null = null;
+  /** How often packets are cut into shards: the 5 s shard window, so a full window seals per tick. */
+  private static readonly recordingShardFlushMs = 5000;
+  /** The durable local shard store, created on first use and shared by every recording of this runtime. */
+  private shardStore: IRecordingShardStore | null = null;
+  /** True once a drain ran with a transport; the drain then does nothing for the rest of this instance. */
+  private pendingShardsDrained = false;
+  /** The drain in flight, so overlapping callers share it instead of uploading the same shards twice. */
+  private drainInFlight: Promise<number> | null = null;
 
   // ── Server-side liveness ───────────────────────────────────────────────────
   /**
@@ -1099,7 +1123,7 @@ export class RealtimeSessionRuntime {
    *   pickers, and never synthesize overrides beyond what the user explicitly chose.
    *   Omit/`null` for the server's defaults (today's behavior).
    * @param recordingConsent Optional EXPLICIT "record this call" consent for THIS session. When
-   *   `true`, the browser records a mic + agent-audio mix and uploads it at session end. When
+   *   `true`, the browser records a mic + agent-audio mix and uploads it as 5 s Opus shards during the call. When
    *   omitted/`null`, the per-user persisted preference (`mj.realtimeVoice.recordingConsent.v1`
    *   via {@link UserInfoEngine}) is read as the default. `false` never records.
    * @param mediaCollectionId Optional per-session media-kit override (`MJ: Collections.ID`). When set,
@@ -1262,6 +1286,9 @@ export class RealtimeSessionRuntime {
     this.resetState();
     this._active$.next(true);
     this._connectionState$.next('connecting');
+    // A drain the constructor deferred (no provider/transport yet) gets its second chance here, and
+    // runs whether or not THIS session records: the pending shards belong to an earlier call.
+    void this.DrainPendingRecordingShards();
 
     // Resolve recording consent for this session: explicit value wins, else the per-user
     // persisted preference. Computed before mint so it can be reported to the server.
@@ -1622,7 +1649,7 @@ export class RealtimeSessionRuntime {
         // `remoteStream` is already set and the handler fires immediately with the same stream;
         // AttachRemoteStream is idempotent, so it is mixed only once.
         client.OnRemoteMediaStream?.((stream) => this.recorder?.AttachRemoteStream(stream));
-        this.startSegmentFlushing();
+        this.startShardFlushing();
       }
     } catch (error) {
       console.warn('[RealtimeSession] Failed to start call recording:', error);
@@ -1630,27 +1657,145 @@ export class RealtimeSessionRuntime {
     }
   }
 
-  /** Begins flushing ~15s crash-recovery shards to the server for the duration of the recording. */
-  private startSegmentFlushing(): void {
-    // Replaced in Task 5 (Opus shard wiring): the queue now takes already-indexed shards, so the
-    // legacy base64 PCM snapshots are wrapped as shards here with a per-recording local counter.
-    const agentSessionId = this.agentSessionId;
-    const sampleRate = this.recorder?.SampleRate ?? 0;
-    this.legacyShardCounter = { Next: 0 };
-    this.shardQueue = new RecordingShardQueue(async (shard) => {
-      if (!agentSessionId) {
-        return false;
-      }
-      return this.uploadRecordingShard(agentSessionId, sampleRate, shard.Index, bytesToBase64(shard.Bytes));
+  // ── Recording shards (MJ#5294) ───────────────────────────────────────────────
+  //
+  // The recorder hands over Opus packets; the runtime cuts them into 5 s `MJOPUS1` shards, writes
+  // each one to the local store BEFORE its upload starts, uploads it as raw bytes, and deletes it from
+  // the store only on the server's ack. The call ends with a `keepalive` terminal request carrying the
+  // final partial shard and the counts the server needs to know it has everything.
+
+  /**
+   * Builds the transport for shard uploads and terminal requests. The default posts to MJAPI's REST
+   * recording routes, derived from the session's GraphQL provider configuration, with credentials
+   * read per request so a refreshed token is used. Returns null — shards then wait in the local
+   * store — when the provider has no URL (a test double, a provider that is not GraphQL, or one not
+   * configured yet). Override to supply another transport.
+   */
+  protected createRecordingTransport(): IRecordingTransport | null {
+    // Typed as GraphQL, but read defensively: a test double or a non-GraphQL provider has no ConfigData.
+    const provider = this.Provider as GraphQLDataProvider | null | undefined;
+    const url = provider?.ConfigData?.URL;
+    if (!provider || !url) {
+      return null;
+    }
+    return new FetchRecordingTransport({
+      BaseURL: RecordingBaseURLFromGraphQLURL(url),
+      Headers: () => {
+        const config = provider.ConfigData;
+        const headers: Record<string, string> = {};
+        if (config?.Token) headers.authorization = `Bearer ${config.Token}`;
+        if (config?.MJAPIKey) headers['x-mj-api-key'] = config.MJAPIKey;
+        if (config?.UserAPIKey) headers['x-api-key'] = config.UserAPIKey;
+        return headers;
+      },
     });
-    this.segmentTimer = setInterval(() => { void this.flushRecordingSegment(); }, RealtimeSessionRuntime.segmentFlushMs);
   }
 
-  /** Stops the periodic crash-recovery shard flush. */
-  private stopSegmentFlushing(): void {
-    if (this.segmentTimer) {
-      clearInterval(this.segmentTimer);
-      this.segmentTimer = null;
+  /**
+   * Builds the durable local shard store. The default is IndexedDB where the host has it and a no-op
+   * store elsewhere (Node, some React Native runtimes). Called once per runtime. Override to supply
+   * another store.
+   */
+  protected createRecordingShardStore(): IRecordingShardStore {
+    return CreateRecordingShardStore(globalThis.indexedDB);
+  }
+
+  /** The runtime's shard store, created on first use. */
+  private ensureShardStore(): IRecordingShardStore {
+    this.shardStore ??= this.createRecordingShardStore();
+    return this.shardStore;
+  }
+
+  /**
+   * Re-uploads shards an earlier, interrupted call left in the local store (crash, closed tab, dead
+   * network), each under its OWN session id and index, oldest first, at most
+   * {@link MAX_DRAINED_SHARDS_PER_LOAD} per runtime. A shard is deleted only on the server's ack.
+   *
+   * Runs once per runtime instance. When there is no transport yet (no provider configuration, e.g.
+   * before login) it returns 0 WITHOUT marking itself done, so a later call — session start — drains
+   * instead of the shards being skipped for this page. Concurrent calls share one run. Never rejects.
+   *
+   * @returns the number of shards the server acknowledged in this call.
+   */
+  public DrainPendingRecordingShards(): Promise<number> {
+    if (this.pendingShardsDrained) {
+      return Promise.resolve(0);
+    }
+    this.drainInFlight ??= this.drainPendingShards().finally(() => {
+      this.drainInFlight = null;
+    });
+    return this.drainInFlight;
+  }
+
+  /** The body of {@link DrainPendingRecordingShards}. */
+  private async drainPendingShards(): Promise<number> {
+    try {
+      const transport = this.createRecordingTransport();
+      if (!transport) {
+        return 0;
+      }
+      const pending = await this.ensureShardStore().ListOldest(MAX_DRAINED_SHARDS_PER_LOAD);
+      let delivered = 0;
+      for (const shard of pending) {
+        let acked = false;
+        try {
+          acked = await transport.UploadShard(shard.SessionID, shard);
+        } catch (error) {
+          console.warn(`[RealtimeSession] Re-uploading stored recording shard ${shard.SessionID}/${shard.Index} failed: ${describeRecordingFailure(error)}; it stays stored for the next load.`, error);
+        }
+        if (acked) {
+          await this.deleteStoredShard(shard.SessionID, shard.Index);
+          delivered++;
+        }
+      }
+      this.pendingShardsDrained = true;
+      if (pending.length > 0) {
+        console.log(`[RealtimeSession] Re-uploaded ${delivered}/${pending.length} stored recording shard(s) from earlier calls.`);
+      }
+      return delivered;
+    } catch (error) {
+      console.warn(`[RealtimeSession] Draining stored recording shards failed: ${describeRecordingFailure(error)}; will retry at the next session start.`, error);
+      return 0;
+    }
+  }
+
+  /** Builds this recording's shard pipeline and starts the 5 s flush. */
+  private startShardFlushing(): void {
+    const sessionId = this.agentSessionId;
+    if (!sessionId) {
+      // Unreachable in practice (the session id is adopted before recording starts), but without
+      // one there is nowhere to send shards, so say so rather than recording into the void.
+      console.warn('[RealtimeSession] Recording started without an agent session id; shards will not be saved.');
+      return;
+    }
+    const transport = this.createRecordingTransport();
+    if (!transport) {
+      console.warn(`[RealtimeSession] No recording transport for session ${sessionId} (provider has no REST configuration); shards are kept in the local store only.`);
+    }
+    this.recordingShards = {
+      SessionID: sessionId,
+      Window: new RecordingShardWindow(),
+      Transport: transport,
+      // Closes over this recording's session id and transport — never the runtime's current ones.
+      Queue: new RecordingShardQueue(async (shard) => {
+        if (!transport) {
+          return false;
+        }
+        const acked = await transport.UploadShard(sessionId, shard);
+        if (acked) {
+          await this.deleteStoredShard(sessionId, shard.Index);
+        }
+        return acked;
+      }),
+    };
+    this.shardFlushTimer = setInterval(() => { void this.flushRecordingShards(); }, RealtimeSessionRuntime.recordingShardFlushMs);
+  }
+
+  /** Stops the periodic shard flush. */
+  private stopShardFlushing(): void {
+    if (this.shardFlushTimer) {
+      clearInterval(this.shardFlushTimer);
+      this.shardFlushTimer = null;
     }
   }
 
@@ -1712,138 +1857,200 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Uploads the chunks captured since the last flush as one crash-recovery shard (durability only;
-   * the canonical file is still the full upload at teardown). Best-effort — never disturbs the call:
-   * a failed shard is retained by the queue and resent under its own index on later flushes, up to a
-   * bounded number of attempts (#5197).
+   * One 5 s tick: cuts the packets encoded since the last tick into shards, stores each one, then
+   * uploads them. Best-effort — never disturbs the call and never rejects. Overlapping ticks are
+   * safe: `Append` is synchronous, so indexes are assigned in order, and the queue bounds how many
+   * flushes upload at once. A failed shard is retained by the queue and resent under its own index
+   * on later ticks (#5197), and stays in the store until acknowledged.
    */
-  private async flushRecordingSegment(): Promise<void> {
+  private async flushRecordingShards(): Promise<void> {
     const recorder = this.recorder;
-    const agentSessionId = this.agentSessionId;
-    const queue = this.shardQueue;
-    const counter = this.legacyShardCounter;
-    if (!recorder || !agentSessionId || !queue || !counter) {
+    const pipeline = this.recordingShards;
+    if (!recorder || !pipeline) {
       return;
     }
-    // Replaced in Task 5 (Opus shard wiring)
-    const fresh: RecordingShard[] = [];
+    let sealed: RecordingShard[];
     try {
-      const audioBase64 = await recorder.SnapshotNewSegmentBase64();
-      if (audioBase64) {
-        fresh.push({ Index: counter.Next++, StartSample: 0, SampleCount: 0, Bytes: base64ToBytes(audioBase64) });
-      }
+      sealed = pipeline.Window.Append(recorder.TakeEncodedPackets());
     } catch (error) {
-      console.warn(`[RealtimeSession] Failed to snapshot recording shard for session ${agentSessionId}:`, error);
+      console.warn(`[RealtimeSession] Failed to take encoded recording packets for session ${pipeline.SessionID}; this tick's audio is lost:`, error);
+      return;
     }
-    await queue.Flush(fresh);
+    await this.storeShards(pipeline.SessionID, sealed);
+    await pipeline.Queue.Flush(sealed);
   }
 
-  /**
-   * Sends one shard and reports whether the server stored it. The resolver reports a failed
-   * ownership load or storage write as `false`, not as an error — that is how #5197 lost a shard
-   * without a single client-side log line — so the typed result must be checked, not just the absence
-   * of a throw.
-   */
-  private async uploadRecordingShard(agentSessionId: string, sampleRate: number, segmentIndex: number, audioBase64: string): Promise<boolean> {
-    const mutation = `
-      mutation UploadRealtimeRecordingSegment($agentSessionId: String!, $segmentIndex: Int!, $audioBase64: String!, $mimeType: String!) {
-        UploadRealtimeRecordingSegment(agentSessionId: $agentSessionId, segmentIndex: $segmentIndex, audioBase64: $audioBase64, mimeType: $mimeType)
+  /** Writes shards to the local store, in order, before their upload starts. Never rejects. */
+  private async storeShards(sessionId: string, shards: RecordingShard[]): Promise<void> {
+    const store = this.ensureShardStore();
+    for (const shard of shards) {
+      try {
+        await store.Put({ SessionID: sessionId, Index: shard.Index, Bytes: shard.Bytes, SavedAt: Date.now() });
+      } catch (error) {
+        // The store contract is never-throw; an override that does must still not stop the upload.
+        console.warn(`[RealtimeSession] Failed to store recording shard ${sessionId}/${shard.Index}; uploading it anyway:`, error);
       }
-    `;
-    // Shards are HEADER-LESS raw little-endian PCM16 (mime audio/L16 with the capture sample rate),
-    // NOT individually-playable WAV — recovery is concatenate-in-order then WAV-wrap. The canonical
-    // seekable WAV is the consolidated end-of-call upload below.
-    const shardMime = `audio/L16;rate=${sampleRate}`;
-    const result = (await this.gql().ExecuteGQL(mutation, {
-      agentSessionId,
-      segmentIndex,
-      audioBase64,
-      mimeType: shardMime,
-    })) as UploadRecordingSegmentResult | null;
-    return result?.UploadRealtimeRecordingSegment === true;
+    }
+  }
+
+  /** Removes an acknowledged shard from the local store. Never rejects. */
+  private async deleteStoredShard(sessionId: string, index: number): Promise<void> {
+    try {
+      await this.ensureShardStore().Delete(sessionId, index);
+    } catch (error) {
+      // Harmless beyond a wasted re-upload on the next load: the server acks a duplicate.
+      console.warn(`[RealtimeSession] Failed to delete acknowledged recording shard ${sessionId}/${index} from the local store:`, error);
+    }
   }
 
   /**
-   * Stops the active recorder and encodes the captured audio. Split from the upload so teardown can
-   * close the server session in between (#5195). Best-effort: returns `null` when nothing was
-   * recorded or the stop failed (warned) — it must NEVER block teardown.
+   * Tells the server, right now, how much of the recording exists — for a host's `pagehide` and
+   * `visibilitychange → hidden` handlers, where the page may be gone a moment later. Synchronous:
+   * it fires a `keepalive` terminal request carrying the pending partial shard and returns without
+   * waiting. Never stops the recorder: after a `hidden` the call may well continue, and later audio
+   * simply starts the next shard index (the tail is sealed, so no index is ever re-sent with
+   * different bytes). No-op when nothing is recording, there is no session id or no transport, or
+   * nothing was captured. Never throws.
+   *
+   * Deliberately opens NO IndexedDB transaction, not even for a full window `Append` happens to seal
+   * here: a `pagehide` handler gets a few milliseconds, and a store write could not complete during
+   * unload anyway. Such windows go straight to the upload queue (fire-and-forget). If the call
+   * continues and this terminal is refused, the tail is handed to the queue too, so it is retried as
+   * an ordinary shard.
    */
-  private async stopRecording(): Promise<StoppedRecording | null> {
-    this.stopSegmentFlushing();
-    // Close the queue with the recording: its retained shards (base64 audio) are released now, not at
-    // the next session start, and a flush still in flight stops sending, so no resend lands after the
-    // end-of-call upload below has deleted the shards.
-    this.shardQueue?.Close();
-    this.shardQueue = null;
+  public SendRecordingTerminal(): void {
     const recorder = this.recorder;
+    const pipeline = this.recordingShards;
+    if (!recorder || !pipeline || !pipeline.Transport) {
+      return;
+    }
+    try {
+      const sealed = pipeline.Window.Append(recorder.TakeEncodedPackets());
+      if (sealed.length > 0) {
+        void pipeline.Queue.Flush(sealed);
+      }
+      const tail = pipeline.Window.SealTail();
+      if (pipeline.Window.LastSealedIndex < 0) {
+        return;
+      }
+      void this.sendRecordingTerminal(pipeline, tail).then((acked) => {
+        if (!acked && tail) {
+          // A Flush on a closed queue (the recording ended meanwhile) is a logged no-op.
+          void pipeline.Queue.Flush([tail]);
+        }
+      });
+    } catch (error) {
+      console.warn(`[RealtimeSession] Failed to send the recording terminal for session ${pipeline.SessionID}:`, error);
+    }
+  }
+
+  /**
+   * Sends the terminal request for a pipeline whose tail is already sealed. Resolves true on a server
+   * ack and logs the outcome with the session id. Never rejects.
+   */
+  private async sendRecordingTerminal(pipeline: RecordingShardPipeline, tail: RecordingShard | null): Promise<boolean> {
+    const lastShardIndex = pipeline.Window.LastSealedIndex;
+    const capturedSamples = pipeline.Window.SealedSamples;
+    const context = `session ${pipeline.SessionID} (last shard ${lastShardIndex}, ${capturedSamples} samples)`;
+    if (!pipeline.Transport) {
+      console.warn(`[RealtimeSession] Recording terminal NOT sent for ${context}: no recording transport; stored shards are drained on a later load.`);
+      return false;
+    }
+    try {
+      const acked = await pipeline.Transport.SendTerminal(pipeline.SessionID, {
+        Tail: tail?.Bytes ?? null,
+        LastShardIndex: lastShardIndex,
+        CapturedSamples: capturedSamples,
+      });
+      if (!acked) {
+        console.warn(`[RealtimeSession] Recording terminal for ${context} was not acknowledged; the server janitor assembles what arrived.`);
+      }
+      return acked;
+    } catch (error) {
+      console.warn(`[RealtimeSession] Recording terminal for ${context} failed: ${describeRecordingFailure(error)}`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Ends the recording at teardown and STARTS its terminal request: stops the recorder (flushing the
+   * encoder), cuts the remaining packets into shards (full windows are stored and handed to the
+   * queue without waiting for their upload), stores the tail trimmed to the recorder's captured
+   * sample count, then fires the `keepalive` terminal. Teardown awaits the returned terminal only
+   * after `CloseAgentSession` ({@link awaitRecordingTerminal}), so the small, critical close never
+   * waits behind the recording (#5195).
+   *
+   * Returns null when nothing was recording or nothing was captured (no terminal is sent then).
+   * Best-effort: never throws, never blocks teardown on the network.
+   */
+  private async finishRecording(): Promise<PendingRecordingTerminal | null> {
+    this.stopShardFlushing();
+    const recorder = this.recorder;
+    const pipeline = this.recordingShards;
     this.recorder = null;
+    this.recordingShards = null;
     this.currentTurnStartMs = null;
     this.turnAudioStartCaptured = false;
-    if (!recorder) {
+    if (!recorder || !pipeline) {
       return null;
     }
     try {
-      // Capture the recorder MIME (now 'audio/wav') BEFORE Stop() — the getter reads '' once stopped.
-      const mimeType = recorder.MimeType;
-      const audioBase64 = await recorder.StopAndEncode();
-      // Read the real waveform peaks computed during capture (survives the stop via the snapshot).
-      const peaks = recorder.GetPeaks();
-      if (!audioBase64) {
-        console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — empty recording.');
+      let capturedSamples: number | null = null;
+      try {
+        capturedSamples = await recorder.Stop();
+      } catch (error) {
+        console.warn(`[RealtimeSession] Recorder failed to stop for session ${pipeline.SessionID}; ending the recording at the packets already encoded:`, error);
+      }
+      const sealed = pipeline.Window.Append(recorder.TakeEncodedPackets());
+      await this.storeShards(pipeline.SessionID, sealed);
+      void pipeline.Queue.Flush(sealed);
+      // Without a count from the recorder the tail keeps every packet it holds (SealTail's default).
+      const tail = pipeline.Window.SealTail(
+        capturedSamples === null ? undefined : Math.max(0, capturedSamples - pipeline.Window.SealedSamples),
+      );
+      if (pipeline.Window.LastSealedIndex < 0) {
+        pipeline.Queue.Close();
         return null;
       }
-      return { MimeType: mimeType, AudioBase64: audioBase64, Peaks: peaks };
+      if (tail) {
+        await this.storeShards(pipeline.SessionID, [tail]);
+      }
+      const acked = this.sendRecordingTerminal(pipeline, tail).then(async (ok) => {
+        if (ok && tail) {
+          await this.deleteStoredShard(pipeline.SessionID, tail.Index);
+        }
+        return ok;
+      });
+      return { Pipeline: pipeline, Acked: acked };
     } catch (error) {
-      console.warn('[RealtimeSession] Failed to stop call recording:', error);
+      console.warn(`[RealtimeSession] Failed to finish the call recording for session ${pipeline.SessionID}; stored shards are drained on a later load:`, error);
+      pipeline.Queue.Close();
       return null;
     }
   }
 
   /**
-   * Uploads a recording returned by {@link stopRecording}. Never throws. No-op when there is
-   * nothing to upload; warns when there is no session id to attach the file to.
+   * Waits for the terminal {@link finishRecording} started, bounded by
+   * {@link RECORDING_TERMINAL_ACK_TIMEOUT_MS}, logs the outcome, then closes the recording's queue
+   * (anything it had not delivered stays in the local store for the next-load drain). Never throws.
    */
-  private async uploadStoppedRecording(agentSessionId: string | null, recording: StoppedRecording | null): Promise<void> {
-    if (!recording) {
-      return;
-    }
-    if (!agentSessionId) {
-      console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — no session id.');
-      return;
-    }
-    try {
-      await this.uploadRecording(agentSessionId, recording.AudioBase64, recording.MimeType, recording.Peaks);
-    } catch (error) {
-      console.warn(`[RealtimeSession] Failed to upload call recording for session ${agentSessionId}:`, error);
-    }
-  }
-
-  /**
-   * Runs the `UploadRealtimeRecording` mutation. A `Success:false` payload is logged; a transport
-   * rejection propagates to `uploadStoppedRecording`, which catches and logs it. Sends the
-   * capture-time waveform `peaks` (max-abs per bucket, normalized 0..1) so the server can persist a
-   * `peaks.json` sidecar for fast waveform rendering without re-decoding the audio.
-   */
-  private async uploadRecording(agentSessionId: string, audioBase64: string, mimeType: string, peaks: number[]): Promise<void> {
-    const mutation = `
-      mutation UploadRealtimeRecording($agentSessionId: String!, $audioBase64: String!, $mimeType: String!, $consent: Boolean, $peaks: [Float!]) {
-        UploadRealtimeRecording(agentSessionId: $agentSessionId, audioBase64: $audioBase64, mimeType: $mimeType, consent: $consent, peaks: $peaks) {
-          Success
-          FileID
-          ErrorMessage
-        }
-      }
-    `;
-    const result = await this.gql().ExecuteGQL(mutation, {
-      agentSessionId,
-      audioBase64,
-      mimeType,
-      consent: true,
-      peaks
+  private async awaitRecordingTerminal(pending: PendingRecordingTerminal): Promise<void> {
+    const sessionId = pending.Pipeline.SessionID;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), RECORDING_TERMINAL_ACK_TIMEOUT_MS);
     });
-    const payload = result?.UploadRealtimeRecording as { Success?: boolean; FileID?: string; ErrorMessage?: string } | undefined;
-    if (!payload?.Success) {
-      console.warn(`[RealtimeSession] ❌ recording upload reported failure: ${payload?.ErrorMessage ?? 'unknown error'} (full result: ${JSON.stringify(result)})`);
+    try {
+      const outcome = await Promise.race([pending.Acked.then((ok) => (ok ? 'ack' : 'failed')), timedOut]);
+      if (outcome === 'ack') {
+        console.log(`[RealtimeSession] Recording terminal acknowledged for session ${sessionId}.`);
+      } else if (outcome === 'timeout') {
+        console.warn(`[RealtimeSession] Recording terminal for session ${sessionId} not acknowledged within ${RECORDING_TERMINAL_ACK_TIMEOUT_MS}ms; ending anyway (the keepalive request may still land).`);
+      }
+      // 'failed' was already logged with its reason by sendRecordingTerminal.
+    } finally {
+      clearTimeout(timer);
+      pending.Pipeline.Queue.Close();
     }
   }
 
@@ -3955,10 +4162,10 @@ export class RealtimeSessionRuntime {
       }
     }
 
-    // Stop + encode the call recording now (the recorder must be detached before the session id is
-    // cleared); the upload itself happens after the close below. Best-effort — stopRecording
-    // swallows its own errors. Null when nothing was recorded.
-    const recording = await this.stopRecording();
+    // End the recording and START its keepalive terminal request now, before the usage flush and
+    // the close, so it is already on the wire if the page dies during either. Best-effort —
+    // finishRecording never throws. Null when nothing was recorded.
+    const recordingTerminal = await this.finishRecording();
     this.recordingStartedAtIso = null;
 
     // Final usage flush WHILE the live session id is still set (the relay mutation also
@@ -3974,11 +4181,12 @@ export class RealtimeSessionRuntime {
       await this.closeServerSession(this.agentSessionId);
     }
 
-    // Upload AFTER the close. The WAV is tens of MB and takes seconds; a page unload aborts the
-    // request, and nothing after an aborted await ever runs — so the small, critical close goes
-    // first (#5195). The server accepts the upload on a Closed session (loadOwnedSession does not
-    // check status), and uploadStoppedRecording never throws.
-    await this.uploadStoppedRecording(this.agentSessionId, recording);
+    // Wait for the terminal's ack only AFTER the close: nothing after an aborted await ever runs, so
+    // the small, critical close must never queue behind the recording (#5195). Bounded by
+    // RECORDING_TERMINAL_ACK_TIMEOUT_MS; SavingRecording$ stays up until it settles.
+    if (recordingTerminal) {
+      await this.awaitRecordingTerminal(recordingTerminal);
+    }
 
     // Capture the session id BEFORE we null it so the lifecycle emit carries it.
     // Skip emitting when there was no live session (defensive — teardown is safe
@@ -4032,8 +4240,10 @@ export class RealtimeSessionRuntime {
     this.pendingUserCaption = '';
     this.hasActiveInterimUserCaption = false;
     this.SetMinimized(false);
-    this.stopSegmentFlushing();
-    this.shardQueue = null;
+    this.stopShardFlushing();
+    // Defensive: teardown already ended any previous recording; a stray pipeline must not keep sending.
+    this.recordingShards?.Queue.Close();
+    this.recordingShards = null;
     this.recorder = null;
     this.recordingStartedAtIso = null;
     this.currentTurnStartMs = null;
