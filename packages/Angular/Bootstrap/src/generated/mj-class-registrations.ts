@@ -35,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (447 classes)
+// @memberjunction/core-entities (448 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -402,6 +402,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -707,7 +708,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (108 classes)
+// @memberjunction/ng-dashboards (109 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -748,6 +749,7 @@ import {
     CredentialsOverviewResourceComponent,
     CredentialsTypesResourceComponent,
     DashboardBrowserResourceComponent,
+    DashboardsCategoriesResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
     DatabaseDesignerDashboardComponent,
@@ -1227,6 +1229,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1249,11 +1252,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
-    MJTagScopeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTagScopeEntity,
     MJTagSuggestionEntity,
     MJTagSynonymEntity,
     MJTaggedItemEntity,
@@ -1453,11 +1456,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricScaleLevelsPanel,
     RubricVersionFormPolicy,
     RubricVersionSummaryPanel,
-    RubricVersionsPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RubricVersionsPanel,
     SkillHierarchyPanel,
     TagHierarchyPanel,
     TemplateCategoryHierarchyPanel,
@@ -1505,6 +1508,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CredentialsOverviewResourceComponent,
     CredentialsTypesResourceComponent,
     DashboardBrowserResourceComponent,
+    DashboardsCategoriesResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
     DatabaseDesignerDashboardComponent,
@@ -1602,7 +1606,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 730;
+export const CLASS_REGISTRATIONS_COUNT = 732;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
