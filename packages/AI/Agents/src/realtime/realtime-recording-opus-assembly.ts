@@ -136,7 +136,7 @@ export const MAX_ASSEMBLY_SAMPLES = RECORDING_SAMPLE_RATE * 60 * 180;
 /** Largest value of the shard ledger's INT `Index` column: "below this" counts every stored shard. */
 const SQL_INT_MAX = 2_147_483_647;
 
-/** Waveform buckets, matching the browser's capture-time `PeakAccumulator`. */
+/** Waveform buckets: the 600 the browser used to compute at capture time, so old and new recordings render alike. */
 const PEAK_BUCKETS = 600;
 const BYTES_PER_SAMPLE = 2;
 
@@ -402,8 +402,8 @@ function allocatePcm16Wav(sampleCount: number, sampleRate: number): { Pcm: Int16
 
 /**
  * Waveform peaks of a whole recording: max-abs per bucket, normalized by the global max (0..1). Same
- * semantics as the browser's capture-time peaks (`DownsamplePeaks` in ng-conversations), so a viewer
- * renders an assembled recording exactly like a browser-uploaded one.
+ * semantics as the peaks the browser used to compute at capture time for its whole-call WAV upload,
+ * so a viewer renders an assembled recording exactly like one uploaded before #5294.
  *
  * @param pcm Mono PCM16 samples.
  * @param buckets Target bucket count (default 600); a shorter buffer yields one bucket per sample.
