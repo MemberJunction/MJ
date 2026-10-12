@@ -4405,6 +4405,9 @@ importers:
 
   packages/Angular/Explorer/auth-services:
     dependencies:
+      '@angular/cdk':
+        specifier: ^21.2.14
+        version: 21.2.14(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
       '@angular/common':
         specifier: ^21.2.22
         version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
@@ -4438,6 +4441,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0-edge.3
         version: link:../../Generic/ui-components
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0-edge.3
+        version: link:../../../ThemeEngine
       '@okta/okta-auth-js':
         specifier: ^7.14.1
         version: 7.14.1(encoding@0.1.13)
@@ -4460,6 +4466,9 @@ importers:
       '@angular/compiler-cli':
         specifier: 21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.2.0-edge.3
+        version: link:../../Generic/test-utils
 
   packages/Angular/Explorer/base-application:
     dependencies:
@@ -4801,6 +4810,9 @@ importers:
       '@memberjunction/ng-artifacts':
         specifier: 6.2.0-edge.3
         version: link:../../Generic/artifacts
+      '@memberjunction/ng-auth-services':
+        specifier: 6.2.0-edge.3
+        version: link:../auth-services
       '@memberjunction/ng-base-application':
         specifier: 6.2.0-edge.3
         version: link:../base-application
@@ -5125,6 +5137,9 @@ importers:
       '@memberjunction/ng-workspace-initializer':
         specifier: 6.2.0-edge.3
         version: link:../workspace-initializer
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0-edge.3
+        version: link:../../../ThemeEngine
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -12126,6 +12141,9 @@ importers:
       '@memberjunction/interactive-component-types':
         specifier: 6.2.0-edge.3
         version: link:../InteractiveComponents
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0-edge.3
+        version: link:../ThemeEngine
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -13102,6 +13120,9 @@ importers:
       '@memberjunction/testing-engine-base':
         specifier: 6.2.0-edge.3
         version: link:../TestingFramework/EngineBase
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0-edge.3
+        version: link:../ThemeEngine
       '@memberjunction/version-history':
         specifier: 6.2.0-edge.3
         version: link:../VersionHistory

@@ -1523,7 +1523,7 @@ const setupComplete$ = new ReplaySubject(1);
   // non-secret allow-list (see AuthProviderEngine.GetPublicCatalog) — the same values a
   // single-provider SPA already compiled into its bundle.
   app.use(AUTH_CATALOG_MOUNT_PATH, cors<cors.CorsRequest>(), createAuthProviderCatalogRouter());
-  startupLog.LogIf('verbose', `[Auth] Public provider catalog registered at ${AUTH_CATALOG_MOUNT_PATH}/providers`);
+  startupLog.LogIf('verbose', `[Auth] Public provider catalog and login screen registered at ${AUTH_CATALOG_MOUNT_PATH}/providers and ${AUTH_CATALOG_MOUNT_PATH}/login-screen`);
 
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
   app.use(CreateUnifiedAuthMiddleware(dataSources));
