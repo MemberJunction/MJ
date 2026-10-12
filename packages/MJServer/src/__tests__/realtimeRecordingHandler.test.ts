@@ -174,6 +174,30 @@ function shardBytes(index: number, seed = 1, sampleCount = SHARD_SAMPLES, packet
     return EncodeRecordingShard({ ShardIndex: index, StartSample: index * SHARD_SAMPLES, SampleCount: sampleCount, PacketCount: packetCount, Packets: packets });
 }
 
+/** The server's system user: the only principal with read access to the shard entity. */
+const SYSTEM_USER = { ID: 'system-user' } as unknown as UserInfo;
+
+/**
+ * The ledger as a request's caller sees it: the guarded procs work, but a read of the shard entity is
+ * refused, exactly as `CheckUserReadPermissions` refuses UI users and widget guests (no CanRead).
+ */
+function callerLedger(inner: FakeLedger): IRealtimeRecordingLedger {
+    const refuse = async (): Promise<never> => {
+        throw new Error('User does not have read permissions on MJ: AI Agent Session Recording Shards');
+    };
+    return {
+        RecordShard: input => inner.RecordShard(input),
+        StampTerminal: (id, expected, captured) => inner.StampTerminal(id, expected, captured),
+        ClaimAssembly: id => inner.ClaimAssembly(id),
+        FinishAssembly: input => inner.FinishAssembly(input),
+        LoadShards: refuse,
+        LoadShardMetadata: refuse,
+        CountShardsBelow: refuse,
+        DeleteShardsBelow: () => inner.DeleteShardsBelow(),
+        PurgeClosedBefore: () => inner.PurgeClosedBefore(),
+    };
+}
+
 function sha256(bytes: Uint8Array): string {
     return createHash('sha256').update(bytes).digest('hex');
 }
@@ -247,7 +271,8 @@ describe('realtime recording REST routes', () => {
                 }
                 return { ID: agentSessionId, ...row } as unknown as MJAIAgentSessionEntity;
             },
-            CreateLedger: () => ledger,
+            CreateLedger: (_provider, contextUser) => (contextUser === SYSTEM_USER ? ledger : callerLedger(ledger)),
+            SystemUser: () => SYSTEM_USER,
             Scheduler: scheduler,
             GraceMs: () => GRACE_MS,
         };
@@ -299,6 +324,8 @@ describe('realtime recording REST routes', () => {
             expect((await post(`/not-a-uuid/shard/0`, shardBytes(0))).status).toBe(400);
             expect((await post(`/${SESSION}/shard/-1`, shardBytes(0))).status).toBe(400);
             expect((await post(`/${SESSION}/shard/1.5`, shardBytes(0))).status).toBe(400);
+            // The ledger's Index is a SQL INT: an index past it is the client's error, not a 500 from the proc.
+            expect((await postShard(2 ** 31, shardBytes(2 ** 31, 1, 960))).status).toBe(400);
             expect(ledger.Shards.get(SESSION)).toBeUndefined();
         });
 
@@ -430,6 +457,16 @@ describe('realtime recording REST routes', () => {
             expect(scheduler.ScheduleAssembly).not.toHaveBeenCalled();
         });
 
+        it('without a system user still stamps the terminal and answers 200, leaving assembly to the janitor', async () => {
+            deps.SystemUser = () => null;
+            expect((await postShard(0)).status).toBe(200);
+            const res = await postEnd(0, SHARD_SAMPLES);
+            expect(res.status).toBe(200);
+            expect(ledger.Sessions.get(SESSION)?.RecordingExpectedShards).toBe(1);
+            expect(scheduler.ScheduleAssembly).not.toHaveBeenCalled();
+            expect(logErrorMock).toHaveBeenCalledWith(expect.stringContaining('no system user'));
+        });
+
         it('schedules a forced-Partial assembly after the grace when shards are missing', async () => {
             await postShard(0);
             await postEnd(2, 3 * SHARD_SAMPLES);
@@ -471,6 +508,8 @@ describe('realtime recording REST routes', () => {
             expect((await post(`/${SESSION}/end?lastShardIndex=abc&capturedSamples=0`, null)).status).toBe(400);
             expect((await post(`/${SESSION}/end?capturedSamples=0`, null)).status).toBe(400);
             expect((await postEnd(-1, 5)).status).toBe(400);
+            // Expected shards (lastShardIndex + 1) must fit the INT column too.
+            expect((await postEnd(2 ** 31 - 1, 0)).status).toBe(400);
             expect((await postEnd(2, 3 * SHARD_SAMPLES, shardBytes(1))).status).toBe(400);
             await postShard(1);
             expect((await postEnd(1, 2 * SHARD_SAMPLES, shardBytes(1, 9))).status).toBe(409);

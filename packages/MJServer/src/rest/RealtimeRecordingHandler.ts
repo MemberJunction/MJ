@@ -39,6 +39,8 @@ export const REALTIME_RECORDING_MOUNT_PATH = '/realtime/recording';
 const LATE_SHARD_REASSEMBLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const OCTET_STREAM = 'application/octet-stream';
+/** Largest shard index the ledger's SQL `INT` column holds; also the bound on expected shards. */
+const MAX_SHARD_INDEX = 2_147_483_647;
 const NON_NEGATIVE_INT = /^\d+$/;
 const INT = /^-?\d+$/;
 
@@ -61,6 +63,13 @@ export interface RealtimeRecordingRouterDeps {
     Scheduler: IRecordingAssemblyScheduler;
     /** Grace before an incomplete recording is assembled as `Partial`. */
     GraceMs: () => number;
+    /**
+     * The server's system user, or null when it is not available. Deciding whether a recording is ready
+     * reads the shard entity, which callers (UI users, widget guests) deliberately cannot read; that read
+     * is the server's own scheduling decision, made after the caller was authorized, so it runs as this
+     * user. With none, nothing is scheduled and the session janitor assembles the recording.
+     */
+    SystemUser: () => UserInfo | null;
 }
 
 /** A request failure with the HTTP status to answer. */
@@ -152,6 +161,9 @@ async function respond(req: Request, res: Response, kind: string, handler: () =>
 async function handleShard(deps: RealtimeRecordingRouterDeps, req: Request, res: Response): Promise<void> {
     const { SessionID, Caller } = res.locals['recording'] as RecordingRequestContext;
     const index = parseInteger(req.params['index'], 'shard index', NON_NEGATIVE_INT);
+    if (index > MAX_SHARD_INDEX) {
+        throw new RecordingRequestError(400, `shard index ${index} exceeds the maximum ${MAX_SHARD_INDEX}`);
+    }
     const body = Buffer.isBuffer(req.body) ? req.body : null;
     if (!body || body.length === 0) {
         throw new RecordingRequestError(400, `The shard must be a non-empty ${OCTET_STREAM} body`);
@@ -165,7 +177,7 @@ async function handleShard(deps: RealtimeRecordingRouterDeps, req: Request, res:
     const ledger = deps.CreateLedger(Caller.Provider, Caller.ContextUser);
     const result = await recordShard(ledger, SessionID, header, body);
     if (result.Outcome === 'Inserted') {
-        await scheduleAfterLateShard(deps, ledger, SessionID, index, result);
+        await scheduleAfterLateShard(deps, Caller.Provider, SessionID, index, result);
     }
     res.status(200).json({ stored: true, duplicate: result.Outcome === 'Duplicate' });
 }
@@ -176,6 +188,10 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
     const capturedSamples = parseInteger(req.query['capturedSamples'], 'capturedSamples', NON_NEGATIVE_INT);
     if (lastShardIndex < -1) {
         throw new RecordingRequestError(400, `lastShardIndex must be -1 or more, got ${lastShardIndex}`);
+    }
+    // lastShardIndex + 1 is stored as the expected shard count, so it must fit the same INT column.
+    if (lastShardIndex >= MAX_SHARD_INDEX) {
+        throw new RecordingRequestError(400, `lastShardIndex must be below ${MAX_SHARD_INDEX}, got ${lastShardIndex}`);
     }
     if (lastShardIndex === -1 && capturedSamples !== 0) {
         throw new RecordingRequestError(400, `lastShardIndex -1 (no shards) contradicts capturedSamples ${capturedSamples}`);
@@ -188,7 +204,7 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
         const tailResult = await recordShard(ledger, SessionID, tail.Header, tail.Bytes);
         if (tailResult.Outcome === 'Inserted') {
             // A re-sent tail can fill a gap of a recording already assembled, exactly like a late shard.
-            await scheduleAfterLateShard(deps, ledger, SessionID, tail.Header.ShardIndex, tailResult);
+            await scheduleAfterLateShard(deps, Caller.Provider, SessionID, tail.Header.ShardIndex, tailResult);
         }
     }
     if (lastShardIndex === -1) {
@@ -206,7 +222,7 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
     }
     LogStatus(`RealtimeRecordingHandler: terminal for session ${SessionID}: ${expected} shards, ${capturedSamples} samples; recording ${stamp.RecordingStatus ?? 'not recorded'}`);
     if (stamp.RecordingStatus === 'Pending') {
-        await scheduleWhenReady(deps, ledger, SessionID, expected);
+        await scheduleWhenReady(deps, Caller.Provider, SessionID, expected);
     }
     res.status(200).json({ accepted: true, ignored: false });
 }
@@ -293,7 +309,7 @@ async function recordShard(ledger: IRealtimeRecordingLedger, sessionID: string, 
  */
 async function scheduleAfterLateShard(
     deps: RealtimeRecordingRouterDeps,
-    ledger: IRealtimeRecordingLedger,
+    provider: DatabaseProviderBase,
     sessionID: string,
     index: number,
     result: RecordShardResult,
@@ -311,7 +327,7 @@ async function scheduleAfterLateShard(
         return;
     }
     if (result.RecordingStatus === 'Pending') {
-        await scheduleWhenReady(deps, ledger, sessionID, expected, false);
+        await scheduleWhenReady(deps, provider, sessionID, expected, false);
     }
 }
 
@@ -321,12 +337,17 @@ async function scheduleAfterLateShard(
  */
 async function scheduleWhenReady(
     deps: RealtimeRecordingRouterDeps,
-    ledger: IRealtimeRecordingLedger,
+    provider: DatabaseProviderBase,
     sessionID: string,
     expected: number,
     graceWhenIncomplete = true,
 ): Promise<void> {
-    const present = await ledger.CountShardsBelow(sessionID, expected);
+    const systemUser = deps.SystemUser();
+    if (!systemUser) {
+        LogError(`RealtimeRecordingHandler: no system user to check whether the recording of session ${sessionID} is complete; the session janitor will assemble it`);
+        return;
+    }
+    const present = await deps.CreateLedger(provider, systemUser).CountShardsBelow(sessionID, expected);
     if (present === expected) {
         deps.Scheduler.ScheduleAssembly(sessionID, 0, false);
     } else if (graceWhenIncomplete) {

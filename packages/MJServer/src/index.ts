@@ -2308,6 +2308,7 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
     CreateLedger: (ledgerProvider, contextUser) => new SqlRealtimeRecordingLedger(ledgerProvider, contextUser),
     Scheduler: RecordingAssemblyScheduler.Instance,
     GraceMs: graceMs,
+    SystemUser: () => UserCache.Instance.GetSystemUser() ?? null,
   }));
   return true;
 }
