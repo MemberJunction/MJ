@@ -11899,14 +11899,14 @@ importers:
         specifier: 6.2.0-edge.3
         version: link:../ServerBootstrapLite
       '@memberjunction/skyway-core':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.1
+        version: 0.7.1
       '@memberjunction/skyway-postgres':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.1
+        version: 0.7.1
       '@memberjunction/skyway-sqlserver':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.1
+        version: 0.7.1
       '@memberjunction/sql-converter':
         specifier: 6.2.0-edge.3
         version: link:../SQLConverter
@@ -13790,14 +13790,14 @@ importers:
         version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
     optionalDependencies:
       '@memberjunction/skyway-core':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.1
+        version: 0.7.1
       '@memberjunction/skyway-postgres':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.1
+        version: 0.7.1
       '@memberjunction/skyway-sqlserver':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.1
+        version: 0.7.1
       mssql:
         specifier: ^11.0.1
         version: 11.0.1
@@ -20247,16 +20247,16 @@ packages:
   '@mediapipe/tasks-vision@0.10.14':
     resolution: {integrity: sha512-vOifgZhkndgybdvoRITzRkIueWWSiCKuEUXXK6Q4FaJsFvRJuwgg++vqFUMlL0Uox62U5aEXFhHxlhV7Ja5e3Q==}
 
-  '@memberjunction/skyway-core@0.6.2':
-    resolution: {integrity: sha512-qrwF6EaqlbwyDl0dnd0U7AaQqfkL9NbVGT/8dy3PO61bJXavrATex+Gy7bImiwsQgslZiwswIb2fzwi04n/vKA==}
+  '@memberjunction/skyway-core@0.7.1':
+    resolution: {integrity: sha512-jvuPXHEhg1V8n0Vaca21xzzYW2qbpuLzExfchDUF/aS9yVFIOx0YGtvCNvvIK61U5gD/Knq+FEWxPHFxbnFbig==}
     engines: {node: '>=18.0.0'}
 
-  '@memberjunction/skyway-postgres@0.6.2':
-    resolution: {integrity: sha512-m37zroaduRFQ6OtxslKpDN0+/ayDsuDMLZneC1g1H5O9cKXveuPBqvPRglHbuR/g9qYj54tZbKomheFwHjAdpA==}
+  '@memberjunction/skyway-postgres@0.7.1':
+    resolution: {integrity: sha512-8jAPsNGqryrFRKtagIUfKUiDvwOTv2ttoa0RviFWydsW6jkdW5rOcaqWMpHUMpOkdk30BsRELeT7Wbia/5IFxA==}
     engines: {node: '>=18.0.0'}
 
-  '@memberjunction/skyway-sqlserver@0.6.2':
-    resolution: {integrity: sha512-2mVkECnMhGieU++ZesoK3NDMveBgamkpWKTeYo3T0r9OTxhISNrM6clXUuZOhq7vKCQwNPb2SY53/n60J+ecuw==}
+  '@memberjunction/skyway-sqlserver@0.7.1':
+    resolution: {integrity: sha512-0HSf2/ZR6EKeBGYfvzJIu2X9aiQYPXOcWx00vkqStqFW2GGBVjZYc48pu+LeYeUX9ckZ1aNRkQIW/Bum6wi3mA==}
     engines: {node: '>=18.0.0'}
 
   '@mermaid-js/parser@0.6.3':
@@ -37206,21 +37206,21 @@ snapshots:
 
   '@mediapipe/tasks-vision@0.10.14': {}
 
-  '@memberjunction/skyway-core@0.6.2':
+  '@memberjunction/skyway-core@0.7.1':
     dependencies:
       crc-32: 1.2.2
       fast-glob: 3.3.3
 
-  '@memberjunction/skyway-postgres@0.6.2':
+  '@memberjunction/skyway-postgres@0.7.1':
     dependencies:
-      '@memberjunction/skyway-core': 0.6.2
+      '@memberjunction/skyway-core': 0.7.1
       pg: 8.18.0
     transitivePeerDependencies:
       - pg-native
 
-  '@memberjunction/skyway-sqlserver@0.6.2':
+  '@memberjunction/skyway-sqlserver@0.7.1':
     dependencies:
-      '@memberjunction/skyway-core': 0.6.2
+      '@memberjunction/skyway-core': 0.7.1
       mssql: 11.0.1
     transitivePeerDependencies:
       - supports-color
