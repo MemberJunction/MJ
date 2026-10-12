@@ -3,6 +3,7 @@
 "@memberjunction/ai-openai": minor
 "@memberjunction/ai-systemone": minor
 "@memberjunction/ai-inception": minor
+"@memberjunction/ai-cloudflare": minor
 "@memberjunction/server-bootstrap": minor
 "@memberjunction/server-bootstrap-lite": minor
 ---
@@ -19,7 +20,7 @@ Shared in `@memberjunction/ai`:
 
 Changes to existing drivers:
 - `SystemOneDecision` and `PerplexityDecision` error messages also read SubQ-style `detail` objects, and an empty `detail` falls through to `error`.
-- The System One drivers redact the API key from error messages, before any truncation.
+- The System One drivers and `OpenAIDecision` redact the API key (for `CloudflareDecision`, also its token alone) from HTTP error messages, before any truncation and again after the vendor message is decoded; a key under 8 characters is left as is.
 - `PerplexityDecision` now extends `BaseHostedSystemOneDecision`, with no change in behaviour.
 
 **Default Decision.** Its bindings are unchanged, but every active Decision model joins its power-matched fallbacks, ordered by PowerRank distance from its target (57). GPT-6 Luna Decisions is now the first fallback; Mercury Decide and SubQ Snap are the last. A fallback is tried only when one of its rows has a credential: an OpenRouter key (as for Jev), a credential bound to the OpenAI, Inception Labs or Subquadratic vendor, or a default `API Key` credential is enough. To keep a model out, set its row's `Status` to `Inactive`.

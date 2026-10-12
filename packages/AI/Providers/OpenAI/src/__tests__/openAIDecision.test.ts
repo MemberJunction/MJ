@@ -475,6 +475,13 @@ describe('OpenAIDecision', () => {
       expect(result.errorMessage).not.toContain(API_KEY.slice(0, 10));
     });
 
+    it('redacts a key the body carried JSON-escaped, once the error reader has decoded it', async () => {
+      respondWith(401, `{"error":{"message":"bad key \\u0073${API_KEY.slice(1)}"}}`);
+      const result = await decide(new OpenAIDecision(API_KEY));
+
+      expect(result.errorMessage).toBe('OpenAI Decisions API returned HTTP 401: bad key [redacted]');
+    });
+
     it('fails on a network error', async () => {
       globalThis.fetch = vi.fn().mockRejectedValue(new Error('Connection reset by peer'));
       const result = await decide(new OpenAIDecision(API_KEY));

@@ -222,10 +222,12 @@ export class OpenAIDecision extends BaseDecision {
             signal,
         });
         if (!res.ok) {
-            // Redacted before DescribeHTTPError sees it, so the snippet's cut can never leave part of the key.
-            const text = RedactSecret(await res.text().catch(() => ''), this.Credential.APIKey);
+            // Redacted before DescribeHTTPError sees it, so the snippet's cut can never leave part of the key,
+            // and again after, for a key the body carried JSON-escaped and the error reader decoded.
+            const key = this.Credential.APIKey;
+            const text = RedactSecret(await res.text().catch(() => ''), key);
             const errorType: AIErrorType | undefined = MODEL_ERROR_STATUSES.has(res.status) ? 'ModelError' : undefined;
-            throw CreateSystemOneHTTPError(this.DescribeHTTPError(res.status, text), res.status, errorType);
+            throw CreateSystemOneHTTPError(RedactSecret(this.DescribeHTTPError(res.status, text), key), res.status, errorType);
         }
         try {
             return await res.json();

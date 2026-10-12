@@ -35,6 +35,9 @@ const ERROR_SNIPPET_LENGTH = 500;
 /** What {@link RedactSecret} puts in place of a secret. */
 const REDACTED = '[redacted]';
 
+/** The shortest secret {@link RedactSecret} replaces; real API keys are far longer. */
+const MIN_REDACTED_SECRET_LENGTH = 8;
+
 /** A parsed JSON object from a System One API, narrowed with {@link IsSystemOneWireObject} before use. */
 export type SystemOneWireObject = Record<string, unknown>;
 
@@ -149,14 +152,16 @@ export function CreateSystemOneHTTPError(message: string, status: number, errorT
 
 /**
  * The text with every occurrence of the trimmed secret replaced by `[redacted]`, or the text unchanged
- * when the secret is empty. Decision drivers run it over an error body before any of it reaches an
- * error message, so no truncation can leave part of an API key behind.
+ * when the secret is shorter than 8 characters: an empty key, or a placeholder such as `x`, whose
+ * replacement would mangle ordinary words. Decision drivers run it over an error body before any of it
+ * reaches an error message, so no truncation can leave part of an API key behind, and again over the
+ * message, which can hold a key the body carried JSON-escaped.
  * @param text The text to redact, such as a response body.
  * @param secret The secret to remove, such as the credential's API key.
  */
 export function RedactSecret(text: string, secret: string): string {
     const trimmed = (secret ?? '').trim();
-    return trimmed.length > 0 ? text.split(trimmed).join(REDACTED) : text;
+    return trimmed.length >= MIN_REDACTED_SECRET_LENGTH ? text.split(trimmed).join(REDACTED) : text;
 }
 
 /**
@@ -313,6 +318,14 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
     }
 
     /**
+     * The secrets an error message must never show, each removed with {@link RedactSecret}. Defaults to
+     * the credential's API key; a driver that sends only part of it (Cloudflare's token) adds that part.
+     */
+    protected get SecretsToRedact(): string[] {
+        return [this.Credential.APIKey];
+    }
+
+    /**
      * Sends the request. This is the driver's only network call; a test double overrides it to stand
      * in for the network.
      * @param url The endpoint from {@link GetEndpointURL}.
@@ -390,6 +403,11 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
         return result;
     }
 
+    /** The text with every one of {@link SecretsToRedact} removed. */
+    private redactSecrets(text: string): string {
+        return this.SecretsToRedact.reduce((redacted, secret) => RedactSecret(redacted, secret), text);
+    }
+
     /** POSTs the request and returns the unwrapped System One response. Throws on a non-2xx status. */
     private async postRequest(model: string, body: SystemOneWireObject, signal?: AbortSignal): Promise<unknown> {
         const res = await this.SendRequest(this.GetEndpointURL(model), {
@@ -399,9 +417,11 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
             signal,
         });
         if (!res.ok) {
-            // Redacted before DescribeHTTPError sees it, so neither an override nor a truncation can leak the key.
-            const text = RedactSecret(await res.text().catch(() => ''), this.Credential.APIKey);
-            throw CreateSystemOneHTTPError(this.DescribeHTTPError(res.status, text), res.status, this.GetHTTPErrorType(res.status));
+            // Redacted before DescribeHTTPError sees it, so neither an override nor a truncation can leak the key,
+            // and again after, for a key the body carried JSON-escaped and the vendor-message reader decoded.
+            const text = this.redactSecrets(await res.text().catch(() => ''));
+            const message = this.redactSecrets(this.DescribeHTTPError(res.status, text));
+            throw CreateSystemOneHTTPError(message, res.status, this.GetHTTPErrorType(res.status));
         }
         let parsed: unknown;
         try {

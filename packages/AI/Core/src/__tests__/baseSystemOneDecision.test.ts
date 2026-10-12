@@ -544,9 +544,15 @@ describe('BaseSystemOneDecision', () => {
         });
 
         it('RedactSecret replaces every occurrence of the trimmed secret, and leaves the text alone for an empty one', () => {
-            expect(RedactSecret('a sk-1 b sk-1', ' sk-1 ')).toBe('a [redacted] b [redacted]');
-            expect(RedactSecret('a sk-1', '')).toBe('a sk-1');
-            expect(RedactSecret('a sk-1', '   ')).toBe('a sk-1');
+            expect(RedactSecret('a sk-12345 b sk-12345', ' sk-12345 ')).toBe('a [redacted] b [redacted]');
+            expect(RedactSecret('a sk-12345', '')).toBe('a sk-12345');
+            expect(RedactSecret('a sk-12345', '   ')).toBe('a sk-12345');
+        });
+
+        it('RedactSecret leaves a secret shorter than 8 characters alone, so a placeholder key cannot mangle the message', () => {
+            expect(RedactSecret('service unavailable: context length exceeded', 'e')).toBe('service unavailable: context length exceeded');
+            expect(RedactSecret('key abcdefg', 'abcdefg')).toBe('key abcdefg');
+            expect(RedactSecret('key abcdefgh', 'abcdefgh')).toBe('key [redacted]');
         });
     });
 });
@@ -594,6 +600,15 @@ describe('BaseHostedSystemOneDecision', () => {
         const result = await driver.Decide(params());
 
         expect(result.errorMessage).toBe('Hosted Decisions API returned HTTP 401: invalid_api_key: Key [redacted] is revoked.');
+    });
+
+    it('redacts a key the body carried JSON-escaped, once the vendor-message reader has decoded it', async () => {
+        const driver = new TestHostedDecision(SECRET_KEY);
+        const escapedKey = `\\u0073${SECRET_KEY.slice(1)}`;
+        driver.Responder = () => new Response(`{"error":{"message":"bad key ${escapedKey}"}}`, { status: 401 });
+        const result = await driver.Decide(params());
+
+        expect(result.errorMessage).toBe('Hosted Decisions API returned HTTP 401: bad key [redacted]');
     });
 
     it('falls back to the status and the start of the body when the body has no message', async () => {
