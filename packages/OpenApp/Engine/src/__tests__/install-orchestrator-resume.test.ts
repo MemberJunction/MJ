@@ -39,7 +39,7 @@ vi.mock('../install/migration-runner.js', () => ({ RunAppMigrations: vi.fn() }))
 vi.mock('../install/package-manager.js', () => ({
     AddAppPackages: vi.fn(),
     RemoveAppPackages: vi.fn(),
-    RunPackageInstall: vi.fn(),
+    RunPackageInstallAsync: vi.fn(),
     BumpPrefixedDependencies: vi.fn(),
 }));
 vi.mock('../install/config-manager.js', () => ({
@@ -81,7 +81,7 @@ import type { OrchestratorContext } from '../install/install-orchestrator.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
 import { CreateAppSchema, SchemaExists } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
-import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies, RemoveAppPackages } from '../install/package-manager.js';
+import { AddAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, RemoveAppPackages } from '../install/package-manager.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveServerDynamicPackages } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
@@ -135,7 +135,7 @@ function baseHappyPathStubs(): void {
     vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
     vi.mocked(DownloadMigrations).mockResolvedValue({ Success: true, Files: [] } as unknown as Awaited<ReturnType<typeof DownloadMigrations>>);
     vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
-    vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+    vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
     vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
     vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
     vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
@@ -190,7 +190,7 @@ describe('InstallApp — resume after a crash mid-install', () => {
         expect(vi.mocked(RunAppMigrations)).not.toHaveBeenCalled();
         expect(vi.mocked(RecordAppInstallation)).not.toHaveBeenCalled();
         // Phase 2 still runs to completion.
-        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalled();
         // Checkpoint cleared on final success.
         expect(vi.mocked(SetAppStep)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', null);
     });
@@ -201,7 +201,7 @@ describe('InstallApp — resume after a crash mid-install', () => {
         const result = await InstallApp({ Source: 'https://github.com/test/app-x' }, context);
 
         expect(result.Success).toBe(true);
-        expect(vi.mocked(RunPackageInstall)).not.toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstallAsync)).not.toHaveBeenCalled();
         expect(vi.mocked(AddServerDynamicPackages)).toHaveBeenCalled();
     });
 
@@ -258,7 +258,7 @@ describe('UpgradeApp — resume after a crash mid-upgrade', () => {
 
         expect(result.Success).toBe(true);
         expect(vi.mocked(RunAppMigrations)).not.toHaveBeenCalled();
-        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalled();
         expect(vi.mocked(UpdateAppRecord)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', expect.objectContaining({ Version: '2.0.0', Status: 'Active' }));
     });
 
@@ -275,7 +275,7 @@ describe('UpgradeApp — resume after a crash mid-upgrade', () => {
         const attempt1 = await UpgradeApp({ AppName: 'app-x' }, context);
         expect(attempt1.Success).toBe(false);
         expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
-        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalledTimes(1); // Packages succeeded before Config threw
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalledTimes(1); // Packages succeeded before Config threw
 
         // Second attempt resumes past the checkpointed Packages step (row is Error, per the
         // mutex rule Error is still an allowed re-entry status for Upgrade — B21).
@@ -288,7 +288,7 @@ describe('UpgradeApp — resume after a crash mid-upgrade', () => {
         expect(attempt2.Success).toBe(true);
         // Error-status re-entry reads the checkpoint too (not just 'Upgrading'), so the
         // already-completed Packages step is skipped on the retry — it is NOT re-run.
-        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalledTimes(1);
     });
 
     it('a checkpoint left by an interrupted upgrade to a DIFFERENT version is not trusted for this version (regression for the version-scoping gap)', async () => {
@@ -307,7 +307,7 @@ describe('UpgradeApp — resume after a crash mid-upgrade', () => {
         expect(result.Success).toBe(true);
         // The mismatched checkpoint is ignored — migrations AND packages both actually run for 2.0.0.
         expect(vi.mocked(RunAppMigrations)).toHaveBeenCalled();
-        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalled();
         expect(vi.mocked(UpdateAppRecord)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', expect.objectContaining({ Version: '2.0.0' }));
     });
 });
@@ -461,7 +461,7 @@ describe('Cross-operation checkpoint contamination — a checkpoint left by one 
         expect(migrationsIndex).toBeGreaterThan(clearIndex);
         // The mismatched checkpoint is not trusted — migrations AND packages both actually run.
         expect(vi.mocked(RunAppMigrations)).toHaveBeenCalled();
-        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalled();
     });
 
     it("RemoveApp: a checkpoint left by an aborted Upgrade ('PackagesInstalled', foreign to Remove) is cleared before Remove starts its own DB cleanup — so a LATER upgrade to that same version cannot wrongly resume from it", async () => {
