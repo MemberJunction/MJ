@@ -1,370 +1,203 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { CalendarEvent, SyncEventsParams, SyncEventsResult } from '@memberjunction/communication-types';
 import {
     CalendarSourceNotBoundError,
+    CalendarSyncProvider,
+    CommunicationCalendarSource,
     GraphCalendarSource,
     GoogleCalendarSource,
-    IGraphCalendarLike,
-    IGoogleCalendarLike,
-    GraphEventPage,
-    GoogleEventPage,
-    GraphCalendarEvent,
-    GoogleCalendarEvent,
-    GoogleListEventsArgs,
-    NormalizeGraphEvent,
-    ParseGraphDateTime,
-    ExtractGraphJoinUrl,
-    MapGraphResponseStatus,
-    NormalizeGoogleEvent,
-    ParseGoogleDateTime,
-    ExtractGoogleJoinUrl,
-    MapGoogleResponseStatus,
+    NormalizeCalendarEvent,
 } from '../calendar-source';
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Fixtures.
+// Fixtures: events as the Communication providers return them from SyncEvents.
 // ──────────────────────────────────────────────────────────────────────────────
 
-const TEAMS_JOIN_URL =
-    'https://teams.microsoft.com/l/meetup-join/19%3Ameeting_X%40thread.v2/0?context=%7B%7D';
+const TEAMS_JOIN_URL = 'https://teams.microsoft.com/l/meetup-join/19%3Ameeting_X%40thread.v2/0?context=%7B%7D';
 const MEET_JOIN_URL = 'https://meet.google.com/abc-defg-hij';
+const NOW = Date.UTC(2026, 5, 13, 12, 0, 0);
+const DAY = 24 * 60 * 60 * 1000;
 
-function graphEvent(overrides: Partial<GraphCalendarEvent> = {}): GraphCalendarEvent {
+function calendarEvent(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
     return {
-        id: 'evt-1',
-        subject: 'Standup',
-        onlineMeeting: { joinUrl: TEAMS_JOIN_URL },
-        start: { dateTime: '2026-06-25T15:00:00.0000000', timeZone: 'UTC' },
-        end: { dateTime: '2026-06-25T15:30:00.0000000', timeZone: 'UTC' },
-        attendees: [
-            { emailAddress: { address: 'sage@customer.com', name: 'Sage' }, status: { response: 'accepted' } },
-            { emailAddress: { address: 'human@customer.com' }, status: { response: 'notResponded' } },
+        ExternalEventID: 'evt-1',
+        SeriesID: null,
+        ICalUID: 'uid-1',
+        Subject: 'Standup',
+        Body: '',
+        Start: new Date('2026-06-25T15:00:00Z'),
+        End: new Date('2026-06-25T15:30:00Z'),
+        IsAllDay: false,
+        Location: null,
+        Organizer: { Email: 'human@customer.com', Name: 'Human' },
+        Attendees: [
+            { Email: 'sage@customer.com', Name: 'Sage', Type: 'Required', Response: 'Accepted' },
+            { Email: 'human@customer.com', Type: 'Required', Response: 'None' },
         ],
-        organizer: { emailAddress: { address: 'human@customer.com', name: 'Human' } },
+        IsCancelled: false,
+        OnlineMeetingUrl: TEAMS_JOIN_URL,
+        LastModified: null,
         ...overrides,
     };
 }
 
-function googleEvent(overrides: Partial<GoogleCalendarEvent> = {}): GoogleCalendarEvent {
+/** A provider whose SyncEvents answers from a queue and records every request. */
+function fakeProvider(...answers: SyncEventsResult[]): CalendarSyncProvider & { Calls: { params: SyncEventsParams; credentials?: object }[] } {
+    const calls: { params: SyncEventsParams; credentials?: object }[] = [];
     return {
-        id: 'gevt-1',
-        summary: 'Sync',
-        conferenceData: { entryPoints: [{ entryPointType: 'video', uri: MEET_JOIN_URL }] },
-        start: { dateTime: '2026-06-25T15:00:00-07:00' },
-        end: { dateTime: '2026-06-25T15:30:00-07:00' },
-        attendees: [
-            { email: 'sage@customer.com', displayName: 'Sage', responseStatus: 'accepted' },
-            { email: 'human@customer.com', responseStatus: 'needsAction' },
-        ],
-        organizer: { email: 'human@customer.com', displayName: 'Human' },
-        ...overrides,
+        Calls: calls,
+        SyncEvents: vi.fn(async (params: SyncEventsParams, credentials?: object) => {
+            calls.push({ params, credentials });
+            return answers.shift() ?? { Success: true, Changes: [], NextSyncToken: 'tok-end' };
+        }),
     };
 }
 
-/** A fake Graph surface that yields preset pages in order, recording the cursors it was called with. */
-function fakeGraph(pages: GraphEventPage[]): { surface: IGraphCalendarLike; cursors: (string | undefined)[] } {
-    const cursors: (string | undefined)[] = [];
-    let i = 0;
-    return {
-        cursors,
-        surface: {
-            listEvents: vi.fn(async (_userId: string, cursor?: string) => {
-                cursors.push(cursor);
-                return pages[Math.min(i++, pages.length - 1)];
-            }),
-        },
-    };
-}
-
-/** A fake Google surface that yields preset pages in order, recording the args it was called with. */
-function fakeGoogle(pages: GoogleEventPage[]): {
-    surface: IGoogleCalendarLike;
-    calls: GoogleListEventsArgs[];
-} {
-    const calls: GoogleListEventsArgs[] = [];
-    let i = 0;
-    return {
-        calls,
-        surface: {
-            listEvents: vi.fn(async (args: GoogleListEventsArgs) => {
-                calls.push(args);
-                return pages[Math.min(i++, pages.length - 1)];
-            }),
-        },
-    };
-}
+const upserted = (event: CalendarEvent) => ({ Kind: 'Upserted' as const, ExternalEventID: event.ExternalEventID, Event: event });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// GraphCalendarSource.
-// ──────────────────────────────────────────────────────────────────────────────
 
-describe('GraphCalendarSource', () => {
-    describe('NotBound → bound transition', () => {
-        it('throws CalendarSourceNotBoundError when no surface is injected', async () => {
-            const source = new GraphCalendarSource();
-            await expect(source.ListUpcomingInvites('sage@customer.com')).rejects.toBeInstanceOf(
-                CalendarSourceNotBoundError,
-            );
-        });
-
-        it('resolves invites once a surface is injected', async () => {
-            const { surface } = fakeGraph([{ value: [graphEvent()], deltaLink: 'delta-1' }]);
-            const source = new GraphCalendarSource(surface);
-            const result = await source.ListUpcomingInvites('sage@customer.com');
-            expect(result.Invites).toHaveLength(1);
-        });
+describe.each([
+    ['GraphCalendarSource', 'Microsoft Graph', (p?: CalendarSyncProvider) => new GraphCalendarSource(p)],
+    ['GoogleCalendarSource', 'Google Calendar', (p?: CalendarSyncProvider) => new GoogleCalendarSource(p)],
+])('%s: not bound → bound', (_name, label, make) => {
+    it('throws CalendarSourceNotBoundError, naming the provider, when built with no provider', async () => {
+        const source = make();
+        await expect(source.ListUpcomingInvites('sage@customer.com')).rejects.toBeInstanceOf(CalendarSourceNotBoundError);
+        await expect(source.ListUpcomingInvites('sage@customer.com')).rejects.toThrow(label);
     });
 
-    describe('delta paging', () => {
-        it('follows @odata.nextLink across pages then captures the @odata.deltaLink cursor', async () => {
-            const { surface, cursors } = fakeGraph([
-                { value: [graphEvent({ id: 'a' })], nextLink: 'next-1' },
-                { value: [graphEvent({ id: 'b' })], nextLink: 'next-2' },
-                { value: [graphEvent({ id: 'c' })], deltaLink: 'delta-final' },
-            ]);
-            const source = new GraphCalendarSource(surface);
-            const result = await source.ListUpcomingInvites('sage@customer.com', 'prior-delta');
-
-            expect(result.Invites.map((i) => i.ExternalEventID)).toEqual(['a', 'b', 'c']);
-            expect(result.NextCursor).toBe('delta-final');
-            // First call uses the prior cursor; subsequent calls follow the in-poll nextLinks.
-            expect(cursors).toEqual(['prior-delta', 'next-1', 'next-2']);
-        });
-
-        it('leaves the cursor unchanged (no NextCursor) when a page has neither next nor delta link', async () => {
-            const { surface } = fakeGraph([{ value: [graphEvent()] }]);
-            const source = new GraphCalendarSource(surface);
-            const result = await source.ListUpcomingInvites('sage@customer.com', 'prior');
-            expect(result.NextCursor).toBeUndefined();
-            expect(result.Invites).toHaveLength(1);
-        });
-    });
-
-    describe('event → CalendarPollResult normalization', () => {
-        it('normalizes id, subject, join URL, start/end, attendees, organizer', async () => {
-            const { surface } = fakeGraph([{ value: [graphEvent()], deltaLink: 'd' }]);
-            const source = new GraphCalendarSource(surface);
-            const { Invites } = await source.ListUpcomingInvites('sage@customer.com');
-            const invite = Invites[0];
-
-            expect(invite.ExternalEventID).toBe('evt-1');
-            expect(invite.Subject).toBe('Standup');
-            expect(invite.JoinUrl).toBe(TEAMS_JOIN_URL);
-            expect(invite.StartTime.toISOString()).toBe('2026-06-25T15:00:00.000Z');
-            expect(invite.EndTime?.toISOString()).toBe('2026-06-25T15:30:00.000Z');
-            expect(invite.Attendees).toEqual([
-                { Email: 'sage@customer.com', DisplayName: 'Sage', ResponseStatus: 'Accepted' },
-                { Email: 'human@customer.com', ResponseStatus: 'NeedsAction' },
-            ]);
-            expect(invite.Organizer).toEqual({ Email: 'human@customer.com', DisplayName: 'Human' });
-        });
-
-        it('drops events with no id or no start time during paging', async () => {
-            const { surface } = fakeGraph([
-                {
-                    value: [
-                        graphEvent({ id: undefined }),
-                        graphEvent({ id: 'ok', start: undefined }),
-                        graphEvent({ id: 'keep' }),
-                    ],
-                    deltaLink: 'd',
-                },
-            ]);
-            const source = new GraphCalendarSource(surface);
-            const { Invites } = await source.ListUpcomingInvites('sage@customer.com');
-            expect(Invites.map((i) => i.ExternalEventID)).toEqual(['keep']);
-        });
+    it('resolves invites once given a provider', async () => {
+        const source = make(fakeProvider({ Success: true, Changes: [upserted(calendarEvent())], NextSyncToken: 'tok-1' }));
+        const poll = await source.ListUpcomingInvites('sage@customer.com');
+        expect(poll.Invites).toHaveLength(1);
+        expect(poll.NextCursor).toBe('tok-1');
     });
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Graph pure helpers.
-// ──────────────────────────────────────────────────────────────────────────────
+describe('polling through SyncEvents', () => {
+    it('reads a forward window on the first poll, as the target identity, with the given credentials', async () => {
+        const provider = fakeProvider();
+        const botCredentials = { accessToken: 'bot-token', disableEnvironmentFallback: true };
+        const source = new GraphCalendarSource(provider, botCredentials, { Now: () => NOW });
+        await source.ListUpcomingInvites('sage@customer.com');
 
-describe('Graph pure helpers', () => {
-    describe('parseGraphDateTime', () => {
-        it('treats UTC and missing zone as UTC', () => {
-            expect(ParseGraphDateTime({ dateTime: '2026-06-25T15:00:00', timeZone: 'UTC' })?.toISOString()).toBe(
-                '2026-06-25T15:00:00.000Z',
-            );
-            expect(ParseGraphDateTime({ dateTime: '2026-06-25T15:00:00' })?.toISOString()).toBe(
-                '2026-06-25T15:00:00.000Z',
-            );
+        expect(provider.Calls[0].params).toEqual({
+            Target: { Identifier: 'sage@customer.com' },
+            SyncToken: undefined,
+            WindowStart: new Date(NOW),
+            WindowEnd: new Date(NOW + 30 * DAY),
         });
-        it('honors an explicit offset/Z suffix on the string', () => {
-            expect(ParseGraphDateTime({ dateTime: '2026-06-25T15:00:00Z' })?.toISOString()).toBe(
-                '2026-06-25T15:00:00.000Z',
-            );
-        });
-        it('returns null on absent/invalid', () => {
-            expect(ParseGraphDateTime(undefined)).toBeNull();
-            expect(ParseGraphDateTime({ dateTime: 'nope' })).toBeNull();
-        });
+        expect(provider.Calls[0].credentials).toBe(botCredentials);
     });
 
-    describe('extractGraphJoinUrl', () => {
-        it('prefers structured onlineMeeting.joinUrl', () => {
-            expect(ExtractGraphJoinUrl(graphEvent())).toBe(TEAMS_JOIN_URL);
-        });
-        it('falls back to the legacy flat onlineMeetingUrl', () => {
-            expect(
-                ExtractGraphJoinUrl(graphEvent({ onlineMeeting: undefined, onlineMeetingUrl: TEAMS_JOIN_URL })),
-            ).toBe(TEAMS_JOIN_URL);
-        });
-        it('extracts a meetup-join URL from the event body when no structured field exists', () => {
-            const event = graphEvent({
-                onlineMeeting: undefined,
-                onlineMeetingUrl: undefined,
-                body: { contentType: 'html', content: `<a href="${TEAMS_JOIN_URL}">Join</a>` },
-            });
-            expect(ExtractGraphJoinUrl(event)).toBe(TEAMS_JOIN_URL);
-        });
-        it('returns undefined for a non-online event', () => {
-            expect(
-                ExtractGraphJoinUrl(graphEvent({ onlineMeeting: undefined, onlineMeetingUrl: undefined, body: undefined })),
-            ).toBeUndefined();
-        });
+    it('honours LookaheadDays', async () => {
+        const provider = fakeProvider();
+        await new GraphCalendarSource(provider, undefined, { Now: () => NOW, LookaheadDays: 7 }).ListUpcomingInvites('sage@customer.com');
+        expect(provider.Calls[0].params.WindowEnd).toEqual(new Date(NOW + 7 * DAY));
     });
 
-    it('mapGraphResponseStatus maps known + unknown responses', () => {
-        expect(MapGraphResponseStatus('accepted')).toBe('Accepted');
-        expect(MapGraphResponseStatus('organizer')).toBe('Accepted');
-        expect(MapGraphResponseStatus('declined')).toBe('Declined');
-        expect(MapGraphResponseStatus('tentativelyAccepted')).toBe('Tentative');
-        expect(MapGraphResponseStatus('notResponded')).toBe('NeedsAction');
-        expect(MapGraphResponseStatus('weird')).toBeUndefined();
+    it('passes the cursor back as the sync token, and returns the new token as the next cursor', async () => {
+        const provider = fakeProvider({ Success: true, Changes: [], NextSyncToken: 'delta-2' });
+        const poll = await new GraphCalendarSource(provider).ListUpcomingInvites('sage@customer.com', 'delta-1');
+        expect(provider.Calls[0].params.SyncToken).toBe('delta-1');
+        expect(poll.NextCursor).toBe('delta-2');
     });
 
-    it('normalizeGraphEvent omits join URL and end when absent', () => {
-        const invite = NormalizeGraphEvent(
-            graphEvent({ onlineMeeting: undefined, onlineMeetingUrl: undefined, body: undefined, end: undefined }),
+    it('leaves the cursor unchanged when the provider returns no token', async () => {
+        const poll = await new GraphCalendarSource(fakeProvider({ Success: true, Changes: [] })).ListUpcomingInvites('sage@customer.com', 'delta-1');
+        expect(poll.NextCursor).toBeUndefined();
+    });
+
+    it('reads Google calendars by the identity address as the calendar ID, as before', async () => {
+        const provider = fakeProvider();
+        await new GoogleCalendarSource(provider).ListUpcomingInvites('sage@customer.com');
+        expect(provider.Calls[0].params.Target).toEqual({ Identifier: 'sage@customer.com', CalendarID: 'sage@customer.com' });
+    });
+
+    /** An expired Graph delta link or Google sync token used to throw on every poll, for good. */
+    it('drops a refused cursor and reads the window again', async () => {
+        const provider = fakeProvider(
+            { Success: false, Changes: [], ResyncRequired: true, ErrorMessage: 'gone' },
+            { Success: true, Changes: [upserted(calendarEvent())], NextSyncToken: 'fresh' }
         );
-        expect(invite?.JoinUrl).toBeUndefined();
-        expect(invite?.EndTime).toBeUndefined();
+        const poll = await new GraphCalendarSource(provider).ListUpcomingInvites('sage@customer.com', 'expired');
+
+        expect(provider.Calls.map((c) => c.params.SyncToken)).toEqual(['expired', undefined]);
+        expect(poll.Invites).toHaveLength(1);
+        expect(poll.NextCursor).toBe('fresh');
+    });
+
+    it('throws the provider error so the watcher logs it and moves on', async () => {
+        const source = new GraphCalendarSource(fakeProvider({ Success: false, Changes: [], ErrorMessage: 'Graph calendar read failed: 403' }));
+        await expect(source.ListUpcomingInvites('sage@customer.com', 'delta-1')).rejects.toThrow('403');
+    });
+
+    it('works over any provider through the base class', async () => {
+        const source = new CommunicationCalendarSource(fakeProvider({ Success: true, Changes: [upserted(calendarEvent())], NextSyncToken: 't' }));
+        expect((await source.ListUpcomingInvites('sage@customer.com')).Invites).toHaveLength(1);
     });
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
-// GoogleCalendarSource.
-// ──────────────────────────────────────────────────────────────────────────────
-
-describe('GoogleCalendarSource', () => {
-    describe('NotBound → bound transition', () => {
-        it('throws CalendarSourceNotBoundError when no surface is injected', async () => {
-            const source = new GoogleCalendarSource();
-            await expect(source.ListUpcomingInvites('sage@customer.com')).rejects.toBeInstanceOf(
-                CalendarSourceNotBoundError,
-            );
-        });
-
-        it('resolves invites once a surface is injected', async () => {
-            const { surface } = fakeGoogle([{ items: [googleEvent()], nextSyncToken: 'sync-1' }]);
-            const source = new GoogleCalendarSource(surface);
-            const result = await source.ListUpcomingInvites('sage@customer.com');
-            expect(result.Invites).toHaveLength(1);
-            expect(result.NextCursor).toBe('sync-1');
-        });
-    });
-
-    describe('sync-token paging', () => {
-        it('uses syncToken on the first call, then pageToken, then captures nextSyncToken', async () => {
-            const { surface, calls } = fakeGoogle([
-                { items: [googleEvent({ id: 'a' })], nextPageToken: 'page-1' },
-                { items: [googleEvent({ id: 'b' })], nextPageToken: 'page-2' },
-                { items: [googleEvent({ id: 'c' })], nextSyncToken: 'sync-final' },
-            ]);
-            const source = new GoogleCalendarSource(surface);
-            const result = await source.ListUpcomingInvites('sage@customer.com', 'prior-sync');
-
-            expect(result.Invites.map((i) => i.ExternalEventID)).toEqual(['a', 'b', 'c']);
-            expect(result.NextCursor).toBe('sync-final');
-            expect(calls).toEqual([
-                { calendarId: 'sage@customer.com', syncToken: 'prior-sync' },
-                { calendarId: 'sage@customer.com', pageToken: 'page-1' },
-                { calendarId: 'sage@customer.com', pageToken: 'page-2' },
-            ]);
-        });
-
-        it('omits syncToken on a first poll with no prior cursor', async () => {
-            const { surface, calls } = fakeGoogle([{ items: [], nextSyncToken: 's' }]);
-            const source = new GoogleCalendarSource(surface);
-            await source.ListUpcomingInvites('sage@customer.com');
-            expect(calls[0]).toEqual({ calendarId: 'sage@customer.com' });
-        });
-    });
-
-    describe('event → CalendarPollResult normalization', () => {
-        it('normalizes id, summary, join URL, start/end, attendees, organizer', async () => {
-            const { surface } = fakeGoogle([{ items: [googleEvent()], nextSyncToken: 's' }]);
-            const source = new GoogleCalendarSource(surface);
-            const invite = (await source.ListUpcomingInvites('sage@customer.com')).Invites[0];
-
-            expect(invite.ExternalEventID).toBe('gevt-1');
-            expect(invite.Subject).toBe('Sync');
-            expect(invite.JoinUrl).toBe(MEET_JOIN_URL);
-            expect(invite.StartTime.toISOString()).toBe('2026-06-25T22:00:00.000Z'); // -07:00 → UTC
-            expect(invite.Attendees).toEqual([
+describe('changes → invites', () => {
+    it('normalizes id, subject, join URL, start/end, attendees and organizer', async () => {
+        const poll = await new GraphCalendarSource(fakeProvider({ Success: true, Changes: [upserted(calendarEvent())], NextSyncToken: 't' })).ListUpcomingInvites('sage@customer.com');
+        expect(poll.Invites[0]).toEqual({
+            ExternalEventID: 'evt-1',
+            Subject: 'Standup',
+            JoinUrl: TEAMS_JOIN_URL,
+            StartTime: new Date('2026-06-25T15:00:00Z'),
+            EndTime: new Date('2026-06-25T15:30:00Z'),
+            Attendees: [
                 { Email: 'sage@customer.com', DisplayName: 'Sage', ResponseStatus: 'Accepted' },
                 { Email: 'human@customer.com', ResponseStatus: 'NeedsAction' },
-            ]);
-            expect(invite.Organizer).toEqual({ Email: 'human@customer.com', DisplayName: 'Human' });
+            ],
+            Organizer: { Email: 'human@customer.com', DisplayName: 'Human' },
         });
+    });
 
-        it('drops cancelled events during paging', async () => {
-            const { surface } = fakeGoogle([
-                { items: [googleEvent({ id: 'gone', status: 'cancelled' }), googleEvent({ id: 'live' })], nextSyncToken: 's' },
-            ]);
-            const source = new GoogleCalendarSource(surface);
-            const { Invites } = await source.ListUpcomingInvites('sage@customer.com');
-            expect(Invites.map((i) => i.ExternalEventID)).toEqual(['live']);
-        });
+    it('skips removed and cancelled events, and events with no id or no start', async () => {
+        const poll = await new GoogleCalendarSource(
+            fakeProvider({
+                Success: true,
+                NextSyncToken: 't',
+                Changes: [
+                    { Kind: 'Removed', ExternalEventID: 'gone' },
+                    upserted(calendarEvent({ ExternalEventID: 'cancelled', IsCancelled: true })),
+                    upserted(calendarEvent({ ExternalEventID: '' })),
+                    upserted(calendarEvent({ ExternalEventID: 'no-start', Start: null })),
+                    upserted(calendarEvent({ ExternalEventID: 'kept', OnlineMeetingUrl: MEET_JOIN_URL })),
+                ],
+            })
+        ).ListUpcomingInvites('sage@customer.com');
+        expect(poll.Invites.map((i) => [i.ExternalEventID, i.JoinUrl])).toEqual([['kept', MEET_JOIN_URL]]);
     });
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Google pure helpers.
-// ──────────────────────────────────────────────────────────────────────────────
-
-describe('Google pure helpers', () => {
-    describe('parseGoogleDateTime', () => {
-        it('parses RFC3339 with offset', () => {
-            expect(ParseGoogleDateTime({ dateTime: '2026-06-25T15:00:00-07:00' })?.toISOString()).toBe(
-                '2026-06-25T22:00:00.000Z',
-            );
-        });
-        it('parses an all-day date as UTC midnight', () => {
-            expect(ParseGoogleDateTime({ date: '2026-06-25' })?.toISOString()).toBe('2026-06-25T00:00:00.000Z');
-        });
-        it('returns null on absent/invalid', () => {
-            expect(ParseGoogleDateTime(undefined)).toBeNull();
-            expect(ParseGoogleDateTime({ dateTime: 'nope' })).toBeNull();
-        });
+describe('NormalizeCalendarEvent', () => {
+    it('falls back to a meeting link in the body when the provider reports none', () => {
+        const invite = NormalizeCalendarEvent(calendarEvent({ OnlineMeetingUrl: null, Body: `<p>Join: <a href="${TEAMS_JOIN_URL}">here</a></p>` }));
+        expect(invite?.JoinUrl).toBe(TEAMS_JOIN_URL);
     });
 
-    describe('extractGoogleJoinUrl', () => {
-        it('prefers a video conferenceData entry point', () => {
-            expect(ExtractGoogleJoinUrl(googleEvent())).toBe(MEET_JOIN_URL);
-        });
-        it('falls back to hangoutLink', () => {
-            expect(ExtractGoogleJoinUrl(googleEvent({ conferenceData: undefined, hangoutLink: MEET_JOIN_URL }))).toBe(
-                MEET_JOIN_URL,
-            );
-        });
-        it('returns undefined when no conferencing is attached', () => {
-            expect(
-                ExtractGoogleJoinUrl(googleEvent({ conferenceData: undefined, hangoutLink: undefined })),
-            ).toBeUndefined();
-        });
+    it('omits the join URL and end when absent', () => {
+        const invite = NormalizeCalendarEvent(calendarEvent({ OnlineMeetingUrl: null, Body: 'no link', End: null, Subject: '' }));
+        expect(invite).not.toHaveProperty('JoinUrl');
+        expect(invite).not.toHaveProperty('EndTime');
+        expect(invite).not.toHaveProperty('Subject');
     });
 
-    it('mapGoogleResponseStatus maps known + unknown responses', () => {
-        expect(MapGoogleResponseStatus('accepted')).toBe('Accepted');
-        expect(MapGoogleResponseStatus('declined')).toBe('Declined');
-        expect(MapGoogleResponseStatus('tentative')).toBe('Tentative');
-        expect(MapGoogleResponseStatus('needsAction')).toBe('NeedsAction');
-        expect(MapGoogleResponseStatus('mystery')).toBeUndefined();
-    });
-
-    it('normalizeGoogleEvent returns null for a cancelled event', () => {
-        expect(NormalizeGoogleEvent(googleEvent({ status: 'cancelled' }))).toBeNull();
+    it('maps attendee responses, with None read as NeedsAction', () => {
+        const invite = NormalizeCalendarEvent(
+            calendarEvent({
+                Attendees: [
+                    { Email: 'a@x.com', Type: 'Required', Response: 'Accepted' },
+                    { Email: 'b@x.com', Type: 'Required', Response: 'Tentative' },
+                    { Email: 'c@x.com', Type: 'Optional', Response: 'Declined' },
+                    { Email: 'd@x.com', Type: 'Optional', Response: 'None' },
+                ],
+            })
+        );
+        expect(invite?.Attendees.map((a) => a.ResponseStatus)).toEqual(['Accepted', 'Tentative', 'Declined', 'NeedsAction']);
     });
 });
