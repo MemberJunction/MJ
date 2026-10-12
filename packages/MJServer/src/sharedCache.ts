@@ -3,9 +3,10 @@
  * what it publishes, what it does with events from other servers, and which periodic jobs the
  * connection's leases coordinate.
  *
- * Two independent consumers share the one connection and its one subscriber:
- * {@link WireSharedCacheEvents} for cache invalidation, and {@link WirePushStatusFanOut} for
- * cross-instance push-status delivery (MJ #4222). Both live here rather than at the call site so
+ * Three independent consumers share the one connection and its one subscriber:
+ * {@link WireSharedCacheEvents} for cache invalidation, {@link WirePushStatusFanOut} for
+ * cross-instance push-status delivery (MJ #4222), and {@link WireCacheInvalidationFanOut} for
+ * record-level browser invalidations from any process (MJ #5510). Both live here rather than at the call site so
  * that "what is our Redis used for" has a single answer.
  *
  */
@@ -18,6 +19,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { PUSH_STATUS_UPDATES_TOPIC, SetPushStatusPublishHook, ParseReplicatedStatusUpdate } from './generic/PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
+import { ParseReplicatedCacheInvalidation, SetCacheInvalidationPublishHook } from './generic/CacheInvalidationFanOut.js';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 /**
@@ -298,5 +300,51 @@ export async function WirePushStatusFanOut(redis: RedisLocalStorageProvider): Pr
         // Single-instance delivery still works, and the durable tail query covers the rest.
         // Degraded, not broken — so this must not stop the server from starting.
         console.warn(`Push-status fan-out unavailable: ${(err as Error).message}`);
+    }
+}
+
+/** Redis channel carrying replicated CACHE_INVALIDATION events between server processes. */
+const CACHE_INVALIDATION_FANOUT_CHANNEL = 'cache-invalidation';
+
+/**
+ * Replicate record-level CACHE_INVALIDATION events across server processes over Redis (MJ #5510).
+ *
+ * Without it, a save reaches only the browsers attached to the process that made it. That was
+ * tolerable while every process served browsers and ran background work; it is not once agents and
+ * scheduled jobs run in a worker process with no browser sockets, which is the topology that keeps
+ * a stall in that work off the interactive event loop.
+ *
+ * Same shape as {@link WirePushStatusFanOut}: outbound, the global BaseEntity listener calls
+ * `ReplicateCacheInvalidation` after its local publish; inbound, a peer's event is republished
+ * straight onto this process's local topic, where the subscription's entity-permission filter
+ * still decides who receives it. `sourceServerId` drops our own echo.
+ *
+ * This complements, and does not replace, the RunView-slot relay in {@link WireSharedCacheEvents}:
+ * that one fires only for entities with a RunView slot cached in Redis and carries no key, so a peer
+ * browser may receive both an entity-level and a record-level event for one save. Both are
+ * invalidations; the duplicate costs a re-read, never a wrong value.
+ */
+export async function WireCacheInvalidationFanOut(redis: RedisLocalStorageProvider): Promise<void> {
+    try {
+        await redis.SubscribeToChannel(CACHE_INVALIDATION_FANOUT_CHANNEL, (raw: string) => {
+            try {
+                const payload = ParseReplicatedCacheInvalidation(raw, MJGlobal.Instance.ProcessUUID);
+                if (payload) {
+                    PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, { ...payload });
+                }
+            } catch (err) {
+                // A malformed message on a shared channel must not take down the subscriber.
+                LogError('Error processing cache-invalidation fan-out message', undefined, err);
+            }
+        });
+
+        SetCacheInvalidationPublishHook((payload) => {
+            redis.PublishMessage(CACHE_INVALIDATION_FANOUT_CHANNEL, JSON.stringify(payload));
+        });
+
+        console.log('[MJAPI] Cache invalidation: cross-process fan-out enabled via Redis');
+    } catch (err) {
+        // Same-process delivery still works. Degraded, not broken — the server must still start.
+        console.warn(`Cache-invalidation fan-out unavailable: ${(err as Error).message}`);
     }
 }

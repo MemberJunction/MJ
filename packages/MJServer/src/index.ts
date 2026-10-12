@@ -71,7 +71,8 @@ import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, Lo
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
 import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
-import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
+import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents, WireCacheInvalidationFanOut } from './sharedCache.js';
+import { ReplicateCacheInvalidation } from './generic/CacheInvalidationFanOut.js';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
 import {
@@ -93,7 +94,7 @@ import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
-import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
+import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast, type CacheInvalidationPayload } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
 import {
@@ -475,6 +476,7 @@ const setupComplete$ = new ReplaySubject(1);
     // they reach into RoomHandoffEngine and RealtimeSessionEventService, and the cache module should not
     // acquire a dependency on either.
     await WirePushStatusFanOut(sharedCache);
+    await WireCacheInvalidationFanOut(sharedCache);
     await wireHandoffOfferFanOut(sharedCache, startupLog);
     await wireRealtimeSessionEventFanOut(sharedCache);
     startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
@@ -1037,7 +1039,7 @@ const setupComplete$ = new ReplaySubject(1);
       const beEvent = event.args as BaseEntityEvent;
       if (beEvent.type === 'save' || beEvent.type === 'delete') {
         const entityName = beEvent.baseEntity.EntityInfo.Name;
-        PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
+        const invalidation: CacheInvalidationPayload = {
           entityName,
           primaryKeyValues: JSON.stringify(beEvent.baseEntity.PrimaryKey.KeyValuePairs),
           action: beEvent.type,
@@ -1051,7 +1053,10 @@ const setupComplete$ = new ReplaySubject(1);
             beEvent.type === 'save' && MayBroadcastRecordData(entityName)
               ? JSON.stringify(beEvent.baseEntity.GetAll())
               : undefined,
-        });
+        };
+        PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, { ...invalidation });
+        // To browsers attached to OTHER processes (e.g. this one is a worker with none) — MJ #5510.
+        ReplicateCacheInvalidation(invalidation);
       }
     }
   });

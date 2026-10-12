@@ -37,10 +37,12 @@ import {
     StartUserCacheChecks,
     StartMetadataSweep,
     WirePushStatusFanOut,
+    WireCacheInvalidationFanOut,
 } from '../sharedCache.js';
 import { MJGlobal } from '@memberjunction/global';
 import type { PubSubEngine } from 'type-graphql';
 import { PublishStatusUpdate, SetPushStatusPublishHook } from '../generic/PushStatusResolver.js';
+import { ReplicateCacheInvalidation, SetCacheInvalidationPublishHook } from '../generic/CacheInvalidationFanOut.js';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import type { CacheSettingsConfig } from '../config.js';
 
@@ -305,6 +307,104 @@ describe('push-status fan-out wiring', () => {
 
         // No hook may be left pointing at a connection it could not subscribe on.
         PublishStatusUpdate(localTopic(), { sessionId: 's', ownerUserId: 'u', message: 'x' });
+        expect(redis.PublishMessage).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * Cache-invalidation fan-out (MJ #5510 part B). A save in a worker process must reach browsers whose
+ * socket is on an API process. Same shape as push-status: real parser, real hook, fake Redis.
+ */
+describe('cache-invalidation fan-out wiring', () => {
+    class FakeSharedCache {
+        public SubscribedChannel: string | undefined;
+        public Published: Array<{ channel: string; payload: string }> = [];
+        private inboundHandler: ((raw: string) => void) | undefined;
+        constructor(private subscribeFails = false) {}
+
+        public SubscribeToChannel = vi.fn(async (channel: string, handler: (raw: string) => void) => {
+            if (this.subscribeFails) {
+                throw new Error('redis is down');
+            }
+            this.SubscribedChannel = channel;
+            this.inboundHandler = handler;
+            return () => undefined;
+        });
+
+        public PublishMessage = vi.fn((channel: string, payload: string) => {
+            this.Published.push({ channel, payload });
+        });
+
+        public Deliver(raw: string): void {
+            this.inboundHandler?.(raw);
+        }
+
+        public AsProvider(): RedisLocalStorageProvider {
+            return this as unknown as RedisLocalStorageProvider;
+        }
+    }
+
+    const savedOnWorker = {
+        entityName: 'MJ: Conversation Details',
+        primaryKeyValues: '[{"FieldName":"ID","Value":"abc"}]',
+        action: 'save',
+        sourceServerId: 'worker-process',
+        timestamp: '2026-10-12T14:02:00.000Z',
+    };
+
+    beforeEach(() => {
+        publish.mockReset();
+        SetCacheInvalidationPublishHook(undefined);
+    });
+    afterEach(() => {
+        SetCacheInvalidationPublishHook(undefined);
+    });
+
+    it('subscribes to the cache-invalidation channel on the shared connection', async () => {
+        const redis = new FakeSharedCache();
+        await WireCacheInvalidationFanOut(redis.AsProvider());
+        expect(redis.SubscribedChannel).toBe('cache-invalidation');
+    });
+
+    it("republishes a PEER's record-level event on this process's CACHE_INVALIDATION topic", async () => {
+        const redis = new FakeSharedCache();
+        await WireCacheInvalidationFanOut(redis.AsProvider());
+
+        redis.Deliver(JSON.stringify(savedOnWorker));
+
+        expect(publish).toHaveBeenCalledTimes(1);
+        expect(publish).toHaveBeenCalledWith('CACHE_INVALIDATION', {
+            ...savedOnWorker,
+            timestamp: new Date(savedOnWorker.timestamp),
+        });
+    });
+
+    it("drops this process's own event echoed back", async () => {
+        const redis = new FakeSharedCache();
+        await WireCacheInvalidationFanOut(redis.AsProvider());
+
+        redis.Deliver(JSON.stringify({ ...savedOnWorker, sourceServerId: MJGlobal.Instance.ProcessUUID }));
+
+        expect(publish).not.toHaveBeenCalled();
+    });
+
+    it('forwards a local event onto the same channel', async () => {
+        const redis = new FakeSharedCache();
+        await WireCacheInvalidationFanOut(redis.AsProvider());
+
+        ReplicateCacheInvalidation({ ...savedOnWorker, sourceServerId: MJGlobal.Instance.ProcessUUID, timestamp: new Date(savedOnWorker.timestamp) });
+
+        expect(redis.Published).toHaveLength(1);
+        expect(redis.Published[0].channel).toBe('cache-invalidation');
+        expect(JSON.parse(redis.Published[0].payload)).toEqual({ ...savedOnWorker, sourceServerId: MJGlobal.Instance.ProcessUUID });
+    });
+
+    it('degrades instead of stopping the server when Redis cannot subscribe', async () => {
+        const redis = new FakeSharedCache(true);
+
+        await expect(WireCacheInvalidationFanOut(redis.AsProvider())).resolves.toBeUndefined();
+
+        ReplicateCacheInvalidation({ ...savedOnWorker, timestamp: new Date() });
         expect(redis.PublishMessage).not.toHaveBeenCalled();
     });
 });

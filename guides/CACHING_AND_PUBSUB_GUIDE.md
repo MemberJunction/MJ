@@ -1887,7 +1887,7 @@ graph TD
 ```
 
 - Browser A saves → MJAPI-A handles locally + publishes to Redis
-- MJAPI-B receives via Redis → publishes CACHE_INVALIDATION (with RecordData) to Browser B
+- MJAPI-B receives via Redis → publishes CACHE_INVALIDATION (with RecordData) to Browser B. Since MJ #5510 every save's record-level event crosses on the `cache-invalidation` channel, whether or not a RunView slot for the entity is cached in Redis
 - Browser B applies changes directly — **no round-trip back to MJAPI-B**
 - MJAPI-A publishes CACHE_INVALIDATION to Browser C (same server, different user)
 - Browser A skips the notification (OriginSessionID match)
@@ -1912,6 +1912,45 @@ graph TD
 All servers share cache state via Redis. All browsers get real-time updates via their server's WebSocket. The system is horizontally scalable — add more MJAPI instances behind the load balancer as traffic grows. Record data flows through Redis pub/sub → GraphQL subscription → direct array mutation — no extra round-trips at any tier.
 
 **Important**: WebSocket connections are sticky (a browser stays connected to the same MJAPI instance for the duration of its session). The load balancer should be configured for WebSocket support (e.g., HAProxy with `option http-server-close`).
+
+### API Processes Plus a Background Worker
+
+Every MJAPI process serves HTTP, WebSockets and background work from **one event loop**. A synchronous phase of background work — a large serialization, prompt assembly, GC under heap pressure — therefore stalls every interactive request on that process for its full duration (MJ #5510). The stall monitor names these in the log (`[WARNING] [EventLoop] MJAPI event loop was blocked for …ms … In flight: …`).
+
+Scheduled jobs (including scheduled agent runs) can be moved to a process that serves no browsers:
+
+```mermaid
+graph TD
+    LB[Load Balancer] --> A1[MJAPI api-1]
+    LB --> A2[MJAPI api-2]
+    W[MJAPI worker<br/>not in the LB pool]
+
+    A1 <--> Redis[(Redis)]
+    A2 <--> Redis
+    W <--> Redis
+
+    A1 --> DB[(Database)]
+    A2 --> DB
+    W --> DB
+```
+
+| Setting | API processes | Worker process |
+|---|---|---|
+| `scheduledJobs.enabled` | `false` | `true` |
+| `integrationSyncWorker.enabled` | `false` | `true` if you use it |
+| `workQueue.enabled` | `false` | `true` if you use it |
+| `REDIS_URL` / `REDIS_KEY_PREFIX` | same value everywhere | same value everywhere |
+| Load balancer | in the pool | **not** in the pool (it still listens, so `/healthcheck` works) |
+
+What reaches a browser when the work runs on the worker:
+
+- **Entity changes** — the worker's saves reach every API process's sockets on the `cache-invalidation` Redis channel (MJ #5510). Without Redis they reach no browser, because the worker has none.
+- **Push-status updates** — any the run publishes (progress, completion) cross through the push-status fan-out (MJ #4222). Token streaming is deliberately not replicated, so a browser never sees a live token stream from the worker.
+- **Run history** — durable in the database as always.
+
+Several workers are safe: `spAcquireScheduledJobLock` is atomic, so each due job runs exactly once.
+
+**What does NOT move.** An agent run a user starts from a conversation still executes in the API process that received the request, so this topology removes scheduled work from the interactive loop but not interactive agent runs. The durable task-graph dispatcher runs on every process; `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` also makes that process refuse task-graph submissions, so do not set it on API processes as a way to move graphs to the worker. Cancelling a run owned by another process needs the database-backed cancel in MJ PR #5047.
 
 ---
 
