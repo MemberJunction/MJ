@@ -193,6 +193,14 @@ dynamicPackages: {
 `--verbose` prints what loaded on stderr. Full model:
 [`guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`](../../guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md).
 
+### Keeping the machine awake
+
+`mj install`, `mj app install`, `mj app upgrade` and `mj migrate` run for many minutes against the
+database. If the machine sleeps mid-run, every in-flight request times out on wake and the step is
+rolled back. On macOS these commands therefore hold a `caffeinate` assertion for as long as the
+CLI process lives (it ends with the command). Set `MJ_ALLOW_SLEEP=1` to opt out. Other platforms
+are unaffected.
+
 ## Commands
 
 ### mj install
