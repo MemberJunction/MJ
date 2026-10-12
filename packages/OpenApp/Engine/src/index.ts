@@ -87,7 +87,7 @@ export {
 export type { RefreshDatabaseConfig } from './install/open-app-metadata-refresh.js';
 export type { MigrationRunOptions, MigrationRunResult, FlywayDatabaseConfig, SkywayDatabaseConfig } from './install/migration-runner.js';
 
-export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, BumpPrefixedDependencies, DetectPackageManager, detectPackageManager, HasPnpmCatalog, hasPnpmCatalog } from './install/package-manager.js';
+export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, RunPackageInstallAsync, ResolvePackageInstallTimeoutMs, DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS, PACKAGE_INSTALL_TIMEOUT_ENV_VAR, BumpPrefixedDependencies, DetectPackageManager, detectPackageManager, HasPnpmCatalog, hasPnpmCatalog } from './install/package-manager.js';
 export type { PackageManagerOptions, PackageOperationResult, PackageManagerType, VersionStrategy, WorkspaceTarget } from './install/package-manager.js';
 
 export {
