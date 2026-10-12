@@ -837,11 +837,14 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
     /**
      * Uploads ONE crash-recovery audio shard (~15s) for an IN-PROGRESS recording into the session's
-     * folder (`realtime-recordings/<sessionId>/seg-NNNN.<ext>`) as a raw storage object. Durability
-     * insurance during a live call so a browser/tab death loses at most the last window; the shards are
-     * deleted once the canonical consolidated file lands via {@link UploadRealtimeRecording}. Ownership-
-     * gated; consent was already established at session start. Best-effort — returns `false` (never
-     * throws) on any problem so a failed shard never disrupts the live call.
+     * folder (`realtime-recordings/<sessionId>/seg-NNNN.r<rate>.pcm` for PCM with a rate in its MIME type,
+     * else the legacy `seg-NNNN.<ext>`) as a raw storage object. Durability insurance during a live call
+     * so a browser/tab death loses at most the last window; the shards are deleted once the canonical
+     * consolidated file lands via {@link UploadRealtimeRecording}, or by the session janitor once it has
+     * recovered a recording from them when that upload never arrives. Ownership-
+     * gated; consent was already established at session start. Refused (`false`) once the session has
+     * its consolidated recording, since nothing would delete a shard written after that. Best-effort —
+     * returns `false` (never throws) on any problem so a failed shard never disrupts the live call.
      *
      * @param agentSessionId The in-progress session (ownership-gated).
      * @param segmentIndex 0-based shard index within the session.
@@ -860,6 +863,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         try {
             const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
             const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+            // The consolidated recording already landed and its upload deleted the shards; a shard
+            // arriving now (one still on the wire at hang-up) would be an orphan nothing deletes.
+            if (session.RecordingFileID) {
+                LogStatus(`RealtimeClientSessionResolver.UploadRealtimeRecordingSegment: shard ${segmentIndex} for session ${agentSessionId} refused — the session already has its consolidated recording`);
+                return false;
+            }
             // Scoped-anonymous elevation (issue #3371) — same rationale as UploadRealtimeRecording.
             const runUser = ResolveScopedAnonymousRunUser(contextUser);
             const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', runUser);
