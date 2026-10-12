@@ -424,7 +424,9 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
 
     // Per-session transcription-model override + MJ-side transport settings. All scrubbed
     // unconditionally — none of these are wire fields on ANY provider in the family.
-    const bag = rest as JSONObject & { inputTranscriptionModel?: unknown; transcriptionLanguages?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown };
+    const bag = rest as JSONObject & {
+        inputTranscriptionModel?: unknown; transcriptionLanguages?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown;
+    };
     const rawItm = bag.inputTranscriptionModel;
     delete bag.inputTranscriptionModel;
     const inputTranscriptionModel = typeof rawItm === 'string' && rawItm.trim().length > 0 ? rawItm.trim() : undefined;

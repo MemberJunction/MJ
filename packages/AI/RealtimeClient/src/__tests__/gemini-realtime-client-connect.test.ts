@@ -4,6 +4,7 @@ import { GeminiRealtimeClient, type GeminiClientConnectArgs, type GeminiLiveClie
 
 // From @google/genai 2.11, `live.connect` resolves only on the server's setupComplete frame and never
 // rejects when the socket closes first. These drive the REAL connect seam against a fake SDK client.
+// Its own file because the module-level vi.mock of @google/genai applies to the whole file.
 vi.mock('@google/genai', async (importOriginal) => ({ ...(await importOriginal<typeof import('@google/genai')>()), GoogleGenAI: vi.fn() }));
 
 type FakeCallbacks = { onclose: (e: Partial<CloseEvent>) => void; onerror: (e: Partial<ErrorEvent>) => void };

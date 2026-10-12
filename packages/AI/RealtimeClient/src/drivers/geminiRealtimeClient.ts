@@ -620,7 +620,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Creation seam for the Gemini Live session. Production constructs a `GoogleGenAI` client
      * with the **ephemeral token as the API key** on the `v1alpha` API version (the only
      * version that accepts `auth_tokens`), then opens `live.connect` with the server-built
-     * model + config. Unit tests override this to return an in-memory fake.
+     * model + config. Rejects if the socket errors or closes before Gemini acknowledges the setup.
+     * Unit tests override this to return an in-memory fake.
      */
     protected async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         const ai = new GoogleGenAI({ apiKey: args.EphemeralToken, httpOptions: { apiVersion: 'v1alpha' } });

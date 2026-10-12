@@ -332,7 +332,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * boundary is the *only* thing tests need to replace.
      *
      * @param args Resolved model, connect config, and the server-message callback.
-     * @returns A promise resolving to the live session handle.
+     * @returns A promise resolving to the live session handle; it rejects if the socket errors or
+     *          closes before Gemini acknowledges the setup.
      */
     protected async connectLiveSession(args: GeminiConnectArgs): Promise<GeminiLiveSession> {
         const client = this.ensureClient();
@@ -456,6 +457,31 @@ export class GeminiRealtime extends BaseRealtimeModel {
         };
     }
 
+    /**
+     * Consumes the driver-NEUTRAL `transcriptionLanguages` bag key (BCP-47 codes) into `languageCodes`
+     * hints on both caption streams. Without a hint Gemini auto-detects each utterance's language for
+     * the captions, and can caption English speech in another script.
+     *
+     * @param cfg The open config bag; the key is always deleted from it.
+     * @param config The connect config receiving the hints.
+     */
+    private static applyTranscriptionLanguages(cfg: Record<string, unknown>, config: LiveConnectConfig): void {
+        const raw = cfg.transcriptionLanguages;
+        delete cfg.transcriptionLanguages;
+        const languageCodes = Array.isArray(raw)
+            ? raw.filter((c): c is string => typeof c === 'string' && c.trim().length > 0).map((c) => c.trim())
+            : [];
+        if (languageCodes.length > 0) {
+            config.inputAudioTranscription = { languageCodes };
+            config.outputAudioTranscription = { languageCodes };
+        } else if (raw !== undefined) {
+            console.warn(
+                '[GeminiRealtime] Ignored the session config bag\'s `transcriptionLanguages` because it holds no language codes '
+                + '— expected an array of BCP-47 codes such as ["en-US"].'
+            );
+        }
+    }
+
     /** Narrows an unenforced config-bag value to a real object — not a string, array, or null. */
     private static isPlainObject(value: unknown): value is SpeechConfig {
         return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -515,21 +541,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 const reason = typeof rawVoice === 'string' ? 'blank' : `not a string (got ${typeof rawVoice})`;
                 console.warn(`[GeminiRealtime] Ignored the session config bag's \`voice\` because it is ${reason} — expected a Gemini prebuilt voice name.`);
             }
-            // Consume the driver-NEUTRAL `transcriptionLanguages` key (BCP-47 codes) too. Without a
-            // `languageCodes` hint Gemini auto-detects each utterance's language for the captions, and
-            // can caption English speech in another script. Set before the merge below, so a
-            // provider-native `inputAudioTranscription` / `outputAudioTranscription` in the bag still wins.
-            const rawLanguages = cfg.transcriptionLanguages;
-            delete cfg.transcriptionLanguages;
-            const languageCodes = Array.isArray(rawLanguages)
-                ? rawLanguages.filter((c): c is string => typeof c === 'string' && c.trim().length > 0).map((c) => c.trim())
-                : [];
-            if (languageCodes.length > 0) {
-                config.inputAudioTranscription = { languageCodes };
-                config.outputAudioTranscription = { languageCodes };
-            } else if (rawLanguages !== undefined) {
-                console.warn('[GeminiRealtime] Ignored the session config bag\'s `transcriptionLanguages` because it holds no language codes — expected an array of BCP-47 codes such as ["en-US"].');
-            }
+            // Consumed before the merge below, so a provider-native transcription config in the bag still wins.
+            GeminiRealtime.applyTranscriptionLanguages(cfg, config);
             // Scrub the MJ-side keys shared across the realtime driver family (OpenAI-protocol
             // feature knobs + transport settings). They are NOT Gemini config keys — a co-agent
             // config carrying e.g. `effortLevel` or `mcpTools` must be SAFE on a Gemini session,
