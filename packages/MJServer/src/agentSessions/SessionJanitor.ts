@@ -573,8 +573,13 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         const sessionID = candidate.ID;
         let attempted = false;
         try {
-            if (candidate.RecordingStatus == null && !(await this.restoreLostRecordingStatus(candidate, ledger))) {
-                return this.recordLedgerFailure(sessionID, false);
+            if (candidate.RecordingStatus == null) {
+                // The restore is a write; a failing one counts toward the per-sweep cap like an assembly.
+                attempted = true;
+                if (!(await this.restoreLostRecordingStatus(candidate, ledger))) {
+                    return this.recordLedgerFailure(sessionID, true);
+                }
+                attempted = false;
             }
             const version = await ledger.ClaimAssembly(sessionID, staleCutoff);
             if (version === null) {
@@ -630,25 +635,18 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
      * the session (e.g. its close) loaded the row before a shard or terminal proc wrote it and saved
      * after: `spUpdate` rewrites every column, so it puts back the stale NULL status and counts.
      *
-     * The terminal proc is the existing way to set a NULL status to `Pending`. Its counts are rebuilt from
-     * the ledger (one past the highest index; the end of the last sample), never lowered below what the
-     * session still stores, so the stamp is accepted and a later real terminal with higher counts still
-     * re-opens the recording. Audio past the last stored shard never reached the server, so these counts
-     * are the best evidence left; a recording whose stored shards are contiguous assembles as Complete.
+     * The terminal proc is the existing way to set a NULL status to `Pending`. It is stamped with the
+     * counts the session still stores, or 0 for a NULL count (the proc accepts any count over NULL), and
+     * never with counts invented from the ledger: a made-up terminal could make a recording whose tail
+     * never arrived assemble as Complete, which deletes its shards. With no real terminal the stored shard
+     * count differs from the stamped one, so the assembly is Partial and keeps the shards; a later real
+     * terminal (higher counts) or late shard re-opens it intact.
      * Returns false (logged) when the status could not be restored.
      */
     private async restoreLostRecordingStatus(candidate: MJAIAgentSessionEntity, ledger: IRealtimeRecordingLedger): Promise<boolean> {
         const sessionID = candidate.ID;
-        const shards = await ledger.LoadShardMetadata(sessionID);
-        if (shards.length === 0) {
-            LogStatus(`[SessionJanitor] Session ${sessionID} has no recording status and its ledger shards are gone; nothing to assemble`);
-            return false;
-        }
-        // reduce, not Math.max(...): the shard count is unbounded until assembly checks it.
-        const ledgerShards = shards.reduce((max, shard) => Math.max(max, shard.Index + 1), 0);
-        const ledgerSamples = shards.reduce((max, shard) => Math.max(max, shard.StartSample + shard.SampleCount), 0);
-        const expectedShards = Math.max(candidate.RecordingExpectedShards ?? 0, ledgerShards);
-        const capturedSamples = Math.max(candidate.RecordingCapturedSamples ?? 0, ledgerSamples);
+        const expectedShards = candidate.RecordingExpectedShards ?? 0;
+        const capturedSamples = candidate.RecordingCapturedSamples ?? 0;
         const stamped = await ledger.StampTerminal(sessionID, expectedShards, capturedSamples);
         if (stamped.RecordingStatus == null) {
             LogError(
@@ -658,8 +656,8 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             return false;
         }
         LogStatus(
-            `[SessionJanitor] Restored recording status ${stamped.RecordingStatus} for session ${sessionID} from its ledger ` +
-            `(${shards.length} shard(s); expected ${expectedShards}, ${capturedSamples} sample(s))`,
+            `[SessionJanitor] Restored recording status ${stamped.RecordingStatus} for session ${sessionID} ` +
+            `(stamped its stored counts: ${expectedShards} shard(s), ${capturedSamples} sample(s))`,
         );
         return true;
     }
@@ -761,10 +759,17 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
      */
     private async runRecoveryPass(provider: DatabaseProviderBase, systemUser: UserInfo): Promise<void> {
         await this.purgeExpiredLedgerShards(provider, systemUser);
+        // A Stop() during a step ends the pass before the next one, so Shutdown waits on less work.
+        if (this._stopped) {
+            return;
+        }
         try {
             await this.RunRecordingLedgerSweep(provider, systemUser);
         } catch (err) {
             LogError(`SessionJanitor recording ledger sweep failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        if (this._stopped) {
+            return;
         }
         await this.RunRecordingRecoverySweep(provider, systemUser);
     }

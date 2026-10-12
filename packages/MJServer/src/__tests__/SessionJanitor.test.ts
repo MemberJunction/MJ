@@ -830,6 +830,23 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
             expect(logStatusMock).toHaveBeenCalledWith(expect.stringMatching(/purged 42 recording shard/i));
         });
 
+        it('a Stop() during the pass ends it before the next step', async () => {
+            const { provider } = makeRecoveryProvider();
+            await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
+            runViewMock.mockClear();
+            let releasePurge: () => void = () => undefined;
+            ledgerMock.PurgeClosedBefore.mockImplementationOnce(
+                () => new Promise<number>((resolve) => { releasePurge = () => resolve(0); }),
+            );
+
+            await vi.advanceTimersByTimeAsync(60_000); // the pass parks in the purge
+            SessionJanitor.Instance.Stop();
+            releasePurge();
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(sessionSweepCalls().filter((c) => c[0].ExtraFilter.includes('RecordingStatus'))).toHaveLength(0);
+        });
+
         it('a failed purge is logged with context and the sweeps still run', async () => {
             const { provider } = makeRecoveryProvider();
             await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
@@ -1157,24 +1174,22 @@ describe('SessionJanitor.RunRecordingLedgerSweep', () => {
         expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`${bad.ID}.*claim deadlock`)));
     });
 
-    it('restores the status a racing session save wiped, from the ledger itself, before claiming', async () => {
+    it('restores the status a racing session save wiped with a (0, 0) stamp, never counts invented from the ledger, before claiming', async () => {
+        // No terminal counts survive: stamping 0/0 sets NULL -> Pending, and the assembly (shard count != 0)
+        // is Partial and keeps the shards, instead of a made-up terminal labelling it Complete.
         const session = ledgerCandidate({ RecordingStatus: null });
-        ledgerMock.LoadShardMetadata.mockResolvedValueOnce([
-            { Index: 0, StartSample: 0, SampleCount: 240_000 },
-            { Index: 2, StartSample: 480_000, SampleCount: 100_000 },
-        ]);
         ledgerMock.StampTerminal.mockResolvedValueOnce({ Outcome: 'Stamped', RecordingStatus: 'Pending' });
 
         expect(await ledgerSweepWith([session])).toBe(1);
 
-        expect(ledgerMock.StampTerminal).toHaveBeenCalledWith(session.ID, 3, 580_000);
+        expect(ledgerMock.StampTerminal).toHaveBeenCalledWith(session.ID, 0, 0);
+        expect(ledgerMock.LoadShardMetadata).not.toHaveBeenCalled();
         expect(ledgerMock.StampTerminal.mock.invocationCallOrder[0]).toBeLessThan(ledgerMock.ClaimAssembly.mock.invocationCallOrder[0]);
         expect(assembleMock).toHaveBeenCalledWith(expect.objectContaining({ SessionID: session.ID, ForcePartial: true }));
     });
 
-    it('never stamps counts below what the session already stored', async () => {
+    it('restores a lost status with the counts the session still stores', async () => {
         const session = ledgerCandidate({ RecordingStatus: null, RecordingExpectedShards: 9, RecordingCapturedSamples: 2_000_000 });
-        ledgerMock.LoadShardMetadata.mockResolvedValueOnce([{ Index: 0, StartSample: 0, SampleCount: 240_000 }]);
         ledgerMock.StampTerminal.mockResolvedValueOnce({ Outcome: 'Stamped', RecordingStatus: 'Pending' });
 
         await ledgerSweepWith([session]);
@@ -1184,12 +1199,22 @@ describe('SessionJanitor.RunRecordingLedgerSweep', () => {
 
     it('LogErrors and backs off a lost status the stamp could not restore', async () => {
         const session = ledgerCandidate({ RecordingStatus: null });
-        ledgerMock.LoadShardMetadata.mockResolvedValueOnce([{ Index: 0, StartSample: 0, SampleCount: 240_000 }]);
         ledgerMock.StampTerminal.mockResolvedValueOnce({ Outcome: 'Ignored', RecordingStatus: null });
 
         expect(await ledgerSweepWith([session])).toBe(0);
         expect(ledgerMock.ClaimAssembly).not.toHaveBeenCalled();
         expect(logErrorMock).toHaveBeenCalledWith(expect.stringContaining(session.ID));
+        await ledgerSweepWith([session]);
+        expect(ledgerMock.StampTerminal).toHaveBeenCalledTimes(1); // backed off
+    });
+
+    it('counts failed status restores toward the per-sweep cap', async () => {
+        const sessions = Array.from({ length: 7 }, () => ledgerCandidate({ RecordingStatus: null }));
+        ledgerMock.StampTerminal.mockRejectedValue(new Error('stamp deadlock'));
+
+        await ledgerSweepWith(sessions);
+
+        expect(ledgerMock.StampTerminal).toHaveBeenCalledTimes(5);
     });
 
     it('attempts at most 5 assemblies per sweep', async () => {
