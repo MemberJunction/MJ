@@ -107,8 +107,6 @@ function makeSessionEntity(overrides: Partial<FakeEntity> = {}): FakeEntity {
         NewRecord: vi.fn(),
         Save: vi.fn(async () => true),
         Load: vi.fn(async () => true),
-        GetAll: vi.fn(() => ({ ID: overrides.ID ?? 'session-1' })),
-        LoadFromData: vi.fn(async () => true),
         LatestResult: { CompleteMessage: '' },
         ...overrides,
     };
@@ -476,48 +474,7 @@ describe('SessionManager.Heartbeat', () => {
     });
 });
 
-describe('SessionManager — saves never write the recording ledger\'s columns back (#5294)', () => {
-    /** Columns the recording ledger's procedures own; a stale copy saved back would rewind them. */
-    const LEDGER_COLUMNS = [
-        'RecordingStatus', 'RecordingExpectedShards', 'RecordingCapturedSamples', 'RecordingGaps',
-        'RecordingAssemblyVersion', 'RecordingFileID', 'RecordingMedia',
-    ];
-
-    /** A session whose loaded row carries ledger values, recording what it is re-hydrated with. */
-    function ledgerSession(status: string) {
-        const row: Record<string, unknown> = {
-            ID: 'session-1', Status: status, ConversationID: null, LastActiveAt: new Date(0),
-            RecordingStatus: 'Pending', RecordingExpectedShards: 4, RecordingCapturedSamples: 960_000,
-            RecordingGaps: null, RecordingAssemblyVersion: 0, RecordingFileID: null, RecordingMedia: null,
-        };
-        const order: string[] = [];
-        const session = makeSessionEntity({
-            ...row,
-            GetAll: vi.fn(() => ({ ...row })),
-            LoadFromData: vi.fn(async () => { order.push('hydrate'); return true; }),
-            Save: vi.fn(async () => { order.push('save'); return true; }),
-        });
-        return { session, order };
-    }
-
-    function hydratedWith(session: FakeEntity): Record<string, unknown> {
-        const calls = (session.LoadFromData as ReturnType<typeof vi.fn>).mock.calls;
-        expect(calls).toHaveLength(1);
-        return calls[0][0] as Record<string, unknown>;
-    }
-
-    it('Heartbeat re-hydrates without the ledger columns before it saves, so the save leaves them alone', async () => {
-        const { session, order } = ledgerSession('Active');
-        const { provider } = makeProvider(() => session);
-
-        await new SessionManager().Heartbeat('session-1', makeUser(), provider);
-
-        const data = hydratedWith(session);
-        expect(Object.keys(data).filter(k => LEDGER_COLUMNS.includes(k))).toEqual([]);
-        expect(data['ID']).toBe('session-1');
-        expect(order).toEqual(['hydrate', 'save']);
-    });
-
+describe('SessionManager.CloseSession — recording assembly (#5294)', () => {
     it('CloseSession of a recorded session asks for its assembly now (the hidden-tab deferral ends with the call)', async () => {
         const session = makeSessionEntity({ ID: 'session-1', Status: 'Active', RecordingStartedAt: new Date(0) });
         const { provider } = makeProvider(() => session);
@@ -530,17 +487,6 @@ describe('SessionManager — saves never write the recording ledger\'s columns b
         const { provider } = makeProvider(() => session);
         await new SessionManager().CloseSession('session-1', makeUser(), provider);
         expect(scheduleAssemblyMock).not.toHaveBeenCalled();
-    });
-
-    it('CloseSession does the same', async () => {
-        const { session, order } = ledgerSession('Active');
-        const { provider } = makeProvider(() => session);
-
-        await new SessionManager().CloseSession('session-1', makeUser(), provider);
-
-        const data = hydratedWith(session);
-        expect(Object.keys(data).filter(k => LEDGER_COLUMNS.includes(k))).toEqual([]);
-        expect(order).toEqual(['hydrate', 'save']);
     });
 });
 

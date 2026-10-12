@@ -447,25 +447,9 @@ export class SessionManager {
     }
 
     /**
-     * Columns of a session that the client-direct recording ledger's stored procedures own (#5294):
-     * they change under a live session (shard inserts, terminal stamps, assembly claims and finishes)
-     * without going through `BaseEntity`, so this manager must never write them back.
-     */
-    private static readonly recordingLedgerColumns: ReadonlySet<string> = new Set<keyof MJAIAgentSessionEntity>([
-        'RecordingStatus', 'RecordingExpectedShards', 'RecordingCapturedSamples', 'RecordingGaps',
-        'RecordingAssemblyVersion', 'RecordingFileID', 'RecordingMedia',
-    ]);
-
-    /**
-     * Loads a session entity by ID for a lifecycle save (close, idle, heartbeat), returning null when it
-     * cannot be loaded.
-     *
-     * A save rewrites every loaded column, so a session loaded before a ledger procedure ran and saved
-     * after it would put back the stale recording state: rewind the assembly version and status (the
-     * running assembly then loses its fence and the recording waits for the janitor) or clear
-     * `RecordingFileID`. The session is therefore re-hydrated from its own values minus the
-     * {@link recordingLedgerColumns}; `BaseEntity` marks the omitted fields not-loaded and leaves them
-     * out of the save. Nothing here reads them.
+     * Loads a session entity by ID, returning null when it cannot be loaded. The server entity
+     * (`MJAIAgentSessionEntityServer`) keeps the lifecycle saves that follow from writing back the
+     * recording ledger's columns (#5294).
      */
     private async loadSession(
         agentSessionID: string,
@@ -473,14 +457,8 @@ export class SessionManager {
         provider: IMetadataProvider,
     ): Promise<MJAIAgentSessionEntity | null> {
         const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
-        if (!(await session.Load(agentSessionID))) {
-            return null;
-        }
-        const lifecycleColumns = Object.fromEntries(
-            Object.entries(session.GetAll()).filter(([name]) => !SessionManager.recordingLedgerColumns.has(name)),
-        );
-        await session.LoadFromData(lifecycleColumns);
-        return session;
+        const loaded = await session.Load(agentSessionID);
+        return loaded ? session : null;
     }
 
     /** Sets `Closed` + `ClosedAt` + `CloseReason` and saves. Returns the save result. */
