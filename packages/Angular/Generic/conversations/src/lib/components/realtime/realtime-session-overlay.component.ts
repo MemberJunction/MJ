@@ -1,6 +1,7 @@
 import { Component, ElementRef, EventEmitter, HostListener, Input, Output, OnDestroy, AfterViewInit, ChangeDetectorRef, NgZone, TemplateRef, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
+import type { VideoSourceState } from '@memberjunction/ai-realtime-client';
 import { UserInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -14,6 +15,7 @@ import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeAgentBannerComponent } from './realtime-agent-banner.component';
 import { RealtimeSessionThreadComponent } from './realtime-session-thread.component';
 import { RealtimeChannelStripComponent } from './realtime-channel-strip.component';
+import { RealtimePerceptionChipComponent, RealtimePerceptionToggle } from './realtime-perception-chip.component';
 import { RealtimeComposerComponent } from './realtime-composer.component';
 import { RealtimeSurfaceTabsComponent } from './realtime-surface-tabs.component';
 import {
@@ -118,6 +120,7 @@ export interface RealtimeStartLiveRequest {
     RealtimeAgentBannerComponent,
     RealtimeSessionThreadComponent,
     RealtimeChannelStripComponent,
+    RealtimePerceptionChipComponent,
     RealtimeComposerComponent,
     RealtimeSurfaceTabsComponent,
     RealtimeWhiteboardBoardComponent,
@@ -610,11 +613,33 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.realtime.ChannelFocus$.subscribe(event => this.onChannelFocus(event.Channel, event.Focused)),
       // The agent ACTED on a channel — auto-reveal its surface tab on first activity.
       this.realtime.ChannelActivity$.subscribe(plugin => this.onChannelActivity(plugin)),
+      // What the agent can see (frames flowing from a whiteboard, browser, shared screen): feeds the
+      // "agent can see" chip. Not gated by disclosure level — it is a privacy indicator, never earned.
+      this.realtime.VideoSources$.subscribe(sources => { this.VideoSources = sources; this.cdr.markForCheck(); }),
       // Live/idle flips: reset/ratchet disclosure + re-evaluate the review-vs-live branch.
       this.realtime.Active$.subscribe(active => this.onActiveChanged(active)),
       // Connection lifecycle drives chrome (the `connecting` loader) + the public output.
       this.realtime.ConnectionState$.subscribe(state => this.onConnectionStateChanged(state))
     );
+  }
+
+  /** The video sources the agent can or could see right now (see {@link RealtimeSessionService.VideoSources$}). */
+  public VideoSources: readonly VideoSourceState[] = [];
+
+  /**
+   * The user switched one of the agent's video sources on or off in the "agent can see" chip. The session
+   * applies it (and remembers it per channel) and tells the agent.
+   */
+  public OnVideoSourceToggled(toggle: RealtimePerceptionToggle): void {
+    this.realtime.SetVideoSourceEnabled(toggle.SourceID, toggle.Enabled);
+  }
+
+  /**
+   * The user moved to another channel's tab (or to a tab that is not a channel). When the model can watch only one
+   * video source, the channel the user is looking at is the one it sees.
+   */
+  public OnActiveChannelChange(channelKey: string | null): void {
+    this.realtime.SetFocusedChannel(channelKey);
   }
 
   ngAfterViewInit(): void {
