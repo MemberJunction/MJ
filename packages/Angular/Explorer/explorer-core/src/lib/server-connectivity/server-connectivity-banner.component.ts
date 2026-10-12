@@ -1,9 +1,13 @@
 import { Component, OnDestroy, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { trigger, transition, style, animate, AnimationEvent } from '@angular/animations';
-import { ServerConnectivityService } from '../services/server-connectivity.service';
+import { ServerConnectivityService, ServerConnectionState } from '../services/server-connectivity.service';
 
 /**
+ * Shown whenever MJAPI is not connected, and says why (MJ #5510): a server that is reconnecting or
+ * stalled is not down, and telling users it is sends them to refresh — which queues a full boot onto
+ * a loop that is about to free up.
+ *
  * When visible, this banner sets --mj-connectivity-banner-height on <html>
  * so that any position:fixed element referencing the shell header offset
  * (e.g. app-switcher mobile dropdown) can account for the banner.
@@ -23,10 +27,22 @@ import { ServerConnectivityService } from '../services/server-connectivity.servi
     ])
   ],
   template: `
-    @if (!IsConnected()) {
-      <div class="connectivity-banner" @slideDown (@slideDown.done)="OnAnimationDone($event)">
-        <i class="fa-solid fa-triangle-exclamation"></i>
-        <span>Server unavailable &mdash; viewing cached data. Some features may not work.</span>
+    @if (State() !== 'connected') {
+      <div class="connectivity-banner" [class]="'connectivity-banner state-' + State()" @slideDown (@slideDown.done)="OnAnimationDone($event)">
+        @switch (State()) {
+          @case ('reconnecting') {
+            <i class="fa-solid fa-rotate fa-spin"></i>
+            <span>Reconnecting to the server&hellip;</span>
+          }
+          @case ('busy') {
+            <i class="fa-solid fa-hourglass-half"></i>
+            <span>The server is busy and slow to respond &mdash; your requests will finish when it catches up, no need to refresh.</span>
+          }
+          @default {
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>Server unavailable &mdash; viewing cached data. Some features may not work.</span>
+          }
+        }
       </div>
     }
   `,
@@ -47,6 +63,12 @@ import { ServerConnectivityService } from '../services/server-connectivity.servi
       gap: 8px;
       font-size: 14px;
       font-weight: 500;
+    }
+
+    .connectivity-banner.state-reconnecting {
+      background: var(--mj-status-info-bg);
+      color: var(--mj-status-info-text);
+      border-bottom-color: var(--mj-status-info-border);
     }
 
     .connectivity-banner i {
@@ -75,7 +97,7 @@ export class ServerConnectivityBannerComponent implements OnDestroy {
    * Connectivity state as a **signal**, not a plain property — and that distinction is the
    * whole point of this shape.
    *
-   * The socket state that feeds `IsConnected$` is reported by graphql-ws, which can announce
+   * The socket state that feeds `ConnectionState$` is reported by graphql-ws, which can announce
    * a drop from a callback that lands *inside* an in-flight change-detection pass (during app
    * startup this reliably happens after the banner's own view has been checked). Assigning a
    * plain property there mutates state the `@if` was already evaluated against, so dev-mode
@@ -87,7 +109,9 @@ export class ServerConnectivityBannerComponent implements OnDestroy {
    * `toSignal` also owns the subscription lifetime via `DestroyRef`, so there is no manual
    * `Subscription` to unsubscribe.
    */
-  public readonly IsConnected = toSignal(this.connectivityService.IsConnected$, { initialValue: true });
+  public readonly State = toSignal(this.connectivityService.ConnectionState$, {
+    initialValue: 'connected' as ServerConnectionState,
+  });
 
   ngOnDestroy(): void {
     this.setBannerHeight(0);

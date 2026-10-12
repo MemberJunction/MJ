@@ -1,5 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { BehaviorSubject, Observable, Subscription } from 'rxjs';
+import { BehaviorSubject, Observable, Subscription, distinctUntilChanged, map } from 'rxjs';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { GraphQLDataProvider, SocketConnectionState } from '@memberjunction/graphql-dataprovider';
 
@@ -13,7 +13,26 @@ import { GraphQLDataProvider, SocketConnectionState } from '@memberjunction/grap
  *
  * 'unknown' (no active socket — either never opened or cleanly disposed) is
  * treated as healthy: absence of signal is not a signal of failure.
+ *
+ * While degraded, {@link ConnectionState$} says WHY (MJ #5510). On a drop the service probes
+ * /healthcheck once, straight away, and classifies the answer — a server whose event loop is stalled
+ * is busy, not down, and telling users it is down sends them to refresh, which queues a full boot
+ * onto the loop the moment it frees up. That probe only classifies: it never forces a reconnect or
+ * clears the warning, so the rule above (only a real 'connected' ends an outage) still holds.
  */
+export type ServerConnectionState =
+  /** The socket is up, or there is none and nothing says the server is down. */
+  | 'connected'
+  /** The socket dropped but /healthcheck answers: the server is up and the socket is re-establishing. */
+  | 'reconnecting'
+  /** /healthcheck accepted the request but did not answer in time: the server is up and stalled. */
+  | 'busy'
+  /** /healthcheck was refused or answered with an error status: the server (or its front end) is down. */
+  | 'unavailable';
+
+/** What one /healthcheck probe found. */
+type ProbeOutcome = 'answered' | 'timed-out' | 'failed';
+
 @Injectable({
   providedIn: 'root'
 })
@@ -21,8 +40,14 @@ export class ServerConnectivityService implements OnDestroy {
   private static readonly POLL_INTERVAL_MS = 30_000;
   private static readonly FETCH_TIMEOUT_MS = 5_000;
 
-  private readonly isConnected = new BehaviorSubject<boolean>(true);
-  public readonly IsConnected$: Observable<boolean> = this.isConnected.asObservable();
+  private readonly connectionState = new BehaviorSubject<ServerConnectionState>('connected');
+  /** Why the server is or is not reachable — drives the banner text. */
+  public readonly ConnectionState$: Observable<ServerConnectionState> = this.connectionState.asObservable();
+  /** `true` only in the 'connected' state. Kept for consumers that need just the yes/no. */
+  public readonly IsConnected$: Observable<boolean> = this.connectionState.pipe(
+    map((state) => state === 'connected'),
+    distinctUntilChanged()
+  );
 
   private healthCheckUrl: string | null = null;
   private pollingTimerId: ReturnType<typeof setTimeout> | null = null;
@@ -36,7 +61,12 @@ export class ServerConnectivityService implements OnDestroy {
 
   /** Synchronous getter for the current connectivity state */
   public get IsConnected(): boolean {
-    return this.isConnected.value;
+    return this.connectionState.value === 'connected';
+  }
+
+  /** Synchronous getter for the current connection state */
+  public get ConnectionState(): ServerConnectionState {
+    return this.connectionState.value;
   }
 
   /**
@@ -50,7 +80,7 @@ export class ServerConnectivityService implements OnDestroy {
     }
     this.healthCheckUrl = healthCheckUrl;
     this.degraded = false;
-    this.isConnected.next(true);
+    this.connectionState.next('connected');
 
     this.attachVisibilityListener();
     this.subscribeToSocketState();
@@ -70,10 +100,10 @@ export class ServerConnectivityService implements OnDestroy {
   /** Force an immediate health check and return the result */
   public async CheckNow(): Promise<boolean> {
     if (!this.healthCheckUrl) {
-      return this.isConnected.value;
+      return this.IsConnected;
     }
     await this.runHealthCheck();
-    return this.isConnected.value;
+    return this.IsConnected;
   }
 
   ngOnDestroy(): void {
@@ -95,10 +125,14 @@ export class ServerConnectivityService implements OnDestroy {
 
   private onSocketStateChange(state: SocketConnectionState): void {
     if (state === 'disconnected') {
+      const wasConnected = this.IsConnected;
       this.degraded = true;
-      if (this.isConnected.value) {
-        this.isConnected.next(false);
+      if (wasConnected) {
+        // Most drops are a socket re-establishing; the classifying probe below corrects this
+        // within FETCH_TIMEOUT_MS if the server is in fact stalled or down.
+        this.connectionState.next('reconnecting');
         LogError('Server connectivity lost (WebSocket closed)');
+        void this.classifyDrop();
       }
       this.scheduleNextPoll();
       return;
@@ -108,8 +142,8 @@ export class ServerConnectivityService implements OnDestroy {
       // The only signal that ends a known outage: frames can flow again.
       this.degraded = false;
       this.clearPollTimer();
-      if (!this.isConnected.value) {
-        this.isConnected.next(true);
+      if (!this.IsConnected) {
+        this.connectionState.next('connected');
         LogStatus('Server connectivity restored (WebSocket reconnected)');
       }
       return;
@@ -125,19 +159,47 @@ export class ServerConnectivityService implements OnDestroy {
       return;
     }
     this.clearPollTimer();
-    if (!this.isConnected.value) {
-      this.isConnected.next(true);
+    if (!this.IsConnected) {
+      this.connectionState.next('connected');
     }
   }
 
-  private async ping(): Promise<boolean> {
-    if (!this.healthCheckUrl) return false;
+  /**
+   * The immediate probe on a drop. Classifies only — no reconnect, no clearing — and drops its
+   * result if the socket recovered (or the service stopped) while the probe was in flight.
+   */
+  private async classifyDrop(): Promise<void> {
+    const outcome = await this.ping();
+    if (this.degraded && this.healthCheckUrl) {
+      this.connectionState.next(ServerConnectivityService.stateFor(outcome));
+    }
+  }
+
+  private static stateFor(outcome: ProbeOutcome): ServerConnectionState {
+    switch (outcome) {
+      case 'answered':
+        return 'reconnecting';
+      case 'timed-out':
+        return 'busy';
+      default:
+        return 'unavailable';
+    }
+  }
+
+  /**
+   * Probe /healthcheck. A timeout is told apart from a failure because they mean different things:
+   * a refused connection or an error status fails fast (down), while a stalled MJAPI still has its
+   * TCP connections accepted by the kernel and simply never answers (busy).
+   */
+  private async ping(): Promise<ProbeOutcome> {
+    if (!this.healthCheckUrl) return 'failed';
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      ServerConnectivityService.FETCH_TIMEOUT_MS
-    );
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, ServerConnectivityService.FETCH_TIMEOUT_MS);
 
     try {
       const response = await fetch(this.healthCheckUrl, {
@@ -145,17 +207,20 @@ export class ServerConnectivityService implements OnDestroy {
         signal: controller.signal,
         cache: 'no-store',
       });
-      return response.ok;
+      return response.ok ? 'answered' : 'failed';
     } catch {
-      return false;
+      return timedOut ? 'timed-out' : 'failed';
     } finally {
       clearTimeout(timeoutId);
     }
   }
 
   private async runHealthCheck(): Promise<void> {
-    const reachable = await this.ping();
-    if (reachable) {
+    const outcome = await this.ping();
+    if (this.degraded) {
+      this.connectionState.next(ServerConnectivityService.stateFor(outcome));
+    }
+    if (outcome === 'answered') {
       // Reachable over HTTP is a cue to retry the socket, NOT evidence the socket works.
       //
       // An HTTP 200 says the server process answers requests. It says nothing about whether
@@ -178,8 +243,8 @@ export class ServerConnectivityService implements OnDestroy {
       if (provider && provider.ActiveSubscriptionCount === 0) {
         this.degraded = false;
         this.clearPollTimer();
-        if (!this.isConnected.value) {
-          this.isConnected.next(true);
+        if (!this.IsConnected) {
+          this.connectionState.next('connected');
           LogStatus('Server connectivity restored (HTTP healthy, no active subscriptions)');
         }
         return;
@@ -232,7 +297,7 @@ export class ServerConnectivityService implements OnDestroy {
 
     if (document.hidden) {
       this.clearPollTimer();
-    } else if (!this.isConnected.value) {
+    } else if (!this.IsConnected) {
       // Tab became visible while disconnected — check immediately
       this.runHealthCheck();
     }

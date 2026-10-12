@@ -2,10 +2,11 @@
  * Half-open socket behavior for the push-status subscription (MJ #4222).
  *
  * THE FAILURE THIS PINS. On an unstable link a WebSocket can stop carrying bytes in both
- * directions while neither end sends FIN or RST. The server notices — graphql-ws's
- * `useServer(options, ws, keepAlive)` defaults its third positional argument to 12s and
- * terminates after an unanswered ws-protocol ping, so the subscription is torn down in
- * ~12-24s and the agent's completion is published into a topic with no subscriber.
+ * directions while neither end sends FIN or RST. The server notices — MJAPI pings every
+ * socket every 12s and terminates one that leaves a ws-protocol ping unanswered (MJ's own
+ * heartbeat since MJ #5510, graphql-ws's `useServer` keepalive before that), so the
+ * subscription is torn down in ~12-24s and the agent's completion is published into a
+ * topic with no subscriber.
  *
  * The client notices nothing at all. graphql-ws re-arms its keepalive ping ONLY on pong
  * receipt (`dist/client.js:187, 207`), so a half-open socket gets exactly one ping and

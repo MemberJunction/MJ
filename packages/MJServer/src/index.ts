@@ -64,6 +64,7 @@ import { DataSourceInfo, raiseEvent } from './types.js';
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { EventLoopStallMonitor, BuildHealthcheckPayload } from './eventLoopStallMonitor.js';
+import { AttachWebSocketHeartbeat } from './wsHeartbeat.js';
 import { SchedulingEngine } from '@memberjunction/scheduling-engine';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
@@ -1178,14 +1179,19 @@ const setupComplete$ = new ReplaySubject(1);
     }
   });
 
-  // graphql-ws's ws integration takes its keepalive as a THIRD POSITIONAL argument to useServer,
-  // defaulting to 12_000 when omitted. That default was doing real work here while being invisible
-  // at the call site: the server pings every 12s and terminates the socket after an unanswered
-  // pong, which is why MJAPI notices a half-open link in ~12-24s while the browser — whose
-  // graphql-ws client does nothing on an unanswered pong — noticed nothing at all (MJ #4222).
-  // Stated explicitly so the behaviour is visible and tunable, and so the next reader does not
-  // conclude from the call site that no server-side heartbeat exists. Value unchanged.
+  // Server-side heartbeat: every 12s each socket is pinged, and one that has not answered by the
+  // next ping is terminated — that is how MJAPI notices a half-open link in ~12-24s (MJ #4222).
+  //
+  // It is MJ's own, not graphql-ws's built-in keepalive (which useServer would run if its third
+  // positional argument were left at its 12_000 default). graphql-ws decides "no pong" in a timer, and
+  // Node runs expired timers before the poll phase that reads incoming frames — so when the event
+  // loop stalls past the deadline, it terminated sockets whose pong was already waiting in the
+  // buffer, dropping every healthy client at once (MJ #5510). AttachWebSocketHeartbeat defers that
+  // verdict until after the poll phase. The 0 passed to useServer below turns graphql-ws's off, so
+  // the two never both ping.
   const WS_SERVER_KEEPALIVE_MS = 12_000;
+  const detachWebSocketHeartbeat = AttachWebSocketHeartbeat(webSocketServer, { IntervalMs: WS_SERVER_KEEPALIVE_MS });
+  ShutdownRegistry.Instance.Register({ ShutdownName: 'WebSocketHeartbeat', Shutdown: () => detachWebSocketHeartbeat() });
 
   // Track per-connection expiry timers so we can clean them up on close
   const expiryTimers = new WeakMap<object, ReturnType<typeof setTimeout>>();
@@ -1262,7 +1268,7 @@ const setupComplete$ = new ReplaySubject(1);
       },
     },
     webSocketServer,
-    WS_SERVER_KEEPALIVE_MS
+    0 // graphql-ws keepalive off — AttachWebSocketHeartbeat above owns ping/pong
   );
 
   const apolloServer = buildApolloServer(
