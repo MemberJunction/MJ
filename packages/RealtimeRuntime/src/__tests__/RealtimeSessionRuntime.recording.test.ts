@@ -95,32 +95,51 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
 
     it('uploads a shard every 5 s with contiguous StartSample, and the tail covers captured − Σ earlier', async () => {
         const { runtime, transport, recorder } = await startRecorded();
-        recorder.Capture(WINDOW + 10);
+        recorder.Capture(WINDOW - 2);
         await vi.advanceTimersByTimeAsync(FLUSH_MS);
         expect(transport.Uploads.map((u) => u.Index)).toEqual([0]);
 
-        recorder.Capture(WINDOW + 30);
+        recorder.Capture(WINDOW - 4);
         await vi.advanceTimersByTimeAsync(FLUSH_MS);
         expect(transport.Uploads.map((u) => u.Index)).toEqual([0, 1]);
 
+        recorder.Capture(40);
         recorder.PacketsFlushedOnStop = 3;
         recorder.PaddingSamples = 400;
         await runtime.EndRealtimeSession();
 
+        const first = (WINDOW - 2) * RECORDING_FRAME_SAMPLES;
+        const second = (WINDOW - 4) * RECORDING_FRAME_SAMPLES;
         const shards = transport.Uploads.map((u) => ParseRecordingShard(u.Bytes));
-        expect(shards.map((s) => s.StartSample)).toEqual([0, WINDOW_SAMPLES]);
-        expect(shards.map((s) => s.SampleCount)).toEqual([WINDOW_SAMPLES, WINDOW_SAMPLES]);
+        expect(shards.map((s) => s.StartSample)).toEqual([0, first]);
+        expect(shards.map((s) => s.SampleCount)).toEqual([first, second]);
 
         expect(transport.Terminals).toHaveLength(1);
         const { Input } = transport.Terminals[0];
         const tail = ParseRecordingShard(Input.Tail!);
-        const captured = (2 * WINDOW + 43) * RECORDING_FRAME_SAMPLES - 400;
+        const captured = (2 * WINDOW - 6 + 43) * RECORDING_FRAME_SAMPLES - 400;
         expect(tail.ShardIndex).toBe(2);
-        expect(tail.StartSample).toBe(2 * WINDOW_SAMPLES);
+        expect(tail.StartSample).toBe(first + second);
         expect(tail.PacketCount).toBe(43);
-        expect(tail.SampleCount).toBe(captured - 2 * WINDOW_SAMPLES);
+        expect(tail.SampleCount).toBe(captured - first - second);
         expect(Input.LastShardIndex).toBe(2);
         expect(Input.CapturedSamples).toBe(captured);
+    });
+
+    it('seals and uploads what each 5 s tick captured, even under a full window, so no audio waits a second tick', async () => {
+        // Capture starts a little after the tick timer, so a real tick holds slightly under 250 packets.
+        const { runtime, transport, recorder } = await startRecorded();
+        recorder.Capture(WINDOW - 3);
+        await vi.advanceTimersByTimeAsync(FLUSH_MS);
+        recorder.Capture(WINDOW - 1);
+        await vi.advanceTimersByTimeAsync(FLUSH_MS);
+
+        const shards = transport.Uploads.map((u) => ParseRecordingShard(u.Bytes));
+        expect(shards.map((s) => [s.ShardIndex, s.StartSample, s.SampleCount])).toEqual([
+            [0, 0, (WINDOW - 3) * RECORDING_FRAME_SAMPLES],
+            [1, (WINDOW - 3) * RECORDING_FRAME_SAMPLES, (WINDOW - 1) * RECORDING_FRAME_SAMPLES],
+        ]);
+        await runtime.EndRealtimeSession();
     });
 
     it('puts each shard in the store before its upload starts and deletes it only after the ack', async () => {

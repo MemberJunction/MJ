@@ -768,7 +768,7 @@ export class RealtimeSessionRuntime {
    * delivered stays in the local store for the next-load drain.
    */
   private recordingShards: RecordingShardPipeline | null = null;
-  /** How often packets are cut into shards: the 5 s shard window, so a full window seals per tick. */
+  /** How often packets are cut into shards: the 5 s shard window, so each tick seals about one window. */
   private static readonly recordingShardFlushMs = 5000;
   /** The durable local shard store, created on first use and shared by every recording of this runtime. */
   private shardStore: IRecordingShardStore | null = null;
@@ -1880,9 +1880,14 @@ export class RealtimeSessionRuntime {
   /**
    * One 5 s tick: cuts the packets encoded since the last tick into shards, stores each one, then
    * uploads them. Best-effort — never disturbs the call and never rejects. Overlapping ticks are
-   * safe: `Append` is synchronous, so indexes are assigned in order, and the queue bounds how many
-   * flushes upload at once. A failed shard is retained by the queue and resent under its own index
-   * on later ticks (#5197), and stays in the store until acknowledged.
+   * safe: `Append` and `SealTail` are synchronous, so indexes are assigned in order, and the queue
+   * bounds how many flushes upload at once. A failed shard is retained by the queue and resent under
+   * its own index on later ticks (#5197), and stays in the store until acknowledged.
+   *
+   * Every tick seals whatever it took, even under a full window (the window's 250-packet and byte caps
+   * still split a larger batch). Capture starts slightly after this timer, so a tick almost never
+   * holds exactly 250 packets; sealing only full windows would leave nearly 5 s of encoded audio in
+   * memory at every moment, unstored and unsent, which a killed tab loses.
    */
   private async flushRecordingShards(): Promise<void> {
     const recorder = this.recorder;
@@ -1893,6 +1898,10 @@ export class RealtimeSessionRuntime {
     let sealed: RecordingShard[];
     try {
       sealed = pipeline.Window.Append(recorder.TakeEncodedPackets());
+      const tick = pipeline.Window.SealTail();
+      if (tick) {
+        sealed.push(tick);
+      }
     } catch (error) {
       console.warn(`[RealtimeSession] Failed to take encoded recording packets for session ${pipeline.SessionID}; this tick's audio is lost:`, error);
       return;
