@@ -187,7 +187,7 @@ const SHARE_SURFACES: readonly ShareSurfaceOption[] = [
           <i class="fa-solid" [class.fa-eye]="AgentVisionOn" [class.fa-eye-slash]="!AgentVisionOn" aria-hidden="true"></i>
         </button>
         @if (ShowLabels) {
-          <span class="control__label" aria-hidden="true">{{ AgentVisionOn ? 'Hide from agent' : 'Show agent' }}</span>
+          <span class="control__label" aria-hidden="true">{{ AgentVisionOn ? 'Hide from agents' : 'Let agents see me' }}</span>
         }
       </span>
     }
@@ -377,7 +377,7 @@ export class MediaControlsComponent implements OnChanges {
 
   /** The agent-vision button's name. */
   public get AgentVisionLabel(): string {
-    return this.AgentVisionOn ? 'Stop letting the agent see your camera and screen' : 'Let the agent see your camera and screen';
+    return this.AgentVisionOn ? 'Stop letting agents in this room see your camera and screen' : 'Let agents in this room see your camera and screen';
   }
 
   /** The Share button's name. */

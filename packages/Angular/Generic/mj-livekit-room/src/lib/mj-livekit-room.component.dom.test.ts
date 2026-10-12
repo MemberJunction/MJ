@@ -444,19 +444,19 @@ describe('MJLiveKitRoomComponent: the preview room (DOM)', () => {
     const f = await render();
     f.componentInstance.ResolvedRoomName = 'preview-room';
     const button = (title: string) => f.nativeElement.querySelector(`button[title="${title}"]`) as HTMLButtonElement | null;
-    button('Let the agent see your camera and screen')?.click();
+    button('Let agents in this room see your camera and screen')?.click();
     f.detectChanges();
     expect(roomOf(f).State.LocalMedia.AgentVisionOn).toBe(true);
-    button('Stop letting the agent see your camera and screen')?.click();
+    button('Stop letting agents in this room see your camera and screen')?.click();
     f.detectChanges();
     expect(roomOf(f).State.LocalMedia.AgentVisionOn).toBe(false);
-    expect(button('Let the agent see your camera and screen')).not.toBeNull();
+    expect(button('Let agents in this room see your camera and screen')).not.toBeNull();
     expect(set).not.toHaveBeenCalled();
   });
 
   it('offers no switch when the host turns it off', async () => {
     const f = await render({ EnableAgentVisionControl: false });
-    expect(f.nativeElement.querySelector('button[title="Let the agent see your camera and screen"]')).toBeNull();
+    expect(f.nativeElement.querySelector('button[title="Let agents in this room see your camera and screen"]')).toBeNull();
   });
 });
 
@@ -466,7 +466,7 @@ describe('MJLiveKitRoomComponent: the preview room (DOM)', () => {
  * controller whose agent watches; MJAPI is a stand-in for `GraphQLLiveKitClient.SetAgentVision`.
  */
 describe('MJLiveKitRoomComponent: what the agent sees, in a meeting (DOM)', () => {
-  const LET = 'button[title="Let the agent see your camera and screen"]';
+  const LET = 'button[title="Let agents in this room see your camera and screen"]';
 
   beforeEach(() => {
     vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
@@ -511,7 +511,7 @@ describe('MJLiveKitRoomComponent: what the agent sees, in a meeting (DOM)', () =
   it('asks MJAPI to withdraw it when the user turns the switch off', async () => {
     const set = vi.spyOn(GraphQLLiveKitClient.prototype, 'SetAgentVision').mockResolvedValue({ Success: true });
     const f = render({ LocalMedia: { MicrophoneEnabled: false, CameraEnabled: false, ScreenShareEnabled: false, AgentVisionOn: true } });
-    await flip(f, 'button[title="Stop letting the agent see your camera and screen"]');
+    await flip(f, 'button[title="Stop letting agents in this room see your camera and screen"]');
     expect(set).toHaveBeenCalledWith('room-1', false);
   });
 
@@ -521,8 +521,8 @@ describe('MJLiveKitRoomComponent: what the agent sees, in a meeting (DOM)', () =
     const errors: string[] = [];
     f.componentInstance.ErrorOccurred.subscribe((e: { Kind: string; Message: string }) => errors.push(`${e.Kind}: ${e.Message}`));
     await flip(f);
-    expect(notice(f)?.textContent).toContain("Couldn't change what the agent sees: You are not in this room.");
-    expect(errors).toEqual(["agent-vision: Couldn't change what the agent sees: You are not in this room."]);
+    expect(notice(f)?.textContent).toContain("Couldn't change what agents see: You are not in this room.");
+    expect(errors).toEqual(["agent-vision: Couldn't change what agents see: You are not in this room."]);
     expect(f.nativeElement.querySelector('mj-livekit-room')).not.toBeNull();
   });
 
@@ -742,11 +742,11 @@ describe("MJLiveKitRoomComponent: an agent's avatar that can't be shown (DOM)", 
 
   it('shows one per agent, stacked under the notice about what the agent sees', () => {
     const { f, state } = render();
-    f.componentInstance.AgentVisionNotice = "Couldn't change what the agent sees: LiveKit is unreachable.";
+    f.componentInstance.AgentVisionNotice = "Couldn't change what agents see: LiveKit is unreachable.";
     state([agent('sage', { Reason: 'bridged' }), agent('rowan', {})]);
     const stack = Array.from(f.nativeElement.querySelectorAll('.mj-lk-notices > mj-alert') as NodeListOf<HTMLElement>);
     expect(stack.map((a) => a.textContent?.trim())).toEqual([
-      "Couldn't change what the agent sees: LiveKit is unreachable.",
+      "Couldn't change what agents see: LiveKit is unreachable.",
       SAGE_BRIDGED,
       "Audio only for Rowan: the avatar couldn't be shown in this meeting",
     ]);
@@ -1066,10 +1066,10 @@ describe("MJLiveKitRoomComponent: what went wrong with the user's devices (DOM)"
 
     it('stacks it under the notice about what the agent sees', () => {
       const { f, fire } = render();
-      f.componentInstance.AgentVisionNotice = "Couldn't change what the agent sees: LiveKit is unreachable.";
+      f.componentInstance.AgentVisionNotice = "Couldn't change what agents see: LiveKit is unreachable.";
       cameraFails(fire);
       const stack = Array.from(f.nativeElement.querySelectorAll('.mj-lk-notices > mj-alert') as NodeListOf<HTMLElement>);
-      expect(stack.map((a) => a.textContent?.trim())).toEqual(["Couldn't change what the agent sees: LiveKit is unreachable.", CAMERA_FAILED]);
+      expect(stack.map((a) => a.textContent?.trim())).toEqual(["Couldn't change what agents see: LiveKit is unreachable.", CAMERA_FAILED]);
     });
 
     it('shows nothing before the room connects, where its connection overlay speaks', () => {

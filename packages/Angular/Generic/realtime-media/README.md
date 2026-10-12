@@ -223,7 +223,7 @@ Each button is a circle named by what a click does, such as "Mute microphone" or
 | `ShowShareMenu` | `true` | Show the Share button's arrow and its menu. |
 | `SharePanels` | `[]` | Panels the user can share on their own (`MediaSharePanel`: `Key`, `Label`, optional `Icon`), offered under "This panel". |
 | `Size` | `'md'` | The circles' size: `'sm'`, `'md'` or `'lg'` (32, 44 or 52 px). The Share arrow stays small. |
-| `ShowLabels` | `false` | A label under each button: Mute or Unmute, Video or Stop video, Share or Stop sharing, Show agent or Hide from agent. |
+| `ShowLabels` | `false` | A label under each button: Mute or Unmute, Video or Stop video, Share or Stop sharing, Let agents see me or Hide from agents. |
 | `CameraOptional` | `false` | For a call where the camera usually stays off, such as one with an agent: the camera button is neutral while off and filled while on, instead of red while off. |
 | `ShowAgentVision`, `AgentVisionOn` | `false` | Show the agent-vision button, and whether it is on (filled). |
 

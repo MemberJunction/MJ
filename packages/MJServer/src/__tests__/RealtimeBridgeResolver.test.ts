@@ -355,6 +355,16 @@ describe('RealtimeBridgeResolver', () => {
         null,
       );
     });
+
+    it('applies a withdrawal without the room check, so a cancelled meeting cannot keep an agent watching', async () => {
+      const authorizer = vi.fn(async () => ({ Authorized: false, Reason: 'Meeting is cancelled.' }));
+      RoomAuthorizationService.Instance.SetAuthorizerForTesting(authorizer);
+      const result = await resolver.SetLiveKitAgentVision(choose(false), ctx);
+      expect(result).toEqual({ Success: true });
+      expect(authorizer).not.toHaveBeenCalled();
+      expect(h.setAgentVision).toHaveBeenCalledWith('room-1', 'user-u1', false);
+      expect(h.writeConsentAudit).toHaveBeenCalledWith(expect.objectContaining({ Allow: false, Applied: true }), null);
+    });
   });
 
   describe('StartLiveKitAgentRoomSession with handoff', () => {

@@ -147,4 +147,22 @@ describe('CreateGuestVoiceMint', () => {
         await expect(CreateGuestVoiceMint(SESSION)([])).rejects.toThrow('Transport error');
         expect(executeGQL).toHaveBeenCalledTimes(1);
     });
+
+    it('mints without the transport fields when the server rejects RelayUrl first', async () => {
+        executeGQL.mockImplementation(async (query: string) => {
+            if (query.includes('RelayUrl')) {
+                throw new Error('Cannot query field "RelayUrl" on type "StartRealtimeClientSessionResult".');
+            }
+            return minted();
+        });
+        const result = await CreateGuestVoiceMint(SESSION)([]);
+        expect(result.sessionConfig.EphemeralToken).toBe('ek_1');
+        expect(queries().map((query) => query.includes('RelayUrl'))).toEqual([true, false]);
+    });
+
+    it('surfaces a failure that merely names RelayUrl, without retrying', async () => {
+        executeGQL.mockRejectedValue(new Error('The relay rejected the session: RelayUrl is not reachable from this network'));
+        await expect(CreateGuestVoiceMint(SESSION)([])).rejects.toThrow('RelayUrl is not reachable');
+        expect(executeGQL).toHaveBeenCalledTimes(1);
+    });
 });

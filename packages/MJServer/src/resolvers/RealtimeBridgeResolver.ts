@@ -24,7 +24,7 @@ import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
 import { RegisterMeetingRecordingFile, CorrelateRecordingStart } from './meetingRecordingRegistration.js';
 import { WriteAgentVisionConsentAudit } from './agentVisionConsentAudit.js';
-import { RoomAuthorizationService } from '@memberjunction/livekit-room-server';
+import { RoomAuthorizationService, type RoomAuthorizationResult } from '@memberjunction/livekit-room-server';
 
 /**
  * Binds the agent realtime-session factory onto the LiveKit room coordinator's model-session creation seam.
@@ -746,9 +746,10 @@ export class RealtimeBridgeResolver extends ResolverBase {
 
   /**
    * Records whether the current user lets agents see their camera and shared screen in a room. The participant is
-   * worked out from the authenticated user, never sent by the client, so a person can only answer for themselves. The
-   * room must be one they may enter ({@link RoomAuthorizationService}, as for every room mutation), and LiveKit refuses
-   * when they are not in it. The choice is set as their `mj.agentCanSee` attribute through LiveKit's server SDK (a
+   * worked out from the authenticated user, never sent by the client, so a person can only answer for themselves. To
+   * allow, the room must be one they may enter ({@link RoomAuthorizationService}, as for every room mutation). A
+   * withdrawal skips that check: a cancelled meeting or a failed lookup must not keep an agent watching someone who is
+   * still in the room, and the identity is always the caller's own. LiveKit refuses either way when they are not in it. The choice is set as their `mj.agentCanSee` attribute through LiveKit's server SDK (a
    * participant's token can't change its own attributes) and audited, applied or not.
    */
   @Mutation(() => LiveKitAgentVisionResult)
@@ -762,7 +763,9 @@ export class RealtimeBridgeResolver extends ResolverBase {
         return { Success: false, ErrorMessage: 'Unable to determine current user.' };
       }
       const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
-      const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(input.RoomName, user, provider);
+      const auth: RoomAuthorizationResult = input.Allow
+        ? await RoomAuthorizationService.Instance.AuthorizeRoomAccess(input.RoomName, user, provider)
+        : { Authorized: true };
       const result: ParticipantUpdateResult = auth.Authorized
         ? await new LiveKitParticipantService().SetAgentVision(input.RoomName, this.participantIdentity(user), input.Allow)
         : { Success: false, ErrorMessage: auth.Reason ?? 'Unauthorized room access.' };

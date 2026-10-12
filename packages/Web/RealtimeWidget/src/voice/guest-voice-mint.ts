@@ -78,14 +78,15 @@ mutation StartWidgetVoiceSession($targetAgentId: String, $clientToolsJson: Strin
 /**
  * The extension a mint failure rejects, when it is a server that predates one rejecting it at validation
  * (`Unknown argument "showsAgentVideo"…`, `Cannot query field "Transport"…`); `null` for any other failure. The quoted
- * field name, not the bare word: "Transport" alone could be any transport error.
+ * field names, not the bare words: "Transport" alone could be any transport error, and "RelayUrl" any message that
+ * names the field.
  */
 function rejectedExtension(error: unknown, asked: WidgetMintExtensions): keyof WidgetMintExtensions | null {
     const message = error instanceof Error ? error.message : String(error);
     if (asked.NoAgentVideo && message.includes('showsAgentVideo')) {
         return 'NoAgentVideo';
     }
-    if (asked.Transport && (message.includes('field "Transport"') || message.includes('RelayUrl'))) {
+    if (asked.Transport && (message.includes('field "Transport"') || message.includes('field "RelayUrl"'))) {
         return 'Transport';
     }
     return null;

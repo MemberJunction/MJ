@@ -22,11 +22,18 @@ export interface RealtimeRelayLimits {
     MaxMissedPongs: number;
     /** Client frames held while the upstream opens; past this the oldest are dropped. */
     MaxPendingFrames: number;
+    /** Bytes of client frames held while the upstream opens; past this the oldest are dropped. */
+    MaxPendingBytes: number;
     /**
      * Bytes the browser leg may have queued after a downstream send. Past this the browser cannot keep up: the tunnel
      * closes (1013 to the browser, 1001 upstream) and the client resumes on a new connection.
      */
     MaxBrowserBufferedBytes: number;
+    /**
+     * Bytes the upstream leg may have queued after an upstream send. Past this the provider has stopped reading: the
+     * tunnel closes (1013 to the browser, 1001 upstream) and the client resumes on a new connection.
+     */
+    MaxUpstreamBufferedBytes: number;
 }
 
 /** The limits MJAPI runs the relay with. */
@@ -36,7 +43,9 @@ export const REALTIME_RELAY_LIMITS: Readonly<RealtimeRelayLimits> = Object.freez
     PingIntervalMs: 20_000,
     MaxMissedPongs: 2,
     MaxPendingFrames: 512,
+    MaxPendingBytes: 8 * 1024 * 1024,
     MaxBrowserBufferedBytes: 16 * 1024 * 1024,
+    MaxUpstreamBufferedBytes: 16 * 1024 * 1024,
 });
 
 /**
@@ -51,7 +60,7 @@ const CLOSE_GOING_AWAY = 1001; // MJAPI is shutting down, or the browser left, s
 const CLOSE_NO_STATUS = 1005; // a close without a code: passed on as a close without a code
 const CLOSE_POLICY = 1008; // no opening frame, or the session refused the connection
 const CLOSE_INTERNAL = 1011; // the policy failed (headers, opening frames), or a send failed
-const CLOSE_TRY_AGAIN = 1013; // the browser fell too far behind; it may resume on a new connection
+const CLOSE_TRY_AGAIN = 1013; // a leg fell too far behind; the browser may resume on a new connection
 const CLOSE_BAD_GATEWAY = 1014; // the upstream did not open, failed, stopped answering, or dropped without a close code
 
 /** The two legs of a tunnel. */
@@ -92,7 +101,7 @@ export function RelayTicketPrefix(id: string): string {
  * policy mints for this connection, sends the policy's opening frames before anything else, and pumps both ways: client
  * frames through the policy's filter (text only; binary client frames are dropped), server frames unchanged once the
  * policy has looked for a resumption handle. It pings both legs and terminates one that stops answering, closes a
- * browser that cannot keep up with what it is sent, passes close codes through, and closes when the session ends. Logs
+ * browser that cannot keep up with what it is sent and an upstream that stops reading, passes close codes through, and closes when the session ends. Logs
  * carry counts, sizes, codes and an 8-character ticket prefix, never payloads, headers or tokens.
  */
 export class RealtimeRelayTunnel {
@@ -101,6 +110,7 @@ export class RealtimeRelayTunnel {
     private intent: RealtimeRelayOpenIntent | null = null;
     /** Client frames that passed the filter before the upstream opened, in arrival order. */
     private readonly pending: string[] = [];
+    private pendingBytes = 0;
     /** Dropped client frames per type label. */
     private readonly drops = new Map<string, number>();
     private readonly traffic = { FramesUp: 0, BytesUp: 0, FramesDown: 0, BytesDown: 0 };
@@ -251,6 +261,7 @@ export class RealtimeRelayTunnel {
         for (const frame of opening) {
             this.sendUp(frame);
         }
+        this.pendingBytes = 0;
         for (const frame of this.pending.splice(0)) {
             this.sendUp(frame);
         }
@@ -296,11 +307,18 @@ export class RealtimeRelayTunnel {
         }
     }
 
-    /** Holds a frame until the upstream opens; past the cap the oldest goes (stale audio is worthless anyway). */
+    /**
+     * Holds a frame until the upstream opens; past either cap (frames or bytes) the oldest go (stale audio is worthless
+     * anyway). A frame larger than the byte cap on its own is dropped.
+     */
     private hold(frame: string): void {
         this.pending.push(frame);
-        if (this.pending.length > this.limits.MaxPendingFrames) {
-            this.pending.shift();
+        this.pendingBytes += Buffer.byteLength(frame);
+        while (
+            this.pending.length > 0 &&
+            (this.pending.length > this.limits.MaxPendingFrames || this.pendingBytes > this.limits.MaxPendingBytes)
+        ) {
+            this.pendingBytes -= Buffer.byteLength(this.pending.shift()!);
             this.countDrop('pre-open-overflow');
         }
     }
@@ -352,12 +370,31 @@ export class RealtimeRelayTunnel {
         }
     }
 
-    /** Sends one text frame upstream and counts it. */
+    /** Sends one text frame upstream and counts it; then the upstream leg's queue is checked against the cap. */
     private sendUp(frame: string): void {
         if (this.send(this.upstream, frame, false)) {
             this.traffic.FramesUp += 1;
             this.traffic.BytesUp += Buffer.byteLength(frame);
+            this.closeIfUpstreamBehind();
         }
+    }
+
+    /**
+     * An upstream that has stopped reading (its queued bytes pass `MaxUpstreamBufferedBytes` after an upstream send) is
+     * closed with 1001 and the browser with 1013, before the ping watchdog would notice; the client resumes on a new
+     * connection.
+     */
+    private closeIfUpstreamBehind(): void {
+        const queued = this.upstream?.bufferedAmount ?? 0;
+        if (queued <= this.limits.MaxUpstreamBufferedBytes) {
+            return;
+        }
+        const t = this.traffic;
+        this.warn(
+            `the upstream leg has ${queued} B queued (cap ${this.limits.MaxUpstreamBufferedBytes} B) after ` +
+                `${t.FramesUp} frames / ${t.BytesUp} B up; closing`
+        );
+        this.closeWith({ Code: CLOSE_TRY_AGAIN, Reason: 'Relay buffer full' }, { Code: CLOSE_GOING_AWAY, Reason: 'Upstream too slow' });
     }
 
     /** Sends on a leg that is open, keeping text as text and binary as binary; a failed send closes the tunnel. */
@@ -524,7 +561,8 @@ export class RealtimeRelayTunnel {
         const count = (this.drops.get(key) ?? 0) + 1;
         this.drops.set(key, count);
         if (key === 'pre-open-overflow' && count === 1) {
-            this.warn(`the pre-open buffer is full (${this.limits.MaxPendingFrames} frames); dropping the oldest`);
+            const l = this.limits;
+            this.warn(`the pre-open buffer is full (${l.MaxPendingFrames} frames or ${l.MaxPendingBytes} B); dropping the oldest`);
         }
     }
 

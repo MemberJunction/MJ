@@ -455,6 +455,31 @@ describe('DefaultRealtimeSessionLauncher', () => {
             await expect(launch(provider)).rejects.toThrow('Transport error');
             expect(provider.mints()).toHaveLength(1);
         });
+
+        it('drops the transport fields for a server whose validator names RelayUrl first', async () => {
+            const provider = new MintProvider();
+            const mint = provider.ExecuteGQL.bind(provider);
+            provider.ExecuteGQL = async (query: string, variables: Record<string, unknown>) => {
+                if (query.includes('mutation StartRealtimeClientSession') && query.includes('RelayUrl')) {
+                    provider.Calls.push({ query, variables });
+                    throw new Error('Cannot query field "RelayUrl" on type "StartRealtimeClientSessionResult".');
+                }
+                return mint(query, variables);
+            };
+            const result = await launch(provider);
+            expect(result.EphemeralToken).toBe('t');
+            expect(provider.mints()[1].query).not.toContain('RelayUrl');
+        });
+
+        it('surfaces a failure that merely names RelayUrl, rather than reading it as a server without the field', async () => {
+            const provider = new MintProvider();
+            provider.ExecuteGQL = async (query: string, variables: Record<string, unknown>) => {
+                provider.Calls.push({ query, variables });
+                throw new Error('The relay rejected the session: RelayUrl is not reachable from this network');
+            };
+            await expect(launch(provider)).rejects.toThrow('RelayUrl is not reachable');
+            expect(provider.mints()).toHaveLength(1);
+        });
     });
 });
 

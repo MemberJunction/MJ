@@ -26,7 +26,9 @@ const FAST_LIMITS: RealtimeRelayLimits = {
     PingIntervalMs: 40,
     MaxMissedPongs: 2,
     MaxPendingFrames: 512,
+    MaxPendingBytes: 8 * 1024 * 1024,
     MaxBrowserBufferedBytes: 16 * 1024 * 1024,
+    MaxUpstreamBufferedBytes: 16 * 1024 * 1024,
 };
 /** Pings every 100 ms, so a silent leg goes at the third tick (300 ms) and a late pong has 50 ms of margin each side. */
 const PONG_LIMITS: RealtimeRelayLimits = { ...FAST_LIMITS, PingIntervalMs: 100 };
@@ -353,14 +355,16 @@ describe('RealtimeProxyServer: the realtime relay', () => {
     });
 
     describe('routing', () => {
-        it('pins the decided limits: 10 s first frame, 15 s upstream, 20 s pings, 2 missed pongs, 512 frames, 16 MiB queue, 2 MiB frames', () => {
+        it('pins the decided limits: 10 s first frame, 15 s upstream, 20 s pings, 2 missed pongs, 512 frames or 8 MiB held, 16 MiB queues, 2 MiB frames', () => {
             expect(REALTIME_RELAY_LIMITS).toEqual({
                 FirstFrameTimeoutMs: 10_000,
                 UpstreamOpenTimeoutMs: 15_000,
                 PingIntervalMs: 20_000,
                 MaxMissedPongs: 2,
                 MaxPendingFrames: 512,
+                MaxPendingBytes: 8 * 1024 * 1024,
                 MaxBrowserBufferedBytes: 16 * 1024 * 1024,
+                MaxUpstreamBufferedBytes: 16 * 1024 * 1024,
             });
             expect(REALTIME_RELAY_MAX_CLIENT_FRAME_BYTES).toBe(2 * 1024 * 1024);
         });
@@ -503,6 +507,22 @@ describe('RealtimeProxyServer: the realtime relay', () => {
             await sleep(30);
             expect(connection.Texts.slice(1)).toEqual(['{"say":"c"}', '{"say":"d"}']);
             expect(connection.Texts[0]).toContain('setup');
+        });
+
+        it('holds frames while the upstream opens up to a byte budget too; past it the oldest go', async () => {
+            FastRelayServer.Limits = { ...FAST_LIMITS, MaxPendingBytes: 25 }; // two 11-byte frames fit, a third does not
+            const policy = new FakePolicy();
+            policy.HeaderDelayMs = 100;
+            const id = issue(policy);
+            const offset = upstream.Connections.length;
+            const browser = await Browser.Connect(rig.RelayUrl(id));
+            browser.Send({ open: {} });
+            for (const word of ['a', 'b', 'c', 'd']) browser.Send({ say: word });
+            const connection = await upstream.Connection(offset);
+            await waitFor(() => connection.Frames.length >= 3, 'the held frames');
+            await sleep(30);
+            expect(connection.Texts.slice(1)).toEqual(['{"say":"c"}', '{"say":"d"}']);
+            expect(logs.join('\n')).toContain('the pre-open buffer is full (512 frames or 25 B); dropping the oldest');
         });
 
         it('closes with 1011 and opens no upstream when the policy has no headers', async () => {
@@ -779,6 +799,22 @@ describe('RealtimeProxyServer: the realtime relay', () => {
             expect(connection.Closed).toEqual({ Code: 1001, Reason: 'Browser too slow' });
             browser.Socket.resume();
             expect(await browser.WaitClosed()).toEqual({ Code: 1013, Reason: 'Relay buffer full' });
+        });
+
+        it('closes the tunnel when the upstream stops reading: 1013 to the browser, 1001 upstream', async () => {
+            FastRelayServer.Limits = { ...SLOW_READER_LIMITS, MaxUpstreamBufferedBytes: 1024 * 1024 };
+            const { Browser: browser, Upstream: connection } = await openFresh(issue(new FakePolicy()));
+            connection.Socket.pause();
+            const said = JSON.stringify({ say: 'x'.repeat(64 * 1024) });
+            for (let i = 0; i < 1024 && browser.Closed === null; i++) {
+                browser.Socket.send(said); // at most 64 MiB
+                if (i % 16 === 15) await sleep(2);
+            }
+            expect(await browser.WaitClosed()).toEqual({ Code: 1013, Reason: 'Relay buffer full' });
+            expect(logs.join('\n')).toMatch(/the upstream leg has \d+ B queued \(cap 1048576 B\) after \d+ frames \/ \d+ B up; closing/);
+            connection.Socket.resume();
+            await waitFor(() => connection.Closed !== null, 'the upstream to close');
+            expect(connection.Closed).toEqual({ Code: 1001, Reason: 'Upstream too slow' });
         });
     });
 

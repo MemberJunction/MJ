@@ -263,7 +263,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   /** Allow leaving the room from the control bar. */
   @Input() public EnableLeaveControl = true;
   /**
-   * Offer the "Let the agent see" switch while an agent in the room watches ({@link LiveKitRoomState.AgentWatching}).
+   * Offer the "Let agents see" switch while an agent in the room watches ({@link LiveKitRoomState.AgentWatching}).
    * The switch only asks: see {@link AgentVisionChange}.
    */
   @Input() public EnableAgentVisionControl = true;
@@ -1107,7 +1107,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     return this.State.Status === 'connected';
   }
 
-  /** Whether the bar offers the "Let the agent see" switch: the host allows it, and an agent in the room watches. */
+  /** Whether the bar offers the "Let agents see" switch: the host allows it, and an agent in the room watches. */
   public get ShowAgentVisionControl(): boolean {
     return this.EnableAgentVisionControl && this.State.AgentWatching === true;
   }

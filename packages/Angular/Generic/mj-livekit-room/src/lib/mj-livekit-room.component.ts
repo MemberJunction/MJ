@@ -1081,7 +1081,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
     const result = await client.SetAgentVision(this.ResolvedRoomName, on);
     if (!result.Success) {
-      this.AgentVisionNotice = `Couldn't change what the agent sees: ${result.ErrorMessage ?? 'unknown error'}`;
+      this.AgentVisionNotice = `Couldn't change what agents see: ${result.ErrorMessage ?? 'unknown error'}`;
       this.ErrorOccurred.emit({ Kind: 'agent-vision', Message: this.AgentVisionNotice });
     }
     this.cdr.markForCheck();

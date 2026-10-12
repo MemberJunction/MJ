@@ -286,7 +286,7 @@ export class LiveKitControlBarComponent {
   @Input() public EnableWhiteboard = false;
   /** Whether the whiteboard surface is currently active. */
   @Input() public WhiteboardActive = false;
-  /** Show the "Let the agent see" button: an agent in the room watches. */
+  /** Show the "Let agents see" button: an agent in the room watches. */
   @Input() public ShowAgentVision = false;
   /** Whether the user lets agents see their camera and shared screen. */
   @Input() public AgentVisionOn = false;

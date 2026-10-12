@@ -142,8 +142,9 @@ function unsupportedExtension(error: unknown, asked: MintExtensions): keyof Mint
   if (asked.AvatarStatus && message.includes('AvatarStatusJson')) {
     return 'AvatarStatus';
   }
-  // The quoted field name, not the bare word: "Transport" alone could be any transport error.
-  if (asked.RelayTransport && (message.includes('field "Transport"') || message.includes('RelayUrl'))) {
+  // The quoted field names, not the bare words: "Transport" alone could be any transport error, and "RelayUrl"
+  // any message that names the field.
+  if (asked.RelayTransport && (message.includes('field "Transport"') || message.includes('field "RelayUrl"'))) {
     return 'RelayTransport';
   }
   if (asked.ChannelScoping && (message.includes('channelCandidatesJson') || message.includes('ClientPolicyJson'))) {

@@ -156,8 +156,8 @@ describe('MediaControlsComponent (DOM)', () => {
   });
 
   describe('the agent-vision button', () => {
-    const LET = 'Let the agent see your camera and screen';
-    const STOP = 'Stop letting the agent see your camera and screen';
+    const LET = 'Let agents in this room see your camera and screen';
+    const STOP = 'Stop letting agents in this room see your camera and screen';
 
     it('is there only when the host shows it', () => {
       expect(button(render(), LET)).toBeNull();
@@ -189,10 +189,10 @@ describe('MediaControlsComponent (DOM)', () => {
 
     it('is labelled after Share when labels are on', () => {
       const f = render({ ShowLabels: true, ShowAgentVision: true });
-      expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim())).toEqual(['Unmute', 'Video', 'Share', 'Show agent']);
+      expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim())).toEqual(['Unmute', 'Video', 'Share', 'Let agents see me']);
       f.componentRef.setInput('AgentVisionOn', true);
       f.detectChanges();
-      expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim()).at(-1)).toBe('Hide from agent');
+      expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim()).at(-1)).toBe('Hide from agents');
     });
 
     it('has no axe violations', async () => {
