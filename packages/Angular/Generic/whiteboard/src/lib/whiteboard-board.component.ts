@@ -540,7 +540,9 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   /** A markdown panel's optional max height (its rendered height stays content-driven). */
   public MarkdownMaxHeight(item: WhiteboardMarkdownItem): number | null {
-    return item.H ?? null;
+    // mid-resize the cap follows the handle, so dragging the bottom edge previews live
+    const t = this.Interaction?.Type === 'resize' ? this.transientBounds(item.ID) : null;
+    return t ? t.H : item.H ?? null;
   }
 
   /** Whether the item is part of the current (single OR multi) selection. */

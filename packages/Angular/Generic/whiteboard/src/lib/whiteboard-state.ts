@@ -655,16 +655,17 @@ export function IsResizableKind(kind: WhiteboardItemKind): boolean {
  * The patch a COMMITTED resize gesture applies for an item kind, given the gesture's
  * final bounds:
  *  - full-box kinds (`shape`, `highlight`, `html`) commit X / Y / W / H;
- *  - content-driven-height kinds (`sticky`, `text`, `image`, `markdown`) commit
- *    X / Y / W only — their rendered height stays content-driven (markdown's optional
- *    `H` max-height cap is set by tools/agents, never by the drag gesture);
+ *  - `markdown` commits X / Y / W / H too: its `H` is a max-height cap (agents set one when
+ *    they add a panel), and content beyond it is clipped — so the user must be able to drag
+ *    the cap taller to reveal it, or shorter to compact the panel;
+ *  - content-driven-height kinds (`sticky`, `text`, `image`) commit X / Y / W only;
  *  - non-resizable kinds (`ink`, `connector`) return `null` (nothing to commit).
  */
 export function BuildResizeCommitPatch(kind: WhiteboardItemKind, bounds: WhiteboardBounds): WhiteboardItemPatch | null {
-  if (kind === 'shape' || kind === 'highlight' || kind === 'html') {
+  if (kind === 'shape' || kind === 'highlight' || kind === 'html' || kind === 'markdown') {
     return { X: bounds.X, Y: bounds.Y, W: bounds.W, H: bounds.H };
   }
-  if (kind === 'sticky' || kind === 'text' || kind === 'image' || kind === 'markdown') {
+  if (kind === 'sticky' || kind === 'text' || kind === 'image') {
     return { X: bounds.X, Y: bounds.Y, W: bounds.W };
   }
   return null;
