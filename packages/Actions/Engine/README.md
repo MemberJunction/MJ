@@ -351,7 +351,10 @@ Four things the mode does *not* change:
   lose, so refusing to run it where the durable path is unavailable would make opting in *less*
   reliable than leaving it off. The same fallback covers a failed submission, with the reason logged.
 - **Parameters are redacted before they are persisted.** A parameter the binding marked as not-logged
-  arrives at the durable runner absent, not secret.
+  arrives at the durable runner absent, not secret. A whole-record binding (`Entity Object` /
+  `Entity Object Data`) is **always** stripped from the durable payload — a durable binding receives
+  only `Static` / `Entity Field` / `Script` values. Pass a key instead (e.g.
+  `Entity Field 'ID'`) and load the record in the action.
 - **The self-trigger guard does not follow the work.** `EntityActionDispatchGuard` tracks origin
   through `AsyncLocalStorage`, which a dispatcher in another process is definitionally outside of. A
   durable action that writes back to its own record must set

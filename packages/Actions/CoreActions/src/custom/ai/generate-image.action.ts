@@ -1,4 +1,4 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams, RuntimeCredentialScope } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunView, UserInfo } from "@memberjunction/core";
@@ -9,7 +9,8 @@ import {
     ImageGenerationResult,
     ImageEditParams,
     GeneratedImage,
-    GetAIAPIKey
+    GetAIAPIKey,
+    CredentialScopeAllows
 } from "@memberjunction/ai";
 import { MJAIModelEntityExtended, MediaOutput } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
@@ -119,7 +120,8 @@ export class GenerateImageAction extends BaseAction {
             // Get image generator model and create instance
             const { generator, model, apiName } = await this.prepareImageGenerator(
                 params.ContextUser,
-                modelName
+                modelName,
+                params.CredentialScope
             );
 
             let result: ImageGenerationResult;
@@ -227,7 +229,8 @@ export class GenerateImageAction extends BaseAction {
      */
     private async prepareImageGenerator(
         contextUser: UserInfo | undefined,
-        modelName?: string
+        modelName?: string,
+        credentialScope?: RuntimeCredentialScope
     ): Promise<{ generator: BaseImageGenerator; model: MJAIModelEntityExtended; apiName: string }> {
         // Ensure AIEngine is loaded
         await AIEngineBase.Instance.Config(false, contextUser);
@@ -272,6 +275,14 @@ export class GenerateImageAction extends BaseAction {
         // Get API key using the vendor's driver class
         const driverClass = inferenceProvider.DriverClass;
         const apiName = inferenceProvider.APIName || model.APIName || model.Name;
+        // On this line the action is never handed the run's keys: every key it can find is the
+        // platform's. A run restricted to its caller's keys therefore cannot generate an image here.
+        if (!CredentialScopeAllows(credentialScope, 'Environment')) {
+            throw new Error(
+                `No credentials found for ${driverClass}: the credential scope is ${credentialScope}, ` +
+                `and Generate Image cannot use the run's own API keys on this release line.`
+            );
+        }
         const apiKey = GetAIAPIKey(driverClass);
 
         if (!apiKey) {

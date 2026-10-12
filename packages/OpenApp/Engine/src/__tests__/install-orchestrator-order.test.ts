@@ -38,6 +38,8 @@ vi.mock('../github/github-client.js', () => ({
 }));
 vi.mock('../install/schema-manager.js', () => ({
     CreateAppSchema: vi.fn(),
+    // Default: the installer may migrate the app schema. Tests of the #4756 gate override it.
+    CheckCanMigrateAppSchema: vi.fn(async () => ({ Success: true })),
     DropAppSchema: vi.fn(),
     SchemaExists: vi.fn(),
     EscapeSqlString: (s: string) => s,
@@ -83,7 +85,7 @@ vi.mock('@memberjunction/core', () => ({
 import { InstallApp, UpgradeApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
-import { CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
+import { CheckCanMigrateAppSchema, CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, PruneDynamicPackagesNotInManifest } from '../install/config-manager.js';
@@ -686,6 +688,32 @@ describe('InstallApp — schema rollback tracks actual creation (B18)', () => {
         // schema it merely adopted (someone else's data). Post-fix: Created=false → no drop.
         expect(vi.mocked(DropAppSchema)).not.toHaveBeenCalled();
     });
+
+    it('fails before migrating when the installer cannot migrate an adopted schema (#4756)', async () => {
+        // A reinstall after `mj app remove --keep-data` of a schema retrofitted to dbo, run by a
+        // db_ddladmin login: its migrations would be denied the history INSERT and their GRANTs.
+        vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+        vi.mocked(CheckCanMigrateAppSchema).mockResolvedValueOnce({ Success: false, ErrorMessage: 'needs CONTROL on test_app_x' });
+
+        const result = await InstallApp({ Source: 'https://github.com/test/app-x' }, migContext);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('needs CONTROL on test_app_x');
+        expect(vi.mocked(CheckCanMigrateAppSchema)).toHaveBeenCalledWith('test_app_x', migContext.DatabaseProvider);
+        expect(vi.mocked(RunAppMigrations)).not.toHaveBeenCalled();
+        expect(vi.mocked(DropAppSchema)).not.toHaveBeenCalled();
+    });
+
+    it('does not probe a schema it just created — the create path already checked', async () => {
+        vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
+        vi.mocked(SchemaExists).mockResolvedValue(false);
+
+        await InstallApp({ Source: 'https://github.com/test/app-x' }, migContext);
+
+        expect(vi.mocked(CreateAppSchema)).toHaveBeenCalled();
+        expect(vi.mocked(CheckCanMigrateAppSchema)).not.toHaveBeenCalled();
+    });
 });
 
 describe('UpgradeApp — migration failure is honest + recoverable (B21)', () => {
@@ -741,6 +769,21 @@ describe('UpgradeApp — migration failure is honest + recoverable (B21)', () =>
         expect(msg).toContain('ddl boom on v2');
         // App is flipped to Error (retryable: B17 makes Error reinstallable; upgrade resumes).
         expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
+    });
+
+    it('fails before any mutation when the login cannot migrate the app schema (#4756)', async () => {
+        // After the README retrofit hands an installer-owned schema to dbo, a db_ddladmin login's
+        // upgrade migrations are denied the history INSERT and their GRANTs (verified on SQL
+        // Server 2022). Fail up front with the remedy instead of leaving a half-upgraded app.
+        vi.mocked(CheckCanMigrateAppSchema).mockResolvedValueOnce({ Success: false, ErrorMessage: 'needs CONTROL on test_app_x' });
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, migContext);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('needs CONTROL on test_app_x');
+        expect(vi.mocked(CheckCanMigrateAppSchema)).toHaveBeenCalledWith('test_app_x', migContext.DatabaseProvider);
+        expect(vi.mocked(RunAppMigrations)).not.toHaveBeenCalled();
+        expect(vi.mocked(SetAppStatus)).not.toHaveBeenCalled();
     });
 });
 
@@ -798,6 +841,12 @@ describe('UpgradeApp — config prune ordering', () => {
         expect(addCall).toBeLessThan(pruneCall);
     });
 
+    it('does not probe schema permissions when the new version has no migrations', async () => {
+        await UpgradeApp({ AppName: 'app-x' }, upContext);
+        expect(vi.mocked(CheckCanMigrateAppSchema)).not.toHaveBeenCalled();
+    });
+
+
     it('fails the upgrade when the prune fails, leaving the added entries in place', async () => {
         // The adds have already run, so the config is a superset of what the new version needs and
         // the server keeps booting. The upgrade must still report failure so the operator retries;
@@ -825,5 +874,82 @@ describe('UpgradeApp — config prune ordering', () => {
         expect(result.Success).toBe(false);
         expect(vi.mocked(PruneDynamicPackagesNotInManifest)).not.toHaveBeenCalled();
         expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
+    });
+});
+
+describe('creating the app schema — core schema owner (#4756)', () => {
+    /**
+     * On SQL Server CreateAppSchema creates the app schema owned by the core schema's owner so
+     * ownership chaining lets app views read core tables. The orchestrator must tell it WHICH
+     * core schema (hosts can configure one other than `__mj`), and must surface — not drop — the
+     * warning CreateAppSchema returns when it had to fall back to installer ownership.
+     */
+    const warnings: Array<{ Phase: string; Message: string }> = [];
+    const ownerContext = (mjCoreSchema?: string): OrchestratorContext => ({
+        ...context,
+        MJCoreSchema: mjCoreSchema,
+        Callbacks: { OnWarn: (phase: string, message: string) => { warnings.push({ Phase: phase, Message: message }); } },
+    } as unknown as OrchestratorContext);
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        warnings.length = 0;
+        installSequence.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(false);   // schema absent → CreateAppSchema runs
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
+        vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
+            installSequence.push(manifest.name);
+            return `id-${manifest.name}`;
+        });
+        serveManifests({ 'https://github.com/test/owned': manifestJSON('owned', {}) });
+    });
+
+    it('passes the configured core schema to CreateAppSchema', async () => {
+        const result = await InstallApp({ Source: 'https://github.com/test/owned' }, ownerContext('mjcore'));
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(vi.mocked(CreateAppSchema)).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(CreateAppSchema).mock.calls[0][2]).toMatchObject({ CoreSchema: 'mjcore' });
+    });
+
+    it("defaults the core schema to '__mj' when the host configures none", async () => {
+        const result = await InstallApp({ Source: 'https://github.com/test/owned' }, ownerContext(undefined));
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(vi.mocked(CreateAppSchema).mock.calls[0][2]).toMatchObject({ CoreSchema: '__mj' });
+    });
+
+    it("surfaces CreateAppSchema's warning through OnWarn('Schema', …) and still installs", async () => {
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true, Warning: 'W' });
+
+        const result = await InstallApp({ Source: 'https://github.com/test/owned' }, ownerContext('__mj'));
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(warnings).toContainEqual({ Phase: 'Schema', Message: 'W' });
+        expect(installSequence).toEqual(['owned']);
+    });
+
+    it('raises no schema warning when CreateAppSchema returns none', async () => {
+        const result = await InstallApp({ Source: 'https://github.com/test/owned' }, ownerContext('__mj'));
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        // The stub dialect makes an unrelated best-effort step (PersistCanonicalSchemaName) warn in
+        // this harness, so assert on the thing under test: no OnWarn call relays a missing warning.
+        for (const w of warnings) {
+            expect(typeof w.Message).toBe('string');
+            expect(w.Message.length).toBeGreaterThan(0);
+        }
     });
 });

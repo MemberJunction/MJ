@@ -10,7 +10,7 @@
  */
 
 import { MJAIPromptRunEntity, MJAIConfigurationEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
-import { ChatResult, ChatMessage, AIAPIKey, ChatTool, ChatToolChoice } from '@memberjunction/ai';
+import { ChatResult, ChatMessage, AIAPIKey, AICredentialScope, ChatTool, ChatToolChoice } from '@memberjunction/ai';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
 import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
@@ -575,6 +575,17 @@ export class AIPromptParams {
   apiKeys?: AIAPIKey[];
 
   /**
+   * Which credentials this execution may spend. Omitted means `'Any'`: the run's own credentials,
+   * then the platform's (credential bindings, the vendor's default credential, environment keys).
+   *
+   * `'RuntimeOnly'` restricts it to what the caller supplied — {@link apiKeys}, or
+   * {@link credentialId}. A model-vendor candidate whose driver class the run carries no key for is
+   * unavailable, so selection and failover stay on the caller's own keys and a run they do not
+   * cover fails with a "no valid API credentials" error instead of running on the platform's account.
+   */
+  CredentialScope?: AICredentialScope;
+
+  /**
    * Whether to clean validation syntax from the AI result.
    * When true, the AIPromptRunner will automatically remove validation syntax
    * (like ?, *, :type, :[N+], :!empty) from JSON keys in the AI's response.
@@ -818,6 +829,39 @@ export class AIPromptParams {
    * tool-based exploration.
    */
   nativeFileInputs?: NativeFileInput[];
+}
+
+/**
+ * The {@link AIPromptParams} fields that decide who a prompt runs as and which credentials it may
+ * spend: the user, the metadata provider, the AI configuration, the runtime keys, the per-request
+ * credential and the credential scope.
+ *
+ * A prompt the runner starts on a caller's behalf — AI JSON repair, the parallel result selector —
+ * must run under the caller's scope. Each one copying these fields by hand is how JSON repair came to
+ * forward `contextUser` and drop the rest, so it ran on the platform's keys inside a customer's run.
+ * Copy them with {@link PickPromptExecutionScope} instead.
+ */
+export type AIPromptExecutionScope = Pick<
+  AIPromptParams,
+  'contextUser' | 'provider' | 'configurationId' | 'apiKeys' | 'credentialId' | 'CredentialScope'
+>;
+
+/**
+ * Copies the {@link AIPromptExecutionScope} of one prompt's params, for a prompt started on its
+ * behalf. Spread it first and set the new prompt's own fields after it.
+ *
+ * Every field of the scope is listed: `satisfies` makes a field added to the type a compile error
+ * here until it is copied, so a new scope field reaches every internal prompt at once.
+ */
+export function PickPromptExecutionScope(params: AIPromptExecutionScope): AIPromptExecutionScope {
+  return {
+    contextUser: params.contextUser,
+    provider: params.provider,
+    configurationId: params.configurationId,
+    apiKeys: params.apiKeys,
+    credentialId: params.credentialId,
+    CredentialScope: params.CredentialScope,
+  } satisfies Record<keyof AIPromptExecutionScope, AIPromptExecutionScope[keyof AIPromptExecutionScope]>;
 }
 
 

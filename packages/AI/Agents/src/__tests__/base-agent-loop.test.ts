@@ -47,6 +47,7 @@ import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { sanitizeToolName } from '../native-tools/action-tool-builder';
+import { AgentRunner } from '../AgentRunner';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 // ============================================================================
@@ -167,6 +168,8 @@ interface RunActionCall {
     params: ScriptedActionParam[];
     /** What BaseAgent.ExecuteSingleAction stamped as Context.ActiveSkillIDs (the run's active skills). */
     activeSkillIDs?: unknown;
+    /** The run's credential scope, as BaseAgent.ExecuteSingleAction handed it to RunAction. */
+    credentialScope?: unknown;
 }
 
 /** Save-queue flush diagnostics (shape from AgentRunStepSaveQueue.Flush). */
@@ -349,8 +352,8 @@ class LoopHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown } }): Promise<ScriptedActionResult> => {
-                const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs };
+            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown }; CredentialScope?: unknown }): Promise<ScriptedActionResult> => {
+                const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs, credentialScope: input.CredentialScope };
                 this.runActionCalls.push(call);
                 return this.runAction(call);
             },
@@ -904,3 +907,68 @@ describe('BaseAgent.Execute — iteration guardrails', () => {
         ).toBe(true);
     });
 });
+
+describe('BaseAgent.Execute — a RuntimeOnly credential scope reaches every prompt in the run', () => {
+    // #601 in Skip: an org's key was rejected, failover reached a vendor the org had no key for, and
+    // the run finished on the platform's key. The scope has to arrive wherever a prompt spends a key.
+    const KEYS = [{ driverClass: 'GeminiLLM', apiKey: 'sk-gemini' }];
+
+    it('every prompt the agent runs carries the scope alongside the keys', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const { agent, runner } = makeAgent([() => llmEnvelope(actionsEnvelope()), () => llmEnvelope(successEnvelope())]);
+        await agent.Execute(makeParams({ apiKeys: KEYS, CredentialScope: 'RuntimeOnly' }));
+        expect(runner.Calls.length).toBeGreaterThan(0);
+        for (const call of runner.Calls) {
+            expect(call.CredentialScope).toBe('RuntimeOnly');
+            expect(call.apiKeys).toBe(KEYS);
+        }
+    });
+
+    it("the agent's own prompt (the child of the agent-type system prompt) carries the scope too", async () => {
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await agent.Execute(makeParams({ apiKeys: KEYS, CredentialScope: 'RuntimeOnly' }));
+        const childPrompts = runner.Calls[0].childPrompts ?? [];
+        expect(childPrompts).toHaveLength(1);
+        expect(childPrompts[0].childPrompt.CredentialScope).toBe('RuntimeOnly');
+    });
+
+    it('every action the agent dispatches is run under the scope', async () => {
+        const { agent } = makeAgent([() => llmEnvelope(actionsEnvelope()), () => llmEnvelope(successEnvelope())]);
+        await agent.Execute(makeParams({ apiKeys: KEYS, CredentialScope: 'RuntimeOnly' }));
+        expect(harness.runActionCalls).toHaveLength(1);
+        expect(harness.runActionCalls[0].credentialScope).toBe('RuntimeOnly');
+    });
+
+    it('a sub-agent is run under its parent\'s scope — it may not spend keys its parent could not', async () => {
+        const runAgent = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValue({ success: true } as Awaited<ReturnType<AgentRunner['RunAgent']>>);
+        try {
+            const agent = new SubAgentHarnessAgent();
+            await agent.ExposeExecuteSubAgent(
+                makeParams({ apiKeys: KEYS, CredentialScope: 'RuntimeOnly' }),
+                { name: 'Child Agent', message: 'do the sub-task' } as SubAgentRequestArg,
+                { ID: 'aaaaaaaa-0000-4000-8000-0000000000c1', Name: 'Child Agent' } as unknown as MJAIAgentEntityExtended,
+                new MockStepEntity(1) as unknown as SubAgentStepArg,
+            );
+            expect(runAgent).toHaveBeenCalledTimes(1);
+            expect(runAgent.mock.calls[0][0].CredentialScope).toBe('RuntimeOnly');
+            expect(runAgent.mock.calls[0][0].apiKeys).toBe(KEYS);
+        } finally {
+            runAgent.mockRestore();
+        }
+    });
+});
+
+type SubAgentArgs = Parameters<BaseAgent['ExecuteSubAgent']>;
+type SubAgentRequestArg = SubAgentArgs[1];
+type SubAgentStepArg = SubAgentArgs[3];
+
+/** Calls the protected ExecuteSubAgent directly; message preparation (conversation history shaping) is out of scope. */
+class SubAgentHarnessAgent extends HarnessAgent {
+    protected override prepareSubAgentMessages(): ReturnType<BaseAgent['prepareSubAgentMessages']> {
+        return [];
+    }
+
+    public ExposeExecuteSubAgent(...args: SubAgentArgs): ReturnType<BaseAgent['ExecuteSubAgent']> {
+        return this.ExecuteSubAgent(...args);
+    }
+}

@@ -316,6 +316,16 @@ export class RunActionParams<TContext = any> {
    public Context?: TContext;
 
    /**
+    * The agent run's credential scope, set by BaseAgent from `ExecuteAgentParams.CredentialScope`.
+    * On this line an action is never handed the run's API keys, so an action that runs its own prompt
+    * or agent must forward this onto that prompt's or agent's params (`CredentialScope`): under
+    * `'RuntimeOnly'` it then finds no usable model and fails, instead of resolving the platform's keys
+    * inside a run restricted to the caller's. An action that calls a vendor itself must refuse the
+    * platform key under `'RuntimeOnly'`. Absent means `'Any'`.
+    */
+   public CredentialScope?: RuntimeCredentialScope;
+
+   /**
     * Optional AbortSignal that is aborted when the action exceeds its wall-clock
     * time budget (set via `Action.MaxExecutionTimeMS` or the engine default). Set
     * automatically by `ActionEngine.RunAction()` — callers should not populate it
@@ -557,3 +567,9 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
    }
 }
 
+/**
+ * Which credentials an agent run may spend: `'Any'` (the run's keys, then the platform's) or
+ * `'RuntimeOnly'` (the run's keys alone). The same union as `AICredentialScope` in
+ * `@memberjunction/ai`, declared here because this package does not depend on that one.
+ */
+export type RuntimeCredentialScope = 'Any' | 'RuntimeOnly';
