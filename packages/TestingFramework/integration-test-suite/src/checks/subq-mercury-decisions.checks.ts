@@ -84,6 +84,10 @@ const INCEPTION_API_NAME = 'mercury-decide';
 const OPENROUTER_API_NAME = 'inception/mercury-decide-20260930';
 const OPENROUTER_MAX_INPUT_TOKENS = 65_536;
 
+/** The vendors' documented endpoints, written out so a changed default in a driver fails here. */
+const SUBQ_ENDPOINT = 'https://api.subq.ai/v1/systemone';
+const INCEPTION_ENDPOINT = 'https://api.inceptionlabs.ai/v1/decisions';
+
 /** Both unmeasured: farther from Default Decision's target rank (57) than every existing Decision model. */
 const SUBQ_POWER_RANK = 43;
 const MERCURY_POWER_RANK = 44;
@@ -458,7 +462,7 @@ function checkClassFactory(): void {
     }
     AssertEqual(subq.constructor, GuardedSubQDecision, "SM2: the bundle's guard, a subclass of the shipped SubQDecision, is on top");
     AssertEqual(subq.EndpointURL, 'https://gateway.example.test/subq/v1/systemone', "SM2: SubQ endpoint from the credential's JSON");
-    AssertEqual(new SubQDecision(SUBQ_KEY).EndpointURL, 'https://api.subq.ai/v1/systemone', 'SM2: the default SubQ endpoint');
+    AssertEqual(new SubQDecision(SUBQ_KEY).EndpointURL, SUBQ_ENDPOINT, 'SM2: the default SubQ endpoint');
 
     const inception = factory.CreateInstance<BaseDecision>(BaseDecision, INCEPTION_DRIVER, JSON.stringify({ apiKey: INCEPTION_KEY, endpoint: 'https://gateway.example.test/inception/v1/decisions' }));
     if (!(inception instanceof InceptionDecision)) {
@@ -466,7 +470,7 @@ function checkClassFactory(): void {
     }
     AssertEqual(inception.constructor, GuardedInceptionDecision, "SM2: the bundle's guard, a subclass of the shipped InceptionDecision, is on top");
     AssertEqual(inception.EndpointURL, 'https://gateway.example.test/inception/v1/decisions', "SM2: Inception endpoint from the credential's JSON");
-    AssertEqual(new InceptionDecision(INCEPTION_KEY).EndpointURL, 'https://api.inceptionlabs.ai/v1/decisions', 'SM2: the default Inception endpoint');
+    AssertEqual(new InceptionDecision(INCEPTION_KEY).EndpointURL, INCEPTION_ENDPOINT, 'SM2: the default Inception endpoint');
 }
 
 // ─── SM3–SM5: the runner, one route each ─────────────────────────────────────────────────────────
@@ -480,7 +484,7 @@ async function checkSubQRunnerCall(ctx: IntegrationCheckContext): Promise<void> 
         const before = subqGuard.Requests.length;
         const result = await withGuardsArmed({ SubQ: answerAsSubQ }, () => runDecision(new AIDecisionRunner(), params, fixtures));
         assertAnsweredBy(result, SUBQ_MODEL, SUBQ_VENDOR, SUBQ_DRIVER, 'SM3');
-        assertOneRequest(subqGuard, before, SubQDecision.DEFAULT_ENDPOINT, SUBQ_KEY, { model: SUBQ_API_NAME, state: SUBQ_STATE, questions: SUBQ_EXPECTED_QUESTIONS }, 'SM3');
+        assertOneRequest(subqGuard, before, SUBQ_ENDPOINT, SUBQ_KEY, { model: SUBQ_API_NAME, state: SUBQ_STATE, questions: SUBQ_EXPECTED_QUESTIONS }, 'SM3');
         assertSubQAnswers(result, 'SM3');
         AssertEqual(result.DecisionResult?.ResolvedModel, SUBQ_API_NAME, 'SM3: resolved model');
         await assertRunRow(ctx, result, SUBQ_MODEL, SUBQ_VENDOR, SUBQ_INPUT_TOKENS, SUBQ_INPUT_PRICE_PER_MILLION, 'SM3');
@@ -499,7 +503,7 @@ async function checkInceptionRunnerCall(ctx: IntegrationCheckContext): Promise<v
         const openRouterBefore = openRouterGuard.Requests.length;
         const result = await withGuardsArmed({ Inception: answerAsInception }, () => runDecision(new AIDecisionRunner(), params, fixtures));
         assertAnsweredBy(result, MERCURY_MODEL, INCEPTION_VENDOR, INCEPTION_DRIVER, 'SM4');
-        assertOneRequest(inceptionGuard, before, InceptionDecision.DEFAULT_ENDPOINT, INCEPTION_KEY, { model: INCEPTION_API_NAME, state: MERCURY_STATE, questions: MERCURY_EXPECTED_QUESTIONS }, 'SM4');
+        assertOneRequest(inceptionGuard, before, INCEPTION_ENDPOINT, INCEPTION_KEY, { model: INCEPTION_API_NAME, state: MERCURY_STATE, questions: MERCURY_EXPECTED_QUESTIONS }, 'SM4');
         AssertEqual(openRouterGuard.Requests.length - openRouterBefore, 0, 'SM4: OpenRouter requests');
         assertMercuryAnswers(result, 'SM4');
         AssertEqual(result.DecisionResult?.ResolvedModel, INCEPTION_API_NAME, 'SM4: resolved model');
@@ -546,13 +550,13 @@ async function checkBoundCredentials(ctx: IntegrationCheckContext): Promise<void
             const subqBefore = subqGuard.Requests.length;
             const subq = await runDecision(new AIDecisionRunner(), subqOverrideParams(ctx), fixtures);
             assertAnsweredBy(subq, SUBQ_MODEL, SUBQ_VENDOR, SUBQ_DRIVER, 'SM6 SubQ Snap');
-            assertOneRequest(subqGuard, subqBefore, SubQDecision.DEFAULT_ENDPOINT, SM6_SUBQ_TOKEN, { model: SUBQ_API_NAME, state: SUBQ_STATE, questions: SUBQ_EXPECTED_QUESTIONS }, 'SM6 SubQ Snap');
+            assertOneRequest(subqGuard, subqBefore, SUBQ_ENDPOINT, SM6_SUBQ_TOKEN, { model: SUBQ_API_NAME, state: SUBQ_STATE, questions: SUBQ_EXPECTED_QUESTIONS }, 'SM6 SubQ Snap');
             assertSubQAnswers(subq, 'SM6 SubQ Snap');
 
             const inceptionBefore = inceptionGuard.Requests.length;
             const mercury = await runDecision(new AIDecisionRunner(), mercuryOverrideParams(ctx, INCEPTION_VENDOR), fixtures);
             assertAnsweredBy(mercury, MERCURY_MODEL, INCEPTION_VENDOR, INCEPTION_DRIVER, 'SM6 Mercury Decide');
-            assertOneRequest(inceptionGuard, inceptionBefore, InceptionDecision.DEFAULT_ENDPOINT, SM6_INCEPTION_TOKEN, { model: INCEPTION_API_NAME, state: MERCURY_STATE, questions: MERCURY_EXPECTED_QUESTIONS }, 'SM6 Mercury Decide');
+            assertOneRequest(inceptionGuard, inceptionBefore, INCEPTION_ENDPOINT, SM6_INCEPTION_TOKEN, { model: INCEPTION_API_NAME, state: MERCURY_STATE, questions: MERCURY_EXPECTED_QUESTIONS }, 'SM6 Mercury Decide');
             assertMercuryAnswers(mercury, 'SM6 Mercury Decide');
         });
     } finally {
