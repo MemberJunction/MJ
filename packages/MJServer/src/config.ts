@@ -172,7 +172,7 @@ const scheduledJobsSchema = z.object({
  * from one event loop, so a synchronous phase of background work stalls every interactive user.
  * When a sampling window's worst event-loop delay reaches `warnThresholdMs`, one warning is logged
  * with the lag, the heap and the agent runs / scheduled jobs in flight; `/healthcheck` reports the
- * latest window's lag and heap.
+ * latest window's lag (not the heap: `/healthcheck` is unauthenticated).
  */
 const eventLoopMonitorSchema = z.object({
   enabled: z.boolean().optional().default(true),

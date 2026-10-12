@@ -128,9 +128,14 @@ describe('EventLoopStallMonitor', () => {
 });
 
 describe('BuildHealthcheckPayload', () => {
-  it('adds the event-loop lag and heap to the status once the monitor has a sample', () => {
+  it('adds the event-loop lag to the status once the monitor has a sample', () => {
     const payload = BuildHealthcheckPayload({ EventLoopLagMs: 1234, HeapUsedMb: 512, SampledAt: new Date() });
-    expect(payload).toEqual({ status: 'ok', eventLoopLagMs: 1234, heapUsedMb: 512 });
+    expect(payload).toEqual({ status: 'ok', eventLoopLagMs: 1234 });
+  });
+
+  it('never exposes the heap size, because /healthcheck is unauthenticated', () => {
+    const payload = BuildHealthcheckPayload({ EventLoopLagMs: 1234, HeapUsedMb: 512, SampledAt: new Date() });
+    expect(payload).not.toHaveProperty('heapUsedMb');
   });
 
   it('keeps the existing { status: "ok" } body when there is no sample yet', () => {
