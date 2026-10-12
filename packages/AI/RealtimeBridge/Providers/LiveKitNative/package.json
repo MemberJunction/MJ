@@ -12,7 +12,8 @@
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "bench:live": "node scripts/worker-meet-live-benchmark.mjs"
   },
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",

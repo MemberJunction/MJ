@@ -82,7 +82,7 @@
       } @else {
         <div id="ob-listbox" role="listbox" aria-label="Suggestions">
         @for (row of Rows; track row.Suggestion.id; let i = $index) {
-          @if (row.GroupLabel) {
+          @if (row.GroupLabel !== null) {
             <div class="ob-group-label" role="presentation">{{ row.GroupLabel }}</div>
           }
           <div class="ob-row" role="option" [attr.id]="'ob-opt-' + i"

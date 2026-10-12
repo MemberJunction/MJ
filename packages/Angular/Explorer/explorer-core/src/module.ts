@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule, RouteReuseStrategy } from '@angular/router';
+import { AngularSplitModule } from 'angular-split';
 
 // Services
 import { SystemValidationService } from './lib/services/system-validation.service';
@@ -39,6 +40,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
 import { DashboardPreferencesDialogComponent } from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
 import { DashboardResource } from './lib/resource-wrappers/dashboard-resource.component';
+import { DashboardAddToMenuComponent } from './lib/resource-wrappers/dashboard-add-to-menu.component';
 import { QueryResource } from './lib/resource-wrappers/query-resource.component';
 import { EntityRecordResource } from './lib/resource-wrappers/record-resource.component';
 import { SearchResultsResource } from './lib/resource-wrappers/search-results-resource.component';
@@ -84,6 +86,7 @@ import {
     ClaimRedeemComponent,
     ResourceContainerComponent,
     DashboardResource,
+    DashboardAddToMenuComponent,
     EntityRecordResource,
     SearchResultsResource,
     UserViewResource,
@@ -126,6 +129,7 @@ import {
     ConversationsModule,
     CoreDashboardsModule,
     DashboardViewerModule,
+    AngularSplitModule,
     ExplorerSettingsModule,
     FileStorageModule,
     EntityFormDialogModule,

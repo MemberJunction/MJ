@@ -44,7 +44,7 @@ import {
     KnowledgeHubMetadataEngine,
 } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
-import { EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
+import { CombineExtraFilters, EntityDocumentTemplateDataBuilder, EntityVectorSyncer, GetEntityDocumentRecordFilter, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
 import { AIEngine } from "@memberjunction/aiengine";
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
@@ -89,8 +89,34 @@ const DEFAULT_BATCH_SIZE = 500;
  */
 const VECTOR_QUERY_BATCH_SIZE = 100;
 
+/**
+ * Upper bound on how many per-record results {@link DuplicateRecordDetector.GetDuplicateRecords}
+ * keeps in memory for the returned response.
+ *
+ * The run itself is batched, but the RESULTS were previously accumulated for its whole duration —
+ * O(records), not O(batch). On a 61,671-record entity that alone exhausted an 8 GB heap and the
+ * process died before the run could finish, so whole-entity detection could not complete at all.
+ *
+ * Retaining them was never load-bearing: every result is already persisted per batch as
+ * `Duplicate Run Detail` / `Duplicate Run Detail Match` rows, so the array is a second copy of
+ * durable data. It is capped rather than removed so small runs keep returning what they always
+ * did; past the cap, `ResultsTruncated` says so and the database is the source of truth.
+ */
+const MAX_RETAINED_RESULTS = 1000;
+
 /** Default batch size for parallel database saves */
 const SAVE_BATCH_SIZE = 20;
+
+/**
+ * How many times TopK to query for when the entity document has a record filter. Candidates that
+ * fail the filter are dropped after the query, so asking for only TopK would let them take slots
+ * that a genuine duplicate should have had; the result is trimmed back to TopK afterwards.
+ *
+ * A heuristic: when most of a record's nearest neighbors fail the filter, fewer than TopK can
+ * survive. Those neighbors are vectors sync stored before the filter excluded their records;
+ * once stale vectors are removed from the index (#5201), the over-fetch should rarely matter.
+ */
+const RECORD_FILTER_TOPK_FACTOR = 3;
 
 /**
  * The entity-document ReasoningModes that turn on the entry-time check. Both carry a typed
@@ -198,6 +224,15 @@ export class DuplicateRecordDetector extends VectorBase {
     /** The Pinecone/pgvector/Qdrant index name resolved from the entity document's VectorIndex */
     private indexName: string;
     /**
+     * The width of the vectors in that index (`MJ: Vector Indexes.Dimensions`), passed as
+     * `Dimensions` to every `RunEmbedding` call (the runner forwards it to the provider's
+     * `EmbedTexts`). Entity vector sync embeds at this width when it fills the index, so the
+     * probe must match it: a 512-wide index probed with 1,536-wide vectors rejects every query,
+     * and the run completes with no matches. Undefined when the index sets no width; the model's
+     * default then applies on both paths.
+     */
+    private embeddingDimensions: number | undefined = undefined;
+    /**
      * The EntityDocumentID for this run. Passed as the vector query `id` for providers that key
      * by EntityDocumentID (the in-process SimpleVectorServiceProvider — see
      * {@link VectorDBBase.QueryKeyIsEntityDocumentID}) instead of the logical index name.
@@ -273,7 +308,7 @@ export class DuplicateRecordDetector extends VectorBase {
             return response;
         }
 
-        const recordIDs = await this.LoadRecordIDsToCheck(params, entityInfo);
+        const recordIDs = await this.LoadRecordIDsToCheck(params, entityInfo, this.GetRecordFilter(entityDocument));
         if (recordIDs.length === 0) {
             response.ErrorMessage = 'No records found to check for duplicates';
             response.Status = 'Error';
@@ -298,6 +333,12 @@ export class DuplicateRecordDetector extends VectorBase {
             LogStatus(`Duplicate detection: resuming from offset ${resumeOffset}`);
         }
 
+        // Carried across batches instead of the full result set. The queue holds only candidates
+        // that can actually auto-merge; the counter keeps the response's total honest once
+        // PotentialDuplicateResult is capped.
+        const autoMergeQueue: PotentialDuplicateResult[] = [];
+        let totalRecordsWithDuplicates = 0;
+
         for (let offset = resumeOffset; offset < recordIDs.length; offset += batchSize) {
             // Check for cancellation between batches
             await duplicateRun.Load(duplicateRun.ID);
@@ -315,7 +356,25 @@ export class DuplicateRecordDetector extends VectorBase {
                 batchIDs, entityInfo, entityDocument, templateParser, duplicateRun.ID,
                 topK, concurrency, options, startTime, recordIDs.length, offset, totalMatchesFound, contextUser
             );
-            response.PotentialDuplicateResult.push(...batchResults.Results);
+            // Retain a bounded sample for the response, and collect the auto-merge queue.
+            // Everything in batchResults.Results is already persisted (processBatch writes the
+            // Detail and Detail Match rows), so dropping the overflow loses no data — only the
+            // in-memory copy that used to grow for the whole run.
+            totalRecordsWithDuplicates += batchResults.Results.length;
+            for (const result of batchResults.Results) {
+                if (response.PotentialDuplicateResult.length < MAX_RETAINED_RESULTS) {
+                    response.PotentialDuplicateResult.push(result);
+                } else {
+                    response.ResultsTruncated = true;
+                }
+                // Auto-merge still runs AFTER the full pass (below), so detection continues to
+                // see the pre-merge dataset exactly as before. Only the eligible candidates are
+                // carried, which is a small fraction of results by definition — they must clear
+                // the absolute threshold.
+                if (this.resultHasAutoMergeCandidate(result, entityDocument, options)) {
+                    autoMergeQueue.push(result);
+                }
+            }
             totalMatchesFound += batchResults.MatchesFound;
 
             // Update cursor for resume support
@@ -334,7 +393,8 @@ export class DuplicateRecordDetector extends VectorBase {
 
         // Step 8: Auto-merge high-confidence matches
         this.reportProgress(options, 'Merging', recordIDs.length, recordIDs.length, totalMatchesFound, startTime);
-        await this.ProcessAutoMerges(response, entityDocument, options);
+        response.TotalRecordsWithDuplicates = totalRecordsWithDuplicates;
+        await this.ProcessAutoMerges(autoMergeQueue, entityDocument, options);
 
         response.Status = 'Success';
         LogStatus(`Duplicate detection complete: ${recordIDs.length} records checked, ${totalMatchesFound} matches found`);
@@ -483,6 +543,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const embedResult = await step('embedding the record', () => this.EmbeddingRunner.RunEmbedding({
             Texts: templateTexts,
             ModelID: this.embeddingModelID ?? undefined,
+            Dimensions: this.embeddingDimensions,
             ContextUser: contextUser,
             Description: `Duplicate detection single record (${entityDocument.Name})`
         }));
@@ -492,10 +553,15 @@ export class DuplicateRecordDetector extends VectorBase {
         const vectors = embedResult.Vectors;
 
         const topK = options.TopK ?? DEFAULT_TOP_K;
+        const recordFilter = this.GetRecordFilter(entityDocument);
         const queryResults = await step('querying the vector index', () => this.QueryDuplicatesForRecords(
-            [record], vectors, templateTexts, entityDocument, topK, options,
+            [record], vectors, templateTexts, entityDocument, this.CandidateQueryTopK(topK, recordFilter), options,
             this.GetQueryConcurrency(entityDocument)
         ));
+        if (recordFilter) {
+            await step('applying the record filter', () => this.FilterNonExistentMatches(queryResults, record.EntityInfo, recordFilter));
+        }
+        this.TrimToTopK(queryResults, topK);
         return queryResults[0] ?? null;
     }
 
@@ -826,6 +892,8 @@ export class DuplicateRecordDetector extends VectorBase {
 
         // 6d: Sub-batch embedding + vector queries in chunks of VECTOR_QUERY_BATCH_SIZE
         //     to keep API payload sizes and memory bounded
+        const recordFilter = this.GetRecordFilter(entityDocument);
+        const queryTopK = this.CandidateQueryTopK(topK, recordFilter);
         const allQueryResults: RecordQueryResult[] = [];
         const subBatches = chunkArray(records, VECTOR_QUERY_BATCH_SIZE);
 
@@ -838,6 +906,7 @@ export class DuplicateRecordDetector extends VectorBase {
             const subEmbedResult = await this.EmbeddingRunner.RunEmbedding({
                 Texts: subTemplateTexts,
                 ModelID: this.embeddingModelID ?? undefined,
+                Dimensions: this.embeddingDimensions,
                 ContextUser: contextUser,
                 Description: `Duplicate detection batch (${entityDocument.Name})`
             });
@@ -848,15 +917,17 @@ export class DuplicateRecordDetector extends VectorBase {
             // Query vector DB for each record in the sub-batch with concurrency control
             this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
             const subQueryResults = await this.QueryDuplicatesForRecords(
-                subRecords, subEmbedResult.Vectors, subTemplateTexts, entityDocument, topK, options, concurrency
+                subRecords, subEmbedResult.Vectors, subTemplateTexts, entityDocument, queryTopK, options, concurrency
             );
             allQueryResults.push(...subQueryResults);
         }
 
         // 6d.5: Drop matches that point to records which no longer exist in the source
         //       entity (stale "ghost" vectors left behind when records are deleted or
-        //       re-seeded with new IDs). See FilterNonExistentMatches() for the why.
-        await this.FilterNonExistentMatches(allQueryResults, entityInfo);
+        //       re-seeded with new IDs), or that fail the entity document's record filter.
+        //       See FilterNonExistentMatches() for the why.
+        await this.FilterNonExistentMatches(allQueryResults, entityInfo, recordFilter);
+        this.TrimToTopK(allQueryResults, topK);
 
         // 6e: Persist match results and update run details
         this.reportProgress(options, 'Matching', totalRecords, processedSoFar + records.length, matchesSoFar, startTime);
@@ -881,16 +952,39 @@ export class DuplicateRecordDetector extends VectorBase {
      * a single-column key (whatever the column is called), `F1|v1||F2|v2` for a composite key —
      * which is the form `MJ: List Details.RecordID` already holds; `CompositeKey.FromURLSegment`
      * rebuilds the real key from it for any entity.
+     *
+     * Every loader reads with `IgnoreMaxRows`. Without it RunView falls back to the entity's
+     * `UserViewMaxRows` (1,000 by default) and returns only the first page of ids. The run then sets
+     * `TotalItemCount` from that page, so it checks a fraction of the records and still reports
+     * itself complete: "1000 of 1000" on a 61,671-record entity.
      */
-    protected async LoadRecordIDsToCheck(params: PotentialDuplicateRequest, entityInfo: EntityInfo): Promise<string[]> {
+    protected async LoadRecordIDsToCheck(params: PotentialDuplicateRequest, entityInfo: EntityInfo, recordFilter?: string | null): Promise<string[]> {
         if (params.ListID) {
-            return this.LoadRecordIDsFromList(params.ListID);
+            return this.KeepRecordIDsPassingFilter(await this.LoadRecordIDsFromList(params.ListID), entityInfo, recordFilter);
         }
         if (params.ViewID) {
-            return this.LoadRecordIDsFromView(params.ViewID, entityInfo);
+            return this.KeepRecordIDsPassingFilter(await this.LoadRecordIDsFromView(params.ViewID, entityInfo), entityInfo, recordFilter);
         }
-        // ExtraFilter or all records
-        return this.LoadRecordIDsFromEntity(entityInfo, params.ExtraFilter);
+        // ExtraFilter or all records, narrowed by the record filter
+        return this.LoadRecordIDsFromEntity(entityInfo, CombineExtraFilters(params.ExtraFilter, recordFilter));
+    }
+
+    /**
+     * Narrow a list's or view's record ids to those that pass the entity document's record filter,
+     * so a record the filter excludes is never checked whatever the run's source.
+     *
+     * @returns the ids unchanged when there is no filter, otherwise those that pass it, in order
+     */
+    protected async KeepRecordIDsPassingFilter(ids: string[], entityInfo: EntityInfo, recordFilter?: string | null): Promise<string[]> {
+        if (!recordFilter || ids.length === 0) {
+            return ids;
+        }
+        const passing = await this.LoadExistingRecordIDs(entityInfo, entityInfo.FirstPrimaryKey.Name, ids, recordFilter); // first-pk-ok: LoadExistingRecordIDs reads pkField only when PrimaryKeys.length === 1; composite keys are rebuilt from the segment
+        const kept = ids.filter(id => passing.has(NormalizeUUID(id)));
+        if (kept.length < ids.length) {
+            LogStatus(`Duplicate detection: ${ids.length - kept.length} of ${ids.length} record(s) excluded by the entity document's record filter`);
+        }
+        return kept;
     }
 
     /**
@@ -903,6 +997,7 @@ export class DuplicateRecordDetector extends VectorBase {
             ExtraFilter: `ListID = '${sanitizedListID}'`,
             Fields: ['RecordID'],
             ResultType: 'simple',
+            IgnoreMaxRows: true, // every member, not the first UserViewMaxRows (see LoadRecordIDsToCheck)
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
@@ -930,6 +1025,7 @@ export class DuplicateRecordDetector extends VectorBase {
             ViewID: viewID,
             Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple',
+            IgnoreMaxRows: true, // every row of the view, not the first UserViewMaxRows (see LoadRecordIDsToCheck)
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
@@ -948,6 +1044,7 @@ export class DuplicateRecordDetector extends VectorBase {
             ExtraFilter: extraFilter,
             Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple',
+            IgnoreMaxRows: true, // every matching row, not the first UserViewMaxRows (see LoadRecordIDsToCheck)
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
@@ -1026,6 +1123,7 @@ export class DuplicateRecordDetector extends VectorBase {
             const vectorIndex = AIEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
             if (vectorIndex) {
                 this.indexName = AIEngine.Instance.GetProviderIndexName(vectorIndex);
+                this.embeddingDimensions = vectorIndex.Dimensions ?? undefined;
             }
         }
         if (!this.indexName) {
@@ -1224,10 +1322,16 @@ export class DuplicateRecordDetector extends VectorBase {
     // ─────────────────────────────────────────────
 
     /**
-     * Generate human-readable template text for each record using the entity document template.
+     * Generate the template text for each record: the text that is embedded and queried with.
      *
-     * Loads the template from TemplateEngineServer and renders it via Nunjucks,
-     * matching the same approach used by the vectorization pipeline.
+     * It must be the text vector sync embedded for the record, or the query vector describes a
+     * different document than the stored one and genuine duplicates fall below the threshold. So
+     * the template is rendered exactly as sync renders it: from the row RunView returns for the
+     * record ({@link LoadTemplateRows}), with every `Entity` param's related rows (a person's
+     * Phones, Emails...), through the same {@link EntityDocumentTemplateDataBuilder} sync uses.
+     *
+     * @throws when a related param's rows can't be loaded: a query rendered without them can't
+     * match the stored text, and would quietly miss the duplicates the run exists to find
      */
     protected async GenerateTemplateTexts(
         templateParser: ReturnType<typeof EntityDocumentTemplateParser.CreateInstance>,
@@ -1239,15 +1343,30 @@ export class DuplicateRecordDetector extends VectorBase {
         const template = this.loadTemplate(entityDocument);
         const templateContent = template.Content[0] as MJTemplateContentEntity;
         TemplateEngineServer.Instance.SetupNunjucks();
+        if (records.length === 0) {
+            return [];
+        }
+
+        const entityInfo = records[0].EntityInfo;
+        const rows = await this.LoadTemplateRows(records, entityInfo);
+        const dataBuilder = new EntityDocumentTemplateDataBuilder(this.RunView, contextUser ?? this.CurrentUser);
+        // Only saved records have related rows: a new record's key, even a client-generated one, has none yet.
+        const savedRows = rows.filter((_, index) => records[index].IsSaved);
+        const relatedData = await dataBuilder.LoadRelatedData(entityInfo, savedRows, template);
+        const missingParams = dataBuilder.MissingRelatedParams(template, relatedData);
+        if (missingParams.length > 0) {
+            throw new Error(`Duplicate detection could not load the related rows for template param(s) ${missingParams.join(', ')} ` +
+                `of entity document '${entityDocument.Name}'; without them the query text would not match the text vector sync stored`);
+        }
 
         const templateTexts: string[] = [];
-        for (const record of records) {
-            // NEW convention: main entity fields are TOP-LEVEL variables (no Entity. prefix).
-            // Spread record fields directly into root context so templates use {{FieldName}}.
-            const data: Record<string, unknown> = { ...record.GetAll() };
+        for (const [index, record] of records.entries()) {
+            const data = dataBuilder.BuildTemplateData(entityInfo, rows[index], template, relatedData);
 
+            // Skip validation and suppress its warnings, as sync does: records commonly have null
+            // fields, and the templates handle them with {% if %} conditionals.
             const result = await TemplateEngineServer.Instance.RenderTemplate(
-                template, templateContent, data, true
+                template, templateContent, data, true, true
             );
 
             if (result.Success) {
@@ -1258,6 +1377,35 @@ export class DuplicateRecordDetector extends VectorBase {
             }
         }
         return templateTexts;
+    }
+
+    /**
+     * Each record's row as vector sync reads it — RunView with `ResultType: 'simple'` and every
+     * column — in the order of `records`, so the template renders the values sync rendered.
+     * `BaseEntity.GetAll()` differs: it turns date fields into `Date` objects, for one.
+     *
+     * An unsaved record (the entry-time check), or one whose row is no longer there, renders from its own values.
+     */
+    protected async LoadTemplateRows(records: BaseEntity[], entityInfo: EntityInfo): Promise<Record<string, unknown>[]> {
+        const saved = records.filter(r => r.IsSaved);
+        const rowsByKey = new Map<string, Record<string, unknown>>();
+        if (saved.length > 0) {
+            const result = await this.RunView.RunView<Record<string, unknown>>({
+                EntityName: entityInfo.Name,
+                ExtraFilter: this.BuildExtraFilter(saved.map(r => r.PrimaryKey)),
+                ResultType: 'simple',
+                IgnoreMaxRows: true, // bounded by the key filter; an entity's UserViewMaxRows can be smaller than a sub-batch
+            }, this.CurrentUser);
+            if (!result.Success) {
+                throw new Error(`Failed to load ${entityInfo.Name} rows for template rendering: ${result.ErrorMessage}`);
+            }
+            for (const row of result.Results) {
+                rowsByKey.set(NormalizeUUID(CompositeKey.FromEntityRecord(entityInfo, row).ToCompactURLSegment()), row);
+            }
+        }
+        return records.map(r =>
+            (r.IsSaved ? rowsByKey.get(NormalizeUUID(r.PrimaryKey.ToCompactURLSegment())) : undefined) ?? r.GetAll()
+        );
     }
 
     /**
@@ -1536,9 +1684,14 @@ export class DuplicateRecordDetector extends VectorBase {
      * batched query and drop any that don't resolve. Keys are compared in compact URL-segment
      * form, so this works for a single-column key of any name and for composite keys.
      *
+     * With the entity document's record filter, a match whose record fails the filter is dropped
+     * the same way: its vector may predate the filter, or the record may have changed since sync.
+     *
      * Mutates `queryResults` in place.
+     *
+     * @param recordFilter the entity document's record filter ({@link GetRecordFilter}), if any
      */
-    protected async FilterNonExistentMatches(queryResults: RecordQueryResult[], entityInfo: EntityInfo): Promise<void> {
+    protected async FilterNonExistentMatches(queryResults: RecordQueryResult[], entityInfo: EntityInfo, recordFilter?: string | null): Promise<void> {
         // Collect every distinct match key across the batch, in the same compact segment form
         // LoadExistingRecordIDs reads back off the live rows.
         const matchIds = new Set<string>();
@@ -1554,7 +1707,7 @@ export class DuplicateRecordDetector extends VectorBase {
             return;
         }
 
-        const existing = await this.LoadExistingRecordIDs(entityInfo, entityInfo.FirstPrimaryKey.Name, [...matchIds]); // first-pk-ok: LoadExistingRecordIDs reads pkField only when PrimaryKeys.length === 1; composite keys are rebuilt from the segment
+        const existing = await this.LoadExistingRecordIDs(entityInfo, entityInfo.FirstPrimaryKey.Name, [...matchIds], recordFilter); // first-pk-ok: LoadExistingRecordIDs reads pkField only when PrimaryKeys.length === 1; composite keys are rebuilt from the segment
 
         // Drop ghost (non-existent) matches in place.
         for (const qr of queryResults) {
@@ -1564,7 +1717,10 @@ export class DuplicateRecordDetector extends VectorBase {
             );
             const removed = before - qr.Duplicates.Duplicates.length;
             if (removed > 0) {
-                LogStatus(`Duplicate detection: dropped ${removed} stale match(es) for source ${qr.SourceKey.ToString()} (records no longer exist — likely orphaned vectors)`);
+                const reason = recordFilter
+                    ? 'records no longer exist or fail the entity document\'s record filter'
+                    : 'records no longer exist — likely orphaned vectors';
+                LogStatus(`Duplicate detection: dropped ${removed} match(es) for source ${qr.SourceKey.ToString()} (${reason})`);
             }
         }
     }
@@ -1577,26 +1733,33 @@ export class DuplicateRecordDetector extends VectorBase {
      *
      * @param pkField the single key column — read only when the entity has exactly one primary
      * key; a composite key's columns come from `entityInfo.PrimaryKeys`.
+     * @param recordFilter the entity document's record filter, if any: only records that also pass
+     * it count as existing
+     * @throws when a record filter is set and can't be applied — failing open would let the records
+     * it excludes through
      */
-    protected async LoadExistingRecordIDs(entityInfo: EntityInfo, pkField: string, ids: string[]): Promise<Set<string>> {
+    protected async LoadExistingRecordIDs(entityInfo: EntityInfo, pkField: string, ids: string[], recordFilter?: string | null): Promise<Set<string>> {
         const existing = new Set<string>();
         const singleColumn = entityInfo.PrimaryKeys.length === 1;
         const keyFields = entityInfo.PrimaryKeys.map(pk => pk.Name);
         for (const chunk of chunkArray(ids, DEFAULT_BATCH_SIZE)) {
-            const filter = singleColumn
+            const keyFilter = singleColumn
                 ? `${pkField} IN (${chunk.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',')})`
                 : chunk.map((id) => `(${CompositeKey.FromURLSegment(entityInfo, id).ToWhereClause()})`).join(' OR ');
             const rv = await this.RunView.RunView<Record<string, unknown>>({
                 EntityName: entityInfo.Name,
-                ExtraFilter: filter,
+                ExtraFilter: CombineExtraFilters(keyFilter, recordFilter),
                 Fields: keyFields,
                 ResultType: 'simple',
+                IgnoreMaxRows: true, // bounded by the key filter; an entity's UserViewMaxRows can be smaller than a chunk
             }, this.CurrentUser);
 
             if (rv.Success) {
                 for (const r of rv.Results) {
                     existing.add(NormalizeUUID(CompositeKey.FromEntityRecord(entityInfo, r).ToCompactURLSegment()));
                 }
+            } else if (recordFilter) {
+                throw new Error(`Failed to apply the entity document's record filter (${recordFilter}) to ${entityInfo.Name}: ${rv.ErrorMessage}`);
             } else {
                 // Fail open: if we can't verify existence, don't silently delete every match.
                 LogError(`FilterNonExistentMatches: failed to verify record existence for ${entityInfo.Name}: ${rv.ErrorMessage}`);
@@ -1606,6 +1769,36 @@ export class DuplicateRecordDetector extends VectorBase {
             }
         }
         return existing;
+    }
+
+    /**
+     * The entity document's record filter (`Configuration.recordFilter.extraFilter`): the records
+     * that take part in duplicate detection. A batch run checks only records that pass it, and every
+     * run offers only candidates that pass it. {@link CheckSingleRecord} and the entry-time check
+     * still check the record they are given, since the caller asked about that record. Vector sync
+     * applies the same filter to the records it vectorizes.
+     *
+     * @returns the predicate, or null when none is set
+     */
+    protected GetRecordFilter(entityDocument: MJEntityDocumentEntity): string | null {
+        return GetEntityDocumentRecordFilter(entityDocument);
+    }
+
+    /**
+     * How many neighbors to query for so that TopK survive the record filter: TopK times
+     * {@link RECORD_FILTER_TOPK_FACTOR} when a filter is set, TopK otherwise.
+     */
+    protected CandidateQueryTopK(topK: number, recordFilter: string | null): number {
+        return recordFilter ? topK * RECORD_FILTER_TOPK_FACTOR : topK;
+    }
+
+    /** Keep at most TopK candidates per result, in the order the query ranked them. Mutates in place. */
+    protected TrimToTopK(queryResults: RecordQueryResult[], topK: number): void {
+        for (const qr of queryResults) {
+            if (qr.Duplicates.Duplicates.length > topK) {
+                qr.Duplicates.Duplicates = qr.Duplicates.Duplicates.slice(0, topK);
+            }
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -2073,7 +2266,7 @@ export class DuplicateRecordDetector extends VectorBase {
      * Automatically merge records that meet the absolute match threshold.
      */
     protected async ProcessAutoMerges(
-        response: PotentialDuplicateResponse,
+        results: PotentialDuplicateResult[],
         entityDocument: MJEntityDocumentEntity,
         options: DuplicateDetectionOptions = {}
     ): Promise<void> {
@@ -2088,7 +2281,7 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         const absoluteThreshold = options.AbsoluteMatchThreshold ?? entityDocument.AbsoluteMatchThreshold;
-        for (const dupeResult of response.PotentialDuplicateResult) {
+        for (const dupeResult of results) {
             for (const [index, dupe] of dupeResult.Duplicates.entries()) {
                 if (!this.IsAutoMergeEligible(dupe, dupeResult, entityDocument, absoluteThreshold)) {
                     continue;
@@ -2096,6 +2289,29 @@ export class DuplicateRecordDetector extends VectorBase {
                 await this.executeAutoMerge(dupe, dupeResult, entityDocument, index);
             }
         }
+    }
+
+    /**
+     * True when a result carries at least one candidate that {@link ProcessAutoMerges} could act
+     * on. Used to decide what the run must carry across batches: results with no eligible
+     * candidate are already persisted and are never read again, so holding them only grows the
+     * heap.
+     *
+     * Deliberately reuses {@link IsAutoMergeEligible}, so a subclass that narrows eligibility
+     * narrows what is retained too, and the two can never disagree.
+     */
+    protected resultHasAutoMergeCandidate(
+        result: PotentialDuplicateResult,
+        entityDocument: MJEntityDocumentEntity,
+        options: DuplicateDetectionOptions = {}
+    ): boolean {
+        const entityInfo = this.Metadata.EntityByName(entityDocument.Entity);
+        if (entityInfo && !entityInfo.AllowRecordMerge) {
+            return false;
+        }
+        const absoluteThreshold = options.AbsoluteMatchThreshold ?? entityDocument.AbsoluteMatchThreshold;
+        return result.Duplicates.some((dupe) =>
+            this.IsAutoMergeEligible(dupe, result, entityDocument, absoluteThreshold));
     }
 
     /**

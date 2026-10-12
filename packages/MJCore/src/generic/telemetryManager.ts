@@ -1901,9 +1901,12 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
                     }
                 }
             }
+            // Dedupe keys are stamped with wall-clock time (see the dedupe check), not the
+            // performance clock `now` reads, so they must age against the same clock.
             const dedupeWindowMs = this._settings.analyzers?.dedupeWindowMs ?? 30000;
+            const wallNow = Date.now();
             for (const [key, seenAt] of this._insightDedupeWindow) {
-                if (now - seenAt > dedupeWindowMs) {
+                if (wallNow - seenAt > dedupeWindowMs) {
                     this._insightDedupeWindow.delete(key);
                 }
             }
