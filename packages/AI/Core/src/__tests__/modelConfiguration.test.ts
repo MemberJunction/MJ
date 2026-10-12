@@ -10,9 +10,11 @@ import { describe, it, expect } from 'vitest';
 import {
     AIModelConfiguration,
     IsPrefixPromptCache,
+    IsZeroDataRetention,
     ParseModelConfiguration,
     ParseVendorConfiguration,
     ResolveEffectiveModelConfiguration,
+    ResolveIsModelFullDuplex,
 } from '../generic/modelConfiguration';
 
 describe('ParseModelConfiguration — tolerant single-layer parse', () => {
@@ -291,3 +293,56 @@ describe('Decision section — per-model typed-decision limits', () => {
         expect(merged?.Decision).toBeUndefined();
     });
 });
+
+describe('Privacy.ZeroDataRetention', () => {
+    it('is true only for an explicit true', () => {
+        expect(IsZeroDataRetention({ Privacy: { ZeroDataRetention: true } })).toBe(true);
+        expect(IsZeroDataRetention({ Privacy: { ZeroDataRetention: false } })).toBe(false);
+        expect(IsZeroDataRetention({ Privacy: { ZeroDataRetention: null } })).toBe(false);
+        expect(IsZeroDataRetention({ Privacy: {} })).toBe(false);
+        expect(IsZeroDataRetention({})).toBe(false);
+        expect(IsZeroDataRetention(null)).toBe(false);
+        expect(IsZeroDataRetention(undefined)).toBe(false);
+    });
+
+    it('survives a tolerant parse of a catalog row', () => {
+        const parsed = ParseModelConfiguration('{"Privacy":{"ZeroDataRetention":true}}');
+        expect(IsZeroDataRetention(parsed)).toBe(true);
+    });
+
+    it('cascades like every other section: the vendor row can declare it for a model that did not', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { LLM: { NativeToolResults: true } },
+            { Privacy: { ZeroDataRetention: true } }
+        );
+        expect(IsZeroDataRetention(merged)).toBe(true);
+        expect(merged?.LLM?.NativeToolResults).toBe(true);
+    });
+
+    it('the most specific layer wins, even when it withdraws the claim', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { Privacy: { ZeroDataRetention: true } },
+            { Privacy: { ZeroDataRetention: false } }
+        );
+        expect(IsZeroDataRetention(merged)).toBe(false);
+    });
+});
+describe('ResolveIsModelFullDuplex — metadata wins over driver fallback', () => {
+    it('returns true when metadata FullDuplex is true, regardless of driver capability', () => {
+        expect(ResolveIsModelFullDuplex({ Realtime: { FullDuplex: true } }, false)).toBe(true);
+        expect(ResolveIsModelFullDuplex({ Realtime: { FullDuplex: true } }, undefined)).toBe(true);
+    });
+
+    it('returns false when metadata FullDuplex is false, even if driver capability is true', () => {
+        expect(ResolveIsModelFullDuplex({ Realtime: { FullDuplex: false } }, true)).toBe(false);
+    });
+
+    it('falls back to driver capability when metadata FullDuplex is omitted or null', () => {
+        expect(ResolveIsModelFullDuplex({ Realtime: { FullDuplex: null } }, true)).toBe(true);
+        expect(ResolveIsModelFullDuplex({ Realtime: {} }, true)).toBe(true);
+        expect(ResolveIsModelFullDuplex(null, true)).toBe(true);
+        expect(ResolveIsModelFullDuplex(null, false)).toBe(false);
+        expect(ResolveIsModelFullDuplex(null, undefined)).toBe(false);
+    });
+});
+

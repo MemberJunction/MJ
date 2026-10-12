@@ -22587,9 +22587,9 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 5 launch pricing on Anthropic direct as of July 24, 2026: $5/$25 per 1M tokens — same as Opus 4.8 at doubled Frontier-Bench performance. Cache hit at $0.50/1M (up to 90% savings). Batch API 50% discount ($2.50/$12.50). Fast mode at $10/$50 per 1M (2.5x throughput / 2x price). Sources: https://www.anthropic.com/news/claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/models/overview ; https://platform.claude.com/docs/en/about-claude/pricing ; https://openrouter.ai/anthropic/claude-opus-5",
+            "Comments": "Claude Opus 5 launch pricing on Anthropic direct as of July 24, 2026: $5/$25 per 1M tokens — same as Opus 4.8 at doubled Frontier-Bench performance. Cache hit at $0.50/1M (up to 90% savings). Batch API 50% discount ($2.50/$12.50). Fast mode at $10/$50 per 1M (2.5x throughput / 2x price). Sources: https://www.anthropic.com/news/claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/models/overview ; https://platform.claude.com/docs/en/about-claude/pricing ; https://openrouter.ai/anthropic/claude-opus-5 AMENDED 2026-10-12: 5-minute cache write recorded as $6.25/1M from https://platform.claude.com/docs/en/about-claude/pricing (1-hour cache write $10/1M is not representable in this schema). Base rates unchanged.",
             "CacheReadPricePerUnit": 0.5,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": 6.25
           },
           "primaryKey": {
             "ID": "BF1FE2DA-3B0D-479C-B30D-1AFF62970BB5"
@@ -25250,7 +25250,12 @@
       "IsActive": true,
       "SpeedRank": 10,
       "CostRank": 5,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Realtime": {
+          "FullDuplex": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -25263,7 +25268,12 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer",
+            "ModelConfiguration": {
+              "Realtime": {
+                "FullDuplex": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "F3431AC6-C079-4866-9F46-A2F38E5A57EB"
@@ -25284,7 +25294,12 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "Realtime": {
+                "FullDuplex": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "29B5A4BC-C201-4341-B60E-C3E929E4E513"
@@ -25579,7 +25594,8 @@
           },
           "TurnDetection": {
             "Coverage": "audioActivityAndAllVideo"
-          }
+          },
+          "FullDuplex": true
         }
       }
     },
@@ -25606,7 +25622,8 @@
                 },
                 "TurnDetection": {
                   "Coverage": "audioActivityAndAllVideo"
-                }
+                },
+                "FullDuplex": true
               }
             }
           },
@@ -25790,7 +25807,8 @@
           "Reasoning": {
             "IncludeThoughtSummaries": true,
             "Level": "medium"
-          }
+          },
+          "FullDuplex": true
         }
       }
     },
@@ -25818,7 +25836,8 @@
                 "Reasoning": {
                   "IncludeThoughtSummaries": true,
                   "Level": "medium"
-                }
+                },
+                "FullDuplex": true
               }
             }
           },
@@ -27484,9 +27503,9 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "CacheReadPricePerUnit": 0.2,
+            "CacheReadPricePerUnit": 0.1,
             "CacheWritePricePerUnit": 2.5,
-            "Comments": "Claude Sonnet 5.5 launch pricing on Anthropic direct (2026-09-28), from Anthropic's own rate card: $2/$10 per 1M in/out, cache reads $0.20/1M, 5-minute cache write $2.50/1M, 1-hour cache write $4/1M (not representable in this schema). Batch API is half rate ($1/$5). Source: https://platform.claude.com/docs/en/about-claude/pricing"
+            "Comments": "Claude Sonnet 5.5 launch pricing on Anthropic direct (2026-09-28), from Anthropic's own rate card: $2/$10 per 1M in/out, cache reads $0.20/1M, 5-minute cache write $2.50/1M, 1-hour cache write $4/1M (not representable in this schema). Batch API is half rate ($1/$5). Source: https://platform.claude.com/docs/en/about-claude/pricing CORRECTION 2026-10-12: cache reads are $0.10/1M, not $0.20 — Anthropic prices cache hits and refreshes on Claude Sonnet 5.5 at 0.05x the base input price (footnote 2 on the rate card), not the standard 0.1x. Re-verified at https://platform.claude.com/docs/en/about-claude/pricing on 2026-10-12."
           },
           "primaryKey": {
             "ID": "D5CC6302-C694-4FDD-ADC5-96C1428819BC"
@@ -27779,6 +27798,217 @@
     "sync": {
       "lastModified": "2026-10-02T21:42:01.957Z",
       "checksum": "178ae924b353d6547990c51b0afc608433e035b4f948843b0c4b67deed7c7534"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Haiku 5.5",
+      "Description": "Anthropic's fastest and lowest-cost model, released October 7, 2026. 1M token context window, 128K max output tokens, text and image input with text output. First Haiku-class model with an adjustable effort setting. Tiered pricing: $0.10/$0.50 per 1M input/output tokens for prompts up to 100K tokens, $0.50/$2.50 above 100K. Anthropic reports it costs roughly 75% less to run on average than Claude Haiku 4.5. Positioned for high-volume, latency-sensitive work (classification, extraction, routing, summarisation, compaction) and subagent workloads; Sonnet 5.5 and Opus 5.5 remain the recommended choices for complex agentic coding. Manual extended thinking (thinking.type=enabled with budget_tokens) is not accepted - use adaptive thinking with effort. temperature, top_p and top_k return a 400 error. Available on the Claude API, Amazon Bedrock, Google Cloud and Microsoft Foundry.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "PowerRank": 20,
+      "IsActive": true,
+      "SpeedRank": 12,
+      "CostRank": 2,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "E740E87A-B6CD-4E20-8F14-FF515C35F1E1"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-haiku-5-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "F4E63A5E-FA8D-45D4-9598-42975D902BF9"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-haiku-5-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "3CF8A8DC-DF90-4BA2-AAD5-6B27DF714285"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-10-07T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.01,
+            "CacheWritePricePerUnit": 0.125,
+            "Comments": "Pricing as of 2026-10-07 (launch) from https://platform.claude.com/docs/en/about-claude/pricing and https://www.anthropic.com/claude-haiku-5-5. This row records the base tier, for prompts up to 100,000 tokens: $0.10 input / $0.50 output per 1M tokens, cache hits and refreshes $0.01/MTok, 5-minute cache writes $0.125/MTok (1-hour cache writes $0.20/MTok are not modelled). NOT MODELLED: prompts over 100,000 tokens bill at $0.50 input / $2.50 output per 1M tokens with cache reads $0.05/MTok - 5x the rates in this row. MJ stores one price pair per route, so long-prompt traffic on this model is under-costed until request-level tiering is supported. Batch API is 50% off."
+          },
+          "primaryKey": {
+            "ID": "951B360F-E614-4849-A287-1B7686551F23"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-10-07T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.01,
+            "CacheWritePricePerUnit": 0.125,
+            "Comments": "Base tier (prompts up to 100,000 tokens) mirroring Anthropic's published list price from https://platform.claude.com/docs/en/about-claude/pricing and https://www.anthropic.com/claude-haiku-5-5; the >100K tier at $0.50/$2.50 is not modelled, as above. PROVENANCE: Amazon sets its own Bedrock rates and the AWS rate card was not reachable from the session that added this row (2026-10-12), so this is Anthropic's list price mirrored onto the Bedrock route - the same seeding convention used for every other Claude/Bedrock row in this catalogue, each of which matched the AWS rate card when checked on 2026-10-05. Confirm against https://aws.amazon.com/bedrock/pricing/ and correct if Bedrock differs. Regional (non-global) Bedrock endpoints carry a 10% premium that is not modelled."
+          },
+          "primaryKey": {
+            "ID": "E49E769D-2845-4549-8F5A-7F9569B619CC"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AA4E20A1-A62E-4A3F-86AD-1AC14C797CEA"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mistral Large 4",
+      "Description": "Mistral AI's largest open-weight model (public preview, October 6, 2026). Granular Mixture-of-Experts: 1.05T total parameters with 52B active, plus a 1.6B vision encoder. Natively multimodal, general purpose, with a 1M token context window. Mistral states weights will be published at the end of October 2026; until then the preview is being red-teamed with cybersecurity partners. Available through the Mistral API and Mistral Studio. Launch pricing is 50% off for two weeks from release; the standard rates are $1.36 input / $0.14 cached input / $4.18 output per 1M tokens.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "PowerRank": 22,
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Mistral Large 3",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "2C112253-9327-478F-AA2B-7DF9436DC41B"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MistralLLM",
+            "APIName": "mistral-large-4",
+            "MaxInputTokens": 1048576,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C8DC5F43-0C3F-459C-A8C6-E71ACEC4748D"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "StartedAt": "2026-10-06T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.68,
+            "OutputPricePerUnit": 2.09,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.07,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Launch pricing as of 2026-10-06 from https://mistral.ai/pricing/api/ and https://docs.mistral.ai/resources/changelogs - $0.68 input / $0.07 cached input / $2.09 output per 1M tokens. ACTION REQUIRED: this is a promotional rate, 50% off for two weeks from release per Mistral's changelog, so it is expected to lapse around 2026-10-20. When it does, expire this row (Status=Expired plus EndedAt) and add the standard rate of $1.36 input / $0.14 cached input / $4.18 output per 1M tokens, which Mistral's pricing page already shows as the pre-discount price."
+          },
+          "primaryKey": {
+            "ID": "C4469E28-2E1C-42C1-AFFD-1F010805E410"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "BE2A6CFF-7AC9-4742-851C-04399DA91214"
     }
   }
 ]

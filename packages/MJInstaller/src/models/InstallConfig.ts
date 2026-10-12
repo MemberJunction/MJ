@@ -59,6 +59,20 @@ export interface InstallConfig {
   /** Password for the MJAPI SQL login. */
   APIPassword: string;
 
+  // ── Database administrator (optional, used once) ──────────────────────
+
+  /**
+   * A SQL login with rights to create databases and logins (for example `sa`).
+   * When the database and the two logins above are not set up yet, the database
+   * phase signs in with this login and runs `mj-db-setup.sql` itself. It is used
+   * only for that one step and is never written to `.env`, the install state, or
+   * the diagnostic report. Interactive installs ask for it when it is needed.
+   */
+  DatabaseAdminUser?: string;
+
+  /** Password for {@link DatabaseAdminUser}. Never persisted. */
+  DatabaseAdminPassword?: string;
+
   // ── Ports ─────────────────────────────────────────────────────────────
 
   /** TCP port for the MJAPI GraphQL server (default: `4000`). */
@@ -195,6 +209,8 @@ const ENV_VAR_MAP: ReadonlyArray<{
   { EnvVar: 'MJ_INSTALL_CODEGEN_PASSWORD',  Field: 'CodeGenPassword',  Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_API_USER',          Field: 'APIUser',          Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_API_PASSWORD',      Field: 'APIPassword',      Parse: (v) => v },
+  { EnvVar: 'MJ_INSTALL_DB_ADMIN_USER',     Field: 'DatabaseAdminUser',     Parse: (v) => v },
+  { EnvVar: 'MJ_INSTALL_DB_ADMIN_PASSWORD', Field: 'DatabaseAdminPassword', Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_API_PORT',          Field: 'APIPort',          Parse: (v) => parseInt(v, 10) },
   { EnvVar: 'MJ_INSTALL_EXPLORER_PORT',     Field: 'ExplorerPort',     Parse: (v) => parseInt(v, 10) },
   { EnvVar: 'MJ_INSTALL_AUTH_PROVIDER',     Field: 'AuthProvider',     Parse: (v) => v as InstallConfig['AuthProvider'] },

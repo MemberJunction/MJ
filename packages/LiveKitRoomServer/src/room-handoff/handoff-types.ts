@@ -161,17 +161,20 @@ export interface StartRoomAgentRequest {
     RealtimeVoice?: string;
 }
 
+/** Handoff lifecycle event payload. */
+export interface RoomHandoffEvent {
+    RoomName: string;
+    EventType: 'Offered' | 'Accepted' | 'Declined' | 'Transferred' | 'Escalated';
+    ActorUserID?: string;
+    ActorAgentID?: string;
+    Details?: Record<string, unknown>;
+    ContextUser?: UserInfo;
+    Provider?: IMetadataProvider;
+}
+
 /** Observer for handoff lifecycle events (offered, accepted, declined, transferred, escalated). */
 export interface IRoomHandoffObserver {
-    OnHandoffEvent?: (event: {
-        RoomName: string;
-        EventType: 'Offered' | 'Accepted' | 'Declined' | 'Transferred' | 'Escalated';
-        ActorUserID?: string;
-        ActorAgentID?: string;
-        Details?: Record<string, unknown>;
-        ContextUser?: UserInfo;
-        Provider?: IMetadataProvider;
-    }) => void | Promise<void>;
+    OnHandoffEvent?: (event: RoomHandoffEvent) => void | Promise<void>;
 }
 
 /** What the host reports back once the agent is in the room. */

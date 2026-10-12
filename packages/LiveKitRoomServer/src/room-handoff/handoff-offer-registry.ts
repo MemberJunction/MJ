@@ -17,7 +17,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { type EntityTransactionScope, IMetadataProvider, LogError, Metadata, RunInEntityTransaction, RunView, UserInfo } from '@memberjunction/core';
+import { type EntityTransactionScope, IMetadataProvider, LogError, LogStatusEx, Metadata, RunInEntityTransaction, RunView, UserInfo } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import type { MJInteractionOfferEntity, MJInteractionEntity } from '@memberjunction/core-entities';
 import type { HandoffMode, HandoffOfferStatus, HandoffOfferView } from './handoff-types';
@@ -89,6 +89,11 @@ export function ToOfferView(offer: HandoffOfferRecord): HandoffOfferView {
 export interface HandoffOfferRegistryDeps {
     Provider?: IMetadataProvider;
     ContextUser?: UserInfo;
+    /**
+     * Lazily resolves a server identity when no `ContextUser` was given (e.g. the system user, which only exists once the
+     * host's user cache has loaded). Consulted on every call, so a late-loading cache is picked up.
+     */
+    ResolveContextUser?: () => UserInfo | undefined;
     Publisher?: (event: { UserID: string; Kind: 'offered' | 'updated'; Offer: HandoffOfferView }) => void;
 }
 
@@ -167,7 +172,7 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
         const p = this.getProvider(input.Provider);
 
         if (p && typeof p.GetEntityObject === 'function') {
-            const user = input.ContextUser ?? this.deps.ContextUser;
+            const user = this.resolveUser(input.ContextUser);
             try {
                 let interactionID = input.InteractionID;
                 if (!interactionID) {
@@ -246,7 +251,7 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
         const now = this.now();
         if (p && typeof p.GetEntityObject === 'function') {
             try {
-                const user = contextUser ?? this.deps.ContextUser;
+                const user = this.resolveUser(contextUser);
                 const entity = await p.GetEntityObject<MJInteractionOfferEntity>('MJ: Interaction Offers', user);
                 const loaded = await entity.Load(offerID);
                 if (loaded) {
@@ -281,10 +286,13 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
     public async PendingForUser(userID: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<HandoffOfferRecord[]> {
         const p = this.getProvider(provider);
         const now = this.now();
-        if (p && typeof p.GetEntityObject === 'function') {
+        const user = this.resolveUser(contextUser);
+        if (!user) {
+            this.noteNoUser();
+        }
+        if (p && user && typeof p.GetEntityObject === 'function') {
             try {
                 const rv = this.getRunView(p);
-                const user = contextUser ?? this.deps.ContextUser;
                 const result = await rv.RunView<MJInteractionOfferEntity>(
                     {
                         EntityName: 'MJ: Interaction Offers',
@@ -329,11 +337,14 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
         await this.sweep(contextUser, provider);
         const p = this.getProvider(provider);
         const now = this.now();
-        if (p && typeof p.GetEntityObject === 'function') {
+        const user = this.resolveUser(contextUser);
+        if (!user) {
+            this.noteNoUser();
+        }
+        if (p && user && typeof p.GetEntityObject === 'function') {
             try {
                 const cutoff = new Date(now - HANDOFF_OFFER_RETENTION_MS).toISOString();
                 const rv = this.getRunView(p);
-                const user = contextUser ?? this.deps.ContextUser;
                 const result = await rv.RunView<MJInteractionOfferEntity>(
                     {
                         EntityName: 'MJ: Interaction Offers',
@@ -366,10 +377,13 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
     public async ForRoom(roomName: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<HandoffOfferRecord[]> {
         const key = roomName.trim().toLowerCase();
         const p = this.getProvider(provider);
-        if (p && typeof p.GetEntityObject === 'function') {
+        const user = this.resolveUser(contextUser);
+        if (!user) {
+            this.noteNoUser();
+        }
+        if (p && user && typeof p.GetEntityObject === 'function') {
             try {
                 const rv = this.getRunView(p);
-                const user = contextUser ?? this.deps.ContextUser;
                 const result = await rv.RunView<MJInteractionOfferEntity>(
                     {
                         EntityName: 'MJ: Interaction Offers',
@@ -407,7 +421,7 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
     ): Promise<ResolveOfferResult> {
         const p = this.getProvider(provider);
         if (p && typeof p.GetEntityObject === 'function') {
-            const user = contextUser ?? this.deps.ContextUser;
+            const user = this.resolveUser(contextUser);
             try {
                 return await RunInEntityTransaction(asTransactionCapable(p), async () => {
                     const entity = await p.GetEntityObject<MJInteractionOfferEntity>('MJ: Interaction Offers', user);
@@ -474,7 +488,7 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
     ): Promise<HandoffOfferRecord | undefined> {
         const p = this.getProvider(provider);
         if (p && typeof p.GetEntityObject === 'function') {
-            const user = contextUser ?? this.deps.ContextUser;
+            const user = this.resolveUser(contextUser);
             try {
                 return await RunInEntityTransaction(asTransactionCapable(p), async () => {
                     const entity = await p.GetEntityObject<MJInteractionOfferEntity>('MJ: Interaction Offers', user);
@@ -522,10 +536,13 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
         const now = this.now();
         let swept = 0;
         const p = this.getProvider(provider);
-        if (p && typeof p.GetEntityObject === 'function') {
+        const user = this.resolveUser(contextUser);
+        if (!user) {
+            this.noteNoUser();
+        }
+        if (p && user && typeof p.GetEntityObject === 'function') {
             try {
                 const rv = this.getRunView(p);
-                const user = contextUser ?? this.deps.ContextUser;
                 const result = await rv.RunView<MJInteractionOfferEntity>(
                     {
                         EntityName: 'MJ: Interaction Offers',
@@ -607,6 +624,24 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
             });
         } catch (e) {
             LogError(`[HandoffOfferRegistry] publish failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    private warnedNoUser = false;
+
+    /** The caller's user, else the configured server identity, else the lazily resolved one. */
+    private resolveUser(contextUser?: UserInfo): UserInfo | undefined {
+        return contextUser ?? this.deps.ContextUser ?? this.deps.ResolveContextUser?.();
+    }
+
+    /** Logs once (not per tick) that database queries are being skipped because no user identity is available yet. */
+    private noteNoUser(): void {
+        if (!this.warnedNoUser) {
+            this.warnedNoUser = true;
+            LogStatusEx({
+                message: '[HandoffOfferRegistry] no context user configured yet; skipping database queries (in-memory offers still served and expired).',
+                verboseOnly: true,
+            });
         }
     }
 
