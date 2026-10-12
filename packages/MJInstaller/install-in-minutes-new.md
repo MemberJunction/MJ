@@ -9,7 +9,7 @@ Before running the installer, make sure you have the following ready:
 1. **A supported database** — Choose one:
    - **SQL Server** — SQL Server 2022 or above. Can be a local SQL Server instance (including Docker) or Azure SQL. You do **not** need to create a database ahead of time — the installer creates it, along with the SQL logins MemberJunction uses, when you give it an administrator login such as `sa`.
      > **Note:** If using a local SQL Server with a self-signed certificate (common with Docker or default installations), the installer will ask if you want to trust the server certificate. Azure SQL handles encryption automatically, so this step is not needed for Azure SQL.
-   - **PostgreSQL** — PostgreSQL 12 or above. Can be a local PostgreSQL instance (including Docker) or a managed PostgreSQL service (AWS RDS, Azure Database, etc.). You do **not** need to create a database ahead of time — the installer creates it, along with the PostgreSQL roles MemberJunction uses, when you give it an administrator login such as `postgres`.
+   - **PostgreSQL** — a local PostgreSQL instance (including Docker) or a managed PostgreSQL service. The installer has been verified against PostgreSQL 16. You do **not** need to create a database ahead of time — the installer creates it, along with the PostgreSQL roles MemberJunction uses, when you give it a superuser login such as `postgres`. For non-interactive installs, set `MJ_INSTALL_DB_PLATFORM=postgresql`.
 
 2. **Node.js 22 or above** (Node.js 24 recommended) — Install from [nodejs.org](https://nodejs.org). Verify with:
    ```
@@ -104,8 +104,10 @@ Either way, two scripts are saved in your working directory so you can see exact
 > - Azure SQL Database does not support `USE` statements. Create the database and logins with the Azure portal or your usual tooling, then run the installer; it will find them already set up.
 >
 > **PostgreSQL Notes:**
-> - The setup script uses standard SQL; any PostgreSQL client (psql, pgAdmin, Azure Data Studio, DBeaver) can run it.
-> - The installer creates PostgreSQL roles, not separate "logins" — PostgreSQL roles serve both purposes.
+> - `mj-db-setup.sql` is a `psql` script (it uses `\connect` and `\gexec`); run it with `psql -h <host> -p <port> -U postgres -d postgres -f mj-db-setup.sql`. The installer itself sends the same statements one at a time through the driver.
+> - The CodeGen and API logins are PostgreSQL login roles with no special attributes (no `CREATEDB`, `CREATEROLE`, or superuser). The CodeGen role owns the `__mj` schema and may create schemas in the database; the API role can read and write the tables, use the sequences, and execute the routines the CodeGen role creates.
+> - The administrator also creates the `pgcrypto` and `uuid-ossp` extensions and the `cdp_BI`, `cdp_CodeGen`, `cdp_Developer`, `cdp_Integration`, and `cdp_UI` group roles that MemberJunction's migrations grant permissions to.
+> - `.env` gets `DB_PLATFORM='postgresql'` and the same `DB_*` / `CODEGEN_DB_*` keys as SQL Server, so `mj migrate` and CodeGen use the CodeGen login and MJAPI uses the API login.
 
 ### 4. Verify Your Installation
 
@@ -247,6 +249,7 @@ You can also provide configuration via environment variables (useful for CI/CD):
 
 | Variable | Maps To |
 |----------|---------|
+| `MJ_INSTALL_DB_PLATFORM` | `sqlserver` (default) or `postgresql` |
 | `MJ_INSTALL_DB_HOST` | Database hostname |
 | `MJ_INSTALL_DB_PORT` | Database port |
 | `MJ_INSTALL_DB_NAME` | Database name |
@@ -255,7 +258,7 @@ You can also provide configuration via environment variables (useful for CI/CD):
 | `MJ_INSTALL_CODEGEN_PASSWORD` | CodeGen password |
 | `MJ_INSTALL_API_USER` | API SQL login |
 | `MJ_INSTALL_API_PASSWORD` | API password |
-| `MJ_INSTALL_DB_ADMIN_USER` | SQL administrator login used once to create the database and logins (never saved) |
+| `MJ_INSTALL_DB_ADMIN_USER` | Administrator login used once to create the database and logins (SQL Server: e.g. `sa`; PostgreSQL: a superuser such as `postgres`; never saved) |
 | `MJ_INSTALL_DB_ADMIN_PASSWORD` | Password for that administrator login (never saved) |
 | `MJ_INSTALL_API_PORT` | GraphQL API port |
 | `MJ_INSTALL_EXPLORER_PORT` | Explorer UI port |

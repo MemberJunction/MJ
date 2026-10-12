@@ -23,7 +23,7 @@
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
     "@types/mssql": "^9.1.9",
-    "@types/pg": "^8.13.1",
+    "@types/pg": "^8.16.0",
     "typescript": "^5.9.3",
     "tsc-alias": "^1.8.15"
   },

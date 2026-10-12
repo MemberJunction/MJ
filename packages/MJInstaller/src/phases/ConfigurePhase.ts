@@ -314,7 +314,7 @@ export class ConfigurePhase {
   ): Promise<InstallConfig> {
     const config = { ...partial };
 
-    // Database platform — ask first so we can set appropriate defaults
+    // Database platform — asked first because it decides the default port.
     if (!config.DatabasePlatform) {
       if (yes) {
         config.DatabasePlatform = 'sqlserver';
@@ -333,7 +333,6 @@ export class ConfigurePhase {
       }
     }
 
-    // Determine default port based on platform
     const defaultPort = config.DatabasePlatform === 'postgresql' ? 5432 : 1433;
 
     // Database settings
@@ -347,7 +346,7 @@ export class ConfigurePhase {
       emitter, 'db-name', 'Database name:', 'MemberJunction', yes
     );
 
-    // TrustCert is SQL Server only
+    // Trusting a self-signed certificate is a SQL Server (tedious) setting.
     config.DatabaseTrustCert = config.DatabasePlatform === 'sqlserver'
       ? (config.DatabaseTrustCert ?? await this.promptConfirm(
         emitter, 'db-trust-cert', 'Trust self-signed server certificate? (common for local instances)', false, yes
@@ -518,30 +517,19 @@ export class ConfigurePhase {
    */
   private async writeEnvFile(envPath: string, config: InstallConfig): Promise<void> {
     const trustCert = config.DatabaseTrustCert ? 'DB_TRUST_SERVER_CERTIFICATE=1' : '';
-
-    // Build database connection vars based on platform
-    // For PostgreSQL: PG_* is used by CodeGen and MJAPI (postgresqlPoolSettings prefers PG_USERNAME)
-    // So we use one user for both. For SQL Server: separate CODEGEN_DB_* and DB_* for API.
-    let dbVars: string;
-    if (config.DatabasePlatform === 'postgresql') {
-      dbVars = `DB_PLATFORM='postgresql'
-PG_HOST='${config.DatabaseHost}'
-PG_PORT=${config.DatabasePort}
-PG_USERNAME='${config.CodeGenUser}'
-PG_PASSWORD='${config.CodeGenPassword}'
-PG_DATABASE='${config.DatabaseName}'`;
-    } else {
-      dbVars = `DB_PLATFORM='sqlserver'
-DB_HOST='${config.DatabaseHost}'
-DB_PORT=${config.DatabasePort}
-CODEGEN_DB_USERNAME='${config.CodeGenUser}'
-CODEGEN_DB_PASSWORD='${config.CodeGenPassword}'
-DB_USERNAME='${config.APIUser}'
-DB_PASSWORD='${config.APIPassword}'
-DB_DATABASE='${config.DatabaseName}'
-${trustCert}`.trim();
-    }
-
+    // PostgreSQL installs need DB_PLATFORM: MJAPI picks its provider from this
+    // env var only (it does not read `dbPlatform` from mj.config.cjs), and
+    // CodeGen and `mj migrate` default to it. SQL Server is everyone's default,
+    // so SQL Server installs leave it out, exactly as before.
+    //
+    // Both platforms use the same connection keys, keeping the CodeGen and API
+    // logins separate: `mj migrate` reads only DB_HOST / DB_PORT / DB_DATABASE and
+    // CODEGEN_DB_USERNAME / CODEGEN_DB_PASSWORD; CodeGen falls back to
+    // CODEGEN_DB_* when PG_USERNAME is unset; MJAPI's PostgreSQL pool reads
+    // PG_USERNAME || DB_USERNAME. PG_USERNAME / PG_PASSWORD are deliberately
+    // not written — CodeGen and MJAPI both prefer them, so setting them would
+    // put CodeGen and MJAPI on the same login.
+    const platformLine = config.DatabasePlatform === 'postgresql' ? "DB_PLATFORM='postgresql'\n" : '';
     // Accept both internal-shape (`ClientID`, `TenantID`, ...) and user-facing
     // shape (`CLIENT_ID`, `TENANT_ID`, ...) keys in AuthProviderValues — see
     // generateEnvironmentFile() for rationale.
@@ -552,7 +540,14 @@ ${trustCert}`.trim();
     const auth0Domain = authValues.AUTH0_DOMAIN ?? authValues.Domain ?? '';
 
     const content = `#Database Setup
-${dbVars}
+${platformLine}DB_HOST='${config.DatabaseHost}'
+DB_PORT=${config.DatabasePort}
+CODEGEN_DB_USERNAME='${config.CodeGenUser}'
+CODEGEN_DB_PASSWORD='${config.CodeGenPassword}'
+DB_USERNAME='${config.APIUser}'
+DB_PASSWORD='${config.APIPassword}'
+DB_DATABASE='${config.DatabaseName}'
+${trustCert}
 
 #OUTPUT CODE is used for output directories like SQL Scripts
 OUTPUT_CODE='${config.DatabaseName}'
@@ -614,7 +609,9 @@ ASK_SKIP_ORGANIZATION_ID=1
       : '';
 
     const versionSection = resolvedVersion ? `  mjRepoVersion: '${resolvedVersion}',\n` : '';
-    const dbPlatformField = config.DatabasePlatform ? `  dbPlatform: '${config.DatabasePlatform}',\n` : '';
+    // Only PostgreSQL needs the platform pinned here (CodeGen and `mj migrate`
+    // read `dbPlatform` ahead of DB_PLATFORM); SQL Server is their default.
+    const dbPlatformField = config.DatabasePlatform === 'postgresql' ? `  dbPlatform: 'postgresql',\n` : '';
 
     const content = `module.exports = {
 ${dbPlatformField}  settings: {
@@ -848,6 +845,8 @@ ${versionSection}${newUserSection}  output: [],
    * should stay where it is.
    */
   private static readonly ROOT_TO_MJAPI_SYNC_KEYS: ReadonlyArray<string> = Object.freeze([
+    // Platform selector (written only by PostgreSQL installs; MJAPI reads it from env)
+    'DB_PLATFORM',
     // SQL Server / generic env var names
     'DB_HOST', 'DB_PORT', 'DB_DATABASE',
     'DB_USERNAME', 'DB_PASSWORD',
