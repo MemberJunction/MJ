@@ -1,5 +1,5 @@
 import { AuthorizationInfo, AuthorizationRoleInfo, AuthorizationRoleType, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { FilterByUUIDs, IndexByUUID, NormalizeUUID, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 
 /** The outcome of {@link EvaluateActionRunAuthorization}. */
 export interface ActionRunAuthorization {
@@ -57,12 +57,12 @@ export function EvaluateActionRunAuthorization(
             ? { Allowed: true, Reason: 'The action authorizes its caller itself.' }
             : { Allowed: false, Reason: 'No Action Authorization grants this action to any role, and the action does not authorize its caller itself; only an Owner may run it.' };
     }
-    const authorizations = metadata.Authorizations;
+    const authorizationsByID = IndexByUUID(metadata.Authorizations);
     const userGrants = grantsToUserRoles(user, metadata.AuthorizationRoles);
     const granted = actionAuthorizationIDs
-        .map((id) => findAuthorization(authorizations, id))
+        .map((id) => authorizationsByID.Get(id))
         .filter((auth): auth is AuthorizationInfo => auth !== undefined)
-        .find((auth) => holdsLinkedAuthorization(auth, authorizations, userGrants));
+        .find((auth) => holdsLinkedAuthorization(auth, authorizationsByID, userGrants));
     return granted
         ? { Allowed: true, Reason: `The user holds the "${granted.Name}" authorization.` }
         : { Allowed: false, Reason: 'None of your roles holds an authorization this action requires.' };
@@ -71,11 +71,7 @@ export function EvaluateActionRunAuthorization(
 /** The role grants that name one of the user's roles. */
 function grantsToUserRoles(user: UserInfo, grants: readonly AuthorizationRoleInfo[]): AuthorizationRoleInfo[] {
     const userRoleIDs = (user.UserRoles ?? []).map((userRole) => userRole.RoleID);
-    return grants.filter((grant) => userRoleIDs.some((roleID) => UUIDsEqual(roleID, grant.RoleID)));
-}
-
-function findAuthorization(authorizations: readonly AuthorizationInfo[], id: string): AuthorizationInfo | undefined {
-    return authorizations.find((auth) => UUIDsEqual(auth.ID, id));
+    return FilterByUUIDs(grants, userRoleIDs, (grant) => grant.RoleID);
 }
 
 /**
@@ -83,19 +79,19 @@ function findAuthorization(authorizations: readonly AuthorizationInfo[], id: str
  * it, and the user holds it directly or through an ancestor. The first two are checked on the linked
  * authorization itself, because the ancestor walk would otherwise grant it through the parent.
  */
-function holdsLinkedAuthorization(auth: AuthorizationInfo, authorizations: readonly AuthorizationInfo[], userGrants: readonly AuthorizationRoleInfo[]): boolean {
+function holdsLinkedAuthorization(auth: AuthorizationInfo, authorizationsByID: UUIDMap<AuthorizationInfo>, userGrants: readonly AuthorizationRoleInfo[]): boolean {
     if (!auth.IsActive || grantTypes(auth, userGrants).includes(AuthorizationRoleType.Deny)) {
         return false;
     }
-    return holdsDirectlyOrThroughAncestor(auth, authorizations, userGrants);
+    return holdsDirectlyOrThroughAncestor(auth, authorizationsByID, userGrants);
 }
 
 /**
  * True when the user holds the authorization or one of its ancestors, following `ParentID` within
- * `authorizations`. This is the walk `AuthorizationEvaluator.UserCanExecuteWithAncestors` does, with
- * the role grants taken from the same provider as the authorizations.
+ * `authorizationsByID`. This is the walk `AuthorizationEvaluator.UserCanExecuteWithAncestors` does,
+ * with the role grants taken from the same provider as the authorizations.
  */
-function holdsDirectlyOrThroughAncestor(auth: AuthorizationInfo, authorizations: readonly AuthorizationInfo[], userGrants: readonly AuthorizationRoleInfo[]): boolean {
+function holdsDirectlyOrThroughAncestor(auth: AuthorizationInfo, authorizationsByID: UUIDMap<AuthorizationInfo>, userGrants: readonly AuthorizationRoleInfo[]): boolean {
     const visited = new Set<string>();
     let node: AuthorizationInfo | undefined = auth;
     while (node && !visited.has(NormalizeUUID(node.ID))) {
@@ -103,7 +99,7 @@ function holdsDirectlyOrThroughAncestor(auth: AuthorizationInfo, authorizations:
             return true;
         }
         visited.add(NormalizeUUID(node.ID));
-        node = node.ParentID ? findAuthorization(authorizations, node.ParentID) : undefined;
+        node = node.ParentID ? authorizationsByID.Get(node.ParentID) : undefined;
     }
     return false;
 }

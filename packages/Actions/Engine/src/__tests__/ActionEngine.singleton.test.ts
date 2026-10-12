@@ -1,7 +1,8 @@
 /**
  * ActionEngineServer is a BaseSingleton: running its constructor again returns the live instance.
  * The host's registrations must survive that. This file uses the real BaseSingleton, which
- * ActionEngine.test.ts replaces with a mock.
+ * ActionEngine.test.ts replaces with a mock. A registration cannot be undone, so this file holds a
+ * single test; Vitest gives each test file its own module graph and so its own singleton.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { ActionEngineServer, type AdhocSQLAuthorizer, type ReadOnlyProviderFactory } from '../generic/ActionEngine';
