@@ -10,7 +10,7 @@ import {
     OpusEncoderEnvironment,
     SelectOpusPacketEncoder,
 } from '../lib/services/recording/opus-packet-encoder';
-import { WasmOpusEncoder, WASM_OPUS_FLUSH_TIMEOUT_MS, WASM_OPUS_READY_TIMEOUT_MS } from '../lib/services/recording/wasm-opus-encoder';
+import { BrowserWorkerPort, WasmOpusEncoder, WASM_OPUS_FLUSH_TIMEOUT_MS, WASM_OPUS_READY_TIMEOUT_MS, type WorkerLike } from '../lib/services/recording/wasm-opus-encoder';
 import {
     AudioDataConstructor,
     AudioEncoderConstructor,
@@ -321,6 +321,18 @@ describe('Opus encoders → runtime shards → server decode (real libopus)', ()
             } finally {
                 vi.useRealTimers();
             }
+        });
+    });
+
+    describe('BrowserWorkerPort', () => {
+        it('turns a worker error event (e.g. a CSP that blocks the worker) into an error reply, so Start fails at once', async () => {
+            vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const worker: WorkerLike = { onmessage: null, onerror: null, postMessage: vi.fn(), terminate: vi.fn() };
+            const port = new BrowserWorkerPort(worker);
+            const started = WasmOpusEncoder.Start(port, new ArrayBuffer(8));
+            worker.onerror?.({ message: 'blocked by Content-Security-Policy' } as ErrorEvent);
+            await expect(started).rejects.toThrow(/blocked by Content-Security-Policy/);
+            expect(worker.terminate).toHaveBeenCalledTimes(1);
         });
     });
 });

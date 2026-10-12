@@ -225,14 +225,27 @@ export class WasmOpusEncoder implements IOpusPacketEncoder {
     }
 }
 
+/** The slice of a DOM `Worker` {@link BrowserWorkerPort} drives (the real `Worker` satisfies it). */
+export type WorkerLike = Pick<Worker, 'postMessage' | 'terminate'> & {
+    // case-violation-ok-legacy-back-compat: mirrors the DOM Worker handler properties so a real Worker satisfies this type
+    onmessage: ((event: MessageEvent<OpusWorkerReply>) => void) | null;
+    // case-violation-ok-legacy-back-compat: mirrors the DOM Worker handler properties so a real Worker satisfies this type
+    onerror: ((event: ErrorEvent) => void) | null;
+};
+
 /** Adapts a DOM `Worker` to {@link OpusWorkerPort}. */
-class BrowserWorkerPort implements OpusWorkerPort {
+export class BrowserWorkerPort implements OpusWorkerPort {
     public OnReply: ((reply: OpusWorkerReply) => void) | null = null;
 
-    constructor(private readonly worker: Worker) {
+    constructor(private readonly worker: WorkerLike) {
         worker.onmessage = (event: MessageEvent<OpusWorkerReply>) => this.OnReply?.(event.data);
+        // A worker that fails to load or throws (a Content-Security-Policy without `worker-src blob:`, for
+        // instance) reports it here, not through a message. Surface it as an error reply, so a starting
+        // encoder fails at once instead of after its start timeout.
         worker.onerror = (event: ErrorEvent) => {
-            console.warn(`[WasmOpusEncoder] Encoder worker error: ${event.message}`);
+            const message = `Encoder worker error: ${event.message}`;
+            console.warn(`[WasmOpusEncoder] ${message}`);
+            this.OnReply?.({ Type: 'error', Message: message });
         };
     }
 
