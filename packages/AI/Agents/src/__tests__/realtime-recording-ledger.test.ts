@@ -75,6 +75,10 @@ describe('SqlRealtimeRecordingLedger procs', () => {
             .rejects.toThrow(/session id/i);
         await expect(ledger.RecordShard({ SessionID: SESSION, Index: -1, StartSample: 0, SampleCount: 0, Data: Buffer.alloc(1), Sha256: 'x' }))
             .rejects.toThrow(/index/i);
+        await expect(ledger.RecordShard({ SessionID: SESSION, Index: 0, StartSample: 0, SampleCount: 0, Data: Buffer.alloc(128 * 1024 + 1), Sha256: 'x' }))
+            .rejects.toThrow(/bytes/);
+        await expect(ledger.RecordShard({ SessionID: SESSION, Index: 0, StartSample: 0, SampleCount: 0, Data: Buffer.alloc(0), Sha256: 'x' }))
+            .rejects.toThrow(/bytes/);
         expect(provider.SqlCalls).toHaveLength(0);
     });
 

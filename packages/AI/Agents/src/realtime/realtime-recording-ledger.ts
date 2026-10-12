@@ -15,6 +15,7 @@
  */
 import { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import { Base64ToBytes, IsValidUUID } from '@memberjunction/global';
+import { RECORDING_SHARD_MAX_BYTES } from '@memberjunction/ai-core-plus';
 import type { RecordingGap } from './realtime-recording-opus-assembly';
 
 /** What happened to an uploaded shard. `Duplicate` is a retry of identical bytes; `Conflict` is the same index with different bytes. */
@@ -118,6 +119,9 @@ export class SqlRealtimeRecordingLedger implements IRealtimeRecordingLedger {
         assertNonNegativeInteger(Index, 'shard index');
         assertNonNegativeInteger(StartSample, 'start sample');
         assertNonNegativeInteger(SampleCount, 'sample count');
+        if (Data.length === 0 || Data.length > RECORDING_SHARD_MAX_BYTES) {
+            throw new Error(`recording ledger: shard ${Index} of session ${SessionID} is ${Data.length} bytes; it must be 1..${RECORDING_SHARD_MAX_BYTES}`);
+        }
         const row = await this.callForOneRow<RecordShardRow>(
             SP_RECORD_SHARD, SessionID, [SessionID, Index, StartSample, SampleCount, Data.length, Sha256, Data]);
         if (!RECORD_OUTCOMES.includes(row.Outcome as RecordShardOutcome)) {

@@ -92,6 +92,9 @@ export const MAX_ASSEMBLY_SHARDS = 2000;
  */
 export const MAX_ASSEMBLY_SAMPLES = RECORDING_SAMPLE_RATE * 60 * 180;
 
+/** Largest value of the shard ledger's INT `Index` column: "below this" counts every stored shard. */
+const SQL_INT_MAX = 2_147_483_647;
+
 /** Waveform buckets, matching the browser's capture-time `PeakAccumulator`. */
 const PEAK_BUCKETS = 600;
 const BYTES_PER_SAMPLE = 2;
@@ -318,6 +321,9 @@ async function assembleFromLedger(input: AssembleRealtimeRecordingInput): Promis
     AssertRecordingAssemblyBounds(expected, captured);
     const target = await resolveStorageTarget(session, input);
 
+    // Bound the row count too before loading: the terminal counts do not limit how many indexes exist.
+    const storedShards = await Ledger.CountShardsBelow(SessionID, SQL_INT_MAX);
+    AssertRecordingAssemblyBounds(storedShards, null);
     const shards = parseLedgerShards(SessionID, await Ledger.LoadShards(SessionID));
     const assembled = AssembleOpusRecordingPcm(shards, expected, captured, CreateLibopusDecoder());
     if (!assembled.Complete && !ForcePartial) {
@@ -373,9 +379,10 @@ interface StorageTarget {
 
 /**
  * A re-assembly writes through the existing file's own storage provider (the agent's configuration may
- * have changed since). An existing file that is not a WAV (a legacy browser upload such as webm) is not
- * overwritten: its `MJ: Files` row would keep the old content type. A new WAV is uploaded instead, and
- * the finish re-points the session at it.
+ * have changed since). Only the session's own `<RecordingFolder>/recording.wav` object is ever
+ * overwritten: `RecordingFileID` is an ordinary column, so it could point at any file (another
+ * session's recording, or a legacy browser upload such as `recording.webm` whose `MJ: Files` row would
+ * keep the old content type). Anything else gets a new WAV upload, and the finish re-points the session.
  */
 async function resolveStorageTarget(session: MJAIAgentSessionEntity, input: AssembleRealtimeRecordingInput): Promise<StorageTarget> {
     const { ContextUser, Provider } = input;
@@ -384,14 +391,15 @@ async function resolveStorageTarget(session: MJAIAgentSessionEntity, input: Asse
         if (!await file.Load(session.RecordingFileID) || !file.ProviderKey) {
             throw new Error(`could not load recording file ${session.RecordingFileID} of session ${session.ID}`);
         }
-        if (file.ContentType === 'audio/wav') {
+        // Some drivers store keys with a leading '/', so compare without it.
+        if (file.ProviderKey.replace(/^\/+/, '') === `${RecordingFolder(session.ID)}/recording.wav`) {
             const accountID = await ResolveStorageAccountIDForProvider(file.ProviderID, ContextUser, Provider);
             if (!accountID) {
                 throw new Error(`no storage account for provider ${file.ProviderID} of recording file ${file.ID}`);
             }
             return { AccountID: accountID, ExistingFile: { ID: file.ID, ProviderKey: file.ProviderKey } };
         }
-        LogStatus(`AssembleRealtimeRecordingFromLedger: session ${session.ID} points at a ${file.ContentType ?? 'untyped'} recording ${file.ID}; uploading a new WAV instead of overwriting it`);
+        LogStatus(`AssembleRealtimeRecordingFromLedger: session ${session.ID} points at recording ${file.ID} (${file.ProviderKey}), not its own recording.wav; uploading a new WAV instead of overwriting it`);
     }
     const agent = await Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ContextUser);
     if (!await agent.Load(session.AgentID)) {

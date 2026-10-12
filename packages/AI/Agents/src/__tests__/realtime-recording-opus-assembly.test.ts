@@ -421,6 +421,42 @@ describe('AssembleRealtimeRecordingFromLedger', () => {
         expect(provider.Links).toEqual([{ FileID: 'file-1', RecordID: SESSION }]);
     });
 
+    it('never overwrites a WAV that is not this session\'s own recording.wav (RecordingFileID pointing elsewhere)', async () => {
+        fixtureShards.forEach(s => ledger.Put(s));
+        const foreignKey = 'realtime-recordings/11111111-2222-4333-8444-555555555555/recording.wav';
+        bucket.Objects.set(foreignKey, { bytes: Buffer.from('other session'), contentType: 'audio/wav' });
+        provider.Files.set('foreign-wav', { ProviderKey: foreignKey, ProviderID: 'prov-1', ContentType: 'audio/wav' });
+        row.RecordingFileID = 'foreign-wav';
+        const { outcome } = await claimAndAssemble();
+
+        expect(outcome).toBe('Complete');
+        expect(bucket.Objects.get(foreignKey)?.bytes.toString()).toBe('other session');
+        expect(uploads).toHaveLength(1);
+        expect(row.RecordingFileID).toBe('file-1');
+    });
+
+    it('re-assembly overwrites its own recording.wav even when the driver keeps a leading slash on the key', async () => {
+        fixtureShards.forEach(s => ledger.Put(s));
+        provider.Files.set('own-wav', { ProviderKey: `/${FOLDER}/recording.wav`, ProviderID: 'prov-1', ContentType: 'audio/wav' });
+        row.RecordingFileID = 'own-wav';
+        const { outcome } = await claimAndAssemble();
+
+        expect(outcome).toBe('Complete');
+        expect(uploads).toHaveLength(0);
+        expect(bucket.Objects.has(`/${FOLDER}/recording.wav`)).toBe(true);
+        expect(ledger.Finishes[0].FileID).toBe('own-wav');
+        expect(provider.Links).toHaveLength(0);
+    });
+
+    it('more stored shard rows than the bound -> Failed without loading them', async () => {
+        ledger.CountShardsBelow = async () => MAX_ASSEMBLY_SHARDS + 1;
+        ledger.LoadError = new Error('must not load');
+        const { outcome } = await claimAndAssemble(true);
+        expect(outcome).toBe('Failed');
+        expect(messages(errorSpy).join('\n')).toContain(`${MAX_ASSEMBLY_SHARDS + 1} shards`);
+        expect(messages(errorSpy).join('\n')).not.toContain('must not load');
+    });
+
     it('incomplete without ForcePartial -> Deferred: the claim is handed back as Pending with no file', async () => {
         fixtureShards.filter(s => s.ShardIndex !== 1).forEach(s => ledger.Put(s));
         const { version, outcome } = await claimAndAssemble();
