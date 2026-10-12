@@ -167,8 +167,9 @@ import {
     SiliconFlowLLM,
 } from '@memberjunction/ai-siliconflow';
 
-// @memberjunction/ai-systemone (1 classes)
+// @memberjunction/ai-systemone (2 classes)
 import {
+    PerplexityDecision,
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
@@ -238,7 +239,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (447 classes)
+// @memberjunction/core-entities (448 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -605,6 +606,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1709,6 +1711,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenRouterDecision,
     OpenRouterLLM,
     SiliconFlowLLM,
+    PerplexityDecision,
     SystemOneDecision,
     VertexLLM,
     xAILLM,
@@ -1864,11 +1867,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
     MJCommunicationProviderEntity,
-    MJCommunicationProviderMessageTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
@@ -2068,11 +2071,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecommendationProviderEntity,
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
-    MJRecordChangeReplayRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
@@ -2105,6 +2108,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -2271,12 +2275,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetSingleSurveyMonkeyResponseAction,
     GetSingleTypeformResponseAction,
     GetSurveyMonkeyDetailsAction,
-    GetSurveyMonkeyResponsesAction,
-    GetSurveyMonkeyStatisticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetSurveyMonkeyResponsesAction,
+    GetSurveyMonkeyStatisticsAction,
     GetTypeformAction,
     GetTypeformFileContentAction,
     GetTypeformFormsAction,
@@ -2475,12 +2479,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ClientContextChannelServer,
     DataSnapshotToolLibrary,
     DocxToolLibrary,
-    DuplicateReasoningAgentProvider,
-    ExcelToolLibrary,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    DuplicateReasoningAgentProvider,
+    ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
     JSONToolLibrary,
@@ -2679,12 +2683,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
-    CreateFormContributionAction,
-    CreateInteractiveFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CreateFormContributionAction,
+    CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
@@ -2850,7 +2854,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1149;
+export const CLASS_REGISTRATIONS_COUNT = 1151;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

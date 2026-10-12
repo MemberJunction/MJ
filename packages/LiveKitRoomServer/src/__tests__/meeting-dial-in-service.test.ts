@@ -177,5 +177,37 @@ describe('MeetingDialInService', () => {
       expect(limiter.CheckAllowed('key1').allowed).toBe(true);
       vi.restoreAllMocks();
     });
+
+    it('sweeps expired entries so spoofed one-off keys do not grow without bound', () => {
+      const limiter = new DialInRateLimiter(3, 100, 100);
+      for (let i = 0; i < 1000; i++) {
+        limiter.RecordFailure(`spoofed-${i}`);
+      }
+      expect(limiter.Size).toBe(1000);
+
+      // All windows elapse; the next failure past the sweep threshold reclaims them
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 500);
+      limiter.RecordFailure('fresh');
+      expect(limiter.Size).toBe(1);
+      vi.restoreAllMocks();
+    });
+
+    it('keeps locked-out entries through a sweep and enforces the hard ceiling', () => {
+      const limiter = new DialInRateLimiter(1, 100, 100000);
+      limiter.RecordFailure('locked');
+      limiter.RecordFailure('locked'); // reaches maxAttempts => locked for 100s
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 500); // window over, lockout still active
+      for (let i = 0; i < 1000; i++) {
+        limiter.RecordFailure(`k-${i}`);
+      }
+      expect(limiter.CheckAllowed('locked').allowed).toBe(false);
+      vi.restoreAllMocks();
+
+      const flood = new DialInRateLimiter(3, 10_000_000, 10_000_000);
+      for (let i = 0; i < 12000; i++) {
+        flood.RecordFailure(`live-${i}`);
+      }
+      expect(flood.Size).toBeLessThanOrEqual(10000);
+    });
   });
 });

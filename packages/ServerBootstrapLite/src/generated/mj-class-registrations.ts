@@ -162,8 +162,9 @@ import {
     SiliconFlowLLM,
 } from '@memberjunction/ai-siliconflow';
 
-// @memberjunction/ai-systemone (1 classes)
+// @memberjunction/ai-systemone (2 classes)
 import {
+    PerplexityDecision,
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
@@ -216,7 +217,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (447 classes)
+// @memberjunction/core-entities (448 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -583,6 +584,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1439,6 +1441,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenRouterDecision,
     OpenRouterLLM,
     SiliconFlowLLM,
+    PerplexityDecision,
     SystemOneDecision,
     VertexLLM,
     xAILLM,
@@ -1595,11 +1598,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
-    MJCompanyIntegrationSyncWatermarkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
     MJComponentEntityExtended,
@@ -1799,11 +1802,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordProcessCategoryEntity,
     MJRecordProcessEntity,
     MJRecordProcessWatermarkEntity,
-    MJRemoteOperationCategoryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
@@ -1826,6 +1829,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -2002,12 +2006,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetBundlesAction,
     GetCertificatesAction,
     GetCourseAnalyticsAction,
-    GetLearnWorldsBulkDataAction,
-    GetLearnWorldsCourseDetailsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetLearnWorldsBulkDataAction,
+    GetLearnWorldsCourseDetailsAction,
     GetLearnWorldsCoursesAction,
     GetLearnWorldsUserDetailsAction,
     GetLearnWorldsUserProgressAction,
@@ -2206,12 +2210,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TaskGraphPauseServerOperation,
     TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
-    TaskGraphSetBreakpointsServerOperation,
-    TaskGraphSkipTaskServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TaskGraphSetBreakpointsServerOperation,
+    TaskGraphSkipTaskServerOperation,
     TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
     TaskGraphUpdateTaskInputServerOperation,
@@ -2410,12 +2414,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RunClusterAnalysisAction,
     RunDecisionAction,
     RunRecordProcessAction,
-    RunStoredQueryAction,
-    ScheduledGeocodingAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    RunStoredQueryAction,
+    ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
     SearchEntityAction,
@@ -2488,7 +2492,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1056;
+export const CLASS_REGISTRATIONS_COUNT = 1058;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
