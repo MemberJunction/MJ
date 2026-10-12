@@ -436,6 +436,14 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
+     * IDs of the scheduled jobs this process is executing right now (a copy). Read by MJAPI's
+     * event-loop stall monitor to name what was running during a stall.
+     */
+    public get InflightJobIDs(): string[] {
+        return Array.from(this.inflightJobPromises.keys());
+    }
+
+    /**
      * Handle job changes (create, update, delete)
      * Reloads job metadata and restarts polling if needed
      *

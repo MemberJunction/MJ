@@ -64,6 +64,8 @@ import { DataSourceInfo, raiseEvent } from './types.js';
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
+import { EventLoopStallMonitor, BuildHealthcheckPayload } from './eventLoopStallMonitor.js';
+import { SchedulingEngine } from '@memberjunction/scheduling-engine';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
@@ -329,6 +331,21 @@ function resolveServerVersion(): string | undefined {
 
 /** How often to re-check for conversation details left behind by finished runs. */
 const ORPHAN_DETAIL_SWEEP_INTERVAL_MS = 5 * 60_000;
+
+/**
+ * Labels for the background work executing in THIS process — the suspects named when the event
+ * loop stalls (MJ #5510). Agent runs come from the run watchdog, which tracks every run it guards;
+ * scheduled jobs from the scheduling engine's in-flight set, named where the engine has the job.
+ */
+function describeBackgroundWorkInFlight(): string[] {
+  const agentRuns = AgentRunWatchdog.Instance.TrackedRunIDs.map((id) => `agent run ${id}`);
+  const engine = SchedulingEngine.Instance;
+  const jobs = engine.InflightJobIDs.map((id) => {
+    const job = engine.ScheduledJobs.find((j) => UUIDsEqual(j.ID, id));
+    return job ? `scheduled job "${job.Name}" (${id})` : `scheduled job ${id}`;
+  });
+  return [...agentRuns, ...jobs];
+}
 
 /**
  * Replicate handoff-offer updates across server instances over Redis.
@@ -1294,8 +1311,19 @@ const setupComplete$ = new ReplaySubject(1);
   // platform probes (Azure App Service, AWS ALB, k8s, etc.) don't
   // generate noisy auth errors in the logs. CORS is enabled so browser-based
   // clients (e.g. MJExplorer's connectivity poller) can read the response.
+  //
+  // The body carries the latest event-loop sample (MJ #5510) so a probe or poller can tell a server
+  // that just stalled from one that is fine. It cannot answer DURING a stall — nothing on a blocked
+  // loop can — so a timed-out probe is itself the stall signal.
+  const eventLoopMonitor = configInfo.eventLoopMonitor.enabled
+    ? new EventLoopStallMonitor({
+        SampleIntervalMs: configInfo.eventLoopMonitor.sampleIntervalMs,
+        WarnThresholdMs: configInfo.eventLoopMonitor.warnThresholdMs,
+        GetInFlightWork: describeBackgroundWorkInFlight,
+      })
+    : null;
   app.get('/healthcheck', cors<cors.CorsRequest>(), (_req, res) => {
-    res.status(200).json({ status: 'ok' });
+    res.status(200).json(BuildHealthcheckPayload(eventLoopMonitor?.GetSnapshot() ?? null));
   });
 
   // Apply middleware-contributed pre-auth handlers (after compression, before routes)
@@ -1705,6 +1733,16 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.SetScheduledJobCount(scheduledJobsService.GetStatus().activeJobs);
   }
   startupLog.PrintSummary();
+
+  // Watch for event-loop stalls (MJ #5510). Started after boot so the synchronous work of startup
+  // itself is not reported as a stall; stopped by the gracefulShutdown drain below.
+  if (eventLoopMonitor) {
+    eventLoopMonitor.Start();
+    ShutdownRegistry.Instance.Register({
+      ShutdownName: 'EventLoopStallMonitor',
+      Shutdown: () => eventLoopMonitor.Stop(),
+    });
+  }
 
   // Process pending RSU work from pre-restart (entity maps, field maps, sync)
   processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
