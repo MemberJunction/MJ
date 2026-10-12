@@ -111,6 +111,15 @@ wire format, through `OpenAIDecision` in [`@memberjunction/ai-openai`](../OpenAI
 has the higher priority, so with keys for both, the runner tries OpenAI first and fails over to
 OpenRouter.
 
+**Mercury Decide.** OpenRouter also serves Inception's diffusion-based decision model,
+`mercury-decide`, through the same Decisions API, as `inception/mercury-decide`. The model's OpenRouter
+row pins the dated `inception/mercury-decide-20260930` (OpenRouter's canonical slug), served by Inception
+with a 65,536-token context, text only, at $0.02 per million input tokens, and uses `OpenRouterDecision`
+and the same key. OpenRouter's free variant (`inception/mercury-decide:free`) is not in the catalog: it
+has its own rate limits and data policy. The model's other route is Inception's own Decisions API,
+through `InceptionDecision` in [`@memberjunction/ai-inception`](../Inception/README.md). That row has the
+higher priority, so with keys for both, the runner tries Inception first and fails over to OpenRouter.
+
 **The wire format.** Jev and Kev speak the System One decisions format. `OpenRouterDecision` extends
 `BaseSystemOneDecision` (`@memberjunction/ai`), which owns the request and answer mapping; this class
 supplies only the endpoint and the default model. Cloudflare's Clef models speak the same format on

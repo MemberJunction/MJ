@@ -75,6 +75,7 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 | systemone-kev | 10 | det | server |
 | perplexity-decider | 5 | det | server |
 | openai-decisions | 7 | det | server |
+| subq-mercury-decisions | 8 | det | server |
 | transaction-groups | 5 | det | **client** |
 | class-resolution | 5 | det | server |
 | metadata-sync | 9 | det | server |
@@ -85,7 +86,7 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 | queue | 7 | det | server |
 | auth-validation | 7 | det | server |
 
-**912 checks / 113 registered bundles today** (IT01–IT112, and IT120, a provisional number for the GPT-6 Luna Decisions bundle that may change at merge; the table above lists the majors — run `mj test list` or read `integration-test-suite/src/checks/` for the full set): 97 members land in the **deterministic** suite, 16 in **live-model**. The 2026-07 expansion added the IT31–IT52 client-first bundles; IT64 onward followed, through the Clef, Kev and Perplexity Decider decision-model bundles at IT108–IT110 and the OpenAI decision-model bundle at IT120. The bundle count is pinned by `check-registry.test.ts` — treat that as the source of truth over any hand-count here. The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.
+**920 checks / 114 registered bundles today** (IT01–IT112, and IT120 and IT121, provisional numbers for the GPT-6 Luna Decisions and the SubQ Snap / Mercury Decide bundles that may change at merge; the table above lists the majors — run `mj test list` or read `integration-test-suite/src/checks/` for the full set): 98 members land in the **deterministic** suite, 16 in **live-model**. The 2026-07 expansion added the IT31–IT52 client-first bundles; IT64 onward followed, through the Clef, Kev and Perplexity Decider decision-model bundles at IT108–IT110 and the OpenAI, SubQ and Inception decision-model bundles at IT120–IT121. The bundle count is pinned by `check-registry.test.ts` — treat that as the source of truth over any hand-count here. The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.
 
 > **Suite ordering invariant**: ALL server-transport members are sequenced before ALL
 > client-transport members (deterministic suite: servers 1–49, clients 50–74). The first client

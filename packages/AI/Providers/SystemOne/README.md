@@ -1,9 +1,10 @@
 # @memberjunction/ai-systemone
 
-MemberJunction drivers for decision APIs that speak TypeSafe's System One decisions format. It ships two `BaseDecision` drivers:
+MemberJunction drivers for decision APIs that speak TypeSafe's System One decisions format. It ships three `BaseDecision` drivers:
 
 - **`SystemOneDecision`**, for any server that answers `POST {base}/v1/systemone` (below);
-- **`PerplexityDecision`**, for Perplexity's Decisions API and its `pplx-decider-v1-27b` model (see [Perplexity's Decider](#perplexitydecision-perplexitys-decider)).
+- **`PerplexityDecision`**, for Perplexity's Decisions API and its `pplx-decider-v1-27b` model (see [Perplexity's Decider](#perplexitydecision-perplexitys-decider));
+- **`SubQDecision`**, for Subquadratic's SubQ Decisions API and its `subq-snap-preview` model (see [SubQ Snap](#subqdecision-subq-snap)).
 
 `SystemOneDecision` covers three kinds of server:
 
@@ -26,9 +27,11 @@ graph TD
     C["CloudflareDecision<br/>(@memberjunction/ai-cloudflare)"] -->|extends| B
     D["OpenRouterDecision<br/>(@memberjunction/ai-openrouter)"] -->|extends| B
     P["PerplexityDecision<br/>(@memberjunction/ai-systemone)"] -->|extends| B
+    Q["SubQDecision<br/>(@memberjunction/ai-systemone)"] -->|extends| B
     B -->|extends| E["BaseDecision<br/>(@memberjunction/ai)"]
     A -->|POST /v1/systemone| F["Kev on Modal · llama-server · TypeSafe"]
     P -->|POST /v1/decisions| G["Perplexity Decisions API<br/>(pplx-decider-v1-27b)"]
+    Q -->|POST /v1/systemone| H["SubQ Decisions API<br/>(subq-snap-preview)"]
 ```
 
 `BaseSystemOneDecision` owns the System One request and answer mapping. `SystemOneDecision` adds the endpoint, the optional token and error messages that name what the server said. `PerplexityDecision` adds Perplexity's endpoint, the key check and Perplexity's error messages.
@@ -154,15 +157,63 @@ const result = await decider.Decide({
 - A `400` is classified from its message. An unknown model is an `InvalidRequest`, which stops the loop.
 - A `413` (a body over 32 MiB) is an `Unknown` error, which fails over. MJ sends no images, so its requests stay far below that size.
 
+## `SubQDecision`: SubQ Snap
+
+`SubQDecision` calls Subquadratic's SubQ Decisions API, `POST https://api.subq.ai/v1/systemone`, which serves SubQ Snap, a multimodal decision model built for fast, long-context decisions. Subquadratic announced it on 2026-10-12, in **public preview**, as `subq-snap-preview`. In MJ's catalog it is the `SubQ Snap` model on the `Subquadratic` vendor. The API is its only host: it is not on OpenRouter.
+
+The API speaks the System One format exactly and returns the response bare, so the driver adds only the endpoint, a check that there is a key, SubQ's error messages and the classification of the statuses SubQ documents.
+
+| | |
+|---|---|
+| **Endpoint** | `https://api.subq.ai/v1/systemone`. A URL passed to the constructor wins, then a credential's `endpoint`. Either is the full request URL. |
+| **Key** | A SubQ API key from console.subq.ai, sent as `Authorization: Bearer <key>`. |
+| **Model** | `subq-snap-preview`, the row's `APIName` and the driver's default. The ID will change at general availability: change the row's `APIName` then; the model's name stays `SubQ Snap`. |
+| **Limits** | 2 to 255 options per Choice and 2 to 10 levels per Score (set as the model's `Decision` limits); question names up to 100 characters. Subquadratic's announcement gives up to 384K tokens of context; its API documentation gives no limit, so none is set. |
+| **Price** | $0.05 per million input tokens. Output is free: `usage.output_tokens` is always 0. |
+
+**Configuration.** Bind an `API Key` AI Credential to the model's `Subquadratic` Inference Provider row (or to the `Subquadratic` vendor), or set the legacy variable:
+
+```bash
+AI_VENDOR_API_KEY__SUBQDECISION=sk-...
+```
+
+**Usage.** Name the model and the vendor through `AIDecisionRunner`, or call the driver directly:
+
+```typescript
+import { SubQDecision } from '@memberjunction/ai-systemone';
+
+const snap = new SubQDecision('your-subq-api-key');
+const result = await snap.Decide({
+    Model: 'subq-snap-preview',
+    State: 'Patient with asthma reports a sore throat, fever since yesterday, and shortness of breath.',
+    Questions: {
+        escalate: { Kind: 'Likelihood', Instructions: 'Should a nurse see this chat before the patient books anything?' },
+        acuity: { Kind: 'Score', Instructions: 'How soon should someone respond?', Levels: ['Within a week', 'Within a day', 'Within an hour'] },
+    },
+});
+```
+
+**As a fallback.** The shipped `Default Decision` prompt does not bind SubQ Snap, and its bindings are unchanged. Like every active `Decision` model, it joins `Default Decision`'s power-matched fallbacks once its key resolves. It is unmeasured in MJ, so its `PowerRank` is 43: farther from `Default Decision`'s target rank (57) than every other shipped Decision model, so it is the last fallback, after Mercury Decide (44) and Kev-0.8B (45). A credential bound to the `Subquadratic` vendor, or a default `API Key` credential, gives its row a key; on such a host `Default Decision` can fail over to SubQ's preview API once every earlier candidate has failed. To prevent that, set the row's `Status` to `Inactive`.
+
+**Errors and failover.**
+
+- A missing key fails before any request with a `NoCredentials` error that allows failover.
+- The message names SubQ's `detail.error_type` and `detail.message` (SubQ's `detail` is an object, unlike FastAPI's string or list).
+- A `401` (a missing or invalid key) is an `Authentication` error. `ErrorAnalyzer` rates it fatal, which stops the failover loop, as for every other driver.
+- A `402` (no credits) is a `NoCredit` error, and a `403` (the key cannot use the model) and a `422` (an invalid request, or a model that is not a decision model) are `ModelError`s. The driver sets these itself, so whatever SubQ's message says, they allow failover rather than stopping the loop. They are not vendor-level errors (`Authentication`, `VendorValidationError`), which would make the runner drop SubQ's other rows; it has none.
+- A `429` and a `503` fail over. SubQ's advice is to retry both with backoff; `Default Decision` sets `MaxRetries` to 0, so it fails over at once.
+
 ## Not supported yet
 
-- **Images.** llama.cpp, Clef and Perplexity's API accept images with the state; MJ's `DecisionParams` has none, so neither driver sends them.
+- **Images.** llama.cpp, Clef, Perplexity's API and SubQ's API (up to 4 images) accept images with the state; MJ's `DecisionParams` has none, so no driver sends them.
 
 ## Class Registration
 
 Registered as `SystemOneDecision` via `@RegisterClass(BaseDecision, 'SystemOneDecision')`. The Kev models' `System One Endpoint` rows name it as their `DriverClass`.
 
 Registered as `PerplexityDecision` via `@RegisterClass(BaseDecision, 'PerplexityDecision')`. The `Perplexity Decider v1 27B` model's `Perplexity` row names it as its `DriverClass`.
+
+Registered as `SubQDecision` via `@RegisterClass(BaseDecision, 'SubQDecision')`. The `SubQ Snap` model's `Subquadratic` row names it as its `DriverClass`.
 
 ## Dependencies
 
