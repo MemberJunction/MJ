@@ -1790,7 +1790,6 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         return session;
     }
 
-
     /**
      * Resolves an ACTIVE channel definition (`MJ: AI Agent Channels`) by name from
      * {@link AIEngineBase}'s cached `AgentChannels` (provider-scoped engine instance, lazy

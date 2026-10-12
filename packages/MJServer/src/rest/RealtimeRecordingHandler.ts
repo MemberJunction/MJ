@@ -8,7 +8,7 @@
  *   with the final partial shard (the tail) as an optional body. The browser sends it with `keepalive` on
  *   End, `pagehide` and `visibilitychange→hidden`, so it may arrive more than once, and late.
  *
- * Both run after the unified auth middleware and are owner-gated. A request does only cheap work: parse
+ * Both run after the unified auth middleware and are owner- and scope-gated (see `loadAuthorizedSession`). A request does only cheap work: parse
  * the shard header and packet bounds, hash, one guarded ledger proc, maybe a count. It never decodes:
  * assembly runs off the request path through the {@link IRecordingAssemblyScheduler}.
  *
@@ -27,6 +27,7 @@ import {
     LoadOwnedRealtimeSession, RealtimeSessionNotFoundError, RealtimeSessionOwnershipError,
 } from '../realtimeSessions/ownedRealtimeSession.js';
 import type { IRecordingAssemblyScheduler } from '../realtimeSessions/RecordingAssemblyScheduler.js';
+import { AuthorizeSessionAccess, LoadSessionConversationExternalID } from '../realtimeSessions/sessionAccess.js';
 
 /** Where {@link CreateRealtimeRecordingRouter} is mounted (under the reserved `/realtime` root). */
 export const REALTIME_RECORDING_MOUNT_PATH = '/realtime/recording';
@@ -53,6 +54,8 @@ export interface RealtimeRecordingRouterDeps {
     /** The authenticated caller, or null (answered 401). */
     ResolveCaller(req: Request): RealtimeRecordingCaller | null;
     LoadOwnedSession: typeof LoadOwnedRealtimeSession;
+    /** The session conversation's per-session scope id, for the anonymous-guest half of the access decision. */
+    LoadConversationExternalID: typeof LoadSessionConversationExternalID;
     /** The ledger for one request; `contextUser` is the caller (used for logging by the procs). */
     CreateLedger(provider: DatabaseProviderBase, contextUser: UserInfo): IRealtimeRecordingLedger;
     Scheduler: IRecordingAssemblyScheduler;
@@ -158,7 +161,7 @@ async function handleShard(deps: RealtimeRecordingRouterDeps, req: Request, res:
         throw new RecordingRequestError(400, `Shard header index ${header.ShardIndex} does not match the path index ${index}`);
     }
 
-    await deps.LoadOwnedSession(SessionID, Caller.ContextUser, Caller.Provider);
+    await loadAuthorizedSession(deps, SessionID, Caller);
     const ledger = deps.CreateLedger(Caller.Provider, Caller.ContextUser);
     const result = await recordShard(ledger, SessionID, header, body);
     if (result.Outcome === 'Inserted') {
@@ -179,10 +182,14 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
     }
     const tail = readOptionalTail(req, SessionID, lastShardIndex);
 
-    const session = await deps.LoadOwnedSession(SessionID, Caller.ContextUser, Caller.Provider);
+    const session = await loadAuthorizedSession(deps, SessionID, Caller);
     const ledger = deps.CreateLedger(Caller.Provider, Caller.ContextUser);
     if (tail) {
-        await recordShard(ledger, SessionID, tail.Header, tail.Bytes);
+        const tailResult = await recordShard(ledger, SessionID, tail.Header, tail.Bytes);
+        if (tailResult.Outcome === 'Inserted') {
+            // A re-sent tail can fill a gap of a recording already assembled, exactly like a late shard.
+            await scheduleAfterLateShard(deps, ledger, SessionID, tail.Header.ShardIndex, tailResult);
+        }
     }
     if (lastShardIndex === -1) {
         // The call captured nothing: there is no recording to stamp or assemble.
@@ -202,6 +209,25 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
         await scheduleWhenReady(deps, ledger, SessionID, expected);
     }
     res.status(200).json({ accepted: true, ignored: false });
+}
+
+/**
+ * Loads the session through the shared ownership gate, then applies the per-session scope rule of
+ * {@link AuthorizeSessionAccess}. The gate alone checks `UserID`, which every anonymous widget guest shares
+ * (they all authenticate as the one Anonymous user); without the scope rule one guest could write shards to
+ * another guest's recording, and a different-bytes shard would mark it Failed. The owner half of the
+ * decision repeats the gate's check on purpose: the decision is one rule, applied whole. Named users carry
+ * no scope and are unaffected.
+ */
+async function loadAuthorizedSession(deps: RealtimeRecordingRouterDeps, sessionID: string, caller: RealtimeRecordingCaller): Promise<MJAIAgentSessionEntity> {
+    const session = await deps.LoadOwnedSession(sessionID, caller.ContextUser, caller.Provider);
+    const externalID = await deps.LoadConversationExternalID(session, caller.ContextUser, caller.Provider);
+    const decision = AuthorizeSessionAccess({ SessionUserID: session.UserID, ConversationExternalID: externalID }, caller.ContextUser);
+    if (decision.Allowed === false) {
+        LogError(`RealtimeRecordingHandler: refused user ${caller.ContextUser.ID} on session ${sessionID}: ${decision.Reason}`);
+        throw new RecordingRequestError(403, 'Not authorized for this realtime session');
+    }
+    return session;
 }
 
 /** The tail shard of a terminal request, or null for an empty body. */

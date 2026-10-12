@@ -11,7 +11,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 
 import { createHash } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
-import type { Server } from 'node:http';
+import { request as httpRequest, type Server } from 'node:http';
 import express from 'express';
 import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
@@ -43,6 +43,8 @@ interface FakeSessionRow {
     RecordingCapturedSamples: number | null;
     RecordingAssemblyVersion: number;
     ClosedAt: Date | null;
+    /** The session conversation's ExternalID: an anonymous widget guest's per-session scope. */
+    ConversationExternalID?: string | null;
 }
 
 interface StoredShard {
@@ -226,8 +228,15 @@ describe('realtime recording REST routes', () => {
         deps = {
             ResolveCaller: req => {
                 const id = req.header('x-test-user');
-                return id ? { ContextUser: { ID: id } as unknown as UserInfo, Provider: {} as unknown as DatabaseProviderBase } : null;
+                const scope = req.header('x-test-scope');
+                const user = {
+                    ID: id,
+                    IsMagicLinkAnonymous: req.header('x-test-anonymous') === 'true',
+                    MagicLinkScope: scope ? { ResourceID: scope } : undefined,
+                };
+                return id ? { ContextUser: user as unknown as UserInfo, Provider: {} as unknown as DatabaseProviderBase } : null;
             },
+            LoadConversationExternalID: async session => ledger.Sessions.get(session.ID)?.ConversationExternalID ?? null,
             LoadOwnedSession: async (agentSessionId, contextUser) => {
                 const row = ledger.Sessions.get(agentSessionId);
                 if (!row) {
@@ -299,6 +308,59 @@ describe('realtime recording REST routes', () => {
             expect(ledger.Shards.get(SESSION)).toBeUndefined();
         });
 
+        it('answers 413 to an over-cap chunked body (no Content-Length) through the streaming limit', async () => {
+            const url = new URL(`${baseUrl}/${SESSION}/shard/0`);
+            const status = await new Promise<number>((resolve, reject) => {
+                const req = httpRequest({
+                    host: url.hostname, port: url.port, path: url.pathname, method: 'POST',
+                    headers: { 'Content-Type': 'application/octet-stream', 'Transfer-Encoding': 'chunked', 'x-test-user': OWNER_ID },
+                }, res => { res.resume(); resolve(res.statusCode ?? 0); });
+                // The server may answer and close before the whole body is written.
+                req.on('error', error => (error.message.includes('EPIPE') || error.message.includes('ECONNRESET') ? undefined : reject(error)));
+                for (let i = 0; i < 5; i++) {
+                    req.write(Buffer.alloc(32 * 1024));
+                }
+                req.end();
+            });
+            expect(status).toBe(413);
+            expect(logStatusMock.mock.calls.some(call => String(call[0]).includes('over the cap'))).toBe(true);
+            expect(ledger.Shards.get(SESSION)).toBeUndefined();
+        });
+
+        describe('anonymous widget guests (per-session scope)', () => {
+            const SCOPE = 'scope-Abc_123';
+
+            beforeEach(() => {
+                addSession(SESSION, { ConversationExternalID: SCOPE });
+            });
+
+            it('refuses an anonymous principal without a scope with 403 and logs the reason', async () => {
+                const res = await post(`/${SESSION}/shard/0`, shardBytes(0), OWNER_ID, { 'x-test-anonymous': 'true' });
+                expect(res.status).toBe(403);
+                expect(ledger.Shards.get(SESSION)).toBeUndefined();
+                expect(logErrorMock.mock.calls.some(call => String(call[0]).includes(SESSION) && String(call[0]).includes('scope_missing'))).toBe(true);
+            });
+
+            it('refuses a mismatched scope with 403, on the shard and the terminal route', async () => {
+                const headers = { 'x-test-anonymous': 'true', 'x-test-scope': 'another-guest' };
+                expect((await post(`/${SESSION}/shard/0`, shardBytes(0), OWNER_ID, headers)).status).toBe(403);
+                expect((await post(`/${SESSION}/end?lastShardIndex=0&capturedSamples=1`, null, OWNER_ID, headers)).status).toBe(403);
+                expect(ledger.Shards.get(SESSION)).toBeUndefined();
+                expect(ledger.Sessions.get(SESSION)?.RecordingExpectedShards).toBeNull();
+                expect(logErrorMock.mock.calls.some(call => String(call[0]).includes(SESSION) && String(call[0]).includes('scope_mismatch'))).toBe(true);
+            });
+
+            it('accepts the guest that carries the matching scope', async () => {
+                const headers = { 'x-test-anonymous': 'true', 'x-test-scope': SCOPE };
+                expect((await post(`/${SESSION}/shard/0`, shardBytes(0), OWNER_ID, headers)).status).toBe(200);
+                expect((await post(`/${SESSION}/end?lastShardIndex=0&capturedSamples=${SHARD_SAMPLES}`, null, OWNER_ID, headers)).status).toBe(200);
+            });
+
+            it('leaves a named owner (no scope, not anonymous) unaffected', async () => {
+                expect((await postShard(0)).status).toBe(200);
+            });
+        });
+
         it('answers 401 when no caller can be resolved', async () => {
             const res = await fetch(`${baseUrl}/${SESSION}/shard/0`, {
                 method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: shardBytes(0) as Uint8Array<ArrayBuffer>,
@@ -352,6 +414,20 @@ describe('realtime recording REST routes', () => {
             expect(res.status).toBe(200);
             expect(ledger.Shards.get(SESSION)?.get(1)).toMatchObject({ SampleCount: 48_000, Sha256: sha256(tail) });
             expect(scheduler.ScheduleAssembly).toHaveBeenCalledWith(SESSION, 0, false);
+        });
+
+        it('applies the late-shard rule to a tail: a missing tail re-sent to a Partial recording closed under 24 h ago re-assembles now', async () => {
+            addSession(SESSION, { RecordingStatus: 'Partial', RecordingExpectedShards: 4, RecordingCapturedSamples: 3 * SHARD_SAMPLES + 48_000, ClosedAt: new Date(Date.now() - HOUR_MS) });
+            const res = await postEnd(3, 3 * SHARD_SAMPLES + 48_000, shardBytes(3, 1, 48_000));
+            expect(res.status).toBe(200);
+            expect(ledger.Shards.get(SESSION)?.has(3)).toBe(true);
+            expect(scheduler.ScheduleAssembly).toHaveBeenCalledWith(SESSION, 0, false);
+        });
+
+        it('does not re-assemble for a re-sent tail when the Partial session closed over 24 h ago', async () => {
+            addSession(SESSION, { RecordingStatus: 'Partial', RecordingExpectedShards: 4, RecordingCapturedSamples: 3 * SHARD_SAMPLES + 48_000, ClosedAt: new Date(Date.now() - 25 * HOUR_MS) });
+            expect((await postEnd(3, 3 * SHARD_SAMPLES + 48_000, shardBytes(3, 1, 48_000))).status).toBe(200);
+            expect(scheduler.ScheduleAssembly).not.toHaveBeenCalled();
         });
 
         it('schedules a forced-Partial assembly after the grace when shards are missing', async () => {

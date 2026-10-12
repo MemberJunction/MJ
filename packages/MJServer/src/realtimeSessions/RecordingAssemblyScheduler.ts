@@ -120,6 +120,11 @@ export class RecordingAssemblyScheduler extends BaseSingleton<RecordingAssemblyS
      * replaces the pending one only when it would fire sooner (at the same time, the merged request keeps
      * `forcePartial` if either had it). A timer that fires while the session's previous run is still going
      * is remembered and run right after it, never alongside it.
+     *
+     * Trade-off: a sooner un-forced request replaces a pending forced one. If that run comes back
+     * `Deferred` (still incomplete), the forced `Partial` is re-scheduled a full grace from then, so a
+     * forced Partial can land up to ~2× the grace after the first terminal signal. Accepted: the sooner
+     * run completes the recording outright whenever the missing shards did arrive.
      */
     public ScheduleAssembly(sessionID: string, delayMs: number, forcePartial: boolean): void {
         const options = this._options;

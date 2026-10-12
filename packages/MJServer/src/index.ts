@@ -49,6 +49,7 @@ import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
 import { createRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.js';
 import { CreateRealtimeRecordingRouter, REALTIME_RECORDING_MOUNT_PATH } from './rest/RealtimeRecordingHandler.js';
 import { LoadOwnedRealtimeSession } from './realtimeSessions/ownedRealtimeSession.js';
+import { LoadSessionConversationExternalID } from './realtimeSessions/sessionAccess.js';
 import { RecordingAssemblyScheduler } from './realtimeSessions/RecordingAssemblyScheduler.js';
 import { REALTIME_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
 import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
@@ -2303,6 +2304,7 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
       return user ? { ContextUser: user, Provider: provider } : null;
     },
     LoadOwnedSession: LoadOwnedRealtimeSession,
+    LoadConversationExternalID: LoadSessionConversationExternalID,
     CreateLedger: (ledgerProvider, contextUser) => new SqlRealtimeRecordingLedger(ledgerProvider, contextUser),
     Scheduler: RecordingAssemblyScheduler.Instance,
     GraceMs: graceMs,
