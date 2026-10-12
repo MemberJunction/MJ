@@ -270,6 +270,13 @@ class FakeLedger implements IRealtimeRecordingLedger {
         this.row.RecordingGaps = Array.isArray(input.Gaps) ? JSON.stringify(input.Gaps) : input.Gaps;
         return true;
     }
+    public readonly GapStamps: { Version: number; Gaps: RecordingGap[] }[] = [];
+    public async StampAssemblyGaps(_: string, version: number, gaps: RecordingGap[]): Promise<boolean> {
+        this.GapStamps.push({ Version: version, Gaps: gaps });
+        if (version !== this.row.RecordingAssemblyVersion || this.row.RecordingStatus !== 'Assembling') return false;
+        this.row.RecordingGaps = JSON.stringify(gaps);
+        return true;
+    }
     public async LoadShards(): Promise<LedgerShard[]> {
         this.FullLoads++;
         if (this.LoadError) throw this.LoadError;
@@ -684,29 +691,40 @@ describe('AssembleRealtimeRecordingFromLedger', () => {
 });
 
 describe('FillGapsFromPreviousRecording / ParseCanonicalRecordingWav', () => {
-    it('reuses only the leading missing run (carrying its old gaps); a later missing range stays a silent gap even inside the old file', () => {
+    it('reuses every missing range the old file covers, carrying the old file\'s own gaps', () => {
         // New timeline: shard 0 missing [0, 1920), shard 1 present [1920, 2880), shard 2 missing [2880, 4800).
         const assembled = AssembleOpusRecordingPcm([fakeShard(1, 1920, 960)], 3, 4800, new ConstantDecoder(7));
-        expect(assembled.LeadingMissingRun).toEqual({ startSample: 0, sampleCount: 1920, indexes: [0] });
+        expect(assembled.MissingRuns).toEqual([
+            { startSample: 0, sampleCount: 1920, indexes: [0] },
+            { startSample: 2880, sampleCount: 1920, indexes: [2] },
+        ]);
         const previous = { Pcm: new Int16Array(4800).fill(3), Gaps: [{ startSample: 960, sampleCount: 480, indexes: [9] }] };
         previous.Pcm.fill(0, 960, 1440);
 
         const filled = FillGapsFromPreviousRecording(assembled, previous);
-        expect(filled.Gaps).toEqual([
-            { startSample: 960, sampleCount: 480, indexes: [9] },
-            { startSample: 2880, sampleCount: 1920, indexes: [2] },
-        ]);
+        expect(filled.Gaps).toEqual([{ startSample: 960, sampleCount: 480, indexes: [9] }]);
         expect(filled.Pcm[0]).toBe(3);
         expect(filled.Pcm[1920]).toBe(7);
-        expect(allZero(filled.Pcm, 2880, 4800)).toBe(true);
+        expect(filled.Pcm[2880]).toBe(3);
         expect(filled.Complete).toBe(false);
         expect([...pcmFromWav(filled.Wav)]).toEqual([...filled.Pcm]);
     });
 
-    it('nothing is reused when shard 0 is present', () => {
+    it('reuses a missing range after a present shard too (a re-sent copy of an assembled shard must not stop reuse)', () => {
         const assembled = AssembleOpusRecordingPcm([fakeShard(0, 0, 960), fakeShard(2, 1920, 960)], 3, 2880, new ConstantDecoder());
-        expect(assembled.LeadingMissingRun).toBeNull();
         const filled = FillGapsFromPreviousRecording(assembled, { Pcm: new Int16Array(2880).fill(4), Gaps: [] });
+        expect(filled.Gaps).toEqual([]);
+        expect(filled.Pcm[960]).toBe(4);
+        expect(filled.Complete).toBe(true);
+    });
+
+    it('never fills a shard that failed to decode from the old file: its gap stays silent', () => {
+        const decoder = new ConstantDecoder();
+        const decode = decoder.Decode.bind(decoder);
+        decoder.Decode = () => { if (decoder.Decoded === 1) { decoder.Decoded++; throw new Error('Opus(InvalidPacket)'); } return decode(); };
+        const assembled = AssembleOpusRecordingPcm([fakeShard(0, 0, 960), fakeShard(1, 960, 960)], 2, 1920, decoder);
+        expect(assembled.MissingRuns).toEqual([]);
+        const filled = FillGapsFromPreviousRecording(assembled, { Pcm: new Int16Array(1920).fill(4), Gaps: [] });
         expect(filled.Gaps).toEqual([{ startSample: 960, sampleCount: 960, indexes: [1] }]);
         expect(allZero(filled.Pcm, 960, 1920)).toBe(true);
     });
@@ -770,7 +788,8 @@ describe('AssembleRealtimeRecordingFromLedger after a Complete recording is re-o
         const a = await claimAndAssemble(true);
         expect(a.outcome).toBe('Retry');
         expect(pcmFromWav(storedWav()).length).toBe(LONG_COUNT * S); // A's WAV is in the object
-        expect(row.RecordingGaps).toBe('[]'); // the stored gaps still describe the first Complete
+        // A stamped its gaps before writing, so the stored gaps describe the object A left behind.
+        expect(JSON.parse(row.RecordingGaps ?? 'null')).toEqual([{ startSample: 5 * S, sampleCount: S, indexes: [5] }]);
 
         // Assembly B (the stale re-claim): shard 5 must still be a gap, not A's silence passed off as audio.
         row.RecordingStatus = 'Pending';
@@ -816,6 +835,22 @@ describe('AssembleRealtimeRecordingFromLedger after a Complete recording is re-o
         expect(allZero(second, 4 * S, 4 * S + 960)).toBe(false);
         expect(allZero(second, CONTINUED_COUNT * S - 960, CONTINUED_COUNT * S)).toBe(false);
         expect(ledger.Deletes).toEqual([4, CONTINUED_COUNT]);
+    });
+
+    it('a re-sent copy of an assembled shard, stored again after the Complete, does not cost the other deleted shards their audio', async () => {
+        const first = pcmFromWav(await completeFirstFour());
+        // Shard 1's ack was lost, so the browser re-sent it after the Complete deleted the rows.
+        ledger.Put(continuedShards[1]);
+        continueCall();
+        const { outcome } = await claimAndAssemble();
+
+        expect(outcome).toBe('Complete');
+        const second = pcmFromWav(storedWav());
+        // Shards 0, 2 and 3 come back from the first recording exactly; shard 1 is decoded again from its
+        // re-sent bytes (after a decoder reset, so its first frames differ slightly), never silence.
+        expect([...second.subarray(0, S)]).toEqual([...first.subarray(0, S)]);
+        expect([...second.subarray(2 * S, 4 * S)]).toEqual([...first.subarray(2 * S, 4 * S)]);
+        expect(allZero(second, S, 2 * S)).toBe(false);
     });
 
     it('carries the previous Partial gaps inside the reused range into the new gap list', async () => {

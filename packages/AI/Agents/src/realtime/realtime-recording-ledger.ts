@@ -85,6 +85,13 @@ export interface IRealtimeRecordingLedger {
     ClaimAssembly(sessionID: string, staleBefore: Date | null): Promise<number | null>;
     /** Finishes an assembly, fenced on its version. Returns false when a newer claim superseded it. */
     FinishAssembly(input: FinishAssemblyInput): Promise<boolean>;
+    /**
+     * Stores `gaps` as the session's `RecordingGaps` while keeping the claim (`Assembling`), fenced on
+     * `version` like {@link FinishAssembly}. Called just before an assembly overwrites `recording.wav`, so
+     * the stored gaps cover every silent range of the object even when the finish never happens.
+     * Returns false when a newer claim superseded this one.
+     */
+    StampAssemblyGaps(sessionID: string, version: number, gaps: RecordingGap[]): Promise<boolean>;
     /** Every stored shard of the session, in index order. */
     LoadShards(sessionID: string): Promise<LedgerShard[]>;
     /** Every stored shard's position, in index order, without the bytes (cheap pre-checks). */
@@ -188,6 +195,15 @@ export class SqlRealtimeRecordingLedger implements IRealtimeRecordingLedger {
         assertNonNegativeInteger(Version, 'assembly version');
         const gaps = Array.isArray(Gaps) ? JSON.stringify(Gaps) : Gaps;
         const affected = await this.callForAffectedRows(SP_FINISH, SessionID, [SessionID, Version, Status, gaps, FileID]);
+        return affected > 0;
+    }
+
+    public async StampAssemblyGaps(sessionID: string, version: number, gaps: RecordingGap[]): Promise<boolean> {
+        assertSessionID(sessionID);
+        assertNonNegativeInteger(version, 'assembly version');
+        // The finish proc with the claim's own status: it writes the gaps, keeps `Assembling`, leaves the
+        // file id alone (null), and is fenced on the version and the Assembling status.
+        const affected = await this.callForAffectedRows(SP_FINISH, sessionID, [sessionID, version, 'Assembling', JSON.stringify(gaps), null]);
         return affected > 0;
     }
 
