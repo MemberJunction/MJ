@@ -1,4 +1,5 @@
 import {
+    AIErrorType,
     BaseDecision,
     ChoiceQuestion,
     CreateSystemOneHTTPError,
@@ -12,12 +13,14 @@ import {
     NormalizeDecisionProbabilities,
     ParseSystemOneCredential,
     ReadDecisionConfidence,
+    ReadSystemOneErrorMessage,
+    RedactSecret,
     ScoreQuestion,
     SystemOneCredential,
     SystemOneWireObject,
     TrimTrailingSlashes,
 } from '@memberjunction/ai';
-import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
 
 /** The path the Decisions API answers on, appended to a base URL that does not already end with it. */
 const DECISIONS_PATH = '/decisions';
@@ -25,8 +28,15 @@ const DECISIONS_PATH = '/decisions';
 /** How much of a non-JSON error body goes into an error message. */
 const ERROR_SNIPPET_LENGTH = 500;
 
-/** What replaces the API key if an error body ever echoes it. */
-const REDACTED = '[redacted]';
+/**
+ * The statuses pinned to a `ModelError` that allows failover. GPT-6 Luna Decisions is `Default Decision`'s
+ * first power-matched fallback. `ErrorAnalyzer` reads a 400, or a 422 whose message names no validation
+ * word, as a fatal `InvalidRequest`, and a 403 whose message says "unauthorized" as a fatal
+ * `Authentication` error; either stops the failover loop, so no later candidate would be tried, though
+ * another model could answer what OpenAI refused. A 401 is left to `ErrorAnalyzer`: a fatal
+ * `Authentication` error, as for every other decision driver.
+ */
+const MODEL_ERROR_STATUSES = new Set([400, 403, 422]);
 
 /** The wire `type` of each MJ question kind. */
 const WIRE_TYPES: Record<DecisionQuestion['Kind'], string> = {
@@ -64,7 +74,8 @@ type MapAnswerResult = { success: true; answer: DecisionAnswer } | { success: fa
  *
  * **Errors.** A non-2xx response throws an error carrying the HTTP `status`, with OpenAI's
  * `error.message` when the body has one, so `BaseDecision.Decide()` classifies it: a 429 or a 5xx allows
- * failover, a 401 stops it. {@link SendRequest} is the one network call, so a test double overrides only it.
+ * failover, a 401 stops it, and a 400, 403 or 422 is a `ModelError` that allows failover. {@link SendRequest}
+ * is the one network call, so a test double overrides only it.
  *
  * MJ sends the state as text; the API's image input is not used yet.
  */
@@ -172,13 +183,13 @@ export class OpenAIDecision extends BaseDecision {
 
     /**
      * The message of the error thrown for a non-2xx response: OpenAI's `error.message` when the body has
-     * one, otherwise the status and the start of the body. The API key never appears in it.
+     * one, otherwise the status and the start of the body.
      * @param status The HTTP status.
-     * @param bodyText The response body as text, possibly empty.
+     * @param bodyText The response body as text, possibly empty, with the API key already redacted.
      */
     protected DescribeHTTPError(status: number, bodyText: string): string {
-        const message = openAIErrorMessage(bodyText) || bodyText.slice(0, ERROR_SNIPPET_LENGTH);
-        return this.redact(`${OpenAIDecision.SERVICE_NAME} returned HTTP ${status}${message ? `: ${message}` : ''}`);
+        const message = ReadSystemOneErrorMessage(bodyText) || bodyText.slice(0, ERROR_SNIPPET_LENGTH);
+        return `${OpenAIDecision.SERVICE_NAME} returned HTTP ${status}${message ? `: ${message}` : ''}`;
     }
 
     /**
@@ -211,8 +222,10 @@ export class OpenAIDecision extends BaseDecision {
             signal,
         });
         if (!res.ok) {
-            const text = await res.text().catch(() => '');
-            throw CreateSystemOneHTTPError(this.DescribeHTTPError(res.status, text), res.status);
+            // Redacted before DescribeHTTPError sees it, so the snippet's cut can never leave part of the key.
+            const text = RedactSecret(await res.text().catch(() => ''), this.Credential.APIKey);
+            const errorType: AIErrorType | undefined = MODEL_ERROR_STATUSES.has(res.status) ? 'ModelError' : undefined;
+            throw CreateSystemOneHTTPError(this.DescribeHTTPError(res.status, text), res.status, errorType);
         }
         try {
             return await res.json();
@@ -259,12 +272,6 @@ export class OpenAIDecision extends BaseDecision {
                 return mapScore(key, question, answer);
         }
     }
-
-    /** The message with the API key, should it appear, replaced. */
-    private redact(message: string): string {
-        const key = this.Credential.APIKey.trim();
-        return key.length > 0 ? message.split(key).join(REDACTED) : message;
-    }
 }
 
 /**
@@ -291,7 +298,8 @@ function buildWireQuestion(key: string, question: DecisionQuestion): SystemOneWi
 
 /**
  * The answer for the question at `index` named `key`: the answer carrying that name, else the answer at
- * the same position when it carries no name. An answer named for another question is never used.
+ * the same position when it carries no name (OpenAI's SDK types an answer's `name` as `string | null`).
+ * An answer named for another question is never used.
  */
 function findAnswer(answers: unknown[], key: string, index: number): unknown {
     const named = answers.find(a => IsSystemOneWireObject(a) && a['name'] === key);
@@ -393,19 +401,6 @@ function scoreToLevelPosition(score: number, levelValues: unknown[], probabiliti
         }
     }
     return values.length - 1;
-}
-
-/** OpenAI's `error.message` from an error body, or an empty string. */
-function openAIErrorMessage(bodyText: string): string {
-    const body = SafeJSONParse<unknown>(bodyText);
-    if (!IsSystemOneWireObject(body)) {
-        return '';
-    }
-    const error = body['error'];
-    if (IsSystemOneWireObject(error) && typeof error['message'] === 'string') {
-        return error['message'].trim();
-    }
-    return typeof error === 'string' ? error.trim() : '';
 }
 
 function clamp(value: number, min: number, max: number): number {

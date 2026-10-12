@@ -413,6 +413,22 @@ describe('OpenAIDecision', () => {
       expect(result.errorInfo).toMatchObject({ errorType: 'Authentication', severity: 'Fatal', httpStatusCode: 401 });
     });
 
+    // GPT-6 Luna Decisions is Default Decision's first fallback: a Fatal error here would stop the loop
+    // before any later candidate. The 422 and 403 messages are hypothetical: ErrorAnalyzer alone reads the
+    // first as a fatal InvalidRequest (no validation word) and the second as a fatal Authentication error.
+    it.each([
+      [400, "Invalid value for 'questions[1].choices': expected at least 2 items."],
+      [403, 'Unauthorized: this project cannot use gpt-6-luna.'],
+      [422, 'The decision could not be completed for this input.'],
+    ])('makes a %i a ModelError that allows failover, never a Fatal error', async (status, message) => {
+      respondWith(status, openAIError(message, 'invalid_request_error', null));
+      const result = await decide(new OpenAIDecision(API_KEY));
+
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toBe(`OpenAI Decisions API returned HTTP ${status}: ${message}`);
+      expect(result.errorInfo).toEqual({ errorType: 'ModelError', severity: 'Retriable', canFailover: true, httpStatusCode: status });
+    });
+
     it('makes a 429 failover-eligible', async () => {
       respondWith(429, openAIError('Rate limit reached for gpt-6-luna in organization org-test on requests per min (RPM): Limit 500, Used 500, Requested 1.', 'requests', 'rate_limit_exceeded'));
       const result = await decide(new OpenAIDecision(API_KEY));
@@ -449,6 +465,14 @@ describe('OpenAIDecision', () => {
 
       expect(result.errorMessage).toBe('OpenAI Decisions API returned HTTP 400: Bad key [redacted]');
       expect(result.errorMessage).not.toContain(API_KEY);
+    });
+
+    it('redacts a key that straddles character 500 of a body before cutting it, leaving no part of it', async () => {
+      respondWith(502, `${'x'.repeat(480)}${API_KEY}${'y'.repeat(100)}`);
+      const result = await decide(new OpenAIDecision(API_KEY));
+
+      expect(result.errorMessage).toBe(`OpenAI Decisions API returned HTTP 502: ${'x'.repeat(480)}[redacted]${'y'.repeat(10)}`);
+      expect(result.errorMessage).not.toContain(API_KEY.slice(0, 10));
     });
 
     it('fails on a network error', async () => {
