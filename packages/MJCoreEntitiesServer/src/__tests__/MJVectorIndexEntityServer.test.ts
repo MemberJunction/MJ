@@ -164,6 +164,21 @@ describe('MJVectorIndexEntityServer.Save', () => {
         expect(createIndexMock.mock.calls[0][0]).toMatchObject({ dimension: 384 });
     });
 
+    it('clears its timer once the provider answers, so a fast create leaves nothing pending and never times out', async () => {
+        vi.useFakeTimers();
+        createIndexMock.mockResolvedValue({ success: true, data: {} });
+        const index = makeNewIndex();
+
+        await index.Save();
+        await flushMicrotasks();
+        await vi.waitFor(() => expect(superSaveMock).toHaveBeenCalledTimes(2));
+
+        expect(vi.getTimerCount(), 'the timeout timer was cleared on the success path').toBe(0);
+        await vi.advanceTimersByTimeAsync(MJVectorIndexEntityServer.CREATE_INDEX_TIMEOUT_MS + 1);
+        expect(logged(/timed out/)).toBe(false);
+        expect(index.ExternalID).toBe('my-index');
+    });
+
     it('does not write metadata back when the provider refuses the index', async () => {
         createIndexMock.mockResolvedValue({ success: false, message: 'quota exceeded' });
         const index = makeNewIndex();

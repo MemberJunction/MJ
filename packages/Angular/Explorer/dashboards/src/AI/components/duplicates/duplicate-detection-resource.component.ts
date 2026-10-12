@@ -178,6 +178,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
      * by a newer selection and must not write its rows (or clear the spinner) over the newer one.
      */
     private reviewLoadGeneration = 0;
+    /**
+     * How many times the first load will re-fetch because the selected document moved while the
+     * rows were in flight, before handing over to a single bounded reload (see loadRunData).
+     */
+    private static readonly MAX_INITIAL_LOAD_FETCHES = 5;
     // ── Comparison Panel State ──
     /** The group being compared (null = panel closed) */
     public ComparisonGroup: DuplicateGroup | null = null;
@@ -667,11 +672,14 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         // the new one rather than show document A's run under document B's name.
         let rows: ReviewRows;
         let selectedAtFetch: string;
+        let fetches = 0;
         do {
             selectedAtFetch = this.SelectedEntityDocumentID;
             rows = await this.fetchReviewRowsForSelectedDocument();
+            fetches++;
         } while (
             generation === this.reviewLoadGeneration &&
+            fetches < DuplicateDetectionResourceComponent.MAX_INITIAL_LOAD_FETCHES &&
             !UUIDsEqual(selectedAtFetch || null, this.SelectedEntityDocumentID || null)
         );
         if (generation === this.reviewLoadGeneration) {
@@ -679,6 +687,13 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         }
         this.runDataLoaded = true;
         this.rebuildBoard();
+        if (!UUIDsEqual(selectedAtFetch || null, this.SelectedEntityDocumentID || null)) {
+            // The selection outran the fetch cap (an agent switching documents faster than the rows
+            // load). One more reload, generation-guarded and not looped, brings the board to the
+            // current pick; now that runDataLoaded is set, any later change reloads on its own.
+            console.warn(`[DuplicateDetection] Selection changed during each of ${fetches} initial fetches; reloading once for the current document`);
+            void this.reloadRunDataForSelection();
+        }
 
         // Reconnect to any in-progress detection run
         this.reconnectToActiveRun();

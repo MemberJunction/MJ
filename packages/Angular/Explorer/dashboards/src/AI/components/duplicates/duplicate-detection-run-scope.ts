@@ -9,12 +9,12 @@
  *
  * The scoping is done in two steps, details first and then matches by the detail IDs just loaded,
  * on purpose. Matches carry no DuplicateRunID of their own, and the only single-query alternative is
- * a subquery against the details view, which needs the schema and view name quoted for the database
- * behind the API. The Angular client has no dialect knowledge (`QuoteSchemaAndView` lives on the
- * server-side database providers, not on the GraphQL provider), so a quoted reference built here is a
- * guess: bracketed T-SQL identifiers are a syntax error on PostgreSQL, where this bug was reported.
- * An `IN (...)` list of IDs is plain SQL everywhere and the join it produces is exact rather than
- * re-derived. Cost: one extra round trip.
+ * a subquery against the details view, which means naming a schema and a view from the client. The
+ * Angular client has no dialect knowledge (`QuoteSchemaAndView` lives on the server-side database
+ * providers, not on the GraphQL provider); the server does rewrite bracketed identifiers for
+ * PostgreSQL, but a view name chosen here is still a guess about the database behind the API. An
+ * `IN (...)` list of IDs is plain SQL everywhere, names nothing, and the join it produces is exact
+ * rather than re-derived. Cost: one extra round trip.
  *
  * Why both queries still carry `IgnoreMaxRows`: details truncate to the newest N by date while
  * matches truncate to the top N by probability. Those two subsets diverge as soon as a run exceeds
