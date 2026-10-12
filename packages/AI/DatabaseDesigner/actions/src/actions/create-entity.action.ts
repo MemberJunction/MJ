@@ -41,6 +41,9 @@ import { BaseDatabaseDesignerAction } from './base-database-designer.action.js';
  */
 @RegisterClass(BaseAction, 'Create Entity')
 export class CreateEntityAction extends BaseDatabaseDesignerAction {
+    /** Checks the caller's Schema Management authorization itself (`checkAuthorization`). */
+    public static readonly AuthorizesCaller = true;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const { td, error: tdError } = this.getTableDefinitionParam(params);

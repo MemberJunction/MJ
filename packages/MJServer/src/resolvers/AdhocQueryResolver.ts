@@ -2,6 +2,7 @@ import { Arg, Ctx, Query, Resolver, Field, Int, InputType } from 'type-graphql';
 import { LogError } from '@memberjunction/core';
 import type { DatabaseProviderBase, RunQueryResult, UserInfo } from '@memberjunction/core';
 import { RenderPipeline } from '@memberjunction/generic-database-provider';
+import type { AdhocSQLAuthorizer } from '@memberjunction/actions';
 import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
 import { GetReadOnlyProvider } from '../util.js';
@@ -94,7 +95,7 @@ export class AdhocQueryResolver extends ResolverBase {
      * so the rendered SQL is the full set of reads. Returns the refusal message, or null.
      *
      * `provider` is the read-only provider the SQL will run on; it supplies the platform and the
-     * entity metadata.
+     * entity metadata. {@link CreateAdhocSQLAuthorizer} exposes this check to the action engine.
      */
     public AuthorizeRenderedSQL(sqlText: string, provider: DatabaseProviderBase, contextUser: UserInfo | undefined): string | null {
         try {
@@ -150,4 +151,19 @@ export class AdhocQueryResolver extends ResolverBase {
             ErrorMessage: errorMessage
         };
     }
+}
+
+/**
+ * The ad-hoc SQL checks MJServer registers with the action engine, so that Run Ad-hoc Query applies
+ * the same checks as {@link AdhocQueryResolver.ExecuteAdhocQuery}: the rendered SQL must be one read
+ * statement that reads only entity views the caller may read in full, and the timeout is limited by
+ * the server's request timeout.
+ * @param requestTimeoutMs the server's request timeout in milliseconds; 0 or less means no limit
+ */
+export function CreateAdhocSQLAuthorizer(requestTimeoutMs: number): AdhocSQLAuthorizer {
+    const resolver = new AdhocQueryResolver();
+    return {
+        Authorize: (sql, provider, contextUser) => resolver.AuthorizeRenderedSQL(sql, provider, contextUser),
+        ClampTimeoutSeconds: (requestedSeconds) => ClampAdhocTimeoutSeconds(requestedSeconds, requestTimeoutMs),
+    };
 }
