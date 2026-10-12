@@ -435,6 +435,21 @@ describe('ProcessRunner', () => {
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     });
 
+    it('should only target listening sockets on Unix, never client connections', () => {
+      const originalPlatform = process.platform;
+      Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+
+      runner.killByPort(4000);
+
+      // Without -sTCP:LISTEN, lsof also returns processes holding a client socket to the
+      // port — the installer itself after its health check — and kill -9 takes it down.
+      const command = String(mockExecSync.mock.calls[0][0]);
+      expect(command).toContain('lsof -ti tcp:4000 -sTCP:LISTEN');
+      expect(command).not.toMatch(/lsof -ti:4000\b/);
+
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    });
+
     it('should not throw if no process is listening on the port', () => {
       const originalPlatform = process.platform;
       Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
