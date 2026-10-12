@@ -20,7 +20,7 @@
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { CleanAndParseJSON } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
+import { GraphQLDataProvider, GraphQLAIClient, type RunAIPromptResult } from '@memberjunction/graphql-dataprovider';
 import { ConversationEngine, type MJConversationBranchEntity } from '@memberjunction/core-entities';
 
 /** The result of a successful naming run. */
@@ -35,7 +35,7 @@ export interface ConversationNameResult {
 export type NamePromptRunner = (
   promptId: string,
   messageText: string
-) => Promise<{ success: boolean; parsedResult?: unknown; output?: string } | null>;
+) => Promise<Pick<RunAIPromptResult, 'success' | 'parsedResult' | 'output'> | null>;
 
 /** Options for {@link GenerateConversationName}. */
 export interface GenerateNameOptions {

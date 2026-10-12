@@ -36,13 +36,6 @@
         </span>
       }
 
-      <!-- Edit (the author's completed user messages): saved as a new fork while the person may fork, else in place -->
-      @if (CanEdit) {
-        <span class="message-edit-icon" (click)="OnEditClick()" title="Edit message">
-          <i class="fas fa-pen"></i>
-        </span>
-      }
-
       <!-- Time pill - shows for AI messages in all states (in-progress, active, complete, failed) -->
       @if (!isUserMessage && timePillText) {
         <span
@@ -71,6 +64,39 @@
           (click)="onTestFeedbackClick()"
           title="Provide Test Feedback">
           <i class="fas fa-flask"></i>
+        </span>
+      }
+
+      <!-- Action group, always visible, styled like the gear: Edit and Fork from here on a user message,
+           Regenerate on an older answer (the last answer carries it in its footer). Labeled on the latest
+           turn, icons elsewhere. -->
+      @if (ShowsActionGroup) {
+        <span class="message-action-group" [class.labeled]="IsLatestTurn" role="group" aria-label="Message actions">
+          @if (CanEdit) {
+            <button type="button" class="message-header-action message-action-edit"
+                    (click)="OnEditClick()" title="Edit message" aria-label="Edit message">
+              <i class="fa-solid fa-pen" aria-hidden="true"></i>
+              @if (IsLatestTurn) {
+                <span>Edit</span>
+              }
+            </button>
+          }
+          @if (CanStartFork) {
+            <button type="button" class="message-header-action message-action-fork"
+                    (click)="OnForkClick($event)" title="Fork from here" aria-label="Fork from here">
+              <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
+              @if (IsLatestTurn) {
+                <span class="action-label-long">Fork from here</span>
+                <span class="action-label-short">Fork</span>
+              }
+            </button>
+          }
+          @if (ShowsHeaderRegenerate) {
+            <button type="button" class="message-header-action message-action-regenerate"
+                    (click)="OnRegenerateClick()" [title]="RegenerateTitle" [attr.aria-label]="RegenerateTitle">
+              <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+            </button>
+          }
         </span>
       }
 
@@ -199,17 +225,17 @@
           placeholder="Edit your message..."></textarea>
           <div class="edit-actions">
             <button mjButton Variant="primary" Size="sm" (click)="SaveEdit()">
-              <i class="fas fa-check" aria-hidden="true"></i>
+              <i [class]="EditSaveIcon" aria-hidden="true"></i>
               {{ EditSaveLabel }}
             </button>
             <button mjButton Variant="secondary" Size="sm" (click)="CancelEditing()">
               <i class="fas fa-times" aria-hidden="true"></i>
               Cancel
             </button>
+            @if (EditNote) {
+              <span class="edit-note">{{ EditNote }}</span>
+            }
           </div>
-          @if (EditMode === 'Fork') {
-            <div class="edit-note">The original message stays here.</div>
-          }
           <div class="edit-hint">{{ EditHint }}</div>
         </div>
       }
@@ -255,36 +281,44 @@
       </div>
     }
 
-    <!-- Message Footer: only rendered on the last message.
+    <!-- Message Footer: only rendered on the last message, and hidden while any message of the view is edited.
          Non-last messages have no footer — pin/delete/rating live in the gear panel. -->
-    @if (!isEditing && isLastMessage && (isConversationOwner || (isAIMessage && messageStatus === 'Complete'))) {
+    @if (ShowsFooter) {
       <div class="message-footer">
         @if (allowMessageDelete && isConversationOwner) {
           <button class="action-bar-btn danger inline-delete" (click)="onDeleteClick()" title="Delete this message and all messages below it">
             <i class="fas fa-trash"></i>
           </button>
         }
-        @if (isAIMessage && messageStatus === 'Complete') {
+        @if (isAIMessage && (messageStatus === 'Complete' || ShowsFooterRegenerate)) {
           <div class="ai-message-actions">
-            <!-- Thumbs visible inline only on the latest AI message, left of pin -->
-            @if (showMessageRating) {
-              <mj-conversation-message-rating
-                [conversationDetailId]="message.ID"
-                [currentUser]="currentUser"
-                [ratingEntityName]="message.EntityInfo.Name || 'MJ: Conversation Details'"
-                [ratingsData]="ratings"
-                [canEdit]="isConversationOwner && !ReadOnly">
-              </mj-conversation-message-rating>
-            }
-            @if (allowPinning) {
-              <button
-                class="action-bar-btn pin-btn"
-                [class.pinned]="message.IsPinned"
-                (click)="PinMessage()"
-                [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
-                type="button">
-                <i class="fas fa-thumbtack"></i>
+            @if (ShowsFooterRegenerate) {
+              <button class="action-bar-btn labeled regenerate-btn" type="button" (click)="OnRegenerateClick()" [title]="RegenerateTitle">
+                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                <span>Regenerate</span>
               </button>
+            }
+            @if (messageStatus === 'Complete') {
+              <!-- Rating sits between Regenerate and Pin on the latest AI message -->
+              @if (showMessageRating) {
+                <mj-conversation-message-rating
+                  [conversationDetailId]="message.ID"
+                  [currentUser]="currentUser"
+                  [ratingEntityName]="message.EntityInfo.Name || 'MJ: Conversation Details'"
+                  [ratingsData]="ratings"
+                  [canEdit]="isConversationOwner && !ReadOnly">
+                </mj-conversation-message-rating>
+              }
+              @if (allowPinning) {
+                <button
+                  class="action-bar-btn pin-btn"
+                  [class.pinned]="message.IsPinned"
+                  (click)="PinMessage()"
+                  [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
+                  type="button">
+                  <i class="fas fa-thumbtack"></i>
+                </button>
+              }
             }
           </div>
         }
@@ -426,26 +460,6 @@
         </div>
       }
     </div>
-
-    <!-- Rating component moved to message footer (lines 113-134) -->
-
-    <!-- Start actions: Fork from here on the person's own finished user message (a new fork that replaces it); Regenerate asks for a new AI reply (a new fork while the person may fork, else in place) -->
-    @if (CanStartFork || CanRegenerate) {
-      <div class="message-actions">
-        @if (CanStartFork) {
-          <button mjButton Variant="flat" Size="sm" (click)="OnForkClick($event)" title="Fork from here">
-            <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
-            Fork from here
-          </button>
-        }
-        @if (CanRegenerate) {
-          <button mjButton Variant="flat" Size="sm" (click)="OnRegenerateClick()" [title]="RegenerateTitle">
-            <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
-            Regenerate
-          </button>
-        }
-      </div>
-    }
 
     <!-- Reaction Buttons -->
     @if (showReactions && !isProcessing && !isInProgressAIMessage && !isEditing) {

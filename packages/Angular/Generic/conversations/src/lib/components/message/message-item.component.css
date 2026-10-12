@@ -351,46 +351,61 @@
 }
 
 /* Right-side cluster anchoring.
-   The first of these three siblings that actually renders absorbs the
+   The first of these siblings that actually renders absorbs the
    `margin-left: auto`, pushing the whole cluster right. Subsequent siblings
    then sit next to it (relying on the flex container's `gap`). This used to
    live only on .time-pill, which broke when timePillText returned null after
    agent completion — the gear icon would shift to the left. */
 .time-pill,
 .test-feedback-icon,
-.agent-run-icon,
-.message-edit-icon {
+.message-action-group,
+.agent-run-icon {
   margin-left: auto;
 }
 .time-pill ~ .test-feedback-icon,
+.time-pill ~ .message-action-group,
 .time-pill ~ .agent-run-icon,
+.test-feedback-icon ~ .message-action-group,
 .test-feedback-icon ~ .agent-run-icon,
-.message-edit-icon ~ .test-feedback-icon,
-.message-edit-icon ~ .agent-run-icon {
+.message-action-group ~ .agent-run-icon {
   margin-left: 8px;
 }
 
-/* Edit pencil on user messages — revealed on message hover to keep headers quiet */
-.message-edit-icon {
+/* Message actions: always visible at the right end of the header, in DOM order (no overlay),
+   with the same look as the gear (.agent-run-icon). */
+.message-action-group {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  color: var(--mj-text-muted);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  opacity: 0;
+  gap: var(--mj-space-2);
 }
-.message-item:hover .message-edit-icon,
-.message-edit-icon:focus-visible {
-  opacity: 1;
+/* Labeled actions on the latest turn need more room between them than icons do */
+.message-action-group.labeled {
+  gap: var(--mj-space-4);
 }
-.message-edit-icon:hover {
+.message-header-action {
+  gap: var(--mj-space-2);
+  min-width: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
+.message-header-action i {
+  font-size: 13px;
+}
+.message-header-action:focus-visible {
+  outline: none;
+  border-radius: var(--mj-radius-sm);
+  box-shadow: var(--mj-focus-ring);
+}
+/* Inherited rows fade to 70%; the stronger color keeps the header icons at 3:1 against the surface */
+.message-item.fork-rail-inherited .message-header-action:not(:hover),
+.message-item.fork-rail-inherited .agent-run-icon:not(:hover):not(.expanded) {
   color: var(--mj-text-secondary);
 }
-.message-edit-icon i.fa-pen {
-  font-size: 12px;
+.message-action-group .action-label-short {
+  display: none;
 }
 
 /* Time pill - unified styling for all AI message states */
@@ -603,30 +618,6 @@
   line-height: 1.5;
 }
 
-.message-actions {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transform: translateY(4px);
-  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
-  background: var(--mj-bg-surface-card);
-  border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
-  padding: 4px;
-  box-shadow: var(--mj-shadow-md);
-  pointer-events: none;
-}
-
-.message-item:hover .message-actions,
-.message-item:focus-within .message-actions {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-
 /* Thread indicator badge */
 .thread-indicator {
   display: inline-flex;
@@ -692,13 +683,21 @@
 
 .edit-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
+/* What the save does, at the right end of the button row */
 .edit-note {
-  margin-top: var(--mj-space-2);
+  margin-left: auto;
   font-size: var(--mj-text-xs);
   color: var(--mj-text-secondary);
+}
+
+/* The answer "Save and resend" will replace dims while that edit is open */
+.message-item.pending-replace .message-body {
+  opacity: 0.6;
 }
 
 .edit-hint {
@@ -760,6 +759,18 @@
 .action-bar-btn i {
   font-size: 16px;
   line-height: 1;
+}
+
+/* A footer button with a text label (Regenerate) */
+.action-bar-btn.labeled {
+  gap: var(--mj-space-2);
+  min-width: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.action-bar-btn.labeled i {
+  font-size: 14px;
 }
 
 .action-bar-btn:hover {
@@ -836,11 +847,11 @@
    Left-margin is governed by the right-side cluster rules above so the gear
    stays right-anchored whether or not the time pill / test-feedback icon
    renders alongside it. */
-.agent-run-icon {
+.agent-run-icon,
+.message-header-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
   height: 20px;
   color: var(--mj-text-muted);
   cursor: pointer;
@@ -848,11 +859,16 @@
   user-select: none;
 }
 
+.agent-run-icon {
+  width: 20px;
+}
+
 .agent-run-icon i.fa-cog {
   font-size: 13px;
 }
 
-.agent-run-icon:hover {
+.agent-run-icon:hover,
+.message-header-action:hover {
   color: var(--mj-text-secondary);
 }
 
@@ -1242,9 +1258,13 @@
     padding: 2px 6px;
   }
 
-  .message-actions {
-    gap: 1px;
-    padding: 3px;
+  /* The latest turn's Fork from here shortens to "Fork" */
+  .message-action-group .action-label-long {
+    display: none;
+  }
+
+  .message-action-group .action-label-short {
+    display: inline;
   }
 }
 
@@ -1781,5 +1801,11 @@
 @media (max-width: 480px) {
   .fork-marker {
     padding: var(--mj-space-2);
+  }
+
+  /* The editor note wraps under the buttons */
+  .edit-note {
+    flex-basis: 100%;
+    margin-left: 0;
   }
 }

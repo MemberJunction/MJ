@@ -67,6 +67,7 @@ import { IsForkPointOrEarlier } from '../../utils/conversation-branching';
 import {
   BackLabelOf,
   BuildForkBreadcrumbs,
+  BuildForkHeaderPath,
   BuildForkMarkerText,
   BuildForkComposerHint,
   BuildForkViewLayout,
@@ -91,6 +92,7 @@ import {
   type DraftForkOpenView,
   type ForkBreadcrumb,
   type ForkChainRow,
+  type ForkHeaderPath,
   type ForkChipAvatar,
   type ForkChipOpenRequest,
   type ForkRows,
@@ -164,6 +166,23 @@ const POST_LANDING_FOLLOW_HOLD_MS = 1500;
 const STREAM_ANCHOR_TOLERANCE_PX = 2;
 /** Numbers the forks popovers of the chat areas on a page, so each popover id is unique. */
 let forksPopoverCount = 0;
+
+/** How many times a new fork's composer prefill waits for the composer to render, and how long each wait is. */
+const PREFILL_MAX_ATTEMPTS = 10;
+const PREFILL_RETRY_MS = 100;
+
+/** True when a key event comes from a text field or an editable element, where Escape belongs to the field. */
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  const el = target as Partial<Pick<HTMLElement, 'isContentEditable' | 'tagName'>> | null;
+  const tag = el?.tagName ?? '';
+  return !!el?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+/** True when a key event comes from inside an open menu's trigger (`aria-expanded="true"`), which closes on Escape itself. */
+function isInOpenMenuTrigger(target: EventTarget | null): boolean {
+  const el = target as Partial<Pick<Element, 'closest'>> | null;
+  return !!el?.closest?.('[aria-expanded="true"]');
+}
 
 /** No rows; one shared instance so {@link ConversationChatAreaComponent.InPlaceTurn} can compare by identity. */
 const NO_DETAILS: MJConversationDetailEntity[] = [];
@@ -1429,7 +1448,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Output() pendingMessageRequested = this.PendingMessageRequested;
 
-  @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
+  private scrollContainer?: ElementRef<HTMLElement>;
+
+  /** The transcript scroller; watched so the scroll-to-bottom arrow follows content that grows or shrinks without a scroll. */
+  @ViewChild('scrollContainer') private set scrollContainerRef(ref: ElementRef<HTMLElement> | undefined) {
+    this.scrollContainer = ref;
+    this.watchScrollContent(ref?.nativeElement ?? null);
+  }
+
+  /** Re-checks the scroll state when the transcript or its content changes size; null when nothing is watched. */
+  private scrollResizeObserver: ResizeObserver | null = null;
+
+  /** Watches `container` and its content for size changes (a new view, removed rows), which fire no scroll event. */
+  private watchScrollContent(container: HTMLElement | null): void {
+    this.scrollResizeObserver?.disconnect();
+    this.scrollResizeObserver = null;
+    if (!container || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(() => this.CheckScroll());
+    observer.observe(container);
+    for (const child of Array.from(container.children)) {
+      observer.observe(child);
+    }
+    this.scrollResizeObserver = observer;
+  }
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
 
   /**
@@ -2575,14 +2618,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private draftForkStart: { View: DraftForkOpenView; ForkID: Promise<string | undefined> } | null = null;
   /** The fork a draft's first send created; the first user message sent into it names it ({@link nameForkFromFirstSend}). */
   private forkNamedByFirstSend: { ConversationID: string; ForkID: string } | null = null;
-  /** True while the open fork's name is edited in the fork bar. */
-  public IsRenamingFork = false;
-  /** The text of the fork name field. */
-  public ForkRenameText = '';
-  /** The fork name field; focused when renaming starts. */
-  @ViewChild('forkNameInput') private forkNameInput?: ElementRef<HTMLInputElement>;
-  /** The rename button of the fork bar; focus goes back to it when the name field closes from the keyboard. */
-  @ViewChild('forkRenameButton', { read: ElementRef }) private forkRenameButton?: ElementRef<HTMLButtonElement>;
+  /** True while the header title (the conversation name in Main, the fork name in a fork) is edited. */
+  public IsRenamingTitle = false;
+  /** The text of the title name field. */
+  public TitleRenameText = '';
+  /** The title name field; focused when renaming starts. */
+  @ViewChild('titleNameInput') private titleNameInput?: ElementRef<HTMLInputElement>;
+  /** The rename button of the header title; focus goes back to it when the name field closes from the keyboard. */
+  @ViewChild('titleRenameButton', { read: ElementRef }) private titleRenameButton?: ElementRef<HTMLButtonElement>;
   /** The breadcrumb built for a view, with the inputs it was built from. */
   private breadcrumbCache: {
     View: ConversationOpenView;
@@ -3187,6 +3230,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   ngOnDestroy() {
+    this.scrollResizeObserver?.disconnect();
+    this.scrollResizeObserver = null;
     // Stop polling when component is destroyed
     this.agentStateService.stopPolling();
     if (this.forkSummaryRefreshTimer) {
@@ -3265,7 +3310,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.windowView = MAIN_OPEN_VIEW;
     this.ForkSummaries = [];
     this.ShowForksPopover = false;
-    this.IsRenamingFork = false;
+    this.IsRenamingTitle = false;
     if (this.forkSummaryRefreshTimer) {
       clearTimeout(this.forkSummaryRefreshTimer);
       this.forkSummaryRefreshTimer = null;
@@ -4330,7 +4375,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (!this.isActiveConversation(conversationId)) {
         return false;
       }
-      this.IsRenamingFork = false;
+      this.IsRenamingTitle = false;
       this.openView = next;
       return await this.reloadWindowForView();
     } finally {
@@ -4369,7 +4414,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * The breadcrumb of the fork bar: the conversation, each ancestor fork, then the open fork ("New fork"
+   * The breadcrumb of the header in a fork: the conversation, each ancestor fork, then the open fork ("New fork"
    * in a draft). Empty in Main. The same array until the view, the fork rows, the summaries or the
    * conversation name change.
    */
@@ -4385,6 +4430,44 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const crumbs = BuildForkBreadcrumbs(view, conversationName, this.knownForkRows(), id => this.forkLabelOf(id));
     this.breadcrumbCache = { View: view, Branches: branches, Summaries: summaries, ConversationName: conversationName, Crumbs: crumbs };
     return crumbs;
+  }
+
+  /** The header path of the open fork or draft: the breadcrumb with the crumbs that collapse into an ellipsis. */
+  public get HeaderPath(): ForkHeaderPath {
+    const crumbs = this.ForkBreadcrumbs;
+    if (this.headerPathCache?.Crumbs !== crumbs) {
+      this.headerPathCache = { Crumbs: crumbs, Path: BuildForkHeaderPath(crumbs) };
+    }
+    return this.headerPathCache.Path;
+  }
+  private headerPathCache: { Crumbs: ForkBreadcrumb[]; Path: ForkHeaderPath } | null = null;
+
+  /** The path's ellipsis was chosen: opens the forks list, which shows the whole chain. */
+  public ShowWholePath(): void {
+    if (!this.ShowForksPopover) {
+      this.ToggleForksPopover();
+    }
+  }
+
+  /**
+   * Escape in the header or the transcript of a fork view: closes the forks list when it is open, else goes
+   * up one level ({@link GoBack}). Ignored when an inner control handled the key (the rename field, a
+   * message editor, an open menu), in a text field, and in Main.
+   */
+  public OnViewEscape(event: Event): void {
+    if (this.OpenView.Kind === 'Main' || event.defaultPrevented || this.IsRenamingTitle || isTextEntryTarget(event.target)) {
+      return;
+    }
+    if (this.ShowForksPopover) {
+      event.preventDefault();
+      this.CloseForksPopover();
+      return;
+    }
+    if (isInOpenMenuTrigger(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    void this.GoBack();
   }
 
   /** A crumb was chosen: opens its fork, or Main for the conversation crumb. The last crumb opens nothing. */
@@ -4424,67 +4507,121 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.OpenView.Kind === 'Fork' && !this.EffectiveReadOnly;
   }
 
-  /** Turns the open fork's name into a text field holding its current name, and focuses it. */
-  public StartForkRename(): void {
-    if (!this.CanRenameFork) {
+  /** True when the conversation may be renamed from the header: Main is open and the person may write to it. */
+  public get CanRenameConversation(): boolean {
+    return this.OpenView.Kind === 'Main' && !!this.Conversation && !this.EffectiveReadOnly;
+  }
+
+  /** True when the header title may be renamed: the conversation in Main, the fork in a fork. */
+  public get CanRenameTitle(): boolean {
+    return this.OpenView.Kind === 'Main' ? this.CanRenameConversation : this.CanRenameFork;
+  }
+
+  /** The header title: the conversation name in Main, the open fork's display name in a fork or draft. */
+  public get HeaderTitle(): string {
+    return this.OpenView.Kind === 'Main' ? (this.Conversation?.Name || '') : this.OpenViewTitle;
+  }
+
+  /** The label of the title rename button and name field. */
+  public get TitleRenameLabel(): string {
+    return this.OpenView.Kind === 'Main' ? 'Rename conversation' : 'Rename fork';
+  }
+
+  /** Turns the header title into a text field holding its current name, and focuses it. */
+  public StartTitleRename(): void {
+    if (!this.CanRenameTitle) {
       return;
     }
-    this.ForkRenameText = this.OpenViewTitle;
-    this.IsRenamingFork = true;
+    this.TitleRenameText = this.HeaderTitle;
+    this.IsRenamingTitle = true;
     this.cdr.detectChanges();
-    const input = this.forkNameInput?.nativeElement;
+    const input = this.titleNameInput?.nativeElement;
     input?.focus();
     input?.select();
   }
 
-  /** Closes the fork name field without saving (Escape) and puts focus back on the rename button. */
-  public CancelForkRename(): void {
-    if (!this.IsRenamingFork) {
+  /** Closes the title name field without saving (Escape) and puts focus back on the rename button. */
+  public CancelTitleRename(): void {
+    if (!this.IsRenamingTitle) {
       return;
     }
-    this.IsRenamingFork = false;
-    this.focusForkRenameButton();
+    this.IsRenamingTitle = false;
+    this.focusTitleRenameButton();
   }
 
-  /** Puts focus on the fork bar's rename button once the name field is gone, when the button is on the page. */
-  private focusForkRenameButton(): void {
+  /** Puts focus on the title rename button once the name field is gone, when the button is on the page. */
+  private focusTitleRenameButton(): void {
     this.cdr.detectChanges();
-    const button = this.forkRenameButton?.nativeElement;
+    const button = this.titleRenameButton?.nativeElement;
     if (button?.isConnected) {
       button.focus();
     }
   }
 
   /**
-   * Saves the fork name field (Enter, or leaving the field): a blank name clears the fork's Name so its
-   * default label shows. Saves nothing when the name did not change. Saves through the branch entity,
-   * then refreshes the fork summaries; shows "Could not rename the fork" when the save fails. With
-   * `restoreFocus` (Enter), focus goes back to the rename button.
+   * Saves the title name field (Enter, or leaving the field) to the conversation in Main or to the open
+   * fork. With `restoreFocus` (Enter), focus goes back to the rename button.
    * @returns true when saved or unchanged; false when nothing was being renamed or the save failed.
    */
-  public async SaveForkRename(restoreFocus = false): Promise<boolean> {
-    if (!this.IsRenamingFork) {
+  public async SaveTitleRename(restoreFocus = false): Promise<boolean> {
+    if (!this.IsRenamingTitle) {
       return false;
     }
-    this.IsRenamingFork = false;
+    this.IsRenamingTitle = false;
     if (restoreFocus) {
-      this.focusForkRenameButton();
+      this.focusTitleRenameButton();
     }
     const view = this.OpenView;
     const conversationId = this.ConversationId;
-    if (view.Kind !== 'Fork' || !conversationId || this.EffectiveReadOnly) {
+    if (!conversationId || this.EffectiveReadOnly) {
       return false;
     }
-    const name = (this.ForkRenameText ?? '').trim() || null;
-    const stored = this.knownForkRow(view.BranchID)?.Name?.trim() || null;
+    if (view.Kind === 'Main') {
+      return this.saveConversationName(conversationId);
+    }
+    return view.Kind === 'Fork' ? this.saveForkName(conversationId, view.BranchID) : false;
+  }
+
+  /**
+   * Saves the title field as the conversation's Name through the engine, then tells the host. A blank or
+   * unchanged name saves nothing. Shows "Could not rename the conversation" when the save fails.
+   */
+  private async saveConversationName(conversationId: string): Promise<boolean> {
+    const name = (this.TitleRenameText ?? '').trim();
+    const conversation = this.Conversation;
+    if (!conversation || !name || name === (conversation.Name ?? '').trim()) {
+      return true;
+    }
+    try {
+      await this.engine.SaveConversation(conversationId, { Name: name }, this.CurrentUser);
+    } catch (error) {
+      console.error(`Failed to rename conversation ${conversationId}:`, error);
+      MJNotificationService.Instance.CreateSimpleNotification('Could not rename the conversation', 'error', 3000);
+      return false;
+    }
+    if (conversation !== this.engine.GetConversation(conversationId)) {
+      conversation.SetMany({ Name: name }, true, true);
+    }
+    this.ConversationRenamed.emit({ conversationId, name, description: conversation.Description ?? '' });
+    return true;
+  }
+
+  /**
+   * Saves the title field as the fork's Name through the branch entity, then refreshes the fork summaries.
+   * A blank name clears the Name so the default label shows; an unchanged name saves nothing. Shows
+   * "Could not rename the fork" when the save fails.
+   */
+  private async saveForkName(conversationId: string, forkId: string): Promise<boolean> {
+    const name = (this.TitleRenameText ?? '').trim() || null;
+    const stored = this.knownForkRow(forkId)?.Name?.trim() || null;
     if (name === stored || (stored === null && name === this.OpenViewTitle)) {
       return true;
     }
     let saved = false;
     try {
-      saved = await SaveForkName({ ForkId: view.BranchID, Name: name, Provider: this.ProviderToUse, CurrentUser: this.CurrentUser });
+      saved = await SaveForkName({ ForkId: forkId, Name: name, Provider: this.ProviderToUse, CurrentUser: this.CurrentUser });
     } catch (error) {
-      console.error(`Failed to rename fork ${view.BranchID}:`, error);
+      console.error(`Failed to rename fork ${forkId}:`, error);
     }
     if (!saved) {
       MJNotificationService.Instance.CreateSimpleNotification('Could not rename the fork', 'error', 3000);
@@ -4561,7 +4698,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       SourceAuthorName: this.rowAuthorOf(message),
     });
     if (opened) {
-      this.prefillComposer(message.Message);
+      const draftView = this.OpenView;
+      this.prefillComposer(message.Message, () => this.OpenView === draftView);
     }
     return opened;
   }
@@ -4575,13 +4713,25 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return (this.messages ?? []).find(m => m.Sequence === sequence && UUIDsEqual(m.BranchID ?? null, forkPoint.ParentBranchID)) ?? null;
   }
 
-  /** Puts `text` in the active composer, unless the composer holds unsent text or there is no text. */
-  private prefillComposer(text: string | null | undefined): void {
-    const input = this.getActiveMessageInputComponent();
-    if (!input || !text?.trim() || input.GetSerializedDraft()) {
+  /**
+   * Puts `text` in the active composer, unless the composer holds unsent text or there is no text. When the
+   * composer has not rendered yet after the view change, tries again shortly, while `stillOpen` holds.
+   */
+  private prefillComposer(text: string | null | undefined, stillOpen: () => boolean, attempt = 0): void {
+    if (!text?.trim() || !stillOpen()) {
       return;
     }
-    input.SetDraft(text);
+    this.cdr.detectChanges();
+    const input = this.getActiveMessageInputComponent();
+    if (!input) {
+      if (attempt < PREFILL_MAX_ATTEMPTS) {
+        setTimeout(() => this.prefillComposer(text, stillOpen, attempt + 1), PREFILL_RETRY_MS);
+      }
+      return;
+    }
+    if (!input.GetSerializedDraft()) {
+      input.SetDraft(text);
+    }
   }
 
   /**
@@ -5239,7 +5389,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return (this.ForkSummaries ?? []).find(s => UUIDsEqual(s.Branch.ID, view.BranchID)) ?? null;
   }
 
-  /** The title of the fork bar: the fork's display name, "New fork" for a draft. */
+  /** The title of the open fork: its display name, "New fork" for a draft. */
   public get OpenViewTitle(): string {
     const view = this.OpenView;
     if (view.Kind === 'DraftFork') {
@@ -8157,7 +8307,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.streamAnchor = 'declined';
       return;
     }
-    const turnTop = this.offsetWithinScroller(pin.target) - pin.clearance;
+    const turnTop = this.offsetWithinScroller(pin.target, container) - pin.clearance;
     container.scrollTop = Math.max(0, Math.min(turnTop, container.scrollHeight - container.clientHeight));
     // Read the position back: the browser clamps and rounds, and the next frame compares against
     // what it will actually read, not what was asked for.
@@ -8202,7 +8352,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     this.turnStartRetryHandle = null;
-    const turnTop = this.offsetWithinScroller(target) - this.turnTopClearance(container);
+    const turnTop = this.offsetWithinScroller(target, container) - this.turnTopClearance(container);
     const turnHeight = container.scrollHeight - turnTop; // the turn is the newest content
     if (turnHeight > container.clientHeight) {
       container.scroll({ top: turnTop, behavior: 'smooth' });
@@ -8229,8 +8379,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /** An element's top edge in the scroller's content coordinates — what scrollTop counts in. */
-  private offsetWithinScroller(el: HTMLElement): number {
-    const container = this.scrollContainer.nativeElement as HTMLElement;
+  private offsetWithinScroller(el: HTMLElement, container: HTMLElement): number {
     return el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
   }
 

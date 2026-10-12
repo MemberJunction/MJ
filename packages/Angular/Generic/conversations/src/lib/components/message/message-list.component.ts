@@ -1087,6 +1087,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
   }
 
+  /** The fork marker shown on its own when the view has no rows (a draft fork with no earlier rows); null otherwise. */
+  public get EmptyViewMarkerText(): string | null {
+    const layout = this.ForkLayout;
+    return layout && !layout.MarkerDetailID ? layout.MarkerText : null;
+  }
+
   /** The chips placed under a message. */
   private chipsFor(detailId: string): readonly MessageForkChip[] {
     return this.ForkChipMap.get(NormalizeUUID(detailId)) ?? EMPTY_FORK_CHIPS;
@@ -1148,6 +1154,44 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       if (rendered.kind === 'component') {
         const instance = rendered.ref.instance as MessageItemComponent;
         instance.InPlaceRole = this.inPlaceRoleFor(instance.message.ID);
+        instance.PendingReplace = this.pendingReplaceFor(instance.message.ID);
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
+  }
+
+  /** The message whose inline editor is open; null when none is. */
+  private editingDetailId: string | null = null;
+
+  /** True when a message other than `detailId` has its inline editor open. */
+  private editOpenElsewhere(detailId: string): boolean {
+    return this.editingDetailId != null && !UUIDsEqual(this.editingDetailId, detailId);
+  }
+
+  /** True for the latest turn's answer while its user message is edited with "Save and resend". */
+  private pendingReplaceFor(detailId: string): boolean {
+    const turn = this.InPlaceTurn;
+    return !!turn?.AnswerDetailID && this.editingDetailId != null
+      && UUIDsEqual(this.editingDetailId, turn.UserDetailID) && UUIDsEqual(turn.AnswerDetailID, detailId);
+  }
+
+  /** A row's inline editor opened or closed: records it and pushes the edit state into every rendered row. */
+  private onRowEditingChanged(detailId: string, open: boolean): void {
+    if (open) {
+      this.editingDetailId = detailId;
+    } else if (this.editingDetailId != null && UUIDsEqual(this.editingDetailId, detailId)) {
+      this.editingDetailId = null;
+    }
+    this.applyEditState();
+  }
+
+  /** Pushes the edit state (another row editing, answer pending replace) into every rendered message component. */
+  private applyEditState(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.EditOpenElsewhere = this.editOpenElsewhere(instance.message.ID);
+        instance.PendingReplace = this.pendingReplaceFor(instance.message.ID);
         rendered.ref.changeDetectorRef.markForCheck();
       }
     }
@@ -1487,12 +1531,19 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
       // Remove rendered items (messages AND session blocks) that no longer exist
       const currentKeys = new Set(timeline.map(item => this.getTimelineKey(item)));
+      const editingBefore = this.editingDetailId;
       this._renderedMessages.forEach((entry, key) => {
         if (!currentKeys.has(key)) {
+          if (entry.kind === 'component' && this.editingDetailId != null && UUIDsEqual(entry.ref.instance.message?.ID, this.editingDetailId)) {
+            this.editingDetailId = null;
+          }
           entry.ref.destroy();
           this._renderedMessages.delete(key);
         }
       });
+      if (editingBefore !== this.editingDetailId) {
+        this.applyEditState();
+      }
 
       // Add or update timeline items in chronological order. `renderMessageItem`
       // internally branches on the slot template (messageRenderer) vs the
@@ -1506,6 +1557,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       // components. The tail and any in-progress message are always kept.
       const range = this.computeMountedRange(timeline);
       const lastMessageKey = this.findLastMessageKey(timeline);
+      const lastUserKey = this.findLastUserMessageKey(timeline);
       for (let i = 0; i < timeline.length; i++) {
         const item = timeline[i];
         const mounted = (i >= range.start && i <= range.end)
@@ -1516,7 +1568,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         } else if (item.Kind === 'session') {
           this.renderSessionBlock(item.Group, i);
         } else {
-          this.renderMessageItem(item.Detail, messages, this.getMessageKey(item.Detail) === lastMessageKey, i);
+          const key = this.getMessageKey(item.Detail);
+          this.renderMessageItem(item.Detail, messages, key === lastMessageKey, key === lastMessageKey || key === lastUserKey, i);
         }
       }
 
@@ -1853,6 +1906,17 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     return null;
   }
 
+  /** The render key of the last User message item in the timeline (the latest turn's user message), or null when none. */
+  private findLastUserMessageKey(timeline: ConversationTimelineItem<MJConversationDetailEntity>[]): string | null {
+    for (let i = timeline.length - 1; i >= 0; i--) {
+      const item = timeline[i];
+      if (item.Kind === 'message' && item.Detail.Role === 'User') {
+        return this.getMessageKey(item.Detail);
+      }
+    }
+    return null;
+  }
+
   /**
    * Creates or updates the ONE timeline card a realtime session collapses to.
    * Click/Open on the card bubbles up via {@link realtimeSessionOpenRequested} so the
@@ -1902,6 +1966,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     message: MJConversationDetailEntity,
     messages: MJConversationDetailEntity[],
     isLastMessage: boolean,
+    isLatestTurn: boolean,
     timelineIndex: number
   ): void {
     const key = this.getMessageKey(message);
@@ -1922,7 +1987,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     }
     if (existing && existing.kind === 'component' && !useCustomRenderer) {
       // Update existing MessageItemComponent in place
-      this.updateMessageItemInstance(existing.ref, message, messages, index);
+      this.updateMessageItemInstance(existing.ref, message, messages, index, isLatestTurn);
       return;
     }
     if (existing) {
@@ -1932,7 +1997,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this._renderedMessages.delete(key);
     }
 
-    this.createRenderedEntry(message, messages, index, key, useCustomRenderer, timelineIndex);
+    this.createRenderedEntry(message, messages, index, isLatestTurn, key, useCustomRenderer, timelineIndex);
   }
 
   /**
@@ -1944,7 +2009,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     ref: ComponentRef<MessageItemComponent>,
     message: MJConversationDetailEntity,
     messages: MJConversationDetailEntity[],
-    index: number
+    index: number,
+    isLatestTurn: boolean
   ): void {
     const instance = ref.instance;
     const previousMessage = instance.message;
@@ -1969,6 +2035,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.ForkRail = this.railFor(message.ID);
     instance.ForkMarkerText = this.markerFor(message.ID);
     instance.InPlaceRole = this.inPlaceRoleFor(message.ID);
+    this.applyRowTurnState(instance, isLatestTurn);
 
     // After the inputs above, for the same reason as the create path: this can force a
     // synchronous child pass, which would otherwise paint the previous refresh's agent run,
@@ -1979,6 +2046,13 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     if (previousMessage && previousMessage.Status !== message.Status) {
       ref.changeDetectorRef.markForCheck();
     }
+  }
+
+  /** Sets a row's latest-turn flag and its edit state. */
+  private applyRowTurnState(instance: MessageItemComponent, isLatestTurn: boolean): void {
+    instance.IsLatestTurn = isLatestTurn;
+    instance.EditOpenElsewhere = this.editOpenElsewhere(instance.message.ID);
+    instance.PendingReplace = this.pendingReplaceFor(instance.message.ID);
   }
 
   /**
@@ -2010,6 +2084,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     message: MJConversationDetailEntity,
     messages: MJConversationDetailEntity[],
     index: number,
+    isLatestTurn: boolean,
     key: string,
     useCustomRenderer: boolean,
     timelineIndex: number
@@ -2049,6 +2124,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.ForkRail = this.railFor(message.ID);
     instance.ForkMarkerText = this.markerFor(message.ID);
     instance.InPlaceRole = this.inPlaceRoleFor(message.ID);
+    this.applyRowTurnState(instance, isLatestTurn);
+    instance.EditingChanged.subscribe((open: boolean) => this.onRowEditingChanged(instance.message.ID, open));
     instance.EditResendRequested.subscribe((e) => this.EditResendRequested.emit(e));
     instance.ForkOpenRequested.subscribe((e: ForkChipOpenRequest) => this.ForkOpenRequested.emit(e));
     instance.ForkRequested.subscribe((m: MJConversationDetailEntity) => this.ForkRequested.emit(m));

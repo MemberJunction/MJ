@@ -31,6 +31,7 @@ function createHarness(original: string, edited: string): Harness {
   open.originalText = original;
   open.cdRef = { detectChanges: vi.fn(), markForCheck: vi.fn() };
   open.EditResendRequested = { emit: (e: EditResendEvent) => emitted.push(e) };
+  open.EditingChanged = { emit: vi.fn() };
   component.IsEditing = true;
   component.EditedText = edited;
 

@@ -62,13 +62,14 @@ describe('ConversationChatAreaComponent fork view', () => {
         expect(c.DisplayMessages.map(m => m.ID)).toEqual(['D1', 'D2']);
         expect(c.OpenViewTitle).toBe('New fork');
         expect(c.ForkLayout?.MarkerDetailID).toBe('D2');
-        expect(c.ForkLayout?.MarkerText).toBe("New fork from Maya Chen's message");
+        expect(c.ForkLayout?.MarkerText).toBe("New fork from Maya Chen's message · nothing is saved until you send");
     });
 
-    it('shows no inherited row and no marker in a draft that replaces the first message', () => {
+    it('shows no inherited row in a draft that replaces the first message, only its marker', () => {
         const c = createChatArea({ Kind: 'DraftFork', ParentBranchID: null, ForkFromSequence: null, AnchorDetailID: null, SourceDetailID: 'D1' });
         expect(c.DisplayMessages).toEqual([]);
-        expect(c.ForkLayout?.MarkerText).toBeNull();
+        expect(c.ForkLayout?.MarkerDetailID).toBeNull();
+        expect(c.ForkLayout?.MarkerText).toBe('New fork · nothing is saved until you send');
         expect(c.ComposerHint).toBe('Agents see only this fork');
     });
 
@@ -290,7 +291,7 @@ describe('ConversationChatAreaComponent fork view', () => {
             expect(c.OpenView).toEqual({ Kind: 'DraftFork', ParentBranchID: null, ForkFromSequence: 2, AnchorDetailID: 'D2', SourceDetailID: 'D3', SourceAuthorName: 'Maya Chen' });
             expect(c.DisplayMessages.map(m => m.ID)).toEqual(['D1', 'D2']);
             expect(c.ForkLayout?.MarkerDetailID).toBe('D2');
-            expect(c.ForkLayout?.MarkerText).toBe("New fork from Maya Chen's message");
+            expect(c.ForkLayout?.MarkerText).toBe("New fork from Maya Chen's message · nothing is saved until you send");
             expect(c.ListHasMoreAbove).toBe(true);
         });
 

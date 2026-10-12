@@ -10,6 +10,7 @@ import {
     ForkChipIcon,
     ForkChipOpenRequestOf,
     BuildForkComposerHint,
+    BuildForkHeaderPath,
     BuildForkListRows,
     BuildForkViewLayout,
     CanForkFrom,
@@ -24,6 +25,7 @@ import {
     ForkOriginText,
     ForkMessageLabel,
     type ConversationOpenView,
+    type ForkBreadcrumb,
 } from '../lib/utils/conversation-forks';
 
 const T1: ConversationOpenView = { Kind: 'Fork', BranchID: 'T1' };
@@ -242,10 +244,10 @@ describe('fork view layout', () => {
         expect(SplitForkRows(rows, MAIN_OPEN_VIEW)).toEqual({ Inherited: [], Own: rows });
     });
 
-    it('inherits nothing in a draft that replaces the first message', () => {
+    it('inherits nothing in a draft that replaces the first message, and keeps its marker to show on its own', () => {
         const first: ConversationOpenView = { Kind: 'DraftFork', ParentBranchID: null, ForkFromSequence: null, AnchorDetailID: null, SourceDetailID: 'D1' };
         expect(SplitForkRows(rows, first)).toEqual({ Inherited: [], Own: [] });
-        expect(BuildForkViewLayout([], first, 'marker')).toEqual({ InheritedIDs: new Set(), MarkerDetailID: null, MarkerText: null });
+        expect(BuildForkViewLayout([], first, 'marker')).toEqual({ InheritedIDs: new Set(), MarkerDetailID: null, MarkerText: 'marker' });
     });
 
     it('marks the inherited rows on screen and puts the marker under the last of them', () => {
@@ -260,8 +262,8 @@ describe('fork view layout', () => {
         expect(BuildForkMarkerText({ IsDraft: false, StarterName: 'Jordan Ellis', AnchorAuthorName: 'Sage', StartedAt: at }, fmt))
             .toBe(`Jordan Ellis forked from Sage's message · @${at.toISOString()}`);
         expect(BuildForkMarkerText({ IsDraft: false, StarterName: null, AnchorAuthorName: null, StartedAt: null }, fmt)).toBe('Someone forked');
-        expect(BuildForkMarkerText({ IsDraft: true, StarterName: null, AnchorAuthorName: 'Maya Chen', StartedAt: null }, fmt)).toBe("New fork from Maya Chen's message");
-        expect(BuildForkMarkerText({ IsDraft: true, StarterName: null, AnchorAuthorName: null, StartedAt: null }, fmt)).toBe('New fork');
+        expect(BuildForkMarkerText({ IsDraft: true, StarterName: null, AnchorAuthorName: 'Maya Chen', StartedAt: null }, fmt)).toBe("New fork from Maya Chen's message · nothing is saved until you send");
+        expect(BuildForkMarkerText({ IsDraft: true, StarterName: null, AnchorAuthorName: null, StartedAt: null }, fmt)).toBe('New fork · nothing is saved until you send');
     });
 
     it('writes the composer hint', () => {
@@ -325,5 +327,39 @@ describe('CanForkFrom', () => {
         expect(CanForkFrom({ ...allow, HoldsAuthorization: false })).toBe(false);
         expect(CanForkFrom({ ...allow, SettingValue: 'off' })).toBe(false);
         expect(CanForkFrom({ ...allow, MayWrite: false })).toBe(false);
+    });
+});
+
+describe('fork header path', () => {
+    /** A breadcrumb of `labels`; the last one is the current entry. */
+    function crumbs(...labels: string[]): ForkBreadcrumb[] {
+        return labels.map((label, i) => ({ BranchID: i === 0 ? null : label, Label: label, IsCurrent: i === labels.length - 1 }));
+    }
+
+    /** The parents as "label" when shown at every width, "(label)" when collapsed on wide screens; then the flags. */
+    function shape(labels: string[]) {
+        const path = BuildForkHeaderPath(crumbs(...labels));
+        return {
+            Parents: path.Parents.map(p => (p.CollapsedWide ? `(${p.Crumb.Label})` : p.Crumb.Label) + (p.IsMiddle ? '*' : '')),
+            CollapsesWide: path.CollapsesWide,
+            HasMiddle: path.HasMiddle,
+        };
+    }
+
+    it('shows the conversation and the fork, with no ellipsis', () => {
+        expect(shape(['Poem', 'Tighter meter'])).toEqual({ Parents: ['Poem'], CollapsesWide: false, HasMiddle: false });
+    });
+
+    it('shows all three entries at full width, and marks the parent as a middle crumb for narrow screens', () => {
+        expect(shape(['Poem', 'Tighter meter', 'Other answer'])).toEqual({ Parents: ['Poem', 'Tighter meter*'], CollapsesWide: false, HasMiddle: true });
+    });
+
+    it('past three entries shows the first, an ellipsis and the last two', () => {
+        expect(shape(['Poem', 'A', 'B', 'C'])).toEqual({ Parents: ['Poem', '(A)*', 'B*'], CollapsesWide: true, HasMiddle: true });
+        expect(shape(['Poem', 'A', 'B', 'C', 'D'])).toEqual({ Parents: ['Poem', '(A)*', '(B)*', 'C*'], CollapsesWide: true, HasMiddle: true });
+    });
+
+    it('has no parents for an empty breadcrumb (Main)', () => {
+        expect(BuildForkHeaderPath([])).toEqual({ Parents: [], CollapsesWide: false, HasMiddle: false });
     });
 });

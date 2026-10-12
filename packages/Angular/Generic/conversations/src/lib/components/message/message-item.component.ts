@@ -184,16 +184,29 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /** Asks the host to rerun this user message's turn in place, after "Save and resend" saved the new text. */
   @Output() public ResendInPlaceRequested = new EventEmitter<MJConversationDetailEntity>();
 
+  /** True for the latest user message and the last message of the view; their actions show labels. Set by the message list. */
+  @Input() public IsLatestTurn = false;
+
+  /** True while another message of the view is being edited; this row's footer then hides. Set by the message list. */
+  @Input() public EditOpenElsewhere = false;
+
+  /** True for the answer that "Save and resend" will replace while that edit is open; the row dims. Set by the message list. */
+  @Input() public PendingReplace = false;
+
+  /** Emits true when this row's inline editor opens and false when it closes. */
+  @Output() public EditingChanged = new EventEmitter<boolean>();
+
   /**
    * How a saved edit is applied: 'Fork' while the person may fork; with forking off, 'Resend' on the
-   * latest user message and 'Save' on an earlier one; null on an inherited row of a fork view.
+   * latest user message and 'Save' on an earlier one; null on an inherited row of a fork view (the row
+   * belongs to the parent path, so Fork from here is offered there instead).
    */
   public get EditMode(): MessageEditMode | null {
-    if (this.CanFork !== false) {
-      return 'Fork';
-    }
     if (this.ForkRail === 'Inherited') {
       return null;
+    }
+    if (this.CanFork !== false) {
+      return 'Fork';
     }
     return (this.InPlaceRole ?? null) === 'User' ? 'Resend' : 'Save';
   }
@@ -210,15 +223,39 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  /** The icon of the edit's save button. */
+  public get EditSaveIcon(): string {
+    switch (this.EditMode) {
+      case 'Resend':
+        return 'fa-solid fa-rotate-left';
+      case 'Save':
+        return 'fa-solid fa-check';
+      default:
+        return 'fa-solid fa-code-branch';
+    }
+  }
+
   /** The keyboard hint under the editor. */
   public get EditHint(): string {
     switch (this.EditMode) {
       case 'Resend':
-        return 'Press Enter to save and resend, Shift+Enter for a new line, Escape to cancel';
+        return 'Enter saves and resends, Shift+Enter for a new line, Escape cancels';
       case 'Save':
-        return 'Press Enter to save, Shift+Enter for a new line, Escape to cancel';
+        return 'Enter saves, Shift+Enter for a new line, Escape cancels';
       default:
-        return 'Press Enter to save as a fork, Shift+Enter for a new line, Escape to cancel';
+        return 'Enter saves as a fork, Shift+Enter for a new line, Escape cancels';
+    }
+  }
+
+  /** The note on the editor's button row: what the save does to the conversation; null for a plain Save. */
+  public get EditNote(): string | null {
+    switch (this.EditMode) {
+      case 'Resend':
+        return 'The current answer will be replaced.';
+      case 'Save':
+        return null;
+      default:
+        return 'The original message stays here.';
     }
   }
 
@@ -1904,6 +1941,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     if (this.IsEditing) {
       classes.push('editing');
     }
+    if (this.PendingReplace) {
+      classes.push('pending-replace');
+    }
     if (this.ForkRail === 'Inherited') {
       classes.push('fork-rail-inherited');
     } else if (this.ForkRail === 'Own') {
@@ -1941,6 +1981,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.originalText = this.message.Message || '';
     this.EditedText = this.originalText;
     this.IsEditing = true;
+    this.EditingChanged.emit(true);
 
     // Focus textarea after Angular renders it
     Promise.resolve().then(() => {
@@ -1959,10 +2000,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public CancelEditing(): void {
-    this.IsEditing = false;
-    this.EditedText = '';
-    this.originalText = '';
-    this.cdRef.detectChanges();
+    this.closeEditor();
   }
 
   /** @deprecated Use {@link CancelEditing}. */
@@ -2002,11 +2040,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  /** Closes the inline editor and renders. */
+  /** Closes the inline editor, tells the list, and renders. */
   private closeEditor(): void {
+    const wasEditing = this.IsEditing;
     this.IsEditing = false;
     this.EditedText = '';
     this.originalText = '';
+    if (wasEditing) {
+      this.EditingChanged.emit(false);
+    }
     this.cdRef.detectChanges();
   }
 
@@ -2018,6 +2060,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public OnEditKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       this.CancelEditing();
     } else if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
@@ -2100,6 +2143,31 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public get CanEdit(): boolean {
     return this.EditMode != null && this.AllowMessageEdit && this.IsUserMessage && !this.ReadOnly && !this.IsEditing
       && this.MessageStatus === 'Complete' && this.isOwnMessage();
+  }
+
+  /**
+   * True when the row shows its action group (Edit and Fork from here on a user message, Regenerate on an
+   * older answer): a finished row, not being edited, while nothing is processing, for a person who may write.
+   */
+  public get ShowsActionGroup(): boolean {
+    return !this.IsEditing && !this.IsProcessing && this.MessageStatus === 'Complete' && !this.ReadOnly
+      && (this.CanEdit || this.CanStartFork || this.ShowsHeaderRegenerate);
+  }
+
+  /** Regenerate in the header's action group: an answer that is not the last message (the last one carries it in its footer). */
+  public get ShowsHeaderRegenerate(): boolean {
+    return this.CanRegenerate && !this.IsLastMessage;
+  }
+
+  /** Regenerate in the footer of the last message. */
+  public get ShowsFooterRegenerate(): boolean {
+    return this.CanRegenerate && this.IsLastMessage;
+  }
+
+  /** True when the last message shows its footer: not while this row or another row of the view is being edited. */
+  public get ShowsFooter(): boolean {
+    return !this.IsEditing && !this.EditOpenElsewhere && this.IsLastMessage
+      && (this.IsConversationOwner || (this.IsAIMessage && this.MessageStatus === 'Complete'));
   }
 
   /** Asks the host to fork the conversation at this message; the click does not reach the message bubble. */

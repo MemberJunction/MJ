@@ -115,6 +115,39 @@ describe('ConversationChatAreaComponent fork start actions', () => {
             expect(h.input.draft.Text).toBe('Draft the launch email');
         });
 
+        it('waits for the composer to render after the view change before putting the text in it', async () => {
+            vi.useFakeTimers();
+            try {
+                const h = createHarness();
+                h.open['messageInputComponents'] = [];
+
+                await h.component.OnForkRequested(MESSAGE);
+                expect(h.input.SetDraft).not.toHaveBeenCalled();
+
+                h.open['messageInputComponents'] = [h.input];
+                await vi.advanceTimersByTimeAsync(100);
+                expect(h.input.SetDraft).toHaveBeenCalledWith('Draft the launch email');
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('stops waiting for the composer when the person leaves the draft', async () => {
+            vi.useFakeTimers();
+            try {
+                const h = createHarness();
+                h.open['messageInputComponents'] = [];
+                await h.component.OnForkRequested(MESSAGE);
+
+                await h.component.BackToMain();
+                h.open['messageInputComponents'] = [h.input];
+                await vi.advanceTimersByTimeAsync(2000);
+                expect(h.input.SetDraft).not.toHaveBeenCalled();
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
         it('keeps unsent text in the composer', async () => {
             const h = createHarness({ composerText: 'half-written thought' });
 

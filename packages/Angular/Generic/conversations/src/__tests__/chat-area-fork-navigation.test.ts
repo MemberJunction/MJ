@@ -37,10 +37,18 @@ function createHarness(opts: { view?: ConversationOpenView; branches?: Conversat
     const reload = vi.fn(async () => true);
     const refresh = vi.fn(async () => undefined);
     const fork = opts.fork ?? forkEntity(null);
+    const conversation = { ID: 'CONV-1', Name: 'Launch plan', Description: 'Q3 launch', SetMany: vi.fn() };
+    const engine = {
+        GetSharedByInfo: () => null,
+        GetConversation: vi.fn((): unknown => conversation),
+        SaveConversation: vi.fn(async () => true),
+    };
+    const renamed = { emit: vi.fn() };
     Object.assign(open, {
         _conversationId: 'CONV-1',
-        Conversation: { ID: 'CONV-1', Name: 'Launch plan' },
-        engine: { GetSharedByInfo: () => null },
+        Conversation: conversation,
+        engine,
+        ConversationRenamed: renamed,
         CurrentUser: { ID: 'USER-1' },
         ReadOnly: opts.readOnly ?? false,
         openView: opts.view ?? MAIN_OPEN_VIEW,
@@ -59,7 +67,7 @@ function createHarness(opts: { view?: ConversationOpenView; branches?: Conversat
     if (opts.autoName !== undefined) {
         open['AutoNameConversation'] = opts.autoName;
     }
-    return { component, open, reload, refresh, fork };
+    return { component, open, reload, refresh, fork, conversation, engine, renamed };
 }
 
 describe('ConversationChatAreaComponent fork navigation, rename and naming', () => {
@@ -118,7 +126,7 @@ describe('ConversationChatAreaComponent fork navigation, rename and naming', () 
         });
     });
 
-    describe('back button', () => {
+    describe('going up one level (the parent crumb and Escape)', () => {
         it('goes up to the parent fork, named in its label', async () => {
             const h = createHarness({ view: FORK_B });
 
@@ -148,43 +156,103 @@ describe('ConversationChatAreaComponent fork navigation, rename and naming', () 
         });
     });
 
+    describe('header path and Escape', () => {
+        /** An Escape keydown from `tagName`, as the header or the transcript receives it. */
+        function escape(tagName = 'DIV', prevented = false) {
+            return { defaultPrevented: prevented, target: { tagName, isContentEditable: false }, preventDefault: vi.fn() } as unknown as Event;
+        }
+
+        it('builds the path from the breadcrumb, once per breadcrumb', () => {
+            const h = createHarness({ view: FORK_B });
+            expect(h.component.HeaderPath.Parents.map(p => p.Crumb.Label)).toEqual(['Launch plan', 'Pricing ideas']);
+            expect(h.component.HeaderPath).toBe(h.component.HeaderPath);
+        });
+
+        it('goes up one level on Escape in a fork, as the parent crumb does', async () => {
+            const h = createHarness({ view: FORK_B });
+            const event = escape();
+            h.component.OnViewEscape(event);
+            await vi.waitFor(() => expect(h.component.OpenView).toEqual(FORK_A));
+            expect(event.preventDefault).toHaveBeenCalled();
+        });
+
+        it('closes the forks list first when it is open', () => {
+            const h = createHarness({ view: FORK_B });
+            h.open['ShowForksPopover'] = true;
+            h.component.OnViewEscape(escape());
+            expect(h.component.ShowForksPopover).toBe(false);
+            expect(h.component.OpenView).toEqual(FORK_B);
+        });
+
+        it('leaves Escape alone in Main, in a text field, in an open menu, while renaming, and after an inner control handled it', () => {
+            const main = createHarness();
+            main.component.OnViewEscape(escape());
+            expect(main.reload).not.toHaveBeenCalled();
+
+            for (const event of [escape('TEXTAREA'), escape('INPUT'), escape('DIV', true)]) {
+                const h = createHarness({ view: FORK_B });
+                h.component.OnViewEscape(event);
+                expect(h.reload).not.toHaveBeenCalled();
+                expect(event.preventDefault).not.toHaveBeenCalled();
+            }
+
+            const menu = createHarness({ view: FORK_B });
+            const fromMenu = { defaultPrevented: false, target: { tagName: 'BUTTON', closest: (sel: string) => (sel === '[aria-expanded="true"]' ? {} : null) }, preventDefault: vi.fn() } as unknown as Event;
+            menu.component.OnViewEscape(fromMenu);
+            expect(menu.reload).not.toHaveBeenCalled();
+
+            const renaming = createHarness({ view: FORK_A });
+            renaming.component.StartTitleRename();
+            renaming.component.OnViewEscape(escape());
+            expect(renaming.reload).not.toHaveBeenCalled();
+        });
+
+        it('opens the forks list from the path ellipsis', () => {
+            const h = createHarness({ view: FORK_B });
+            h.component.ShowWholePath();
+            expect(h.component.ShowForksPopover).toBe(true);
+            h.component.ShowWholePath();
+            expect(h.component.ShowForksPopover).toBe(true);
+        });
+    });
+
     describe('rename', () => {
         it('opens the name field with the current name, and is not offered in a draft or a read-only conversation', () => {
             const h = createHarness({ view: FORK_A });
             expect(h.component.CanRenameFork).toBe(true);
-            h.component.StartForkRename();
-            expect(h.component.IsRenamingFork).toBe(true);
-            expect(h.component.ForkRenameText).toBe('Pricing ideas');
+            h.component.StartTitleRename();
+            expect(h.component.IsRenamingTitle).toBe(true);
+            expect(h.component.TitleRenameText).toBe('Pricing ideas');
 
             const draft = createHarness({ view: DRAFT_UNDER_A });
             expect(draft.component.CanRenameFork).toBe(false);
-            draft.component.StartForkRename();
-            expect(draft.component.IsRenamingFork).toBeFalsy();
+            draft.component.StartTitleRename();
+            expect(draft.component.IsRenamingTitle).toBeFalsy();
 
             expect(createHarness({ view: FORK_A, readOnly: true }).component.CanRenameFork).toBe(false);
         });
 
         it('saves the trimmed name through the branch entity, then refreshes the fork summaries', async () => {
             const h = createHarness({ view: FORK_A, fork: forkEntity('Pricing ideas') });
-            h.component.StartForkRename();
-            h.component.ForkRenameText = '  Annual pricing  ';
+            h.component.StartTitleRename();
+            h.component.TitleRenameText = '  Annual pricing  ';
 
-            expect(await h.component.SaveForkRename()).toBe(true);
+            expect(await h.component.SaveTitleRename()).toBe(true);
 
             expect(h.fork.Load).toHaveBeenCalledWith('A');
             expect(h.fork.Name).toBe('Annual pricing');
             expect(h.fork.Save).toHaveBeenCalledOnce();
             expect(h.refresh).toHaveBeenCalledOnce();
-            expect(h.component.IsRenamingFork).toBe(false);
+            expect(h.component.IsRenamingTitle).toBe(false);
             expect(notify).not.toHaveBeenCalled();
         });
 
         it('clears the name for an empty field, so the default label shows again', async () => {
             const h = createHarness({ view: FORK_A, fork: forkEntity('Pricing ideas') });
-            h.component.StartForkRename();
-            h.component.ForkRenameText = '   ';
+            h.component.StartTitleRename();
+            h.component.TitleRenameText = '   ';
 
-            expect(await h.component.SaveForkRename()).toBe(true);
+            expect(await h.component.SaveTitleRename()).toBe(true);
 
             expect(h.fork.Name).toBeNull();
             expect(h.fork.Save).toHaveBeenCalledOnce();
@@ -192,13 +260,13 @@ describe('ConversationChatAreaComponent fork navigation, rename and naming', () 
 
         it('saves nothing for an unchanged name, including the default label of an unnamed fork', async () => {
             const named = createHarness({ view: FORK_A });
-            named.component.StartForkRename();
-            expect(await named.component.SaveForkRename()).toBe(true);
+            named.component.StartTitleRename();
+            expect(await named.component.SaveTitleRename()).toBe(true);
 
             const unnamed = createHarness({ view: FORK_B });
-            unnamed.component.StartForkRename();
-            expect(unnamed.component.ForkRenameText).toBe('Edited version');
-            expect(await unnamed.component.SaveForkRename()).toBe(true);
+            unnamed.component.StartTitleRename();
+            expect(unnamed.component.TitleRenameText).toBe('Edited version');
+            expect(await unnamed.component.SaveTitleRename()).toBe(true);
 
             expect(named.fork.Save).not.toHaveBeenCalled();
             expect(unnamed.fork.Save).not.toHaveBeenCalled();
@@ -206,38 +274,115 @@ describe('ConversationChatAreaComponent fork navigation, rename and naming', () 
 
         it('cancels on Escape without saving, and a later blur saves nothing', async () => {
             const h = createHarness({ view: FORK_A });
-            h.component.StartForkRename();
-            h.component.ForkRenameText = 'Something else';
+            h.component.StartTitleRename();
+            h.component.TitleRenameText = 'Something else';
 
-            h.component.CancelForkRename();
-            expect(h.component.IsRenamingFork).toBe(false);
-            expect(await h.component.SaveForkRename()).toBe(false);
+            h.component.CancelTitleRename();
+            expect(h.component.IsRenamingTitle).toBe(false);
+            expect(await h.component.SaveTitleRename()).toBe(false);
 
             expect((h.open['Provider'] as { GetEntityObject: ReturnType<typeof vi.fn> }).GetEntityObject).not.toHaveBeenCalled();
         });
 
         it('shows "Could not rename the fork" when the save fails or throws', async () => {
             const failed = createHarness({ view: FORK_A, fork: forkEntity('Pricing ideas', false) });
-            failed.component.StartForkRename();
-            failed.component.ForkRenameText = 'New name';
-            expect(await failed.component.SaveForkRename()).toBe(false);
+            failed.component.StartTitleRename();
+            failed.component.TitleRenameText = 'New name';
+            expect(await failed.component.SaveTitleRename()).toBe(false);
             expect(notify).toHaveBeenCalledWith('Could not rename the fork', 'error', 3000);
             expect(failed.refresh).not.toHaveBeenCalled();
 
             notify.mockClear();
             const thrown = createHarness({ view: FORK_A });
             (thrown.open['Provider'] as { GetEntityObject: ReturnType<typeof vi.fn> }).GetEntityObject.mockRejectedValue(new Error('offline'));
-            thrown.component.StartForkRename();
-            thrown.component.ForkRenameText = 'New name';
-            expect(await thrown.component.SaveForkRename()).toBe(false);
+            thrown.component.StartTitleRename();
+            thrown.component.TitleRenameText = 'New name';
+            expect(await thrown.component.SaveTitleRename()).toBe(false);
             expect(notify).toHaveBeenCalledWith('Could not rename the fork', 'error', 3000);
         });
 
         it('closes the name field when the view changes', async () => {
             const h = createHarness({ view: FORK_A });
-            h.component.StartForkRename();
+            h.component.StartTitleRename();
             await h.component.BackToMain();
-            expect(h.component.IsRenamingFork).toBe(false);
+            expect(h.component.IsRenamingTitle).toBe(false);
+        });
+    });
+
+    describe('header title', () => {
+        it('shows the conversation name in Main and the fork name in a fork, with a matching rename label', () => {
+            const main = createHarness();
+            expect(main.component.HeaderTitle).toBe('Launch plan');
+            expect(main.component.TitleRenameLabel).toBe('Rename conversation');
+
+            const fork = createHarness({ view: FORK_B });
+            expect(fork.component.HeaderTitle).toBe('Edited version');
+            expect(fork.component.TitleRenameLabel).toBe('Rename fork');
+            expect(createHarness({ view: DRAFT_UNDER_A }).component.HeaderTitle).toBe('New fork');
+        });
+    });
+
+    describe('conversation rename', () => {
+        it('opens the name field with the conversation name in Main, and is not offered in a read-only conversation', () => {
+            const h = createHarness();
+            expect(h.component.CanRenameConversation).toBe(true);
+            expect(h.component.CanRenameTitle).toBe(true);
+            h.component.StartTitleRename();
+            expect(h.component.IsRenamingTitle).toBe(true);
+            expect(h.component.TitleRenameText).toBe('Launch plan');
+
+            expect(createHarness({ readOnly: true }).component.CanRenameTitle).toBe(false);
+            expect(createHarness({ view: FORK_A }).component.CanRenameConversation).toBe(false);
+        });
+
+        it('saves the trimmed name through the engine and tells the host', async () => {
+            const h = createHarness();
+            h.component.StartTitleRename();
+            h.component.TitleRenameText = '  Launch plan v2  ';
+
+            expect(await h.component.SaveTitleRename()).toBe(true);
+
+            expect(h.engine.SaveConversation).toHaveBeenCalledWith('CONV-1', { Name: 'Launch plan v2' }, { ID: 'USER-1' });
+            expect(h.renamed.emit).toHaveBeenCalledWith({ conversationId: 'CONV-1', name: 'Launch plan v2', description: 'Q3 launch' });
+            expect(h.conversation.SetMany).not.toHaveBeenCalled();
+            expect(h.component.IsRenamingTitle).toBe(false);
+            expect(h.fork.Save).not.toHaveBeenCalled();
+        });
+
+        it('updates a host-owned conversation object that is not the engine copy', async () => {
+            const h = createHarness();
+            h.engine.GetConversation.mockReturnValue({ ID: 'CONV-1', Name: 'Launch plan v2' });
+            h.component.StartTitleRename();
+            h.component.TitleRenameText = 'Launch plan v2';
+
+            expect(await h.component.SaveTitleRename()).toBe(true);
+
+            expect(h.conversation.SetMany).toHaveBeenCalledWith({ Name: 'Launch plan v2' }, true, true);
+        });
+
+        it('saves nothing for a blank or unchanged name', async () => {
+            const h = createHarness();
+            h.component.StartTitleRename();
+            h.component.TitleRenameText = '   ';
+            expect(await h.component.SaveTitleRename()).toBe(true);
+
+            h.component.StartTitleRename();
+            expect(await h.component.SaveTitleRename()).toBe(true);
+
+            expect(h.engine.SaveConversation).not.toHaveBeenCalled();
+            expect(h.renamed.emit).not.toHaveBeenCalled();
+        });
+
+        it('shows "Could not rename the conversation" when the save fails', async () => {
+            const h = createHarness();
+            h.engine.SaveConversation.mockRejectedValue(new Error('denied'));
+            h.component.StartTitleRename();
+            h.component.TitleRenameText = 'New name';
+
+            expect(await h.component.SaveTitleRename()).toBe(false);
+
+            expect(notify).toHaveBeenCalledWith('Could not rename the conversation', 'error', 3000);
+            expect(h.renamed.emit).not.toHaveBeenCalled();
         });
     });
 

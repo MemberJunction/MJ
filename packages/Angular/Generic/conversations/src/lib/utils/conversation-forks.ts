@@ -128,6 +128,9 @@ export interface ForkBreadcrumb {
 /** The label of the last crumb of a draft fork. */
 export const DRAFT_FORK_TITLE = 'New fork';
 
+/** The end of a draft's fork marker. */
+export const DRAFT_MARKER_SUFFIX = ' · nothing is saved until you send';
+
 /**
  * The breadcrumb of a fork or draft view: the conversation (opens Main), each ancestor fork from the
  * one under Main down, then the open fork (a draft: "New fork"). Empty for Main.
@@ -150,6 +153,47 @@ export function BuildForkBreadcrumbs(
         ? { BranchID: view.BranchID, Label: forkLabel(view.BranchID), IsCurrent: true }
         : { BranchID: null, Label: DRAFT_FORK_TITLE, IsCurrent: true });
     return crumbs;
+}
+
+/** A crumb before the current one in the header path. */
+export interface ForkPathParent {
+    readonly Crumb: ForkBreadcrumb;
+    /** A crumb between the first and the current one; narrow screens hide every one of them behind the ellipsis. */
+    readonly IsMiddle: boolean;
+    /** Hidden behind the ellipsis at every width: a middle crumb other than the parent, in a path of more than three entries. */
+    readonly CollapsedWide: boolean;
+}
+
+/** The header path of a fork view, built from its breadcrumb. */
+export interface ForkHeaderPath {
+    /** The crumbs before the current one, in order. */
+    readonly Parents: readonly ForkPathParent[];
+    /** True when the path has more than three entries, so the ellipsis shows at every width. */
+    readonly CollapsesWide: boolean;
+    /** True when there is a crumb between the first and the current one, so narrow screens show the ellipsis. */
+    readonly HasMiddle: boolean;
+}
+
+/** Paths longer than this show the first crumb, an ellipsis, and the last two entries. */
+export const MAX_FULL_PATH_ENTRIES = 3;
+
+/**
+ * The header path of a breadcrumb: the first crumb (the conversation) always shows; past three entries the
+ * crumbs between it and the parent of the current entry collapse into an ellipsis.
+ */
+export function BuildForkHeaderPath(crumbs: readonly ForkBreadcrumb[]): ForkHeaderPath {
+    const parents = crumbs.filter(c => !c.IsCurrent);
+    const collapsesWide = crumbs.length > MAX_FULL_PATH_ENTRIES;
+    const lastParent = parents.length - 1;
+    return {
+        Parents: parents.map((crumb, i) => ({
+            Crumb: crumb,
+            IsMiddle: i > 0,
+            CollapsedWide: collapsesWide && i > 0 && i < lastParent,
+        })),
+        CollapsesWide: collapsesWide,
+        HasMiddle: parents.length > 1,
+    };
 }
 
 /** The label of the fork view's back button: "Back to <parent fork>", or "Back to Main" with no parent. */
@@ -437,6 +481,7 @@ export interface ForkViewLayout {
     readonly InheritedIDs: ReadonlySet<string>;
     /** The row the fork marker shows under: the last inherited row on screen; null when none is. */
     readonly MarkerDetailID: string | null;
+    /** The marker text; null when no inherited row is on screen, except in a draft, whose marker then stands alone. */
     readonly MarkerText: string | null;
 }
 
@@ -454,15 +499,15 @@ export function BuildForkViewLayout<T extends { ID: string; BranchID?: string | 
     return {
         InheritedIDs: new Set(inherited.map(r => NormalizeUUID(r.ID))),
         MarkerDetailID: last ? last.ID : null,
-        MarkerText: last ? markerText : null,
+        MarkerText: last || view.Kind === 'DraftFork' ? markerText : null,
     };
 }
 
 /**
  * The fork marker: "<person> forked from <author>'s message · <time>" ("Someone" with no person; the
  * "from" part only with an author; the time only when known). A draft: "New fork from <author>'s
- * message". `AnchorAuthorName` is the author the "from" part names: the source message's author for a
- * fork with a source, else the anchor's.
+ * message · nothing is saved until you send". `AnchorAuthorName` is the author the "from" part names: the
+ * source message's author for a fork with a source, else the anchor's.
  */
 export function BuildForkMarkerText(
     input: { IsDraft: boolean; StarterName: string | null; AnchorAuthorName: string | null; StartedAt: Date | null },
@@ -470,7 +515,7 @@ export function BuildForkMarkerText(
 ): string {
     const from = input.AnchorAuthorName ? ` from ${input.AnchorAuthorName}'s message` : '';
     if (input.IsDraft) {
-        return `New fork${from}`;
+        return `New fork${from}${DRAFT_MARKER_SUFFIX}`;
     }
     const time = input.StartedAt ? ` · ${formatTime(input.StartedAt)}` : '';
     return `${input.StarterName ?? 'Someone'} forked${from}${time}`;

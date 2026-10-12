@@ -47,7 +47,7 @@
          like the Form Builder cockpit show the mode picker above the
          empty-state on a fresh chat instead of waiting for the first
          message to round-trip. -->
-    <div class="chat-header">
+    <div class="chat-header" (keydown.escape)="OnViewEscape($event)">
       <div class="chat-info" [class.with-sidebar-toggle]="showSidebarToggle">
         @if (showSidebarToggle) {
           <button class="sidebar-toggle-btn"
@@ -57,7 +57,7 @@
           </button>
         }
         @if (conversation) {
-          <div class="chat-title">{{ conversation.Name || '' }}</div>
+          <ng-container *ngTemplateOutlet="titleBar"></ng-container>
         }
         @if (sharedByBadge) {
           <span class="shared-by-badge" [title]="sharedByBadge.fullTooltip">
@@ -162,6 +162,64 @@
       </div>
     </div>
   }
+
+  <!-- Header title. Main: the conversation name. A fork: the path, the conversation and each parent fork
+       (each opens its view; the parent is the way back), then the open fork with its kind icon. Past three
+       entries, and on narrow screens, the middle crumbs collapse into an ellipsis that opens the forks list.
+       The current name can be renamed in place. -->
+  <ng-template #titleBar>
+    <div class="chat-title-bar">
+      @if (OpenView.Kind === 'Main') {
+        <ng-container *ngTemplateOutlet="titleName"></ng-container>
+      } @else {
+        <nav class="chat-title-path" aria-label="Breadcrumb">
+          <ol class="chat-title-crumbs">
+            @for (parent of HeaderPath.Parents; track $index) {
+              @if ($index === 1) {
+                <li class="chat-title-crumb chat-title-ellipsis" [class.collapses-wide]="HeaderPath.CollapsesWide">
+                  <button mjButton Variant="flat" Size="sm" type="button" (click)="ShowWholePath()" aria-label="Show the whole path" title="Show the whole path">…</button>
+                  <i class="fa-solid fa-chevron-right chat-title-sep" aria-hidden="true"></i>
+                </li>
+              }
+              <li class="chat-title-crumb" [class.path-middle]="parent.IsMiddle" [class.collapsed-wide]="parent.CollapsedWide">
+                <button mjButton Variant="flat" Size="sm" type="button" (click)="OpenCrumb(parent.Crumb)" [title]="'Back to ' + parent.Crumb.Label">
+                  <span class="chat-title-crumb-label">{{ parent.Crumb.Label }}</span>
+                </button>
+                <i class="fa-solid fa-chevron-right chat-title-sep" aria-hidden="true"></i>
+              </li>
+            }
+            <li class="chat-title-current" aria-current="page">
+              <i [class]="'chat-title-kind ' + OpenViewIcon" [attr.data-kind]="OpenViewKind" aria-hidden="true"></i>
+              <ng-container *ngTemplateOutlet="titleName"></ng-container>
+            </li>
+          </ol>
+        </nav>
+      }
+    </div>
+  </ng-template>
+
+  <!-- The current name and its rename button; the inline field while renaming -->
+  <ng-template #titleName>
+    @if (IsRenamingTitle) {
+      <input
+        #titleNameInput
+        type="text"
+        class="chat-title-input"
+        maxlength="255"
+        [attr.aria-label]="TitleRenameLabel"
+        [(ngModel)]="TitleRenameText"
+        (keydown.enter)="$event.preventDefault(); SaveTitleRename(true)"
+        (keydown.escape)="$event.preventDefault(); $event.stopPropagation(); CancelTitleRename()"
+        (blur)="SaveTitleRename()" />
+    } @else {
+      <h2 class="chat-title" [title]="HeaderTitle">{{ HeaderTitle }}</h2>
+      @if (CanRenameTitle) {
+        <button mjButton #titleRenameButton Variant="icon" Size="sm" type="button" class="chat-title-rename" (click)="StartTitleRename()" [attr.aria-label]="TitleRenameLabel" [title]="TitleRenameLabel">
+          <i class="fa-solid fa-pen" aria-hidden="true"></i>
+        </button>
+      }
+    }
+  </ng-template>
 
   <!-- Messages and Artifact Split Layout — restructures into [stage | rail]
        when isDemonstrationActive (per Matt's 06-10 design). The .demonstration-mode
@@ -302,51 +360,10 @@
       } @else {
         <!-- Normal Message View -->
         <div class="chat-messages-wrapper">
-          @if (OpenView.Kind !== 'Main') {
-            <div class="fork-view-bar" role="region" aria-label="Fork">
-              <button mjButton Variant="icon" Size="sm" class="fork-view-back" (click)="GoBack()" [attr.aria-label]="BackLabel" [title]="BackLabel">
-                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
-              </button>
-              <div class="fork-view-titles">
-                <nav class="fork-view-breadcrumb" aria-label="Breadcrumb">
-                  <ol class="fork-view-crumbs">
-                    @for (crumb of ForkBreadcrumbs; track $index) {
-                      <li class="fork-view-crumb">
-                        @if (!$first) {
-                          <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-                        }
-                        @if (crumb.IsCurrent) {
-                          <span class="fork-view-crumb-current" aria-current="page">{{ crumb.Label }}</span>
-                        } @else {
-                          <button mjButton Variant="flat" Size="sm" (click)="OpenCrumb(crumb)">{{ crumb.Label }}</button>
-                        }
-                      </li>
-                    }
-                  </ol>
-                </nav>
-                <div class="fork-view-heading">
-                  <i [class]="'fork-view-kind ' + OpenViewIcon" [attr.data-kind]="OpenViewKind" aria-hidden="true"></i>
-                  @if (IsRenamingFork) {
-                    <input
-                      #forkNameInput
-                      type="text"
-                      class="fork-view-name-input"
-                      maxlength="255"
-                      aria-label="Rename fork"
-                      [(ngModel)]="ForkRenameText"
-                      (keydown.enter)="$event.preventDefault(); SaveForkRename(true)"
-                      (keydown.escape)="$event.preventDefault(); $event.stopPropagation(); CancelForkRename()"
-                      (blur)="SaveForkRename()" />
-                  } @else {
-                    <h2 class="fork-view-title">{{ OpenViewTitle }}</h2>
-                    @if (CanRenameFork) {
-                      <button mjButton #forkRenameButton Variant="icon" Size="sm" class="fork-view-rename" (click)="StartForkRename()" aria-label="Rename fork" title="Rename fork">
-                        <i class="fa-solid fa-pen" aria-hidden="true"></i>
-                      </button>
-                    }
-                  }
-                </div>
-              </div>
+          @if (OpenView.Kind !== 'Main' && slotTemplate('header')) {
+            <!-- A host header replaces the default one, so the fork title shows above the transcript. -->
+            <div class="fork-view-bar" role="region" aria-label="Fork" (keydown.escape)="OnViewEscape($event)">
+              <ng-container *ngTemplateOutlet="titleBar"></ng-container>
             </div>
           }
           <!-- Upload Indicator Overlay (centered in conversation area) -->
@@ -355,7 +372,7 @@
               <mj-loading [text]="uploadingMessage" size="medium"></mj-loading>
             </div>
           }
-          <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
+          <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()" (keydown.escape)="OnViewEscape($event)">
             <mj-conversation-message-list
               [showEmptyFill]="showEmptyFill"
               [showDateNavigation]="showDateNavigation"

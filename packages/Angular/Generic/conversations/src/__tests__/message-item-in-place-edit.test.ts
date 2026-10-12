@@ -30,6 +30,7 @@ function createItem(opts: Opts = {}) {
         EditResendRequested: { emit: (e: { NewText: string }) => events.push(`fork:${e.NewText}`) },
         MessageEdited: { emit: () => events.push('edited') },
         ResendInPlaceRequested: { emit: () => events.push('resend') },
+        EditingChanged: { emit: (open: boolean) => events.push(open ? 'editing' : 'closed') },
     });
     return { component, message, events, open };
 }
@@ -46,20 +47,26 @@ describe('MessageItemComponent in-place edit', () => {
         vi.restoreAllMocks();
     });
 
-    it('chooses the edit mode, label and hint from CanFork, the latest-turn role and the rail', () => {
+    it('chooses the edit mode, label, icon, note and hint from CanFork, the latest-turn role and the rail', () => {
         const fork = createItem().component;
-        expect([fork.EditMode, fork.EditSaveLabel, fork.EditHint]).toEqual(['Fork', 'Save as fork', 'Press Enter to save as a fork, Shift+Enter for a new line, Escape to cancel']);
+        expect([fork.EditMode, fork.EditSaveLabel, fork.EditSaveIcon, fork.EditNote, fork.EditHint]).toEqual(
+            ['Fork', 'Save as fork', 'fa-solid fa-code-branch', 'The original message stays here.', 'Enter saves as a fork, Shift+Enter for a new line, Escape cancels']);
         const resend = createItem({ canFork: false, inPlaceRole: 'User' }).component;
-        expect([resend.EditMode, resend.EditSaveLabel, resend.EditHint]).toEqual(['Resend', 'Save and resend', 'Press Enter to save and resend, Shift+Enter for a new line, Escape to cancel']);
+        expect([resend.EditMode, resend.EditSaveLabel, resend.EditSaveIcon, resend.EditNote, resend.EditHint]).toEqual(
+            ['Resend', 'Save and resend', 'fa-solid fa-rotate-left', 'The current answer will be replaced.', 'Enter saves and resends, Shift+Enter for a new line, Escape cancels']);
         const save = createItem({ canFork: false }).component;
-        expect([save.EditMode, save.EditSaveLabel, save.EditHint]).toEqual(['Save', 'Save', 'Press Enter to save, Shift+Enter for a new line, Escape to cancel']);
+        expect([save.EditMode, save.EditSaveLabel, save.EditSaveIcon, save.EditNote, save.EditHint]).toEqual(
+            ['Save', 'Save', 'fa-solid fa-check', null, 'Enter saves, Shift+Enter for a new line, Escape cancels']);
     });
 
-    it('offers Edit on own rows with forking off, and none on an inherited row', () => {
+    it('offers Edit on own rows, and none on an inherited row whether or not the person may fork', () => {
         expect(createItem({ canFork: false, editing: false }).component.CanEdit).toBe(true);
-        const inherited = createItem({ canFork: false, rail: 'Inherited', editing: false }).component;
-        expect(inherited.EditMode).toBeNull();
-        expect(inherited.CanEdit).toBe(false);
+        expect(createItem({ editing: false }).component.CanEdit).toBe(true);
+        for (const canFork of [false, true]) {
+            const inherited = createItem({ canFork, rail: 'Inherited', editing: false }).component;
+            expect(inherited.EditMode).toBeNull();
+            expect(inherited.CanEdit).toBe(false);
+        }
     });
 
     it('offers Regenerate with forking off only on the latest answer, with its title', () => {
@@ -73,7 +80,7 @@ describe('MessageItemComponent in-place edit', () => {
     it('hands a fork edit to the host without saving the row', async () => {
         const h = createItem();
         await h.component.SaveEdit();
-        expect(h.events).toEqual(['fork:new text']);
+        expect(h.events).toEqual(['fork:new text', 'closed']);
         expect(h.message.Message).toBe('old text');
     });
 
@@ -81,14 +88,14 @@ describe('MessageItemComponent in-place edit', () => {
         const h = createItem({ canFork: false });
         await h.component.SaveEdit();
         expect(h.message.Message).toBe('new text');
-        expect(h.events).toEqual(['save', 'edited']);
+        expect(h.events).toEqual(['save', 'closed', 'edited']);
         expect(h.component.IsEditing).toBe(false);
     });
 
     it('saves the text, then asks the host to rerun the turn, for Save and resend', async () => {
         const h = createItem({ canFork: false, inPlaceRole: 'User' });
         await h.component.SaveEdit();
-        expect(h.events).toEqual(['save', 'edited', 'resend']);
+        expect(h.events).toEqual(['save', 'closed', 'edited', 'resend']);
     });
 
     it('keeps the editor open and the old text when the save fails', async () => {
