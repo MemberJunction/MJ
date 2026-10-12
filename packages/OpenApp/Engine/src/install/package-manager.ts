@@ -265,6 +265,20 @@ function ValidateRegistryUrl(url: string): { Valid: boolean; Reason?: string } {
   return { Valid: true };
 }
 
+/**
+ * True when `url` points at the public npm registry itself. Compares the parsed host — a
+ * substring test would also accept `https://evil.example/registry.npmjs.org` and
+ * `https://registry.npmjs.org.evil.example`. An unparseable URL is not the default, so it goes
+ * on to {@link ValidateRegistryUrl}, which rejects it.
+ */
+export function IsDefaultNpmRegistry(url: string): boolean {
+  try {
+    return new URL(url).hostname.toLowerCase() === 'registry.npmjs.org';
+  } catch {
+    return false;
+  }
+}
+
 /** Default ceiling for one package install run by the app engine: 30 minutes. */
 export const DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -306,7 +320,7 @@ function BuildPackageInstallPlan(
   // Only pass --registry for non-default registries. The standard npm registry
   // (https://registry.npmjs.org) is already the default, and passing it explicitly
   // overrides scoped registry + auth token settings in .npmrc, breaking private packages.
-  const isCustomRegistry = !!registryUrl && !registryUrl.includes('registry.npmjs.org');
+  const isCustomRegistry = !!registryUrl && !IsDefaultNpmRegistry(registryUrl);
 
   // Defense-in-depth: validate the registry URL is a clean http(s) URL before using it. It is
   // passed as a literal argv element (no shell), but a malformed URL / wrong protocol is

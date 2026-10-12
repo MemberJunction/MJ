@@ -21,6 +21,7 @@ import { spawn } from 'node:child_process';
 import {
     RunPackageInstallAsync,
     ResolvePackageInstallTimeoutMs,
+    IsDefaultNpmRegistry,
     DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS,
     PACKAGE_INSTALL_TIMEOUT_ENV_VAR,
 } from '../install/package-manager.js';
@@ -118,6 +119,35 @@ describe('RunPackageInstallAsync', () => {
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('Invalid custom registry URL');
         expect(mockSpawn).not.toHaveBeenCalled();
+    });
+});
+
+describe('IsDefaultNpmRegistry', () => {
+    it('accepts the public npm registry by host', () => {
+        expect(IsDefaultNpmRegistry('https://registry.npmjs.org')).toBe(true);
+        expect(IsDefaultNpmRegistry('https://registry.npmjs.org/')).toBe(true);
+        expect(IsDefaultNpmRegistry('https://REGISTRY.npmjs.org/some/path')).toBe(true);
+    });
+
+    it('rejects look-alikes a substring test would accept', () => {
+        expect(IsDefaultNpmRegistry('https://evil.example/registry.npmjs.org')).toBe(false);
+        expect(IsDefaultNpmRegistry('https://registry.npmjs.org.evil.example')).toBe(false);
+        expect(IsDefaultNpmRegistry('https://evil.example/?r=registry.npmjs.org')).toBe(false);
+        expect(IsDefaultNpmRegistry('not a url registry.npmjs.org')).toBe(false);
+    });
+
+    it('passes a look-alike to the package manager as a custom registry', async () => {
+        const pending = RunPackageInstallAsync('/repo', false, 'https://registry.npmjs.org.evil.example', 'pnpm', 60_000);
+        child.emit('close', 0);
+        await pending;
+        expect(mockSpawn.mock.calls[0][1]).toEqual(['install', '--registry=https://registry.npmjs.org.evil.example']);
+    });
+
+    it('does not pass the default registry explicitly', async () => {
+        const pending = RunPackageInstallAsync('/repo', false, 'https://registry.npmjs.org', 'pnpm', 60_000);
+        child.emit('close', 0);
+        await pending;
+        expect(mockSpawn.mock.calls[0][1]).toEqual(['install']);
     });
 });
 
