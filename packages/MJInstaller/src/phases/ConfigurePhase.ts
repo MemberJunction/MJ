@@ -314,19 +314,45 @@ export class ConfigurePhase {
   ): Promise<InstallConfig> {
     const config = { ...partial };
 
+    // Database platform — ask first so we can set appropriate defaults
+    if (!config.DatabasePlatform) {
+      if (yes) {
+        config.DatabasePlatform = 'sqlserver';
+      } else {
+        const platformChoice = await this.promptSelect(
+          emitter,
+          'db-platform',
+          'Database platform:',
+          [
+            { Label: 'SQL Server', Value: 'sqlserver' },
+            { Label: 'PostgreSQL', Value: 'postgresql' },
+          ],
+          'sqlserver'
+        );
+        config.DatabasePlatform = platformChoice as InstallConfig['DatabasePlatform'];
+      }
+    }
+
+    // Determine default port based on platform
+    const defaultPort = config.DatabasePlatform === 'postgresql' ? 5432 : 1433;
+
     // Database settings
     config.DatabaseHost = config.DatabaseHost ?? await this.promptInput(
       emitter, 'db-host', 'Database server hostname:', 'localhost', yes
     );
     config.DatabasePort = config.DatabasePort ?? await this.promptPort(
-      emitter, 'db-port', 'Database server port:', 1433, yes
+      emitter, 'db-port', 'Database server port:', defaultPort, yes
     );
     config.DatabaseName = config.DatabaseName ?? await this.promptInput(
       emitter, 'db-name', 'Database name:', 'MemberJunction', yes
     );
-    config.DatabaseTrustCert = config.DatabaseTrustCert ?? await this.promptConfirm(
-      emitter, 'db-trust-cert', 'Trust self-signed server certificate? (common for local instances)', false, yes
-    );
+
+    // TrustCert is SQL Server only
+    config.DatabaseTrustCert = config.DatabasePlatform === 'sqlserver'
+      ? (config.DatabaseTrustCert ?? await this.promptConfirm(
+        emitter, 'db-trust-cert', 'Trust self-signed server certificate? (common for local instances)', false, yes
+      ))
+      : false;
 
     // CodeGen credentials
     config.CodeGenUser = config.CodeGenUser ?? await this.promptInput(
@@ -492,6 +518,31 @@ export class ConfigurePhase {
    */
   private async writeEnvFile(envPath: string, config: InstallConfig): Promise<void> {
     const trustCert = config.DatabaseTrustCert ? 'DB_TRUST_SERVER_CERTIFICATE=1' : '';
+
+    // Build database connection vars based on platform
+    // PostgreSQL uses PG_* env vars for CodeGen (CodeGenLib), API still uses DB_* or generic names
+    let dbVars: string;
+    if (config.DatabasePlatform === 'postgresql') {
+      dbVars = `DB_PLATFORM='postgresql'
+PG_HOST='${config.DatabaseHost}'
+PG_PORT=${config.DatabasePort}
+PG_USERNAME='${config.CodeGenUser}'
+PG_PASSWORD='${config.CodeGenPassword}'
+PG_DATABASE='${config.DatabaseName}'
+DB_USERNAME='${config.APIUser}'
+DB_PASSWORD='${config.APIPassword}'`;
+    } else {
+      dbVars = `DB_PLATFORM='sqlserver'
+DB_HOST='${config.DatabaseHost}'
+DB_PORT=${config.DatabasePort}
+CODEGEN_DB_USERNAME='${config.CodeGenUser}'
+CODEGEN_DB_PASSWORD='${config.CodeGenPassword}'
+DB_USERNAME='${config.APIUser}'
+DB_PASSWORD='${config.APIPassword}'
+DB_DATABASE='${config.DatabaseName}'
+${trustCert}`.trim();
+    }
+
     // Accept both internal-shape (`ClientID`, `TenantID`, ...) and user-facing
     // shape (`CLIENT_ID`, `TENANT_ID`, ...) keys in AuthProviderValues — see
     // generateEnvironmentFile() for rationale.
@@ -502,14 +553,7 @@ export class ConfigurePhase {
     const auth0Domain = authValues.AUTH0_DOMAIN ?? authValues.Domain ?? '';
 
     const content = `#Database Setup
-DB_HOST='${config.DatabaseHost}'
-DB_PORT=${config.DatabasePort}
-CODEGEN_DB_USERNAME='${config.CodeGenUser}'
-CODEGEN_DB_PASSWORD='${config.CodeGenPassword}'
-DB_USERNAME='${config.APIUser}'
-DB_PASSWORD='${config.APIPassword}'
-DB_DATABASE='${config.DatabaseName}'
-${trustCert}
+${dbVars}
 
 #OUTPUT CODE is used for output directories like SQL Scripts
 OUTPUT_CODE='${config.DatabaseName}'
@@ -571,9 +615,10 @@ ASK_SKIP_ORGANIZATION_ID=1
       : '';
 
     const versionSection = resolvedVersion ? `  mjRepoVersion: '${resolvedVersion}',\n` : '';
+    const dbPlatformField = config.DatabasePlatform ? `  dbPlatform: '${config.DatabasePlatform}',\n` : '';
 
     const content = `module.exports = {
-  settings: {
+${dbPlatformField}  settings: {
     host: '${config.DatabaseHost}',
     port: ${config.DatabasePort},
     database: '${config.DatabaseName}',

@@ -4,22 +4,11 @@
  * Makes sure the database exists and the CodeGen and API logins can use it, so
  * the migrate phase that follows has somewhere to run.
  *
- * 1. Generates two idempotent scripts and saves them in the install folder:
- *    - **`mj-db-setup.sql`** — creates the database (if missing), the `__mj`
- *      schema, the SQL logins, the database users, and the role grants.
- *    - **`mj-db-validate.sql`** — checks that the schema and users exist.
- * 2. Checks that SQL Server is reachable.
- * 3. Signs in as the CodeGen and API logins. If both work, the database is
- *    already set up and nothing else happens.
- * 4. Otherwise it runs `mj-db-setup.sql` itself, signed in with an administrator
- *    login (`DatabaseAdminUser` / `DatabaseAdminPassword`, or
- *    `MJ_INSTALL_DB_ADMIN_USER` / `MJ_INSTALL_DB_ADMIN_PASSWORD`). Interactive
- *    installs ask for that login, and can still choose to run the script by hand.
- *    The administrator login is used only here and is never saved.
- * 5. Signs in as both logins again to confirm the setup worked.
+ * Supports both SQL Server and PostgreSQL.
  *
  * @module phases/DatabaseProvisionPhase
- * @see SqlServerAdapter — TCP check, sign-in check, and script execution.
+ * @see SqlServerAdapter — SQL Server TCP check, sign-in check, and script execution.
+ * @see PostgresAdapter — PostgreSQL connectivity check, login verification, and script execution.
  * @see ConfigurePhase — provides the database credentials used in script generation.
  */
 
@@ -29,6 +18,7 @@ import type { PartialInstallConfig } from '../models/InstallConfig.js';
 import { InstallerError } from '../errors/InstallerError.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { SqlServerAdapter, SqlBatchError, type SqlLoginTarget } from '../adapters/SqlServerAdapter.js';
+import { PostgresAdapter } from '../adapters/PostgresAdapter.js';
 
 /**
  * Input context for the database provisioning phase.
@@ -111,309 +101,27 @@ export function SplitSqlBatches(script: string): string[] {
 }
 
 /**
- * Phase C — Generates SQL provisioning scripts and validates database connectivity.
- *
- * @example
- * ```typescript
- * const dbPhase = new DatabaseProvisionPhase();
- * const result = await dbPhase.Run({
- *   Dir: '/path/to/install',
- *   Config: { DatabaseHost: 'localhost', DatabasePort: 1433, DatabaseName: 'MJ' },
- *   Yes: false,
- *   Emitter: emitter,
- * });
- * console.log(`Scripts: ${result.ScriptsGenerated.join(', ')}`);
- * ```
+ * Quote a PostgreSQL identifier by wrapping in double quotes and doubling any
+ * inner double quotes.
  */
-export class DatabaseProvisionPhase {
-  private fileSystem = new FileSystemAdapter();
-  private sqlAdapter = new SqlServerAdapter();
+export function QuotePgIdentifier(name: string): string {
+  return `"${name.replace(/"/g, '""')}"`;
+}
 
-  /**
-   * Execute the database provisioning phase: generate the scripts, make sure
-   * SQL Server is reachable, and set the database up if it is not already.
-   *
-   * @param context - Database provision input with directory, config, mode, and emitter.
-   * @returns Script paths, whether setup was confirmed, and whether the script ran.
-   * @throws {InstallerError} `DB_UNREACHABLE` when SQL Server cannot be reached;
-   *   `DB_NOT_SET_UP` when the database is not set up and no administrator login
-   *   was given (or the user chose to run the script and it still is not);
-   *   `DB_ADMIN_LOGIN_FAILED` when the administrator login is refused;
-   *   `DB_SETUP_FAILED` when the setup script fails or leaves a login unable to sign in.
-   */
-  async Run(context: DatabaseProvisionContext): Promise<DatabaseProvisionResult> {
-    const { Config: config, Emitter: emitter } = context;
+/**
+ * Escape text for use inside a PostgreSQL `'...'` literal by doubling `'`.
+ */
+export function EscapePgString(text: string): string {
+  return text.replace(/'/g, "''");
+}
 
-    // Step 1: Generate SQL scripts
-    emitter.Emit('step:progress', {
-      Type: 'step:progress',
-      Phase: 'database',
-      Message: 'Generating database setup scripts...',
-    });
-
-    const setupScript = this.generateSetupScript(config);
-    const scriptPath = path.join(context.Dir, 'mj-db-setup.sql');
-    await this.fileSystem.WriteText(scriptPath, setupScript);
-
-    const validateScript = this.generateValidateScript(config);
-    const validatePath = path.join(context.Dir, 'mj-db-validate.sql');
-    await this.fileSystem.WriteText(validatePath, validateScript);
-    const scriptsGenerated = [scriptPath, validatePath];
-
-    emitter.Emit('log', {
-      Type: 'log',
-      Level: 'verbose',
-      Message: `SQL scripts saved to:\n  - ${scriptPath}\n  - ${validatePath}`,
-    });
-
-    // Step 2: Make sure SQL Server is reachable.
-    // Resolution order matches PreflightPhase.checkSqlConnectivity:
-    //   1. .env in context.Dir (when present) — this is what the app will actually use.
-    //   2. Explicit config.DatabaseHost / DatabasePort.
-    //   3. Defaults (localhost:1433).
-    emitter.Emit('step:progress', {
-      Type: 'step:progress',
-      Phase: 'database',
-      Message: 'Validating database connectivity...',
-    });
-
-    const envValues = await this.readEnvDbTarget(context.Dir);
-    const host = envValues?.host ?? config.DatabaseHost ?? 'localhost';
-    const port = envValues?.port ?? config.DatabasePort ?? 1433;
-    const connectivity = await this.sqlAdapter.CheckConnectivity(host, port);
-
-    if (!connectivity.Reachable) {
-      throw new InstallerError(
-        'database',
-        'DB_UNREACHABLE',
-        `Cannot connect to SQL Server at ${host}:${port}. ${connectivity.ErrorMessage ?? ''}`,
-        'Ensure SQL Server is running and reachable from this machine, then run the install again.'
-      );
-    }
-
-    emitter.Emit('log', {
-      Type: 'log',
-      Level: 'verbose',
-      Message: `SQL Server reachable at ${host}:${port} (${connectivity.LatencyMs}ms).`,
-    });
-
-    // Step 3: Is the database already set up?
-    const server = { Host: host, Port: port, TrustServerCertificate: config.DatabaseTrustCert ?? false };
-    const dbName = config.DatabaseName ?? 'MemberJunction';
-    const before = await this.checkProvisioned(server, config);
-
-    if (before.Status === 'ready') {
-      emitter.Emit('log', {
-        Type: 'log',
-        Level: 'info',
-        Message: `Database "${dbName}" is already set up; the CodeGen and API logins both sign in.`,
-      });
-      return { ScriptsGenerated: scriptsGenerated, ValidationPassed: true, SetupScriptExecuted: false };
-    }
-
-    if (before.Status === 'unknown') {
-      emitter.Emit('warn', {
-        Type: 'warn',
-        Phase: 'database',
-        Message: `Could not check whether database "${dbName}" is set up: ${before.Detail}. Continuing; if it is not set up, run ${scriptPath} as a SQL administrator.`,
-      });
-      return { ScriptsGenerated: scriptsGenerated, ValidationPassed: false, SetupScriptExecuted: false };
-    }
-
-    // Step 4: Set it up — automatically with an administrator login, or by hand.
-    emitter.Emit('log', {
-      Type: 'log',
-      Level: 'verbose',
-      Message: `Database "${dbName}" is not set up yet: ${before.Detail}.`,
-    });
-
-    const admin = await this.resolveAdminCredentials(context, server, dbName, scriptPath);
-    if (admin) {
-      await this.runSetupScript(server, admin, setupScript, scriptPath, emitter);
-    } else if (context.Yes) {
-      throw new InstallerError(
-        'database',
-        'DB_NOT_SET_UP',
-        `Database "${dbName}" is not set up: ${before.Detail}.`,
-        `Set MJ_INSTALL_DB_ADMIN_USER and MJ_INSTALL_DB_ADMIN_PASSWORD to a SQL login that can create databases and logins (such as sa) and the installer will set it up, or run ${scriptPath} as a SQL administrator. Then run the install again.`
-      );
-    } else {
-      await this.promptForScriptExecution(emitter, scriptPath);
-    }
-
-    // Step 5: Confirm both logins now work.
-    const after = await this.checkProvisioned(server, config);
-    if (after.Status === 'ready') {
-      emitter.Emit('log', {
-        Type: 'log',
-        Level: 'info',
-        Message: `Database "${dbName}" is set up; the CodeGen and API logins both sign in.`,
-      });
-      return { ScriptsGenerated: scriptsGenerated, ValidationPassed: true, SetupScriptExecuted: admin !== null };
-    }
-
-    if (after.Status === 'unknown') {
-      emitter.Emit('warn', {
-        Type: 'warn',
-        Phase: 'database',
-        Message: `Could not confirm the database setup: ${after.Detail}. Continuing.`,
-      });
-      return { ScriptsGenerated: scriptsGenerated, ValidationPassed: false, SetupScriptExecuted: admin !== null };
-    }
-
-    throw new InstallerError(
-      'database',
-      admin ? 'DB_SETUP_FAILED' : 'DB_NOT_SET_UP',
-      `Database "${dbName}" is still not usable after setup: ${after.Detail}.`,
-      `Check the output of ${scriptPath} (run it in SSMS or Azure Data Studio as a SQL administrator), then run the install again.`
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Setup check and execution
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Sign in to the target database as the CodeGen login and then the API login.
-   * A login SQL Server refuses means setup has not run; any other failure means
-   * the check could not tell.
-   */
-  private async checkProvisioned(
-    server: Omit<SqlLoginTarget, 'Database' | 'User' | 'Password'>,
-    config: PartialInstallConfig
-  ): Promise<ProvisionCheck> {
-    const database = config.DatabaseName ?? 'MemberJunction';
-    const logins = [
-      { Role: 'CodeGen', User: config.CodeGenUser ?? 'MJ_CodeGen', Password: config.CodeGenPassword ?? '' },
-      { Role: 'API', User: config.APIUser ?? 'MJ_Connect', Password: config.APIPassword ?? '' },
-    ];
-
-    for (const login of logins) {
-      const result = await this.sqlAdapter.TryLogin({ ...server, Database: database, User: login.User, Password: login.Password });
-      if (result.Ok) continue;
-      const detail = `the ${login.Role} login "${login.User}" cannot sign in to "${database}" (${result.ErrorMessage ?? 'no detail'})`;
-      return result.LoginRejected ? { Status: 'not-set-up', Detail: detail } : { Status: 'unknown', Detail: detail };
-    }
-    return { Status: 'ready' };
-  }
-
-  /**
-   * Find an administrator login to run the setup script with: from config or
-   * `MJ_INSTALL_DB_ADMIN_*` first; otherwise, interactively, by asking. The login
-   * is checked against `master` before it is used. Returns `null` when the user
-   * chooses to run the script themselves, or when nothing is configured in
-   * non-interactive mode.
-   */
-  private async resolveAdminCredentials(
-    context: DatabaseProvisionContext,
-    server: Omit<SqlLoginTarget, 'Database' | 'User' | 'Password'>,
-    dbName: string,
-    scriptPath: string
-  ): Promise<AdminCredentials | null> {
-    const { Config: config, Emitter: emitter } = context;
-
-    if (config.DatabaseAdminUser && config.DatabaseAdminPassword !== undefined) {
-      const configured = { User: config.DatabaseAdminUser, Password: config.DatabaseAdminPassword };
-      const result = await this.sqlAdapter.TryLogin({ ...server, Database: 'master', ...configured });
-      if (result.Ok) return configured;
-      throw new InstallerError(
-        'database',
-        'DB_ADMIN_LOGIN_FAILED',
-        `The administrator login "${configured.User}" could not sign in: ${result.ErrorMessage ?? 'no detail'}.`,
-        `Check DatabaseAdminUser / DatabaseAdminPassword (or MJ_INSTALL_DB_ADMIN_USER / MJ_INSTALL_DB_ADMIN_PASSWORD), or run ${scriptPath} as a SQL administrator.`
-      );
-    }
-
-    if (context.Yes) return null;
-
-    const method = await this.prompt(emitter, {
-      PromptId: 'db-setup-method',
-      PromptType: 'select',
-      Message: `Database "${dbName}" is not set up yet. How should it be set up?`,
-      Choices: [
-        { Label: 'Set it up now (you will be asked for a SQL admin login such as sa)', Value: 'auto' },
-        { Label: `I'll run ${path.basename(scriptPath)} myself`, Value: 'manual' },
-      ],
-      Default: 'auto',
-    });
-    if (method !== 'auto') return null;
-
-    for (let attempt = 1; attempt <= ADMIN_LOGIN_ATTEMPTS; attempt++) {
-      const user = await this.prompt(emitter, {
-        PromptId: 'db-admin-user',
-        PromptType: 'input',
-        Message: 'SQL admin login (needs rights to create databases and logins):',
-        Default: config.DatabaseAdminUser ?? 'sa',
-      });
-      const password = await this.prompt(emitter, {
-        PromptId: 'db-admin-password',
-        PromptType: 'password',
-        Message: `Password for ${user}:`,
-      });
-      const result = await this.sqlAdapter.TryLogin({ ...server, Database: 'master', User: user, Password: password });
-      if (result.Ok) return { User: user, Password: password };
-      emitter.Emit('warn', {
-        Type: 'warn',
-        Phase: 'database',
-        Message: `"${user}" could not sign in: ${result.ErrorMessage ?? 'no detail'}`,
-      });
-    }
-
-    throw new InstallerError(
-      'database',
-      'DB_ADMIN_LOGIN_FAILED',
-      `No administrator login could sign in after ${ADMIN_LOGIN_ATTEMPTS} attempts.`,
-      `Run ${scriptPath} as a SQL administrator, then run the install again.`
-    );
-  }
-
-  /** Run the setup script batch by batch as the administrator login. */
-  private async runSetupScript(
-    server: Omit<SqlLoginTarget, 'Database' | 'User' | 'Password'>,
-    admin: AdminCredentials,
-    setupScript: string,
-    scriptPath: string,
-    emitter: InstallerEventEmitter
-  ): Promise<void> {
-    emitter.Emit('log', {
-      Type: 'log',
-      Level: 'info',
-      Message: `Setting up the database as "${admin.User}" (running ${path.basename(scriptPath)})...`,
-    });
-
-    try {
-      await this.sqlAdapter.ExecuteBatches(
-        { ...server, Database: 'master', User: admin.User, Password: admin.Password },
-        SplitSqlBatches(setupScript),
-        (message) => emitter.Emit('log', { Type: 'log', Level: 'verbose', Message: `    ${message}` })
-      );
-    } catch (err) {
-      const where = err instanceof SqlBatchError ? ` (batch ${err.BatchNumber})` : '';
-      throw new InstallerError(
-        'database',
-        'DB_SETUP_FAILED',
-        `${path.basename(scriptPath)} failed${where}: ${err instanceof Error ? err.message : String(err)}`,
-        `Make sure "${admin.User}" can create databases and logins, or run ${scriptPath} yourself as a SQL administrator. Then run the install again.`
-      );
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // SQL script generation
-  // ---------------------------------------------------------------------------
-
+/**
+ * SQL Server script generation for database provisioning.
+ */
+class SqlServerScriptGenerator {
   /**
    * Returns true when `userName` is a SQL Server built-in sysadmin principal that
    * cannot be the target of `CREATE LOGIN` / `CREATE USER` / role-grant statements.
-   *
-   * The only such principal we expect to see at this layer is `sa` — but case-
-   * insensitive because SQL Server itself treats logins as case-insensitive by
-   * default. Without this guard, an install that configures `sa` as the CodeGen
-   * or API user (a common pattern in dev / Docker / single-user setups) produces
-   * `Msg 15405, Cannot use the special principal 'sa'` errors throughout setup.
-   * The database itself still gets created (step 1 succeeds before any sa-specific
-   * statement runs), but the visible errors are confusing and the script reports
-   * partial failure.
    */
   private isBuiltInSysadmin(userName: string): boolean {
     return userName.trim().toLowerCase() === 'sa';
@@ -477,15 +185,7 @@ GO`;
 GO`;
   }
 
-  /**
-   * SQL asserting that `user` exists in the database, or a self-reporting
-   * pass-comment for a built-in sysadmin.
-   *
-   * `sa` maps to `dbo` and never appears in `sys.database_principals`, so the
-   * plain existence check reports `[FAIL] User sa NOT found` on a perfectly
-   * correct setup. The setup emitter already skips sa-specific DDL for the same
-   * reason (Msg 15405); validation has to agree with it.
-   */
+  /** SQL asserting that `user` exists in the database. */
   private validateUserBlock(user: string): string {
     if (this.isBuiltInSysadmin(user)) {
       return `PRINT '[PASS] User ${EscapeSqlString(user)} is a built-in sysadmin (maps to dbo; no database principal expected)';`;
@@ -496,7 +196,7 @@ ELSE
     PRINT '[FAIL] User ${EscapeSqlString(user)} NOT found';`;
   }
 
-  private generateSetupScript(config: PartialInstallConfig): string {
+  GenerateSetupScript(config: PartialInstallConfig): string {
     const dbName = config.DatabaseName ?? 'MemberJunction';
     const codeGenUser = config.CodeGenUser ?? 'MJ_CodeGen';
     const codeGenPassword = config.CodeGenPassword ?? 'CHANGE_ME';
@@ -576,7 +276,7 @@ PRINT 'API user: ${EscapeSqlString(apiUser)}';
 `;
   }
 
-  private generateValidateScript(config: PartialInstallConfig): string {
+  GenerateValidateScript(config: PartialInstallConfig): string {
     const dbName = config.DatabaseName ?? 'MemberJunction';
     const codeGenUser = config.CodeGenUser ?? 'MJ_CodeGen';
     const apiUser = config.APIUser ?? 'MJ_Connect';
@@ -606,6 +306,566 @@ PRINT '';
 PRINT '=== Validation complete ===';
 `;
   }
+}
+
+/**
+ * PostgreSQL script generation for database provisioning.
+ */
+class PostgreSQLScriptGenerator {
+  GenerateSetupScript(config: PartialInstallConfig): string {
+    const dbName = config.DatabaseName ?? 'MemberJunction';
+    const codeGenUser = config.CodeGenUser ?? 'mj_codegen';
+    const codeGenPassword = config.CodeGenPassword ?? 'CHANGE_ME';
+    const apiUser = config.APIUser ?? 'mj_connect';
+    const apiPassword = config.APIPassword ?? 'CHANGE_ME';
+
+    return `-- MemberJunction Database Setup Script (PostgreSQL)
+-- Generated by MJ Installer
+-- This script is idempotent (safe to run multiple times)
+--
+-- Run this script as the 'postgres' superuser:
+--   psql -h localhost -U postgres -f mj-db-setup.sql
+--
+-- Note: The database creation must happen outside a transaction/DO block,
+-- so you must run this script using psql, not via a prepared statement.
+
+-- ============================================================================
+-- This script assumes it is being run via psql (not within a DO block).
+-- It will execute the following as separate commands:
+-- ============================================================================
+
+-- Step 1: Create database if not exists
+-- (This must be run outside a transaction, so psql must execute it directly)
+
+-- Step 2: Create extensions and roles in the target database
+-- (This uses a DO block since it needs transaction context)
+
+-- Step 3: Create schema and grant privileges
+-- (This also uses a DO block)
+
+DO \\$\\$
+DECLARE
+    v_db_exists boolean;
+    v_role_exists boolean;
+BEGIN
+    -- Check if database exists
+    SELECT EXISTS(
+        SELECT 1 FROM pg_database WHERE datname = '${EscapePgString(dbName)}'
+    ) INTO v_db_exists;
+
+    IF NOT v_db_exists THEN
+        RAISE NOTICE 'Creating database: ${EscapePgString(dbName)}';
+        EXECUTE 'CREATE DATABASE ${QuotePgIdentifier(dbName)}';
+    ELSE
+        RAISE NOTICE 'Database already exists: ${EscapePgString(dbName)}';
+    END IF;
+END \\$\\$;
+
+-- Connect to the target database for the remaining setup
+\\c ${QuotePgIdentifier(dbName)}
+
+-- Create extensions if not present
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Create roles (logins) if not present
+DO \\$\\$
+BEGIN
+    -- Create CodeGen role if it doesn't exist
+    IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = '${EscapePgString(codeGenUser)}') THEN
+        RAISE NOTICE 'Creating role: ${EscapePgString(codeGenUser)}';
+        EXECUTE 'CREATE USER ${QuotePgIdentifier(codeGenUser)} WITH PASSWORD ' || quote_literal('${EscapePgString(codeGenPassword)}') || ' LOGIN';
+    ELSE
+        RAISE NOTICE 'Role already exists: ${EscapePgString(codeGenUser)}';
+    END IF;
+
+    -- Create API role if it doesn't exist
+    IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = '${EscapePgString(apiUser)}') THEN
+        RAISE NOTICE 'Creating role: ${EscapePgString(apiUser)}';
+        EXECUTE 'CREATE USER ${QuotePgIdentifier(apiUser)} WITH PASSWORD ' || quote_literal('${EscapePgString(apiPassword)}') || ' LOGIN';
+    ELSE
+        RAISE NOTICE 'Role already exists: ${EscapePgString(apiUser)}';
+    END IF;
+END \\$\\$;
+
+-- Create schema if not present
+CREATE SCHEMA IF NOT EXISTS __mj;
+
+-- Grant ownership to CodeGen role
+ALTER SCHEMA __mj OWNER TO ${QuotePgIdentifier(codeGenUser)};
+
+-- Grant privileges on schema to API role
+GRANT USAGE ON SCHEMA __mj TO ${QuotePgIdentifier(apiUser)};
+GRANT USAGE ON SCHEMA public TO ${QuotePgIdentifier(apiUser)};
+
+-- Grant privileges on existing and future tables
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA __mj TO ${QuotePgIdentifier(apiUser)};
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${QuotePgIdentifier(apiUser)};
+
+-- Grant privileges on sequences
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA __mj TO ${QuotePgIdentifier(apiUser)};
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${QuotePgIdentifier(apiUser)};
+
+-- Grant privileges on functions/procedures
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA __mj TO ${QuotePgIdentifier(apiUser)};
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${QuotePgIdentifier(apiUser)};
+GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA __mj TO ${QuotePgIdentifier(apiUser)};
+GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA public TO ${QuotePgIdentifier(apiUser)};
+
+-- Set default privileges for future objects (CodeGen creates these)
+ALTER DEFAULT PRIVILEGES FOR USER ${QuotePgIdentifier(codeGenUser)} IN SCHEMA __mj
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${QuotePgIdentifier(apiUser)};
+ALTER DEFAULT PRIVILEGES FOR USER ${QuotePgIdentifier(codeGenUser)} IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${QuotePgIdentifier(apiUser)};
+ALTER DEFAULT PRIVILEGES FOR USER ${QuotePgIdentifier(codeGenUser)} IN SCHEMA __mj
+  GRANT USAGE, SELECT ON SEQUENCES TO ${QuotePgIdentifier(apiUser)};
+ALTER DEFAULT PRIVILEGES FOR USER ${QuotePgIdentifier(codeGenUser)} IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO ${QuotePgIdentifier(apiUser)};
+ALTER DEFAULT PRIVILEGES FOR USER ${QuotePgIdentifier(codeGenUser)} IN SCHEMA __mj
+  GRANT EXECUTE ON FUNCTIONS TO ${QuotePgIdentifier(apiUser)};
+ALTER DEFAULT PRIVILEGES FOR USER ${QuotePgIdentifier(codeGenUser)} IN SCHEMA public
+  GRANT EXECUTE ON FUNCTIONS TO ${QuotePgIdentifier(apiUser)};
+ALTER DEFAULT PRIVILEGES FOR USER ${QuotePgIdentifier(codeGenUser)} IN SCHEMA __mj
+  GRANT EXECUTE ON PROCEDURES TO ${QuotePgIdentifier(apiUser)};
+ALTER DEFAULT PRIVILEGES FOR USER ${QuotePgIdentifier(codeGenUser)} IN SCHEMA public
+  GRANT EXECUTE ON PROCEDURES TO ${QuotePgIdentifier(apiUser)};
+
+-- CodeGen role needs elevated permissions
+ALTER ROLE ${QuotePgIdentifier(codeGenUser)} CREATEDB CREATEROLE;
+GRANT ALL PRIVILEGES ON DATABASE ${QuotePgIdentifier(dbName)} TO ${QuotePgIdentifier(codeGenUser)};
+GRANT ALL PRIVILEGES ON SCHEMA __mj TO ${QuotePgIdentifier(codeGenUser)};
+GRANT ALL PRIVILEGES ON SCHEMA public TO ${QuotePgIdentifier(codeGenUser)};
+ALTER DEFAULT PRIVILEGES IN SCHEMA __mj GRANT ALL ON TABLES TO ${QuotePgIdentifier(codeGenUser)};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${QuotePgIdentifier(codeGenUser)};
+
+-- Final message
+SELECT 'MemberJunction database setup complete' as "Status";
+`;
+  }
+
+  GenerateValidateScript(config: PartialInstallConfig): string {
+    const dbName = config.DatabaseName ?? 'MemberJunction';
+    const codeGenUser = config.CodeGenUser ?? 'mj_codegen';
+    const apiUser = config.APIUser ?? 'mj_connect';
+
+    return `-- MemberJunction Database Validation Script (PostgreSQL)
+-- Generated by MJ Installer
+-- Run this to verify the database setup is correct.
+--
+-- psql -h localhost -U postgres -d ${QuotePgIdentifier(dbName)} -f mj-db-validate.sql
+
+DO \\$\\$
+BEGIN
+    RAISE NOTICE 'Checking database: ${EscapePgString(dbName)}';
+    RAISE NOTICE '';
+
+    -- Check __mj schema
+    IF EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = '__mj') THEN
+        RAISE NOTICE '[PASS] __mj schema exists';
+    ELSE
+        RAISE NOTICE '[FAIL] __mj schema NOT found';
+    END IF;
+
+    -- Check CodeGen role
+    IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname = '${EscapePgString(codeGenUser)}') THEN
+        RAISE NOTICE '[PASS] CodeGen role exists: ${EscapePgString(codeGenUser)}';
+    ELSE
+        RAISE NOTICE '[FAIL] CodeGen role NOT found: ${EscapePgString(codeGenUser)}';
+    END IF;
+
+    -- Check API role
+    IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname = '${EscapePgString(apiUser)}') THEN
+        RAISE NOTICE '[PASS] API role exists: ${EscapePgString(apiUser)}';
+    ELSE
+        RAISE NOTICE '[FAIL] API role NOT found: ${EscapePgString(apiUser)}';
+    END IF;
+
+    RAISE NOTICE '';
+    RAISE NOTICE '=== Validation complete ===';
+END \\$\\$;
+`;
+  }
+}
+
+/**
+ * Phase C — Generates SQL provisioning scripts and validates database connectivity.
+ *
+ * @example
+ * ```typescript
+ * const dbPhase = new DatabaseProvisionPhase();
+ * const result = await dbPhase.Run({
+ *   Dir: '/path/to/install',
+ *   Config: { DatabasePlatform: 'postgresql', DatabaseHost: 'localhost', DatabasePort: 5432, DatabaseName: 'MJ' },
+ *   Yes: false,
+ *   Emitter: emitter,
+ * });
+ * console.log(`Scripts: ${result.ScriptsGenerated.join(', ')}`);
+ * ```
+ */
+export class DatabaseProvisionPhase {
+  private fileSystem = new FileSystemAdapter();
+  private sqlAdapter = new SqlServerAdapter();
+  private pgAdapter = new PostgresAdapter();
+
+  /**
+   * Execute the database provisioning phase: generate the scripts, make sure
+   * the database server is reachable, and set the database up if it is not already.
+   *
+   * @param context - Database provision input with directory, config, mode, and emitter.
+   * @returns Script paths, whether setup was confirmed, and whether the script ran.
+   * @throws {InstallerError} `DB_UNREACHABLE` when the database server cannot be reached;
+   *   `DB_NOT_SET_UP` when the database is not set up and no administrator login
+   *   was given (or the user chose to run the script and it still is not);
+   *   `DB_ADMIN_LOGIN_FAILED` when the administrator login is refused;
+   *   `DB_SETUP_FAILED` when the setup script fails or leaves a login unable to sign in.
+   */
+  async Run(context: DatabaseProvisionContext): Promise<DatabaseProvisionResult> {
+    const { Config: config, Emitter: emitter } = context;
+    const platform = config.DatabasePlatform ?? 'sqlserver';
+
+    // Step 1: Generate SQL scripts
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'database',
+      Message: 'Generating database setup scripts...',
+    });
+
+    const [setupScript, validateScript] = this.generateScripts(platform, config);
+    const scriptPath = path.join(context.Dir, 'mj-db-setup.sql');
+    const validatePath = path.join(context.Dir, 'mj-db-validate.sql');
+    await this.fileSystem.WriteText(scriptPath, setupScript);
+    await this.fileSystem.WriteText(validatePath, validateScript);
+    const scriptsGenerated = [scriptPath, validatePath];
+
+    emitter.Emit('log', {
+      Type: 'log',
+      Level: 'verbose',
+      Message: `SQL scripts saved to:\n  - ${scriptPath}\n  - ${validatePath}`,
+    });
+
+    // Step 2: Check connectivity to the database server
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'database',
+      Message: 'Validating database connectivity...',
+    });
+
+    const envValues = await this.readEnvDbTarget(context.Dir);
+    const host = envValues?.host ?? config.DatabaseHost ?? 'localhost';
+    const defaultPort = platform === 'postgresql' ? 5432 : 1433;
+    const port = envValues?.port ?? config.DatabasePort ?? defaultPort;
+
+    const connectivity = platform === 'postgresql'
+      ? await this.pgAdapter.CheckConnectivity(host, port)
+      : await this.sqlAdapter.CheckConnectivity(host, port);
+
+    if (!connectivity.Reachable) {
+      const dbType = platform === 'postgresql' ? 'PostgreSQL' : 'SQL Server';
+      throw new InstallerError(
+        'database',
+        'DB_UNREACHABLE',
+        `Cannot connect to ${dbType} at ${host}:${port}. ${connectivity.ErrorMessage ?? ''}`,
+        `Ensure ${dbType} is running and reachable from this machine, then run the install again.`
+      );
+    }
+
+    emitter.Emit('log', {
+      Type: 'log',
+      Level: 'verbose',
+      Message: `Database server reachable at ${host}:${port} (${connectivity.LatencyMs}ms).`,
+    });
+
+    // Step 3: Is the database already set up?
+    const dbName = config.DatabaseName ?? 'MemberJunction';
+    const before = await this.checkProvisioned(platform, host, port, config);
+
+    if (before.Status === 'ready') {
+      emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: `Database "${dbName}" is already set up; both logins can connect.`,
+      });
+      return { ScriptsGenerated: scriptsGenerated, ValidationPassed: true, SetupScriptExecuted: false };
+    }
+
+    if (before.Status === 'unknown') {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'database',
+        Message: `Could not check whether database "${dbName}" is set up: ${before.Detail}. Continuing; if it is not set up, run ${scriptPath} as a database administrator.`,
+      });
+      return { ScriptsGenerated: scriptsGenerated, ValidationPassed: false, SetupScriptExecuted: false };
+    }
+
+    // Step 4: Set it up — automatically with administrator credentials, or by hand.
+    emitter.Emit('log', {
+      Type: 'log',
+      Level: 'verbose',
+      Message: `Database "${dbName}" is not set up yet: ${before.Detail}.`,
+    });
+
+    const admin = await this.resolveAdminCredentials(context, platform, host, port, dbName, scriptPath);
+    if (admin) {
+      await this.runSetupScript(platform, host, port, admin, setupScript, scriptPath, emitter);
+    } else if (context.Yes) {
+      const dbType = platform === 'postgresql' ? 'PostgreSQL' : 'SQL Server';
+      throw new InstallerError(
+        'database',
+        'DB_NOT_SET_UP',
+        `Database "${dbName}" is not set up: ${before.Detail}.`,
+        `Set MJ_INSTALL_DB_ADMIN_USER and MJ_INSTALL_DB_ADMIN_PASSWORD to a login that can create databases (such as 'postgres' for PostgreSQL or 'sa' for SQL Server) and the installer will set it up, or run ${scriptPath} as a ${dbType} administrator. Then run the install again.`
+      );
+    } else {
+      await this.promptForScriptExecution(emitter, scriptPath);
+    }
+
+    // Step 5: Confirm both logins now work.
+    const after = await this.checkProvisioned(platform, host, port, config);
+    if (after.Status === 'ready') {
+      emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: `Database "${dbName}" is set up; both logins can connect.`,
+      });
+      return { ScriptsGenerated: scriptsGenerated, ValidationPassed: true, SetupScriptExecuted: admin !== null };
+    }
+
+    if (after.Status === 'unknown') {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'database',
+        Message: `Could not confirm the database setup: ${after.Detail}. Continuing.`,
+      });
+      return { ScriptsGenerated: scriptsGenerated, ValidationPassed: false, SetupScriptExecuted: admin !== null };
+    }
+
+    throw new InstallerError(
+      'database',
+      admin ? 'DB_SETUP_FAILED' : 'DB_NOT_SET_UP',
+      `Database "${dbName}" is still not usable after setup: ${after.Detail}.`,
+      `Check the output of ${scriptPath}, then run the install again.`
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Platform-specific helpers
+  // ---------------------------------------------------------------------------
+
+  private generateScripts(platform: string, config: PartialInstallConfig): [string, string] {
+    if (platform === 'postgresql') {
+      const gen = new PostgreSQLScriptGenerator();
+      return [gen.GenerateSetupScript(config), gen.GenerateValidateScript(config)];
+    }
+    const gen = new SqlServerScriptGenerator();
+    return [gen.GenerateSetupScript(config), gen.GenerateValidateScript(config)];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Setup check and execution
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Try to connect as both the CodeGen and API logins to verify provisioning.
+   */
+  private async checkProvisioned(
+    platform: string,
+    host: string,
+    port: number,
+    config: PartialInstallConfig
+  ): Promise<ProvisionCheck> {
+    const database = config.DatabaseName ?? 'MemberJunction';
+    const logins = [
+      { Role: 'CodeGen', User: config.CodeGenUser ?? (platform === 'postgresql' ? 'mj_codegen' : 'MJ_CodeGen'), Password: config.CodeGenPassword ?? '' },
+      { Role: 'API', User: config.APIUser ?? (platform === 'postgresql' ? 'mj_connect' : 'MJ_Connect'), Password: config.APIPassword ?? '' },
+    ];
+
+    for (const login of logins) {
+      if (platform === 'postgresql') {
+        const result = await this.pgAdapter.TryLogin(host, port, login.User, login.Password, database);
+        if (result.Success) continue;
+        if (result.IsLoginRejected || result.IsDatabaseMissing) {
+          const detail = `the ${login.Role} login "${login.User}" cannot connect to database "${database}"`;
+          return { Status: 'not-set-up', Detail: detail };
+        }
+        const detail = `the ${login.Role} login "${login.User}" failed to connect (${result.ErrorMessage ?? 'unknown error'})`;
+        return { Status: 'unknown', Detail: detail };
+      } else {
+        const result = await this.sqlAdapter.TryLogin({
+          Host: host,
+          Port: port,
+          TrustServerCertificate: config.DatabaseTrustCert ?? false,
+          Database: database,
+          User: login.User,
+          Password: login.Password,
+        });
+        if (result.Ok) continue;
+        const detail = `the ${login.Role} login "${login.User}" cannot sign in to "${database}" (${result.ErrorMessage ?? 'no detail'})`;
+        return result.LoginRejected ? { Status: 'not-set-up', Detail: detail } : { Status: 'unknown', Detail: detail };
+      }
+    }
+    return { Status: 'ready' };
+  }
+
+  /**
+   * Find administrator credentials to run the setup script with.
+   */
+  private async resolveAdminCredentials(
+    context: DatabaseProvisionContext,
+    platform: string,
+    host: string,
+    port: number,
+    dbName: string,
+    scriptPath: string
+  ): Promise<AdminCredentials | null> {
+    const { Config: config, Emitter: emitter } = context;
+
+    if (config.DatabaseAdminUser && config.DatabaseAdminPassword !== undefined) {
+      const configured = { User: config.DatabaseAdminUser, Password: config.DatabaseAdminPassword };
+      if (platform === 'postgresql') {
+        const result = await this.pgAdapter.TryLogin(host, port, configured.User, configured.Password, 'postgres');
+        if (result.Success) return configured;
+        throw new InstallerError(
+          'database',
+          'DB_ADMIN_LOGIN_FAILED',
+          `The administrator login "${configured.User}" could not sign in: ${result.ErrorMessage ?? 'no detail'}.`,
+          `Check DatabaseAdminUser / DatabaseAdminPassword (or MJ_INSTALL_DB_ADMIN_USER / MJ_INSTALL_DB_ADMIN_PASSWORD), or run ${scriptPath} as a database administrator.`
+        );
+      } else {
+        const result = await this.sqlAdapter.TryLogin({
+          Host: host,
+          Port: port,
+          TrustServerCertificate: config.DatabaseTrustCert ?? false,
+          Database: 'master',
+          User: configured.User,
+          Password: configured.Password,
+        });
+        if (result.Ok) return configured;
+        throw new InstallerError(
+          'database',
+          'DB_ADMIN_LOGIN_FAILED',
+          `The administrator login "${configured.User}" could not sign in: ${result.ErrorMessage ?? 'no detail'}.`,
+          `Check DatabaseAdminUser / DatabaseAdminPassword (or MJ_INSTALL_DB_ADMIN_USER / MJ_INSTALL_DB_ADMIN_PASSWORD), or run ${scriptPath} as a SQL administrator.`
+        );
+      }
+    }
+
+    if (context.Yes) return null;
+
+    const dbType = platform === 'postgresql' ? 'PostgreSQL' : 'SQL Server';
+    const defaultAdmin = platform === 'postgresql' ? 'postgres' : 'sa';
+
+    const method = await this.prompt(emitter, {
+      PromptId: 'db-setup-method',
+      PromptType: 'select',
+      Message: `Database "${dbName}" is not set up yet. How should it be set up?`,
+      Choices: [
+        { Label: `Set it up now (you will be asked for a ${dbType} admin login such as ${defaultAdmin})`, Value: 'auto' },
+        { Label: `I'll run ${path.basename(scriptPath)} myself`, Value: 'manual' },
+      ],
+      Default: 'auto',
+    });
+    if (method !== 'auto') return null;
+
+    for (let attempt = 1; attempt <= ADMIN_LOGIN_ATTEMPTS; attempt++) {
+      const user = await this.prompt(emitter, {
+        PromptId: 'db-admin-user',
+        PromptType: 'input',
+        Message: `${dbType} admin login (needs rights to create databases and users):`,
+        Default: config.DatabaseAdminUser ?? defaultAdmin,
+      });
+      const password = await this.prompt(emitter, {
+        PromptId: 'db-admin-password',
+        PromptType: 'password',
+        Message: `Password for ${user}:`,
+      });
+
+      if (platform === 'postgresql') {
+        const result = await this.pgAdapter.TryLogin(host, port, user, password, 'postgres');
+        if (result.Success) return { User: user, Password: password };
+        emitter.Emit('warn', {
+          Type: 'warn',
+          Phase: 'database',
+          Message: `"${user}" could not sign in: ${result.ErrorMessage ?? 'no detail'}`,
+        });
+      } else {
+        const result = await this.sqlAdapter.TryLogin({
+          Host: host,
+          Port: port,
+          TrustServerCertificate: config.DatabaseTrustCert ?? false,
+          Database: 'master',
+          User: user,
+          Password: password,
+        });
+        if (result.Ok) return { User: user, Password: password };
+        emitter.Emit('warn', {
+          Type: 'warn',
+          Phase: 'database',
+          Message: `"${user}" could not sign in: ${result.ErrorMessage ?? 'no detail'}`,
+        });
+      }
+    }
+
+    throw new InstallerError(
+      'database',
+      'DB_ADMIN_LOGIN_FAILED',
+      `No administrator login could sign in after ${ADMIN_LOGIN_ATTEMPTS} attempts.`,
+      `Run ${scriptPath} as a ${dbType} administrator, then run the install again.`
+    );
+  }
+
+  /** Run the setup script. */
+  private async runSetupScript(
+    platform: string,
+    host: string,
+    port: number,
+    admin: AdminCredentials,
+    setupScript: string,
+    scriptPath: string,
+    emitter: InstallerEventEmitter
+  ): Promise<void> {
+    emitter.Emit('log', {
+      Type: 'log',
+      Level: 'info',
+      Message: `Setting up the database as "${admin.User}" (running ${path.basename(scriptPath)})...`,
+    });
+
+    try {
+      if (platform === 'postgresql') {
+        const result = await this.pgAdapter.ExecuteScript(
+          host,
+          port,
+          'postgres',
+          admin.User,
+          admin.Password,
+          setupScript
+        );
+        if (!result.Success) {
+          throw new Error(result.ErrorMessage ?? 'unknown error');
+        }
+      } else {
+        await this.sqlAdapter.ExecuteBatches(
+          {
+            Host: host,
+            Port: port,
+            TrustServerCertificate: false,
+            Database: 'master',
+            User: admin.User,
+            Password: admin.Password,
+          },
+          SplitSqlBatches(setupScript),
+          (message) => emitter.Emit('log', { Type: 'log', Level: 'verbose', Message: `    ${message}` })
+        );
+      }
+    } catch (err) {
+      const where = err instanceof SqlBatchError ? ` (batch ${err.BatchNumber})` : '';
+      throw new InstallerError(
+        'database',
+        'DB_SETUP_FAILED',
+        `${path.basename(scriptPath)} failed${where}: ${err instanceof Error ? err.message : String(err)}`,
+        `Make sure "${admin.User}" has the necessary privileges, or run ${scriptPath} yourself as a database administrator. Then run the install again.`
+      );
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Prompt helper
@@ -618,7 +878,7 @@ PRINT '=== Validation complete ===';
     await this.prompt(emitter, {
       PromptId: 'run-db-script',
       PromptType: 'confirm',
-      Message: `Please run "${scriptPath}" in SSMS or Azure Data Studio as a SQL administrator, then confirm to continue.`,
+      Message: `Please run "${scriptPath}" as a database administrator, then confirm to continue.`,
       Default: 'yes',
     });
   }
@@ -635,19 +895,6 @@ PRINT '=== Validation complete ===';
 
   /**
    * Best-effort read of `<targetDir>/.env` to extract the database host/port.
-   * Returns null when no `.env` exists or neither key is set, letting the
-   * caller fall back to config / defaults. Errors are swallowed silently —
-   * this is a diagnostic enhancement, not a hard requirement.
-   *
-   * Reads `PG_HOST` / `PG_PORT` first, then falls back to `DB_HOST` / `DB_PORT`
-   * so a PostgreSQL install with PG-named env vars doesn't yield a stale
-   * connectivity target. Matches codegen-lib's `DEFAULT_CODEGEN_CONFIG`
-   * env-var precedence and {@link PreflightPhase.readEnvDbTarget}.
-   *
-   * Mirrors {@link PreflightPhase.readEnvDbTarget} — kept duplicated rather
-   * than extracted because the two phases shouldn't be coupled through a
-   * shared helper for a small piece of optional logic. Keep both copies in
-   * sync when changing key precedence.
    */
   private async readEnvDbTarget(targetDir: string): Promise<{ host?: string; port?: number } | null> {
     const envPath = path.join(targetDir, '.env');
@@ -669,8 +916,7 @@ PRINT '=== Validation complete ===';
   }
 
   /**
-   * Minimal dotenv-style key extractor — handles `KEY=value`, `KEY='value'`,
-   * `KEY="value"`, ignores `#` comments and blank lines.
+   * Minimal dotenv-style key extractor.
    */
   private parseDotenvValue(content: string, key: string): string | undefined {
     const lines = content.split(/\r?\n/);

@@ -22,18 +22,23 @@
 import fs from 'node:fs/promises';
 import type { PackageManagerType } from './PackageManager.js';
 export interface InstallConfig {
+  // ── Database platform ────────────────────────────────────────────────
+
+  /** Database platform: SQL Server or PostgreSQL (default: `'sqlserver'`). */
+  DatabasePlatform: 'sqlserver' | 'postgresql';
+
   // ── Database ──────────────────────────────────────────────────────────
 
-  /** SQL Server hostname or IP address (default: `"localhost"`). */
+  /** Database hostname or IP address (default: `"localhost"`). */
   DatabaseHost: string;
 
-  /** SQL Server TCP port (default: `1433`). */
+  /** Database TCP port (default: `1433` for SQL Server, `5432` for PostgreSQL). */
   DatabasePort: number;
 
   /** Target database name (common value: `"MemberJunction"`; no auto-applied default). */
   DatabaseName: string;
 
-  /** Whether to trust self-signed TLS certificates (common for local dev instances). */
+  /** Whether to trust self-signed TLS certificates (SQL Server only; common for local dev instances). */
   DatabaseTrustCert: boolean;
 
   // ── CodeGen credentials ───────────────────────────────────────────────
@@ -201,6 +206,7 @@ const ENV_VAR_MAP: ReadonlyArray<{
   Field: keyof InstallConfig;
   Parse: (value: string) => unknown;
 }> = [
+  { EnvVar: 'MJ_INSTALL_DB_PLATFORM',       Field: 'DatabasePlatform', Parse: (v) => v as InstallConfig['DatabasePlatform'] },
   { EnvVar: 'MJ_INSTALL_DB_HOST',           Field: 'DatabaseHost',     Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_DB_PORT',           Field: 'DatabasePort',     Parse: (v) => parseInt(v, 10) },
   { EnvVar: 'MJ_INSTALL_DB_NAME',           Field: 'DatabaseName',     Parse: (v) => v },
@@ -306,7 +312,8 @@ export function resolveFromEnvironment(): PartialInstallConfig {
 
 /** Canonical PascalCase keys accepted in `install.config.json`. */
 const KNOWN_KEYS: ReadonlySet<string> = new Set<string>([
-  'DatabaseHost', 'DatabasePort', 'DatabaseName', 'DatabaseTrustCert',
+  'DatabasePlatform', 'DatabaseHost', 'DatabasePort', 'DatabaseName', 'DatabaseTrustCert',
+  'DatabaseAdminUser', 'DatabaseAdminPassword',
   'CodeGenUser', 'CodeGenPassword', 'APIUser', 'APIPassword',
   'APIPort', 'ExplorerPort', 'AuthProvider', 'AuthProviderValues',
   'OpenAIKey', 'AnthropicKey', 'MistralKey', 'BaseEncryptionKey', 'InstallMode', 'CreateNewUser',
