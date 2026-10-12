@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, ChangeDetectorRef, AfterViewInit, OnDestroy, inject } from '@angular/core';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ComposerTriggerProvider, MentionSuggestion } from '../../composer-trigger-provider';
 import { MentionEditorComponent, PendingAttachment } from '../mention/mention-editor.component';
@@ -19,14 +19,123 @@ import { BeforeSkillsOpenedEventArgs } from '../../events/composer-events';
  * - Artifact creation
  * - Conversation management
  */
+/** Geometry for {@link NeedsActionsRow}, all in px. */
+export interface ActionsRowGeometry {
+  /** The editor's top padding. */
+  PadTop: number;
+  /** The editor's own bottom padding (without the button strip). */
+  PadBottom: number;
+  /** The editor's minimum height. */
+  MinHeight: number;
+  /** Height of the text itself (at least one line). */
+  TextHeight: number;
+  /** Band at the bottom of the editor the floating buttons cover, plus a small gap. */
+  ButtonZone: number;
+  /** Whether the strip is currently on (its padding is then not part of the editor's resting height). */
+  RowOn: boolean;
+}
+
+/**
+ * Whether the composer's text would reach the floating buttons, so they need their own strip below the text.
+ * Decided from where the text would END without the strip, never from the editor's current box, so turning the
+ * strip on cannot flip the answer back off.
+ */
+export function NeedsActionsRow(g: ActionsRowGeometry): boolean {
+  const resting = Math.max(g.MinHeight, g.PadTop + g.TextHeight + (g.RowOn ? 0 : g.PadBottom));
+  return g.PadTop + g.TextHeight > resting - g.ButtonZone;
+}
+
 @Component({
   standalone: false,
   selector: 'mj-message-input-box',
   templateUrl: './message-input-box.component.html',
   styleUrls: ['./message-input-box.component.css']
 })
-export class MessageInputBoxComponent {
+export class MessageInputBoxComponent implements AfterViewInit, OnDestroy {
   @ViewChild('mentionEditor') MentionEditor?: MentionEditorComponent;
+  @ViewChild('inputWrapper') private inputWrapper?: ElementRef<HTMLElement>;
+
+  /**
+   * True when the text would reach the floating buttons in the bottom-right corner, so the editor adds a strip
+   * for them below the text (the ChatGPT pattern). False while the text stays clear of them.
+   */
+  public ActionsRow = false;
+  /** Height (px) of the strip reserved for the buttons when {@link ActionsRow} is on. */
+  public ActionsRowPx: number | null = null;
+
+  private readonly cdr = inject(ChangeDetectorRef);
+  private layoutObserver: ResizeObserver | null = null;
+  private layoutFrame: number | null = null;
+
+  public ngAfterViewInit(): void {
+    const wrapper = this.inputWrapper?.nativeElement;
+    if (wrapper && typeof ResizeObserver !== 'undefined') {
+      this.layoutObserver = new ResizeObserver(() => this.scheduleActionsLayout());
+      this.layoutObserver.observe(wrapper);
+    }
+    this.scheduleActionsLayout();
+  }
+
+  public ngOnDestroy(): void {
+    this.layoutObserver?.disconnect();
+    if (this.layoutFrame !== null) {
+      cancelAnimationFrame(this.layoutFrame);
+    }
+  }
+
+  /**
+   * Re-check after the editor has rendered the latest text, at most once per frame. Pauses with the tab in the
+   * background (no layout to fix there) and catches up on the first frame back.
+   */
+  private scheduleActionsLayout(): void {
+    if (this.layoutFrame !== null || typeof requestAnimationFrame === 'undefined') {
+      return;
+    }
+    this.layoutFrame = requestAnimationFrame(() => {
+      this.layoutFrame = null;
+      this.updateActionsLayout();
+    });
+  }
+
+  /**
+   * Decides whether the buttons need their own strip. The answer depends only on where the text WOULD end without
+   * the strip: the editor's top padding plus the text's height, against the editor's resting height minus the
+   * zone the buttons cover. Using the text's own height (not the editor's current box) keeps the decision stable,
+   * so adding the strip never flips it back off.
+   */
+  private updateActionsLayout(): void {
+    const wrapper = this.inputWrapper?.nativeElement;
+    const editor = wrapper?.querySelector<HTMLElement>('.mention-editor');
+    const buttons = wrapper?.querySelector<HTMLElement>('.send-button-icon');
+    if (!wrapper || !editor || !buttons) {
+      return;
+    }
+    const style = getComputedStyle(editor);
+    const padTop = parseFloat(style.paddingTop) || 0;
+    const padBottom = parseFloat(style.paddingBottom) || 0;
+    const minHeight = parseFloat(style.minHeight) || 0;
+    const lineHeight = parseFloat(style.lineHeight) || 24;
+
+    const range = document.createRange();
+    if (typeof range.getBoundingClientRect !== 'function') {
+      return; // no layout engine (server rendering, jsdom): nothing to measure
+    }
+    range.selectNodeContents(editor);
+    const textHeight = Math.max(range.getBoundingClientRect().height, lineHeight);
+
+    const editorRect = editor.getBoundingClientRect();
+    const buttonsRect = buttons.getBoundingClientRect();
+    // the band (from the editor's bottom edge up) the buttons occupy, plus a 4px gap
+    const buttonZone = Math.max(0, editorRect.bottom - buttonsRect.top) + 4;
+    const needsRow = NeedsActionsRow({ PadTop: padTop, PadBottom: padBottom, MinHeight: minHeight, TextHeight: textHeight, ButtonZone: buttonZone, RowOn: this.ActionsRow });
+    const rowPx = Math.ceil(buttonZone);
+
+    if (needsRow !== this.ActionsRow || (needsRow && rowPx !== this.ActionsRowPx)) {
+      this.ActionsRow = needsRow;
+      this.ActionsRowPx = needsRow ? rowPx : null;
+      this.cdr.detectChanges();
+    }
+  }
 
   /** @deprecated Use {@link MentionEditor}. */
   get mentionEditor(): MentionEditorComponent | undefined {
@@ -188,6 +297,7 @@ export class MessageInputBoxComponent {
   OnValueChange(newValue: string): void {
     this.Value = newValue;
     this.ValueChange.emit(this.Value);
+    this.scheduleActionsLayout();
   }
 
   /**

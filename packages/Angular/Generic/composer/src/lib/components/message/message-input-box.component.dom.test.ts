@@ -116,3 +116,24 @@ describe('MessageInputBoxComponent (DOM)', () => {
     expect(out).toContain('typed');
   });
 });
+
+describe('MessageInputBoxComponent (DOM) — adaptive button row', () => {
+  it('starts with the buttons inline (no strip)', () => {
+    const fx = render({ EnableAttachments: true });
+    const wrapper = query(fx, '.input-wrapper') as HTMLElement;
+    expect(wrapper.classList.contains('actions-row')).toBe(false);
+    expect(wrapper.style.getPropertyValue('--mj-composer-actions-row')).toBe('');
+  });
+
+  it('applies the strip class and its height when the row is needed', () => {
+    const fx = render({ EnableAttachments: true });
+    fx.componentInstance.ActionsRow = true;
+    fx.componentInstance.ActionsRowPx = 47;
+    fx.componentRef.changeDetectorRef.markForCheck();
+    fx.detectChanges();
+    const wrapper = query(fx, '.input-wrapper') as HTMLElement;
+    expect(wrapper.classList.contains('actions-row')).toBe(true);
+    expect(wrapper.style.getPropertyValue('--mj-composer-actions-row')).toBe('47px');
+  });
+});
+

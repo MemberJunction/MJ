@@ -1,5 +1,5 @@
 <div class="message-input-box-container" (click)="OnContainerClick($event)">
-  <div class="input-wrapper">
+  <div class="input-wrapper" #inputWrapper [class.actions-row]="ActionsRow" [style.--mj-composer-actions-row.px]="ActionsRowPx">
     <mj-mention-editor
       #mentionEditor
       [placeholder]="Placeholder"

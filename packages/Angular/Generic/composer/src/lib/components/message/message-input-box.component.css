@@ -25,6 +25,13 @@
   flex: 1;
   display: block;
 }
+/* Adaptive action row (the ChatGPT pattern): the attach / voice / send buttons sit in the editor's bottom-right
+   corner while the text stays clear of them. Once the text would reach that corner, the component adds
+   .actions-row and the editor gains a strip at the bottom for the buttons, so text never runs behind them. The
+   strip goes away again when the text no longer needs it. */
+.input-wrapper.actions-row ::ng-deep .mention-editor {
+  padding-bottom: var(--mj-composer-actions-row, 3rem);
+}
 
 .message-input-box-textarea {
   flex: 1;
