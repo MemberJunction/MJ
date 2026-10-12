@@ -492,6 +492,9 @@ importers:
 
   packages/AI/Agents:
     dependencies:
+      '@evan/opus':
+        specifier: 1.0.3
+        version: 1.0.3
       '@memberjunction/actions':
         specifier: 6.2.0-edge.3
         version: link:../../Actions/Engine
