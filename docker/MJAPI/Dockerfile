@@ -16,11 +16,12 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 RUN apt-get install -y nodejs
 
 # ffmpeg for meeting avatars: an agent's bot decodes its live avatar (H.264 video, AAC voice) with it, found on the PATH
-# (or at MJ_FFMPEG_PATH). A static LGPL build from BtbN/FFmpeg-Builds (glibc >= 2.28; focal has 2.31), pinned by
-# release and asset and checked against its sha256; only the ffmpeg binary and its licence are kept. Pin the three
-# values per architecture from the release's page and its checksums.sha256. Build with --build-arg INSTALL_FFMPEG=false
-# to leave it out: meetings then stay audio only, and the room says why.
-ARG INSTALL_FFMPEG=true
+# (or at MJ_FFMPEG_PATH). Off by default: without it, meetings stay audio only, and the room says why. To turn it on,
+# pin the three values per architecture below (FFMPEG_BTBN_RELEASE, the asset and its sha256, from the release's page
+# and its checksums.sha256) and build with --build-arg INSTALL_FFMPEG=true. It installs a static LGPL build from
+# BtbN/FFmpeg-Builds (glibc >= 2.28; focal has 2.31), checked against its sha256; only the ffmpeg binary and its
+# licence are kept.
+ARG INSTALL_FFMPEG=false
 ARG FFMPEG_BTBN_RELEASE=PIN-BTBN-RELEASE-TAG
 ARG FFMPEG_BTBN_ASSET_AMD64=PIN-ffmpeg-n7.1-linux64-lgpl-7.1.tar.xz
 ARG FFMPEG_BTBN_SHA256_AMD64=PIN-SHA256
