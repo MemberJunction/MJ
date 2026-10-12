@@ -503,12 +503,27 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 const reason = typeof rawVoice === 'string' ? 'blank' : `not a string (got ${typeof rawVoice})`;
                 console.warn(`[GeminiRealtime] Ignored the session config bag's \`voice\` because it is ${reason} — expected a Gemini prebuilt voice name.`);
             }
+            // Consume the driver-NEUTRAL `transcriptionLanguages` key (BCP-47 codes) too. Without a
+            // `languageCodes` hint Gemini auto-detects each utterance's language for the captions, and
+            // can caption English speech in another script. Set before the merge below, so a
+            // provider-native `inputAudioTranscription` / `outputAudioTranscription` in the bag still wins.
+            const rawLanguages = cfg.transcriptionLanguages;
+            delete cfg.transcriptionLanguages;
+            const languageCodes = Array.isArray(rawLanguages)
+                ? rawLanguages.filter((c): c is string => typeof c === 'string' && c.trim().length > 0).map((c) => c.trim())
+                : [];
+            if (languageCodes.length > 0) {
+                config.inputAudioTranscription = { languageCodes };
+                config.outputAudioTranscription = { languageCodes };
+            } else if (rawLanguages !== undefined) {
+                console.warn('[GeminiRealtime] Ignored the session config bag\'s `transcriptionLanguages` because it holds no language codes — expected an array of BCP-47 codes such as ["en-US"].');
+            }
             // Scrub the MJ-side keys shared across the realtime driver family (OpenAI-protocol
             // feature knobs + transport settings). They are NOT Gemini config keys — a co-agent
             // config carrying e.g. `effortLevel` or `mcpTools` must be SAFE on a Gemini session,
             // not spread raw into the Live SDK where strictness varies by version. Scrubbed keys
             // are diag-logged so config typos / cross-provider keys stop being silent.
-            // The two keys Gemini translates natively (`disableAutoResponse`, `voice`) were already
+            // The keys Gemini translates natively (`disableAutoResponse`, `voice`, `transcriptionLanguages`) were already
             // consumed and deleted above, so the loop only ever sees keys with no Gemini mapping —
             // no per-key exemption needed here.
             //

@@ -849,6 +849,58 @@ describe('C7: agnostic voice → Gemini speechConfig (issue #3721)', () => {
     });
 });
 
+describe('C8: transcriptionLanguages → caption language hints', () => {
+    it('hints both caption streams and consumes the neutral key without a scrub warning', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({ Config: { transcriptionLanguages: [' en-US ', ''] } }));
+            const config = driver.LastConnectArgs!.Config as LiveConnectConfig & Record<string, unknown>;
+            expect(config.inputAudioTranscription).toEqual({ languageCodes: ['en-US'] });
+            expect(config.outputAudioTranscription).toEqual({ languageCodes: ['en-US'] });
+            expect(config.transcriptionLanguages).toBeUndefined();
+            expect(warn).not.toHaveBeenCalled();
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('lets a provider-native transcription config in the bag win', async () => {
+        const driver = new TestGeminiRealtime('k');
+        await driver.StartSession(makeParams({
+            Config: { transcriptionLanguages: ['en-US'], inputAudioTranscription: { languageCodes: ['fr-FR'] } },
+        }));
+        const config = driver.LastConnectArgs!.Config as LiveConnectConfig;
+        expect(config.inputAudioTranscription).toEqual({ languageCodes: ['fr-FR'] });
+        expect(config.outputAudioTranscription).toEqual({ languageCodes: ['en-US'] });
+    });
+
+    it('warns on a value with no codes and keeps auto-detection', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({ Config: { transcriptionLanguages: 'en-US' } }));
+            const config = driver.LastConnectArgs!.Config as LiveConnectConfig & Record<string, unknown>;
+            expect(config.inputAudioTranscription).toEqual({});
+            expect(config.outputAudioTranscription).toEqual({});
+            expect(config.transcriptionLanguages).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('holds no language codes'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('keeps the hint out of the token lock (transcription keys 400 the mint) but in SessionConfig', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { transcriptionLanguages: ['en-US'] } }));
+        const locked = driver.MintParams?.config?.liveConnectConstraints?.config as LiveConnectConfig;
+        expect(locked.inputAudioTranscription).toBeUndefined();
+        expect(locked.outputAudioTranscription).toBeUndefined();
+        const sessionConfig = (cfg.SessionConfig as { config: LiveConnectConfig }).config;
+        expect(sessionConfig.inputAudioTranscription).toEqual({ languageCodes: ['en-US'] });
+    });
+});
+
 /* ------------------------------------------------------------------ */
 /*  Per-model Live legality (plan §6 tasks C1-C4)                     */
 /*                                                                    */

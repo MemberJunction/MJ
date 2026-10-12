@@ -1490,6 +1490,7 @@ describe('SEAM-4: config-tuning bag → driver session payload (end-to-end shape
             parallelToolCalls: true,
             mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
             inputTranscriptionModel: 'whisper-1',
+            transcriptionLanguages: ['en-US'],
         };
         const driver = new TestableOpenAIRealtime('k');
         await driver.StartSession({
@@ -1507,7 +1508,8 @@ describe('SEAM-4: config-tuning bag → driver session payload (end-to-end shape
             expect(tools).toHaveLength(2); // function + mcp
             expect(tools[1]).toMatchObject({ type: 'mcp', server_label: 'kb' });
             const audio = session.audio as { input?: { transcription?: { model?: string } } };
-            expect(audio.input?.transcription?.model).toBe('whisper-1');
+            expect(audio.input?.transcription).toEqual({ model: 'whisper-1' });
+            expect(session.transcriptionLanguages).toBeUndefined(); // not mapped for this family; never sent raw
         } else {
             throw new Error('expected realtime session.update');
         }

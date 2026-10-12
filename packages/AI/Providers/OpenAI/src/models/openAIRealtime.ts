@@ -424,10 +424,13 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
 
     // Per-session transcription-model override + MJ-side transport settings. All scrubbed
     // unconditionally — none of these are wire fields on ANY provider in the family.
-    const bag = rest as JSONObject & { inputTranscriptionModel?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown };
+    const bag = rest as JSONObject & { inputTranscriptionModel?: unknown; transcriptionLanguages?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown };
     const rawItm = bag.inputTranscriptionModel;
     delete bag.inputTranscriptionModel;
     const inputTranscriptionModel = typeof rawItm === 'string' && rawItm.trim().length > 0 ? rawItm.trim() : undefined;
+    // The caption-language hint is not mapped for this family yet (the model's own text is the
+    // agent caption, so only user ASR could use it, and the compat endpoints' support is unverified).
+    delete bag.transcriptionLanguages;
     const rawEndpoint = bag.endpoint;
     delete bag.endpoint;
     const endpoint = typeof rawEndpoint === 'string' && rawEndpoint.trim().length > 0 ? rawEndpoint.trim() : undefined;

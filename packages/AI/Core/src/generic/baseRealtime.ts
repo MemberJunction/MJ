@@ -240,6 +240,7 @@ export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'parallelToolCalls',
     'mcpTools',
     'inputTranscriptionModel',
+    'transcriptionLanguages',
     'voice',
     'firstMessage',
     'disableAutoResponse',
