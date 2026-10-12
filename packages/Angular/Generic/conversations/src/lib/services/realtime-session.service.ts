@@ -72,10 +72,12 @@ export class RealtimeSessionService extends RealtimeSessionRuntime {
      * @param visibility the visibility source (`document`)
      */
     protected WireRecordingTerminalTriggers(page: PageHideEventTarget, visibility: VisibilityEventSource): void {
-        page.addEventListener('pagehide', () => this.SendRecordingTerminal());
+        page.addEventListener('pagehide', () => this.SendRecordingTerminal({ Final: true }));
         visibility.addEventListener('visibilitychange', () => {
             if (visibility.visibilityState === 'hidden') {
-                this.SendRecordingTerminal();
+                // Not final: the user may come back and the call go on, so the server only stamps the
+                // counts and assembles after its grace period instead of rewriting the recording now.
+                this.SendRecordingTerminal({ Final: false });
             }
         });
     }

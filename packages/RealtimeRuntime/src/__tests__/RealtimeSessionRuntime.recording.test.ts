@@ -423,6 +423,15 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         expect(after).toEqual(['terminal:session-1/1', 'upload(keepalive):session-1/0']);
     });
 
+    it('a hidden-tab terminal is sent as not final; End\'s terminal is final', async () => {
+        const { runtime, transport, recorder } = await startRecorded();
+        recorder.Capture(7);
+        runtime.SendRecordingTerminal({ Final: false });
+        recorder.Capture(4);
+        await runtime.EndRealtimeSession();
+        expect(transport.Terminals.map((t) => t.Input.Final)).toEqual([false, true]);
+    });
+
     it('SendRecordingTerminal is a no-op without a recording', () => {
         const transport = new FakeRecordingTransport();
         const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), new FakeShardStore(), transport);

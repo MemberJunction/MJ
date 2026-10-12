@@ -15,6 +15,11 @@ export interface RecordingTerminalInput {
     Tail: Uint8Array | null;
     LastShardIndex: number;
     CapturedSamples: number;
+    /**
+     * False when the call may go on (the tab was only hidden): the server stamps the counts but assembles
+     * after its grace period instead of now. Absent or true: the call ended.
+     */
+    Final?: boolean;
 }
 
 /** Per-upload options for {@link IRecordingTransport.UploadShard}. */
@@ -61,7 +66,8 @@ export class FetchRecordingTransport implements IRecordingTransport {
     }
 
     public SendTerminal(sessionID: string, input: RecordingTerminalInput): Promise<boolean> {
-        const query = `lastShardIndex=${input.LastShardIndex}&capturedSamples=${input.CapturedSamples}`;
+        const final = input.Final === false ? '&final=false' : '';
+        const query = `lastShardIndex=${input.LastShardIndex}&capturedSamples=${input.CapturedSamples}${final}`;
         const url = `${this.config.BaseURL}/realtime/recording/${encodeURIComponent(sessionID)}/end?${query}`;
         return this.post(url, input.Tail ?? new Uint8Array(0), true, `terminal ${sessionID}/${input.LastShardIndex}`);
     }

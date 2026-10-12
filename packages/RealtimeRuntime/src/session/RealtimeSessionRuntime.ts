@@ -108,6 +108,16 @@ interface RecordingShardPipeline {
   Transport: IRecordingTransport | null;
 }
 
+/** Options of {@link RealtimeSessionRuntime.SendRecordingTerminal}. */
+export interface RecordingTerminalOptions {
+  /**
+   * False when the call may continue — the host's `visibilitychange → hidden` handler. The server then
+   * stamps the counts but assembles only after its grace period, so switching tabs does not rewrite the
+   * recording each time. Defaults to true (`pagehide`: the page is going away).
+   */
+  Final?: boolean;
+}
+
 /** A terminal request that teardown started before closing the session and awaits after it. */
 interface PendingRecordingTerminal {
   Pipeline: RecordingShardPipeline;
@@ -1982,7 +1992,7 @@ export class RealtimeSessionRuntime {
    * on a page that is merely hidden (the call goes on) that keeps the durable copy until the server
    * acknowledges it; on a page that is unloading the task just never runs.
    */
-  public SendRecordingTerminal(): void {
+  public SendRecordingTerminal(options?: RecordingTerminalOptions): void {
     const recorder = this.recorder;
     const pipeline = this.recordingShards;
     if (!recorder || !pipeline || !pipeline.Transport) {
@@ -1994,7 +2004,7 @@ export class RealtimeSessionRuntime {
       if (pipeline.Window.LastSealedIndex < 0) {
         return;
       }
-      void this.dispatchRecordingTerminal(pipeline, sealed, tail, true);
+      void this.dispatchRecordingTerminal(pipeline, sealed, tail, true, options?.Final ?? true);
     } catch (error) {
       console.warn(`[RealtimeSession] Failed to send the recording terminal for session ${pipeline.SessionID}:`, error);
     }
@@ -2025,9 +2035,10 @@ export class RealtimeSessionRuntime {
     sealedNow: RecordingShard[],
     tail: RecordingShard | null,
     deferStore: boolean,
+    final: boolean,
   ): Promise<boolean> {
     const sessionId = pipeline.SessionID;
-    const terminalAcked = this.sendRecordingTerminal(pipeline, tail);
+    const terminalAcked = this.sendRecordingTerminal(pipeline, tail, final);
     const toStore = tail ? [...sealedNow, tail] : sealedNow;
     let stored: Promise<void> = Promise.resolve();
     if (toStore.length > 0) {
@@ -2107,7 +2118,7 @@ export class RealtimeSessionRuntime {
    * Sends the terminal request for a pipeline whose tail is already sealed. Resolves true on a server
    * ack and logs the outcome with the session id. Never rejects.
    */
-  private async sendRecordingTerminal(pipeline: RecordingShardPipeline, tail: RecordingShard | null): Promise<boolean> {
+  private async sendRecordingTerminal(pipeline: RecordingShardPipeline, tail: RecordingShard | null, final: boolean): Promise<boolean> {
     const lastShardIndex = pipeline.Window.LastSealedIndex;
     const capturedSamples = pipeline.Window.SealedSamples;
     const context = `session ${pipeline.SessionID} (last shard ${lastShardIndex}, ${capturedSamples} samples)`;
@@ -2120,6 +2131,7 @@ export class RealtimeSessionRuntime {
         Tail: tail?.Bytes ?? null,
         LastShardIndex: lastShardIndex,
         CapturedSamples: capturedSamples,
+        Final: final,
       });
       if (!acked) {
         console.warn(`[RealtimeSession] Recording terminal for ${context} was not acknowledged; the server janitor assembles what arrived.`);
@@ -2170,7 +2182,7 @@ export class RealtimeSessionRuntime {
         pipeline.Queue.Close();
         return null;
       }
-      return { Pipeline: pipeline, Acked: this.dispatchRecordingTerminal(pipeline, sealed, tail, false) };
+      return { Pipeline: pipeline, Acked: this.dispatchRecordingTerminal(pipeline, sealed, tail, false, true) };
     } catch (error) {
       console.warn(`[RealtimeSession] Failed to finish the call recording for session ${pipeline.SessionID}; stored shards are drained at the next session start or load:`, error);
       this.recorder = null;

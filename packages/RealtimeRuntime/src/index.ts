@@ -47,6 +47,7 @@ export {
     type RealtimeThoughtNarration,
     type StartRealtimeClientSessionResult,
     type RealtimeSessionRunOptions,
+    type RecordingTerminalOptions,
 } from './session/RealtimeSessionRuntime';
 
 // How a session is minted — the seam an app implements to replace the stock mint.

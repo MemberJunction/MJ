@@ -56,6 +56,14 @@ describe('FetchRecordingTransport', () => {
         expect(init.body).toBe(tail);
     });
 
+    it('marks a non-final terminal (a hidden tab) with final=false, and leaves a final one unmarked', async () => {
+        const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+        await make(fetchMock).SendTerminal('s1', { Tail: null, LastShardIndex: 2, CapturedSamples: 9, Final: false });
+        await make(fetchMock).SendTerminal('s1', { Tail: null, LastShardIndex: 3, CapturedSamples: 10, Final: true });
+        expect(fetchMock.mock.calls[0][0]).toBe('http://h:4000/realtime/recording/s1/end?lastShardIndex=2&capturedSamples=9&final=false');
+        expect(fetchMock.mock.calls[1][0]).toBe('http://h:4000/realtime/recording/s1/end?lastShardIndex=3&capturedSamples=10');
+    });
+
     it('sends an empty body when there is no tail', async () => {
         const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
         await make(fetchMock).SendTerminal('s1', { Tail: null, LastShardIndex: 0, CapturedSamples: 0 });

@@ -71,6 +71,17 @@ describe('RealtimeSessionService — recording terminal on pagehide / visibility
         doc.visibilityState = 'hidden';
         doc.Fire('visibilitychange');
         expect(send).toHaveBeenCalledTimes(1);
+        // The call may go on after a hide, so the server must not assemble the recording right away.
+        expect(send).toHaveBeenCalledWith({ Final: false });
+    });
+
+    it('pagehide sends a final terminal', () => {
+        const service = new TestableSessionService();
+        const send = vi.spyOn(service, 'SendRecordingTerminal').mockImplementation(() => undefined);
+        const page = new FakeTarget();
+        service.Wire(page, new FakeTarget());
+        page.Fire('pagehide');
+        expect(send).toHaveBeenCalledWith({ Final: true });
     });
 
     it('the constructor wires pagehide + visibilitychange on window/document and adds no beforeunload listener', () => {
