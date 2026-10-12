@@ -54,6 +54,13 @@ export type AppContext = {
    * Per-request DatabaseProviderBase instances  
    */
   providers: Array<ProviderInfo>;
+
+  /**
+   * The caller's network address as Express resolved it (`req.ip`, which honours the app's
+   * `trust proxy` setting). Present for HTTP requests; absent on WebSocket (subscription) contexts.
+   * Used only to key abuse limits (e.g. realtime verification sends) — never as an identity.
+   */
+  ClientIp?: string;
 };
 
 export class ProviderInfo {
