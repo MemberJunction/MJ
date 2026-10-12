@@ -86,4 +86,61 @@ describe('PostgreSQLDataProvider — transaction scope affinity (#4786)', () => 
         expect(savepointSQL.some((q) => /^ROLLBACK TO SAVEPOINT/i.test(q))).toBe(true);
         expect(pool.queries.filter((q) => /SAVEPOINT/i.test(q))).toEqual([]);
     });
+
+    describe('caller-supplied SQL protections follow the caller, not the instance', () => {
+        /** Every AcquireClient hands out a fresh client, so the transaction's client and an own connection are told apart. */
+        let acquired: Recorder[];
+
+        beforeEach(() => {
+            acquired = [];
+            const cm = (provider as unknown as { _connectionManager: { AcquireClient: () => Promise<unknown> } })._connectionManager;
+            cm.AcquireClient = vi.fn(async () => {
+                const r: Recorder = {
+                    queries: [],
+                    query: vi.fn(async (sql: string) => { r.queries.push(sql); return { rows: [] }; }),
+                    release: vi.fn(),
+                };
+                acquired.push(r);
+                return r;
+            });
+        });
+
+        it('an unrelated caller asking for a read-only transaction gets one while someone else\'s transaction is open', async () => {
+            const aOpen = gate();
+            const b = (async () => {
+                await aOpen.wait;
+                await provider.ExecuteSQL('SELECT 7 AS caller_sql', [], { readOnlyTransaction: true });
+            })();
+            await provider.BeginTransaction();
+            aOpen.open();
+            await b;
+            await provider.RollbackTransaction();
+            const [txClient, ownClient] = acquired;
+            expect(txClient.queries).not.toContain('SELECT 7 AS caller_sql');
+            expect(pool.queries).not.toContain('SELECT 7 AS caller_sql');
+            expect(ownClient?.queries.slice(0, 3)).toEqual(['BEGIN READ ONLY', 'SELECT 7 AS caller_sql', 'ROLLBACK']);
+        });
+
+        it('an unrelated caller\'s statement timeout is applied while someone else\'s transaction is open', async () => {
+            const aOpen = gate();
+            const b = (async () => {
+                await aOpen.wait;
+                await provider.ExecuteSQL('SELECT 8 AS timed', [], { timeoutMs: 300 });
+            })();
+            await provider.BeginTransaction();
+            aOpen.open();
+            await b;
+            await provider.RollbackTransaction();
+            const ownClient = acquired[1];
+            expect(ownClient?.queries.slice(0, 3)).toEqual(['BEGIN', 'SET LOCAL statement_timeout = 300', 'SELECT 8 AS timed']);
+        });
+
+        it('a member\'s read-only request still runs inside its own transaction', async () => {
+            await provider.BeginTransaction();
+            await provider.ExecuteSQL('SELECT 9 AS member_sql', [], { readOnlyTransaction: true });
+            await provider.CommitTransaction();
+            expect(acquired).toHaveLength(1);
+            expect(acquired[0].queries).toEqual(['BEGIN', 'SELECT 9 AS member_sql', 'COMMIT']);
+        });
+    });
 });
