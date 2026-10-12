@@ -63,6 +63,7 @@ import {
     EncryptedValueParts,
     KeyConfiguration
 } from './interfaces';
+import { EncryptionKeyUnavailableError } from './EncryptionKeyUnavailableError';
 
 /**
  * Cache entry with TTL for key material.
@@ -820,11 +821,26 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         // Get or create the key source
         const source = await this.getOrCreateKeySource(config.source.driverClass);
 
-        // Get key from source
-        const keyMaterial = await source.GetKey(
-            config.source.lookupValue,
-            config.keyVersion
-        );
+        // Get key from source. A source that doesn't hold this key is a configuration state (an
+        // app's key this install wasn't given), not a fault: say so with a typed error callers can
+        // report once. Asked only after a failure, so a remote source costs nothing extra.
+        let keyMaterial: Buffer;
+        try {
+            keyMaterial = await source.GetKey(
+                config.source.lookupValue,
+                config.keyVersion
+            );
+        } catch (err) {
+            if (!(await source.KeyExists(config.source.lookupValue).catch(() => true))) {
+                throw new EncryptionKeyUnavailableError(
+                    config.keyId,
+                    this.GetKeyConfiguration(config.keyId)?.key.Name ?? config.keyId,
+                    source.SourceName,
+                    config.source.lookupValue
+                );
+            }
+            throw err;
+        }
 
         // Validate key length
         this.validateKeyLength(keyMaterial, config);
