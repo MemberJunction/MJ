@@ -86,6 +86,18 @@ class SaveDeleteTestProvider extends SQLServerDataProvider {
   }
 }
 
+// These suites assert the LITERAL save/delete grammar (values inlined as T-SQL literals) on the
+// executed SQL. That form is still produced for every save — it is what SQL logging records and
+// what runs whenever parameterizing is unsafe — but by default the executed statement is now its
+// parameterized twin, so the literal form is pinned here. The parameterized path is covered in
+// parameterized-saves.test.ts.
+beforeEach(() => {
+  SQLServerDataProvider.ParameterizeSaves = false;
+});
+afterEach(() => {
+  SQLServerDataProvider.ParameterizeSaves = true;
+});
+
 function makeProvider(): SaveDeleteTestProvider {
   const provider = new SaveDeleteTestProvider();
   provider.AttachPool(new MockConnectionPool());
