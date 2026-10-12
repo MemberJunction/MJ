@@ -22,18 +22,28 @@
 import fs from 'node:fs/promises';
 import type { PackageManagerType } from './PackageManager.js';
 export interface InstallConfig {
+  // ── Database platform ────────────────────────────────────────────────
+
+  /**
+   * Database platform (default: `'sqlserver'`). Decides the default port, the
+   * setup script the database phase generates and runs, and — for
+   * `'postgresql'` — the `DB_PLATFORM` / `dbPlatform` settings written to `.env`
+   * and `mj.config.cjs`. Set with `MJ_INSTALL_DB_PLATFORM`.
+   */
+  DatabasePlatform: 'sqlserver' | 'postgresql';
+
   // ── Database ──────────────────────────────────────────────────────────
 
-  /** SQL Server hostname or IP address (default: `"localhost"`). */
+  /** Database hostname or IP address (default: `"localhost"`). */
   DatabaseHost: string;
 
-  /** SQL Server TCP port (default: `1433`). */
+  /** Database TCP port (default: `1433` for SQL Server, `5432` for PostgreSQL). */
   DatabasePort: number;
 
   /** Target database name (common value: `"MemberJunction"`; no auto-applied default). */
   DatabaseName: string;
 
-  /** Whether to trust self-signed TLS certificates (common for local dev instances). */
+  /** Whether to trust self-signed TLS certificates (SQL Server only; common for local dev instances). */
   DatabaseTrustCert: boolean;
 
   // ── CodeGen credentials ───────────────────────────────────────────────
@@ -58,6 +68,20 @@ export interface InstallConfig {
 
   /** Password for the MJAPI SQL login. */
   APIPassword: string;
+
+  // ── Database administrator (optional, used once) ──────────────────────
+
+  /**
+   * A SQL login with rights to create databases and logins (for example `sa`).
+   * When the database and the two logins above are not set up yet, the database
+   * phase signs in with this login and runs `mj-db-setup.sql` itself. It is used
+   * only for that one step and is never written to `.env`, the install state, or
+   * the diagnostic report. Interactive installs ask for it when it is needed.
+   */
+  DatabaseAdminUser?: string;
+
+  /** Password for {@link DatabaseAdminUser}. Never persisted. */
+  DatabaseAdminPassword?: string;
 
   // ── Ports ─────────────────────────────────────────────────────────────
 
@@ -187,6 +211,7 @@ const ENV_VAR_MAP: ReadonlyArray<{
   Field: keyof InstallConfig;
   Parse: (value: string) => unknown;
 }> = [
+  { EnvVar: 'MJ_INSTALL_DB_PLATFORM',       Field: 'DatabasePlatform', Parse: (v) => ParseDatabasePlatform(v) },
   { EnvVar: 'MJ_INSTALL_DB_HOST',           Field: 'DatabaseHost',     Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_DB_PORT',           Field: 'DatabasePort',     Parse: (v) => parseInt(v, 10) },
   { EnvVar: 'MJ_INSTALL_DB_NAME',           Field: 'DatabaseName',     Parse: (v) => v },
@@ -195,6 +220,8 @@ const ENV_VAR_MAP: ReadonlyArray<{
   { EnvVar: 'MJ_INSTALL_CODEGEN_PASSWORD',  Field: 'CodeGenPassword',  Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_API_USER',          Field: 'APIUser',          Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_API_PASSWORD',      Field: 'APIPassword',      Parse: (v) => v },
+  { EnvVar: 'MJ_INSTALL_DB_ADMIN_USER',     Field: 'DatabaseAdminUser',     Parse: (v) => v },
+  { EnvVar: 'MJ_INSTALL_DB_ADMIN_PASSWORD', Field: 'DatabaseAdminPassword', Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_API_PORT',          Field: 'APIPort',          Parse: (v) => parseInt(v, 10) },
   { EnvVar: 'MJ_INSTALL_EXPLORER_PORT',     Field: 'ExplorerPort',     Parse: (v) => parseInt(v, 10) },
   { EnvVar: 'MJ_INSTALL_AUTH_PROVIDER',     Field: 'AuthProvider',     Parse: (v) => v as InstallConfig['AuthProvider'] },
@@ -222,6 +249,23 @@ const AUTH_ENV_VAR_MAP: ReadonlyArray<{
   { EnvVar: 'MJ_INSTALL_AUTH0_CLIENT_ID',       Key: 'ClientID' },
   { EnvVar: 'MJ_INSTALL_AUTH0_CLIENT_SECRET',   Key: 'ClientSecret' },
 ];
+
+/**
+ * Parse a database platform name. Accepts exactly the values MemberJunction's
+ * own `DB_PLATFORM` accepts — `sqlserver` or `postgresql`, any case — so the
+ * installer never writes a value MJAPI, CodeGen, or `mj migrate` would reject.
+ *
+ * @param value - Raw value from `MJ_INSTALL_DB_PLATFORM` or a config file.
+ * @returns The normalized platform.
+ * @throws When the value is anything else.
+ */
+export function ParseDatabasePlatform(value: string): InstallConfig['DatabasePlatform'] {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'sqlserver' || normalized === 'postgresql') {
+    return normalized;
+  }
+  throw new Error(`Invalid database platform '${value}'. Use 'sqlserver' or 'postgresql'.`);
+}
 
 /**
  * Parse a string environment variable as a boolean.
@@ -290,7 +334,8 @@ export function resolveFromEnvironment(): PartialInstallConfig {
 
 /** Canonical PascalCase keys accepted in `install.config.json`. */
 const KNOWN_KEYS: ReadonlySet<string> = new Set<string>([
-  'DatabaseHost', 'DatabasePort', 'DatabaseName', 'DatabaseTrustCert',
+  'DatabasePlatform', 'DatabaseHost', 'DatabasePort', 'DatabaseName', 'DatabaseTrustCert',
+  'DatabaseAdminUser', 'DatabaseAdminPassword',
   'CodeGenUser', 'CodeGenPassword', 'APIUser', 'APIPassword',
   'APIPort', 'ExplorerPort', 'AuthProvider', 'AuthProviderValues',
   'OpenAIKey', 'AnthropicKey', 'MistralKey', 'BaseEncryptionKey', 'InstallMode', 'CreateNewUser',
@@ -380,7 +425,7 @@ export async function LoadConfigFile(filePath: string): Promise<PartialInstallCo
 
     // 1. Canonical PascalCase key
     if (KNOWN_KEYS.has(key)) {
-      (config as Record<string, unknown>)[key] = value;
+      (config as Record<string, unknown>)[key] = key === 'DatabasePlatform' ? ParseDatabasePlatform(String(value)) : value;
       recognized++;
       continue;
     }

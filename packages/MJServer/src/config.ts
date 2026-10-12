@@ -38,6 +38,19 @@ const userHandlingInfoSchema = z.object({
   contextUserForNewUserCreation: z.string().optional().default(''),
   CreateUserApplicationRecords: z.boolean().optional().default(false),
   UserApplications: z.array(z.string()).optional().default([]),
+  /**
+   * Build each auto-created user as a copy of a template user (`User.IsTemplate`), so new people start
+   * with its pinned apps, views, settings, dashboards and conversations. `email` names the template;
+   * `preset` is the `MJ: Users` clone preset to apply (default `template`). The copy takes the roles
+   * and apps of the template, so `newUserRoles`, `CreateUserApplicationRecords` and `UserApplications`
+   * apply only when the template can't be used, in which case a plain user is created as before.
+   */
+  newUserTemplate: z
+    .object({
+      email: z.string(),
+      preset: z.string().optional().default('template'),
+    })
+    .optional(),
 });
 
 const databaseSettingsInfoSchema = z.object({

@@ -95,9 +95,9 @@ export {
     AddClientDynamicPackages,
     RemoveServerDynamicPackages,
     PruneDynamicPackagesNotInManifest,
-    ToggleServerDynamicPackages
-} from './install/config-manager.js';
+    ToggleServerDynamicPackages, SetNewUserTemplate } from './install/config-manager.js';
 export type { DynamicPackageEntry, ConfigOperationResult } from './install/config-manager.js';
+export { OfferTemplateUser, NamesFromEmail, TEMPLATE_USER_ENV, type TemplateUserContext } from './install/template-user.js';
 
 export { AngularConfigManager, DerivePrebundleExcludePatterns } from './install/angular-config-manager.js';
 export type { AngularConfigResult } from './install/angular-config-manager.js';
