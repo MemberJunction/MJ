@@ -60,6 +60,8 @@ interface AgentLoopInternals {
     _actionFailureHistory: Map<string, { lastParamsString: string; identicalFailures: number; totalConsecutiveFailures: number }>;
     recordActionFailure(action: AgentAction, actionEntity: MJActionEntityExtended | undefined, message: string | null | undefined, normalizedParams: string): void;
     normalizeActionParams(params: Record<string, unknown> | null | undefined): string;
+    /** A16: a run that continues another applies its stored bindings (ALS14). */
+    inheritBoundActionParams(params: ExecuteAgentParams): Promise<void>;
 }
 
 /** The core 'Calculate Expression' action: a pure, deterministic failure source with no external dependency. */
@@ -637,6 +639,28 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
             AssertEqual(blockedReason(after.result), 'fatal', 'the lockout holds for later calls, like any fatal failure');
             Assert(!after.result.LogEntry, 'the locked-out call wrote no log row');
             console.log('      → refused before the engine, generic message, locked out for the run');
+        }
+    },
+    {
+        Id: 'agent-loop-standin.ALS14',
+        Name: 'ALS14: a run\'s bound parameters are stored on its row, and a run that continues it (lastRunId) applies them when its caller passes none',
+        Fn: async (ctx): Promise<void> => {
+            const h = await makeBreakerHarness(ctx, 'ALS14');
+            if (!h) { return; }
+            const bound = { [h.calc.ID]: { Expression: '(2 * 3) + 4' } };
+            const prior = await createAgentRunFixture(ctx);
+            prior.BoundActionParams = JSON.stringify(bound);
+            Assert(await prior.Save(), `prior run saves its bindings: ${prior.LatestResult?.CompleteMessage}`);
+
+            h.params.lastRunId = prior.ID;
+            await h.internals.inheritBoundActionParams(h.params);
+            AssertEqual(JSON.stringify(h.params.boundActionParams), JSON.stringify(bound), 'the continuing run applies the stored bindings');
+
+            const own = { [h.calc.ID]: { Expression: '1 + 1' } };
+            h.params.boundActionParams = own;
+            await h.internals.inheritBoundActionParams(h.params);
+            Assert(h.params.boundActionParams === own, 'a caller\'s own bindings win over the stored ones');
+            console.log('      → stored on the run, read back from the database, caller\'s bindings win');
         }
     }
 ];
