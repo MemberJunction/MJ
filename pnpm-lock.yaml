@@ -12755,6 +12755,9 @@ importers:
       mssql:
         specifier: ^12.2.0
         version: 12.7.0
+      pg:
+        specifier: ^8.13.3
+        version: 8.18.0
       simple-git:
         specifier: ^3.30.0
         version: 3.30.0
@@ -12765,6 +12768,9 @@ importers:
       '@types/mssql':
         specifier: ^9.1.9
         version: 9.1.9
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
       tsc-alias:
         specifier: ^1.8.15
         version: 1.8.16
