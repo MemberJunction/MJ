@@ -47,7 +47,7 @@ Chips sit in a row in the top-left corner, in this order:
 - "AI-generated video" while the tile shows an avatar's video. An avatar is generated, and a watermark the model adds
   can't be seen, so the tile says so for as long as it shows one.
 - "Sharing" while the participant shares a screen.
-- "Agent can see" while `Participant.AgentCanSee` is true: the host reports that an agent can see this participant's
+- "Agents can see" while `Participant.AgentCanSee` is true: the host reports that an agent can see this participant's
   camera and shared screen.
 - `Status`, a short text from the host such as what an agent is doing, marked with a dot.
 
@@ -188,8 +188,8 @@ for the user's camera and share.
 
 An `mj-media-tile` with `Mirror` on, so the camera shows as in a mirror (a shared screen does not), and no pin.
 
-- `AgentCanSee` shows "Agent can see this" while the host knows the user's frames reach an agent. The tile's own
-  "Agent can see" chip still follows `Participant.AgentCanSee`, in the same corner.
+- `AgentCanSee` shows "Agents can see this" while the host knows the user's frames reach an agent. The tile's own
+  "Agents can see" chip still follows `Participant.AgentCanSee`, in the same corner.
 - `ShowHide` (on by default) shows a Hide button that emits `HideRequested`. The host takes the tile away; the camera
   stays on, so others still see the user.
 - `Participant`, `AvatarUrl`, `MeterSettings`, `ShowName`, `ShowMeter`, `ShowConnectionQuality` and

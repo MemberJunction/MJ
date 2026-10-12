@@ -5,7 +5,7 @@ import type { MediaAudioMeterSettings } from './audio-meter.component';
 
 /**
  * `mj-self-view`: the user's own tile, as `mj-media-tile` draws it, with the camera mirrored as in a mirror (a
- * shared screen is not mirrored). "Agent can see this" shows while the host says the user's frames reach an agent.
+ * shared screen is not mirrored). "Agents can see this" shows while the host says the user's frames reach an agent.
  * The Hide button asks the host to take the tile away; the camera stays on, so others still see the user. Content
  * marked `mjMediaTileActions` goes to the tile's top corner, before the Hide button.
  */
@@ -35,7 +35,7 @@ import type { MediaAudioMeterSettings } from './audio-meter.component';
       </ng-container>
     </mj-media-tile>
     @if (AgentCanSee) {
-      <span class="self__badge"><i class="fa-solid fa-eye" aria-hidden="true"></i> Agent can see this</span>
+      <span class="self__badge"><i class="fa-solid fa-eye" aria-hidden="true"></i> Agents can see this</span>
     }
   `,
   styleUrls: ['./self-view.component.css'],
@@ -43,7 +43,7 @@ import type { MediaAudioMeterSettings } from './audio-meter.component';
 export class SelfViewComponent {
   /** The user, as a `/media` participant: their camera, or their picture or initials while it is off. */
   @Input() public Participant: MediaParticipant | null = null;
-  /** Show "Agent can see this": the host knows the user's frames reach an agent. */
+  /** Show "Agents can see this": the host knows the user's frames reach an agent. */
   @Input() public AgentCanSee = false;
   /** Show the Hide button. */
   @Input() public ShowHide = true;

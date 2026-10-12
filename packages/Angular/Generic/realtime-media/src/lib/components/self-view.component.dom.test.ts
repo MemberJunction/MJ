@@ -39,12 +39,12 @@ describe('SelfViewComponent (DOM)', () => {
     expect(mirrored(f)).toBe(false);
   });
 
-  it('says "Agent can see this" only when the host says so', () => {
+  it('says "Agents can see this" only when the host says so', () => {
     const f = render();
     expect(query(f, '.self__badge')).toBeNull();
     f.componentRef.setInput('AgentCanSee', true);
     f.detectChanges();
-    expect(query(f, '.self__badge')?.textContent?.trim()).toBe('Agent can see this');
+    expect(query(f, '.self__badge')?.textContent?.trim()).toBe('Agents can see this');
   });
 
   it('asks the host to hide it from a named Hide button', () => {

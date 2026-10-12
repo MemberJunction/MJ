@@ -1150,12 +1150,12 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       expect(f.componentInstance.State.LocalMedia.AgentVisionOn).toBeUndefined();
     });
 
-    it('says "Agent can see" on the tiles of the people an agent can see, the user\'s own included', () => {
+    it('says "Agents can see" on the tiles of the people an agent can see, the user\'s own included', () => {
       const ada = { ...person('ada'), AgentCanSee: true };
       const you = { ...person('you', { Local: true }), AgentCanSee: true };
       const f = render(makeFakeController(makeState({ Status: 'connected', Local: you, Remote: [ada, person('bo'), sage()], AgentWatching: true })).controller, { Layout: 'grid' });
       const chip = (name: string) => tileOf(f, name)?.querySelector('.tile__chip')?.textContent?.trim() ?? null;
-      expect([chip('you'), chip('ada'), chip('bo')]).toEqual(['Agent can see', 'Agent can see', null]);
+      expect([chip('you'), chip('ada'), chip('bo')]).toEqual(['Agents can see', 'Agents can see', null]);
     });
   });
 
@@ -1337,8 +1337,8 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       expect(tileOf(f, 'Grace')?.querySelector('.tile__chip')).toBeNull();
       (query(f, 'button[title="Let agents in this room see your camera and screen"]') as HTMLButtonElement).click();
       await settle(f);
-      expect(tileOf(f, 'Grace')?.querySelector('.tile__chip')?.textContent?.trim()).toBe('Agent can see');
-      expect(tileOf(f, 'Ada')?.querySelector('.tile__chip')?.textContent?.trim()).toBe('Agent can see');
+      expect(tileOf(f, 'Grace')?.querySelector('.tile__chip')?.textContent?.trim()).toBe('Agents can see');
+      expect(tileOf(f, 'Ada')?.querySelector('.tile__chip')?.textContent?.trim()).toBe('Agents can see');
       expect(query(f, 'button[title="Stop letting agents in this room see your camera and screen"]')).not.toBeNull();
     });
   });

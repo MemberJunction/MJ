@@ -139,7 +139,7 @@ describe('VoiceCallBody', () => {
         expect(styleOf(controls).position).toBeUndefined();
         // The controls are last: they hold the stop button and the hint, and nothing comes after them.
         expect(hosts(controls).filter((n) => n.type === 'Pressable')).toHaveLength(3);
-        expect(collectText(controls)).toBe('Tap to stop · swipe right for keyboard');
+        expect(collectText(controls)).toBe('Tap to end the call · swipe right for keyboard');
     });
 
     it('positions nothing absolutely but the ripple rings inside the orb frame', () => {
@@ -216,10 +216,10 @@ describe('VoiceCallBody', () => {
         expect(scrollToEnd).toHaveBeenCalledWith({ animated: true });
     });
 
-    it('stops the call from the button named "Stop", the only button that acts', () => {
+    it('ends the call from the button named "End call", as the web names it, the only button that acts', () => {
         const onStop = vi.fn();
         const tree = renderBody({ OnStop: onStop });
-        const stop = buttonNamed(tree, 'Stop');
+        const stop = buttonNamed(tree, 'End call');
         expect(stop?.type).toBe('Pressable');
         expect(stop?.props.disabled).toBeFalsy();
         (stop?.props.onPress as () => void)();
@@ -242,7 +242,7 @@ describe('VoiceCallBody', () => {
         const buttons = hosts(parts(renderBody()).controls).filter((n) => n.type === 'Pressable');
         expect(buttons.map((b) => [b.props.accessibilityRole, b.props.accessibilityLabel])).toEqual([
             ['button', 'Keyboard'],
-            ['button', 'Stop'],
+            ['button', 'End call'],
             ['button', 'Menu'],
         ]);
     });

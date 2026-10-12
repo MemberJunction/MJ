@@ -87,7 +87,7 @@ export type MediaTileVideoFit = 'cover' | 'contain';
             <span class="tile__chip"><i class="fa-solid fa-display" aria-hidden="true"></i> Sharing</span>
           }
           @if (AgentCanSee) {
-            <span class="tile__chip"><i class="fa-solid fa-eye" aria-hidden="true"></i> Agent can see</span>
+            <span class="tile__chip"><i class="fa-solid fa-eye" aria-hidden="true"></i> Agents can see</span>
           }
           @if (Status) {
             <span class="tile__chip tile__chip--status">{{ Status }}</span>

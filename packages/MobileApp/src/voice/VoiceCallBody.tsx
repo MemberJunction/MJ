@@ -44,7 +44,7 @@ export type VoiceCallBodyProps = {
     TranscriptText: string;
     /** The caption's scroll view, which is kept at its end as the caption grows. */
     TranscriptScrollRef: RefObject<ScrollView | null>;
-    /** Called when the user taps the stop button ("Stop" to a screen reader). */
+    /** Called when the user taps the red button ("End call" to a screen reader). */
     OnStop: () => void;
 };
 
@@ -57,8 +57,8 @@ export type VoiceCallBodyProps = {
  * is as tall as its caption, up to the room under the stage; past that the caption scrolls, kept at
  * its latest words.
  *
- * A screen reader finds the controls as three buttons: "Keyboard", "Stop" and "Menu", the words the
- * screen's hint and the mobile app plan use for them. Only "Stop" acts; the other two are disabled
+ * A screen reader finds the controls as three buttons: "Keyboard", "End call" and "Menu"; "End call" is
+ * the web call's name for the same button, and the screen's hint uses it. Only "End call" acts; the other two are disabled
  * placeholders.
  */
 export function VoiceCallBody({
@@ -96,14 +96,14 @@ export function VoiceCallBody({
                     <Pressable style={styles.ctrlBtn} disabled accessibilityRole="button" accessibilityLabel="Keyboard">
                         <Icons.ChevronUp size={22} color="#f6f6f8" strokeWidth={2} />
                     </Pressable>
-                    <Pressable style={styles.ctrlBtnPrimary} onPress={OnStop} accessibilityRole="button" accessibilityLabel="Stop">
+                    <Pressable style={styles.ctrlBtnPrimary} onPress={OnStop} accessibilityRole="button" accessibilityLabel="End call">
                         <View style={styles.ctrlSquare} />
                     </Pressable>
                     <Pressable style={styles.ctrlBtn} disabled accessibilityRole="button" accessibilityLabel="Menu">
                         <Icons.Sliders size={22} color="#f6f6f8" strokeWidth={2} />
                     </Pressable>
                 </View>
-                <Text style={styles.ctrlLabel}>Tap to stop · swipe right for keyboard</Text>
+                <Text style={styles.ctrlLabel}>Tap to end the call · swipe right for keyboard</Text>
             </View>
         </View>
     );

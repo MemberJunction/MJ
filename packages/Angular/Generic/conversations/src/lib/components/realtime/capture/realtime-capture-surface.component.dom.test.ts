@@ -129,7 +129,7 @@ describe('RealtimeCaptureSurfaceComponent (DOM)', () => {
     await ExpectNoAxeViolations(fixture);
   });
 
-  describe('"Agent can see this" while the camera is on, following the frames the model is sent (#5373)', () => {
+  describe('"Agents can see this" while the camera is on, following the frames the model is sent (#5373)', () => {
     /** A capture's source as the session's video source arbiter lists it: on and sent to the model unless the test says otherwise. */
     const source = (kind: 'camera' | 'screen', state: Partial<VideoSourceState> = {}): VideoSourceState => ({
       SourceID: `capture:${kind}`,
@@ -178,7 +178,7 @@ describe('RealtimeCaptureSurfaceComponent (DOM)', () => {
       const { fixture, publish } = cameraOnInCall();
       publish([source('camera')]);
       expect(query(fixture, 'mj-self-view')).not.toBeNull();
-      expect(text(fixture, 'mj-self-view .self__badge')).toBe('Agent can see this');
+      expect(text(fixture, 'mj-self-view .self__badge')).toBe('Agents can see this');
       expect(chip(fixture)).toBe('Agent can see: Camera');
     });
 
@@ -195,7 +195,7 @@ describe('RealtimeCaptureSurfaceComponent (DOM)', () => {
       const { fixture, publish } = cameraOnInCall();
       publish([source('camera', { Active: false }), source('screen')]);
       publish([source('camera', { Picked: true }), source('screen', { Active: false })]);
-      expect(text(fixture, 'mj-self-view .self__badge')).toBe('Agent can see this');
+      expect(text(fixture, 'mj-self-view .self__badge')).toBe('Agents can see this');
       expect(chip(fixture)).toBe('Agent sees: Camera');
     });
 
