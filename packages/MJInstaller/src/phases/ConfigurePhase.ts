@@ -520,7 +520,8 @@ export class ConfigurePhase {
     const trustCert = config.DatabaseTrustCert ? 'DB_TRUST_SERVER_CERTIFICATE=1' : '';
 
     // Build database connection vars based on platform
-    // PostgreSQL uses PG_* env vars for CodeGen (CodeGenLib), API still uses DB_* or generic names
+    // For PostgreSQL: PG_* is used by CodeGen and MJAPI (postgresqlPoolSettings prefers PG_USERNAME)
+    // So we use one user for both. For SQL Server: separate CODEGEN_DB_* and DB_* for API.
     let dbVars: string;
     if (config.DatabasePlatform === 'postgresql') {
       dbVars = `DB_PLATFORM='postgresql'
@@ -528,9 +529,7 @@ PG_HOST='${config.DatabaseHost}'
 PG_PORT=${config.DatabasePort}
 PG_USERNAME='${config.CodeGenUser}'
 PG_PASSWORD='${config.CodeGenPassword}'
-PG_DATABASE='${config.DatabaseName}'
-DB_USERNAME='${config.APIUser}'
-DB_PASSWORD='${config.APIPassword}'`;
+PG_DATABASE='${config.DatabaseName}'`;
     } else {
       dbVars = `DB_PLATFORM='sqlserver'
 DB_HOST='${config.DatabaseHost}'
