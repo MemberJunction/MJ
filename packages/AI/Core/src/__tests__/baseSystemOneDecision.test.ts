@@ -6,8 +6,10 @@ import {
     NormalizeDecisionProbabilities,
     ParseSystemOneCredential,
     ReadDecisionConfidence,
+    ReadSystemOneErrorMessage,
     SystemOneConfigurationError,
 } from '../generic/baseSystemOneDecision';
+import { AIErrorType } from '../generic/errorTypes';
 import {
     ChoiceAnswer,
     ChoiceQuestion,
@@ -81,6 +83,13 @@ class WrappingSystemOneDecision extends TestSystemOneDecision {
 
     protected DescribeHTTPError(status: number, bodyText: string): string {
         return `wrapped ${status} [${bodyText.length} chars]`;
+    }
+}
+
+/** A driver that classifies a 422 itself, as a vendor whose 422 is a vendor-specific refusal. */
+class ClassifyingSystemOneDecision extends TestSystemOneDecision {
+    protected GetHTTPErrorType(status: number): AIErrorType | undefined {
+        return status === 422 ? 'VendorValidationError' : undefined;
     }
 }
 
@@ -397,6 +406,25 @@ describe('BaseSystemOneDecision', () => {
             expect(denied.errorInfo).toMatchObject({ errorType: 'Authentication', severity: 'Fatal' });
         });
 
+        it("attaches GetHTTPErrorType's type as a Retriable, failover-eligible classification that ErrorAnalyzer keeps", async () => {
+            const driver = new ClassifyingSystemOneDecision();
+            driver.Responder = () => new Response('', { status: 422 });
+            const result = await driver.Decide(params());
+
+            expect(result.errorMessage).toBe('Test Decisions API returned HTTP 422');
+            expect(result.errorInfo).toEqual({ errorType: 'VendorValidationError', severity: 'Retriable', canFailover: true, httpStatusCode: 422 });
+        });
+
+        it('leaves a status GetHTTPErrorType does not map, and every status by default, to ErrorAnalyzer', async () => {
+            const classifying = new ClassifyingSystemOneDecision();
+            classifying.Responder = () => new Response('', { status: 401 });
+            expect((await classifying.Decide(params())).errorInfo).toMatchObject({ errorType: 'Authentication', severity: 'Fatal' });
+
+            const plain = new TestSystemOneDecision();
+            plain.Responder = () => new Response('', { status: 422 });
+            expect((await plain.Decide(params())).errorInfo).toMatchObject({ errorType: 'InvalidRequest', severity: 'Fatal', canFailover: false });
+        });
+
         it('fails when a 2xx body is not JSON', async () => {
             const driver = new TestSystemOneDecision();
             driver.Responder = () => new Response('<html>gateway</html>', { status: 200 });
@@ -425,6 +453,25 @@ describe('BaseSystemOneDecision', () => {
             expect(IsSystemOneWireObject([])).toBe(false);
             expect(IsSystemOneWireObject(null)).toBe(false);
             expect(IsSystemOneWireObject('x')).toBe(false);
+        });
+
+        it.each([
+            ['a FastAPI detail string', { detail: 'Not authenticated' }, 'Not authenticated'],
+            ['a FastAPI detail list, joined', { detail: [{ loc: ['body', 'questions'], msg: 'Field required', type: 'missing' }, { msg: ' ' }, { msg: 'Input should be a valid string' }] }, 'Field required; Input should be a valid string'],
+            ["SubQ's detail object, prefixed by its error_type", { detail: { error_type: 'validation_error', message: "questions/queue: must have required property 'criteria'" } }, "validation_error: questions/queue: must have required property 'criteria'"],
+            ['a detail object with no error_type', { detail: { message: 'Insufficient credits.' } }, 'Insufficient credits.'],
+            ["an OpenAI-style error.message, trimmed", { error: { message: ' Decision model not found. ', type: 'invalid_request_error', code: 'model_not_found' } }, 'Decision model not found.'],
+            ['a detail object with no message, falling through to error.message', { detail: { error_type: 'x' }, error: { message: 'from error' } }, 'from error'],
+            ['a plain error string', { error: 'Model is loading' }, 'Model is loading'],
+            ['a body with neither', { message: 'not read' }, ''],
+        ])('ReadSystemOneErrorMessage reads %s', (_label, body, expected) => {
+            expect(ReadSystemOneErrorMessage(JSON.stringify(body))).toBe(expected);
+        });
+
+        it('ReadSystemOneErrorMessage gives an empty string for a body that is not a JSON object', () => {
+            expect(ReadSystemOneErrorMessage('')).toBe('');
+            expect(ReadSystemOneErrorMessage('<html>504</html>')).toBe('');
+            expect(ReadSystemOneErrorMessage('["detail"]')).toBe('');
         });
 
         it('CreateSystemOneHTTPError carries the status', () => {

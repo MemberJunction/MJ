@@ -1,12 +1,12 @@
 import {
     BaseDecision,
     BaseSystemOneDecision,
-    IsSystemOneWireObject,
     NonEmptyString,
+    ReadSystemOneErrorMessage,
     SystemOneConfigurationError,
     TrimTrailingSlashes,
 } from '@memberjunction/ai';
-import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
 
 /**
  * A `BaseDecision` driver for Perplexity's Decisions API, `POST https://api.perplexity.ai/v1/decisions`,
@@ -68,7 +68,7 @@ export class PerplexityDecision extends BaseSystemOneDecision {
      * `504` can be an HTML page, so those keep the default: the status and the start of the body.
      */
     protected DescribeHTTPError(status: number, bodyText: string): string {
-        const message = perplexityErrorMessage(SafeJSONParse<unknown>(bodyText));
+        const message = ReadSystemOneErrorMessage(bodyText);
         return message ? `${this.ServiceName} returned HTTP ${status}: ${message}` : super.DescribeHTTPError(status, bodyText);
     }
 
@@ -85,13 +85,4 @@ export class PerplexityDecision extends BaseSystemOneDecision {
             Message: `${this.ServiceName} has no API key: bind an 'API Key' credential whose apiKey is a Perplexity API key, or set AI_VENDOR_API_KEY__PERPLEXITYDECISION`,
         };
     }
-}
-
-/** The `error.message` of a Perplexity error body (`{ error: { message, type, code } }`), or an empty string. */
-function perplexityErrorMessage(body: unknown): string {
-    if (!IsSystemOneWireObject(body)) {
-        return '';
-    }
-    const error = body['error'];
-    return IsSystemOneWireObject(error) && typeof error['message'] === 'string' ? error['message'].trim() : '';
 }

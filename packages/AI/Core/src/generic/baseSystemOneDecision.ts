@@ -10,9 +10,10 @@
  * @module @memberjunction/ai
  */
 
+import { SafeJSONParse } from '@memberjunction/global';
 import { BaseDecision } from './baseDecision';
 import { ModelUsage } from './baseModel';
-import { AIErrorType } from './errorTypes';
+import { AIErrorInfo, AIErrorType } from './errorTypes';
 import {
     ChoiceQuestion,
     DecisionAnswer,
@@ -37,6 +38,8 @@ export type SystemOneWireObject = Record<string, unknown>;
 /** An error carrying the HTTP status, which `ErrorAnalyzer` reads to classify it. */
 export type SystemOneHTTPError = Error & {
     status: number;  // case-violation-ok-legacy-back-compat: ErrorAnalyzer reads the lowercase `status` that HTTP client errors carry
+    /** A classification set by the driver ({@link BaseSystemOneDecision.GetHTTPErrorType}), which `ErrorAnalyzer` keeps as it is. */
+    errorInfo?: AIErrorInfo;  // case-violation-ok-legacy-back-compat: ErrorAnalyzer reads the lowercase `errorInfo` that failed results carry
 };
 
 type MapAnswerResult = { success: true; answer: DecisionAnswer } | { success: false; errorMessage: string };
@@ -133,6 +136,44 @@ export function CreateSystemOneHTTPError(message: string, status: number): Syste
 }
 
 /**
+ * The vendor's message from a decision API's error body, or an empty string when it has none. It reads,
+ * in order:
+ * - `detail` as FastAPI sends it: a string, or a list of `{ msg }` (joined with `; `);
+ * - `detail` as an object `{ error_type, message }` (SubQ), as `error_type: message`;
+ * - `error.message`, as OpenAI-style APIs send it (Perplexity, Inception, llama.cpp);
+ * - `error` as a plain string.
+ * @param bodyText The response body as text; anything that is not a JSON object gives an empty string.
+ */
+export function ReadSystemOneErrorMessage(bodyText: string): string {
+    const body = SafeJSONParse<unknown>(bodyText);
+    if (!IsSystemOneWireObject(body)) {
+        return '';
+    }
+    const detail = body['detail'];
+    if (typeof detail === 'string') {
+        return detail.trim();
+    }
+    if (Array.isArray(detail)) {
+        return detail
+            .map(d => (IsSystemOneWireObject(d) ? NonEmptyString(d['msg']) ?? '' : ''))
+            .filter(m => m.length > 0)
+            .join('; ');
+    }
+    if (IsSystemOneWireObject(detail)) {
+        const message = NonEmptyString(detail['message']);
+        const errorType = NonEmptyString(detail['error_type']);
+        if (message) {
+            return errorType ? `${errorType}: ${message}` : message;
+        }
+    }
+    const error = body['error'];
+    if (IsSystemOneWireObject(error) && typeof error['message'] === 'string') {
+        return error['message'].trim();
+    }
+    return typeof error === 'string' ? error.trim() : '';
+}
+
+/**
  * A `BaseDecision` driver for an API that speaks the System One decisions wire format. It maps MJ's
  * questions onto the wire (a Likelihood as `noul`, a Choice's options as `{ value: description }`, a
  * Score's levels as an array), maps the typed answers back, and records the dated model and usage.
@@ -142,7 +183,8 @@ export function CreateSystemOneHTTPError(message: string, status: number): Syste
  * - {@link ServiceName} and {@link DefaultModel}, and {@link GetEndpointURL} for the URL;
  * - optionally {@link GetRequestHeaders} (default: a bearer API key), {@link GetWireModelName}
  *   (default: the model unchanged), {@link UnwrapResponse} (default: the body as sent),
- *   {@link DescribeHTTPError} (default: the status and the start of the body) and
+ *   {@link DescribeHTTPError} (default: the status and the start of the body),
+ *   {@link GetHTTPErrorType} (default: leave the classification to `ErrorAnalyzer`) and
  *   {@link GetConfigurationError} (default: none).
  *
  * {@link Credential} is the API key read with {@link ParseSystemOneCredential}, so a credential
@@ -229,6 +271,17 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
     protected DescribeHTTPError(status: number, bodyText: string): string {
         const snippet = bodyText.slice(0, ERROR_SNIPPET_LENGTH);
         return `${this.ServiceName} returned HTTP ${status}${snippet ? `: ${snippet}` : ''}`;
+    }
+
+    /**
+     * The error type for a non-2xx status whose `ErrorAnalyzer` reading is wrong for this API, or
+     * undefined (the default) to leave it to `ErrorAnalyzer`, which reads the message and the status. A
+     * type returned here is attached to the thrown error as a `Retriable` error that allows failover:
+     * another candidate may answer what this API refused.
+     * @param _status The HTTP status.
+     */
+    protected GetHTTPErrorType(_status: number): AIErrorType | undefined {
+        return undefined;
     }
 
     /**
@@ -319,7 +372,12 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
         });
         if (!res.ok) {
             const text = await res.text().catch(() => '');
-            throw CreateSystemOneHTTPError(this.DescribeHTTPError(res.status, text), res.status);
+            const error = CreateSystemOneHTTPError(this.DescribeHTTPError(res.status, text), res.status);
+            const errorType = this.GetHTTPErrorType(res.status);
+            if (errorType) {
+                error.errorInfo = { errorType, severity: 'Retriable', canFailover: true, httpStatusCode: res.status };
+            }
+            throw error;
         }
         let parsed: unknown;
         try {
