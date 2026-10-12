@@ -3,6 +3,8 @@ import Prism from 'prismjs';
 // TYPE-ONLY — erased at compile time, so it costs nothing at runtime. The mermaid engine
 // itself is fetched on demand; see `loadMermaid()`.
 import type { Mermaid } from 'mermaid';
+// TYPE-ONLY as well: KaTeX is fetched on demand the same way; see `loadKatex()`.
+import type katex from 'katex';
 import {
   MarkdownEngine,
   MarkdownConfig,
@@ -100,6 +102,75 @@ function getPurifier(): ReturnType<typeof DOMPurify> | null {
   return purifier;
 }
 
+/**
+ * Unicode's Mathematical Alphanumeric Symbols by MathML `mathvariant`: the code points of capital
+ * A, small a and digit 0 (0 where Unicode has no digits in that style).
+ */
+const MATH_LETTER_BASES: Readonly<Record<string, readonly [number, number, number]>> = {
+  bold: [0x1d400, 0x1d41a, 0x1d7ce],
+  italic: [0x1d434, 0x1d44e, 0],
+  'bold-italic': [0x1d468, 0x1d482, 0],
+  script: [0x1d49c, 0x1d4b6, 0],
+  'bold-script': [0x1d4d0, 0x1d4ea, 0],
+  fraktur: [0x1d504, 0x1d51e, 0],
+  'double-struck': [0x1d538, 0x1d552, 0x1d7d8],
+  'bold-fraktur': [0x1d56c, 0x1d586, 0],
+  'sans-serif': [0x1d5a0, 0x1d5ba, 0x1d7e2],
+  'bold-sans-serif': [0x1d5d4, 0x1d5ee, 0x1d7ec],
+  'sans-serif-italic': [0x1d608, 0x1d622, 0],
+  'sans-serif-bold-italic': [0x1d63c, 0x1d656, 0],
+  monospace: [0x1d670, 0x1d68a, 0x1d7f6],
+};
+
+/** Letters Unicode encoded (in Letterlike Symbols) before that block existed; it has holes where they would go. */
+const MATH_LETTER_HOLES: Readonly<Record<string, string>> = {
+  'italic h': 'ℎ',
+  'script B': 'ℬ', 'script E': 'ℰ', 'script F': 'ℱ', 'script H': 'ℋ', 'script I': 'ℐ', 'script L': 'ℒ',
+  'script M': 'ℳ', 'script R': 'ℛ', 'script e': 'ℯ', 'script g': 'ℊ', 'script o': 'ℴ',
+  'fraktur C': 'ℭ', 'fraktur H': 'ℌ', 'fraktur I': 'ℑ', 'fraktur R': 'ℜ', 'fraktur Z': 'ℨ',
+  'double-struck C': 'ℂ', 'double-struck H': 'ℍ', 'double-struck N': 'ℕ', 'double-struck P': 'ℙ',
+  'double-struck Q': 'ℚ', 'double-struck R': 'ℝ', 'double-struck Z': 'ℤ',
+};
+
+function toMathLetter(char: string, variant: string): string | null {
+  const hole = MATH_LETTER_HOLES[`${variant} ${char}`];
+  if (hole) return hole;
+  const bases = MATH_LETTER_BASES[variant];
+  if (!bases) return null;
+  const code = char.charCodeAt(0);
+  if (code >= 65 && code <= 90) return String.fromCodePoint(bases[0] + code - 65);
+  if (code >= 97 && code <= 122) return String.fromCodePoint(bases[1] + code - 97);
+  if (code >= 48 && code <= 57 && bases[2]) return String.fromCodePoint(bases[2] + code - 48);
+  return null;
+}
+
+/**
+ * Chrome lays out MathML Core, which honors `mathvariant` only as "normal". KaTeX writes
+ * \mathbf{E} as `<mi mathvariant="bold">E</mi>` and \mathbb{R} as `mathvariant="double-struck"`,
+ * so Chrome would show plain letters, losing the difference between a vector and a scalar. MathML
+ * Core's own answer is to spell such letters with their Unicode math characters (𝐄, ℝ), which every
+ * browser renders. Identifiers and numbers only; anything without a Unicode form (Greek, text runs)
+ * keeps its attribute and gets the CSS fallback in the component stylesheet.
+ */
+function useUnicodeMathLetters(root: Element): void {
+  root.querySelectorAll('mi[mathvariant], mn[mathvariant]').forEach((node) => {
+    const variant = node.getAttribute('mathvariant') ?? '';
+    const text = node.textContent ?? '';
+    const letters = Array.from(text, (char) => toMathLetter(char, variant));
+    if (text && letters.every((letter) => letter !== null)) {
+      node.textContent = letters.join('');
+      node.removeAttribute('mathvariant');
+    }
+  });
+}
+
+/**
+ * TeX that defines macros. KaTeX's `maxExpand` counts expansions, not output, so three kilobytes of
+ * `\def` can expand to half a million MathML nodes and freeze the tab, again on every streamed
+ * chunk. A rendered answer has no use for its own macros, so such formulas stay source.
+ */
+const TEX_MACRO_DEFINITION = /\\(?:[gex]?def|let|futurelet|newcommand|renewcommand|providecommand)(?![a-zA-Z])/;
+
 @Injectable({
   providedIn: 'root'
 })
@@ -112,6 +183,10 @@ export class MarkdownService {
   private mermaidEngine: Mermaid | null = null;
   /** In-flight load, so N diagrams in one document share ONE chunk fetch. */
   private mermaidLoad: Promise<Mermaid> | null = null;
+  /** The KaTeX engine, once its lazy chunk has landed. Null until a formula is actually typeset. */
+  private katexEngine: typeof katex | null = null;
+  /** In-flight load, so N formulas in one document share ONE chunk fetch. */
+  private katexLoad: Promise<typeof katex> | null = null;
 
   /**
    * Prism-backed highlight function injected into the core engine. The engine
@@ -346,6 +421,87 @@ export class MarkdownService {
   /** @deprecated Use {@link RenderMermaid}. */
   public async renderMermaid(container: HTMLElement): Promise<boolean> {
     return this.RenderMermaid(container);
+  }
+
+  /**
+   * Fetch the KaTeX engine, on first use only. A dynamic `import()` under the "genuine bundle-size
+   * deferral" allowance (typescript-style rules, category 3), like {@link loadMermaid}: KaTeX is
+   * 277 KB minified (76 KB gzipped), and documents with no math never download it. A failed load
+   * clears the cached promise so a later render can retry.
+   */
+  private async loadKatex(): Promise<typeof katex> {
+    if (this.katexEngine) {
+      return this.katexEngine;
+    }
+
+    this.katexLoad ??= import('katex').then((module) => module.default);
+
+    try {
+      this.katexEngine = await this.katexLoad;
+      return this.katexEngine;
+    } catch (error) {
+      this.katexLoad = null;
+      throw error;
+    }
+  }
+
+  /**
+   * Typeset TeX math in a container: every `code.mj-math` placeholder that markdown-core's
+   * math extension emitted. Call this after the HTML has been inserted into the DOM.
+   *
+   * The output is MathML, which current browsers lay out natively, so hosts need no KaTeX
+   * stylesheet or fonts. KaTeX builds the nodes itself from the TeX text (no HTML string is
+   * parsed) and runs with `trust` off, so `\href`, `\url` and `\includegraphics` stay inert.
+   * A formula KaTeX cannot parse, one that defines macros, or an engine that fails to load leaves
+   * the TeX source showing as code. User sizes are capped at 20em.
+   *
+   * Whether math is on is the caller's decision (`<mj-markdown>` checks its `EnableMath` input):
+   * this service is a root singleton whose config the last-rendered component set, so it is no
+   * guide to the container in hand. Without math enabled at parse time there are no placeholders.
+   *
+   * @param container The DOM element containing the math placeholders
+   * @returns true if at least one formula was typeset
+   */
+  public async RenderMath(container: HTMLElement): Promise<boolean> {
+    // Find the placeholders BEFORE touching the engine: no math, no chunk fetch.
+    const placeholders = container.querySelectorAll<HTMLElement>('code.mj-math');
+    if (placeholders.length === 0) return false;
+
+    let engine: typeof katex;
+    try {
+      engine = await this.loadKatex();
+    } catch (error) {
+      console.error('Failed to load the KaTeX math engine:', error);
+      return false;
+    }
+
+    let typeset = false;
+    placeholders.forEach((placeholder) => {
+      // A newer render (the next streamed chunk) replaced it while KaTeX was loading.
+      if (!container.contains(placeholder)) return;
+      const tex = placeholder.textContent ?? '';
+      const target = document.createElement('span');
+      try {
+        if (TEX_MACRO_DEFINITION.test(tex)) {
+          throw new Error('Formulas that define macros are not typeset');
+        }
+        engine.render(tex, target, {
+          displayMode: placeholder.classList.contains('mj-math-display'),
+          output: 'mathml',
+          throwOnError: true,
+          strict: 'ignore',
+          maxSize: 20
+        });
+        useUnicodeMathLetters(target);
+        placeholder.replaceWith(...Array.from(target.childNodes));
+        typeset = true;
+      } catch (error) {
+        placeholder.classList.add('mj-math-error');
+        placeholder.title = error instanceof Error ? error.message : 'This formula could not be typeset';
+      }
+    });
+
+    return typeset;
   }
 
   /**

@@ -130,6 +130,11 @@ function renderBlock(token: Token, key: string): React.ReactNode {
             return <SvgBlock key={key} xml={svg.svgContent} />;
         }
 
+        case 'mathBlock':
+            // TeX math (markdown-core's math extension). No typesetter on mobile yet: show the
+            // source, delimiters included, as code.
+            return <CodeBlock key={key} code={(token as Tokens.Generic).raw.trim()} />;
+
         case 'def':
             return null;
 
@@ -167,6 +172,8 @@ function renderInline(tokens: Token[] | undefined, keyPrefix: string): React.Rea
                 return <Text key={key} style={styles.del}>{renderInline((token as Tokens.Del).tokens, key)}</Text>;
             case 'codespan':
                 return <Text key={key} style={styles.codespan}>{decodeEntities((token as Tokens.Codespan).text)}</Text>;
+            case 'math':
+                return <Text key={key} style={styles.codespan}>{(token as Tokens.Generic).raw}</Text>;
             case 'link': {
                 const l = token as Tokens.Link;
                 return (

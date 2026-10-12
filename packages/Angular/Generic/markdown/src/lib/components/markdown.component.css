@@ -488,6 +488,42 @@
 }
 
 /* ============================================
+   TeX Math (typeset as MathML by MarkdownService.RenderMath)
+   ============================================ */
+.mj-markdown-container .mj-math-block {
+  margin: 1em 0;
+}
+
+/* A wide display formula scrolls instead of widening the message. */
+.mj-markdown-container .katex:has(> math[display="block"]) {
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Bold styles Unicode has no math letters for (Greek, text runs); Chrome ignores mathvariant. */
+.mj-markdown-container math [mathvariant*="bold"] {
+  font-weight: bold;
+}
+
+/* Chrome ignores MathML's columnalign too, which centres every cell and un-aligns the "=" signs of
+   a derivation. KaTeX writes exactly "right left" (repeated, for alignedat) for aligned, split and
+   alignedat, and "left left" for cases; other column lists (arrays) stay centred. */
+.mj-markdown-container mtable:is([columnalign="right left"], [columnalign^="right left right left"]) > mtr > mtd:nth-child(odd) {
+  text-align: right;
+}
+
+.mj-markdown-container mtable:is([columnalign="right left"], [columnalign^="right left right left"]) > mtr > mtd:nth-child(even),
+.mj-markdown-container mtable[columnalign="left left"] > mtr > mtd {
+  text-align: left;
+}
+
+/* TeX that KaTeX could not parse stays visible as source; its title says why. */
+.mj-markdown-container code.mj-math-error {
+  text-decoration: underline wavy var(--mj-status-error);
+}
+
+/* ============================================
    Mermaid Diagrams
    ============================================ */
 .mj-markdown-container .mermaid-diagram {

@@ -92,6 +92,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   }
 
   /**
+   * Enable TeX math (`$…$`, `$$…$$`, `\(…\)`, `\[…\]`), typeset as MathML
+   */
+  @Input() EnableMath: boolean = DEFAULT_MARKDOWN_CONFIG.enableMath;
+
+  /**
    * Enable copy button on code blocks
    */
   @Input() EnableCodeCopy: boolean = DEFAULT_MARKDOWN_CONFIG.enableCodeCopy;
@@ -398,6 +403,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
 
   private renderStartTime: number = 0;
   private hasMermaid: boolean = false;
+  private hasMath: boolean = false;
   private hasCodeBlocks: boolean = false;
   private themeObserver: MutationObserver | null = null;
 
@@ -414,6 +420,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       changes['data'] ||
       changes['enableHighlight'] ||
       changes['enableMermaid'] ||
+      changes['EnableMath'] ||
       changes['enableCodeCopy'] ||
       changes['enableCollapsibleHeadings'] ||
       changes['collapsibleHeadingLevel'] ||
@@ -465,6 +472,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     const config: MarkdownConfig = {
       enableHighlight: this.EnableHighlight,
       enableMermaid: this.EnableMermaid,
+      enableMath: this.EnableMath,
       enableCodeCopy: this.EnableCodeCopy,
       enableCollapsibleHeadings: this.EnableCollapsibleHeadings,
       collapsibleHeadingLevel: this.CollapsibleHeadingLevel,
@@ -488,6 +496,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     // Check for mermaid and code blocks
     this.hasMermaid = html.includes('language-mermaid') || html.includes('class="mermaid"');
     this.hasCodeBlocks = html.includes('<pre>') && html.includes('<code');
+    this.hasMath = html.includes('class="mj-math');
 
     // Sanitize if enabled
     // Note: We bypass Angular's sanitizer when SVG renderer or HTML passthrough is enabled
@@ -527,6 +536,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     if (this.EnableCollapsibleHeadings) {
       this.markdownService.initializeCollapsibleHeadings(container as HTMLElement);
       this.setupCollapsibleListeners(container as HTMLElement);
+    }
+
+    // Typeset TeX math (async: KaTeX loads on first use)
+    if (this.EnableMath && this.hasMath) {
+      await this.markdownService.RenderMath(container as HTMLElement);
     }
 
     // Render mermaid diagrams (async)

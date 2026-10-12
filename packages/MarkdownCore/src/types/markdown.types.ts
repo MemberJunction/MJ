@@ -24,6 +24,14 @@ export interface MarkdownConfig {
   enableMermaid?: boolean;
 
   /**
+   * Enable TeX math: `$…$` and `\(…\)` inline, `$$…$$` and `\[…\]` for display math.
+   * The core only recognizes it (see `CreateMathExtension`); typesetting is the
+   * renderer's job — ng-markdown typesets it as MathML with KaTeX, loaded on first use.
+   * @default true
+   */
+  enableMath?: boolean;
+
+  /**
    * Enable copy-to-clipboard button on code blocks.
    * @default true
    */
@@ -166,6 +174,7 @@ export type ResolvedMarkdownConfig = Required<Omit<MarkdownConfig, 'autoExpandLe
 export const DEFAULT_MARKDOWN_CONFIG: ResolvedMarkdownConfig = {
   enableHighlight: true,
   enableMermaid: true,
+  enableMath: true,
   enableCodeCopy: true,
   enableCollapsibleHeadings: false,
   collapsibleHeadingLevel: 2,
