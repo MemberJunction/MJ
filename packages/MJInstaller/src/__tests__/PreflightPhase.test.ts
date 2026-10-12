@@ -1,4 +1,4 @@
-import { createMockFileSystem, createMockProcessRunner, createMockSqlAdapter } from './mocks/adapters.js';
+import { createMockFileSystem, createMockProcessRunner, createMockSqlAdapter, createMockPgAdapter } from './mocks/adapters.js';
 import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { samplePartialConfig } from './mocks/fixtures.js';
 import type { PreflightContext } from '../phases/PreflightPhase.js';
@@ -25,6 +25,13 @@ const mockSql = createMockSqlAdapter();
 vi.mock('../adapters/SqlServerAdapter.js', () => {
   return {
     SqlServerAdapter: function SqlServerAdapter() { return mockSql; },
+  };
+});
+
+const mockPg = createMockPgAdapter();
+vi.mock('../adapters/PostgresAdapter.js', () => {
+  return {
+    PostgresAdapter: function PostgresAdapter() { return mockPg; },
   };
 });
 
@@ -132,6 +139,7 @@ describe('PreflightPhase', () => {
       mockProcess[key].mockReset();
     }
     mockSql.CheckConnectivity.mockReset();
+    mockPg.CheckConnectivity.mockReset().mockResolvedValue({ Reachable: true, LatencyMs: 7 });
 
     phase = new PreflightPhase();
 
@@ -352,6 +360,19 @@ describe('PreflightPhase', () => {
       expect(sqlCheck!.Status).toBe('fail');
       expect(sqlCheck!.Message).toContain('Connection refused');
       expect(result.Passed).toBe(false);
+    });
+
+    it('checks PostgreSQL (default port 5432) when the platform is postgresql', async () => {
+      mockFs.FileExists.mockImplementation(async (p: string) => !p.endsWith('.env'));
+      const ctx = makeContext();
+      ctx.Config = { ...ctx.Config, DatabasePlatform: 'postgresql', DatabasePort: undefined };
+      const result = await phase.Run(ctx);
+      const pgCheck = result.Diagnostics.Checks.find(c => c.Name === 'PostgreSQL connectivity');
+      expect(pgCheck).toBeDefined();
+      expect(pgCheck!.Status).toBe('pass');
+      expect(pgCheck!.Message).toContain('PostgreSQL reachable at');
+      expect(mockPg.CheckConnectivity).toHaveBeenCalledWith(expect.any(String), 5432);
+      expect(mockSql.CheckConnectivity).not.toHaveBeenCalled();
     });
 
     it('should skip SQL check when SkipDB is true', async () => {
