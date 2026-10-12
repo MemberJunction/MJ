@@ -12557,6 +12557,9 @@ importers:
       minimatch:
         specifier: ^9.0.5
         version: 9.0.9
+      mssql:
+        specifier: ^12.2.0
+        version: 12.7.0
       simple-git:
         specifier: ^3.30.0
         version: 3.30.0
@@ -12564,6 +12567,9 @@ importers:
       '@types/adm-zip':
         specifier: ^0.5.7
         version: 0.5.7
+      '@types/mssql':
+        specifier: ^9.1.9
+        version: 9.1.9
       tsc-alias:
         specifier: ^1.8.15
         version: 1.8.16

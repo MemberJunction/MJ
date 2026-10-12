@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import type { spawn } from 'node:child_process';
-import { KeepAwakeForCommand, KEEP_AWAKE_COMMANDS, KEEP_AWAKE_OPT_OUT_ENV_VAR, type KeepAwakeEnvironment } from '../lib/keep-awake';
+import { KeepAwakeForCommand, SleepNoticeForCommand, KEEP_AWAKE_COMMANDS, KEEP_AWAKE_OPT_OUT_ENV_VAR, type KeepAwakeEnvironment } from '../lib/keep-awake';
 
 function fakeChild(): EventEmitter & { unref: ReturnType<typeof vi.fn> } {
     return Object.assign(new EventEmitter(), { unref: vi.fn() });
@@ -58,5 +58,19 @@ describe('KeepAwakeForCommand', () => {
         const erroring = environment({ Spawn: vi.fn(() => child) as unknown as typeof spawn });
         expect(KeepAwakeForCommand('install', erroring)).toBe(true);
         expect(() => child.emit('error', new Error('spawn caffeinate ENOENT'))).not.toThrow();
+    });
+});
+
+describe('SleepNoticeForCommand', () => {
+    it('warns about sleep at the start of every long database command', () => {
+        for (const id of KEEP_AWAKE_COMMANDS) {
+            expect(SleepNoticeForCommand(id, false)).toMatch(/Don't let this machine sleep/);
+            expect(SleepNoticeForCommand(id, true)).toMatch(/keeping this Mac awake.*closing the lid/);
+        }
+    });
+
+    it('says nothing for short commands', () => {
+        expect(SleepNoticeForCommand('sync:push', false)).toBeUndefined();
+        expect(SleepNoticeForCommand('version', true)).toBeUndefined();
     });
 });

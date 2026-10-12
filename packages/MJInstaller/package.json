@@ -16,10 +16,12 @@
   "dependencies": {
     "adm-zip": "^0.5.16",
     "minimatch": "^9.0.5",
+    "mssql": "^12.2.0",
     "simple-git": "^3.30.0"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
+    "@types/mssql": "^9.1.9",
     "typescript": "^5.9.3",
     "tsc-alias": "^1.8.15"
   },
