@@ -64,6 +64,25 @@ import {
   type RealtimeSessionStartOptions
 } from './channel-session-scope';
 import { RecordingShardQueue } from './RecordingShardQueue';
+import type { RecordingShard } from './RecordingShardWindow';
+
+// Replaced in Task 5 (Opus shard wiring): temporary base64 <-> bytes bridge for the legacy PCM shards.
+const BASE64_CHUNK = 0x8000;
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += BASE64_CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + BASE64_CHUNK));
+  }
+  return btoa(binary);
+}
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
 
 /**
  * `MJ: User Settings` key for the per-user "record this voice call" consent toggle. Stored as
@@ -722,6 +741,8 @@ export class RealtimeSessionRuntime {
    * (#5196) fills the gap with silence.
    */
   private shardQueue: RecordingShardQueue | null = null;
+  /** Replaced in Task 5 (Opus shard wiring). Per-recording so a late flush never touches a newer session's indexes. */
+  private legacyShardCounter: { Next: number } | null = null;
   /** How often crash-recovery shards are flushed during a recording. */
   private static readonly segmentFlushMs = 15000;
 
@@ -1611,7 +1632,17 @@ export class RealtimeSessionRuntime {
 
   /** Begins flushing ~15s crash-recovery shards to the server for the duration of the recording. */
   private startSegmentFlushing(): void {
-    this.shardQueue = new RecordingShardQueue();
+    // Replaced in Task 5 (Opus shard wiring): the queue now takes already-indexed shards, so the
+    // legacy base64 PCM snapshots are wrapped as shards here with a per-recording local counter.
+    const agentSessionId = this.agentSessionId;
+    const sampleRate = this.recorder?.SampleRate ?? 0;
+    this.legacyShardCounter = { Next: 0 };
+    this.shardQueue = new RecordingShardQueue(async (shard) => {
+      if (!agentSessionId) {
+        return false;
+      }
+      return this.uploadRecordingShard(agentSessionId, sampleRate, shard.Index, bytesToBase64(shard.Bytes));
+    });
     this.segmentTimer = setInterval(() => { void this.flushRecordingSegment(); }, RealtimeSessionRuntime.segmentFlushMs);
   }
 
@@ -1690,16 +1721,21 @@ export class RealtimeSessionRuntime {
     const recorder = this.recorder;
     const agentSessionId = this.agentSessionId;
     const queue = this.shardQueue;
-    if (!recorder || !agentSessionId || !queue) {
+    const counter = this.legacyShardCounter;
+    if (!recorder || !agentSessionId || !queue || !counter) {
       return;
     }
-    // Read once: a shard's sample rate is fixed at capture, and the recorder may be stopped by the
-    // time a retry of it runs.
-    const sampleRate = recorder.SampleRate;
-    await queue.Flush(
-      () => recorder.SnapshotNewSegmentBase64(),
-      (segmentIndex, audioBase64) => this.uploadRecordingShard(agentSessionId, sampleRate, segmentIndex, audioBase64),
-    );
+    // Replaced in Task 5 (Opus shard wiring)
+    const fresh: RecordingShard[] = [];
+    try {
+      const audioBase64 = await recorder.SnapshotNewSegmentBase64();
+      if (audioBase64) {
+        fresh.push({ Index: counter.Next++, StartSample: 0, SampleCount: 0, Bytes: base64ToBytes(audioBase64) });
+      }
+    } catch (error) {
+      console.warn(`[RealtimeSession] Failed to snapshot recording shard for session ${agentSessionId}:`, error);
+    }
+    await queue.Flush(fresh);
   }
 
   /**
