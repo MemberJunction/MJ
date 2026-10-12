@@ -368,6 +368,18 @@ Microsoft MAI-Voice-2.1.
 26. **[Flagged — new, internal]** **`gpt-6.1-sol` MaxInputTokens 922,000 vs 1,050,000 on its
     siblings.** A convention decision, not an error — see Model Updates.
 
+27. **[Flagged — new, corrects a prior "Resolved"]** **8 duplicate `primaryKey` UUIDs exist across
+    the AI metadata files** on `origin/next` today. The 2026-10-05 report closed its carried item 12
+    with "a full scan finds **zero** duplicate primary keys across every model, vendor and cost
+    row" — that scan evidently covered `.ai-models.json` alone. Walking `.ai-models.json`,
+    `.cohere-reranker-models.json` and `.ai-vendors.json` together finds each of these IDs twice:
+    `E3A5CCEC-`, `D8A5CCEC-`, `DAA5CCEC-`, `DBA5CCEC-`, `E4A5CCEC-6A37-EF11-86D4-000D3A4E707E`,
+    `27C0423E-F36B-1410-8876-005D02743E8C`, `DAB9433E-` and `E1B9433E-F36B-1410-8DA0-00021F8B792E`.
+    All 8 pre-date this branch and none were introduced here (verified against `origin/next`); this
+    run's 10 new UUIDs each appear exactly once. Whether these collide in practice depends on
+    whether the paired records belong to the same entity — worth one look, and the de-duplication
+    scan should be re-run across all three files rather than one.
+
 ### Notes on the routine prompt itself (§0 asks for this)
 
 **The repo mirror matches the stored prompt** section for section (§0.1–§0.6, Steps 1–4,
@@ -389,11 +401,48 @@ Three carried defects in the prompt of record, all **unfixed**, all re-verified 
    `b.Priority - a.Priority` — **descending, so higher is tried first** — while
    `RerankerService.ts:341` reads the same field ascending. The defect is in both copies of the
    prompt, so it is a real error, not mirror drift.
-3. **Trailing newline.** Correcting last week's note: `metadata/ai-models/.ai-models.json` **does**
-   end with exactly one `\n`, and a `json.dumps(…, indent=2, ensure_ascii=False) + "\n"` round-trip
-   is byte-identical to the committed file. Verified before editing, which is why this run's diff is
-   209 insertions / 4 deletions rather than a whole-file rewrite. Worth stating in the prompt as the
-   safe edit recipe.
+3. **Trailing newline — last week's note was right and this run's "correction" of it was wrong.**
+   The CI log for this PR's first commit shows `mj sync push` rewriting the file's last line as
+   `]` with `\ No newline at end of file`, so the tool genuinely does write these files **without**
+   a trailing newline, exactly as the 2026-10-05 report said. What that report did not say, and
+   what matters more, is that **it has no effect on the gate**: `scripts/ci-restore-sync-only-metadata.mjs`
+   compares `JSON.parse`d trees, not bytes, so trailing whitespace is normalised away. Either
+   convention passes. The committed file currently ends with one `\n` and this run kept it that way.
+
+4. **The prompt's Deliverable 2 example omits `primaryKey` on the model record itself, and that
+   is what reddened this PR's first commit.** This is the sharper half of defect 1 and deserves
+   stating separately, because supplying `uuidgen` UUIDs is not sufficient — they must be on
+   **every** record, including the top-level model, not just the `relatedEntities` rows. This run
+   put `primaryKey` on all five vendor rows and all three cost rows but not on the two new model
+   records, so `mj sync push` minted two (`E3F20ACE-…`, `19F7A55A-…`). `stripSync()` strips only
+   `sync` keys and `deleteRecord.deletedAt`, so a minted `primaryKey` survives the strip, the file
+   is held back from restore, and the drift step fails — which is precisely the violation the gate
+   exists to catch, working as designed. Fixed in the second commit.
+
+   **The reusable check**, which needs no database and reproduces the gate exactly:
+
+   ```bash
+   node --input-type=module -e '
+   import { isSyncOnlyChange } from "./scripts/ci-restore-sync-only-metadata.mjs";
+   import { readFileSync } from "node:fs";
+   const F = "metadata/ai-models/.ai-models.json";
+   const committed = readFileSync(F, "utf8");
+   let minted = 0;
+   const push = (n) => Array.isArray(n) ? n.map(push)
+     : (n && typeof n === "object")
+       ? (() => { const o = {};
+           for (const [k, v] of Object.entries(n)) o[k] = k === "fields" ? v : push(v);
+           if ("fields" in n) { if (!("primaryKey" in o)) o.primaryKey = { ID: "MINTED-" + (++minted) };
+             o.sync = { lastModified: "x", checksum: "y" }; }
+           return o; })()
+       : n;
+   const pushed = JSON.stringify(push(JSON.parse(committed)), null, 2);
+   console.log("would mint:", minted, "| sync-only:", isSyncOnlyChange(pushed, committed));'
+   ```
+
+   It must print `would mint: 0 | sync-only: true`. **This belongs in §0.3 next to the Status
+   check** — §0.3 catches bad `Status` values, but nothing in the prompt catches the missing
+   `primaryKey`, which is the failure that has now hit two consecutive runs.
 
 **New recommendation**: Step 2's source list should record that **egress varies between sessions**.
 Last week's advice to prefer the AWS Price List API and vendors' GitHub docs repos did not work this
