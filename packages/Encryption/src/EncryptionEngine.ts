@@ -978,6 +978,9 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
      * The engine never touches key material during validation — that stays
      * encapsulated within each provider.
      *
+     * A failed result also says whether the source holds the key at all (`IsConfigured`), so a
+     * key this install was never given can be told from one that is present but unusable.
+     *
      * @param contextUser - User context for database access
      * @returns Array of validation results, one per active key
      */
@@ -987,6 +990,7 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         SourceType: string;
         LookupValue: string;
         IsAccessible: boolean;
+        IsConfigured?: boolean;
         Error?: string;
     }>> {
         await this.ensureConfigured(contextUser);
@@ -1008,6 +1012,7 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         SourceType: string;
         LookupValue: string;
         IsAccessible: boolean;
+        IsConfigured?: boolean;
         Error?: string;
     }> {
         const result = {
@@ -1016,6 +1021,7 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
             SourceType: '',
             LookupValue: key.KeyLookupValue || '',
             IsAccessible: false,
+            IsConfigured: undefined as boolean | undefined,
             Error: undefined as string | undefined
         };
 
@@ -1040,6 +1046,15 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
 
             result.IsAccessible = validation.IsAccessible;
             result.Error = validation.Error;
+            // Whether the source holds the key at all, as opposed to holding one that fails
+            // validation. Asked only on failure, so a remote source costs nothing extra.
+            if (!validation.IsAccessible) {
+                try {
+                    result.IsConfigured = await source.KeyExists(keyConfig.source.lookupValue);
+                } catch {
+                    result.IsConfigured = true; // can't tell: keep the validation error as the whole story
+                }
+            }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             result.Error = message;
