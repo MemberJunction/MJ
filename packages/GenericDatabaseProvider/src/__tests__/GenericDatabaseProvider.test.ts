@@ -41,6 +41,7 @@ import {
     ProviderBase,
     ProviderConfigDataBase,
     InMemoryLocalStorageProvider,
+    LocalCacheManager,
 } from '@memberjunction/core';
 import type { PostCommitToken, QueryExecutionSpec, RunViewParams } from '@memberjunction/core';
 import type { MJEntityAIActionEntity } from '@memberjunction/core-entities';
@@ -2996,6 +2997,72 @@ describe('TransactionFrameTracker', () => {
             t.EndEpoch('committed');
         }
         expect(t.Resolve(first, false).Kind).toBe('drop');
+    });
+});
+
+describe('GenericDatabaseProvider entity-event batch levels follow the begin outcome (#4786 merge)', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    function spyBatch() {
+        const cache = LocalCacheManager.Instance;
+        return {
+            begin: vi.spyOn(cache, 'BeginEntityEventBatch').mockImplementation(() => undefined),
+            end: vi.spyOn(cache, 'EndEntityEventBatch').mockResolvedValue(undefined),
+            abandon: vi.spyOn(cache, 'AbandonEntityEventBatch').mockResolvedValue(undefined),
+        };
+    }
+
+    it('opens a level only after the begin succeeds, and closes it on commit as a success', async () => {
+        const spies = spyBatch();
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        expect(spies.begin).toHaveBeenCalledTimes(1);
+        await p.CommitTransaction();
+        expect(spies.end).toHaveBeenCalledTimes(1);
+        expect(spies.end).toHaveBeenCalledWith(p, true);
+    });
+
+    it('a begin that throws opens no level, so the caller\'s rollback closes none', async () => {
+        const spies = spyBatch();
+        class FailingBegin extends RecordingProvider {
+            protected override async BeginPhysicalTransaction(): Promise<void> {
+                throw new Error('pool exhausted');
+            }
+        }
+        const p = new FailingBegin();
+        await expect(p.BeginTransaction()).rejects.toThrow(/pool exhausted/);
+        expect(spies.begin).not.toHaveBeenCalled();
+        await p.RollbackTransaction().catch(() => undefined);
+        expect(spies.end).not.toHaveBeenCalled();
+    });
+
+    it('a nested begin whose savepoint fails adds no level; the outer settle closes exactly one', async () => {
+        const spies = spyBatch();
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        const realExecute = p.ExecuteSQL.bind(p);
+        p.ExecuteSQL = async <T,>(sql?: string, params?: unknown[], options?: { connectionSource?: unknown }): Promise<Array<T>> => {
+            if (sql?.startsWith('SAVE TRANSACTION')) throw new Error('savepoint refused');
+            return realExecute<T>(sql, params, options);
+        };
+        await expect(p.BeginTransaction()).rejects.toThrow(/savepoint refused/);
+        expect(spies.begin).toHaveBeenCalledTimes(1);
+        await p.CommitTransaction();
+        expect(spies.end).toHaveBeenCalledTimes(1);
+        expect(spies.end).toHaveBeenCalledWith(p, true);
+    });
+
+    it('rollback closes the level as a failure; reset abandons the batch', async () => {
+        const spies = spyBatch();
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.RollbackTransaction();
+        expect(spies.end).toHaveBeenCalledWith(p, false);
+        await p.BeginTransaction();
+        await p.ResetTransactionState();
+        expect(spies.abandon).toHaveBeenCalledWith(p);
     });
 });
 
