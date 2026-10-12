@@ -1209,7 +1209,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT108 - Realtime Session Config Guard",
+            "TestID": "@lookup:MJ: Tests.Name=IT111 - Realtime Session Config Guard",
             "Sequence": 49,
             "Status": "Active"
           },
@@ -1220,7 +1220,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT109 - Realtime Session Identity Verification",
+            "TestID": "@lookup:MJ: Tests.Name=IT112 - Realtime Session Identity Verification",
             "Sequence": 50,
             "Status": "Active"
           },
