@@ -36927,6 +36927,12 @@ export const MJUserSchema = z.object({
         * * Display Name: User Image Icon Class
         * * SQL Data Type: nvarchar(100)
         * * Description: Font Awesome icon class for user avatar (e.g., "fa-solid fa-user-astronaut"). Used as fallback when UserImageURL is not provided. Example classes: "fa-solid fa-user", "fa-regular fa-circle-user", "fa-solid fa-user-tie".`),
+    IsTemplate: z.boolean().describe(`
+        * * Field Name: IsTemplate
+        * * Display Name: Is Template
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this user is a template: its configuration (pinned apps, views, settings, dashboards, conversations) is copied to new users through the template clone preset or userHandling.newUserTemplate. Template users are for setting things up, not for everyday use; Explorer shows a banner while one is signed in.`),
     FirstLast: z.string().nullable().describe(`
         * * Field Name: FirstLast
         * * Display Name: First Last
@@ -87706,6 +87712,13 @@ export interface MJEntityEntity_IEntityCloneConfiguration {
     Enabled?: boolean;
     /** Hard refusal: this entity's rows are never created by the clone engine, as root or as child. Overrides every relationship policy. Use for audit, run, credential and metadata entities. */
     NotCloneable?: boolean;
+    /**
+     * Lets a NotCloneable entity's rows be copied after all, but only as children of a template copy: a
+     * clone run under a preset with `TemplateSourceField` whose source record has that flag set. Use for
+     * rows that are private to a person (conversations, dashboard preferences) and must never be copied
+     * from one user to another, yet belong in a template built to be copied.
+     */
+    CloneableFromTemplate?: boolean;
     /** Shown to users and returned in warnings when NotCloneable or Enabled=false. */
     NotCloneableReason?: string;
     /** Authorization name checked with ancestors. Default 'Clone Records'; resolved per §9.1. */
@@ -87867,6 +87880,14 @@ export interface MJEntityEntity_IClonePreset {
     Options?: Record<string, unknown>;
     /** Edge policy overrides, keyed by related entity name. */
     Relationships?: Record<string, { Policy: 'Deep' | 'Reference' | 'Skip' }>;
+    /**
+     * Makes this a template preset. Names a boolean field on the root entity; the preset is offered and
+     * applied only when the source record has it set (e.g. `IsTemplate` on `MJ: Users`), and the plan is
+     * blocked otherwise. A template preset may open edges the configuration Locks and copy children whose
+     * entity is `CloneableFromTemplate`: those protections keep a person's private records from being
+     * copied to someone else, which does not apply to a record built to be copied.
+     */
+    TemplateSourceField?: string;
 }
 
 /**
@@ -140669,6 +140690,20 @@ export class MJUserEntity extends BaseEntity<MJUserEntityType> {
     }
     set UserImageIconClass(value: string | null) {
         this.Set('UserImageIconClass', value);
+    }
+
+    /**
+    * * Field Name: IsTemplate
+    * * Display Name: Is Template
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this user is a template: its configuration (pinned apps, views, settings, dashboards, conversations) is copied to new users through the template clone preset or userHandling.newUserTemplate. Template users are for setting things up, not for everyday use; Explorer shows a banner while one is signed in.
+    */
+    get IsTemplate(): boolean {
+        return this.Get('IsTemplate');
+    }
+    set IsTemplate(value: boolean) {
+        this.Set('IsTemplate', value);
     }
 
     /**
