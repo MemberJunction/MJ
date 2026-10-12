@@ -63,7 +63,9 @@ GO
 -- Records one shard. Insert-if-absent under a key-range lock (the MERGE the design calls for):
 --   * absent            → inserted; a NULL status becomes Pending, and a Complete/Partial session given a
 --                         shard at or past its expected count becomes Pending again (the call went on after a
---                         terminal signal, so there is unassembled audio). An insert while Assembling also
+--                         terminal signal, so there is unassembled audio) — but only within 24 h of close:
+--                         an older session's file and status are left alone (the shard is kept and the
+--                         caller logs it). An insert while Assembling also
 --                         re-opens it AND bumps the version: the running assembler may already have read the
 --                         ledger, so its fenced finish must lose and a fresh claim must pick the shard up.
 --   * same index + hash → Duplicate (a retry; acknowledged as success).
@@ -104,7 +106,8 @@ BEGIN
          WHERE [ID] = @AgentSessionID
            AND ([RecordingStatus] IS NULL
                 OR [RecordingStatus] = N'Assembling'
-                OR ([RecordingStatus] IN (N'Complete', N'Partial') AND @Index >= ISNULL([RecordingExpectedShards], 0)));
+                OR ([RecordingStatus] IN (N'Complete', N'Partial') AND @Index >= ISNULL([RecordingExpectedShards], 0)
+                    AND ([ClosedAt] IS NULL OR [ClosedAt] > DATEADD(HOUR, -24, SYSDATETIMEOFFSET()))));
     END
     ELSE IF EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIAgentSessionRecordingShard]
                      WHERE [AgentSessionID] = @AgentSessionID AND [Index] = @Index AND [Sha256] = @Sha256)
