@@ -81,6 +81,8 @@ interface ComparisonFieldRow {
     HasDifference: boolean;
     /** Index of the column whose value is selected for merge (0 = source, 1+ = match index) */
     SelectedColumnIndex: number;
+    /** Whether this row's long values are expanded — shared by every column so they open and close together. */
+    Expanded?: boolean;
 }
 
 /** LLM reasoning recommendation surfaced alongside a match (null when reasoning never ran) */

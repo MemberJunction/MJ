@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 
 /**
  * A comparison value longer than this many characters renders collapsed by
@@ -43,8 +43,14 @@ export class CompareValueComponent {
     return this._value;
   }
 
-  /** Whether a long value is currently expanded. */
-  public Expanded = false;
+  /**
+   * Whether a long value is expanded. Bind it two-way (`[(Expanded)]`) to share one state across a row, so
+   * expanding one column's value expands the others in that row too.
+   */
+  @Input() Expanded = false;
+
+  /** Emitted when the user toggles the value, with the new expanded state. */
+  @Output() ExpandedChange = new EventEmitter<boolean>();
 
   /** True when the value exceeds {@link LONG_VALUE_THRESHOLD}. */
   public get IsLong(): boolean {
@@ -60,5 +66,6 @@ export class CompareValueComponent {
   public ToggleExpanded(event: MouseEvent): void {
     event.stopPropagation();
     this.Expanded = !this.Expanded;
+    this.ExpandedChange.emit(this.Expanded);
   }
 }

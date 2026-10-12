@@ -109,3 +109,47 @@ describe('CompareValueComponent (DOM)', () => {
     expect(el(f, '.compare-value-text')?.classList.contains('compare-value-collapsed')).toBe(true);
   });
 });
+
+/** Host mirroring one grid ROW: a source value and a match value sharing the row's expanded state. */
+@Component({
+  standalone: true,
+  imports: [CompareValueComponent],
+  template: `
+    <div class="source"><mj-compare-value [Value]="Source" [Expanded]="Expanded" (ExpandedChange)="Expanded = $event"></mj-compare-value></div>
+    <div class="match"><mj-compare-value [Value]="Match" [Expanded]="Expanded" (ExpandedChange)="Expanded = $event"></mj-compare-value></div>`,
+})
+class RowHostComponent {
+  public Source = LONG_URL;
+  public Match = LONG_URL + '?v=2';
+  public Expanded = false;
+}
+
+describe('CompareValueComponent (DOM) — one row expands together', () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [RowHostComponent] });
+  });
+
+  const collapsed = (root: HTMLElement, cell: string): boolean | undefined =>
+    root.querySelector(`.${cell} .compare-value-text`)?.classList.contains('compare-value-collapsed');
+
+  it('expanding one column expands the other values in the same row, and collapsing closes them all', () => {
+    const f = TestBed.createComponent(RowHostComponent);
+    f.detectChanges();
+    const root = f.nativeElement as HTMLElement;
+    expect(collapsed(root, 'source')).toBe(true);
+    expect(collapsed(root, 'match')).toBe(true);
+
+    (root.querySelector('.match .compare-value-toggle') as HTMLElement).click();
+    f.detectChanges();
+    expect(f.componentInstance.Expanded).toBe(true);
+    expect(collapsed(root, 'source')).toBe(false);
+    expect(collapsed(root, 'match')).toBe(false);
+
+    (root.querySelector('.source .compare-value-toggle') as HTMLElement).click();
+    f.detectChanges();
+    expect(f.componentInstance.Expanded).toBe(false);
+    expect(collapsed(root, 'source')).toBe(true);
+    expect(collapsed(root, 'match')).toBe(true);
+  });
+});
+
