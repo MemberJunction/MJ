@@ -95,6 +95,8 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     });
 
     const context = this.buildContext(request);
+    // Refuse up front (one clear "needs training" error) rather than returning N failed records.
+    await processor.Preflight(context);
     const results = await processor.ProcessBatch(records, context);
 
     // When an explicit OutputMapping was supplied (and this is not a dry run),

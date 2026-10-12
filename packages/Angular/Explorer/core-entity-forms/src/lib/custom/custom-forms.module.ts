@@ -31,6 +31,7 @@ import { CreatePromptDialogComponent } from "./AIAgents/create-prompt-dialog.com
 import { CreateSubAgentDialogComponent } from "./AIAgents/create-sub-agent-dialog.component";
 import { AIAgentManagementService } from "./AIAgents/ai-agent-management.service";
 import { AgentsModule } from "@memberjunction/ng-agents";
+import { ArtifactsModule } from "@memberjunction/ng-artifacts";
 import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
 import { TestingModule } from "@memberjunction/ng-testing";
@@ -190,6 +191,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MLModelFormComponentExtended,
     ],
     imports: [
+    ArtifactsModule,
         CommonModule,
         RubricsModule,
         RubricAuthorPanel,
