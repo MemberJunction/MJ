@@ -1,5 +1,5 @@
-import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
-import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
+import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider, DatabaseProviderBase } from "@memberjunction/core";
+import { MJActionEntity, MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { BaseSingleton, MJGlobal, MJLruCache, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
 import { BaseActionFilter } from "./BaseActionFilter";
@@ -80,6 +80,37 @@ export interface ActionFilterContext {
 }
 
 /**
+ * Opens a provider on the host's read-only database login. Resolves null when the host has no
+ * read-only login configured.
+ */
+export type ReadOnlyProviderFactory = () => Promise<DatabaseProviderBase | null>;
+
+/**
+ * The host's checks for SQL a caller wrote, so that an action which runs such SQL applies the same
+ * rules as the host's own ad-hoc SQL API. MJServer registers one at startup.
+ */
+export interface AdhocSQLAuthorizer {
+   /**
+    * Why `contextUser` may not run `sql` on `provider`, or null when they may. The host checks the
+    * SQL as it will run: one read statement, and every table it reads an entity view the user may
+    * read in full.
+    */
+   Authorize(sql: string, provider: DatabaseProviderBase, contextUser: UserInfo): string | null;
+
+   /** The timeout, in seconds, to run with when the caller asks for `requestedSeconds`. */
+   ClampTimeoutSeconds(requestedSeconds: number | undefined): number;
+}
+
+/**
+ * True when `actionClass` declares `AuthorizesCaller = true` as its own static field. A subclass does
+ * not inherit the marker from its parent. The field is read by name, so a class built on another
+ * loaded copy of {@link BaseAction} qualifies too.
+ */
+function declaresAuthorizesCaller(actionClass: unknown): boolean {
+   return typeof actionClass === 'function' && Object.getOwnPropertyDescriptor(actionClass, 'AuthorizesCaller')?.value === true;
+}
+
+/**
  * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
@@ -127,6 +158,68 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
 
    public get ContextUser(): UserInfo { return (this._contextUser ?? this.base.ContextUser) as UserInfo; }
    public set ContextUser(value: UserInfo) { this._contextUser = value; }
+
+   // No initializer, so running the constructor again on the live singleton keeps the registration.
+   private _readOnlyProviderFactory?: ReadOnlyProviderFactory;
+
+   /**
+    * Registers how the host opens a provider on its read-only database login. MJServer registers one
+    * at startup. A second registration through this setter throws; code running inside the server
+    * process can still replace it.
+    * @throws Error when a factory is already registered
+    */
+   public SetReadOnlyProviderFactory(factory: ReadOnlyProviderFactory): void {
+      if (this._readOnlyProviderFactory) {
+         throw new Error('A read-only provider factory is already registered with the action engine; a second registration is not allowed.');
+      }
+      this._readOnlyProviderFactory = factory;
+   }
+
+   /**
+    * A provider on the host's read-only database login, for actions that run caller-supplied SQL.
+    * Such actions run only here and never fall back to the read-write provider, so they refuse when
+    * this resolves null: no factory registered, or no read-only login configured.
+    */
+   public async GetReadOnlyProvider(): Promise<DatabaseProviderBase | null> {
+      return this._readOnlyProviderFactory ? await this._readOnlyProviderFactory() : null;
+   }
+
+   // No initializer, so running the constructor again on the live singleton keeps the registration.
+   private _adhocSQLAuthorizer?: AdhocSQLAuthorizer;
+
+   /**
+    * Registers the host's checks for SQL a caller wrote. MJServer registers one at startup. A second
+    * registration through this setter throws; code running inside the server process can still
+    * replace it.
+    * @throws Error when an authorizer is already registered
+    */
+   public SetAdhocSQLAuthorizer(authorizer: AdhocSQLAuthorizer): void {
+      if (this._adhocSQLAuthorizer) {
+         throw new Error('An ad-hoc SQL authorizer is already registered with the action engine; a second registration is not allowed.');
+      }
+      this._adhocSQLAuthorizer = authorizer;
+   }
+
+   /**
+    * The host's checks for SQL a caller wrote. Actions that run such SQL refuse when this is null.
+    */
+   public get AdhocSQLAuthorizer(): AdhocSQLAuthorizer | null {
+      return this._adhocSQLAuthorizer ?? null;
+   }
+
+   /**
+    * True when the class that runs `action` declares {@link BaseAction.AuthorizesCaller} itself. The
+    * class is resolved the way {@link RunClassBasedAction} resolves it. A subclass that overrides a
+    * marked action does not inherit the marker. A Runtime action, or one with no registered class,
+    * does not authorize its caller.
+    */
+   public ActionAuthorizesCaller(action: MJActionEntity): boolean {
+      if (action.Type === 'Runtime') {
+         return false;
+      }
+      const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, action.DriverClass || action.Name);
+      return declaresAuthorizesCaller(registration?.SubClass);
+   }
 
    // ── Proxied cached collections (single source of truth: ActionEngineBase.Instance) ──
    public get Actions(): MJActionEntityExtended[] { return this.base.Actions; }
