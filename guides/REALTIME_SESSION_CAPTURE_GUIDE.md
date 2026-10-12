@@ -78,7 +78,14 @@ recording problem must not fail the session.
 Recording works on **both** topologies; the difference is only *where* the audio is mixed.
 
 **Server-bridged sessions** (LiveKit/Zoom/Teams/Twilio): the server-side `IRealtimeSession` carries the
-media (`OnOutput` = model speech; `SendIn- It mixes the user's microphone with the agent's remote-audio stream through the Web Audio API and
+media (`OnOutput` = model speech; `SendInput` = inbound), so the `RealtimeSessionRunner` attaches the
+`RealtimeRecordingController` there — it taps `OnOutput`, wraps `SendInput`, mixes to a mono PCM16 WAV,
+computes capture-time peaks, and finalizes on `Stop()`.
+
+**Client-direct browser sessions** negotiate audio in the browser — the server never sees those frames —
+so capture happens **in the browser** via `RealtimeAudioRecorder` (`@memberjunction/ng-conversations`):
+
+- It mixes the user's microphone with the agent's remote-audio stream through the Web Audio API and
   captures Float32 frames off an `AudioWorkletNode` (preferred) or `ScriptProcessorNode` (fallback) at
   48 kHz (resampling when the browser will not give it a 48 kHz context), and feeds them to **one Opus
   encoder for the whole call** — WebCodecs `AudioEncoder` where it supports mono 48 kHz Opus, otherwise
@@ -89,11 +96,6 @@ media (`OnOutput` = model speech; `SendIn- It mixes the user's microphone with t
   computes `peaks.json` from the decoded PCM — the stored artifacts are the same WAV + sidecar as
   before. The delivery, ledger and assembly rules are in
   [REALTIME_CO_AGENTS_GUIDE.md §3, step 6](REALTIME_CO_AGENTS_GUIDE.md#client-direct-flow-the-shipped-path).
-Node` (preferred) or `ScriptProcessorNode` (fallback) —
-  **not** a `MediaRecorder` (whose webm/opus output is header-less, so range seeking is unreliable). At
-  `Stop()` the accumulated PCM is encoded to a seekable 16-bit PCM WAV via `encodePcm16Wav`.
-- A bounded `PeakAccumulator` computes the waveform peaks **during** capture (cost stays O(buckets)
-  regardless of call length); these become the `peaks.json` sidecar on upload.
 - **Agent-audio mixing:** the agent's WebRTC track usually lands *after* recording has already begun
   (mic-only). The recorder exposes `AttachRemoteStream(stream)`, and the session service subscribes to
   the client driver's `OnRemoteMediaStream(cb)` hook (`BaseRealtimeClient` / `OpenAIRealtimeClient`) so
