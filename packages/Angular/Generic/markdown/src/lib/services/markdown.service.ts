@@ -63,9 +63,12 @@ import 'prismjs/components/prism-graphql';
  *   DOM clobbering has no effect here, and heading anchors matter.
  * - `target` on links is kept, with `rel="noopener noreferrer"` enforced when it is set.
  * - `columnalign` and `columnspacing` are added: DOMPurify's MathML list spells the first
- *   `columnsalign` and lacks the second, so every MathML table lost its layout. Both are
- *   presentational. (`form` on `<mo>` stays out: on HTML it associates an element with a form, and
+ *   `columnsalign` and lacks the second, so MathML tables lost their layout in Firefox and Safari
+ *   (Chrome ignores both; the component stylesheet aligns columns there). Both are presentational. (`form` on `<mo>` stays out: on HTML it associates an element with a form, and
  *   MathML infers an operator's form without it.)
+ * - `annotation` / `annotation-xml` content is dropped with the element. DOMPurify removes both but
+ *   would keep their text, and MathJax, Pandoc and Word MathML carry the TeX source there, so a
+ *   formula would read "x2x^2".
  * - `<use>` is allowed only with a same-document reference (`#id`); external references
  *   are removed. SMIL `<animate>`/`<set>` stay disallowed: they can rewrite `href`.
  */
@@ -80,6 +83,7 @@ function getPurifier(): ReturnType<typeof DOMPurify> | null {
     USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
     ADD_TAGS: ['use'],
     ADD_ATTR: ['target', 'columnalign', 'columnspacing'],
+    ADD_FORBID_CONTENTS: ['annotation', 'annotation-xml'],
     FORCE_BODY: true,
     SANITIZE_DOM: false,
   });

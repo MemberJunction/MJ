@@ -336,6 +336,12 @@ describe('MarkdownService (DOM)', () => {
       expect(table?.getAttribute('columnspacing')).toBe('0em 2em');
     });
 
+    it('shows the formula once when MathML carries its TeX in an annotation (MathJax, Pandoc, Word)', () => {
+      const c = mount('<math><semantics><mrow><msup><mi>x</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">x^2</annotation></semantics></math>');
+      expect(c.querySelector('msup')).not.toBeNull();
+      expect(c.textContent?.trim()).toBe('x2');
+    });
+
     it('spells styled letters with Unicode math characters, as for typeset TeX', async () => {
       const c = mount('<math><mi mathvariant="bold">E</mi><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mn>3</mn></msup></math>');
       await service.RenderMath(c);

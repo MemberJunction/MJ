@@ -99,7 +99,7 @@ export class YourModule {}
 | `data` | `string` | `''` | Markdown content to render |
 | `enableHighlight` | `boolean` | `true` | Prism.js syntax highlighting |
 | `enableMermaid` | `boolean` | `true` | Mermaid diagram rendering |
-| `EnableMath` | `boolean` | `true` | TeX math and MathML markup. Single dollars follow Pandoc's rule, so `$5 and $10` stays text; `\$` is a literal dollar. PascalCase only: unlike the older inputs above, it has no lowercase alias |
+| `EnableMath` | `boolean` | `true` | TeX math, and keeping markdown out of MathML markup (`<mml:math>` needs it; unprefixed `<math>` renders either way, since the sanitizer allows MathML). Single dollars follow Pandoc's rule, so `$5 and $10` stays text; `\$` is a literal dollar. PascalCase only: unlike the older inputs above, it has no lowercase alias |
 | `enableCodeCopy` | `boolean` | `true` | Copy button on code blocks |
 | `enableCollapsibleHeadings` | `boolean` | `false` | Collapsible heading sections |
 | `collapsibleHeadingLevel` | `1-6` | `2` | Heading level to start collapsing |

@@ -488,9 +488,10 @@
 }
 
 /* ============================================
-   TeX Math (typeset as MathML by MarkdownService.RenderMath)
+   Math (TeX typeset as MathML by MarkdownService.RenderMath, and MathML markup)
    ============================================ */
 .mj-markdown-container .mj-math-block {
+  display: block;
   margin: 1em 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -510,14 +511,19 @@
 
 /* Chrome ignores MathML's columnalign too, which centres every cell and un-aligns the "=" signs of
    a derivation. KaTeX writes exactly "right left" (repeated, for alignedat) for aligned, split and
-   alignedat, and "left left" for cases; other column lists (arrays) stay centred. */
+   alignedat, and "left left" for cases; JATS tables often say just "left" or "right". Other column
+   lists (arrays) stay centred. */
 .mj-markdown-container mtable:is([columnalign="right left"], [columnalign^="right left right left"]) > mtr > mtd:nth-child(odd) {
   text-align: right;
 }
 
 .mj-markdown-container mtable:is([columnalign="right left"], [columnalign^="right left right left"]) > mtr > mtd:nth-child(even),
-.mj-markdown-container mtable[columnalign="left left"] > mtr > mtd {
+.mj-markdown-container mtable:is([columnalign="left left"], [columnalign="left"]) > mtr > mtd {
   text-align: left;
+}
+
+.mj-markdown-container mtable[columnalign="right"] > mtr > mtd {
+  text-align: right;
 }
 
 /* TeX that KaTeX could not parse stays visible as source; its title says why. */

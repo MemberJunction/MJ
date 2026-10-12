@@ -151,6 +151,32 @@ describe('math extension: MathML markup', () => {
     expect(out).toContain('<p>After.</p>');
   });
 
+  it('an inline formula that starts a line stays in its sentence', () => {
+    const out = html(`Loss was\n${jatsInline}\nper pulse.`);
+    expect((out.match(/<p>/g) ?? []).length).toBe(1);
+    expect(out).toMatch(/^<p>Loss was[\s\S]*<math display="inline">[\s\S]*<\/math>[\s\S]*per pulse\.<\/p>/);
+  });
+
+  it('a formula that is a whole paragraph stays one element across a blank line', () => {
+    const out = html(`Before.\n\n<mml:math>\n  <mml:mi>a</mml:mi>\n\n      <mml:mi>b</mml:mi>\n</mml:math>\n\nAfter.`);
+    expect(out).toMatch(/<p><math>\s*<mi>a<\/mi>\s*<mi>b<\/mi>\s*<\/math><\/p>/);
+    expect(out).not.toContain('<pre>');
+  });
+
+  it('a display formula inside a sentence gets the scrolling wrapper', () => {
+    expect(html('Then <math display="block"><mi>x</mi></math> holds.')).toContain('<span class="mj-math-block"><math display="block">');
+  });
+
+  it('tag names are case-insensitive, and <math-field> is not math', () => {
+    expect(html('so <Math><mi>a</mi><mo>*</mo><mi>b</mi><mo>*</mo></Math> holds')).not.toContain('<em>');
+    const tokens = new MarkdownEngine().ParseToTokens('a <math-field>x</math-field> and </math>');
+    expect(JSON.stringify(tokens)).not.toContain('"mathml');
+  });
+
+  it('an opener never swallows a later code span', () => {
+    expect(html('a <math> b `</math>` c')).toContain('<code>&lt;/math&gt;</code>');
+  });
+
   it('markdown never reaches inside the markup', () => {
     const out = html('so <math><mi>a</mi><mo>*</mo><mi>b</mi><mo>*</mo><msub><mi>x</mi><mi>i_j</mi></msub></math> holds');
     expect(out).not.toContain('<em>');
@@ -163,9 +189,13 @@ describe('math extension: MathML markup', () => {
     expect(out).not.toContain('<math');
   });
 
-  it('an unclosed <math> is left to the normal HTML handling and stays linear', () => {
+  it.each([
+    ['unclosed elements', 'text <math><mi>x</mi> and more\n\n'.repeat(2000)],
+    ['open tags with no closing >', 'x <math a'.repeat(30000)],
+    ['prefixed open tags with no closing >', 'x <a.b-c:math '.repeat(20000)],
+  ])('%s stay linear', (_name, markdown) => {
     const started = performance.now();
-    html('text <math><mi>x</mi> and more\n\n'.repeat(2000));
+    html(markdown);
     expect(performance.now() - started).toBeLessThan(1000);
   });
 

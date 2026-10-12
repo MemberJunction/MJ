@@ -38,18 +38,35 @@ export interface MathMLToken extends Tokens.Generic {
 
 // A whole <math> element, optionally namespace-prefixed (JATS writes <mml:math>), matched as one
 // piece so markdown never reaches inside it: pretty-printed MathML is indented and spans lines, which
-// markdown would turn into code blocks, and `*` or `_` between its tags would become emphasis. The
-// content can't contain another opener, so an unclosed one fails at the next instead of scanning on.
-const MATHML_ELEMENT = String.raw`<(?<prefix>(?:[A-Za-z][\w.-]*:)?)math\b(?:[^>"']|"[^"]*"|'[^']*')*>(?:(?!<(?:[A-Za-z][\w.-]*:)?math\b)[\s\S])*?<\/\k<prefix>math\s*>`;
-const MATHML_INLINE_RULE = new RegExp(`^${MATHML_ELEMENT}`);
-const MATHML_BLOCK_RULE = new RegExp(String.raw`^ {0,3}(?<markup>${MATHML_ELEMENT})[ \t]*(?:\n+|$)`);
-const MATHML_OPENER = /<(?:[A-Za-z][\w.-]*:)?math\b/;
+// markdown would turn into code blocks, and `*` or `_` between its tags would become emphasis. Tag
+// names are case-insensitive, as in HTML; `<math-field>` and the like are not math. Neither the open
+// tag nor the content can run into another opener, so an unclosed one fails at the next instead of
+// scanning on (attributes without a closing `>` made that quadratic). An inline element never contains
+// a backtick, so an opener can't swallow a later code span.
+const OPENER = String.raw`<(?:[A-Za-z][\w.-]*:)?math(?=[\s/>])`;
+const OPEN_TAG = String.raw`<(?<prefix>(?:[A-Za-z][\w.-]*:)?)math(?=[\s/>])(?:[^<>"']|"[^"]*"|'[^']*')*>`;
+const CLOSE_TAG = String.raw`<\/\k<prefix>math\s*>`;
+const MATHML_INLINE_RULE = new RegExp('^' + OPEN_TAG + '(?:(?!' + OPENER + ')[^`])*?' + CLOSE_TAG, 'i');
+// A block is a `display="block"` element on its own lines, or any element that is a whole paragraph
+// (`tail` then holds a blank line). An inline element at the start of a line inside a sentence stays
+// in the sentence.
+const MATHML_BLOCK_RULE = new RegExp(
+  String.raw`^ {0,3}(?<markup>` + OPEN_TAG + String.raw`(?:(?!` + OPENER + String.raw`)[\s\S])*?` + CLOSE_TAG +
+    String.raw`)(?<tail>[ \t]*(?:\n(?:[ \t]*\n)*|$))`,
+  'i',
+);
+const MATHML_OPENER = new RegExp(OPENER, 'i');
 
 function matchMathML(src: string, rule: RegExp, type: MathMLToken['type']): MathMLToken | undefined {
   const match = rule.exec(src);
   if (!match) return undefined;
   const text = (match.groups?.markup ?? match[0]).trim().replace(/<(\/?)[A-Za-z][\w.-]*:(?=[A-Za-z])/g, '<$1');
-  const displayMode = /^<math\b(?:[^>"']|"[^"]*"|'[^']*')*?\sdisplay\s*=\s*["']?block/.test(text);
+  const displayMode = /^<math(?=[\s/>])(?:[^<>"']|"[^"]*"|'[^']*')*?\sdisplay\s*=\s*["']?block/i.test(text);
+  if (type === 'mathmlBlock' && !displayMode) {
+    const tail = match.groups?.tail ?? '';
+    const wholeParagraph = (tail.match(/\n/g) ?? []).length >= 2 || match[0].length === src.length;
+    if (!wholeParagraph) return undefined;
+  }
   return { type, raw: match[0], text, displayMode };
 }
 
@@ -187,13 +204,14 @@ export function CreateMathExtension(): MarkedExtension {
         name: 'mathmlBlock',
         level: 'block',
         start(src: string) {
-          // Same paragraph-bounded search as mathBlock above.
+          // Same paragraph-bounded search as mathBlock above, and only a display element may cut
+          // the paragraph: an inline formula that starts a line belongs to its sentence.
           const paragraphEnd = src.search(/\n[ \t]*\n/);
           const scope = paragraphEnd === -1 ? src : src.slice(0, paragraphEnd + 1);
-          const candidates = new RegExp(`^ {0,3}${MATHML_OPENER.source}`, 'gm');
+          const candidates = new RegExp(`^ {0,3}${MATHML_OPENER.source}`, 'gim');
           let found: RegExpExecArray | null;
           while ((found = candidates.exec(scope)) !== null) {
-            if (MATHML_BLOCK_RULE.test(src.slice(found.index))) return found.index;
+            if (matchMathML(src.slice(found.index), MATHML_BLOCK_RULE, 'mathmlBlock')?.displayMode) return found.index;
           }
           return undefined;
         },
@@ -216,7 +234,10 @@ export function CreateMathExtension(): MarkedExtension {
           return matchMathML(src, MATHML_INLINE_RULE, 'mathml');
         },
         renderer(token) {
-          return (token as MathMLToken).text;
+          // A display formula inside a sentence (JATS puts them mid-paragraph) gets the block
+          // wrapper too, as a span, so a wide one scrolls instead of widening the message.
+          const mathml = token as MathMLToken;
+          return mathml.displayMode ? `<span class="mj-math-block">${mathml.text}</span>` : mathml.text;
         },
       },
     ],

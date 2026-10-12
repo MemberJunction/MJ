@@ -508,7 +508,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     }
 
     // When Angular's sanitizer is bypassed, the HTML has already been sanitized by
-    // MarkdownService.parse() (DOMPurify, HTML + SVG profiles) unless enableJavaScript
+    // MarkdownService.parse() (DOMPurify, HTML, SVG and MathML profiles) unless enableJavaScript
     // opted out. Nothing further to do here.
 
     // Trust the HTML for display
