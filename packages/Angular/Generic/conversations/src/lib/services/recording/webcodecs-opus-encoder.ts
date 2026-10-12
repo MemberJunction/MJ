@@ -16,6 +16,7 @@ export type AudioEncoderLike = Pick<AudioEncoder, 'configure' | 'encode' | 'flus
 /** The WebCodecs `AudioEncoder` constructor shape (the real global satisfies it). */
 export interface AudioEncoderConstructor {
     new (init: AudioEncoderInit): AudioEncoderLike;
+    // case-violation-ok-legacy-back-compat: mirrors the WebCodecs static so the real `AudioEncoder` global satisfies this interface
     isConfigSupported(config: AudioEncoderConfig): Promise<AudioEncoderSupport>;
 }
 

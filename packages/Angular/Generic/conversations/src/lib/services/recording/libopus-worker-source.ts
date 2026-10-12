@@ -1,15 +1,18 @@
-/** Messages the main thread posts to the libopus Worker. */
+/**
+ * Messages the main thread posts to the libopus Worker. The fields are PascalCase like every other MJ
+ * API shape; the worker source below reads them by these exact names.
+ */
 export type OpusWorkerRequest =
-    | { type: 'init'; wasm: ArrayBuffer }
-    | { type: 'encode'; pcm: Float32Array }
-    | { type: 'flush'; id: number };
+    | { Type: 'init'; Wasm: ArrayBuffer }
+    | { Type: 'encode'; Pcm: Float32Array }
+    | { Type: 'flush'; ID: number };
 
 /** Messages the libopus Worker posts back. */
 export type OpusWorkerReply =
-    | { type: 'ready' }
-    | { type: 'packets'; packets: ArrayBuffer[] }
-    | { type: 'flushed'; id: number }
-    | { type: 'error'; message: string };
+    | { Type: 'ready' }
+    | { Type: 'packets'; Packets: ArrayBuffer[] }
+    | { Type: 'flushed'; ID: number }
+    | { Type: 'error'; Message: string };
 
 /**
  * JavaScript source of the libopus encoder Worker, started from a Blob URL.
@@ -54,12 +57,12 @@ function describe(error) {
 
 function fail(message) {
     failed = true;
-    self.postMessage({ type: 'error', message: message });
+    self.postMessage({ Type: 'error', Message: message });
 }
 
 function postPackets(packets) {
     if (packets.length > 0) {
-        self.postMessage({ type: 'packets', packets: packets }, packets);
+        self.postMessage({ Type: 'packets', Packets: packets }, packets);
     }
 }
 
@@ -101,26 +104,26 @@ function flush(id) {
         filled = 0;
     }
     postPackets(packets);
-    self.postMessage({ type: 'flushed', id: id });
+    self.postMessage({ Type: 'flushed', ID: id });
 }
 
 function handle(message) {
     if (failed) {
-        if (message.type === 'flush') {
-            self.postMessage({ type: 'flushed', id: message.id });
+        if (message.Type === 'flush') {
+            self.postMessage({ Type: 'flushed', ID: message.ID });
         }
         return;
     }
     try {
-        if (message.type === 'encode') {
-            encode(message.pcm);
-        } else if (message.type === 'flush') {
-            flush(message.id);
+        if (message.Type === 'encode') {
+            encode(message.Pcm);
+        } else if (message.Type === 'flush') {
+            flush(message.ID);
         }
     } catch (error) {
-        fail('libopus ' + message.type + ' failed: ' + describe(error));
-        if (message.type === 'flush') {
-            self.postMessage({ type: 'flushed', id: message.id });
+        fail('libopus ' + message.Type + ' failed: ' + describe(error));
+        if (message.Type === 'flush') {
+            self.postMessage({ Type: 'flushed', ID: message.ID });
         }
     }
 }
@@ -159,7 +162,7 @@ function init(bytes) {
         encoder = state;
         pcmPtr = exports.malloc(FRAME_SAMPLES * 2);
         outPtr = exports.malloc(MAX_PACKET_BYTES);
-        self.postMessage({ type: 'ready' });
+        self.postMessage({ Type: 'ready' });
         drainQueue();
     }).catch(function (error) {
         fail('libopus init failed: ' + describe(error));
@@ -169,8 +172,8 @@ function init(bytes) {
 
 self.onmessage = function (event) {
     var message = event.data;
-    if (message.type === 'init') {
-        init(message.wasm);
+    if (message.Type === 'init') {
+        init(message.Wasm);
         return;
     }
     if (!wasm && !failed) {

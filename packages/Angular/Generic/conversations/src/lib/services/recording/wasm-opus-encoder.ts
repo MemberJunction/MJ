@@ -67,7 +67,7 @@ export class WasmOpusEncoder implements IOpusPacketEncoder {
      */
     constructor(private readonly port: OpusWorkerPort, wasmBytes: ArrayBuffer, private readonly onClose: () => void = () => undefined) {
         port.OnReply = (reply) => this.onReply(reply);
-        port.Post({ type: 'init', wasm: wasmBytes }, [wasmBytes]);
+        port.Post({ Type: 'init', Wasm: wasmBytes }, [wasmBytes]);
     }
 
     /** Loads the embedded wasm and starts the worker from a Blob URL. Rejects if either fails. */
@@ -88,7 +88,7 @@ export class WasmOpusEncoder implements IOpusPacketEncoder {
             return;
         }
         const copy = pcm48k.slice();
-        this.port.Post({ type: 'encode', pcm: copy }, [copy.buffer]);
+        this.port.Post({ Type: 'encode', Pcm: copy }, [copy.buffer]);
     }
 
     public Flush(): Promise<void> {
@@ -106,7 +106,7 @@ export class WasmOpusEncoder implements IOpusPacketEncoder {
                 clearTimeout(timer);
                 resolve();
             });
-            this.port.Post({ type: 'flush', id }, []);
+            this.port.Post({ Type: 'flush', ID: id }, []);
         });
     }
 
@@ -132,20 +132,20 @@ export class WasmOpusEncoder implements IOpusPacketEncoder {
     }
 
     private onReply(reply: OpusWorkerReply): void {
-        switch (reply.type) {
+        switch (reply.Type) {
             case 'packets':
-                for (const buffer of reply.packets) {
+                for (const buffer of reply.Packets) {
                     this.packets.push(new Uint8Array(buffer));
                 }
                 break;
             case 'flushed': {
-                const release = this.flushWaiters.get(reply.id);
-                this.flushWaiters.delete(reply.id);
+                const release = this.flushWaiters.get(reply.ID);
+                this.flushWaiters.delete(reply.ID);
                 release?.();
                 break;
             }
             case 'error':
-                console.warn(`[WasmOpusEncoder] ${reply.message} — the rest of this call is not recorded.`);
+                console.warn(`[WasmOpusEncoder] ${reply.Message} — the rest of this call is not recorded.`);
                 break;
             case 'ready':
                 break;
