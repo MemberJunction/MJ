@@ -818,6 +818,7 @@ describe('FindIgnoredRealtimeConfigKeys', () => {
             turnTaking: { mode: 'proactive' },
             disclosure: 'silent',
             allowedAgents: [{ agentId: 'AGENT-1', label: 'Skip' }],
+            channels: { include: ['Media'], exclude: ['RemoteBrowser'] },
             session: { effortLevel: 'high' },
             directActions: { enabled: true, actionNames: ['Action1'], timeoutMs: 5000 },
             allowDirectActionInvocation: true,

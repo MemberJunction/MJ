@@ -143,8 +143,8 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     if (this.options.logRecordChangeMetadata !== true && simpleSQLFallback) {
       processedQuery = simpleSQLFallback;
       // Tag the description only when the logged text actually differs from what ran.
-      // A save on an entity without record-change tracking hands over a fallback that is
-      // byte-identical to the executed SQL (updates), and tagging that would misreport it.
+      // A save on an entity without record-change tracking can hand over a fallback that is
+      // byte-identical to the executed SQL (a forced update), and tagging that would misreport it.
       if (description && simpleSQLFallback !== query && !description.includes('(core SP call only)')) {
         logEntry = logEntry.replace(`-- ${description}\n`, `-- ${description} (core SP call only)\n`);
       }

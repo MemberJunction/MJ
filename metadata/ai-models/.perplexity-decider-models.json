@@ -1,0 +1,82 @@
+[
+  {
+    "fields": {
+      "Name": "Perplexity Decider v1 27B",
+      "Description": "Perplexity's 27B open-weight decision model, pplx-decider-v1-27b (Apache-2.0, released October 1, 2026), fine-tuned from Qwen3.8-27B. It answers Likelihood, Choice (up to 255 options) and Score (up to 10 levels) questions, up to 128 in one call, about a state of up to 262,144 input tokens (the questions included), and returns a probability for every option or level. It writes no text. It takes the same System One request as Jev. Its only managed host is Perplexity's Decisions API (POST https://api.perplexity.ai/v1/decisions), limited to 10 requests per second per organization; running the open weights yourself needs a CUDA GPU with about 49 GiB for the weights and Perplexity's own Python inference code, which has no HTTP server. Perplexity reports 85.71% accuracy overall on 11 public benchmarks it chose, against 84.51% for Jev, with Jev ahead on 6 of the 11; those are Perplexity's figures, not MJ's measurements. The API also accepts images with the state, which MJ does not send yet. Its raw probabilities are not calibrated to MJ's data, so set thresholds on calibrated values.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 59,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxQuestionsPerCall": 128,
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 10,
+          "MaxStateTokens": 262144
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Perplexity",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "765E427F-73F5-43D4-8FFA-4284B779FD93"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Perplexity",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "PerplexityDecision",
+            "APIName": "pplx-decider-v1-27b",
+            "MaxInputTokens": 262144,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "3E71459D-B50E-43E6-8F75-C7E19980A9E1"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Perplexity",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.04,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "pplx-decider-v1-27b on Perplexity's Decisions API, October 2026: $0.04 per million input tokens; output is free, with no per-request fee. Source: https://docs.perplexity.ai/docs/decisions/quickstart"
+          },
+          "primaryKey": {
+            "ID": "F57EF21E-CD61-4C9A-A134-31EE6E2BF901"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "17D9DAC5-0382-42F8-A0A7-1EBB0532F1A2"
+    }
+  }
+]
