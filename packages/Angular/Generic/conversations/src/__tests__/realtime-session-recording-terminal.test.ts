@@ -118,7 +118,7 @@ describe('RealtimeSessionService — recording terminal on pagehide / visibility
         internals.recordingShards = {
             SessionID: 'session-1',
             Window: new RecordingShardWindow(),
-            Queue: { Flush: vi.fn(async () => undefined), Close: vi.fn() },
+            Queue: { Flush: vi.fn(async () => undefined), Close: vi.fn(), Unacknowledged: () => [] },
             Transport: transport,
         };
 

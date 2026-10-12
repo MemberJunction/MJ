@@ -27,6 +27,8 @@ export class FakeRecorder implements IRealtimeSessionRecorder {
     public StopError: Error | null = null;
     /** When true, {@link Stop} never settles (a wedged encoder). */
     public StopHangs = false;
+    /** When set, {@link Stop} waits for it before flushing (an encoder still finishing its last frames). */
+    public StopGate: Promise<void> | null = null;
     private pending: Uint8Array[] = [];
     private produced = 0;
 
@@ -51,6 +53,9 @@ export class FakeRecorder implements IRealtimeSessionRecorder {
         }
         if (this.StopHangs) {
             return new Promise<number>(() => undefined);
+        }
+        if (this.StopGate) {
+            await this.StopGate;
         }
         this.Capture(this.PacketsFlushedOnStop);
         this.PacketsFlushedOnStop = 0;
@@ -100,6 +105,8 @@ export interface FakeUpload {
     SessionID: string;
     Index: number;
     Bytes: Uint8Array;
+    /** True for a `keepalive` upload (the page-may-close path), false for the queue's ordinary ones. */
+    Keepalive: boolean;
 }
 
 export interface FakeTerminal {
@@ -134,7 +141,7 @@ export class FakeRecordingTransport implements IRecordingTransport {
         options?: RecordingUploadOptions,
     ): Promise<boolean> {
         this.Log.push(`upload${options?.Keepalive ? '(keepalive)' : ''}:${sessionID}/${shard.Index}`);
-        this.Uploads.push({ SessionID: sessionID, Index: shard.Index, Bytes: shard.Bytes });
+        this.Uploads.push({ SessionID: sessionID, Index: shard.Index, Bytes: shard.Bytes, Keepalive: options?.Keepalive === true });
         if (this.Offline) {
             throw new Error('offline');
         }

@@ -67,6 +67,8 @@ interface PendingShard {
  */
 export class RecordingShardQueue {
   private retained: PendingShard[] = [];
+  /** Every shard handed to the queue and not yet acknowledged or given up on, by index. */
+  private readonly outstanding = new Map<number, RecordingShard>();
   private inFlight = 0;
   /** True once a capacity stall has been logged; cleared when a flush actually runs. */
   private capacityWarned = false;
@@ -85,6 +87,15 @@ export class RecordingShardQueue {
   }
 
   /**
+   * Every shard the queue still holds without an acknowledgement — on the wire, waiting in a flush's
+   * batch, or retained for a retry — oldest first. A page that is about to unload re-sends these with
+   * `keepalive`, because its ordinary requests are aborted with it.
+   */
+  public Unacknowledged(): RecordingShard[] {
+    return [...this.outstanding.values()].sort((a, b) => a.Index - b.Index);
+  }
+
+  /**
    * Uploads retained shards oldest-first, then `fresh`. A failure never stops the rest of the
    * flush. At {@link MAX_CONCURRENT_FLUSHES} in flight nothing is uploaded and `fresh` is retained
    * for the next flush instead. Never rejects.
@@ -99,6 +110,9 @@ export class RecordingShardQueue {
       return;
     }
     const freshPending = fresh.map((shard): PendingShard => ({ Shard: shard, Attempts: 0 }));
+    for (const shard of fresh) {
+      this.outstanding.set(shard.Index, shard);
+    }
     if (this.inFlight >= MAX_CONCURRENT_FLUSHES) {
       this.retain(freshPending);
       this.warnCapacitySkip();
@@ -131,6 +145,7 @@ export class RecordingShardQueue {
   public Close(): void {
     this.closed = true;
     this.retained = [];
+    this.outstanding.clear();
   }
 
   /** Sorted re-insert: concurrent flushes can fail out of index order, and the oldest must go first. */
@@ -140,6 +155,9 @@ export class RecordingShardQueue {
     const overflow = this.retained.length - MAX_RETAINED_SHARDS;
     if (overflow > 0) {
       const dropped = this.retained.splice(0, overflow);
+      for (const pending of dropped) {
+        this.outstanding.delete(pending.Shard.Index);
+      }
       console.warn(
         `[RealtimeSession] Retry queue over ${MAX_RETAINED_SHARDS} shards; dropped oldest shard(s) ${dropped.map((p) => p.Shard.Index).join(', ')} from memory — they stay in the local IndexedDB store and are re-sent from it once uploads succeed again.`,
       );
@@ -181,6 +199,7 @@ export class RecordingShardQueue {
       failure = error;
     }
     if (stored) {
+      this.outstanding.delete(shard.Index);
       return;
     }
     if (this.closed) {
@@ -195,6 +214,7 @@ export class RecordingShardQueue {
         `[RealtimeSession] Dropping recording shard ${shard.Index} from the retry queue after ${pending.Attempts}/${MAX_SHARD_UPLOAD_ATTEMPTS} failed uploads (${describeFailure(failure)}); it stays in the local store and is re-sent from it once uploads succeed again:`,
         failure,
       );
+      this.outstanding.delete(shard.Index);
       this.onGivenUp([shard]);
       return;
     }

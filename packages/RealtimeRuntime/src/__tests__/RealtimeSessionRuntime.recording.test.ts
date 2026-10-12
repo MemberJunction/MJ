@@ -193,7 +193,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
 
         await vi.advanceTimersByTimeAsync(0); // the constructor's deferred drain
 
-        expect(transport.Uploads).toEqual([{ SessionID: 'crashed-session', Index: 4, Bytes: bytes }]);
+        expect(transport.Uploads).toEqual([{ SessionID: 'crashed-session', Index: 4, Bytes: bytes, Keepalive: false }]);
         expect(store.Keys).toEqual([]);
         expect(store.Log).toContain(`list:${MAX_DRAINED_SHARDS_PER_LOAD}`);
         await expect(runtime.DrainPendingRecordingShards()).resolves.toBe(0); // once per instance
@@ -278,8 +278,9 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         transport.ReleaseTerminal(true);
         await ending;
         expect(ended).toBe(true);
-        // The tail was stored before the terminal went out, and the ack released it.
-        expect(store.Log.filter((e) => e.endsWith('session-1/0'))).toEqual(['put:session-1/0', 'terminal:session-1/0', 'delete:session-1/0']);
+        // The terminal went out first (nothing may delay it while the page can still close), the tail
+        // was stored after it, and the ack released the stored copy.
+        expect(store.Log.filter((e) => e.endsWith('session-1/0'))).toEqual(['terminal:session-1/0', 'put:session-1/0', 'delete:session-1/0']);
     });
 
     it(`EndRealtimeSession resolves after ${RECORDING_TERMINAL_ACK_TIMEOUT_MS} ms when the terminal is never acknowledged`, async () => {
@@ -306,15 +307,16 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         expect(provider.MutationNames.filter((n) => n.startsWith('UploadRealtimeRecording'))).toEqual([]);
     });
 
-    it('SendRecordingTerminal sends a sealed full window with keepalive before the terminal, synchronously, without stopping the recorder', async () => {
+    it('SendRecordingTerminal sends the terminal, then a sealed full window with keepalive, synchronously, without stopping the recorder', async () => {
         const { runtime, store, transport, recorder, log } = await startRecorded();
         recorder.Capture(WINDOW + 7);
         const logBefore = log.length;
 
         runtime.SendRecordingTerminal();
 
-        // Both requests are dispatched inside the handler, the full window first.
-        expect(log.slice(logBefore)).toEqual(['upload(keepalive):session-1/0', 'terminal:session-1/1']);
+        // Both requests are dispatched inside the handler, the terminal first so it always gets the
+        // keepalive budget; the server assembles as soon as the window it lists as missing arrives.
+        expect(log.slice(logBefore)).toEqual(['terminal:session-1/1', 'upload(keepalive):session-1/0']);
         const { Input } = transport.Terminals[0];
         expect(Input.LastShardIndex).toBe(1);
         expect(Input.CapturedSamples).toBe((WINDOW + 7) * RECORDING_FRAME_SAMPLES);
@@ -368,6 +370,59 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         ]);
     });
 
+    it('SendRecordingTerminal re-sends with keepalive, after the terminal, a shard whose ordinary upload is still in flight', async () => {
+        // An ordinary fetch is aborted when the page unloads, so a shard on the wire at pagehide is lost.
+        const { runtime, recorder, transport, log } = await startRecorded();
+        recorder.Capture(WINDOW - 2);
+        transport.HoldNextUpload = new Promise(() => undefined);
+        await vi.advanceTimersByTimeAsync(FLUSH_MS);
+        recorder.Capture(7);
+        const logBefore = log.length;
+
+        runtime.SendRecordingTerminal();
+
+        expect(log.slice(logBefore)).toEqual(['terminal:session-1/1', 'upload(keepalive):session-1/0']);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('a pagehide while End is still stopping the recorder sends a terminal, and End continues at the next index', async () => {
+        const { runtime, transport, recorder } = await startRecorded();
+        recorder.Capture(7);
+        recorder.PacketsFlushedOnStop = 2;
+        let releaseStop: () => void = () => undefined;
+        recorder.StopGate = new Promise<void>((resolve) => {
+            releaseStop = resolve;
+        });
+        const ending = runtime.EndRealtimeSession();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(recorder.StopCalls).toBe(1);
+
+        runtime.SendRecordingTerminal();
+        expect(transport.Terminals.map((t) => t.Input.LastShardIndex)).toEqual([0]);
+
+        releaseStop();
+        await ending;
+        const tails = transport.Terminals.map((t) => ParseRecordingShard(t.Input.Tail!));
+        expect(tails.map((t) => [t.ShardIndex, t.StartSample, t.PacketCount])).toEqual([
+            [0, 0, 7],
+            [1, 7 * RECORDING_FRAME_SAMPLES, 2],
+        ]);
+    });
+
+    it('End re-sends with keepalive, after the terminal, a shard whose ordinary upload is still in flight', async () => {
+        const { runtime, recorder, transport, log } = await startRecorded();
+        recorder.Capture(WINDOW - 2);
+        transport.HoldNextUpload = new Promise(() => undefined);
+        await vi.advanceTimersByTimeAsync(FLUSH_MS);
+        recorder.Capture(5);
+        const logBefore = log.length;
+
+        await runtime.EndRealtimeSession();
+
+        const after = log.slice(logBefore).filter((e) => !e.startsWith('put:') && !e.startsWith('delete:'));
+        expect(after).toEqual(['terminal:session-1/1', 'upload(keepalive):session-1/0']);
+    });
+
     it('SendRecordingTerminal is a no-op without a recording', () => {
         const transport = new FakeRecordingTransport();
         const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), new FakeShardStore(), transport);
@@ -393,7 +448,8 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
     });
 
     it('drains at the next session start what the previous teardown left in the store', async () => {
-        const { runtime, store, transport, recorder } = await startRecorded();
+        // The terminal is refused and so is the tail's retry as an ordinary shard: it stays stored.
+        const { runtime, store, transport, recorder } = await startRecorded(['refused']);
         recorder.Capture(5);
         transport.TerminalAck = false;
         await runtime.EndRealtimeSession();
@@ -402,7 +458,8 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         transport.TerminalAck = true;
         await runtime.StartRealtimeSessionFromResult(mintedSession('session-2'));
         await vi.advanceTimersByTimeAsync(0);
-        expect(transport.Uploads.map((u) => `${u.SessionID}/${u.Index}`)).toEqual(['session-1/0']);
+        // The refused retry, then the drain at session start.
+        expect(transport.Uploads.map((u) => `${u.SessionID}/${u.Index}`)).toEqual(['session-1/0', 'session-1/0']);
         expect(store.Keys).toEqual([]);
         await runtime.EndRealtimeSession();
     });

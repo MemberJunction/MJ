@@ -517,7 +517,7 @@ describe('session lifecycle, driven end to end with fakes', () => {
             expect(runtime['recordingShards']).toBeNull();
         });
 
-        it('a flush in flight at hang-up sends nothing more once the recording has ended', async () => {
+        it('a flush in flight at hang-up sends nothing more once the recording has ended; End re-sends both with keepalive instead', async () => {
             const { runtime, transport, flush } = await startRecorded(['refused']);
             await flush(); // shard 0 refused and retained
             let release!: (outcome: FakeUploadOutcome) => void;
@@ -528,7 +528,11 @@ describe('session lifecycle, driven end to end with fakes', () => {
             await runtime.EndRealtimeSession();
             release('refused');
             await inFlight;
-            expect(indexes(transport)).toEqual([0, 0]);
+            const ordinary = transport.Uploads.filter((u) => !u.Keepalive).map((u) => u.Index);
+            const keepalive = transport.Uploads.filter((u) => u.Keepalive).map((u) => u.Index);
+            expect(ordinary).toEqual([0, 0]);
+            // The ordinary requests die with an unloading page; End's keepalive copies do not.
+            expect(keepalive).toEqual([0, 1]);
         });
 
         it("a flush still in flight when a new session starts keeps its own session id and indexes", async () => {

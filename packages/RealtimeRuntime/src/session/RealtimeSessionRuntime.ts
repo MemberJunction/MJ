@@ -12,6 +12,7 @@ import {
   IsIdentityVerifiedEventPayload,
   NormalizeChannelKey,
   ParseRealtimeSessionClientPolicy,
+  RECORDING_TERMINAL_MAX_BYTES,
   ResolveClientTools,
   SelectNativeChannelTools,
   UserExposureReason,
@@ -769,6 +770,12 @@ export class RealtimeSessionRuntime {
    */
   private recordingShards: RecordingShardPipeline | null = null;
   /** How often packets are cut into shards: the 5 s shard window, so each tick seals about one window. */
+  /**
+   * Bytes of `keepalive` request bodies one terminal may use, the tail included. Browsers share about
+   * 64 KiB of in-flight keepalive bodies per page; the brief reserves 48 KiB of it for the recording,
+   * leaving room for a host's own close beacon (Caliber sends one from `pagehide` too).
+   */
+  private static readonly recordingKeepaliveBudgetBytes = RECORDING_TERMINAL_MAX_BYTES;
   private static readonly recordingShardFlushMs = 5000;
   /** The durable local shard store, created on first use and shared by every recording of this runtime. */
   private shardStore: IRecordingShardStore | null = null;
@@ -1960,22 +1967,20 @@ export class RealtimeSessionRuntime {
   /**
    * Tells the server, right now, how much of the recording exists — for a host's `pagehide` and
    * `visibilitychange → hidden` handlers, where the page may be gone a moment later. Synchronous:
-   * it fires a `keepalive` terminal request carrying the pending partial shard and returns without
-   * waiting. Never stops the recorder: after a `hidden` the call may well continue, and later audio
-   * simply starts the next shard index (the tail is sealed, so no index is ever re-sent with
-   * different bytes). No-op when nothing is recording, there is no session id or no transport, or
-   * nothing was captured. Never throws.
+   * it seals the pending partial shard and fires the `keepalive` terminal with it, then re-sends
+   * with `keepalive` whatever the server has not acknowledged yet (see
+   * {@link dispatchRecordingTerminal}), and returns without waiting. Never stops the recorder: after
+   * a `hidden` the call may well continue, and later audio simply starts the next shard index (the
+   * tail is sealed, so no index is ever re-sent with different bytes). Also works while End is still
+   * stopping the recorder, which is exactly when a host that does not await End navigates away.
+   * No-op when nothing is recording, there is no session id or no transport, or nothing was
+   * captured. Never throws.
    *
    * Deliberately opens NO IndexedDB transaction inside the handler: a `pagehide` handler gets a few
-   * milliseconds, and a store write started there could not complete during unload anyway. Instead:
-   * - a full window `Append` happens to seal here is uploaded with `keepalive`, dispatched BEFORE the
-   *   terminal, so it survives the tab closing. If the browser refuses it (keepalive budget) or the
-   *   server does, it falls back to the ordinary queue under the same index.
-   * - those windows, and a tail whose terminal is refused, are written to the store from a
-   *   `setTimeout(0)` task after the handler returns. On a page that is merely hidden (the call goes
-   *   on) that restores the durable copy, so a frozen background tab that exhausts the queue's
-   *   attempts still leaves them for the next-load drain; on a page that is unloading the task just
-   *   never runs. A refused tail is also retried through the queue as an ordinary shard.
+   * milliseconds, and a store write started there could not complete during unload anyway. The
+   * shards it sealed are written to the store from a `setTimeout(0)` task after the handler returns:
+   * on a page that is merely hidden (the call goes on) that keeps the durable copy until the server
+   * acknowledges it; on a page that is unloading the task just never runs.
    */
   public SendRecordingTerminal(): void {
     const recorder = this.recorder;
@@ -1984,41 +1989,104 @@ export class RealtimeSessionRuntime {
       return;
     }
     try {
-      const transport = pipeline.Transport;
-      const sessionId = pipeline.SessionID;
       const sealed = pipeline.Window.Append(recorder.TakeEncodedPackets());
       const tail = pipeline.Window.SealTail();
       if (pipeline.Window.LastSealedIndex < 0) {
         return;
       }
-      const windowsStored = sealed.length > 0 ? this.storeShardsLater(sessionId, sealed) : Promise.resolve();
-      for (const shard of sealed) {
-        void transport
-          .UploadShard(sessionId, shard, { Keepalive: true })
-          .catch((error: unknown) => {
-            console.warn(`[RealtimeSession] Keepalive upload of recording shard ${sessionId}/${shard.Index} failed: ${describeRecordingFailure(error)}`, error);
-            return false;
-          })
-          .then(async (acked) => {
-            // Wait for the deferred Put first, so a fast ack's Delete cannot run before it and
-            // leave an orphan row behind (and the queue's own ack-Delete likewise).
-            await windowsStored;
-            if (acked) {
-              await this.deleteStoredShard(sessionId, shard.Index);
-            } else {
-              await pipeline.Queue.Flush([shard]);
-            }
-          });
-      }
-      void this.sendRecordingTerminal(pipeline, tail).then(async (acked) => {
-        if (!acked && tail) {
-          await this.storeShardsLater(sessionId, [tail]);
-          // A Flush on a closed queue (the recording ended meanwhile) is a logged no-op.
-          await pipeline.Queue.Flush([tail]);
-        }
-      });
+      void this.dispatchRecordingTerminal(pipeline, sealed, tail, true);
     } catch (error) {
       console.warn(`[RealtimeSession] Failed to send the recording terminal for session ${pipeline.SessionID}:`, error);
+    }
+  }
+
+  /**
+   * Fires the terminal request, then re-sends with `keepalive` every shard the server has not
+   * acknowledged, then stores the shards sealed for this terminal. Shared by End and the page-lifecycle
+   * handlers. Everything that needs the network is dispatched synchronously, before any storage work,
+   * because the page may close at any moment from here on: an ordinary `fetch` is aborted on unload,
+   * and a `keepalive` one is not.
+   *
+   * - The terminal goes first so it always gets the keepalive budget. The server waits for the shards
+   *   the terminal says exist, and assembles as soon as the last missing one arrives.
+   * - The re-sent shards are the queue's unacknowledged ones (on the wire, waiting in a batch, or
+   *   retained after a failure) plus `sealedNow`, oldest first, within
+   *   {@link recordingKeepaliveBudgetBytes} together with the tail. A `sealedNow` shard that does not
+   *   fit, or whose keepalive upload fails, goes through the ordinary queue instead (it may still
+   *   land if the page stays). The queue keeps its own shards either way; a duplicate is acked as one.
+   * - `sealedNow` and the tail are stored after the dispatch, from a `setTimeout(0)` task when called
+   *   from a page-lifecycle handler (`deferStore`). A shard's stored copy is deleted on its ack, after
+   *   the store write, so a fast ack can never leave an orphan row.
+   *
+   * Resolves true when the terminal was acknowledged. Never rejects.
+   */
+  private dispatchRecordingTerminal(
+    pipeline: RecordingShardPipeline,
+    sealedNow: RecordingShard[],
+    tail: RecordingShard | null,
+    deferStore: boolean,
+  ): Promise<boolean> {
+    const sessionId = pipeline.SessionID;
+    const terminalAcked = this.sendRecordingTerminal(pipeline, tail);
+    const toStore = tail ? [...sealedNow, tail] : sealedNow;
+    let stored: Promise<void> = Promise.resolve();
+    if (toStore.length > 0) {
+      stored = deferStore ? this.storeShardsLater(sessionId, toStore) : this.storeShards(sessionId, toStore);
+    }
+    this.resendUnacknowledgedWithKeepalive(pipeline, sealedNow, tail?.Bytes.length ?? 0, stored);
+    return terminalAcked.then(async (acked) => {
+      await stored;
+      if (!tail) {
+        return acked;
+      }
+      if (acked) {
+        await this.deleteStoredShard(sessionId, tail.Index);
+      } else {
+        // Retried as an ordinary shard; a Flush on a closed queue (the recording ended) is a logged no-op.
+        await pipeline.Queue.Flush([tail]);
+      }
+      return acked;
+    });
+  }
+
+  /** The `keepalive` re-send part of {@link dispatchRecordingTerminal}. Never throws. */
+  private resendUnacknowledgedWithKeepalive(
+    pipeline: RecordingShardPipeline,
+    sealedNow: RecordingShard[],
+    bytesAlreadySent: number,
+    stored: Promise<void>,
+  ): void {
+    const transport = pipeline.Transport;
+    const sessionId = pipeline.SessionID;
+    const fresh = new Set(sealedNow.map((shard) => shard.Index));
+    const toQueue = (shard: RecordingShard): Promise<void> => stored.then(() => pipeline.Queue.Flush([shard]));
+    const byIndex = new Map<number, RecordingShard>();
+    for (const shard of [...pipeline.Queue.Unacknowledged(), ...sealedNow]) {
+      byIndex.set(shard.Index, shard);
+    }
+    let budget = RealtimeSessionRuntime.recordingKeepaliveBudgetBytes - bytesAlreadySent;
+    for (const shard of [...byIndex.values()].sort((a, b) => a.Index - b.Index)) {
+      if (!transport || shard.Bytes.length > budget) {
+        if (fresh.has(shard.Index)) {
+          void toQueue(shard);
+        }
+        continue;
+      }
+      budget -= shard.Bytes.length;
+      void transport
+        .UploadShard(sessionId, shard, { Keepalive: true })
+        .catch((error: unknown) => {
+          console.warn(`[RealtimeSession] Keepalive upload of recording shard ${sessionId}/${shard.Index} failed: ${describeRecordingFailure(error)}`, error);
+          return false;
+        })
+        .then(async (acked) => {
+          await stored;
+          if (acked) {
+            await this.deleteStoredShard(sessionId, shard.Index);
+          } else if (fresh.has(shard.Index)) {
+            await pipeline.Queue.Flush([shard]);
+          }
+        });
     }
   }
 
@@ -2065,11 +2133,15 @@ export class RealtimeSessionRuntime {
 
   /**
    * Ends the recording at teardown and STARTS its terminal request: stops the recorder (flushing the
-   * encoder), cuts the remaining packets into shards (full windows are stored and handed to the
-   * queue without waiting for their upload), stores the tail trimmed to the recorder's captured
-   * sample count, then fires the `keepalive` terminal. Teardown awaits the returned terminal only
-   * after `CloseAgentSession` ({@link awaitRecordingTerminal}), so the small, critical close never
-   * waits behind the recording (#5195).
+   * encoder), cuts the remaining packets into shards with the tail trimmed to the recorder's captured
+   * sample count, and dispatches the `keepalive` terminal plus `keepalive` re-sends of everything not
+   * yet acknowledged, before storing anything ({@link dispatchRecordingTerminal}). Teardown awaits the
+   * returned terminal only after `CloseAgentSession` ({@link awaitRecordingTerminal}), so the small,
+   * critical close never waits behind the recording (#5195).
+   *
+   * The recorder and pipeline stay visible to {@link SendRecordingTerminal} until the recorder has
+   * stopped: a `pagehide` in that window (a host that navigates away without awaiting End) still
+   * sends what was captured, and End then continues at the next index.
    *
    * Returns null when nothing was recording or nothing was captured (no terminal is sent then).
    * Best-effort: never throws, never blocks teardown on the network.
@@ -2078,18 +2150,18 @@ export class RealtimeSessionRuntime {
     this.stopShardFlushing();
     const recorder = this.recorder;
     const pipeline = this.recordingShards;
-    this.recorder = null;
-    this.recordingShards = null;
     this.currentTurnStartMs = null;
     this.turnAudioStartCaptured = false;
     if (!recorder || !pipeline) {
+      this.recorder = null;
+      this.recordingShards = null;
       return null;
     }
     try {
       const capturedSamples = await this.stopRecorder(recorder, pipeline.SessionID);
+      this.recorder = null;
+      this.recordingShards = null;
       const sealed = pipeline.Window.Append(recorder.TakeEncodedPackets());
-      await this.storeShards(pipeline.SessionID, sealed);
-      void pipeline.Queue.Flush(sealed);
       // Without a count from the recorder the tail keeps every packet it holds (SealTail's default).
       const tail = pipeline.Window.SealTail(
         capturedSamples === null ? undefined : Math.max(0, capturedSamples - pipeline.Window.SealedSamples),
@@ -2098,18 +2170,11 @@ export class RealtimeSessionRuntime {
         pipeline.Queue.Close();
         return null;
       }
-      if (tail) {
-        await this.storeShards(pipeline.SessionID, [tail]);
-      }
-      const acked = this.sendRecordingTerminal(pipeline, tail).then(async (ok) => {
-        if (ok && tail) {
-          await this.deleteStoredShard(pipeline.SessionID, tail.Index);
-        }
-        return ok;
-      });
-      return { Pipeline: pipeline, Acked: acked };
+      return { Pipeline: pipeline, Acked: this.dispatchRecordingTerminal(pipeline, sealed, tail, false) };
     } catch (error) {
       console.warn(`[RealtimeSession] Failed to finish the call recording for session ${pipeline.SessionID}; stored shards are drained at the next session start or load:`, error);
+      this.recorder = null;
+      this.recordingShards = null;
       pipeline.Queue.Close();
       this.rearmPendingShardDrain();
       return null;
