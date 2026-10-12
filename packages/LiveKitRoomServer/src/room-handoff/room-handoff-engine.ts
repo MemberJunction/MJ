@@ -40,6 +40,7 @@ import type {
     IRoomPresence,
     RoomAgentStarter,
     RoomHandoffAgentContext,
+    RoomHandoffEvent,
 } from './handoff-types';
 
 /** The tool the AI calls after briefing the new party, to say it is done and can leave. */
@@ -94,6 +95,7 @@ interface HandoffFlow {
 export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
     private deps: RoomHandoffDeps = {};
     private readonly flows = new Map<string, HandoffFlow>();
+    private readonly registeredObservers = new Set<IRoomHandoffObserver>();
     private nextFlowID = 1;
 
     protected constructor() {
@@ -113,6 +115,16 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
         });
     }
 
+    /** Registers an observer for handoff lifecycle events without replacing the primary collaborator. */
+    public RegisterObserver(observer: IRoomHandoffObserver): { Unregister: () => void } {
+        this.registeredObservers.add(observer);
+        return {
+            Unregister: () => {
+                this.registeredObservers.delete(observer);
+            },
+        };
+    }
+
     /** The collaborators currently set (a `Pick` for diagnostics; tests read it). */
     public get Deps(): Readonly<RoomHandoffDeps> {
         return this.deps;
@@ -125,6 +137,31 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
         }
         this.flows.clear();
         this.deps = {};
+        this.registeredObservers.clear();
+    }
+
+    /** Emits a handoff event to all registered observers and the primary observer. */
+    public EmitHandoffEvent(event: RoomHandoffEvent): void {
+        this.emitHandoffEvent(event);
+    }
+
+    private emitHandoffEvent(event: RoomHandoffEvent): void {
+        if (this.deps.Observer?.OnHandoffEvent) {
+            void Promise.resolve()
+                .then(() => this.deps.Observer?.OnHandoffEvent?.(event))
+                .catch((err) => {
+                    LogError(`[RoomHandoffEngine] collaborator observer error: ${err instanceof Error ? err.message : String(err)}`);
+                });
+        }
+        for (const obs of this.registeredObservers) {
+            if (obs.OnHandoffEvent) {
+                void Promise.resolve()
+                    .then(() => obs.OnHandoffEvent?.(event))
+                    .catch((err) => {
+                        LogError(`[RoomHandoffEngine] registered observer error: ${err instanceof Error ? err.message : String(err)}`);
+                    });
+            }
+        }
     }
 
     /**
@@ -196,7 +233,7 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
         this.publishUpdate(resolved.Offer);
         const flow = this.flowForOffer(resolved.Offer);
         if (flow) {
-            this.deps.Observer?.OnHandoffEvent?.({
+            this.emitHandoffEvent({
                 RoomName: resolved.Offer.RoomName,
                 EventType: 'Accepted',
                 ActorUserID: userID,
@@ -220,7 +257,7 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
         this.publishUpdate(resolved.Offer);
         const flow = this.flowForOffer(resolved.Offer);
         if (flow) {
-            this.deps.Observer?.OnHandoffEvent?.({
+            this.emitHandoffEvent({
                 RoomName: resolved.Offer.RoomName,
                 EventType: 'Declined',
                 ActorUserID: userID,
@@ -243,7 +280,7 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
             return;
         }
         if (payload.Offer.Status === 'Accepted') {
-            this.deps.Observer?.OnHandoffEvent?.({
+            this.emitHandoffEvent({
                 RoomName: flow.Agent.RoomName,
                 EventType: 'Accepted',
                 ActorUserID: payload.UserID,
@@ -255,7 +292,7 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
             flow.Phase = 'joining';
             void this.waitForUserToJoin(flow, payload.UserID);
         } else if (payload.Offer.Status === 'Declined') {
-            this.deps.Observer?.OnHandoffEvent?.({
+            this.emitHandoffEvent({
                 RoomName: flow.Agent.RoomName,
                 EventType: 'Declined',
                 ActorUserID: payload.UserID,
@@ -330,7 +367,7 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
         flow.OfferID = offer.OfferID;
         this.publish({ UserID: offer.TargetUserID, Kind: 'offered', Offer: ToOfferView(offer) });
         void this.notify(offer, flow);
-        this.deps.Observer?.OnHandoffEvent?.({
+        this.emitHandoffEvent({
             RoomName: flow.Agent.RoomName,
             EventType: 'Offered',
             ActorUserID: destination.UserID,
@@ -338,7 +375,7 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
             ContextUser: flow.Agent.ContextUser,
             Provider: flow.Agent.Provider,
         });
-        this.deps.Observer?.OnHandoffEvent?.({
+        this.emitHandoffEvent({
             RoomName: flow.Agent.RoomName,
             EventType: 'Escalated',
             ActorUserID: destination.UserID,
@@ -388,6 +425,7 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
                 Number: number,
                 ParticipantIdentity: identity,
                 DisplayName: displayName,
+                FromNumber: flow.Request.Destination.Kind === 'number' ? flow.Request.Destination.FromNumber : undefined,
                 RingTimeoutSeconds: HANDOFF_DIAL_RING_SECONDS,
             });
         } catch (e) {
@@ -468,7 +506,7 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
             return;
         }
         const name = displayNameOf(flow);
-        this.deps.Observer?.OnHandoffEvent?.({
+        this.emitHandoffEvent({
             RoomName: flow.Agent.RoomName,
             EventType: 'Transferred',
             Details: {

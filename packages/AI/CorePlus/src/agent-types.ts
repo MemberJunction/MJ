@@ -17,7 +17,7 @@ import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
 import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
-import { AIAPIKey } from '@memberjunction/ai';
+import { AIAPIKey, AICredentialScope } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionParam } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
@@ -364,6 +364,17 @@ export interface AgentPipelineRequest {
 }
 
 /**
+ * One image a client tool returns for the model to see. `Base64` is raw base64 without a data
+ * URL prefix.
+ */
+export interface ClientToolMediaItem {
+    MimeType: string;
+    Base64: string;
+    Width?: number;
+    Height?: number;
+}
+
+/**
  * Response from a client tool execution — returned to the server when
  * the client finishes running the tool.
  */
@@ -374,6 +385,8 @@ export interface ClientToolResponse {
     Success: boolean;
     /** The tool result (if successful) */
     Result?: unknown;
+    /** Images for the model, when the tool returns any. */
+    Media?: ClientToolMediaItem[];
     /** Error message (if failed) */
     ErrorMessage?: string;
 }
@@ -388,6 +401,8 @@ export interface ClientToolResultSummary {
     Success: boolean;
     /** Result data from the tool */
     Result?: unknown;
+    /** Images for the model, when the tool returns any. */
+    Media?: ClientToolMediaItem[];
     /** Error message if the tool failed */
     ErrorMessage?: string;
 }
@@ -1247,6 +1262,22 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * and the corresponding apiKey value.
      */
     apiKeys?: AIAPIKey[];
+    /**
+     * Which credentials the run may spend; omitted means `'Any'`. `'RuntimeOnly'` restricts the run's
+     * model calls to {@link apiKeys}: a vendor the run carries no key for is not used, rather than
+     * falling back to the platform's credentials. See `AICredentialScope` in `@memberjunction/ai`.
+     *
+     * Covered: every prompt the agent runs and the ones it starts on its own behalf (JSON repair, the
+     * result-selector judge, summarize, compaction, naming), decision calls, self-check rubrics,
+     * sub-agents, realtime sessions and actions. An action that calls a vendor directly gets the run's
+     * key through `RunActionParams.RuntimeAPIKeyResolver`; one that runs its own prompt or agent is
+     * handed only the scope, not the keys, so under `'RuntimeOnly'` it fails rather than spending the
+     * platform's.
+     *
+     * Not covered: retrieval reranking (`AIRerankerRunner`, the search rerankers) and vector
+     * embeddings outside a prompt run, which are platform infrastructure and resolve their own keys.
+     */
+    CredentialScope?: AICredentialScope;
     /**
      * Optional ID of the last run in a run chain.
      * When provided, this links the new run to a previous run, allowing

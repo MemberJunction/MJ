@@ -16,7 +16,6 @@ export class MJPhoneNumberFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'phoneNumberDetails', sectionName: 'Phone Number Details', isExpanded: true },
             { sectionKey: 'carrierInformation', sectionName: 'Carrier Information', isExpanded: true },
             { sectionKey: 'configuration', sectionName: 'Configuration', isExpanded: true },

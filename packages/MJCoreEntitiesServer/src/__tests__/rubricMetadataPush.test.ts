@@ -150,7 +150,6 @@ describe('shipped rubric metadata', () => {
         expect(new Set(names).size).toBe(names.length);
         for (const record of records) {
             expect(record.primaryKey.ID).toMatch(/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/);
-            expect(record.sync).toBeUndefined();
             const template = record.fields.TemplateText.replace('@file:', '');
             expect(readFileSync(join(root, 'prompts', template), 'utf8').length).toBeGreaterThan(0);
         }

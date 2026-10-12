@@ -3,6 +3,7 @@ export * from './generic/baseLLM';
 export * from './generic/baseImage';
 export * from './generic/baseReranker';
 export * from './generic/baseDecision';
+export * from './generic/baseSystemOneDecision';
 export * from './generic/chat.types';
 export * from './generic/toolTurnEncoding';
 export * from './generic/openAICompatibleTools';

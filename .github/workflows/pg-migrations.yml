@@ -474,17 +474,28 @@ jobs:
           CODEGEN_DB_PASSWORD: testpass
           MJ_INTEGRATION_TEST: '1'
           RUN_AGENT_TESTS: '0'
+        # Every test runs even when an earlier one fails, so one regression cannot hide the rest;
+        # the step fails at the end if any did. The query bundles (IT02, IT35, IT102) cover query
+        # rendering, paging and counts on PostgreSQL. The client-transport query bundles (IT33,
+        # IT34, IT103) need a running MJAPI, which this lane does not start.
         run: |
-          set -e
+          FAILED=""
           for TEST in \
             "IT38 - Template Engine Rendering" \
             "IT39 - Actions Pipeline" \
             "IT48 - ClassFactory Resolution Contracts" \
             "IT20 - Lists Keyset Pagination" \
-            "IT87 - Nested Transactions (ambient savepoints)"; do
+            "IT87 - Nested Transactions (ambient savepoints)" \
+            "IT02 - RunQuery Cache Integrity" \
+            "IT35 - RunQuery Feature Surface" \
+            "IT102 - RunQuery Rendering Matrix"; do
             echo "=== $TEST (PostgreSQL) ==="
-            node packages/MJCLI/bin/run.js test run --name "$TEST"
+            node packages/MJCLI/bin/run.js test run --name "$TEST" || FAILED="$FAILED\n  $TEST"
           done
+          if [ -n "$FAILED" ]; then
+            printf "Failed on PostgreSQL:$FAILED\n"
+            exit 1
+          fi
 
       - name: (Nightly) Functional lane verdict
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

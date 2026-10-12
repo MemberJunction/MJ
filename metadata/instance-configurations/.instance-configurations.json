@@ -132,7 +132,7 @@
       "ValueType": "number",
       "Category": "Search",
       "DisplayName": "Default Minimum Relevance Score",
-      "Description": "Minimum relevance score threshold for search results (0-1). Results below this score are filtered out.",
+      "Description": "Minimum semantic similarity (0-1) for search results, applied to semantic (vector) matches before fusion. Keyword and other text matches are never filtered by it. Embedding models score even unrelated text fairly high, so the useful value depends on the model in use.",
       "DefaultValue": "0.35"
     },
     "primaryKey": {
@@ -249,6 +249,24 @@
     "sync": {
       "lastModified": "2026-08-05T18:34:32.674Z",
       "checksum": "0c4ece3d0989261bc5badfdd776fdeec262d7ef3b86dfa6b680878bef910a729"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Forms.MetadataContributions.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Forms",
+      "DisplayName": "Enable Metadata Form Contributions",
+      "Description": "Show form panels defined as MJ: Entity Form Contributions rows in Explorer. Set to false to turn every such row off in the browser and in the answers of the Get Form Contributions For Entity and Get Form Composition For Entity actions; compiled form panels are unaffected. The server process's own form cache follows the MJ_FORMS_METADATA_CONTRIBUTIONS environment variable instead.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "7746A62A-10C2-4444-96A2-983D151F98CC"
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:21:36.488Z",
+      "checksum": "74029d3eb472d5c37ad35873c332f0327a08269b6cb6a53e4bee105ae125f727"
     }
   }
 ]

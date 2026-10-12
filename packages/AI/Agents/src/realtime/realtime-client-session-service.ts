@@ -30,7 +30,7 @@
  * @author MemberJunction.com
  */
 
-import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView, DatabaseProviderBase } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -42,17 +42,40 @@ import {
     GetAIAPIKey,
     AIAPIKey,
     AIAPIKeyResolver,
+    AICredentialScope,
+    CredentialScopeAllows,
     IRealtimeSession,
+    IsZeroDataRetention,
     JSONObject,
     RealtimeSessionParams,
     RealtimeToolCall,
     RealtimeToolDefinition
 } from '@memberjunction/ai';
-import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIAgentRunEntityExtended, MJAIPromptRunEntityExtended, AgentExecutionProgressCallback, ExecuteAgentResult, AppContextSnapshot, FormatAppContextNote, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
+import {
+    MJAIAgentEntityExtended,
+    MJAIModelEntityExtended,
+    MJAIAgentRunEntityExtended,
+    MJAIPromptRunEntityExtended,
+    AgentExecutionProgressCallback,
+    ExecuteAgentResult,
+    AppContextSnapshot,
+    FormatAppContextNote,
+    ResolvePromptRunUserID,
+    ClientToolMetadataFromDefinition,
+    ParseAgentSettings,
+    ResolveAppClientToolMetadata,
+    ResolveClientTools,
+    type ClientToolMetadata,
+    type IAgentSettings,
+    type RealtimeChannelCandidate,
+    type RealtimeSessionClientPolicy,
+    type RealtimeSessionClientTools
+} from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
 import { AgentRunner } from '../AgentRunner';
+import { AgentRunWatchdog } from '../agent-run-watchdog';
 import { DelegationNarrator } from './realtime-delegation-narrator';
 import { FilterAllowedAgentsByCanRun } from './realtime-coagent-resolution';
 import {
@@ -91,6 +114,26 @@ import {
     IsActionAllowedForDirectInvocation
 } from './realtime-coagent-config';
 import { SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtime-vendor-resolution';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { BuildSessionChannelPolicy, type RealtimeChannelRegistryRow } from './realtime-channel-policy';
+
+/**
+ * Context passed to {@link PrepareClientSessionInput.ResolveHostTools} describing the
+ * model, vendor, and driver resolved for the realtime session.
+ */
+export interface RealtimeHostToolsResolutionContext {
+    /** The resolved model entity ID. */
+    ModelID?: string;
+    /** The resolved model vendor ID, if known. */
+    ModelVendorID?: string;
+    /** The resolved realtime driver class name (e.g. 'OpenAILiveRealtime'). */
+    DriverClass?: string;
+}
+
+/**
+ * Resolver callback signature for dynamically resolving host tools prior to session start.
+ */
+export type RealtimeHostToolsResolver = (resolved: RealtimeHostToolsResolutionContext) => RealtimeToolDefinition[] | undefined;
 
 /**
  * Input for {@link RealtimeClientSessionService.PrepareClientSession}.
@@ -111,6 +154,13 @@ export interface PrepareClientSessionInput {
      * client-initiated session today.
      */
     APIKeys?: AIAPIKey[];
+    /**
+     * The run's credential scope (`ExecuteAgentParams.CredentialScope`). `'RuntimeOnly'` makes
+     * {@link PrepareClientSessionInput.APIKeys} the whole key chain: a vendor they do not key is not
+     * selected, and the {@link RealtimeClientSessionService.getAPIKeyForDriver} seam (by default the
+     * platform's environment key) is never consulted. Absent ⇒ `'Any'`.
+     */
+    CredentialScope?: AICredentialScope;
     /** The Realtime Co-Agent entity. Provide this OR {@link PrepareClientSessionInput.CoAgentID}. */
     CoAgent?: MJAIAgentEntityExtended;
     /** The Realtime Co-Agent id (resolved from cached metadata). Provide this OR {@link PrepareClientSessionInput.CoAgent}. */
@@ -129,6 +179,15 @@ export interface PrepareClientSessionInput {
      */
     ApplicationID?: string;
     /**
+     * The interactive channels the BROWSER reports it could mount in this session (key, code defaults,
+     * native tools, host-declared?). When present the service scopes them — registry kill switch, agent
+     * and app configuration (`realtime.channels`) — narrows/completes {@link ExtraTools} to match, and
+     * returns the resolved {@link RealtimeClientSessionPrepResult.ClientPolicy} for the browser to
+     * activate. Absent ⇒ no scoping (a client that predates channel scoping, or a host that mints
+     * through its own proxy): {@link ExtraTools} is used exactly as declared.
+     */
+    ChannelCandidates?: RealtimeChannelCandidate[];
+    /**
      * Optional app-context snapshot — where the user is, what they see, and the live capability
      * manifest — injected into the companion system prompt at mint (the session-start half of the
      * client-context delivery; the {@link import('@memberjunction/ai-core-plus').AppContextSnapshot}
@@ -144,6 +203,11 @@ export interface PrepareClientSessionInput {
      * local tool handler ({@link BridgeRealtimeRuntime.SetLocalToolHandler}).
      */
     HostTools?: RealtimeToolDefinition[];
+    /**
+     * Optional callback that allows the host to resolve host tools dynamically based on
+     * the model, vendor, and driver actually resolved for the session, before session opening.
+     */
+    ResolveHostTools?: RealtimeHostToolsResolver;
     /**
      * Host-authored instructions appended to the system prompt (e.g. "this is an audio-only phone call …",
      * the caller's number and verification status). Empty/absent adds nothing.
@@ -283,6 +347,12 @@ export interface RealtimeClientSessionPrepResult {
      */
     EffectiveConfig?: RealtimeCoAgentConfig;
     /**
+     * The resolved channel scope and client-tool tiers for the browser to activate — present only when
+     * the input carried {@link PrepareClientSessionInput.ChannelCandidates}. The transport layer returns
+     * it in the mint result and persists the in-session channel keys on the session.
+     */
+    ClientPolicy?: RealtimeSessionClientPolicy;
+    /**
      * The effective narration pace (`realtime.narration.paceMs`) — minimum gap in ms between
      * spoken progress updates. `undefined` when not configured (clients/runners use their
      * built-in default). In the CLIENT-DIRECT topology narration pacing is enforced client-side,
@@ -351,6 +421,16 @@ export interface ExecuteRelayedToolInput {
      */
     ResumeRunID?: string;
     /**
+     * The browser's GraphQL session id. Lets the delegated run execute client tools the surface
+     * registered, because the client-tool request channel is keyed on this id.
+     */
+    BrowserSessionID?: string;
+    /**
+     * The app-context snapshot the browser sent at session start, so the delegated run's prompt sees
+     * surface context and tools. It does not follow later navigation in the browser.
+     */
+    AppContext?: AppContextSnapshot;
+    /**
      * The id of the human this delegation is FOR, threaded into the delegated run's `userId`.
      *
      * The relayed-tool path may execute under an ELEVATED principal (a scoped anonymous magic-link
@@ -407,6 +487,8 @@ export interface RealtimeSessionParamsPrep {
     EffectiveConfig?: RealtimeCoAgentConfig;
     /** The assembled session params (TARGET-identity prompt, stable tools incl. invoke-target, voice, memory). */
     SessionParams?: RealtimeSessionParams;
+    /** The resolved channel scope + client-tool tiers, when the input carried channel candidates. */
+    ClientPolicy?: RealtimeSessionClientPolicy;
 }
 
 /**
@@ -710,7 +792,7 @@ export class RealtimeClientSessionService {
         if (!prep.Success || !prep.CoAgent || !prep.Resolution || !prep.SessionParams || !prep.EffectiveConfig) {
             return { Success: false, ErrorMessage: prep.ErrorMessage };
         }
-        const { CoAgent: coAgent, Resolution: resolution, SessionParams: sessionParams, EffectiveConfig: effectiveConfig } = prep;
+        const { CoAgent: coAgent, Resolution: resolution, SessionParams: sessionParams, EffectiveConfig: effectiveConfig, ClientPolicy: clientPolicy } = prep;
 
         if (!resolution.Model.SupportsClientDirect) {
             return {
@@ -749,6 +831,7 @@ export class RealtimeClientSessionService {
             DriverClass: resolution.DriverClass,
             NarrationInstructionsTemplate: this.resolveNarrationInstructionsTemplate() ?? undefined,
             EffectiveConfig: effectiveConfig,
+            ClientPolicy: clientPolicy,
             NarrationPaceMs: GetNarrationPaceMs(effectiveConfig) ?? undefined,
         };
     }
@@ -938,12 +1021,164 @@ export class RealtimeClientSessionService {
         }
         const resolution = outcome.Resolution;
 
+        let hostTools = input.HostTools;
+        if (input.ResolveHostTools) {
+            const dynamicHostTools = input.ResolveHostTools({
+                ModelID: resolution.ModelID,
+                ModelVendorID: resolution.ModelVendorID,
+                DriverClass: resolution.DriverClass,
+            });
+            if (dynamicHostTools !== undefined) {
+                hostTools = dynamicHostTools;
+            }
+        }
+
+        const effectiveInput = hostTools !== input.HostTools ? { ...input, HostTools: hostTools } : input;
+        // Channel scoping + client-tool tiers: narrows the declared tools to the scope's decision and
+        // folds the app tier into the capability manifest the prompt renders. The scoped input is what
+        // the prompt/tool builders see, so a vetoed channel is absent from the framing as well as the tools.
+        const scoped = await this.scopeSessionInput(effectiveInput, effectiveConfig, contextUser, provider, this.modelHasZeroDataRetention(resolution.ModelID, resolution.ModelVendorID));
         const sessionParams = await this.buildSessionParams(
-            input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
+            scoped.Input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
             resolution.ModelID, resolution.ModelVendorID,
         );
 
-        return { Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams };
+        return {
+            Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams,
+            ClientPolicy: scoped.ClientPolicy,
+        };
+    }
+
+    /**
+     * Applies channel scoping and the client-tool tiers to a prepare input.
+     *
+     * - **App tier into the prompt.** `Application.AgentSettings.ClientTools` is resolved to metadata
+     *   and layered, through the unified {@link ResolveClientTools}, beneath the live surface's own
+     *   manifest in the app-context snapshot — so the co-agent is told about tools the app declares
+     *   even when the active surface did not republish them. (Only the HOST can run them; the browser
+     *   reports "declared but not registered" for one it has no handler for.) The agent's static
+     *   junction tools are deliberately NOT added to the voice prompt — voice prompts are
+     *   token-sensitive and a tool with no browser handler is noise — but they ride the returned policy
+     *   so the browser can describe them.
+     * - **Channel scoping.** When the browser reported candidates, they are scoped against the
+     *   registry and the cascade's `channels` section, and the declared tools narrowed to match
+     *   ({@link BuildSessionChannelPolicy}).
+     *
+     * @returns The (possibly adjusted) input, and the policy to hand back when candidates were reported.
+     */
+    protected async scopeSessionInput(
+        input: PrepareClientSessionInput,
+        effectiveConfig: RealtimeCoAgentConfig,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        modelHasZeroDataRetention = false
+    ): Promise<{ Input: PrepareClientSessionInput; ClientPolicy?: RealtimeSessionClientPolicy }> {
+        const tiers = await this.resolveSessionClientToolTiers(input.ApplicationID, input.TargetAgentID, contextUser);
+        const appContext = this.withAppToolTier(input.AppContext, tiers.App, input.TargetAgentID);
+        const candidates = input.ChannelCandidates ?? [];
+        if (candidates.length === 0) {
+            return { Input: appContext === input.AppContext ? input : { ...input, AppContext: appContext } };
+        }
+        const outcome = BuildSessionChannelPolicy({
+            Candidates: candidates,
+            ChannelsConfig: effectiveConfig.realtime?.channels ?? null,
+            Registry: this.readChannelRegistry(provider),
+            ClientTools: input.ExtraTools,
+            ClientToolTiers: tiers,
+            ModelHasZeroDataRetention: modelHasZeroDataRetention,
+        });
+        return {
+            Input: { ...input, ExtraTools: outcome.ClientTools, AppContext: appContext },
+            ClientPolicy: outcome.Policy,
+        };
+    }
+
+    /**
+     * Whether the session model's effective catalog configuration (type < model < vendor < model-vendor)
+     * declares `Privacy.ZeroDataRetention: true`. Fails closed: a model or vendor row that cannot be
+     * resolved, or a catalog lookup that throws, reads as "not declared", so an agent that REQUIRES zero
+     * data retention loses exposure rather than gaining it. Overridable seam.
+     *
+     * @param modelID The resolved `MJ: AI Models` id.
+     * @param modelVendorID The resolved model-vendor row id (the cascade's most specific layer).
+     */
+    protected modelHasZeroDataRetention(modelID: string | undefined, modelVendorID: string | undefined): boolean {
+        if (!modelID) {
+            return false;
+        }
+        try {
+            return IsZeroDataRetention(AIEngine.Instance.GetEffectiveModelConfiguration(modelID, modelVendorID));
+        } catch (error) {
+            LogError(`RealtimeClientSessionService.modelHasZeroDataRetention failed for model '${modelID}': ${error instanceof Error ? error.message : String(error)}`);
+            return false;
+        }
+    }
+
+    /**
+     * Layers the app's client tools beneath the surface's manifest in the app-context snapshot, through
+     * the unified resolver (`session > app`, first match by name wins). Returns the SAME snapshot object
+     * when nothing changes, so callers can detect "no change" by identity.
+     */
+    private withAppToolTier(
+        appContext: AppContextSnapshot | undefined,
+        appTools: ReadonlyArray<ClientToolMetadata> | undefined,
+        targetAgentId: string
+    ): AppContextSnapshot | undefined {
+        if (!appContext || !appTools || appTools.length === 0) {
+            return appContext;
+        }
+        const surfaceTools = appContext.Capabilities?.Tools;
+        const tools = ResolveClientTools({ agentId: targetAgentId, sessionTools: surfaceTools, appTools: [...appTools] });
+        if (surfaceTools && tools.length === surfaceTools.length) {
+            return appContext; // the surface already covered every app tool
+        }
+        return { ...appContext, Capabilities: { ...appContext.Capabilities, Tools: tools } };
+    }
+
+    /**
+     * The server's view of the channel registry (`MJ: AI Agent Channels`), read from the request
+     * provider's cached {@link AIEngineBase} rows (already configured by the prepare). Overridable seam.
+     * Tolerant: an unloaded cache yields an empty registry (every candidate then reads as having no
+     * row), never a throw.
+     */
+    protected readChannelRegistry(provider: IMetadataProvider): RealtimeChannelRegistryRow[] {
+        try {
+            const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(provider, AIEngineBase) as AIEngineBase;
+            return (engine.AgentChannels ?? []).map(c => ({ Name: c.Name, IsActive: c.IsActive }));
+        } catch (error) {
+            LogError(`RealtimeClientSessionService.readChannelRegistry failed: ${error instanceof Error ? error.message : String(error)}`);
+            return [];
+        }
+    }
+
+    /**
+     * Resolves the client-tool tiers the browser is told about at mint: the APP tier
+     * (`Application.AgentSettings.ClientTools` resolved against the tool-definition catalog) and the
+     * STATIC tier (the target agent's `MJ: AI Agent Client Tools` junction). Overridable seam; tolerant —
+     * any failure yields empty tiers and never fails the mint.
+     */
+    protected async resolveSessionClientToolTiers(
+        applicationId: string | undefined,
+        targetAgentId: string,
+        contextUser: UserInfo
+    ): Promise<RealtimeSessionClientTools> {
+        const tiers: RealtimeSessionClientTools = {};
+        try {
+            const settings = await this.loadAppAgentSettings(applicationId, contextUser);
+            const definitions = AIEngine.Instance.ClientToolDefinitions ?? [];
+            const app = ResolveAppClientToolMetadata(settings?.ClientTools, definitions, ref =>
+                LogStatus(`RealtimeClientSessionService: the app's client tool '${ref.Name ?? ref.ClientToolDefinitionID}' matches no tool definition — skipping it.`));
+            if (app.length > 0) {
+                tiers.App = app;
+            }
+            const stat = targetAgentId ? AIEngine.Instance.GetClientToolsForAgent(targetAgentId).map(ClientToolMetadataFromDefinition) : [];
+            if (stat.length > 0) {
+                tiers.Static = stat;
+            }
+        } catch (error) {
+            LogError(`RealtimeClientSessionService.resolveSessionClientToolTiers failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return tiers;
     }
 
     /**
@@ -994,6 +1229,31 @@ export class RealtimeClientSessionService {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         provider: IMetadataProvider
     ): Promise<string | null> {
+        const settings = await this.loadAppAgentSettings(applicationId, contextUser);
+        if (!settings) {
+            return null;
+        }
+        const relevantAgents: RealtimeAllowedAgent[] = (settings.RelevantAgents ?? []).map(r => {
+            const entry: RealtimeAllowedAgent = { agentId: r.AgentID };
+            if (r.Label) {
+                entry.label = r.Label;
+            }
+            if (r.Disclosure === 'silent' || r.Disclosure === 'mention' || r.Disclosure === 'hand-voice') {
+                entry.disclosure = r.Disclosure;
+            }
+            return entry;
+        });
+        return BuildAppRealtimeOverridesJson(settings.Realtime ?? null, relevantAgents);
+    }
+
+    /**
+     * Reads and parses an application's `AgentSettings` (one tiny by-ID read, served from the provider's
+     * RunView cache on repeat). The RAW column is parsed with {@link ParseAgentSettings} rather than read
+     * through the CodeGen-generated `AgentSettingsObject` accessor, so a field added to the settings
+     * interface works the moment the code reading it ships, before CodeGen next refreshes the copy.
+     * Tolerant — a blank id, a failed read, a missing app, or an app with no usable settings returns `null`.
+     */
+    protected async loadAppAgentSettings(applicationId: string | undefined, contextUser: UserInfo): Promise<IAgentSettings | null> {
         const appId = applicationId?.trim();
         if (!appId) {
             return null;
@@ -1009,23 +1269,9 @@ export class RealtimeClientSessionService {
             if (!result.Success || !result.Results || result.Results.length === 0) {
                 return null;
             }
-            const settings = result.Results[0].AgentSettingsObject;
-            if (!settings) {
-                return null;
-            }
-            const relevantAgents: RealtimeAllowedAgent[] = (settings.RelevantAgents ?? []).map(r => {
-                const entry: RealtimeAllowedAgent = { agentId: r.AgentID };
-                if (r.Label) {
-                    entry.label = r.Label;
-                }
-                if (r.Disclosure === 'silent' || r.Disclosure === 'mention' || r.Disclosure === 'hand-voice') {
-                    entry.disclosure = r.Disclosure;
-                }
-                return entry;
-            });
-            return BuildAppRealtimeOverridesJson(settings.Realtime ?? null, relevantAgents);
+            return ParseAgentSettings(result.Results[0].AgentSettings);
         } catch (error) {
-            LogError(`RealtimeClientSessionService.resolveAppRealtimeOverrides failed for app '${appId}': ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`RealtimeClientSessionService.loadAppAgentSettings failed for app '${appId}': ${error instanceof Error ? error.message : String(error)}`);
             return null;
         }
     }
@@ -1120,10 +1366,30 @@ export class RealtimeClientSessionService {
             run.UserID = userID;
         }
         if (await run.Save()) {
+            this.KeepCoAgentRunAlive(run.ID, provider, contextUser);
             return run.ID;
         }
         LogError(`RealtimeClientSessionService.createCoAgentRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         return null;
+    }
+
+    /**
+     * Keeps a voice session's co-agent run alive as far as the {@link AgentRunWatchdog} is concerned. The
+     * run spans the whole call, but no agent loop owns it, so nothing stamped its heartbeat: the watchdog
+     * force-failed every call that ran past ~5 minutes ("no liveness heartbeat … owning process presumed
+     * dead") while the call carried on. Called when the run is created and again on each persisted
+     * session heartbeat (`SessionManager`), so whichever server instance the session is talking to keeps
+     * it fresh; the watchdog drops it once it is finalized. Only a database provider can stamp heartbeats —
+     * any other provider is a no-op, as for every agent run.
+     *
+     * @param coAgentRunID The session's co-agent run id (from its `Config`), or nothing.
+     * @param provider The request-scoped metadata provider.
+     * @param contextUser The user the heartbeat writes run as.
+     */
+    public KeepCoAgentRunAlive(coAgentRunID: string | null | undefined, provider: IMetadataProvider, contextUser: UserInfo): void {
+        if (coAgentRunID && provider instanceof DatabaseProviderBase) {
+            AgentRunWatchdog.Instance.Track(coAgentRunID, provider, contextUser);
+        }
     }
 
     /**
@@ -1227,9 +1493,58 @@ export class RealtimeClientSessionService {
         success: boolean = true,
         coAgentRunStepID: string | null = null,
     ): Promise<void> {
-        await this.finalizeAgentRun(coAgentRunID, contextUser, provider, success);
-        await this.finalizePromptRun(promptRunID, contextUser, provider, success);
-        await this.finalizeRunStep(coAgentRunStepID, contextUser, provider, success);
+        try {
+            await this.finalizeAgentRun(coAgentRunID, contextUser, provider, success);
+            await this.finalizePromptRun(promptRunID, contextUser, provider, success);
+            await this.finalizeRunStep(coAgentRunStepID, contextUser, provider, success);
+        } finally {
+            // Even when a finalize step throws, the run still owes its cost, and the watchdog must stop
+            // treating it as alive — or a run stuck at Running would be kept fresh indefinitely.
+            await this.rollUpCoAgentRunUsage(coAgentRunID, promptRunID, contextUser, provider);
+            if (coAgentRunID) {
+                AgentRunWatchdog.Instance.Untrack(coAgentRunID);
+            }
+        }
+    }
+
+    /**
+     * Copies the co-agent prompt run's tokens and cost onto the co-agent run. The realtime model's usage
+     * accumulates on the prompt run ({@link AccumulatePromptRunUsage}), which prices itself; the run's
+     * own `TotalCost` / `Total*TokensUsed` stayed 0, so everything that sums agent runs — the realtime
+     * analytics dashboard's per-session cost among them — left out the voice model entirely and showed
+     * only the delegated runs. Mirrors how an agent loop derives its run totals from its prompt runs.
+     *
+     * Applied whatever the run's status: a run the watchdog already failed, or one a shutdown cancelled,
+     * still owes its cost. Runs after {@link finalizePromptRun}, which waits for in-flight usage writes,
+     * so the copy sees the final counts. Tolerant: logs, never throws.
+     */
+    private async rollUpCoAgentRunUsage(
+        coAgentRunID: string | null,
+        promptRunID: string | null,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<void> {
+        if (!coAgentRunID || !promptRunID) {
+            return;
+        }
+        try {
+            const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
+            const run = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+            if (!(await promptRun.Load(promptRunID)) || !(await run.Load(coAgentRunID))) {
+                return;
+            }
+            const promptTokens = promptRun.TokensPrompt ?? 0;
+            const completionTokens = promptRun.TokensCompletion ?? 0;
+            run.TotalPromptTokensUsed = promptTokens;
+            run.TotalCompletionTokensUsed = completionTokens;
+            run.TotalTokensUsed = promptRun.TokensUsed ?? promptTokens + completionTokens;
+            run.TotalCost = promptRun.TotalCost ?? promptRun.Cost ?? 0;
+            if (run.Dirty && !(await run.Save())) {
+                LogError(`RealtimeClientSessionService.rollUpCoAgentRunUsage save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        } catch (error) {
+            LogError(`RealtimeClientSessionService.rollUpCoAgentRunUsage failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     /**
@@ -1700,14 +2015,15 @@ export class RealtimeClientSessionService {
         // A resolver that fell back to the environment itself would answer before the seam, so a
         // subclass that overrides the seam would lose to AI_VENDOR_API_KEY__<driver>.
         const resolveRunKey = this.buildRunKeyResolver(input.APIKeys);
+        const scope = input.CredentialScope ?? 'Any';
         if (input.PreferredModelID) {
-            return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveRunKey);
+            return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveRunKey, scope);
         }
-        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig, resolveRunKey);
+        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig, resolveRunKey, scope);
         if (fromConfig) {
             return { Resolution: fromConfig };
         }
-        const resolution = await this.resolveRealtimeModel(coAgent, resolveRunKey);
+        const resolution = await this.resolveRealtimeModel(coAgent, resolveRunKey, scope);
         return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage() };
     }
 
@@ -1733,9 +2049,10 @@ export class RealtimeClientSessionService {
      *
      * @param effectiveConfig The resolved effective configuration.
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
+     * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
      * @returns The resolution, or `null` when no preference is configured or it can't be satisfied.
      */
-    protected resolveConfiguredModelPreference(effectiveConfig?: RealtimeCoAgentConfig, resolve?: AIAPIKeyResolver): RealtimeModelResolution | null {
+    protected resolveConfiguredModelPreference(effectiveConfig?: RealtimeCoAgentConfig, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolution | null {
         const preference = effectiveConfig?.realtime?.modelPreference;
         if (!preference) {
             return null;
@@ -1755,7 +2072,7 @@ export class RealtimeClientSessionService {
             );
             return null;
         }
-        const resolution = this.resolveVendorAndInstantiate(model, resolve);
+        const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope);
         if (!resolution) {
             LogError(
                 `RealtimeClientSessionService: configured realtime model preference '${model.Name}' has no usable ` +
@@ -1793,9 +2110,10 @@ export class RealtimeClientSessionService {
      *
      * @param preferredModelID The `MJ: AI Models.ID` the user chose.
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
+     * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
      * @returns The resolution outcome (resolution or a specific failure reason).
      */
-    protected resolvePreferredRealtimeModel(preferredModelID: string, resolve?: AIAPIKeyResolver): RealtimeModelResolutionOutcome {
+    protected resolvePreferredRealtimeModel(preferredModelID: string, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolutionOutcome {
         const model = this.findModelByID(preferredModelID);
         if (!model) {
             return { ErrorMessage: `The requested realtime model (id '${preferredModelID}') was not found in AI model metadata.` };
@@ -1806,7 +2124,7 @@ export class RealtimeClientSessionService {
         if (!this.isRealtimeModel(model)) {
             return { ErrorMessage: `The requested model '${model.Name}' is not a Realtime model (its type is '${model.AIModelType}').` };
         }
-        const resolution = this.resolveVendorAndInstantiate(model, resolve);
+        const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope);
         if (!resolution) {
             return {
                 ErrorMessage:
@@ -1843,9 +2161,10 @@ export class RealtimeClientSessionService {
      *
      * @param coAgent The co-agent being voiced (reserved for future per-agent model preference).
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
+     * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
      * @returns The resolved model + identifiers, or `null`.
      */
-    protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended, resolve?: AIAPIKeyResolver): Promise<RealtimeModelResolution | null> {
+    protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): Promise<RealtimeModelResolution | null> {
         // Walk candidates in descending PowerRank, returning the FIRST that fully resolves to a usable
         // client-direct driver (active vendor + API key + ClassFactory driver + SupportsClientDirect).
         // Single-pick dead-ended whenever the highest-power model lacked a key or client-direct support
@@ -1853,7 +2172,7 @@ export class RealtimeClientSessionService {
         // surfaced "No usable Realtime model" instead of falling through to a model that works.
         const candidates = this.selectRealtimeModelCandidates(coAgent);
         for (const model of candidates) {
-            const resolution = this.resolveVendorAndInstantiate(model, resolve);
+            const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope);
             if (resolution && resolution.Model.SupportsClientDirect) {
                 return resolution;
             }
@@ -1873,12 +2192,18 @@ export class RealtimeClientSessionService {
      * @param resolve The session's run-scoped key resolver. Expected to answer with run keys only:
      *   one that falls back to the environment itself answers before {@link getAPIKeyForDriver} and
      *   so bypasses an override of it.
+     * @param credentialScope A scope that rules out the `'Environment'` source (`'RuntimeOnly'`) drops the
+     *   {@link getAPIKeyForDriver} seam: the run's keys are the whole chain, so a vendor they do not key
+     *   is never selected on the platform's key.
      * @returns The full resolution, or `null` when no vendor/key/driver can be satisfied.
      */
-    protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended, resolve?: AIAPIKeyResolver): RealtimeModelResolution | null {
+    protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolution | null {
         // The run's keys first, then this service's own seam (which subclasses and tests override) —
         // so a run-scoped credential wins without taking that seam away from anyone who replaced it.
-        const resolveKey: AIAPIKeyResolver = (driverClass) => resolve?.(driverClass) ?? this.getAPIKeyForDriver(driverClass);
+        // A scope that rules out the environment has no second step: the seam's default is the platform key.
+        const resolveKey: AIAPIKeyResolver = CredentialScopeAllows(credentialScope, 'Environment')
+            ? (driverClass) => resolve?.(driverClass) ?? this.getAPIKeyForDriver(driverClass)
+            : (driverClass) => resolve?.(driverClass);
         const vendor = this.selectRealtimeVendor(model.ID, resolveKey);
         if (!vendor) {
             return null;
@@ -2267,7 +2592,9 @@ export class RealtimeClientSessionService {
                 `Knowledge Hub" → ContextTool with action 'NavigateToApp'; "open this record"; "switch to the X tab"). ` +
                 `Do NOT route in-app navigation/actions through '${INVOKE_TARGET_AGENT_TOOL_NAME}', and NEVER say you ` +
                 `need an active session id or a screen snapshot to do them — calling 'ContextTool' is all that's ` +
-                `needed. Reserve '${INVOKE_TARGET_AGENT_TOOL_NAME}' for actual analysis / data work, not navigation.`;
+                `needed. Reserve '${INVOKE_TARGET_AGENT_TOOL_NAME}' for actual analysis / data work, not navigation. ` +
+                `When a channel note lists interactive channels you can use, 'ContextTool' also addresses ONE of ` +
+                `them: add "target": { "channel": "<channel name>" } and use that channel's action names.`;
         }
 
         return clause;
@@ -2744,11 +3071,13 @@ export class RealtimeClientSessionService {
     /**
      * Runs (or resumes) the target agent for a delegation. Threads the combined abort signal, parent
      * run linkage, session id, and the `OnProgress` callback so the resolver can stream progress.
+     * The browser session id becomes the run's `sessionID` (client-tool channel) and the app-context
+     * snapshot rides `data.appContext` (prompt context and surface tools); both are optional.
      * When {@link ExecuteRelayedToolInput.ResumeRunID} is set, resumes that paused run via
      * `lastRunId` + `autoPopulateLastRunPayload` (the user's answer continues the same interactive
      * run) instead of starting fresh.
      *
-     * @param input The relayed tool input (linkage, progress callback, optional resume id).
+     * @param input The relayed tool input (linkage, progress callback, optional resume id, browser session, app context).
      * @param request The broker's delegation request (call id + arguments + abort signal).
      * @param target The resolved target agent.
      * @param contextUser The calling user.
@@ -2777,6 +3106,8 @@ export class RealtimeClientSessionService {
             cancellationToken: this.combineSignals(request.AbortSignal, input.AbortSignal),
             parentRun: parentRun ?? undefined,
             agentSessionID: input.AgentSessionID,
+            sessionID: input.BrowserSessionID,
+            data: input.AppContext ? { appContext: input.AppContext } : undefined,
             onProgress: input.OnProgress,
             lastRunId: input.ResumeRunID,
             autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined

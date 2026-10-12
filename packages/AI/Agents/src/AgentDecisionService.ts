@@ -12,7 +12,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
 import { DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { AIDecisionRunner, AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { AgentDecisionAnswerSummary } from '@memberjunction/ai-core-plus';
+import { AgentDecisionAnswerSummary, PickPromptExecutionScope, type AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 
 /**
  * Parameters for the AgentDecisionService.Ask method.
@@ -42,6 +42,14 @@ export interface AgentDecisionAskParams {
      * Optional prompt name to resolve from AIEngine. Defaults to 'Default Decision'.
      */
     PromptName?: string;
+
+    /**
+     * The asking run's execution scope — its configuration, runtime API keys and credential scope.
+     * Without it a decision resolves no run key and, under the default scope, answers on the
+     * platform's keys inside a customer's run; under `'RuntimeOnly'` that is exactly what must not
+     * happen. `ContextUser` still names the user.
+     */
+    ExecutionScope?: AIPromptExecutionScope;
 
     /**
      * Optional cancellation token to abort execution.
@@ -108,6 +116,9 @@ export class AgentDecisionService {
             }
 
             const params = new AIDecisionParams();
+            if (args.ExecutionScope) {
+                Object.assign(params, PickPromptExecutionScope(args.ExecutionScope));
+            }
             params.prompt = prompt;
             params.contextUser = args.ContextUser;
             params.State = args.State;

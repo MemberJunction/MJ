@@ -6,7 +6,7 @@
  */
 
 import type { UserInfo } from '@memberjunction/core';
-import type { AIAPIKey, ModelUsage, SpeechResult } from '@memberjunction/ai';
+import type { AIAPIKey, AICredentialScope, ModelUsage, SpeechResult } from '@memberjunction/ai';
 
 /**
  * What every media operation adds to its driver params: the fields the runner needs to choose a
@@ -36,6 +36,13 @@ export interface AIMediaRunOptions {
    * default credential of the vendor's credential type, wins over them.
    */
   APIKeys?: AIAPIKey[];
+
+  /**
+   * Passed through as the base runner's `CredentialScope`. `'RuntimeOnly'` restricts the run to
+   * {@link APIKeys}: a candidate whose driver class has no key there is skipped, never run on the
+   * platform's credentials.
+   */
+  CredentialScope?: AICredentialScope;
 
   /** A parent `MJ: AI Prompt Runs` row, recorded as this run's `ParentID`. */
   ParentRunID?: string;

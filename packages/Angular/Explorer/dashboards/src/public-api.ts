@@ -166,6 +166,10 @@ export {
   ShareDialogResult
 } from './DashboardBrowser/dashboard-share-dialog.component';
 
+// Dashboards app pages (the Library is DashboardBrowserResourceComponent above)
+export { DashboardsCategoriesResourceComponent, LoadDashboardsCategoriesResource } from './DashboardBrowser/dashboards-categories-resource.component';
+export * from './shared/dashboards-app.helpers';
+
 // Home Application and Dashboard
 export { HomeApplication } from './Home/home-application';
 export { HomeDashboardComponent } from './Home/home-dashboard.component';
@@ -243,6 +247,10 @@ export * from './DatabaseDesigner/database-designer-dashboards.module';
 export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } from './DatabaseDesigner/components/database-designer-dashboard.component';
 export * from './shared/shared-dashboard-widgets.module';
 export * from './archiving-dashboards.module';
+
+// Work Queue app — operator dashboard over the WorkQueue.* remote operations (spec 09b)
+export * from './work-queue-dashboards.module';
+export { WorkQueueDashboardComponent } from './WorkQueue/work-queue-dashboard.component';
 
 // Routines app — schedule AI agents to run on a cron cadence
 export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserRoutines/user-routines-resource.component';

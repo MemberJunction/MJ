@@ -569,10 +569,14 @@ export class AnthropicLLM extends BaseLLM {
      * "one call at a time" as `disable_parallel_tool_use` on the choice object rather than as a
      * top-level request field.
      *
+     * Manual (budget) thinking accepts only `auto` and `none`; a forced choice there is rejected
+     * with a 400, so it becomes `auto` and the prompt is what steers the model to the tool.
+     *
      * @param params The chat params for this request
+     * @param budgetThinking Whether this request enables thinking in its budget form
      * @returns The Anthropic tool_choice object, or undefined to accept the provider default
      */
-    private buildAnthropicToolChoice(params: ChatParams): ToolChoice | undefined {
+    private buildAnthropicToolChoice(params: ChatParams, budgetThinking: boolean): ToolChoice | undefined {
         const choice = params.toolChoice;
         // `parallelToolCalls === false` still needs a choice object to hang the flag on; Anthropic's
         // own default is `auto`, so that is the one we synthesize.
@@ -585,6 +589,8 @@ export class AnthropicLLM extends BaseLLM {
             mapped = { type: 'auto' };
         } else if (choice === 'none') {
             mapped = { type: 'none' };
+        } else if (budgetThinking) {
+            mapped = { type: 'auto' };
         } else if (choice === 'required') {
             mapped = { type: 'any' };
         } else {
@@ -760,7 +766,7 @@ export class AnthropicLLM extends BaseLLM {
             const anthropicTools = this.buildAnthropicTools(params);
             if (anthropicTools) {
                 createParams.tools = anthropicTools;
-                const toolChoice = this.buildAnthropicToolChoice(params);
+                const toolChoice = this.buildAnthropicToolChoice(params, thinking.thinking?.type === 'enabled');
                 if (toolChoice) {
                     createParams.tool_choice = toolChoice;
                 }

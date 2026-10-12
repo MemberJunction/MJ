@@ -28,6 +28,71 @@ describe('ErrorAnalyzer', () => {
             expect(info.canFailover).toBe(true);
         });
 
+        it("should detect Google's invalid-key 400 as authentication, which stops failover", () => {
+            // The shape @google/genai surfaces: the vendor's JSON error body as the message, HTTP 400.
+            const error = {
+                status: 400,
+                message: JSON.stringify({
+                    error: {
+                        code: 400,
+                        message: 'API key not valid. Please pass a valid API key.',
+                        status: 'INVALID_ARGUMENT',
+                        details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'API_KEY_INVALID' }]
+                    }
+                })
+            };
+            const info = ErrorAnalyzer.analyzeError(error, 'Google');
+
+            expect(info.errorType).toBe('Authentication');
+            expect(info.severity).toBe('Fatal');
+        });
+
+        it("should detect Google's expired-key 400 as authentication, which stops failover", () => {
+            // Same shape as the invalid key, but reason API_KEY_EXPIRED. It read as InvalidRequest before.
+            const error = {
+                status: 400,
+                message: JSON.stringify({
+                    error: {
+                        code: 400,
+                        message: 'API key expired. Please renew the API key.',
+                        status: 'INVALID_ARGUMENT',
+                        details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'API_KEY_EXPIRED' }]
+                    }
+                })
+            };
+            const info = ErrorAnalyzer.analyzeError(error, 'Google');
+
+            expect(info.errorType).toBe('Authentication');
+            expect(info.severity).toBe('Fatal');
+        });
+
+        it("does not read Google's FAILED_PRECONDITION 400 (unsupported user location) as authentication", () => {
+            const error = {
+                status: 400,
+                message: JSON.stringify({
+                    error: {
+                        code: 400,
+                        message: 'User location is not supported for the API use.',
+                        status: 'FAILED_PRECONDITION'
+                    }
+                })
+            };
+            const info = ErrorAnalyzer.analyzeError(error, 'Google');
+
+            expect(info.errorType).not.toBe('Authentication');
+        });
+
+        it('keeps the classification a failed result already carries — a rejected streaming ChatResult', () => {
+            // BaseLLM rejects a failed stream with its ChatResult; analyzed afresh that is 'Unknown'/'Transient'.
+            const driverInfo = { error: { name: 'ApiError', status: 400 }, errorType: 'Authentication', severity: 'Fatal', canFailover: true };
+            const rejected = { success: false, errorMessage: 'API key not valid. Please pass a valid API key.', errorInfo: driverInfo };
+
+            const info = ErrorAnalyzer.analyzeError(rejected, 'AIPromptRunner');
+
+            expect(info.errorType).toBe('Authentication');
+            expect(info.severity).toBe('Fatal');
+        });
+
         it('should detect context length exceeded', () => {
             const error = { message: 'context_length_exceeded: maximum context length is 128k' };
             const info = ErrorAnalyzer.analyzeError(error);
@@ -110,8 +175,10 @@ describe('ErrorAnalyzer', () => {
         });
 
         it('should detect error type from constructor name', () => {
-            const error = new Error('some error');
-            Object.defineProperty(error.constructor, 'name', { value: 'RateLimitError' });
+            // A subclass rather than renaming error.constructor, which is the global Error and would
+            // turn every later plain Error in this file into a rate limit.
+            class RateLimitError extends Error {}
+            const error = new RateLimitError('some error');
             const info = ErrorAnalyzer.analyzeError(error);
 
             expect(info.errorType).toBe('RateLimit');
@@ -190,6 +257,72 @@ describe('ErrorAnalyzer', () => {
             const info = ErrorAnalyzer.analyzeError(error);
 
             expect(info.providerErrorCode).toBe('invalid_model');
+        });
+    });
+
+    describe('connection failures from Node fetch', () => {
+        /** Builds the error Node's fetch throws: a TypeError whose real reason sits on `cause`. */
+        function fetchFailure(message: string, causeCode: string, causeName = 'Error'): TypeError {
+            const cause = Object.assign(new Error(`${causeCode} reason`), { code: causeCode, name: causeName });
+            return new TypeError(message, { cause });
+        }
+
+        it.each([
+            ['connection refused', fetchFailure('fetch failed', 'ECONNREFUSED')],
+            ['connection reset', fetchFailure('fetch failed', 'ECONNRESET')],
+            ['DNS lookup failed', fetchFailure('fetch failed', 'ENOTFOUND')],
+            ['DNS temporarily unavailable', fetchFailure('fetch failed', 'EAI_AGAIN')],
+            ['socket closed mid-response', fetchFailure('terminated', 'UND_ERR_SOCKET', 'SocketError')],
+            ['connect timeout', fetchFailure('fetch failed', 'UND_ERR_CONNECT_TIMEOUT', 'ConnectTimeoutError')],
+        ])('classifies %s as a retriable NetworkError that fails over', (_label, error) => {
+            const info = ErrorAnalyzer.AnalyzeError(error, 'Gemini');
+
+            expect(info.errorType).toBe('NetworkError');
+            expect(info.severity).toBe('Retriable');
+            expect(info.canFailover).toBe(true);
+        });
+
+        it('reads the code through an SDK wrapper two levels down', () => {
+            const wrapped = new Error('exception TypeError: fetch failed sending request', { cause: fetchFailure('fetch failed', 'ECONNRESET') });
+
+            expect(ErrorAnalyzer.AnalyzeError(wrapped).errorType).toBe('NetworkError');
+        });
+
+        it('classifies a bare "fetch failed" with no cause as NetworkError', () => {
+            expect(ErrorAnalyzer.AnalyzeError(new TypeError('fetch failed')).errorType).toBe('NetworkError');
+        });
+
+        it('classifies an AbortSignal.timeout() TimeoutError as NetworkError, by its message', () => {
+            const error = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError', code: 23 });
+
+            expect(ErrorAnalyzer.AnalyzeError(error).errorType).toBe('NetworkError');
+        });
+
+        it('does not treat a plain AbortError as a network failure, since a caller cancellation looks the same', () => {
+            const error = Object.assign(new Error('This operation was aborted'), { name: 'AbortError', code: 20 });
+
+            expect(ErrorAnalyzer.AnalyzeError(error).errorType).toBe('Unknown');
+        });
+
+        it('does not treat an unrelated TypeError as a network failure', () => {
+            expect(ErrorAnalyzer.AnalyzeError(new TypeError("Cannot read properties of undefined (reading 'text')")).errorType).toBe('Unknown');
+        });
+
+        it('stops at a cause cycle', () => {
+            const a = new Error('first');
+            const b = new Error('second', { cause: a });
+            (a as Error & { cause?: Error }).cause = b;
+
+            expect(ErrorAnalyzer.AnalyzeError(a).errorType).toBe('Unknown');
+        });
+
+        it('reports no HTTP status for a system error code or a DOMException code', () => {
+            expect(ErrorAnalyzer.AnalyzeError(fetchFailure('fetch failed', 'ECONNRESET').cause).httpStatusCode).toBeUndefined();
+            expect(ErrorAnalyzer.AnalyzeError(Object.assign(new Error('aborted'), { name: 'AbortError', code: 20 })).httpStatusCode).toBeUndefined();
+        });
+
+        it('still reads a numeric HTTP status from code', () => {
+            expect(ErrorAnalyzer.AnalyzeError({ message: '', code: 503 }).httpStatusCode).toBe(503);
         });
     });
 

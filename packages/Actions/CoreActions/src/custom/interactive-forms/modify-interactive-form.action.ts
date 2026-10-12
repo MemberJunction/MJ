@@ -2,11 +2,12 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
+import type { MJComponentEntity, MJEntityFormOverrideEntity } from "@memberjunction/core-entities";
 import type { ComponentSpec } from "@memberjunction/interactive-component-types";
 import {
-    AddOutput, BumpVersion, CheckOverrideOwnership, Failure, GetStringParam,
+    AddOutput, BumpVersion, CheckPersonalWrite, Failure, GetStringParam,
     InsertComponent, InsertOverride, LintFormSpec, LoadComponent, LoadOverride,
-    MapToComponentStatus, ParseSpecParam, ParseVersionBumpKind,
+    MapToComponentStatus, ParseSpecParam, ParseVersionBumpKind, WriteAtomically,
     type VersionBumpKind,
 } from "./_shared";
 
@@ -30,18 +31,15 @@ import {
  * Pending sources stay in-place, Active sources bump minor, Inactive
  * sources bump patch (the conservative branch-from-historical case).
  *
- * **Security clamp.** Modify *always* writes a User-scope Pending Override,
- * regardless of the original override's scope. Even if the caller is
- * modifying a Role-scope or Global override (which they have permission to
- * read because they pass the ownership check), the new Pending sibling
- * is always User-scoped to the calling user. Scope promotion (User → Role
- * → Global) is a separate, deliberate human action with its own permission
- * gate in Component Studio / Form Builder. The agent cannot widen scope
- * through Modify any more than through Create.
+ * **Ownership.** Only the caller's own User-scope overrides can be modified.
+ * A Role or Global override, or another user's, returns FORBIDDEN for every
+ * caller (see `CheckPersonalWrite` in `_shared.ts`): shared forms are managed
+ * from Form Builder or the form's Manage drawer. A new Pending Override is
+ * written User-scope, as Create writes it.
  *
- * **Ownership check.** The caller must own (or have role membership for, or
- * be admin over) the existing override they're modifying. See
- * `checkOverrideOwnership` in `_shared.ts`. Returns FORBIDDEN if rejected.
+ * **Atomicity.** The in-place Component and Override writes run in one entity
+ * transaction, and so do the new-version Component and Override inserts, so a
+ * refused Override save leaves no Component change behind.
  *
  * Inputs:
  *   - `OverrideID` (required, string) — the override to modify
@@ -84,8 +82,7 @@ export class ModifyInteractiveFormAction extends BaseAction {
             if (!override) {
                 return Failure("OVERRIDE_NOT_FOUND", `EntityFormOverride '${overrideID}' not found.`);
             }
-            // Defense-in-depth ownership check — see _shared.ts.
-            const ownershipFail = CheckOverrideOwnership(override, user);
+            const ownershipFail = CheckPersonalWrite(override, user);
             if (ownershipFail) return ownershipFail;
             const existingComponent = await LoadComponent(provider, user, override.ComponentID);
             if (!existingComponent) {
@@ -160,25 +157,9 @@ export class ModifyInteractiveFormAction extends BaseAction {
             }
 
             if (bumpKind === 'in-place') {
-                // ── in-place modify of the Pending Component ─────────────
-                existingComponent.Specification = JSON.stringify(spec);
-                // Refresh Title/Description if the new spec moves them.
-                if (spec.title) existingComponent.Title = spec.title;
-                if (spec.description) existingComponent.Description = spec.description;
-                const saved = await existingComponent.Save();
-                if (!saved) {
-                    return Failure("PERSIST_FAILED",
-                        `Component in-place update failed: ${existingComponent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-                }
-                if (notes) {
-                    // Append a line of human-readable notes. The Notes column
-                    // accepts NVARCHAR(MAX), so this scales.
-                    const existingNotes = (override as unknown as { Notes?: string | null }).Notes ?? '';
-                    (override as unknown as { Notes?: string | null }).Notes = existingNotes
-                        ? `${existingNotes}\n${notes}`
-                        : notes;
-                    await override.Save();
-                }
+                const written = await WriteAtomically(provider, () =>
+                    this.modifyInPlace(existingComponent, override, spec, notes));
+                if ('error' in written) return written.error;
                 AddOutput(params, "ComponentID", existingComponent.ID);
                 AddOutput(params, "OverrideID", override.ID);
                 AddOutput(params, "Mode", "in-place");
@@ -202,36 +183,32 @@ export class ModifyInteractiveFormAction extends BaseAction {
             // historical — no demote needed since source is already Inactive,
             // and the user explicitly opened it to fork from there).
             const newVersion = BumpVersion(existingComponent.Version, bumpKind);
-            const newSequence = (existingComponent.VersionSequence ?? 0) + 1;
-            const componentInsert = await InsertComponent({
-                provider, user, spec,
-                fallbackName: existingComponent.Name,
-                description: existingComponent.Description,
-                version: newVersion,
-                versionSequence: newSequence,
-                componentStatus: 'Pending',
+            const inserted = await WriteAtomically(provider, async () => {
+                const componentInsert = await InsertComponent({
+                    provider, user, spec,
+                    fallbackName: existingComponent.Name,
+                    description: existingComponent.Description,
+                    version: newVersion,
+                    versionSequence: (existingComponent.VersionSequence ?? 0) + 1,
+                    componentStatus: 'Pending',
+                });
+                if ('error' in componentInsert) return componentInsert;
+                // InsertOverride writes the new Pending Override User-scoped to the caller.
+                const overrideInsert = await InsertOverride({
+                    provider, user,
+                    entityID: override.EntityID,
+                    componentID: componentInsert.id,
+                    name: override.Name,
+                    description: override.Description,
+                    notes,
+                    status: 'Pending',
+                    priority: override.Priority,
+                });
+                if ('error' in overrideInsert) return overrideInsert;
+                return { componentID: componentInsert.id, overrideID: overrideInsert.id };
             });
-            if ('error' in componentInsert) return componentInsert.error;
-            const newComponentID = componentInsert.id;
-
-            // New Pending Override at the same scope as the existing one. We
-            // do not widen scope: if existing is User-scoped, new is too. If
-            // somehow existing is Role/Global (manual promotion), we still
-            // honor that — Modify is a content change, not a scope change.
-            const overrideInsert = await InsertOverride({
-                provider, user,
-                entityID: override.EntityID,
-                componentID: newComponentID,
-                name: override.Name,
-                description: override.Description,
-                notes,
-                status: 'Pending',
-                priority: override.Priority,
-            });
-            if ('error' in overrideInsert) {
-                return Failure("PERSIST_FAILED",
-                    `${overrideInsert.error.Message} (Component ${newComponentID} was persisted; its sibling override row failed to write.)`);
-            }
+            if ('error' in inserted) return inserted.error;
+            const newComponentID = inserted.componentID;
 
             // Demote the prior Pending source — both the Component row and
             // its Override row — to Inactive. This preserves the rollback
@@ -264,7 +241,7 @@ export class ModifyInteractiveFormAction extends BaseAction {
             }
 
             AddOutput(params, "ComponentID", newComponentID);
-            AddOutput(params, "OverrideID", overrideInsert.id);
+            AddOutput(params, "OverrideID", inserted.overrideID);
             AddOutput(params, "Mode", "new-version");
             AddOutput(params, "Version", newVersion);
             return {
@@ -272,7 +249,7 @@ export class ModifyInteractiveFormAction extends BaseAction {
                 Message: JSON.stringify({
                     Mode: 'new-version',
                     ComponentID: newComponentID,
-                    OverrideID: overrideInsert.id,
+                    OverrideID: inserted.overrideID,
                     Version: newVersion,
                     BumpKind: bumpKind,
                     PreviousComponentID: existingComponent.ID,
@@ -287,6 +264,33 @@ export class ModifyInteractiveFormAction extends BaseAction {
             LogError(`ModifyInteractiveFormAction: ${message}`);
             return Failure("UNEXPECTED_ERROR", message);
         }
+    }
+
+    /**
+     * Overwrite the Pending Component's spec and append any notes to the Override. Returns an
+     * `{ error }` result on a refused save, so the caller's transaction rolls both back.
+     */
+    private async modifyInPlace(
+        component: MJComponentEntity,
+        override: MJEntityFormOverrideEntity,
+        spec: ComponentSpec,
+        notes: string | null,
+    ): Promise<{ ok: true } | { error: ActionResultSimple }> {
+        component.Specification = JSON.stringify(spec);
+        // Refresh Title/Description if the new spec moves them.
+        if (spec.title) component.Title = spec.title;
+        if (spec.description) component.Description = spec.description;
+        if (!(await component.Save())) {
+            return { error: Failure("PERSIST_FAILED",
+                `Component in-place update failed: ${component.LatestResult?.CompleteMessage ?? 'unknown error'}`) };
+        }
+        if (!notes) return { ok: true };
+        override.Notes = override.Notes ? `${override.Notes}\n${notes}` : notes;
+        if (!(await override.Save())) {
+            return { error: Failure("PERSIST_FAILED",
+                `Override notes update failed: ${override.LatestResult?.CompleteMessage ?? 'unknown error'}`) };
+        }
+        return { ok: true };
     }
 
     private findParam(params: RunActionParams, name: string): unknown {

@@ -4,6 +4,7 @@ import { GetGlobalObjectStore } from '@memberjunction/global';
 import { MJUserRecordLogEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { ResourceTypeForEntity } from './recent-resource-type';
 
 /**
  * Represents a recently accessed resource
@@ -165,7 +166,7 @@ export class RecentAccessService {
   }
 
   /**
-   * Loads recent access items for the current user using UserInfoEngine (cached).
+   * Loads recent access items for the current user from `MJ: User Record Logs`.
    * @param maxItems - Maximum number of items to return (default 15)
    * @param forceRefresh - Force refresh even if already loaded
    */
@@ -179,8 +180,7 @@ export class RecentAccessService {
 
       const md = this.Provider;
 
-      // Get recent records, limited to maxItems (already ordered by LatestAt DESC in engine)
-      const userRecordLogs = UserInfoEngine.Instance.UserRecordLogs.slice(0, maxItems);
+      const userRecordLogs = await UserInfoEngine.Instance.LoadRecentRecordLogs(maxItems, md.CurrentUser, md);
 
       const items: RecentAccessItem[] = [];
 
@@ -301,22 +301,7 @@ export class RecentAccessService {
    * Determines the resource type based on entity name
    */
   private determineResourceType(entityName: string): 'record' | 'view' | 'dashboard' | 'artifact' | 'report' {
-    const normalizedName = entityName.toLowerCase();
-
-    if (normalizedName === 'user views') {
-      return 'view';
-    }
-    if (normalizedName === 'dashboards') {
-      return 'dashboard';
-    }
-    if (normalizedName === 'mj: conversation artifacts' || normalizedName === 'conversation artifacts') {
-      return 'artifact';
-    }
-    if (normalizedName === 'reports') {
-      return 'report';
-    }
-
-    return 'record';
+    return ResourceTypeForEntity(entityName);
   }
 
   /**

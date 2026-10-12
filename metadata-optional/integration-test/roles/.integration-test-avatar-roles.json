@@ -1,0 +1,20 @@
+[
+  {
+    "fields": {
+      "Name": "Integration Test: Avatar Self-Service",
+      "Description": "Integration-test-only role for the self-service avatar mutation (UpdateMyAvatar). Grants READ ONLY on 'MJ: Users' — the shape of a locked-down deployment, where users can see user records but cannot update them (a row filter cannot restrict columns, so own-row Update would also expose Email). The self-avatar-client bundle proves the mutation still works for a user holding only this role, and that the plain entity save is refused. Safe to delete; assign only to the seeded it-avatar-* test accounts."
+    },
+    "primaryKey": {
+      "ID": "55F5724E-7041-4F39-B91B-50FFD257043C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Integration Test: Avatar User Editor",
+      "Description": "Integration-test-only role for the self-service avatar mutation (UpdateMyAvatar). Grants READ and UPDATE on 'MJ: Users' — the contrast leg: the self-avatar-client bundle proves the mutation also works for a user who could have saved the row directly. Safe to delete; assign only to the seeded it-avatar-* test accounts."
+    },
+    "primaryKey": {
+      "ID": "DB9E075D-DC56-400E-A079-74F47C8F77BB"
+    }
+  }
+]

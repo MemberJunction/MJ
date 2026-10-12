@@ -234,7 +234,7 @@
   {
     "fields": {
       "Name": "Get Active Form For Entity",
-      "Description": "Read-only action returning the currently-resolved interactive-form override (if any) for the (entity, requesting user) pair plus the full list of applicable variants. Returns null Active + empty Variants when no override exists. Used by the Form Builder agent to decide between Create (no override exists) and Modify (an override already exists).",
+      "Description": "Read-only action returning the currently-resolved interactive-form override (if any) for the (entity, requesting user) pair plus the full list of applicable variants. Returns null Active + empty Variants when no override exists. On an identity or permission entity (MJ: Users, Roles, Authorizations, API Keys and the like) only the caller's own User overrides apply, as on the form. Used by the Form Builder agent to decide between Create (no override exists) and Modify (an override already exists).",
       "DriverClass": "__GetActiveFormForEntity",
       "Type": "Custom",
       "Status": "Active",
@@ -371,8 +371,8 @@
       "ID": "BED1E6E0-D1B6-4D7D-B84A-851B8440EAAA"
     },
     "sync": {
-      "lastModified": "2026-05-29T19:48:52.471Z",
-      "checksum": "f414e04e9473cc1455142bc2f3defb1e87308b1b5be893e8690b5ed081a08919"
+      "lastModified": "2026-10-06T20:21:42.875Z",
+      "checksum": "275cc1d31aa08615874c9cbcefcb6b516111c7bb0a2bf6a037c64296265f80d4"
     }
   },
   {
@@ -630,7 +630,7 @@
   {
     "fields": {
       "Name": "Modify Interactive Form",
-      "Description": "Modify an existing interactive-form override. Routes off the source Override's status (not the underlying Component). Behavior is driven by the optional VersionBumpKind input: 'in-place' (default for Pending sources) overwrites the Pending Component row with no new version; 'patch'/'minor'/'major' snapshot a new Pending Component + sibling Override using the bumped version. Pending sources with a bump demote the prior Pending to Inactive (preserves rollback history). Active sources reject 'in-place' (would corrupt the live row) and default to 'minor'. Inactive sources reject 'in-place' (use Revert to re-activate first) but accept patch/minor/major as a branch-from-historical operation — default 'patch'; the Inactive source row is left untouched. Scope is preserved from the existing override.",
+      "Description": "Modify an existing interactive-form override. Routes off the source Override's status (not the underlying Component). Behavior is driven by the optional VersionBumpKind input: 'in-place' (default for Pending sources) overwrites the Pending Component row with no new version; 'patch'/'minor'/'major' snapshot a new Pending Component + sibling Override using the bumped version. Pending sources with a bump demote the prior Pending to Inactive (preserves rollback history). Active sources reject 'in-place' (would corrupt the live row) and default to 'minor'. Inactive sources reject 'in-place' (use Revert to re-activate first) but accept patch/minor/major as a branch-from-historical operation — default 'patch'; the Inactive source row is left untouched. Acts only on the caller's own User-scope overrides: a Role or Global override, or another user's, returns FORBIDDEN, because shared forms are managed from Form Builder or the form's Manage drawer. Any new override is User scope. The new Component and override (or, in place, the Component and the override's notes) are written in one transaction, so a refused override save leaves no Component change. Demoting the prior Pending source runs after that transaction; a failed demotion is logged and the new version stays.",
       "DriverClass": "__ModifyInteractiveForm",
       "Type": "Custom",
       "Status": "Active",
@@ -920,6 +920,20 @@
             "lastModified": "2026-05-29T19:48:54.324Z",
             "checksum": "7a5aded980c8b4d9858c40d84ba904a947409d38a4e45f52c56b8d30b02c2ecc"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FORBIDDEN",
+            "Description": "The override is not one of the caller's own User-scope overrides (a Role or Global override, or another user's). Shared forms are managed from Form Builder or the form's Manage drawer."
+          },
+          "primaryKey": {
+            "ID": "07022CCB-70E0-4CDD-AD03-C9CFEC12840C"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:42.951Z",
+            "checksum": "c6f2911502b843b3da702ea3c53c0743e0d5f1be7487af94ebdd30bb60f10234"
+          }
         }
       ]
     },
@@ -927,14 +941,14 @@
       "ID": "1AEAC96B-5578-4099-BC40-E9D02E590DB4"
     },
     "sync": {
-      "lastModified": "2026-05-29T19:48:52.522Z",
-      "checksum": "b84ff866d9ad9b48ce582ecf1a994b5e5d77b9509844bc2a0e611b34b5055c25"
+      "lastModified": "2026-10-06T20:21:42.894Z",
+      "checksum": "08aa3324c7db88a17bf80b4d8c5dce0fb61e7bfc64085bbe0c038bf3fcfe081f"
     }
   },
   {
     "fields": {
       "Name": "Activate Interactive Form Version",
-      "Description": "Promote a Pending EntityFormOverride to Active. Atomically demotes any sibling Active override at the same scope target to Inactive (and its Component). The Pending Override is the one the agent just produced via Modify; activating it makes it the live form. Old Component rows persist forever as immutable history — revertible via 'Revert Interactive Form'.",
+      "Description": "Promote one of the caller's Pending EntityFormOverrides to Active; its Component and override flip in one transaction. Then, after that transaction, demotes the caller's other Active override on the entity to Inactive (and its Component); if that fails it returns PERSIST_FAILED with the target already Active. Activating an override that is already Active also sets aside the caller's other Active personal overrides for that entity (and their Components), so the target is the only Active personal one. The Pending Override is the one the agent just produced via Modify; activating it makes it the live form. Old Component rows persist forever as immutable history — revertible via 'Revert Interactive Form'. Acts only on the caller's own User-scope overrides: a Role or Global override, or another user's, returns FORBIDDEN, because shared forms are managed from Form Builder or the form's Manage drawer.",
       "DriverClass": "__ActivateInteractiveFormVersion",
       "Type": "Custom",
       "Status": "Active",
@@ -1087,14 +1101,14 @@
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "PERSIST_FAILED",
-            "Description": "Database write failed; see message."
+            "Description": "A save failed; see message. When setting the prior Active override aside fails, the target is already Active."
           },
           "primaryKey": {
             "ID": "F1738A57-A641-4111-AD8D-CFE7269583B4"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:54.637Z",
-            "checksum": "726783c9012fc711fe69036852b546394d8eb1ad07d4798d664d671f798cca83"
+            "lastModified": "2026-10-06T20:21:42.968Z",
+            "checksum": "80fd49dad2cb8a27d3bf471341c6e072b6636a8fbacec0d7c68b6070ed979102"
           }
         },
         {
@@ -1124,6 +1138,20 @@
             "lastModified": "2026-05-29T19:48:54.682Z",
             "checksum": "7a5aded980c8b4d9858c40d84ba904a947409d38a4e45f52c56b8d30b02c2ecc"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FORBIDDEN",
+            "Description": "The override is not one of the caller's own User-scope overrides (a Role or Global override, or another user's). Shared forms are managed from Form Builder or the form's Manage drawer."
+          },
+          "primaryKey": {
+            "ID": "EF86D943-3D4E-42A7-850C-95C9ED305898"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:42.981Z",
+            "checksum": "c6f2911502b843b3da702ea3c53c0743e0d5f1be7487af94ebdd30bb60f10234"
+          }
         }
       ]
     },
@@ -1131,14 +1159,14 @@
       "ID": "68B9E24D-3ECF-4D5D-81FF-95CDFC27BE70"
     },
     "sync": {
-      "lastModified": "2026-05-29T19:48:52.547Z",
-      "checksum": "d5f349f2a56a111acf8cc2194ac8f8e923927b04ab083451770ebddeca792049"
+      "lastModified": "2026-10-06T20:21:42.914Z",
+      "checksum": "c880914bec63eb4eca6bf525cd1c712c75818fbbaa29021fcd026f0d8ba7f981"
     }
   },
   {
     "fields": {
       "Name": "Revert Interactive Form",
-      "Description": "Re-point an Active EntityFormOverride at an older Component version in the same Name lineage. Pure UPDATE on the override row; no new Components or Overrides are created. Use to roll back to a prior working form when a recent change misbehaves. Old Component rows are never deleted, so revert is fully reversible by reverting again to the original version.",
+      "Description": "Re-point an Active EntityFormOverride at an older Component version in the same Name lineage. Pure UPDATE on the override row; no new Components or Overrides are created. Use to roll back to a prior working form when a recent change misbehaves. Old Component rows are never deleted, so revert is fully reversible by reverting again to the original version. Acts only on the caller's own User-scope overrides: a Role or Global override, or another user's, returns FORBIDDEN, because shared forms are managed from Form Builder or the form's Manage drawer.",
       "DriverClass": "__RevertInteractiveForm",
       "Type": "Custom",
       "Status": "Active",
@@ -1400,6 +1428,20 @@
             "lastModified": "2026-05-29T19:48:55.164Z",
             "checksum": "7a5aded980c8b4d9858c40d84ba904a947409d38a4e45f52c56b8d30b02c2ecc"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FORBIDDEN",
+            "Description": "The override is not one of the caller's own User-scope overrides (a Role or Global override, or another user's). Shared forms are managed from Form Builder or the form's Manage drawer."
+          },
+          "primaryKey": {
+            "ID": "FF3BDD7C-ADEA-4292-A4D4-B4A81DFC206A"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:42.994Z",
+            "checksum": "c6f2911502b843b3da702ea3c53c0743e0d5f1be7487af94ebdd30bb60f10234"
+          }
         }
       ]
     },
@@ -1407,8 +1449,8 @@
       "ID": "DDACA877-B97A-40FA-B434-E002193DCC2C"
     },
     "sync": {
-      "lastModified": "2026-05-29T19:48:52.567Z",
-      "checksum": "8722babb5f883bd755adb91e7685f25856e1f398ca983e5d029a80c73bf7900e"
+      "lastModified": "2026-10-06T20:21:42.933Z",
+      "checksum": "e197a581205943fb201ef330fa2f1d6a09355ec86adb6e842a4acaea82e569d2"
     }
   }
 ]

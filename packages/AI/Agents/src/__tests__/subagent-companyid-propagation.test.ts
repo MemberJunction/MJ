@@ -96,6 +96,28 @@ describe("BaseAgent.ExecuteSubAgent - companyId propagation (§4.2)", () => {
         expect(passedParams.PrimaryScopeRecordID).toBe("record-uuid-1");
     });
 
+    it("a sub-agent of a RuntimeOnly parent runs RuntimeOnly, on the parent's keys and configuration", async () => {
+        const caller = new TestableSubAgentCaller();
+        const keys = [{ driverClass: "GeminiLLM", apiKey: "sk-gemini" }];
+        const params: ExecuteAgentParams = {
+            agent: { ID: "parent-agent-id", Name: "ParentAgent" } as unknown as MJAIAgentEntityExtended,
+            conversationMessages: [],
+            apiKeys: keys,
+            configurationId: "config-uuid-1",
+            CredentialScope: "RuntimeOnly",
+        };
+        const subAgent = { ID: "child-agent-id", Name: "ChildAgent", Status: "Active" } as unknown as MJAIAgentEntityExtended;
+        const stepEntity = { ID: "step-uuid-3", TargetLogID: null } as unknown as MJAIAgentRunStepEntityExtended;
+
+        await caller.invokeExecuteSubAgent(params, { name: "ChildAgent", message: "Do it", terminateAfter: false }, subAgent, stepEntity);
+
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        const passedParams: ExecuteAgentParams = mockRunAgent.mock.calls[0][0];
+        expect(passedParams.CredentialScope).toBe("RuntimeOnly");
+        expect(passedParams.apiKeys).toBe(keys);
+        expect(passedParams.configurationId).toBe("config-uuid-1");
+    });
+
     it("passes undefined companyId when parent params do not specify one", async () => {
         const caller = new TestableSubAgentCaller();
         const params: ExecuteAgentParams = {

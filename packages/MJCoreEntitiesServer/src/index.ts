@@ -29,6 +29,8 @@ export * from './custom/MJAIBridgeProviderEntityServer.server';
 export * from './custom/MJAIBridgeAgentIdentityEntityServer.server';
 export * from './custom/MJAIBridgeProviderChannelEntityServer.server';
 export * from './custom/MJAIAgentSessionBridgeEntityServer.server';
+export * from './custom/sessionConfigGuard';
+export * from './custom/MJAIAgentSessionEntityServer.server';
 export * from './custom/MJAIAgentSessionBridgeParticipantEntityServer.server';
 export * from './custom/MJAIRemoteBrowserProviderEntityServer.server';
 export * from './custom/MJMaterializedResultEntityServer.server';
@@ -57,6 +59,15 @@ export * from './engines/QueryMatchResult';
 export * from './engines/ComponentMetadataEngineServer';
 export * from './engines/IdentityClaimEngineServer';
 export * from './custom/MJRemoteOperationEntityServer.server';
+export {
+    ApplyFormScopeValidation,
+    FormScopeDeleteRefusal,
+    FormScopeRefusalResult,
+    FormScopeReplayRefusal,
+    type GuardedFormScopeRow,
+} from './custom/FormScopeGuard';
+export * from './custom/MJEntityFormOverrideEntityServer.server';
+export * from './custom/MJEntityFormContributionEntityServer.server';
 export * from './custom/MJRecordChangeEntityServer.server';
 export * from './custom/MJRubricVersionEntityServer.server';
 export * from './custom/MJRubricCriterionEntityServer.server';

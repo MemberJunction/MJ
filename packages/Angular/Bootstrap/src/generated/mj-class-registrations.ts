@@ -27,13 +27,14 @@ import {
     SaveEntityGraphOperation,
 } from '@memberjunction/core';
 
-// @memberjunction/ai-vectors-memory (2 classes)
+// @memberjunction/ai-vectors-memory (3 classes)
 import {
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (440 classes)
+// @memberjunction/core-entities (448 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -257,6 +258,7 @@ import {
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -399,6 +401,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -471,6 +474,12 @@ import {
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
+    MJWorkQueueDeduplicationEntity,
+    MJWorkQueueDeliveryEntity,
+    MJWorkQueueMessageEntity,
+    MJWorkQueueSubscriptionEntity,
+    MJWorkQueueTopicEntity,
+    MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -550,10 +559,12 @@ import {
     MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (8 classes)
+// @memberjunction/ng-conversations (10 classes)
 import {
     AgentMentionProvider,
     ClientContextChannel,
+    IdentityVerificationChannel,
+    InteractiveComponentChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
@@ -693,7 +704,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (107 classes)
+// @memberjunction/ng-dashboards (109 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -734,6 +745,7 @@ import {
     CredentialsOverviewResourceComponent,
     CredentialsTypesResourceComponent,
     DashboardBrowserResourceComponent,
+    DashboardsCategoriesResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
     DatabaseDesignerDashboardComponent,
@@ -799,6 +811,7 @@ import {
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
     VisualizeResourceComponent,
+    WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
     WorkflowsDashboardComponent,
     WorkflowsResourceComponent,
@@ -839,6 +852,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAIRealtimeClient,
     xAIRealtimeClient,
     SaveEntityGraphOperation,
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
     AIAgentPermissionProvider,
@@ -1030,11 +1044,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardPermissionEntity,
     MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
-    MJDashboardUserStateEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardUserStateEntity,
     MJDataContextEntity,
     MJDataContextItemEntity,
     MJDatasetEntity,
@@ -1067,6 +1081,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -1209,6 +1224,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1232,13 +1248,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTagCoOccurrenceEntity,
     MJTagEntity,
     MJTagScopeEntity,
-    MJTagSuggestionEntity,
-    MJTagSynonymEntity,
-    MJTaggedItemEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTagSuggestionEntity,
+    MJTagSynonymEntity,
+    MJTaggedItemEntity,
     MJTaskDependencyEntity,
     MJTaskEntity,
     MJTaskTypeEntity,
@@ -1285,6 +1301,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
+    MJWorkQueueDeduplicationEntity,
+    MJWorkQueueDeliveryEntity,
+    MJWorkQueueMessageEntity,
+    MJWorkQueueSubscriptionEntity,
+    MJWorkQueueTopicEntity,
+    MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1332,6 +1354,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkOSProvider,
     AgentMentionProvider,
     ClientContextChannel,
+    IdentityVerificationChannel,
+    InteractiveComponentChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
@@ -1428,6 +1452,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SkillHierarchyPanel,
     TagHierarchyPanel,
     TemplateCategoryHierarchyPanel,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     TestSuiteHierarchyPanel,
     UserHeaderPanel,
     UserOverviewPanel,
@@ -1439,10 +1467,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ActionExecutionMonitoringComponent,
     ActionExplorerComponent,
     ActionsOverviewComponent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     ActivityComponent,
     AdminDataSchemaComponent,
     AdminDevToolsResourceComponent,
@@ -1476,6 +1500,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CredentialsOverviewResourceComponent,
     CredentialsTypesResourceComponent,
     DashboardBrowserResourceComponent,
+    DashboardsCategoriesResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
     DatabaseDesignerDashboardComponent,
@@ -1541,6 +1566,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
     VisualizeResourceComponent,
+    WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
     WorkflowsDashboardComponent,
     WorkflowsResourceComponent,
@@ -1572,7 +1598,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 715;
+export const CLASS_REGISTRATIONS_COUNT = 728;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

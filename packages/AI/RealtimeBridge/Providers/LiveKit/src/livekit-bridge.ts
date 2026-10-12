@@ -26,7 +26,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 import {
     BaseRealtimeBridge,
     BridgeConnectResult,
@@ -163,7 +163,7 @@ export class LiveKitBridge extends BaseRealtimeBridge {
 
         this.sdk = this.sdkFactory(ctx.Configuration);
         this.wireInboundAudio(this.sdk);
-        this.sdk.onDisconnected(() => this.handleRoomDisconnected());
+        this.sdk.onDisconnected((reason) => this.handleRoomDisconnected(reason));
 
         // Roster diarization is native to LiveKit (per-participant tracks); only stand up the Meeting
         // Controls source when the provider advertises it (the engine also gates on this flag).
@@ -362,7 +362,8 @@ export class LiveKitBridge extends BaseRealtimeBridge {
     }
 
     /** Handles the SDK's room-disconnected signal: surface an empty roster so the engine sees everyone gone. */
-    private handleRoomDisconnected(): void {
+    private handleRoomDisconnected(reason?: string): void {
+        LogStatus(`[LiveKitBridge] room disconnected${reason ? ` (${reason})` : ''}`);
         this.participantHandler?.([]);
         this.meetingControls?.IngestRoster([]);
     }

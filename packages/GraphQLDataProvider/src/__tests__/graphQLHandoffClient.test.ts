@@ -13,6 +13,7 @@ const OFFER: HandoffOfferInfo = {
   Status: 'Pending',
   CreatedAt: '2026-10-03T10:00:00.000Z',
   ExpiresAt: '2026-10-03T10:00:45.000Z',
+  InteractionID: 'int-123',
 };
 
 /** The client is a thin transport adapter, tested through a stub provider that records requests and returns canned replies. */
@@ -39,6 +40,7 @@ describe('GraphQLHandoffClient', () => {
       expect(offers).toEqual([OFFER]);
       expect(calls[0].variables).toEqual({});
       expect(calls[0].query).toContain('MyHandoffOffers');
+      expect(calls[0].query).toContain('InteractionID');
     });
 
     it('resolves to an empty list when the reply carries none, or the transport fails', async () => {

@@ -649,7 +649,7 @@ export class RunCodeGenBase {
     return {
       dirtySchemas: ResolveDirtySchemasForEmit(
         entities,
-        [...ManageMetadataBase.newEntityList, ...ManageMetadataBase.modifiedEntityList],
+        [...ManageMetadataBase.newEntityList, ...ManageMetadataBase.modifiedEntityList, ...ManageMetadataBase.EntitiesWithNewJSONValidators],
         skipDB,
         fileEmit?.dirtySchemaOnly !== false,
         ManageMetadataBase.deletedEntitySchemaList,

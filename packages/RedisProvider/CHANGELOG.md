@@ -1,5 +1,101 @@
 # @memberjunction/redis-provider
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 41c2c08: Stop serializing the whole metadata graph into a store nothing can read it back from
+
+  `ProviderBase.SaveLocalMetadataToStorage()` ran `JSON.stringify` over the entire metadata graph on
+  every metadata reload, then copied it into a `Blob`, gzipped it, and base64-encoded it one byte at a
+  time. The snapshot exists so a cold process can start from a cached copy instead of querying — which
+  only works if the store outlives the writer. On a server with no `REDIS_URL` the store is an
+  in-process `Map`, so the only possible reader is the heap that already holds the live objects, and
+  the whole round trip buys nothing.
+
+  Measured on a 791-entity tenant: 131.5M characters per stringify, ~10s and ~1.2GB of transient heap
+  per refresh against a 2.2GB steady state, and the final flatten of that string needs one contiguous
+  ~500MB allocation. Saved queries are metadata members, so an agent writing them marks metadata stale
+  and triggers a refresh roughly every 30 seconds; two overlapping refreshes exhausted the heap and
+  MJAPI died with `Reached heap limit Allocation failed` inside `String::SlowFlatten`.
+
+  `ILocalStorageProvider` gains an optional `SupportsCrossProcessPersistence`. `ProviderBase` skips
+  both the save and the load when it is `false`, logging the reason once per process. A provider that
+  does not declare it is treated as persistent, so Redis and browser behaviour is unchanged — the
+  conservative direction, since a pointless save only wastes work while wrongly skipping a necessary
+  one would leave a cache that never populates. Every in-repo provider now declares it, including the
+  instrumented test wrapper, which delegates to the store it wraps.
+
+  `arrayBufferToBase64` / `base64ToArrayBuffer` use Node's native codec when `Buffer` exists, falling
+  back to the existing loops in the browser. The byte-at-a-time encoder built a rope the size of the
+  payload and then forced a flatten, measured at 3702ms for an 8.6MB buffer under heap pressure
+  against 191ms cold.
+
+  `TelemetryManager.trimIfNeeded()` only ever trimmed `_events`. Three collections derived from it were
+  never released for the life of the process: `_insights` grew by one entry per emitted warning,
+  `_patterns` by one per distinct fingerprint (every new filter combination is a new fingerprint, so it
+  grew with query variety), and `_insightDedupeWindow` by one per dedupe key. All three are now bound
+  on the same schedule as the events they come from — `maxInsights` defaults to 1000, and the two map
+  sweeps are O(n) so they run at most once a minute rather than on every recorded event.
+
+  After the equivalent patch on a live tenant: the refresh cycle went from 10019/9372/8994 ms to
+  330/214/298 ms, heap peak from 3597/3171/3171 MB to 1576/1575/1575 MB, the per-refresh transient
+  spike from +1.0-1.2 GB to 0, and the retained baseline from 2204 MB to 1575 MB.
+
+- 196160a: Survive a Redis outage: reconnect without giving up, fail fast, say so, and come back correct
+
+  `RedisLocalStorageProvider` could not survive an outage longer than ~11 seconds, and if it could it
+  would have come back with a cache it believed was valid and wasn't. Found operationally: an Azure
+  Cache for Redis instance was unreachable for ~25 minutes and every server already running went
+  permanently cache-blind without saying so.
+
+  **Reconnection no longer surrenders.** `retryStrategy` returned `null` past `maxRetries` (default 10),
+  and `null` tells ioredis to stop reconnecting for the life of the client — no recovery short of a
+  process restart. The backoff was `times * 200`, linear despite a comment claiming otherwise, so ten
+  attempts was ~11 seconds of tolerance: shorter than a Redis restart, an ElastiCache failover or a pod
+  reschedule. The ceiling now sits on the delay between attempts (`maxRetryDelayMs`, default 30s) rather
+  than on the attempt count, and `maxRetries` becomes an opt-in for short-lived scripts that genuinely
+  should fail rather than wait.
+
+  **Reconnecting is no longer mistaken for being correct.** Pub/sub has no replay, so a subscriber that
+  was away receives nothing published during the gap — it resumes holding entries its siblings
+  invalidated minutes ago. The failure is symmetric: invalidations this process published while
+  disconnected never reached its siblings either. A fleet-wide epoch counter, incremented once per
+  mutation and carried on every `CacheChangedEvent`, is compared on reconnect: unchanged means nothing
+  was invalidated anywhere and the local cache is **kept**; advanced means everything local is dropped;
+  a process that mutated while disconnected bumps the epoch so its siblings flush too; and a counter
+  that cannot be read flushes, because an unestablished correctness claim should cost the expensive
+  answer. Keeping the cache when nothing changed is the point — a blind flush-on-reconnect is also
+  correct but discards a valid cache on every connection blip.
+
+  **Commands fail fast instead of accumulating.** With `maxRetriesPerRequest: null` and ioredis's
+  default offline queue, a multi-minute outage queued commands whose promises never settled — unbounded
+  memory plus awaits that hung for the duration. Once a connection has been established and then lost,
+  reads return a miss and writes no-op, both of which are correct and merely slower. Startup is
+  deliberately exempt: before the first connection a brief queue is the difference between a warm cache
+  and a cold one, and nothing can be stale because nothing is cached.
+
+  **The failure is now observable.** Every lifecycle handler was gated behind `enableLogging` and logged
+  via `LogStatus`, which is suppressed when `GetProductionStatus()` is true — so a dead cache client
+  produced no output at all in production. Connection loss and recovery are now public events
+  (`OnConnectionLost`, `OnConnectionRestored`, `OnReconciliationRequired`) so a consumer can degrade
+  deliberately and report health, with error-channel logging as the production-visible fallback.
+
+  `CacheChangedEvent` gains an optional `Epoch`. Transports that do not implement the counter omit it
+  and consumers that do not care about recovery can ignore it. The post-reconnect guarantee is
+  documented in `guides/CACHING_AND_PUBSUB_GUIDE.md`.
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes

@@ -1570,6 +1570,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             ExtraFilter: `ID IN (${idList}) AND (LockToken IS NULL OR ExpectedCompletionAt IS NULL OR ExpectedCompletionAt < '${nowIso}')`,
             Fields: ['ID', 'Name', 'ExpectedCompletionAt'],
             ResultType: 'simple',
+            // Live lock/lease state must come from the database. Without this the server cache
+            // would answer (a server trusts its cache hits), and the per-poll timestamp in the
+            // filter would also mint a new, never-read cache key on every poll.
+            BypassCache: true,
             // Deliberately a fresh, narrowly-filtered read of LIVE lock/lease state — the cached
             // SchedulingEngineBase copy would be stale (and possibly cross-process stale). Exempt it
             // from the "Entity Already in Engine" optimization analyzer rather than have it flagged.

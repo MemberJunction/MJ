@@ -3,12 +3,13 @@ import {
   BaseEngine,
   BaseEnginePropertyConfig,
   IMetadataProvider,
+  LogError,
   LogStatus,
   RegisterForStartup,
   RunView,
   UserInfo,
 } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { Observable } from 'rxjs';
 
 /**
@@ -67,7 +68,11 @@ import {
 
 /**
  * UserInfoEngine is a singleton engine that provides centralized access to user-specific data
- * including notifications, workspaces, applications, favorites, and record logs.
+ * including notifications, workspaces, applications and favorites.
+ *
+ * Record logs (`MJ: User Record Logs`) are deliberately not cached here: a row is written every time a
+ * user opens a record, so caching them would turn every record open into a cache update in every
+ * process holding the engine. Use {@link LoadRecentRecordLogs} to query them on demand.
  *
  * This engine consolidates multiple user-related RunView calls into a single batched load,
  * improving performance and enabling local caching for faster subsequent access.
@@ -101,7 +106,6 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   private _workspaces: MJWorkspaceEntity[] = [];
   private _userApplications: MJUserApplicationEntity[] = [];
   private _userFavorites: MJUserFavoriteEntity[] = [];
-  private _userRecordLogs: MJUserRecordLogEntity[] = [];
   private _userSettings: MJUserSettingEntity[] = [];
 
   // Notification types (global - not user-specific)
@@ -222,13 +226,6 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         Type: 'entity',
         EntityName: 'MJ: User Favorites',
         PropertyName: '_userFavorites',
-        CacheLocal: true,
-        Filter: userFilter,
-      },
-      {
-        Type: 'entity',
-        EntityName: 'MJ: User Record Logs',
-        PropertyName: '_userRecordLogs',
         CacheLocal: true,
         Filter: userFilter,
       },
@@ -654,13 +651,43 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
-   * Get all record logs for the current user (recent record access), ordered by LatestAt (most recent first)
+   * Loads a user's most recently accessed records from `MJ: User Record Logs`, newest first.
+   *
+   * This is a query, not a cache read, and it does not require {@link Config} to have run. Record
+   * logs are written on every record open, which makes them a poor fit for an engine cache.
+   *
+   * @param maxItems - Maximum number of logs to return
+   * @param contextUser - The user whose logs to load. Required on the server; on the client it
+   *   defaults to the provider's current user.
+   * @param provider - The provider to query through; defaults to the engine's provider
+   * @returns The logs, newest first; an empty array when there is no user or the query fails
    */
-  public get UserRecordLogs(): MJUserRecordLogEntity[] {
-    if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserRecordLogEntity>('_userRecordLogs')
-      .filter((r) => UUIDsEqual(r.UserID, this._loadedForUserId))
-      .sort((a, b) => new Date(b.LatestAt).getTime() - new Date(a.LatestAt).getTime());
+  public async LoadRecentRecordLogs(
+    maxItems: number,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<MJUserRecordLogEntity[]> {
+    const md = provider ?? this.ProviderToUse;
+    const user = contextUser ?? md.CurrentUser;
+    if (!user) {
+      return [];
+    }
+    const rv = RunView.FromMetadataProvider(md);
+    const result = await rv.RunView<MJUserRecordLogEntity>(
+      {
+        EntityName: 'MJ: User Record Logs',
+        ExtraFilter: `UserID='${EscapeSQLString(user.ID)}'`,
+        OrderBy: 'LatestAt DESC',
+        MaxRows: maxItems,
+        ResultType: 'entity_object',
+      },
+      user,
+    );
+    if (!result.Success) {
+      LogError(`UserInfoEngine: failed to load recent record logs: ${result.ErrorMessage}`);
+      return [];
+    }
+    return result.Results;
   }
 
   // ========================================================================
@@ -729,15 +756,6 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public GetFavoritesForEntity(entityId: string): MJUserFavoriteEntity[] {
     return this.UserFavorites.filter((f) => UUIDsEqual(f.EntityID, entityId));
-  }
-
-  /**
-   * Get recent record logs for a specific entity
-   * @param entityId - The entity ID to filter by
-   * @param maxItems - Maximum number of items to return (default: 10)
-   */
-  public GetRecentRecordsForEntity(entityId: string, maxItems: number = 10): MJUserRecordLogEntity[] {
-    return this.UserRecordLogs.filter((r) => UUIDsEqual(r.EntityID, entityId)).slice(0, maxItems);
   }
 
   /**

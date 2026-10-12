@@ -50,6 +50,14 @@ function isGeminiCancellationError(error: unknown): boolean {
 const GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE = 'skip_thought_signature_validator';
 
 /**
+ * Where a thought signature was minted: serving endpoint plus model. A signature only validates where
+ * it came from — after a failover from Google AI Studio to Vertex AI (or the reverse), or onto another
+ * Gemini model, replaying it is a hard 400 "Corrupted thought signature." Recorded beside the signature
+ * on capture, compared on replay, and a foreign signature is replaced with the placeholder.
+ */
+const THOUGHT_SIGNATURE_ORIGIN_KEY = 'thoughtSignatureOrigin';
+
+/**
  * The user turn Gemini is given when a conversation would otherwise open with a model turn.
  *
  * Gemini requires `contents` to begin with a user turn, and enforces it hard for tool calls: a
@@ -292,7 +300,8 @@ export class GeminiLLM extends BaseLLM {
                 : '';
 
             // Convert all non-system messages and apply role alternation
-            const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
+            const signatureOrigin = this.thoughtSignatureOrigin(modelName);
+            const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m, signatureOrigin));
             const tempMessages = this.geminiMessageSpacing(convertedMessages);
 
             // Split: all but last message go in history, last message gets system instructions prepended
@@ -431,7 +440,7 @@ export class GeminiLLM extends BaseLLM {
 
             const rawContent = candidate.content?.parts?.find(part => part.text && !part.thought)?.text || '';
             const thinking = candidate.content?.parts?.find(part => part.thought)?.text || '';
-            const toolCalls = this.extractToolCalls(candidate.content?.parts);
+            const toolCalls = this.extractToolCalls(candidate.content?.parts, this.thoughtSignatureOrigin(modelName));
 
             // Check if we got empty content despite no blocking. A native tool call IS output, and a
             // forced/clean tool-call turn legitimately carries no text at all — so tool calls
@@ -600,6 +609,18 @@ export class GeminiLLM extends BaseLLM {
     }
 
     /**
+     * The serving endpoint a thought signature from this driver is valid on. Vertex overrides it.
+     */
+    protected get ThoughtSignatureEndpoint(): string {
+        return 'gemini-api';
+    }
+
+    /** Endpoint plus model — the scope a thought signature validates in. */
+    protected thoughtSignatureOrigin(modelName: string): string {
+        return `${this.ThoughtSignatureEndpoint}:${modelName}`;
+    }
+
+    /**
      * Pulls `functionCall` parts out of a Gemini candidate and normalizes them.
      *
      * Gemini does not always populate a call `id`, so one is synthesized from the tool name and the
@@ -607,9 +628,10 @@ export class GeminiLLM extends BaseLLM {
      * `functionResponse` echoes back.
      *
      * @param parts The candidate's content parts
+     * @param signatureOrigin Where this response's thought signatures validate (see {@link thoughtSignatureOrigin})
      * @returns The normalized calls, or undefined when the model called nothing
      */
-    private extractToolCalls(parts: Part[] | undefined): ChatToolCall[] | undefined {
+    private extractToolCalls(parts: Part[] | undefined, signatureOrigin: string): ChatToolCall[] | undefined {
         const calls: ChatToolCall[] = [];
         for (const part of parts ?? []) {
             const call = part.functionCall;
@@ -622,7 +644,9 @@ export class GeminiLLM extends BaseLLM {
                 arguments: call.args ?? {},
                 // Gemini 3 signs each function-call part; a replayed call without its signature is
                 // rejected (HTTP 400). Keep it so history round-trips.
-                ...(part.thoughtSignature ? { providerMetadata: { thoughtSignature: part.thoughtSignature } } : {})
+                ...(part.thoughtSignature
+                    ? { providerMetadata: { thoughtSignature: part.thoughtSignature, [THOUGHT_SIGNATURE_ORIGIN_KEY]: signatureOrigin } }
+                    : {})
             });
         }
         return calls.length > 0 ? calls : undefined;
@@ -765,7 +789,8 @@ export class GeminiLLM extends BaseLLM {
             : '';
 
         // Convert all non-system messages and apply role alternation
-        const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
+        const signatureOrigin = this.thoughtSignatureOrigin(modelName);
+        const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m, signatureOrigin));
         const tempMessages = this.geminiMessageSpacing(convertedMessages);
 
         // Split: all but last message go in history, last message gets system instructions prepended
@@ -1272,19 +1297,38 @@ export class GeminiLLM extends BaseLLM {
         return [{ text: content }];
     }
 
-    public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content {
+    /**
+     * The signature to replay on a call: its own when it was minted where this request is going,
+     * otherwise the documented placeholder. A signature with no recorded origin is replayed as-is.
+     */
+    private static signatureForReplay(call: NonNullable<ChatMessage['toolCalls']>[number], signatureOrigin: string | undefined): string {
+        const metadata = call.providerMetadata;
+        const signature = metadata?.thoughtSignature;
+        if (typeof signature !== 'string') {
+            return GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE;
+        }
+        const origin = metadata?.[THOUGHT_SIGNATURE_ORIGIN_KEY];
+        const foreign = signatureOrigin !== undefined && typeof origin === 'string' && origin !== signatureOrigin;
+        return foreign ? GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE : signature;
+    }
+
+    /**
+     * Maps one MJ message to a Gemini history entry.
+     *
+     * @param message The message to map
+     * @param signatureOrigin Where this request is going (endpoint + model). When given, a replayed
+     *   call's thought signature from anywhere else is swapped for the placeholder.
+     */
+    public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage, signatureOrigin?: string): Content {
         const parts = GeminiLLM.MapMJContentToGeminiParts(message.content);
 
         // An assistant turn that called tools must replay those calls as `functionCall` parts so the
         // `functionResponse` parts that follow have something to pair with.
         if (message.toolCalls?.length) {
             for (const call of message.toolCalls) {
-                // Replay the signature the model gave us; a call this process synthesized (a corpus
-                // history, a transferred conversation) has none, and Gemini documents a placeholder
-                // that skips the check for exactly that case.
-                const signature = typeof call.providerMetadata?.thoughtSignature === 'string'
-                    ? call.providerMetadata.thoughtSignature
-                    : GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE;
+                // Replay the signature the model gave us when it is valid here; a call this process
+                // synthesized, or one signed by another endpoint or model, gets the placeholder.
+                const signature = GeminiLLM.signatureForReplay(call, signatureOrigin);
                 parts.push({ functionCall: { id: call.id, name: call.name, args: call.arguments ?? {} }, thoughtSignature: signature });
             }
         }
