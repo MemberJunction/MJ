@@ -1354,7 +1354,20 @@ export class SQLServerDataProvider
     isUpdate: boolean,
     _spName: string,
   ): SaveCallBinding {
-    const uniqueSuffix = this.allocateSaveCallSuffix(entity);
+    return this.renderSaveCallBindingWithSuffix(entity, fieldValues, isUpdate, this.allocateSaveCallSuffix(entity));
+  }
+
+  /**
+   * The binding for a given variable suffix. Split out of RenderSaveCallBinding so the update
+   * replay form can re-render a subset of the fields under the SAME suffix without allocating
+   * another one (inside a TransactionGroup that would consume a `_n` ordinal).
+   */
+  private renderSaveCallBindingWithSuffix(
+    entity: BaseEntity,
+    fieldValues: Map<EntityFieldInfo, unknown>,
+    isUpdate: boolean,
+    uniqueSuffix: string,
+  ): Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }> {
     const declarations: string[] = [];
     const setStatements: string[] = [];
     const execParams: string[] = [];
@@ -1457,6 +1470,37 @@ export class SQLServerDataProvider
       ? `\nELSE\nBEGIN\n    EXEC [${schema}].${this.GetCreateUpdateSPName(entity, false)} ${binding.callArgsSQL}\nEND`
       : '';
     return `${this.renderDeclareSetHead(binding)}${createBranch}${updateBranch}`;
+  }
+
+  /**
+   * Replay form of an UPDATE for the SQL log (never executed): `EXEC spUpdate` with only the
+   * fields this save changed, plus the primary key. The update procs keep every column whose
+   * parameter is not passed (`ISNULL(@p, [Col])`), so replaying the recording applies exactly
+   * the change that was made and leaves the target's other columns — including settings a
+   * consumer tuned on an MJ-owned row — alone. A field changed to NULL still carries its
+   * `_Clear` companion (derived from the same map). A save whose changes touch no proc
+   * parameter has nothing to replay, so it is logged as a comment. A hand-written update proc
+   * (spUpdateGenerated off) makes no ISNULL promise, so it keeps the full-row form.
+   */
+  protected override RenderReplayUpdateSQL(
+    binding: SaveCallBinding,
+    entity: BaseEntity,
+    changedFieldValues: Map<EntityFieldInfo, unknown>,
+  ): string | undefined {
+    if (binding.kind !== 'mssql-declare-exec') {
+      throw new Error(`SQLServerDataProvider.RenderReplayUpdateSQL: unexpected binding kind '${binding.kind}'`);
+    }
+    const info = entity.EntityInfo;
+    if (!info.spUpdateGenerated) {
+      return undefined;
+    }
+    if (changedFieldValues.size === 0) {
+      const key = entity.PrimaryKey.ToString().replace(/[\r\n]+/g, ' ');
+      return `-- ${info.Name} (${key}): saved with no field changes; nothing to replay`;
+    }
+    const changed = this.renderSaveCallBindingWithSuffix(entity, changedFieldValues, true, binding.suffix);
+    const spName = this.GetCreateUpdateSPName(entity, false);
+    return `${this.renderDeclareSetHead(changed)}EXEC [${info.SchemaName}].${spName} ${changed.callArgsSQL}`;
   }
 
   /** `DECLARE ...\n\nSET ...\n\n` when the binding declares variables, else empty. */

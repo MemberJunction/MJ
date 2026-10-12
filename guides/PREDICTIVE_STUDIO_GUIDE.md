@@ -429,6 +429,25 @@ These are **four distinct, orthogonal** things. The common confusion is to assum
 
 > **#2770 is NOT "ML Model Run Results."** It's view/entity-materialization infrastructure that ML could *optionally* use later. Per-run prediction history already lives in path B (`MJ: Process Run Details`) and, if you want a typed table, path C (`childRecord`). Writing a prediction into an entity column (path A) is a plain MJ column write — it needs nothing from #2770.
 
+### 6.x "Needs training" and opt-in auto-train
+
+A model row can exist without a trained artifact — most often because an app **seeds** model metadata but the serialized model only ever lived on the machine that trained it. Artifact bytes are per-host (§5) and training always creates a **new** immutable model row, so a shipped model id can never be made scoreable in place.
+
+- **Refuse up front, clearly.** Record Set Processing has an optional run-level `IRecordProcessor.Preflight(context)` seam, called once before the first batch. `MLModelInferenceProcessor.Preflight` warm-loads the model; a model that is missing, has no `ArtifactFileID`, or whose artifact bytes aren't on this server throws a `ModelNeedsTrainingError` ("… needs training …"). The run is recorded as `Failed` with that message and **no record is processed** — instead of every record failing into the error-rate circuit breaker. `ScoreRecordSet` uses the same preflight.
+- **Never publish an untrained model.** The promotion gate refuses `→ Published` for a model with no artifact (`needs-training` outcome; Actions return `MODEL_NEEDS_TRAINING`, Remote Ops throw the message).
+- **Studio shows it.** The Production panel marks such a model **Needs training** (amber) instead of Bound/Scheduled and disables **Operate**.
+- **Opt-in auto-train.** An `'ML Model'` Record Process can declare, in its `Configuration`:
+
+  ```json
+  { "primaryKeyField": "ID",
+    "autoTrain": { "pipelineId": "<ML Training Pipeline id>",
+                   "binding": { "targetColumn": "RenewalProbability", "mode": "Scheduled" } } }
+  ```
+
+  (`modelId` may then be omitted.) When a run's model needs training, `PipelineAutoTrainer` **reuses** the newest Published model of that pipeline whose artifact loads on this server, or **trains** the pipeline through the real `TrainingEngine` and publishes it through the promotion gate (Draft → Validated → Published — a leakage-flagged model is refused and stays Draft for a human). It then writes the model id back into the process `Configuration`, repoints the process's bindings (and any still on the superseded model), creates the declared binding if none exists, archives the superseded Published model, and the same run goes on to score. Processes that don't declare `autoTrain` are unaffected. This is how an Open App ships a scoring process that works on a fresh install with no hand steps — ship the **pipeline + Record Process**, not model rows.
+
+> Feature assembly reads **every** matching row when the caller sets no `MaxRows` (`IgnoreMaxRows`), so training is not silently capped at the entity's `UserViewMaxRows` (1000 by default).
+
 ---
 
 ## 7. The experiment engine — a generic agentic-search primitive

@@ -9,6 +9,8 @@ import { MJAIAgentEntity, MJAIAgentRunEntity, MJTestEntity, MJTestRunEntity } fr
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessage } from '@memberjunction/ai';
 import { BaseTestDriver } from './BaseTestDriver';
+import { BuildJudgeOutputEvidence, JudgeOutputEvidence } from '../utils/judge-evidence';
+import { ComponentRegistryFetcher, LoadJudgeArtifacts } from './agent-run-evidence';
 import { EnsureImplicitRubricOracle, PublishedVersionPin, ResolveRubric, WeightsForImplicitRubric, type RubricSuiteRow } from '../oracles/rubric-resolution';
 import {
     DriverExecutionContext,
@@ -78,7 +80,31 @@ export interface AgentEvalConfig {
      * - "all-turns-aggregate": Evaluate all turns together at the end
      */
     evaluationStrategy?: 'final-turn-only' | 'each-turn' | 'all-turns-aggregate';
+
+    /**
+     * What judge oracles (llm-judge, decision-judge, rubric) see besides the bare output. By default
+     * they see the agent's final message, final payload and output artifacts — with registry
+     * component manifests resolved to full specs — whenever that adds to the payload alone.
+     */
+    judgeEvidence?: AgentEvalJudgeEvidenceConfig;
 }
+
+/** Controls the evidence judge oracles see for an agent run. */
+export interface AgentEvalJudgeEvidenceConfig {
+    /** False sends judges only the bare output, as before this option existed. Default true. */
+    enabled?: boolean;
+    /** Include the run's output artifacts. Default true. */
+    includeArtifacts?: boolean;
+    /** Resolve `location: "registry"` component manifests to their full spec. Default true. */
+    resolveRegistryComponents?: boolean;
+    /** Characters any one item may contribute. Default 40,000. */
+    maxCharsPerItem?: number;
+    /** Characters all items together may contribute. Default 120,000. */
+    maxTotalChars?: number;
+}
+
+/** The oracle types that judge the output's substance and so read judge evidence. */
+export const JUDGE_ORACLE_TYPES: ReadonlySet<string> = new Set(['llm-judge', 'decision-judge', 'rubric']);
 
 /**
  * Single turn in a multi-turn test
@@ -1088,6 +1114,7 @@ export class AgentEvalDriver extends BaseTestDriver {
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
         const oracleResults: OracleResult[] = [];
+        const judgeEvidence = await this.buildJudgeEvidence(config, turnResults[turnResults.length - 1], context);
 
         for (const oracleConfig of config.oracles) {
             const oracle = context.oracleRegistry.get(oracleConfig.type);
@@ -1114,6 +1141,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                     contextUser: context.contextUser,
                     testRunId: context.testRun.ID,
                     provider: this.Provider ?? undefined,
+                    judgeEvidence,
                 };
 
                 const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});
@@ -1151,6 +1179,7 @@ export class AgentEvalDriver extends BaseTestDriver {
         messagePrefix: string = ''
     ): Promise<OracleResult[]> {
         const oracleResults: OracleResult[] = [];
+        const judgeEvidence = await this.buildJudgeEvidence(config, turnResult, context);
 
         for (const oracleConfig of config.oracles) {
             const oracle = context.oracleRegistry.get(oracleConfig.type);
@@ -1168,6 +1197,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                     contextUser: context.contextUser,
                     testRunId: context.testRun.ID,
                     provider: this.Provider ?? undefined,
+                    judgeEvidence,
                 };
 
                 const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});
@@ -1196,6 +1226,48 @@ export class AgentEvalDriver extends BaseTestDriver {
         }
 
         return oracleResults;
+    }
+
+    /**
+     * Builds the evidence judge oracles see for one turn: the agent's final message, final payload
+     * and output artifacts (registry component manifests resolved to full specs). Returns undefined
+     * when no judge oracle is configured, when evidence is disabled, or when it would add nothing to
+     * the bare output — so agents whose payload is the whole answer are judged exactly as before.
+     * Never throws; a failure is logged and judging proceeds on the bare output.
+     * @private
+     */
+    private async buildJudgeEvidence(
+        config: AgentEvalConfig,
+        turnResult: TurnResult | undefined,
+        context: DriverExecutionContext
+    ): Promise<JudgeOutputEvidence | undefined> {
+        const settings = config.judgeEvidence ?? {};
+        if (!turnResult || settings.enabled === false || !config.oracles.some(oracle => JUDGE_ORACLE_TYPES.has(oracle.type))) {
+            return undefined;
+        }
+        try {
+            const agentRun = turnResult.agentRun;
+            const provider = this.Provider;
+            const artifacts = settings.includeArtifacts === false || !provider
+                ? []
+                : await LoadJudgeArtifacts(
+                    agentRun.ConversationDetailID,
+                    provider,
+                    context.contextUser,
+                    settings.resolveRegistryComponents === false ? undefined : new ComponentRegistryFetcher(provider)
+                );
+            const evidence = BuildJudgeOutputEvidence(
+                { FinalPayload: agentRun.FinalPayload, Message: agentRun.Message, Artifacts: artifacts },
+                { MaxCharsPerItem: settings.maxCharsPerItem, MaxTotalChars: settings.maxTotalChars }
+            );
+            if (evidence) {
+                this.logToTestRun(context, 'info', `Judge evidence: ${evidence.Items.map(item => item.Label).join('; ')}${evidence.Truncated ? ' (truncated)' : ''}`);
+            }
+            return evidence;
+        } catch (error) {
+            this.logError('Could not build judge evidence; judging the bare output', error as Error);
+            return undefined;
+        }
     }
 
     /**

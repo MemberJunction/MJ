@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     ResolveGeminiLiveProfile,
+    ResolveGeminiMaxInboundVideoStreams,
     ResolveGeminiThinkingLevel,
     GEMINI_LIVE_FALLBACK_PROFILE,
 } from '../geminiLiveProfiles';
@@ -84,5 +85,31 @@ describe('ResolveGeminiThinkingLevel', () => {
             const r = ResolveGeminiThinkingLevel(v, p);
             expect(Boolean(r.Level) && Boolean(r.Warning)).toBe(false);
         }
+    });
+});
+
+describe('MaxInboundVideoStreams', () => {
+    it('Gemini 3.8 Live and Extended Thinking each take exactly one inbound video stream', () => {
+        expect(ResolveGeminiMaxInboundVideoStreams(ResolveGeminiLiveProfile('gemini-3.8-live'))).toBe(1);
+        expect(ResolveGeminiMaxInboundVideoStreams(ResolveGeminiLiveProfile('gemini-3.8-live-extended-thinking'))).toBe(1);
+    });
+
+    it('a model that does not accept video has zero streams', () => {
+        expect(ResolveGeminiMaxInboundVideoStreams(ResolveGeminiLiveProfile('gemini-3.1-flash-live-preview'))).toBe(0);
+    });
+
+    it('the fallback profile declares one stream but resolves to zero while it accepts no video', () => {
+        expect(GEMINI_LIVE_FALLBACK_PROFILE.MaxInboundVideoStreams).toBe(1);
+        expect(GEMINI_LIVE_FALLBACK_PROFILE.SupportsInboundVideo).toBe(false);
+        expect(ResolveGeminiMaxInboundVideoStreams(GEMINI_LIVE_FALLBACK_PROFILE)).toBe(0);
+        expect(ResolveGeminiMaxInboundVideoStreams(ResolveGeminiLiveProfile('some-future-live-model'))).toBe(0);
+        expect(ResolveGeminiMaxInboundVideoStreams(ResolveGeminiLiveProfile(undefined))).toBe(0);
+    });
+
+    it('a video profile that declares no count means one, and a stale count on a non-video row is ignored', () => {
+        const base = ResolveGeminiLiveProfile('gemini-3.8-live');
+        expect(ResolveGeminiMaxInboundVideoStreams({ ...base, MaxInboundVideoStreams: undefined })).toBe(1);
+        expect(ResolveGeminiMaxInboundVideoStreams({ ...base, MaxInboundVideoStreams: 2 })).toBe(2);
+        expect(ResolveGeminiMaxInboundVideoStreams({ ...base, SupportsInboundVideo: false, MaxInboundVideoStreams: 2 })).toBe(0);
     });
 });

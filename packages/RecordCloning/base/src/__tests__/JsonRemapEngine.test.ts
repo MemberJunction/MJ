@@ -287,4 +287,48 @@ describe('JsonRemapEngine', () => {
         const other = ApplyJsonRemap({ ref: '7' }, { Rules: rules, KeyMap: { '7': 'other-entity-copy' } });
         expect(other.Output).toEqual({ ref: '7' });
     });
+
+    describe('Top-level arrays and the Golden Layout dashboard format', () => {
+        it("walks a top-level array with a leading '[*]' (pinned items)", () => {
+            const pins = [
+                { DisplayName: 'Chat', Configuration: { appId: 'app-1' } },
+                { DisplayName: 'Revenue', Configuration: { dashboardId: 'dash-old', recordId: 'dash-old' } },
+            ];
+            const res = ApplyJsonRemap(JSON.stringify(pins), {
+                Rules: [
+                    { Path: '[*].Configuration.dashboardId', Mode: 'remap', OnMissing: 'reuse' },
+                    { Path: '[*].Configuration.recordId', Mode: 'remap', OnMissing: 'reuse' },
+                ],
+                KeyMap: { 'dash-old': 'dash-new' },
+            });
+            expect(res.Success).toBe(true);
+            const out = res.Output as typeof pins;
+            expect(Array.isArray(out)).toBe(true);
+            expect(out[1].Configuration).toEqual({ dashboardId: 'dash-new', recordId: 'dash-new' });
+            expect(out[0].Configuration).toEqual({ appId: 'app-1' });
+        });
+
+        it('remaps artifact ids nested in layout.root under the dashboard-ui-config preset', () => {
+            const ui = {
+                layout: { root: { content: [{ content: [
+                    { componentState: { partTypeId: 'part-type', config: { artifactId: 'art-old' } } },
+                    { content: [{ componentState: { config: { artifactId: 'art-elsewhere' } } }] },
+                ] }] } },
+                settings: {},
+            };
+            const res = ApplyJsonRemap(ui, { Preset: 'dashboard-ui-config', KeyMap: { 'art-old': 'art-new', 'art-elsewhere': 'art-2' } });
+            const root = (res.Output as typeof ui).layout.root.content[0].content;
+            expect((root[0] as { componentState: { config: { artifactId: string }; partTypeId: string } }).componentState.config.artifactId).toBe('art-new');
+            expect((root[0] as { componentState: { partTypeId: string } }).componentState.partTypeId).toBe('part-type');
+            expect((root[1] as { content: Array<{ componentState: { config: { artifactId: string } } }> }).content[0].componentState.config.artifactId).toBe('art-2');
+        });
+    });
+
+    it('matches UUID keys ignoring case (SQL Server returns them upper-case, JSON often holds lower-case)', () => {
+        const res = ApplyJsonRemap({ a: { artifactId: 'abcdef01-2345-6789-abcd-ef0123456789' } }, {
+            Rules: [{ Path: 'a.artifactId', Mode: 'remap', OnMissing: 'reuse' }],
+            KeyMap: { 'ABCDEF01-2345-6789-ABCD-EF0123456789': 'new-id' },
+        });
+        expect((res.Output as { a: { artifactId: string } }).a.artifactId).toBe('new-id');
+    });
 });
