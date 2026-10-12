@@ -145,6 +145,8 @@ Durable friction points the third and fourth drivers surfaced — they generaliz
 
 ### Recipe: add a new interactive channel
 
+See the [Realtime Channels Guide](REALTIME_CHANNELS_GUIDE.md) for the current, complete recipe (including wrapping an existing component and publishing from an Open App); the summary below is the original short recipe.
+
 Covered in depth in [§5](#5-channels--the-heart-of-the-system); the short version:
 
 1. Subclass `BaseRealtimeChannelClient<YourSurfaceComponent>`, implementing the channel contract (tools + perception + surface + state of record).
@@ -405,6 +407,8 @@ When no moderator is injected into the engine — or no `promptId` is configured
 ---
 
 ## 5. Channels — The Heart of the System
+
+> **Building, wrapping, scoping or publishing a channel?** The [Realtime Channels Guide](REALTIME_CHANNELS_GUIDE.md) is the how-to: the self-describing channel contract, exposure and `ReturnsChannelData`, wrapping an existing Angular component with `AngularComponentChannel`, scoping, visual perception, publishing from an Open App, and testing. This section is the architecture those build on.
 
 A channel is more than transport. An **interactive channel** is a bidirectional surface the session's *single* realtime agent both **perceives** and **acts upon**. One agent per session is a hard invariant — everything every channel observes feeds that one agent, and every channel mutation comes from it.
 
