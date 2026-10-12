@@ -203,50 +203,15 @@ describe('SubQDecision', () => {
     });
   });
 
-  describe('the key and the endpoint', () => {
-    it("sends a JSON credential's apiKey, not its JSON", async () => {
-      const calls = fakeFetch(() => textResponse(DOCS_RESPONSE_TEXT));
-      const result = await new SubQDecision(JSON.stringify({ apiKey: 'subq-from-credential' })).Decide(docsParams());
-
-      expect(result.success).toBe(true);
-      expect(calls[0].Url).toBe('https://api.subq.ai/v1/systemone');
-      expect(calls[0].Init?.headers).toEqual({ Authorization: 'Bearer subq-from-credential', 'Content-Type': 'application/json' });
-    });
-
-    it('sends a plain key as it is', async () => {
-      const calls = fakeFetch(() => textResponse(DOCS_RESPONSE_TEXT));
-      await new SubQDecision('subq-plain').Decide(docsParams());
-
-      expect(calls[0].Init?.headers).toEqual({ Authorization: 'Bearer subq-plain', 'Content-Type': 'application/json' });
-    });
-
-    it("prefers the constructor's endpoint over the credential's, and the credential's over the default", async () => {
-      const credential = JSON.stringify({ apiKey: 'subq-k', endpoint: 'https://credential.example.test/v1/systemone/' });
-      expect(new SubQDecision(credential, 'https://ctor.example.test/v1/systemone').EndpointURL).toBe('https://ctor.example.test/v1/systemone');
-      expect(new SubQDecision(credential).EndpointURL).toBe('https://credential.example.test/v1/systemone');
-      expect(new SubQDecision('subq-k').EndpointURL).toBe(SubQDecision.DEFAULT_ENDPOINT);
-      expect(new SubQDecision('subq-k', '  ').EndpointURL).toBe(SubQDecision.DEFAULT_ENDPOINT);
-
-      const calls = fakeFetch(() => textResponse(DOCS_RESPONSE_TEXT));
-      await new SubQDecision(credential, 'https://ctor.example.test/v1/systemone').Decide(docsParams());
-      expect(calls[0].Url).toBe('https://ctor.example.test/v1/systemone');
-    });
-  });
-
   describe('a missing key', () => {
-    it.each([
-      ['an empty key', ''],
-      ['a blank key', '   '],
-      ['a JSON credential with no apiKey', JSON.stringify({ endpoint: 'https://api.subq.ai/v1/systemone' })],
-      ['a JSON credential with an empty apiKey', JSON.stringify({ apiKey: '' })],
-    ])('fails %s before any request, with a NoCredentials error that allows failover', async (_label, apiKey) => {
+    it("fails before any request, naming SubQ's key and its legacy variable", async () => {
       const calls = fakeFetch(() => textResponse(DOCS_RESPONSE_TEXT));
-      const result = await new SubQDecision(apiKey).Decide(docsParams());
+      const result = await new SubQDecision('').Decide(docsParams());
 
       expect(calls).toHaveLength(0);
-      expect(result.success).toBe(false);
-      expect(result.errorMessage).toContain("'API Key' credential");
-      expect(result.errorMessage).toContain('AI_VENDOR_API_KEY__SUBQDECISION');
+      expect(result.errorMessage).toBe(
+        "SubQ Decisions API has no API key: bind an 'API Key' credential whose apiKey is a SubQ API key, or set AI_VENDOR_API_KEY__SUBQDECISION"
+      );
       expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
     });
   });

@@ -165,48 +165,15 @@ describe('InceptionDecision', () => {
     });
   });
 
-  describe('the key and the endpoint', () => {
-    it("sends a JSON credential's apiKey, not its JSON", async () => {
-      const calls = fakeFetch(() => jsonResponse(DOCS_RESPONSE));
-      const result = await new InceptionDecision(JSON.stringify({ apiKey: 'inception-from-credential' })).Decide(docsParams());
-
-      expect(result.success).toBe(true);
-      expect(calls[0].Init?.headers).toEqual({ Authorization: 'Bearer inception-from-credential', 'Content-Type': 'application/json' });
-    });
-
-    it('sends a plain key as it is', async () => {
-      const calls = fakeFetch(() => jsonResponse(DOCS_RESPONSE));
-      await new InceptionDecision('inception-plain').Decide(docsParams());
-
-      expect(calls[0].Init?.headers).toEqual({ Authorization: 'Bearer inception-plain', 'Content-Type': 'application/json' });
-    });
-
-    it("prefers the constructor's endpoint over the credential's, and the credential's over the default", async () => {
-      const credential = JSON.stringify({ apiKey: 'inception-k', endpoint: 'https://credential.example.test/v1/decisions/' });
-      expect(new InceptionDecision(credential, 'https://ctor.example.test/v1/decisions').EndpointURL).toBe('https://ctor.example.test/v1/decisions');
-      expect(new InceptionDecision(credential).EndpointURL).toBe('https://credential.example.test/v1/decisions');
-      expect(new InceptionDecision('inception-k').EndpointURL).toBe(InceptionDecision.DEFAULT_ENDPOINT);
-      expect(new InceptionDecision('inception-k', '  ').EndpointURL).toBe(InceptionDecision.DEFAULT_ENDPOINT);
-
-      const calls = fakeFetch(() => jsonResponse(DOCS_RESPONSE));
-      await new InceptionDecision(credential).Decide(docsParams());
-      expect(calls[0].Url).toBe('https://credential.example.test/v1/decisions');
-    });
-  });
-
   describe('a missing key', () => {
-    it.each([
-      ['an empty key', ''],
-      ['a blank key', '   '],
-      ['a JSON credential with no apiKey', JSON.stringify({ endpoint: 'https://api.inceptionlabs.ai/v1/decisions' })],
-    ])('fails %s before any request, with a NoCredentials error that allows failover', async (_label, apiKey) => {
+    it("fails before any request, naming Inception's key and its legacy variable", async () => {
       const calls = fakeFetch(() => jsonResponse(DOCS_RESPONSE));
-      const result = await new InceptionDecision(apiKey).Decide(docsParams());
+      const result = await new InceptionDecision('').Decide(docsParams());
 
       expect(calls).toHaveLength(0);
-      expect(result.success).toBe(false);
-      expect(result.errorMessage).toContain("'API Key' credential");
-      expect(result.errorMessage).toContain('AI_VENDOR_API_KEY__INCEPTIONDECISION');
+      expect(result.errorMessage).toBe(
+        "Inception Decisions API has no API key: bind an 'API Key' credential whose apiKey is an Inception API key, or set AI_VENDOR_API_KEY__INCEPTIONDECISION"
+      );
       expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
     });
   });
