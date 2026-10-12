@@ -34,7 +34,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (447 classes)
+// @memberjunction/core-entities (448 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -401,6 +401,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -558,10 +559,12 @@ import {
     MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (8 classes)
+// @memberjunction/ng-conversations (10 classes)
 import {
     AgentMentionProvider,
     ClientContextChannel,
+    IdentityVerificationChannel,
+    InteractiveComponentChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
@@ -1221,6 +1224,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1244,11 +1248,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTagCoOccurrenceEntity,
     MJTagEntity,
     MJTagScopeEntity,
-    MJTagSuggestionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTagSuggestionEntity,
     MJTagSynonymEntity,
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
@@ -1350,6 +1354,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkOSProvider,
     AgentMentionProvider,
     ClientContextChannel,
+    IdentityVerificationChannel,
+    InteractiveComponentChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
@@ -1446,13 +1452,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SkillHierarchyPanel,
     TagHierarchyPanel,
     TemplateCategoryHierarchyPanel,
-    TestSuiteHierarchyPanel,
-    UserHeaderPanel,
-    UserOverviewPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    TestSuiteHierarchyPanel,
+    UserHeaderPanel,
+    UserOverviewPanel,
     UserViewCategoryHierarchyPanel,
     TagEngineBase,
     AIAnalyticsResourceComponent,
@@ -1592,7 +1598,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 725;
+export const CLASS_REGISTRATIONS_COUNT = 728;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -1,9 +1,10 @@
 import type { Type } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
-import { CHANNEL_INBOUND_VIDEO_TRACK, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
+import { RealtimeToolDefinition } from '@memberjunction/ai';
+import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
 import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
-import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
+import { BaseRealtimeChannelClient, BuildToolBackedVerbs, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
   ApplyWhiteboardAgentTool, BuildWhiteboardExportSvg, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
   WHITEBOARD_TOOL_PREFIX, WhiteboardState, WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent
@@ -162,20 +163,8 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   private stateChangedSub: Subscription | null = null;
   /** Per-widget ambient-interaction note throttles (ItemID → window state). */
   private interactionThrottles = new Map<string, InteractionThrottleEntry>();
-  /** Shared video bridge streaming board frames to the model when the model supports inbound video. */
-  private videoBridge: ChannelInboundVideoBridge | null = null;
-  /** Pacing timestamp for event-driven visual scene pushes (enforces max 1 fps). */
-  private lastPushTimestamp = 0;
-
   public get ChannelName(): string {
     return 'Whiteboard';
-  }
-
-  /**
-   * Sourced tracks: Whiteboard can source inbound video to the model when the model supports it.
-   */
-  public override GetSourcedTracks(): readonly RealtimeTrackDescriptor[] {
-    return [CHANNEL_INBOUND_VIDEO_TRACK];
   }
 
   /**
@@ -195,140 +184,23 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     }
   }
 
-  private static readonly WHITEBOARD_DEFAULT_CADENCE_MS = 1000;
-  private static readonly WHITEBOARD_MIN_CADENCE_MS = 250;
-
-  // NO liveness heartbeat here, deliberately. This channel is 100% CHANGE-DRIVEN: the only thing
-  // that pushes a frame is a board mutation. A periodic keep-alive would have to be driven by its
-  // own always-on interval — this channel does no work at all while the board is idle, and
-  // resurrecting it every 15 seconds to re-send an unchanged picture is a cost with no shown
-  // benefit. (It also cannot be smuggled in via the mutation path: a 15s elapsed-check inside
-  // onUserMutation only runs when a mutation arrives, so on an idle board it is never evaluated —
-  // which is exactly what the constant this replaced did.) If the inbound video track ever needs
-  // keep-alive frames, that belongs on the track or the bridge, once, not per channel.
-
-  /** Trailing timer to deliver the settled resting frame after rapid user drawing/edits. */
-  private whiteboardTrailingTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Last base64 JPEG frame pushed to the bridge, used for deduplication. */
-  private lastPushedWhiteboardFrame: string | null = null;
-
-  /** Cancels any active trailing-edge settle timer and clears the handle. */
-  private clearWhiteboardTrailingTimer(): void {
-    if (this.whiteboardTrailingTimer != null) {
-      clearTimeout(this.whiteboardTrailingTimer);
-      this.whiteboardTrailingTimer = null;
-    }
-  }
-
   /**
-   * Resolves the effective push cadence in milliseconds based on the negotiated inbound video track.
-   * Defaults to 1000ms (1 fps ceiling for Gemini Live), but clamps down to a minimum of 250ms (4 fps)
-   * if the negotiated track specifies a higher `Rate`.
+   * The shared frame bridge, which now lives on the base channel (`VisualVideoBridge`). This accessor
+   * keeps the board's long-standing `videoBridge` handle — tests and tooling reach the bridge by that
+   * name — pointing at the one the pump actually writes to.
    */
-  private getNegotiatedVideoCadenceMs(): number {
-    const client = this.Context?.Client;
-    if (!client) {
-      return RealtimeWhiteboardChannel.WHITEBOARD_DEFAULT_CADENCE_MS;
-    }
-    const tracks: readonly RealtimeTrack[] = client.EstablishedTracks;
-    const videoTrack = tracks?.find(
-      (t: RealtimeTrack) =>
-        t.Descriptor.Modality === 'video' &&
-        t.Descriptor.Direction === 'inbound'
-    );
-    const rate = videoTrack?.Descriptor.Rate;
-    if (typeof rate === 'number' && rate > 0) {
-      return Math.max(
-        RealtimeWhiteboardChannel.WHITEBOARD_MIN_CADENCE_MS,
-        Math.floor(1000 / rate)
-      );
-    }
-    return RealtimeWhiteboardChannel.WHITEBOARD_DEFAULT_CADENCE_MS;
+  private get videoBridge(): ChannelInboundVideoBridge | null {
+    return this.VisualVideoBridge;
+  }
+  private set videoBridge(bridge: ChannelInboundVideoBridge | null) {
+    this.VisualVideoBridge = bridge;
   }
 
-  /**
-   * Pushes a frame to the video bridge, updating timestamp and deduplication cache.
-   */
-  private pushWhiteboardFrame(frame: string): void {
-    this.lastPushTimestamp = Date.now();
-    this.lastPushedWhiteboardFrame = frame;
-    this.ensureVideoBridge()?.PushFrame(frame);
-  }
-
-  /**
-   * Pushes the latest board visual scene when user mutations occur, with dynamic pacing,
-   * deduplication, and a trailing-edge settle timer so the model sees the final resting state.
-   */
-  private async onUserMutation(): Promise<void> {
-    try {
-      const bridge = this.ensureVideoBridge();
-      if (!bridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
-        return;
-      }
-
-      const now = Date.now();
-      const cadenceMs = this.getNegotiatedVideoCadenceMs();
-      const elapsed = now - this.lastPushTimestamp;
-
-      if (elapsed >= cadenceMs) {
-        this.clearWhiteboardTrailingTimer();
-        const frame = await this.GetLatestFrame();
-        if (!frame) {
-          return;
-        }
-        if (frame !== this.lastPushedWhiteboardFrame) {
-          this.pushWhiteboardFrame(frame);
-        }
-      } else {
-        // Within cooldown window: schedule trailing settle timer if not already armed.
-        if (!this.whiteboardTrailingTimer) {
-          const delay = Math.max(0, cadenceMs - elapsed);
-          this.whiteboardTrailingTimer = setTimeout(async () => {
-            this.whiteboardTrailingTimer = null;
-            try {
-              if (!this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
-                return;
-              }
-              const frame = await this.GetLatestFrame();
-              if (!frame) {
-                return;
-              }
-              if (frame !== this.lastPushedWhiteboardFrame) {
-                this.pushWhiteboardFrame(frame);
-              }
-            } catch (err) {
-              console.error('[RealtimeWhiteboardChannel] Error in whiteboard trailing settle timer:', err);
-            }
-          }, delay);
-        }
-      }
-    } catch (err) {
-      console.error('[RealtimeWhiteboardChannel] Error in onUserMutation:', err);
-    }
-  }
-
-  /**
-   * Pushes exactly ONE confirmation frame after an agent tool mutates the board, and
-   * informs the model context so it does not loop narrating its own change.
-   */
-  private async pushAgentConfirmationFrame(): Promise<void> {
-    try {
-      const bridge = this.ensureVideoBridge();
-      if (!bridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
-        return;
-      }
-      this.clearWhiteboardTrailingTimer();
-      const frame = await this.GetLatestFrame();
-      if (frame) {
-        this.pushWhiteboardFrame(frame);
-        this.Context?.SendContextNote(
-          '[whiteboard] visual confirmation of your action (background — do NOT narrate or announce your own change; continue naturally)'
-        );
-      }
-    } catch (err) {
-      console.error('[RealtimeWhiteboardChannel] Error in pushAgentConfirmationFrame:', err);
-    }
-  }
+  // The change-driven frame pump (leading edge, trailing settle, dedupe, negotiated cadence, one
+  // confirmation frame after an agent edit) used to live here. It is now the base channel's
+  // `EnableVisualPerception` pump, enabled from OnInitialize — this channel only says WHEN its picture
+  // changed. The behavior is unchanged, including (deliberately) the shared bridge's fixed-rate poller:
+  // see `StartBridgePoller` in OnInitialize.
 
   public get ToolNamePrefix(): string {
     return WHITEBOARD_TOOL_PREFIX;
@@ -366,33 +238,62 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     };
   }
 
-  /** Persist the board (host-debounced) on EVERY board mutation — user edits AND agent tools. */
+  /**
+   * The board's self-description: what it holds, every `Whiteboard_*` tool as a verb (so a tool a
+   * subclass adds shows up here too), and that the model can SEE it (frames), not just read its state.
+   */
+  public override GetDescriptor(): RealtimeChannelDescriptor {
+    return {
+      Key: this.ChannelName,
+      Version: REALTIME_CHANNEL_CONTRACT_VERSION,
+      DisplayName: this.TabTitle,
+      OwningPackage: '@memberjunction/ng-conversations',
+      Instructions:
+        'A shared canvas you and the user can both draw, write and annotate on live. Whatever you add ' +
+        'appears instantly, and you perceive what the user adds. Use it to sketch, diagram and explain ' +
+        'visually; do not narrate minor edits.',
+      Nouns: [
+        {
+          Name: 'pages',
+          Description: 'The board\'s pages, in order; each holds the items (notes, shapes, connectors, text, widgets) drawn on it.',
+          Schema: { type: 'array', items: { type: 'object' } }
+        }
+      ],
+      Verbs: BuildToolBackedVerbs(this.GetToolDefinitions(), this.ToolNamePrefix),
+      Events: [
+        { Name: 'state_changed', Description: 'The board changed (by you or the user).' },
+        { Name: 'frame_pushed', Description: 'A picture of the board was sent to you.' }
+      ],
+      DisplayPolicy: 'open-on-start',
+      DefaultAvailability: 'all-sessions',
+      MaxExposure: 'pixels'
+    };
+  }
+
+  /**
+   * Persist the board (host-debounced) on EVERY board mutation — user edits AND agent tools — and drive
+   * the visual pump. The board feeds the model its own perception (coalesced scene deltas from the
+   * bound surface), so state changes are recorded for events and frame tagging only (`Perceive: false`):
+   * the structured note would duplicate the deltas.
+   */
   protected override OnInitialize(): void {
     this.stateChangedSub?.unsubscribe();
-    this.clearWhiteboardTrailingTimer();
+    this.EnableVisualPerception(this, {
+      ConfirmationNote:
+        '[whiteboard] visual confirmation of your action (background — do NOT narrate or announce your own change; continue naturally)',
+      // Preserves what the board always did: it started the bridge's fixed-rate poller despite being
+      // designed heartbeat-free. Flagged for the reviewer; remove to make the board purely change-driven.
+      StartBridgePoller: true
+    });
     this.stateChangedSub = this.State.Changed$.subscribe((change) => {
       this.Context?.RequestSave(this.State.ToJSON());
-      // Only user edits (and scene replacements like undo) drive the user settle-debounce pipeline.
+      this.RecordChange({ Author: change.Author, Perceive: false });
+      // Only user edits (and scene replacements like undo) drive the settle-debounce pipeline.
       // Agent edits are confirmed with a single frame in ApplyAgentTool.
       if (change.Author === 'user' || change.Op === 'replace') {
-        void this.onUserMutation();
+        void this.NotifyVisualChange();
       }
     });
-    this.ensureVideoBridge();
-  }
-
-  public override OnSessionStarted(): void {
-    this.ensureVideoBridge();
-  }
-
-  private ensureVideoBridge(): ChannelInboundVideoBridge | null {
-    if (!this.videoBridge && this.Context) {
-      this.videoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this);
-    }
-    if (this.videoBridge && !this.videoBridge.IsActive && this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
-      this.videoBridge.Start?.();
-    }
-    return this.videoBridge;
   }
 
   /**
@@ -401,7 +302,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    * outputs are subscribed back into the host context — the overlay never sees any of it.
    */
   public BindSurface(instance: RealtimeWhiteboardHostComponent): void {
-    this.ensureVideoBridge();
+    this.EnsureVideoBridge();
     this.releaseSurface();
     this.host = instance;
     instance.State = this.State;
@@ -543,7 +444,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     // quiet about it — so the failure would vanish from the user's view while the model carried on.
     // It would also push a frame identical to the last one, since a failed tool changes nothing.
     if (toolSucceeded(result)) {
-      void this.pushAgentConfirmationFrame();
+      void this.ConfirmVisualChange();
     }
     return result;
   }
@@ -575,13 +476,9 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   }
 
   public override Dispose(): void {
-    this.clearWhiteboardTrailingTimer();
-    this.videoBridge?.Stop();
-    this.videoBridge = null;
     this.stateChangedSub?.unsubscribe();
     this.stateChangedSub = null;
-    this.lastPushedWhiteboardFrame = null;
-    super.Dispose(); // releases the surface binding + context
+    super.Dispose(); // releases the surface binding, the visual pump + bridge, and the context
   }
 
   /** Unsubscribes surface outputs, cancels pending ambient notes and drops the host reference. */

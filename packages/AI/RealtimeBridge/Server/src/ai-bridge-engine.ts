@@ -1155,6 +1155,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             active.Ending = true; // ignore model-loss signals that race the teardown
             await this.disconnectDriver(active, reason);
             this.activeSessions.delete(key);
+            // Per-session diagnostic one-shot flags (keyed by SessionBridgeID) must not outlive the session.
+            this.diagInbound.delete(active.SessionBridgeID);
+            this.diagOutbound.delete(active.SessionBridgeID);
             const done = await this.markBridgeDisconnected(
                 sessionBridgeID,
                 reason,
