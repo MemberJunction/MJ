@@ -6,7 +6,7 @@
  * @module @memberjunction/ai-agents
  */
 import type { UserInfo } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, NormalizeUUID, UUIDSet } from '@memberjunction/global';
 import type { AgentAudienceMode, AgentRunAudience } from '@memberjunction/ai-core-plus';
 
 /** The modes an audience may name. A `Record` so a mode added to {@link AgentAudienceMode} fails to compile here. */
@@ -47,10 +47,13 @@ export function AgentAudienceProblem(audience: unknown): string | null {
  */
 export function AgentAudienceReaderIDs(audience: AgentRunAudience | undefined, callerID: string | undefined): string[] {
     if (!audience || audience.Mode !== 'Intersection') return [];
+    const seen = new UUIDSet(callerID ? [callerID] : []);
     const ids: string[] = [];
     for (const id of audience.UserIDs) {
-        const known = UUIDsEqual(id, callerID) || ids.some(existing => UUIDsEqual(existing, id));
-        if (!known) ids.push(NormalizeUUID(id));
+        if (!seen.Has(id)) {
+            seen.Add(id);
+            ids.push(NormalizeUUID(id));
+        }
     }
     return ids;
 }
@@ -67,8 +70,9 @@ export function AgentAudienceAddsReader(audience: AgentRunAudience | undefined, 
 /** Match each ID to a user (case-insensitive), reporting the IDs no user has. */
 export function MatchAudienceUsers(ids: string[], users: UserInfo[]): AudienceUserMatch {
     const match: AudienceUserMatch = { Readers: [], MissingIDs: [] };
+    const usersByID = IndexByUUID(users);
     for (const id of ids) {
-        const user = users.find(u => UUIDsEqual(u.ID, id));
+        const user = usersByID.Get(id);
         if (user) {
             match.Readers.push(user);
         } else {

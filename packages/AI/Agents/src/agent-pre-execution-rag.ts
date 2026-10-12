@@ -23,7 +23,7 @@
  */
 
 import { IsVerboseLoggingEnabled, LogError, LogStatus, LogStatusEx, RunView, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
     MJAIAgentSearchScopeEntity,
@@ -430,10 +430,13 @@ export class AgentPreExecutionRAG {
 
     /** The audience's readers beyond the caller: each distinct ID once, the caller left out. */
     private audienceReaders(params: AgentPreExecutionRAGParams): UserInfo[] {
+        const seen = new UUIDSet(params.contextUser.ID ? [params.contextUser.ID] : []);
         const readers: UserInfo[] = [];
         for (const reader of params.audienceReaders ?? []) {
-            const known = UUIDsEqual(reader.ID, params.contextUser.ID) || readers.some(r => UUIDsEqual(r.ID, reader.ID));
-            if (!known) readers.push(reader);
+            if (!seen.Has(reader.ID)) {
+                seen.Add(reader.ID);
+                readers.push(reader);
+            }
         }
         return readers;
     }

@@ -1,5 +1,5 @@
 import type { UserInfo } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { UUIDSet } from "@memberjunction/global";
 
 /**
  * The people, besides the caller, who will see what an action returns — set on
@@ -36,11 +36,14 @@ export function ActionAudienceReaders(audience: unknown, contextUser: UserInfo |
    if (audience === undefined) return [];
    const readers = audience !== null && typeof audience === 'object' && 'Readers' in audience ? audience.Readers : undefined;
    if (!Array.isArray(readers)) return null;
+   const seen = new UUIDSet(contextUser?.ID ? [contextUser.ID] : []);
    const distinct: UserInfo[] = [];
    for (const reader of readers as unknown[]) {
       if (!isIdentifiedReader(reader)) return null;
-      const known = UUIDsEqual(reader.ID, contextUser?.ID) || distinct.some(r => UUIDsEqual(r.ID, reader.ID));
-      if (!known) distinct.push(reader);
+      if (!seen.Has(reader.ID)) {
+         seen.Add(reader.ID);
+         distinct.push(reader);
+      }
    }
    return distinct;
 }

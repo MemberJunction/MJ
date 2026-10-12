@@ -33,7 +33,7 @@ import {
     MJAISkillEntity,
     ScopeBundle
 } from '@memberjunction/core-entities';
-import { BaseSingleton, EscapeSQLString, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, IsValidUUID, MJGlobal, NormalizeUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { FileStorageEngine, StorageAccessEvaluator } from '@memberjunction/storage';
 import {
     SearchParams,
@@ -1199,7 +1199,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         if (unresolved.length === 0) return explanations;
         const note = `searched together with ${unresolved.join(', ')}, which cannot be resolved, the search is refused — `
             + 'this scope reaches nothing in it (on its own it would be searched as explained above)';
-        return explanations.map(e => unresolved.some(id => UUIDsEqual(id, e.ScopeID))
+        const unresolvedIDs = new UUIDSet(unresolved);
+        return explanations.map(e => unresolvedIDs.Has(e.ScopeID)
             ? e
             : { ...e, Reachable: false, Diagnostics: [...e.Diagnostics, note] });
     }

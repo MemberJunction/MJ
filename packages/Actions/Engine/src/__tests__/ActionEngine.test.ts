@@ -88,6 +88,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     RequiresSubclass: (await importOriginal<typeof import('@memberjunction/global')>()).RequiresSubclass,
     // Same story for OptionalKeyedSpecialization (baseEntity.ts marks EntityField with it, B47).
     OptionalKeyedSpecialization: (await importOriginal<typeof import('@memberjunction/global')>()).OptionalKeyedSpecialization,
+    // Real UUIDSet — actions-base's audience helpers (ActionAudienceReaders) dedupe readers with it.
+    UUIDSet: (await importOriginal<typeof import('@memberjunction/global')>()).UUIDSet,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,
