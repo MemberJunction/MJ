@@ -13,10 +13,11 @@
  * decision call can reach a provider, whichever candidate this environment's credentials select.
  * `LLMDecision` needs no credential, so a runner with no keys at all (CI) selects it; a host with an
  * OpenRouter key selects Jev's `OpenRouterDecision`. Both names go to the stand-in, and so do
- * `CloudflareDecision`, `SystemOneDecision`, `PerplexityDecision` and `OpenAIDecision`: the Clef, Kev,
- * Perplexity Decider and GPT-6 Luna Decisions models are in no shipped prompt's bindings, but as active
- * Decision models they join the Default Decision prompt's power-matched fallback candidates, so a host
- * with their credentials could otherwise reach a provider on a failover.
+ * `CloudflareDecision`, `SystemOneDecision`, `PerplexityDecision`, `OpenAIDecision`, `SubQDecision` and
+ * `InceptionDecision`: the Clef, Kev, Perplexity Decider, GPT-6 Luna Decisions, SubQ Snap and Mercury
+ * Decide models are in no shipped prompt's bindings, but as active Decision models they join the Default
+ * Decision prompt's power-matched fallback candidates, so a host with their credentials could otherwise
+ * reach a provider on a failover.
  */
 import { MJGlobal } from '@memberjunction/global';
 import {
@@ -30,10 +31,20 @@ import {
 
 /**
  * The decision driver classes the shipped decision prompts can reach: LLM Decision and Jev, which they
- * bind to, and Clef, self-hosted Kev, the Perplexity Decider and GPT-6 Luna Decisions on OpenAI,
- * power-matched fallbacks (Kev-4B and GPT-6 Luna Decisions on OpenRouter use Jev's driver).
+ * bind to, and Clef, self-hosted Kev, the Perplexity Decider, GPT-6 Luna Decisions on OpenAI, SubQ Snap
+ * and Mercury Decide on Inception, power-matched fallbacks (Kev-4B, GPT-6 Luna Decisions and Mercury
+ * Decide on OpenRouter use Jev's driver).
  */
-export const SCRIPTED_DECISION_DRIVER_CLASSES: readonly string[] = ['LLMDecision', 'OpenRouterDecision', 'CloudflareDecision', 'SystemOneDecision', 'PerplexityDecision', 'OpenAIDecision'];
+export const SCRIPTED_DECISION_DRIVER_CLASSES: readonly string[] = [
+    'LLMDecision',
+    'OpenRouterDecision',
+    'CloudflareDecision',
+    'SystemOneDecision',
+    'PerplexityDecision',
+    'OpenAIDecision',
+    'SubQDecision',
+    'InceptionDecision',
+];
 
 /** The model name the stand-in reports, so a prompt run it answered is recognisable. */
 export const SCRIPTED_DECISION_MODEL = 'it-scripted-decision';
