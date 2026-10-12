@@ -5,6 +5,7 @@ import {
     RealtimeTrack,
     RealtimeTrackDescriptor,
     RealtimeTrackDirection,
+    RealtimeTrackKey,
     ResolveRequestedTracks,
     RealtimeUsageModalityDetail,
 } from '@memberjunction/ai';
@@ -277,6 +278,36 @@ export abstract class BaseRealtimeClient {
         return this.tracks;
     }
 
+    /** The model's declared inbound video stream ceiling, recorded by {@link negotiateTracks}; `undefined` until a driver declares one. */
+    private inboundVideoStreamLimit: number | undefined;
+
+    /**
+     * How many concurrent inbound video streams the model accepts: the ceiling the driver declared when it
+     * negotiated tracks, else `1` when an inbound video track is live and `0` when it is not.
+     *
+     * A source arbiter reads this to decide whether several live video sources must be narrowed to one
+     * (with a note to the model on each switch) or passed through untouched.
+     */
+    public get MaxInboundVideoStreams(): number {
+        if (typeof this.inboundVideoStreamLimit === 'number') {
+            return this.IsTrackEstablished('video', 'inbound') ? this.inboundVideoStreamLimit : 0;
+        }
+        return this.IsTrackEstablished('video', 'inbound') ? 1 : 0;
+    }
+
+    /**
+     * The frame rate (frames per second) the live inbound video track was negotiated at — the model's
+     * ceiling or the session's request, whichever is lower — or `undefined` when no inbound video track
+     * is live or none declared a rate. Anything pacing a video feed reads THIS, never a constant of its own.
+     */
+    public get InboundVideoRate(): number | undefined {
+        const track = this.tracks.find(
+            (t) => t.State === 'live' && t.Descriptor.Direction === 'inbound' && String(t.Descriptor.Modality).trim().toLowerCase() === 'video'
+        );
+        const rate = track?.Descriptor.Rate;
+        return typeof rate === 'number' && rate > 0 ? rate : undefined;
+    }
+
     /**
      * Returns whether a track of the requested modality and direction is established and `'live'`.
      */
@@ -294,23 +325,29 @@ export abstract class BaseRealtimeClient {
      */
     protected negotiateTracks(
         requested: readonly RealtimeTrackDescriptor[] | undefined,
-        supported: readonly RealtimeTrackDescriptor[] | undefined
+        supported: readonly RealtimeTrackDescriptor[] | undefined,
+        maxInboundVideoStreams?: number
     ): RealtimeTrack[] {
+        // Keyed by direction + modality + SOURCE, so two requested inbound video streams fed by
+        // different sources stay two tracks (a model that accepts several needs both), while two
+        // descriptors that name no source still collapse to the one stream they always did.
         const trackMap = new Map<string, RealtimeTrackDescriptor>();
         for (const t of DEFAULT_REALTIME_AUDIO_TRACKS) {
-            trackMap.set(`${t.Direction}:${t.Modality}`, t);
+            trackMap.set(RealtimeTrackKey(t), t);
         }
         if (requested) {
             for (const t of requested) {
-                trackMap.set(`${t.Direction}:${t.Modality}`, t);
+                trackMap.set(RealtimeTrackKey(t), t);
             }
         }
         const effectiveRequested: readonly RealtimeTrackDescriptor[] = Array.from(trackMap.values());
         const effectiveSupported = supported ?? DEFAULT_REALTIME_AUDIO_TRACKS;
+        this.inboundVideoStreamLimit = typeof maxInboundVideoStreams === 'number' ? maxInboundVideoStreams : undefined;
         const resolved = ResolveRequestedTracks(
             effectiveRequested,
             effectiveSupported,
-            (d, i) => `${d.Direction}:${String(d.Modality)}:${i}`
+            (d, i) => `${d.Direction}:${String(d.Modality)}:${i}`,
+            { MaxInboundVideoStreams: this.inboundVideoStreamLimit }
         );
         this.tracks = resolved.map((t) => ({
             ...t,
@@ -644,9 +681,12 @@ export abstract class BaseRealtimeClient {
      *
      * @param base64Image Base64-encoded image data.
      * @param mimeType Image MIME type (defaults to 'image/jpeg').
+     * @param sourceId Which source this frame came from. A driver whose model takes ONE inbound video
+     *   stream ignores it (the source arbiter already chose what to send); a driver whose model takes
+     *   several routes the frame to the track bound to that `SourceID`.
      * @returns `true` if accepted and sent; `false` if dropped (throttled, unestablished, etc.).
      */
-    public SendVideoFrame?(base64Image: string, mimeType?: string): boolean;
+    public SendVideoFrame?(base64Image: string, mimeType?: string, sourceId?: string): boolean;
 
     // ── Protected emit helpers for concrete drivers ───────────────────────────
 
