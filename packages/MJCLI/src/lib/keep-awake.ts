@@ -11,6 +11,9 @@
  * On macOS this holds a `caffeinate` assertion tied to the CLI's own pid, so it ends the moment
  * the command does — no cleanup, nothing left behind. Elsewhere it is a no-op. Set
  * {@link KEEP_AWAKE_OPT_OUT_ENV_VAR} to opt out.
+ *
+ * Either way, {@link SleepNoticeForCommand} tells the user at the start: no assertion survives
+ * a closed lid, and on Windows and Linux nothing holds the machine awake at all.
  */
 import { spawn } from 'node:child_process';
 
@@ -59,4 +62,18 @@ export function KeepAwakeForCommand(commandId: string, environment: KeepAwakeEnv
   } catch {
     return false;
   }
+}
+
+/**
+ * The one-line warning to show when a long database command starts, or `undefined` for commands
+ * that are not long enough to need it.
+ *
+ * @param commandId - The oclif command id.
+ * @param keptAwake - Whether {@link KeepAwakeForCommand} started an assertion for this run.
+ */
+export function SleepNoticeForCommand(commandId: string, keptAwake: boolean): string | undefined {
+  if (!KEEP_AWAKE_COMMANDS.has(commandId)) return undefined;
+  return keptAwake
+    ? 'This can take 15 minutes or more. MJ is keeping this Mac awake until it finishes, but closing the lid will still put it to sleep and can make the command fail partway.'
+    : "This can take 15 minutes or more. Don't let this machine sleep until it finishes: sleep pauses the database connection and can make the command fail partway.";
 }
