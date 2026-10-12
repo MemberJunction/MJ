@@ -102,23 +102,19 @@ SiliconFlow) through the same Decisions API, so the `Kev-4B` model's OpenRouter 
 `Default Decision` does not bind Kev-4B, but as an active Decision model it is one of the
 power-matched fallbacks, after Jev and `LLM Decision`, for any host that has this key.
 
-**GPT-6 Luna Decisions.** OpenRouter also serves OpenAI's decision model, `gpt-6-luna`, through the
-same Decisions API, as `openai/gpt-6-luna-decisions`. The model's OpenRouter row pins the dated
-`openai/gpt-6-luna-decisions-20261006`, served by OpenAI with a 1,050,000-token context, and uses
-`OpenRouterDecision` and the same key. OpenRouter's response for it is in the System One format, so
-this driver maps it unchanged. The model's other route is OpenAI's own Decisions API, which has its own
-wire format, through `OpenAIDecision` in [`@memberjunction/ai-openai`](../OpenAI/readme.md). That row
-has the higher priority, so with keys for both, the runner tries OpenAI first and fails over to
-OpenRouter.
+**GPT-6 Luna Decisions and Mercury Decide.** OpenRouter also serves these through the same Decisions
+API, in the System One format, so each model's OpenRouter row uses `OpenRouterDecision` and the same key,
+with a pinned slug. Each model's own vendor route has the higher priority.
+- `openai/gpt-6-luna-decisions-20261006`, served by OpenAI, 1,050,000-token context. The other route is
+  `OpenAIDecision` in [`@memberjunction/ai-openai`](../OpenAI/readme.md).
+- `inception/mercury-decide-20260930`, served by Inception, 65,536-token context, text only. The other
+  route is `InceptionDecision` in [`@memberjunction/ai-inception`](../Inception/README.md). The free
+  variant (`inception/mercury-decide:free`) is not in the catalog: it has its own rate limits and data
+  policy.
 
-**Mercury Decide.** OpenRouter also serves Inception's diffusion-based decision model,
-`mercury-decide`, through the same Decisions API, as `inception/mercury-decide`. The model's OpenRouter
-row pins the dated `inception/mercury-decide-20260930` (OpenRouter's canonical slug), served by Inception
-with a 65,536-token context, text only, at $0.02 per million input tokens, and uses `OpenRouterDecision`
-and the same key. OpenRouter's free variant (`inception/mercury-decide:free`) is not in the catalog: it
-has its own rate limits and data policy. The model's other route is Inception's own Decisions API,
-through `InceptionDecision` in [`@memberjunction/ai-inception`](../Inception/README.md). That row has the
-higher priority, so with keys for both, the runner tries Inception first and fails over to OpenRouter.
+Both are `Default Decision` power-matched fallbacks for a host with this key, GPT-6 Luna Decisions the
+first and Mercury Decide among the last, because the fallbacks follow PowerRank distance from
+`Default Decision`'s target rank.
 
 **The wire format.** Jev and Kev speak the System One decisions format. `OpenRouterDecision` extends
 `BaseSystemOneDecision` (`@memberjunction/ai`), which owns the request and answer mapping; this class

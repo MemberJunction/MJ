@@ -447,7 +447,8 @@ OD7 registers the shared `ScriptedDecision` over every decision driver class, as
 - The model is shipped metadata, read only.
 - OD5 and OD7 use `DecisionRunnerProbe` to read the candidates and the failed attempts.
 - OD6 and OD7 create real `API Key` credentials through `CredentialEngine`, with bindings on the model's OpenAI Inference Provider row (`decision-fixtures.ts`). They delete them in a `finally`.
-- Teardown deletes the prompt runs OD3 and OD4 created and anything a failed check left, then restores both drivers.
+- Every runner check tracks its prompt runs in `DecisionFixtures` and deletes them in a `finally`; Teardown deletes anything a failed check left, then restores both drivers.
+- The guards (`decision-guards.ts`, whose `GuardedOpenRouterDecision` the subq-mercury-decisions bundle shares) and the assertions both bundles use (`decision-fixtures.ts`) are shared.
 
 **Tier.** All 7 deterministic, ungated. Break-it checks, each run against the built suite and then reversed:
 

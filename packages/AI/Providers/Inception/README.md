@@ -9,7 +9,7 @@ Both use the same Inception API key.
 
 ## Decisions: Mercury Decide
 
-`InceptionDecision` calls Inception's Decisions API, `POST https://api.inceptionlabs.ai/v1/decisions`, which serves `mercury-decide`, a diffusion-based decision model released on 2026-09-30. In MJ's catalog it is the `Mercury Decide` model. The API speaks TypeSafe's System One format exactly, so the driver extends `BaseSystemOneDecision` from `@memberjunction/ai`, which owns the request and answer mapping; the driver adds the endpoint, a check that there is a key, Inception's error messages and the classification of the statuses Inception documents.
+`InceptionDecision` calls Inception's Decisions API, `POST https://api.inceptionlabs.ai/v1/decisions`, which serves `mercury-decide`, a diffusion-based decision model released on 2026-09-30. In MJ's catalog it is the `Mercury Decide` model. The API speaks TypeSafe's System One format exactly, so the driver extends `BaseHostedSystemOneDecision` from `@memberjunction/ai`, which owns the request and answer mapping, the endpoint, the key check and the error messages; the driver adds Inception's defaults and the classification of the statuses Inception documents.
 
 | | |
 |---|---|
@@ -50,7 +50,7 @@ const result = await decide.Decide({
 });
 ```
 
-**As a fallback.** The shipped `Default Decision` prompt does not bind Mercury Decide, and its bindings are unchanged. Like every active `Decision` model, it joins `Default Decision`'s power-matched fallbacks once one of its rows has a credential. It is unmeasured in MJ (OpenRouter says it leads JevBench), so its `PowerRank` is 44: farther from `Default Decision`'s target rank (57) than every other shipped Decision model but SubQ Snap (43), so its two rows come after Kev-0.8B (45) and before SubQ Snap.
+**As a fallback.** `Default Decision`'s bindings are unchanged, but Mercury Decide, unmeasured in MJ, is among its last power-matched fallbacks once one of its rows has a credential, because the fallbacks follow PowerRank distance from `Default Decision`'s target rank.
 
 Existing credentials can be enough to reach it: an Inception key bound to the `Inception Labs` vendor for `Mercury 2`, or a default `API Key` credential, covers its Inception row, and an OpenRouter key set for Jev covers its OpenRouter row. On such a host `Default Decision` can send a decision's state to Inception once every earlier candidate has failed. To prevent that, set the row's `Status` to `Inactive`.
 

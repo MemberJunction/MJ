@@ -34,7 +34,7 @@ graph TD
     Q -->|POST /v1/systemone| H["SubQ Decisions API<br/>(subq-snap-preview)"]
 ```
 
-`BaseSystemOneDecision` owns the System One request and answer mapping. `SystemOneDecision` adds the endpoint, the optional token and error messages that name what the server said. `PerplexityDecision` adds Perplexity's endpoint, the key check and Perplexity's error messages.
+`BaseSystemOneDecision` owns the System One request and answer mapping. `SystemOneDecision` adds the endpoint, the optional token and error messages that name what the server said. `PerplexityDecision` and `SubQDecision` extend `BaseHostedSystemOneDecision`, which adds the fixed endpoint, the key check and the vendor's error messages; each supplies only its vendor's facts.
 
 ## Configuration
 
@@ -193,7 +193,7 @@ const result = await snap.Decide({
 });
 ```
 
-**As a fallback.** The shipped `Default Decision` prompt does not bind SubQ Snap, and its bindings are unchanged. Like every active `Decision` model, it joins `Default Decision`'s power-matched fallbacks once its key resolves. It is unmeasured in MJ, so its `PowerRank` is 43: farther from `Default Decision`'s target rank (57) than every other shipped Decision model, so it is the last fallback, after Mercury Decide (44) and Kev-0.8B (45). A credential bound to the `Subquadratic` vendor, or a default `API Key` credential, gives its row a key; on such a host `Default Decision` can fail over to SubQ's preview API once every earlier candidate has failed. To prevent that, set the row's `Status` to `Inactive`.
+**As a fallback.** `Default Decision`'s bindings are unchanged, but SubQ Snap, unmeasured in MJ, is its last power-matched fallback once its key resolves, because the fallbacks follow PowerRank distance from `Default Decision`'s target rank. A credential bound to the `Subquadratic` vendor, or a default `API Key` credential, gives its row a key; on such a host `Default Decision` can fail over to SubQ's preview API once every earlier candidate has failed. To prevent that, set the row's `Status` to `Inactive`.
 
 **Errors and failover.**
 
