@@ -32,6 +32,9 @@ const WIRE_LIKELIHOOD = 'noul';
 /** How much of a non-JSON error body goes into an error message. */
 const ERROR_SNIPPET_LENGTH = 500;
 
+/** What {@link RedactSecret} puts in place of a secret. */
+const REDACTED = '[redacted]';
+
 /** A parsed JSON object from a System One API, narrowed with {@link IsSystemOneWireObject} before use. */
 export type SystemOneWireObject = Record<string, unknown>;
 
@@ -130,9 +133,30 @@ export function TrimTrailingSlashes(value: string): string {
 /**
  * Creates an error that carries the HTTP status, so `BaseDecision.Decide()` classifies it through
  * `ErrorAnalyzer`: a 429 or 5xx then allows failover to another decision model.
+ * @param message The error message.
+ * @param status The HTTP status.
+ * @param errorType A classification the driver pins for this status. When given, the error carries it
+ * as a `Retriable` error that allows failover, which `ErrorAnalyzer` keeps as it is; when omitted,
+ * `ErrorAnalyzer` reads the message and the status.
  */
-export function CreateSystemOneHTTPError(message: string, status: number): SystemOneHTTPError {
-    return Object.assign(new Error(message), { status });
+export function CreateSystemOneHTTPError(message: string, status: number, errorType?: AIErrorType): SystemOneHTTPError {
+    const error: SystemOneHTTPError = Object.assign(new Error(message), { status });
+    if (errorType) {
+        error.errorInfo = { errorType, severity: 'Retriable', canFailover: true, httpStatusCode: status };
+    }
+    return error;
+}
+
+/**
+ * The text with every occurrence of the trimmed secret replaced by `[redacted]`, or the text unchanged
+ * when the secret is empty. Decision drivers run it over an error body before any of it reaches an
+ * error message, so no truncation can leave part of an API key behind.
+ * @param text The text to redact, such as a response body.
+ * @param secret The secret to remove, such as the credential's API key.
+ */
+export function RedactSecret(text: string, secret: string): string {
+    const trimmed = (secret ?? '').trim();
+    return trimmed.length > 0 ? text.split(trimmed).join(REDACTED) : text;
 }
 
 /**
@@ -142,6 +166,9 @@ export function CreateSystemOneHTTPError(message: string, status: number): Syste
  * - `detail` as an object `{ error_type, message }` (SubQ), as `error_type: message`;
  * - `error.message`, as OpenAI-style APIs send it (Perplexity, Inception, llama.cpp);
  * - `error` as a plain string.
+ *
+ * A `detail` that carries no message (a blank string, a list with no non-empty `msg`, an object with no
+ * non-empty `message`) falls through to `error`, so it never hides the vendor's real message.
  * @param bodyText The response body as text; anything that is not a JSON object gives an empty string.
  */
 export function ReadSystemOneErrorMessage(bodyText: string): string {
@@ -149,28 +176,28 @@ export function ReadSystemOneErrorMessage(bodyText: string): string {
     if (!IsSystemOneWireObject(body)) {
         return '';
     }
-    const detail = body['detail'];
-    if (typeof detail === 'string') {
-        return detail.trim();
+    const detail = readDetailMessage(body['detail']);
+    if (detail) {
+        return detail;
     }
+    const error = body['error'];
+    return NonEmptyString(IsSystemOneWireObject(error) ? error['message'] : error) ?? '';
+}
+
+/** The message in an error body's `detail` (a string, a FastAPI list, or SubQ's object), or undefined when it has none. */
+function readDetailMessage(detail: unknown): string | undefined {
     if (Array.isArray(detail)) {
-        return detail
-            .map(d => (IsSystemOneWireObject(d) ? NonEmptyString(d['msg']) ?? '' : ''))
-            .filter(m => m.length > 0)
-            .join('; ');
+        const messages = detail
+            .map(d => (IsSystemOneWireObject(d) ? NonEmptyString(d['msg']) : undefined))
+            .filter((m): m is string => m !== undefined);
+        return messages.length > 0 ? messages.join('; ') : undefined;
     }
     if (IsSystemOneWireObject(detail)) {
         const message = NonEmptyString(detail['message']);
         const errorType = NonEmptyString(detail['error_type']);
-        if (message) {
-            return errorType ? `${errorType}: ${message}` : message;
-        }
+        return message && errorType ? `${errorType}: ${message}` : message;
     }
-    const error = body['error'];
-    if (IsSystemOneWireObject(error) && typeof error['message'] === 'string') {
-        return error['message'].trim();
-    }
-    return typeof error === 'string' ? error.trim() : '';
+    return NonEmptyString(detail);
 }
 
 /**
@@ -266,7 +293,8 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
      * The message of the error thrown for a non-2xx response. Defaults to the status and the first 500
      * characters of the body.
      * @param status The HTTP status.
-     * @param bodyText The response body as text, possibly empty.
+     * @param bodyText The response body as text, possibly empty, with the API key already redacted
+     * ({@link RedactSecret}).
      */
     protected DescribeHTTPError(status: number, bodyText: string): string {
         const snippet = bodyText.slice(0, ERROR_SNIPPET_LENGTH);
@@ -371,13 +399,9 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
             signal,
         });
         if (!res.ok) {
-            const text = await res.text().catch(() => '');
-            const error = CreateSystemOneHTTPError(this.DescribeHTTPError(res.status, text), res.status);
-            const errorType = this.GetHTTPErrorType(res.status);
-            if (errorType) {
-                error.errorInfo = { errorType, severity: 'Retriable', canFailover: true, httpStatusCode: res.status };
-            }
-            throw error;
+            // Redacted before DescribeHTTPError sees it, so neither an override nor a truncation can leak the key.
+            const text = RedactSecret(await res.text().catch(() => ''), this.Credential.APIKey);
+            throw CreateSystemOneHTTPError(this.DescribeHTTPError(res.status, text), res.status, this.GetHTTPErrorType(res.status));
         }
         let parsed: unknown;
         try {
@@ -495,6 +519,71 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
         return {
             success: true,
             answer: { Kind: 'Score', Value: clamp(score, 0, question.Levels.length - 1), Probabilities: probabilities, Confidence: ReadDecisionConfidence(answer, probabilities) },
+        };
+    }
+}
+
+/**
+ * A {@link BaseSystemOneDecision} for a hosted System One API at one fixed URL that requires an API key,
+ * such as Perplexity's, SubQ's and Inception's Decisions APIs. It owns what those drivers share:
+ * - **The endpoint**, {@link EndpointURL}: the constructor's URL, else the credential's `endpoint` (an
+ *   `API Key with Endpoint` credential), else {@link DefaultEndpoint}. Each is the full request URL, used
+ *   for every model, since the model travels in the body. Trailing slashes are removed.
+ * - **Error messages**: the vendor's message read with {@link ReadSystemOneErrorMessage}, else the base
+ *   default (the status and the start of the body).
+ * - **The missing-key check**: no API key fails before any request, as a `NoCredentials` error that allows
+ *   failover, since another candidate may be configured.
+ *
+ * A subclass supplies {@link ServiceName}, {@link DefaultModel}, {@link DefaultEndpoint},
+ * {@link APIKeyDescription} and {@link LegacyKeyVariable}, and, when `ErrorAnalyzer` misreads one of its
+ * vendor's statuses, {@link GetHTTPErrorType}.
+ */
+export abstract class BaseHostedSystemOneDecision extends BaseSystemOneDecision {
+    private _endpointOverride: string | undefined;
+
+    /**
+     * Creates the driver.
+     * @param apiKey The vendor's API key, or an AI Credential's values in JSON.
+     * @param endpointURL Overrides the credential's `endpoint` and {@link DefaultEndpoint}.
+     */
+    constructor(apiKey: string, endpointURL?: string) {
+        super(apiKey);
+        this._endpointOverride = NonEmptyString(endpointURL);
+    }
+
+    /** The Decisions API endpoint URL: the constructor's, else the credential's, else {@link DefaultEndpoint}, without trailing slashes. */
+    public get EndpointURL(): string {
+        return TrimTrailingSlashes(this._endpointOverride ?? this.Credential.Endpoint ?? this.DefaultEndpoint);
+    }
+
+    /** The vendor's endpoint, used when neither the constructor nor the credential gives one. */
+    protected abstract get DefaultEndpoint(): string;
+
+    /** What the credential's `apiKey` must be, for the missing-key message, such as `'a Perplexity API key'`. */
+    protected abstract get APIKeyDescription(): string;
+
+    /** The legacy environment variable that can hold the key, such as `'AI_VENDOR_API_KEY__PERPLEXITYDECISION'`. */
+    protected abstract get LegacyKeyVariable(): string;
+
+    /** The one endpoint, whatever the model: the model travels in the body. */
+    protected GetEndpointURL(_model: string): string {
+        return this.EndpointURL;
+    }
+
+    /** The vendor's message when the body has one; otherwise the base default, the status and the start of the body. */
+    protected DescribeHTTPError(status: number, bodyText: string): string {
+        const message = ReadSystemOneErrorMessage(bodyText);
+        return message ? `${this.ServiceName} returned HTTP ${status}: ${message}` : super.DescribeHTTPError(status, bodyText);
+    }
+
+    /** No API key stops the call before any request, as a `NoCredentials` error that allows failover. */
+    protected GetConfigurationError(): SystemOneConfigurationError | undefined {
+        if (this.Credential.APIKey.trim().length > 0) {
+            return undefined;
+        }
+        return {
+            ErrorType: 'NoCredentials',
+            Message: `${this.ServiceName} has no API key: bind an 'API Key' credential whose apiKey is ${this.APIKeyDescription}, or set ${this.LegacyKeyVariable}`,
         };
     }
 }
