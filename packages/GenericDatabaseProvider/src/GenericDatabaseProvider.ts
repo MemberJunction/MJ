@@ -111,7 +111,7 @@ import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-
 import { TransactionFrameTracker } from './TransactionFrameTracker';
 import { TransactionAffinity, type TransactionMembership } from './TransactionAffinity.js';
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
-import { EncryptionEngine } from '@memberjunction/encryption';
+import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
 /**
@@ -881,6 +881,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         const decryptedValue = await encryptionEngine.Decrypt(fieldValue, user);
                         processedRow[field.Name] = decryptedValue;
                     } catch (decryptError) {
+                        // A key this install wasn't given (an app's own key) is configuration, not a
+                        // fault: one warning per key, and the value stays encrypted.
+                        if (IsEncryptionKeyUnavailable(decryptError)) {
+                            ReportEncryptionKeyUnavailable(decryptError);
+                            continue;
+                        }
                         const message = decryptError instanceof Error ? decryptError.message : String(decryptError);
                         LogError(
                             `Failed to decrypt field "${field.Name}" on entity "${entityInfo.Name}": ${message}. ` +

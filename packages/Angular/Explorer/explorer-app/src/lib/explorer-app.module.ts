@@ -17,7 +17,7 @@ import { MJExplorerAppComponent } from './explorer-app.component';
 import { MJLoginSlotDirective } from './login-slot.directive';
 import { MJLoginPickerComponent } from '@memberjunction/ng-auth-services';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJ_STARTUP_VALIDATION } from '@memberjunction/ng-bootstrap';
-import { ShellModule, StartupValidationService, SystemValidationBannerComponent, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
+import { ShellModule, StartupValidationService, SystemValidationBannerComponent, ServerConnectivityBannerComponent, TemplateUserBannerComponent } from '@memberjunction/ng-explorer-core';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { FeedbackModule } from '@memberjunction/ng-feedback';
 import { MJServiceWorkerModule, UpdateNotificationComponent } from '@memberjunction/ng-explorer-service-worker';
@@ -34,6 +34,7 @@ import { MJServiceWorkerModule, UpdateNotificationComponent } from '@memberjunct
     MJLoginSlotDirective,  // Standalone — host templates for the login screen's slots
     SystemValidationBannerComponent,  // Standalone component
     ServerConnectivityBannerComponent,  // Standalone component
+    TemplateUserBannerComponent,  // Standalone component
     ConversationsModule,
     UpdateNotificationComponent,  // Standalone — bottom-right "Update available" toast (no-op when SW disabled)
     FeedbackModule.forRoot({
