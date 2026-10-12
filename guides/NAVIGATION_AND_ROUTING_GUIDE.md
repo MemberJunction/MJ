@@ -192,6 +192,17 @@ protected UpdateQueryParams(params: Record<string, string | null>): void {
 }
 ```
 
+### A Tab's Params Reach Only the Resource It Shows
+
+With one unpinned tab, opening another app replaces that tab in place and keeps its ID. The component cache keys on app, resource type and record, not on tab ID, so the replaced component stays alive and still bound to the tab's ID. Without a check, it would receive the next resource's params too. Before this rule, a Home pin wrote `?dashboard=<id>` to Home's tab, the cached Dashboards Library received it and opened the dashboard in the Dashboards app, and Back looped.
+
+So `BaseResourceComponent` passes its own `Data` as the owner on both delivery paths:
+
+- `NavigationService.ObserveTabQueryParams(tabId, owner)` emits only while the tab shows `owner`.
+- The back/forward path checks `NavigationService.IsTabShowingResource(tabId, owner)`.
+
+A tab shows `owner` when the app, resource type, driver class, entity and record match the `ResourceData` the tab container gave the component. This is the read-side match to the write guard in `UpdateTabQueryParams`. A child that a host stamps with `ParentTabId` has no owner, so it still receives its host tab's params.
+
 ---
 
 ## URL Structure Reference

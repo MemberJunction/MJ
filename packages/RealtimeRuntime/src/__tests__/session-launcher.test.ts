@@ -1,0 +1,298 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import type { IMetadataProvider } from '@memberjunction/core';
+import type { RealtimeSessionClientPolicy } from '@memberjunction/ai-core-plus';
+import {
+    BaseRealtimeChannelClient,
+    DefaultRealtimeSessionLauncher,
+    RealtimeSessionRuntime,
+    type IRealtimeMediaHost,
+    type IRealtimeSessionLauncher,
+    type RealtimeSessionLaunchContext,
+    type RealtimeSessionLaunchRequest,
+    type StartRealtimeClientSessionResult,
+} from '../index';
+import { LegacyEchoChannel } from './channel-test-helpers';
+
+@RegisterClass(BaseRealtimeChannelClient, 'LauncherEchoChannel')
+class LauncherEcho extends LegacyEchoChannel {}
+
+@RegisterClass(BaseRealtimeClient, 'launcher-fake-provider')
+class LauncherFakeClient extends BaseRealtimeClient {
+    public async Connect(): Promise<void> {
+        this.emitStateChange('listening');
+    }
+    public SendText(): void {}
+    public CancelActiveResponse(): void {}
+    public SendContextNote(): void {}
+    public RequestSpokenUpdate(): void {}
+    public SendToolResult(): void {}
+    public SetMuted(): void {}
+    public async Disconnect(): Promise<void> {}
+    public get IsBusy(): boolean {
+        return false;
+    }
+    public get IsAudioPlaying(): boolean {
+        return false;
+    }
+}
+
+class Host implements IRealtimeMediaHost {
+    public async AcquireMicrophone(): Promise<MediaStream> {
+        return { getTracks: () => [], getAudioTracks: () => [] } as unknown as MediaStream;
+    }
+}
+
+function mintResult(overrides: Partial<StartRealtimeClientSessionResult> = {}): StartRealtimeClientSessionResult {
+    return {
+        AgentSessionId: 'session-1',
+        ConversationId: 'conv-1',
+        Provider: 'launcher-fake-provider',
+        Model: 'm',
+        EphemeralToken: 't',
+        ExpiresAt: '2030-01-01T00:00:00Z',
+        SessionConfigJson: '{}',
+        ModelName: 'Fake',
+        NarrationInstructionsTemplate: null,
+        PriorChannelStatesJson: null,
+        ...overrides,
+    };
+}
+
+interface GqlCall {
+    query: string;
+    variables: Record<string, unknown>;
+}
+
+/** A GraphQL provider that answers the stock mint and records every call. */
+class MintProvider {
+    public readonly sessionId = 'transport-1';
+    public Calls: GqlCall[] = [];
+    public RejectChannelScoping = false;
+    public Entities: unknown[] = [{ Name: 'MJ: AI Agent Channels' }];
+    public async ExecuteGQL(query: string, variables: Record<string, unknown>): Promise<unknown> {
+        this.Calls.push({ query, variables });
+        if (query.includes('mutation StartRealtimeClientSession')) {
+            if (this.RejectChannelScoping && query.includes('channelCandidatesJson')) {
+                throw new Error('Unknown argument "channelCandidatesJson" on field "Mutation.StartRealtimeClientSession".');
+            }
+            return { StartRealtimeClientSession: mintResult() };
+        }
+        return {};
+    }
+    public PushStatusUpdates(): { subscribe(): { unsubscribe(): void } } {
+        return { subscribe: () => ({ unsubscribe: () => undefined }) };
+    }
+    public mints(): GqlCall[] {
+        return this.Calls.filter((c) => c.query.includes('mutation StartRealtimeClientSession'));
+    }
+}
+
+function request(overrides: Partial<RealtimeSessionLaunchRequest> = {}): RealtimeSessionLaunchRequest {
+    return {
+        TargetAgentId: 'agent-1',
+        ConversationId: null,
+        LastSessionId: null,
+        PreferredModelId: null,
+        ClientTools: [],
+        CoAgentId: null,
+        ConfigOverridesJson: null,
+        RecordingConsent: false,
+        RecordingStartedAt: null,
+        MediaCollectionId: null,
+        ApplicationId: null,
+        AppContext: null,
+        ChannelCandidatesJson: null,
+        ...overrides,
+    };
+}
+
+function stubRegistry(): void {
+    vi.spyOn(AIEngineBase, 'GetProviderInstance').mockReturnValue({
+        Config: async () => undefined,
+        AgentChannels: [{ ID: 'c1', Name: 'Echo', ClientPluginClass: 'LauncherEchoChannel', IsActive: true }],
+    } as unknown as AIEngineBase);
+}
+
+function build(provider: MintProvider = new MintProvider()) {
+    const runtime = new RealtimeSessionRuntime(new Host());
+    runtime.Provider = provider as unknown as IMetadataProvider;
+    return { runtime, provider };
+}
+
+async function start(runtime: RealtimeSessionRuntime): Promise<void> {
+    await runtime.StartRealtimeSession('agent-1', 'conv-9', null, 'Sage', null, [{ Name: 'Host_Tool', Description: 'd', ParametersSchema: { type: 'object' } }], null, null, true, null, 'app-1');
+}
+
+describe('DefaultRealtimeSessionLauncher', () => {
+    beforeEach(() => vi.spyOn(console, 'warn').mockImplementation(() => undefined));
+    afterEach(() => vi.restoreAllMocks());
+
+    it('mints through the stock mutation with every request field mapped to its variable', async () => {
+        const provider = new MintProvider();
+        const result = await new DefaultRealtimeSessionLauncher().Launch(
+            request({
+                ConversationId: 'conv-1',
+                LastSessionId: 'prior',
+                PreferredModelId: 'model-1',
+                ClientTools: [{ Name: 'T', Description: 'd', ParametersSchema: { type: 'object' } }],
+                CoAgentId: 'co',
+                ConfigOverridesJson: '{"a":1}',
+                RecordingConsent: true,
+                RecordingStartedAt: '2030-01-01T00:00:00Z',
+                MediaCollectionId: 'kit',
+                ApplicationId: 'app',
+                AppContext: { Route: '/x' } as never,
+            }),
+            { Provider: provider as unknown as IMetadataProvider }
+        );
+        expect(result.EphemeralToken).toBe('t');
+        const [mint] = provider.mints();
+        expect(mint.variables).toMatchObject({
+            targetAgentId: 'agent-1',
+            conversationId: 'conv-1',
+            lastSessionId: 'prior',
+            preferredModelId: 'model-1',
+            coAgentId: 'co',
+            configOverridesJson: '{"a":1}',
+            recordingConsent: true,
+            recordingStartedAt: '2030-01-01T00:00:00Z',
+            mediaCollectionId: 'kit',
+            applicationId: 'app',
+        });
+        expect(JSON.parse(String(mint.variables['clientToolsJson']))).toHaveLength(1);
+        expect(JSON.parse(String(mint.variables['appContextJson']))).toEqual({ Route: '/x' });
+    });
+
+    it('sends null — never an empty array — when there are no client tools', async () => {
+        const provider = new MintProvider();
+        await new DefaultRealtimeSessionLauncher().Launch(request(), { Provider: provider as unknown as IMetadataProvider });
+        expect(provider.mints()[0].variables['clientToolsJson']).toBeNull();
+    });
+
+    it('uses the channel-scoping mutation only when there are candidates', async () => {
+        const provider = new MintProvider();
+        const launcher = new DefaultRealtimeSessionLauncher();
+        const context: RealtimeSessionLaunchContext = { Provider: provider as unknown as IMetadataProvider };
+        await launcher.Launch(request(), context);
+        await launcher.Launch(request({ ChannelCandidatesJson: '[{"Key":"Echo"}]' }), context);
+        const [plain, scoped] = provider.mints();
+        expect(plain.query).not.toContain('channelCandidatesJson');
+        expect(scoped.query).toContain('$channelCandidatesJson');
+        expect(scoped.query).toContain('ClientPolicyJson');
+        expect(scoped.variables['channelCandidatesJson']).toBe('[{"Key":"Echo"}]');
+    });
+
+    it('retries without channel scoping against a server that predates it, and remembers', async () => {
+        const provider = new MintProvider();
+        provider.RejectChannelScoping = true;
+        const launcher = new DefaultRealtimeSessionLauncher();
+        const context: RealtimeSessionLaunchContext = { Provider: provider as unknown as IMetadataProvider };
+        await launcher.Launch(request({ ChannelCandidatesJson: '[]' }), context);
+        expect(provider.mints()).toHaveLength(2); // rejected, then the plain mutation
+        await launcher.Launch(request({ ChannelCandidatesJson: '[]' }), context);
+        expect(provider.mints()).toHaveLength(3); // asked once; the second mint went straight to the plain mutation
+    });
+
+    it('surfaces any other mint failure instead of swallowing it', async () => {
+        const provider = new MintProvider();
+        provider.ExecuteGQL = async () => {
+            throw new Error('Not authorized');
+        };
+        await expect(new DefaultRealtimeSessionLauncher().Launch(request({ ChannelCandidatesJson: '[]' }), { Provider: provider as unknown as IMetadataProvider })).rejects.toThrow('Not authorized');
+    });
+
+    it('rejects a mint that carries no ephemeral token', async () => {
+        const provider = new MintProvider();
+        provider.ExecuteGQL = async () => ({ StartRealtimeClientSession: mintResult({ EphemeralToken: '' }) });
+        await expect(new DefaultRealtimeSessionLauncher().Launch(request(), { Provider: provider as unknown as IMetadataProvider })).rejects.toThrow('no ephemeral token');
+    });
+});
+
+describe('RealtimeSessionRuntime.Launcher', () => {
+    beforeEach(() => {
+        stubRegistry();
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    it('defaults to the stock launcher, and a default session mints exactly as it always did', async () => {
+        const { runtime, provider } = build();
+        expect(runtime.Launcher).toBeInstanceOf(DefaultRealtimeSessionLauncher);
+        await start(runtime);
+        const [mint] = provider.mints();
+        expect(mint.variables).toMatchObject({ targetAgentId: 'agent-1', conversationId: 'conv-9', applicationId: 'app-1', recordingConsent: true });
+        expect(mint.query).toContain('$channelCandidatesJson'); // Phase 1's channel candidates still ride the default mint
+        const candidates = JSON.parse(String(mint.variables['channelCandidatesJson'])) as Array<{ Key: string }>;
+        expect(candidates.map((c) => c.Key)).toEqual(['Echo']);
+        const tools = JSON.parse(String(mint.variables['clientToolsJson'])) as Array<{ Name: string }>;
+        expect(tools.map((t) => t.Name)).toEqual(['Host_Tool', 'Echo_Say']); // host tools, then the in-scope channel's native tools
+        expect(runtime.IsActive).toBe(true);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('mints through a custom launcher INSTEAD of the stock mutation, with the resolved request', async () => {
+        const { runtime, provider } = build();
+        const seen: Array<{ request: RealtimeSessionLaunchRequest; context: RealtimeSessionLaunchContext }> = [];
+        const launcher: IRealtimeSessionLauncher = {
+            Launch: async (req, context) => {
+                seen.push({ request: req, context });
+                return mintResult();
+            },
+        };
+        runtime.Launcher = launcher;
+        await start(runtime);
+
+        expect(provider.mints()).toHaveLength(0); // no Proxy, no stock mutation
+        expect(runtime.IsActive).toBe(true);
+        expect(runtime.CurrentAgentSessionId).toBe('session-1');
+        const { request: req, context } = seen[0];
+        expect(req).toMatchObject({ TargetAgentId: 'agent-1', ConversationId: 'conv-9', ApplicationId: 'app-1', RecordingConsent: true });
+        expect(req.ClientTools.map((t) => t.Name)).toEqual(['Host_Tool', 'Echo_Say']);
+        expect(JSON.parse(String(req.ChannelCandidatesJson))[0].Key).toBe('Echo');
+        expect(context.Provider).toBe(provider);
+        await runtime.EndRealtimeSession();
+    });
+
+    it("applies the policy a custom launcher's mint returns", async () => {
+        const { runtime } = build();
+        const policy: RealtimeSessionClientPolicy = { Version: 1, Channels: [] }; // a server that puts NO channel in this session
+        runtime.Launcher = { Launch: async () => mintResult({ ClientPolicyJson: JSON.stringify(policy) }) };
+        await start(runtime);
+        expect(runtime.ActiveChannels).toHaveLength(0);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('fails the start, keeping the error, when the launcher throws', async () => {
+        const { runtime } = build();
+        runtime.Launcher = {
+            Launch: async () => {
+                throw new Error('guest exchange refused');
+            },
+        };
+        await start(runtime);
+        expect(runtime.IsActive).toBe(false);
+        expect(runtime.LastStartError?.message).toContain('guest exchange refused');
+    });
+
+    it('fails the start when a launcher returns no ephemeral token', async () => {
+        const { runtime } = build();
+        runtime.Launcher = { Launch: async () => mintResult({ EphemeralToken: '' }) };
+        await start(runtime);
+        expect(runtime.IsActive).toBe(false);
+        expect(runtime.LastStartError?.message).toContain('no ephemeral token');
+    });
+
+    it('restores the stock launcher when set to null', async () => {
+        const { runtime, provider } = build();
+        runtime.Launcher = { Launch: async () => mintResult() };
+        runtime.Launcher = null;
+        expect(runtime.Launcher).toBeInstanceOf(DefaultRealtimeSessionLauncher);
+        await start(runtime);
+        expect(provider.mints()).toHaveLength(1);
+        await runtime.EndRealtimeSession();
+    });
+});

@@ -44,7 +44,7 @@ import {
     KnowledgeHubMetadataEngine,
 } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
-import { EntityDocumentTemplateDataBuilder, EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
+import { CombineExtraFilters, EntityDocumentTemplateDataBuilder, EntityVectorSyncer, GetEntityDocumentRecordFilter, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
 import { AIEngine } from "@memberjunction/aiengine";
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
@@ -106,6 +106,17 @@ const MAX_RETAINED_RESULTS = 1000;
 
 /** Default batch size for parallel database saves */
 const SAVE_BATCH_SIZE = 20;
+
+/**
+ * How many times TopK to query for when the entity document has a record filter. Candidates that
+ * fail the filter are dropped after the query, so asking for only TopK would let them take slots
+ * that a genuine duplicate should have had; the result is trimmed back to TopK afterwards.
+ *
+ * A heuristic: when most of a record's nearest neighbors fail the filter, fewer than TopK can
+ * survive. Those neighbors are vectors sync stored before the filter excluded their records;
+ * once stale vectors are removed from the index (#5201), the over-fetch should rarely matter.
+ */
+const RECORD_FILTER_TOPK_FACTOR = 3;
 
 /**
  * The entity-document ReasoningModes that turn on the entry-time check. Both carry a typed
@@ -297,7 +308,7 @@ export class DuplicateRecordDetector extends VectorBase {
             return response;
         }
 
-        const recordIDs = await this.LoadRecordIDsToCheck(params, entityInfo);
+        const recordIDs = await this.LoadRecordIDsToCheck(params, entityInfo, this.GetRecordFilter(entityDocument));
         if (recordIDs.length === 0) {
             response.ErrorMessage = 'No records found to check for duplicates';
             response.Status = 'Error';
@@ -542,10 +553,15 @@ export class DuplicateRecordDetector extends VectorBase {
         const vectors = embedResult.Vectors;
 
         const topK = options.TopK ?? DEFAULT_TOP_K;
+        const recordFilter = this.GetRecordFilter(entityDocument);
         const queryResults = await step('querying the vector index', () => this.QueryDuplicatesForRecords(
-            [record], vectors, templateTexts, entityDocument, topK, options,
+            [record], vectors, templateTexts, entityDocument, this.CandidateQueryTopK(topK, recordFilter), options,
             this.GetQueryConcurrency(entityDocument)
         ));
+        if (recordFilter) {
+            await step('applying the record filter', () => this.FilterNonExistentMatches(queryResults, record.EntityInfo, recordFilter));
+        }
+        this.TrimToTopK(queryResults, topK);
         return queryResults[0] ?? null;
     }
 
@@ -876,6 +892,8 @@ export class DuplicateRecordDetector extends VectorBase {
 
         // 6d: Sub-batch embedding + vector queries in chunks of VECTOR_QUERY_BATCH_SIZE
         //     to keep API payload sizes and memory bounded
+        const recordFilter = this.GetRecordFilter(entityDocument);
+        const queryTopK = this.CandidateQueryTopK(topK, recordFilter);
         const allQueryResults: RecordQueryResult[] = [];
         const subBatches = chunkArray(records, VECTOR_QUERY_BATCH_SIZE);
 
@@ -899,15 +917,17 @@ export class DuplicateRecordDetector extends VectorBase {
             // Query vector DB for each record in the sub-batch with concurrency control
             this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
             const subQueryResults = await this.QueryDuplicatesForRecords(
-                subRecords, subEmbedResult.Vectors, subTemplateTexts, entityDocument, topK, options, concurrency
+                subRecords, subEmbedResult.Vectors, subTemplateTexts, entityDocument, queryTopK, options, concurrency
             );
             allQueryResults.push(...subQueryResults);
         }
 
         // 6d.5: Drop matches that point to records which no longer exist in the source
         //       entity (stale "ghost" vectors left behind when records are deleted or
-        //       re-seeded with new IDs). See FilterNonExistentMatches() for the why.
-        await this.FilterNonExistentMatches(allQueryResults, entityInfo);
+        //       re-seeded with new IDs), or that fail the entity document's record filter.
+        //       See FilterNonExistentMatches() for the why.
+        await this.FilterNonExistentMatches(allQueryResults, entityInfo, recordFilter);
+        this.TrimToTopK(allQueryResults, topK);
 
         // 6e: Persist match results and update run details
         this.reportProgress(options, 'Matching', totalRecords, processedSoFar + records.length, matchesSoFar, startTime);
@@ -938,15 +958,33 @@ export class DuplicateRecordDetector extends VectorBase {
      * `TotalItemCount` from that page, so it checks a fraction of the records and still reports
      * itself complete: "1000 of 1000" on a 61,671-record entity.
      */
-    protected async LoadRecordIDsToCheck(params: PotentialDuplicateRequest, entityInfo: EntityInfo): Promise<string[]> {
+    protected async LoadRecordIDsToCheck(params: PotentialDuplicateRequest, entityInfo: EntityInfo, recordFilter?: string | null): Promise<string[]> {
         if (params.ListID) {
-            return this.LoadRecordIDsFromList(params.ListID);
+            return this.KeepRecordIDsPassingFilter(await this.LoadRecordIDsFromList(params.ListID), entityInfo, recordFilter);
         }
         if (params.ViewID) {
-            return this.LoadRecordIDsFromView(params.ViewID, entityInfo);
+            return this.KeepRecordIDsPassingFilter(await this.LoadRecordIDsFromView(params.ViewID, entityInfo), entityInfo, recordFilter);
         }
-        // ExtraFilter or all records
-        return this.LoadRecordIDsFromEntity(entityInfo, params.ExtraFilter);
+        // ExtraFilter or all records, narrowed by the record filter
+        return this.LoadRecordIDsFromEntity(entityInfo, CombineExtraFilters(params.ExtraFilter, recordFilter));
+    }
+
+    /**
+     * Narrow a list's or view's record ids to those that pass the entity document's record filter,
+     * so a record the filter excludes is never checked whatever the run's source.
+     *
+     * @returns the ids unchanged when there is no filter, otherwise those that pass it, in order
+     */
+    protected async KeepRecordIDsPassingFilter(ids: string[], entityInfo: EntityInfo, recordFilter?: string | null): Promise<string[]> {
+        if (!recordFilter || ids.length === 0) {
+            return ids;
+        }
+        const passing = await this.LoadExistingRecordIDs(entityInfo, entityInfo.FirstPrimaryKey.Name, ids, recordFilter); // first-pk-ok: LoadExistingRecordIDs reads pkField only when PrimaryKeys.length === 1; composite keys are rebuilt from the segment
+        const kept = ids.filter(id => passing.has(NormalizeUUID(id)));
+        if (kept.length < ids.length) {
+            LogStatus(`Duplicate detection: ${ids.length - kept.length} of ${ids.length} record(s) excluded by the entity document's record filter`);
+        }
+        return kept;
     }
 
     /**
@@ -1646,9 +1684,14 @@ export class DuplicateRecordDetector extends VectorBase {
      * batched query and drop any that don't resolve. Keys are compared in compact URL-segment
      * form, so this works for a single-column key of any name and for composite keys.
      *
+     * With the entity document's record filter, a match whose record fails the filter is dropped
+     * the same way: its vector may predate the filter, or the record may have changed since sync.
+     *
      * Mutates `queryResults` in place.
+     *
+     * @param recordFilter the entity document's record filter ({@link GetRecordFilter}), if any
      */
-    protected async FilterNonExistentMatches(queryResults: RecordQueryResult[], entityInfo: EntityInfo): Promise<void> {
+    protected async FilterNonExistentMatches(queryResults: RecordQueryResult[], entityInfo: EntityInfo, recordFilter?: string | null): Promise<void> {
         // Collect every distinct match key across the batch, in the same compact segment form
         // LoadExistingRecordIDs reads back off the live rows.
         const matchIds = new Set<string>();
@@ -1664,7 +1707,7 @@ export class DuplicateRecordDetector extends VectorBase {
             return;
         }
 
-        const existing = await this.LoadExistingRecordIDs(entityInfo, entityInfo.FirstPrimaryKey.Name, [...matchIds]); // first-pk-ok: LoadExistingRecordIDs reads pkField only when PrimaryKeys.length === 1; composite keys are rebuilt from the segment
+        const existing = await this.LoadExistingRecordIDs(entityInfo, entityInfo.FirstPrimaryKey.Name, [...matchIds], recordFilter); // first-pk-ok: LoadExistingRecordIDs reads pkField only when PrimaryKeys.length === 1; composite keys are rebuilt from the segment
 
         // Drop ghost (non-existent) matches in place.
         for (const qr of queryResults) {
@@ -1674,7 +1717,10 @@ export class DuplicateRecordDetector extends VectorBase {
             );
             const removed = before - qr.Duplicates.Duplicates.length;
             if (removed > 0) {
-                LogStatus(`Duplicate detection: dropped ${removed} stale match(es) for source ${qr.SourceKey.ToString()} (records no longer exist — likely orphaned vectors)`);
+                const reason = recordFilter
+                    ? 'records no longer exist or fail the entity document\'s record filter'
+                    : 'records no longer exist — likely orphaned vectors';
+                LogStatus(`Duplicate detection: dropped ${removed} match(es) for source ${qr.SourceKey.ToString()} (${reason})`);
             }
         }
     }
@@ -1687,26 +1733,33 @@ export class DuplicateRecordDetector extends VectorBase {
      *
      * @param pkField the single key column — read only when the entity has exactly one primary
      * key; a composite key's columns come from `entityInfo.PrimaryKeys`.
+     * @param recordFilter the entity document's record filter, if any: only records that also pass
+     * it count as existing
+     * @throws when a record filter is set and can't be applied — failing open would let the records
+     * it excludes through
      */
-    protected async LoadExistingRecordIDs(entityInfo: EntityInfo, pkField: string, ids: string[]): Promise<Set<string>> {
+    protected async LoadExistingRecordIDs(entityInfo: EntityInfo, pkField: string, ids: string[], recordFilter?: string | null): Promise<Set<string>> {
         const existing = new Set<string>();
         const singleColumn = entityInfo.PrimaryKeys.length === 1;
         const keyFields = entityInfo.PrimaryKeys.map(pk => pk.Name);
         for (const chunk of chunkArray(ids, DEFAULT_BATCH_SIZE)) {
-            const filter = singleColumn
+            const keyFilter = singleColumn
                 ? `${pkField} IN (${chunk.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',')})`
                 : chunk.map((id) => `(${CompositeKey.FromURLSegment(entityInfo, id).ToWhereClause()})`).join(' OR ');
             const rv = await this.RunView.RunView<Record<string, unknown>>({
                 EntityName: entityInfo.Name,
-                ExtraFilter: filter,
+                ExtraFilter: CombineExtraFilters(keyFilter, recordFilter),
                 Fields: keyFields,
                 ResultType: 'simple',
+                IgnoreMaxRows: true, // bounded by the key filter; an entity's UserViewMaxRows can be smaller than a chunk
             }, this.CurrentUser);
 
             if (rv.Success) {
                 for (const r of rv.Results) {
                     existing.add(NormalizeUUID(CompositeKey.FromEntityRecord(entityInfo, r).ToCompactURLSegment()));
                 }
+            } else if (recordFilter) {
+                throw new Error(`Failed to apply the entity document's record filter (${recordFilter}) to ${entityInfo.Name}: ${rv.ErrorMessage}`);
             } else {
                 // Fail open: if we can't verify existence, don't silently delete every match.
                 LogError(`FilterNonExistentMatches: failed to verify record existence for ${entityInfo.Name}: ${rv.ErrorMessage}`);
@@ -1716,6 +1769,36 @@ export class DuplicateRecordDetector extends VectorBase {
             }
         }
         return existing;
+    }
+
+    /**
+     * The entity document's record filter (`Configuration.recordFilter.extraFilter`): the records
+     * that take part in duplicate detection. A batch run checks only records that pass it, and every
+     * run offers only candidates that pass it. {@link CheckSingleRecord} and the entry-time check
+     * still check the record they are given, since the caller asked about that record. Vector sync
+     * applies the same filter to the records it vectorizes.
+     *
+     * @returns the predicate, or null when none is set
+     */
+    protected GetRecordFilter(entityDocument: MJEntityDocumentEntity): string | null {
+        return GetEntityDocumentRecordFilter(entityDocument);
+    }
+
+    /**
+     * How many neighbors to query for so that TopK survive the record filter: TopK times
+     * {@link RECORD_FILTER_TOPK_FACTOR} when a filter is set, TopK otherwise.
+     */
+    protected CandidateQueryTopK(topK: number, recordFilter: string | null): number {
+        return recordFilter ? topK * RECORD_FILTER_TOPK_FACTOR : topK;
+    }
+
+    /** Keep at most TopK candidates per result, in the order the query ranked them. Mutates in place. */
+    protected TrimToTopK(queryResults: RecordQueryResult[], topK: number): void {
+        for (const qr of queryResults) {
+            if (qr.Duplicates.Duplicates.length > topK) {
+                qr.Duplicates.Duplicates = qr.Duplicates.Duplicates.slice(0, topK);
+            }
+        }
     }
 
     // ─────────────────────────────────────────────

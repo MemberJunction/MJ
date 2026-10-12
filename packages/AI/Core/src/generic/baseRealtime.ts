@@ -440,6 +440,18 @@ export interface RealtimeSessionCapabilities {
     SupportedInboundTracks?: readonly RealtimeTrackDescriptor[];
 
     /**
+     * How many concurrent inbound VIDEO streams this model accepts: `0` when it accepts none, `1` for every
+     * model shipped so far, more for a future model that can look at several things at once. Absent
+     * means "derive it from {@link SupportedInboundTracks}" — one when an inbound video track is
+     * declared, none otherwise (see `ResolveMaxInboundVideoStreams`).
+     *
+     * A source arbiter maps however many live video sources exist onto this many streams: with `1` it
+     * picks one and tells the model when it switches; with enough streams for every source it passes
+     * them through untouched.
+     */
+    MaxInboundVideoStreams?: number;
+
+    /**
      * Media tracks this model can EMIT (model -> user). Absent or empty is read as "outbound audio
      * only". Non-audio outbound tracks (avatar video, haptics) are admitted by the contract because
      * direction is a property of a track rather than part of its type; no provider in play emits one

@@ -11,6 +11,7 @@ import { Float32VectorToBase64, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual
 import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse, VectorizeProgressUpdate } from '../generic/vectorSync.types';
 import { EntityDocumentConfiguration, EntityDocumentMetadataConfig, EntityDocumentFieldConfig } from '../generic/entityDocumentConfig.types';
+import { CombineExtraFilters, GetEntityDocumentRecordFilter, ParseEntityDocumentConfiguration } from '../generic/entityDocumentConfig';
 import { EntityDocumentCache } from '@memberjunction/entity-documents';
 import { PagedRecords } from './PagedRecords';
 import { EntityDocumentTemplateDataBuilder } from './EntityDocumentTemplateData';
@@ -502,14 +503,7 @@ export class EntityVectorSyncer extends VectorBase {
    * Returns an empty object if the Configuration column is null or invalid JSON.
    */
   private parseDocumentConfig(entityDocument: MJEntityDocumentEntity): EntityDocumentConfiguration {
-    const raw = entityDocument.Configuration;
-    if (!raw) return {};
-    try {
-      return JSON.parse(raw) as EntityDocumentConfiguration;
-    } catch {
-      LogError(`Invalid JSON in EntityDocument.Configuration for "${entityDocument.Name}", using defaults`);
-      return {};
-    }
+    return ParseEntityDocumentConfiguration(entityDocument);
   }
 
   /** Column types that can never be stored in vector metadata, even by explicit inclusion */
@@ -807,6 +801,16 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   /**
+   * The filter on the records a run vectorizes: the list's members when the run is for a list,
+   * and the entity document's record filter (`Configuration.recordFilter.extraFilter`) when one
+   * is set, ANDed together. Undefined when neither applies.
+   */
+  protected BuildRecordPageFilter(entity: EntityInfo, params: VectorizeEntityParams, entityDocument: MJEntityDocumentEntity, md: IMetadataProvider): string | undefined {
+    const listFilter = params.listID ? this.BuildListFilter(entity, md.ConfigData.MJCoreSchemaName, params.listID) : undefined;
+    return CombineExtraFilters(listFilter, GetEntityDocumentRecordFilter(entityDocument));
+  }
+
+  /**
    * Starts the async data paging loop that feeds records into the stream pipeline.
    */
   private startDataPaging(
@@ -842,6 +846,7 @@ export class EntityVectorSyncer extends VectorBase {
       }
 
       const useKeysetForThisRun = canUseKeyset && !params.StartingOffset;
+      const pageFilter = this.BuildRecordPageFilter(entity, params, entityDocument, md);
       let pageIndex = 0;
 
       let hasMore = true;
@@ -854,10 +859,7 @@ export class EntityVectorSyncer extends VectorBase {
           AfterKey: useKeysetForThisRun ? lastSeenKey : undefined,
         };
 
-        if (params.listID) {
-          const coreSchema: string = md.ConfigData.MJCoreSchemaName;
-          pageRecordRequest.Filter = this.BuildListFilter(entity, coreSchema, params.listID);
-        }
+        pageRecordRequest.Filter = pageFilter;
 
         const recordsPage: unknown[] = await super.PageRecordsByEntityID<unknown>(pageRecordRequest);
         const relatedData: TemplateParamData[] = await this.GetRelatedTemplateDataForBatch(entity, recordsPage, template);
