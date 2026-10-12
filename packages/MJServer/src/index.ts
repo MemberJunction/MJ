@@ -19,9 +19,10 @@ import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { Session as InspectorSession } from 'node:inspector';
-import { sep } from 'node:path';
+import { join, sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
 import { BuildSchemaOptions, buildSchemaSync, getMetadataStorage, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
@@ -1095,7 +1096,7 @@ const setupComplete$ = new ReplaySubject(1);
     const profile = await new Promise<unknown>((res, rej) =>
       profSession!.post('Profiler.stop', (e, r) => (e ? rej(e) : res((r as { profile: unknown }).profile)))
     );
-    const outPath = `/tmp/mjapi_schema_build_${process.pid}.cpuprofile`;
+    const outPath = join(mkdtempSync(join(tmpdir(), 'mjapi-schema-')), `mjapi_schema_build_${process.pid}.cpuprofile`);
     writeFileSync(outPath, JSON.stringify(profile));
     profSession.disconnect();
     // eslint-disable-next-line no-console

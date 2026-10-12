@@ -515,3 +515,39 @@ describe('TeamsBridge — the provider row metadata ships', () => {
         expect((await bridge.GetParticipants()).map((p) => p.ExternalId)).toContain('p-alice');
     });
 });
+
+describe('TeamsBridge — the meeting thread id in a join link', () => {
+    const parse = (address: string): string | undefined =>
+        (new TeamsBridge() as unknown as { parseThreadId(a: string): string | undefined }).parseThreadId(address);
+    /** What the parse replaced, kept here as the reference it must agree with. */
+    const byRegex = (address: string): string | undefined => {
+        let decoded: string;
+        try {
+            decoded = decodeURIComponent(address);
+        } catch {
+            decoded = address;
+        }
+        return decoded.match(/(19:meeting_[^/@]+@thread\.v2)/i)?.[1];
+    };
+
+    it.each([
+        'https://teams.microsoft.com/l/meetup-join/19%3Ameeting_ABC%40thread.v2/0',
+        'https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40THREAD.V2/0',
+        '19:meeting_@thread.v2',
+        '19:meeting_a/b@thread.v2',
+        '19:meeting_a/19:meeting_b@thread.v2',
+        '19:meeting_a@other 19:meeting_b@thread.v2',
+        '19:meeting_x@thread.v1',
+        'https://example.com/no-thread',
+        '%E0%A4%A',
+        '',
+    ])('agrees with the regex it replaced on %j', (address) => {
+        expect(parse(address)).toBe(byRegex(address));
+    });
+
+    it('reads a long run of repeated prefixes quickly', () => {
+        const started = Date.now();
+        expect(parse('19:meeting_'.repeat(50_000))).toBeUndefined();
+        expect(Date.now() - started).toBeLessThan(1000);
+    });
+});

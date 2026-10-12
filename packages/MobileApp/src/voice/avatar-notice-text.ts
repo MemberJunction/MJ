@@ -37,5 +37,6 @@ export const AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT = "Audio only: the avatar ca
  */
 export function AvatarNoticeText(reason: RealtimeAvatarUnavailableReason | null, agentName?: string | null): string {
     const sentence = reason === null ? AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT : AVATAR_NOTICE_TEXT[reason];
-    return sentence.replace('{Agent}', agentName?.trim() || 'the agent');
+    const name = agentName?.trim() || 'the agent';
+    return sentence.replace('{Agent}', () => name);
 }

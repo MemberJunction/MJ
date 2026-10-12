@@ -359,8 +359,27 @@ export class TeamsBridge extends BaseRealtimeBridge {
                 return address;
             }
         })();
-        const match = decoded.match(/(19:meeting_[^/@]+@thread\.v2)/i);
-        return match ? match[1] : undefined;
+        // Found by index, not a regex: an unanchored `19:meeting_[^/@]+` backtracks quadratically on a string that
+        // repeats `19:meeting_`. Same match: the first `19:meeting_` whose run up to the next `@` holds no `/`, is not
+        // empty, and continues `@thread.v2`.
+        const lower = decoded.replace(/[A-Z]/g, (c) => c.toLowerCase()); // ASCII only, so indexes line up with `decoded`
+        const prefix = '19:meeting_';
+        const suffix = '@thread.v2';
+        let at = -1;
+        for (let start = lower.indexOf(prefix); start >= 0; start = lower.indexOf(prefix, start + 1)) {
+            const bodyStart = start + prefix.length;
+            if (at < bodyStart) {
+                at = lower.indexOf('@', bodyStart);
+                if (at < 0) {
+                    return undefined;
+                }
+            }
+            const body = decoded.slice(bodyStart, at);
+            if (body.length > 0 && !body.includes('/') && lower.startsWith(suffix, at)) {
+                return decoded.slice(start, at + suffix.length);
+            }
+        }
+        return undefined;
     }
 
     /** Returns the PCM bytes of an outbound audio frame, preferring the binary payload. */
