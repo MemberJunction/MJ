@@ -1,9 +1,10 @@
 /**
- * decision-fixtures.ts — throwaway decision-routing fixtures for the cloudflare-clef, systemone-kev and
- * perplexity-decider bundles: real `MJ: Credentials` rows created through `CredentialEngine`,
- * `MJ: AI Credential Bindings` rows, a test Decision prompt with its own model bindings, a test Decision
- * model with model-vendor rows under keys the check chooses, a probe runner, a driver that is always
- * unavailable, and the cleanup for all of them.
+ * decision-fixtures.ts — throwaway decision-routing fixtures for the decision-model bundles
+ * (cloudflare-clef, systemone-kev, perplexity-decider, openai-decisions, subq-mercury-decisions): real
+ * `MJ: Credentials` rows created through `CredentialEngine`, `MJ: AI Credential Bindings` rows, a test
+ * Decision prompt with its own model bindings, a test Decision model with model-vendor rows under keys
+ * the check chooses, a probe runner, a driver that is always unavailable, and the cleanup for all of
+ * them; and the lookups and assertions the openai-decisions and subq-mercury-decisions bundles share.
  *
  * NOT a check bundle: it registers nothing on import.
  *
@@ -26,7 +27,7 @@
 import { randomBytes } from 'node:crypto';
 import { CompositeKey, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { BaseDecision, DecisionResult } from '@memberjunction/ai';
+import { BaseDecision, DecisionResult, type DecisionQuestion } from '@memberjunction/ai';
 import type {
     MJAICredentialBindingEntity,
     MJAIModelEntity,
@@ -37,12 +38,19 @@ import type {
 } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
-import { AIDecisionRunner, type AIDecisionParams, type FailoverAttempt, type ModelVendorCandidate } from '@memberjunction/ai-prompts';
+import {
+    AIDecisionParams,
+    AIDecisionRunner,
+    type AIDecisionRunResult,
+    type FailoverAttempt,
+    type ModelVendorCandidate,
+} from '@memberjunction/ai-prompts';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { EncryptionEngine } from '@memberjunction/encryption';
-import { Settle } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, Settle } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { AGENT_LIVE_FIXTURE_TAG, NewMarker, RequireRows } from './agent-live-shared';
+import { SCRIPTED_DECISION_DRIVER_CLASSES, type ScriptedDecision } from './decision-test-double';
 
 // ─── Constants ───────────────────────────────────────────────────────────────────────────────────
 
@@ -143,6 +151,137 @@ export async function ReadDecisionPromptRun(ctx: IntegrationCheckContext, id: st
         BypassCache: true,
     }, ctx.User);
     return RequireRows(result, `prompt run ${id}`)[0];
+}
+
+// ─── Shared lookups and assertions (openai-decisions, subq-mercury-decisions) ────────────────────────
+
+/** Asserts `actual` is a number within 1e-9 of `expected`. */
+export function AssertClose(actual: number | null | undefined, expected: number, message: string): void {
+    Assert(typeof actual === 'number' && Math.abs(actual - expected) < 1e-9, `${message} — expected ${expected}, got ${String(actual)}`);
+}
+
+/** A candidate as `model / vendor / driver`, for messages and order comparisons. */
+export function DescribeCandidate(candidate: ModelVendorCandidate): string {
+    return `${candidate.model.Name} / ${candidate.vendorName ?? 'no vendor'} / ${candidate.driverClass}`;
+}
+
+/** A model's name by ID, for comparisons and messages. */
+export function ModelNameOf(modelId: string): string {
+    return AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, modelId))?.Name ?? `unknown model ${modelId}`;
+}
+
+/** The model's model-vendor rows on one vendor, of one type. */
+export function ModelVendorRowsOf(model: MJAIModelEntityExtended, vendorName: string, type: MJAIModelVendorEntity['Type']): MJAIModelVendorEntity[] {
+    const vendorId = RequireVendorID(vendorName);
+    return AIEngine.Instance.ModelVendors.filter(mv => UUIDsEqual(mv.ModelID, model.ID) && UUIDsEqual(mv.VendorID, vendorId) && mv.Type === type);
+}
+
+/** Asserts an Inference Provider row is there and Active, names `driverClass` and `apiName`, has `maxInputTokens`, and does not stream. */
+export function AssertInferenceRow(row: MJAIModelVendorEntity | undefined, driverClass: string, apiName: string, maxInputTokens: number | null, label: string): void {
+    Assert(!!row, `${label}: missing`);
+    AssertEqual(row!.Status, 'Active', `${label}: status`);
+    AssertEqual(row!.DriverClass, driverClass, `${label}: DriverClass`);
+    AssertEqual(row!.APIName, apiName, `${label}: APIName`);
+    AssertEqual(row!.MaxInputTokens, maxInputTokens, `${label}: MaxInputTokens`);
+    AssertEqual(row!.SupportsStreaming, false, `${label}: SupportsStreaming`);
+}
+
+/** A decision request on `prompt`: `questions` about `state`, as the check's user. */
+export function NewDecisionParams(ctx: IntegrationCheckContext, prompt: MJAIPromptEntityExtended, state: AIDecisionParams['State'], questions: Record<string, DecisionQuestion>): AIDecisionParams {
+    const params = new AIDecisionParams();
+    params.prompt = prompt;
+    params.contextUser = ctx.User;
+    params.State = state;
+    params.Questions = questions;
+    return params;
+}
+
+/** Runs one decision, waits for its run row and hands its ID to `fixtures` for deletion. */
+export async function RunDecision(runner: AIDecisionRunner, params: AIDecisionParams, fixtures: DecisionFixtures): Promise<AIDecisionRunResult> {
+    const result = await runner.ExecuteDecision(params);
+    await runner.WaitForPendingPromptRunSaves();
+    fixtures.TrackPromptRun(result.promptRun?.ID);
+    return result;
+}
+
+/** Asserts the run succeeded on `modelName` through `vendorName` with `driverClass`. */
+export function AssertAnsweredBy(result: AIDecisionRunResult, modelName: string, vendorName: string, driverClass: string, label: string): void {
+    Assert(result.success, `${label}: the decision failed: ${result.errorMessage ?? 'no error message'}`);
+    AssertEqual(result.DriverClass, driverClass, `${label}: answering driver class`);
+    AssertEqual(result.modelInfo?.modelName, modelName, `${label}: answering model`);
+    AssertEqual(result.modelInfo?.vendorName, vendorName, `${label}: answering vendor`);
+}
+
+/**
+ * Asserts the run row names `modelName`, `vendorName` and Default Decision, succeeded, and has `tokens`
+ * and `cost` (to the column's 8 decimal places). Returns the row.
+ */
+export async function AssertRunRow(ctx: IntegrationCheckContext, result: AIDecisionRunResult, modelName: string, vendorName: string, tokens: number, cost: number, label: string): Promise<DecisionPromptRunRow> {
+    Assert(!!result.promptRun?.ID, `${label}: no prompt run`);
+    const row = await ReadDecisionPromptRun(ctx, result.promptRun!.ID);
+    Assert(!!row, `${label}: prompt run ${result.promptRun!.ID} was not found`);
+    Assert(UUIDsEqual(row!.PromptID, RequireDefaultDecisionPrompt().ID), `${label}: the run's prompt is not Default Decision`);
+    Assert(UUIDsEqual(row!.ModelID, RequireDecisionModel(modelName).ID), `${label}: run model ${row!.ModelID} is not ${modelName}`);
+    Assert(!!row!.VendorID && UUIDsEqual(row!.VendorID, RequireVendorID(vendorName)), `${label}: run vendor ${String(row!.VendorID)} is not ${vendorName}`);
+    AssertEqual(row!.Success, true, `${label}: run Success`);
+    AssertEqual(row!.TokensPrompt, tokens, `${label}: run TokensPrompt`);
+    Assert(typeof row!.Cost === 'number' && Math.abs(row!.Cost - cost) < 1e-8, `${label}: run Cost — expected ${cost} to 8 places, got ${String(row!.Cost)}`);
+    return row!;
+}
+
+/** The first of Jev and LLM Decision the runner has a credential for: what Default Decision selects. */
+export function ExpectedSelection(probe: DecisionRunnerProbe, candidates: ModelVendorCandidate[], prompt: MJAIPromptEntityExtended, params: AIDecisionParams): string {
+    const first = candidates.slice(0, 2).find(c => probe.HasCredentials(c, prompt, params));
+    return first ? first.model.Name : 'none';
+}
+
+/** Runs `params` through `probe`; asserts it selected `expected` and considered `candidates`, in order. */
+export async function AssertSelects(probe: DecisionRunnerProbe, params: AIDecisionParams, fixtures: DecisionFixtures, candidates: ModelVendorCandidate[], expected: string, label: string): Promise<AIDecisionRunResult> {
+    const result = await RunDecision(probe, params, fixtures);
+    Assert(result.success, `${label}: the decision failed: ${result.errorMessage ?? 'no error message'}`);
+    AssertEqual(result.modelInfo?.modelName, expected, `${label}: the selected model`);
+    AssertEqual(
+        JSON.stringify((result.modelSelectionInfo?.ModelsConsidered ?? []).map(c => `${c.model.Name} / ${c.vendor?.Name ?? 'no vendor'}`)),
+        JSON.stringify(candidates.map(c => `${c.model.Name} / ${c.vendorName ?? 'no vendor'}`)),
+        `${label}: the candidates the run considered`,
+    );
+    return result;
+}
+
+/** The candidate a failover leg must reach. */
+export interface FailoverTarget {
+    ModelName: string;
+    VendorName: string;
+    DriverClass: string;
+}
+
+/**
+ * With every decision driver but `target`'s unavailable (the scripted `decider` stands in for that one),
+ * asserts `Default Decision` fails over to `target`: each credentialed candidate ahead of it fails as
+ * `ServiceUnavailable`, LLM Decision among them, and `decider` answers once.
+ */
+export async function AssertDefaultDecisionFailsOverTo(probe: DecisionRunnerProbe, params: AIDecisionParams, fixtures: DecisionFixtures, decider: ScriptedDecision, target: FailoverTarget, label: string): Promise<void> {
+    const prompt = RequireDefaultDecisionPrompt();
+    const candidates = probe.Candidates(prompt, params);
+    const index = candidates.findIndex(c => c.model.Name === target.ModelName && c.vendorName === target.VendorName);
+    Assert(index >= 0, `${label}: ${target.ModelName} on ${target.VendorName} is not a candidate`);
+    const credentialedAhead = candidates.slice(0, index).filter(c => probe.HasCredentials(c, prompt, params));
+    const unavailable = SCRIPTED_DECISION_DRIVER_CLASSES.filter(name => name !== target.DriverClass);
+    const restores = unavailable.map(name => RegisterDecisionStandIn(name, UnavailableDecision));
+    const callsBefore = decider.Calls.length;
+    const attemptsBefore = probe.Attempts.length;
+    try {
+        const result = await RunDecision(probe, params, fixtures);
+        AssertAnsweredBy(result, target.ModelName, target.VendorName, target.DriverClass, label);
+    } finally {
+        for (const restore of restores.reverse()) {
+            restore();
+        }
+    }
+    AssertEqual(decider.Calls.length - callsBefore, 1, `${label}: calls the scripted driver answered`);
+    const attempts = probe.Attempts.slice(attemptsBefore).map(a => `${ModelNameOf(a.Attempt.modelId)}:${a.Attempt.errorType}`);
+    AssertEqual(JSON.stringify(attempts), JSON.stringify(credentialedAhead.map(c => `${c.model.Name}:ServiceUnavailable`)), `${label}: the failed attempts before ${target.ModelName}`);
+    Assert(attempts.some(a => a.startsWith('LLM Decision:')), `${label}: LLM Decision was not tried first`);
 }
 
 // ─── The probe runner ────────────────────────────────────────────────────────────────────────────

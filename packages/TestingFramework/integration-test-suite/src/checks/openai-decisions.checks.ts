@@ -42,9 +42,10 @@
  *
  * TRANSPORT: SERVER-ONLY by necessity: the guards are ClassFactory registrations in this process.
  *
- * FIXTURES: none seeded; the model is shipped metadata, read only. OD6 and OD7 create a credential and a
- * binding (decision-fixtures.ts) and delete them in a `finally`; Teardown deletes whatever a failed check
- * left, and every prompt run the bundle creates.
+ * FIXTURES: none seeded; the model is shipped metadata, read only. Each runner check tracks its prompt runs,
+ * and OD6 and OD7 create a credential and a binding (decision-fixtures.ts), all deleted in a `finally`;
+ * Teardown deletes whatever a failed check left. The guards and the shared assertions are in
+ * decision-guards.ts and decision-fixtures.ts.
  */
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -57,25 +58,44 @@ import {
 } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
-import type { MJAIModelVendorEntity } from '@memberjunction/core-entities';
-import { AIDecisionParams, AIDecisionRunner, type AIDecisionRunResult, type ModelVendorCandidate } from '@memberjunction/ai-prompts';
+import { AIDecisionRunner, type AIDecisionParams, type AIDecisionRunResult, type ModelVendorCandidate } from '@memberjunction/ai-prompts';
 import { OpenAIDecision } from '@memberjunction/ai-openai';
 import { OpenRouterDecision } from '@memberjunction/ai-openrouter';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
-import { DeleteById } from './agent-live-shared';
 import { RegisterScriptedDecision, ScriptedDecision, SCRIPTED_DECISION_DRIVER_CLASSES } from './decision-test-double';
 import {
+    AssertAnsweredBy,
+    AssertClose,
+    AssertDefaultDecisionFailsOverTo,
+    AssertInferenceRow,
+    AssertRunRow,
+    AssertSelects,
     DecisionFixtures,
     DecisionRunnerProbe,
+    DescribeCandidate,
+    ExpectedSelection,
+    ModelVendorRowsOf,
+    NewDecisionParams,
     ReadDecisionPromptRun,
     RegisterDecisionStandIn,
     RequireDecisionModel,
     RequireDefaultDecisionPrompt,
     RequireInferenceRowID,
     RequireVendorID,
-    UnavailableDecision,
+    RunDecision,
 } from './decision-fixtures';
+import {
+    AssertOneRequest,
+    GuardedOpenRouterDecision,
+    GuardedSend,
+    JSONResponse,
+    NewGuardState,
+    OPENROUTER_GUARD,
+    ResetGuards,
+    WithGuardsArmed,
+    type GuardResponder,
+} from './decision-guards';
 
 // ─── Constants ───────────────────────────────────────────────────────────────────────────────────
 
@@ -229,98 +249,38 @@ const LIVE_OPENROUTER_RESPONSE = {
 
 // ─── The guards ──────────────────────────────────────────────────────────────────────────────────
 
-/** One request a guard received. */
-interface GuardedRequest {
-    Url: string;
-    Authorization: string | null;
-    Body: unknown;
-}
-
-/** How an armed guard answers a request. */
-type Responder = (request: GuardedRequest) => Response;
-
-/** What one guard was sent, and how it answers; undefined `Respond` refuses. Module state, because the runner builds its own drivers. */
-interface GuardState {
-    Requests: GuardedRequest[];
-    Respond: Responder | undefined;
-}
-
-const openAIGuard: GuardState = { Requests: [], Respond: undefined };
-const openRouterGuard: GuardState = { Requests: [], Respond: undefined };
-
-function jsonResponse(status: number, body: unknown): Response {
-    return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-}
-
-/** Records the request; answers as the guard is armed to, or refuses with a 500. Never calls the network. */
-function guardedSend(guard: GuardState, service: string, url: string, init: RequestInit): Response {
-    const body: unknown = JSON.parse(String(init.body));
-    const request: GuardedRequest = { Url: url, Authorization: new Headers(init.headers).get('Authorization'), Body: body };
-    guard.Requests.push(request);
-    return guard.Respond
-        ? guard.Respond(request)
-        : jsonResponse(500, { error: { message: `The integration-test ${service} guard is not armed: no request leaves this process` } });
-}
+const openAIGuard = NewGuardState();
 
 /** The real `OpenAIDecision` with only its network call replaced by the guard. */
 class GuardedOpenAIDecision extends OpenAIDecision {
     protected async SendRequest(url: string, init: RequestInit): Promise<Response> {
-        return guardedSend(openAIGuard, 'OpenAI', url, init);
+        return GuardedSend(openAIGuard, 'OpenAI', url, init);
     }
 }
 
-/** The real `OpenRouterDecision` with only its network call replaced by the guard. */
-class GuardedOpenRouterDecision extends OpenRouterDecision {
-    protected async SendRequest(url: string, init: RequestInit): Promise<Response> {
-        return guardedSend(openRouterGuard, 'OpenRouter', url, init);
-    }
+/** Arms the OpenAI and OpenRouter guards with the given responders for the length of `work`, then disarms both. */
+async function withGuardsArmed(responders: { OpenAI?: GuardResponder; OpenRouter?: GuardResponder }, work: () => Promise<void>): Promise<void> {
+    await WithGuardsArmed([[openAIGuard, responders.OpenAI], [OPENROUTER_GUARD, responders.OpenRouter]], work);
 }
 
-/** Arms the guards with the given responders for the length of `work`, then disarms both. */
-async function withGuardsArmed(responders: { OpenAI?: Responder; OpenRouter?: Responder }, work: () => Promise<void>): Promise<void> {
-    openAIGuard.Respond = responders.OpenAI;
-    openRouterGuard.Respond = responders.OpenRouter;
-    try {
-        await work();
-    } finally {
-        openAIGuard.Respond = undefined;
-        openRouterGuard.Respond = undefined;
-    }
-}
-
-const answerAsOpenAI: Responder = () => jsonResponse(200, scriptedOpenAIResponse());
-const answerAsOpenRouter: Responder = () => jsonResponse(200, LIVE_OPENROUTER_RESPONSE);
+const answerAsOpenAI: GuardResponder = () => JSONResponse(200, scriptedOpenAIResponse());
+const answerAsOpenRouter: GuardResponder = () => JSONResponse(200, LIVE_OPENROUTER_RESPONSE);
 
 // ─── Lookups and assertions ──────────────────────────────────────────────────────────────────────
 
-/** The prompt runs OD3 and OD4 created, deleted in Teardown. */
-const createdPromptRunIDs: string[] = [];
-
 /** What Setup changed for the bundle, undone in Teardown. */
 const bundleRestores: Array<() => void> = [];
+
+/** The Decisions API body `OpenAIDecision` must send for {@link QUESTIONS}. */
+const EXPECTED_OPENAI_BODY = { model: OPENAI_API_NAME, input: STATE, questions: EXPECTED_OPENAI_QUESTIONS };
 
 function requireModel(): MJAIModelEntityExtended {
     return RequireDecisionModel(MODEL_NAME);
 }
 
-function assertClose(actual: number | null | undefined, expected: number, message: string): void {
-    Assert(typeof actual === 'number' && Math.abs(actual - expected) < 1e-9, `${message} — expected ${expected}, got ${String(actual)}`);
-}
-
-/** The model's model-vendor rows on one vendor, of one type. */
-function rowsOf(model: MJAIModelEntityExtended, vendorName: string, type: MJAIModelVendorEntity['Type']): MJAIModelVendorEntity[] {
-    const vendorId = RequireVendorID(vendorName);
-    return AIEngine.Instance.ModelVendors.filter(mv => UUIDsEqual(mv.ModelID, model.ID) && UUIDsEqual(mv.VendorID, vendorId) && mv.Type === type);
-}
-
 /** A decision request on `prompt` for {@link QUESTIONS}. */
 function decisionParams(ctx: IntegrationCheckContext, prompt: MJAIPromptEntityExtended): AIDecisionParams {
-    const params = new AIDecisionParams();
-    params.prompt = prompt;
-    params.contextUser = ctx.User;
-    params.State = STATE;
-    params.Questions = QUESTIONS;
-    return params;
+    return NewDecisionParams(ctx, prompt, STATE, QUESTIONS);
 }
 
 /** A decision request on `Default Decision` naming the model on `vendorName`. */
@@ -330,73 +290,33 @@ function overrideParams(ctx: IntegrationCheckContext, vendorName: string): AIDec
     return params;
 }
 
-/** Runs one decision, waits for its run row and records it for deletion. */
-async function runDecision(runner: AIDecisionRunner, params: AIDecisionParams, track: (id: string | undefined) => void): Promise<AIDecisionRunResult> {
-    const result = await runner.ExecuteDecision(params);
-    await runner.WaitForPendingPromptRunSaves();
-    track(result.promptRun?.ID);
-    return result;
-}
-
-function trackForTeardown(id: string | undefined): void {
-    if (id) {
-        createdPromptRunIDs.push(id);
-    }
-}
-
-/** Asserts the run succeeded on the model through `vendorName` with `driverClass`. */
-function assertAnsweredBy(result: AIDecisionRunResult, vendorName: string, driverClass: string, label: string): void {
-    Assert(result.success, `${label}: the decision failed: ${result.errorMessage ?? 'no error message'}`);
-    AssertEqual(result.DriverClass, driverClass, `${label}: answering driver class`);
-    AssertEqual(result.modelInfo?.modelName, MODEL_NAME, `${label}: answering model`);
-    AssertEqual(result.modelInfo?.vendorName, vendorName, `${label}: answering vendor`);
-}
-
 /** Asserts the answers came back mapped from {@link SCRIPTED_OPENAI_ANSWERS}. */
 function assertOpenAIAnswers(result: AIDecisionRunResult, label: string): void {
-    assertClose((result.Answers['urgent'] as LikelihoodAnswer)?.Probability, 0.91, `${label}: urgent probability`);
+    AssertClose((result.Answers['urgent'] as LikelihoodAnswer)?.Probability, 0.91, `${label}: urgent probability`);
     const team = result.Answers['team'] as ChoiceAnswer;
     AssertEqual(team?.Value, 'technical', `${label}: team choice`);
-    assertClose(team.Confidence, 0.9, `${label}: team confidence`);
-    assertClose(team.Probabilities['technical'], 0.95 / 0.98, `${label}: team probability renormalised`);
+    AssertClose(team.Confidence, 0.9, `${label}: team confidence`);
+    AssertClose(team.Probabilities['technical'], 0.95 / 0.98, `${label}: team probability renormalised`);
     const severity = result.Answers['severity'] as ScoreAnswer;
-    assertClose(severity?.Value, 2.7, `${label}: severity score`);
+    AssertClose(severity?.Value, 2.7, `${label}: severity score`);
     AssertEqual(JSON.stringify(severity.Probabilities), JSON.stringify({ 'No impact': 0, Minor: 0.05, Major: 0.2, Critical: 0.75 }), `${label}: severity probabilities keyed by level label`);
 }
 
 /** Asserts the answers came back mapped from {@link LIVE_OPENROUTER_RESPONSE}. */
 function assertOpenRouterAnswers(result: AIDecisionRunResult, label: string): void {
-    assertClose((result.Answers['urgent'] as LikelihoodAnswer)?.Probability, 0.99, `${label}: urgent probability`);
+    AssertClose((result.Answers['urgent'] as LikelihoodAnswer)?.Probability, 0.99, `${label}: urgent probability`);
     const team = result.Answers['team'] as ChoiceAnswer;
     AssertEqual(team?.Value, 'technical', `${label}: team choice`);
     AssertEqual(JSON.stringify(team.Probabilities), JSON.stringify({ billing: 0, technical: 1, sales: 0 }), `${label}: team probabilities`);
     const severity = result.Answers['severity'] as ScoreAnswer;
-    assertClose(severity?.Value, 2.97, `${label}: severity score`);
+    AssertClose(severity?.Value, 2.97, `${label}: severity score`);
     AssertEqual(JSON.stringify(severity.Probabilities), JSON.stringify({ 'No impact': 0, Minor: 0, Major: 0.03, Critical: 0.97 }), `${label}: severity probabilities keyed by level`);
 }
 
-/** Asserts one request reached the OpenAI guard since `before`, with `token` as the bearer and the Decisions body. */
-function assertOpenAIRequest(before: number, token: string, label: string): void {
-    AssertEqual(openAIGuard.Requests.length - before, 1, `${label}: OpenAI requests`);
-    const sent = openAIGuard.Requests[openAIGuard.Requests.length - 1];
-    AssertEqual(sent.Url, OpenAIDecision.DEFAULT_ENDPOINT, `${label}: request URL`);
-    AssertEqual(sent.Authorization, `Bearer ${token}`, `${label}: Authorization header`);
-    AssertEqual(JSON.stringify(sent.Body), JSON.stringify({ model: OPENAI_API_NAME, input: STATE, questions: EXPECTED_OPENAI_QUESTIONS }), `${label}: request body`);
-}
-
-/** Asserts the run row names the model and `vendorName`, succeeded, and has the given tokens and cost. */
+/** Asserts the run row names the model and `vendorName`, succeeded, has the given tokens and cost, and holds the mapped answers. */
 async function assertRunRow(ctx: IntegrationCheckContext, result: AIDecisionRunResult, vendorName: string, tokens: number, cost: number, label: string): Promise<void> {
-    Assert(!!result.promptRun?.ID, `${label}: no prompt run`);
-    const row = await ReadDecisionPromptRun(ctx, result.promptRun!.ID);
-    Assert(!!row, `${label}: prompt run ${result.promptRun!.ID} was not found`);
-    Assert(UUIDsEqual(row!.PromptID, RequireDefaultDecisionPrompt().ID), `${label}: the run's prompt is not Default Decision`);
-    Assert(UUIDsEqual(row!.ModelID, requireModel().ID), `${label}: run model ${row!.ModelID} is not ${MODEL_NAME}`);
-    Assert(!!row!.VendorID && UUIDsEqual(row!.VendorID, RequireVendorID(vendorName)), `${label}: run vendor ${String(row!.VendorID)} is not ${vendorName}`);
-    AssertEqual(row!.Success, true, `${label}: run Success`);
-    AssertEqual(row!.TokensPrompt, tokens, `${label}: run TokensPrompt`);
-    // The column keeps 8 decimal places.
-    Assert(typeof row!.Cost === 'number' && Math.abs(row!.Cost - cost) < 1e-8, `${label}: run Cost — expected ${cost} to 8 places, got ${String(row!.Cost)}`);
-    const recorded: unknown = JSON.parse(row!.Result ?? '{}');
+    const row = await AssertRunRow(ctx, result, MODEL_NAME, vendorName, tokens, cost, label);
+    const recorded: unknown = JSON.parse(row.Result ?? '{}');
     Assert(IsSystemOneWireObject(recorded) && IsSystemOneWireObject(recorded['team']) && recorded['team']['Value'] === 'technical', `${label}: the run's Result does not hold the mapped answers`);
 }
 
@@ -411,13 +331,13 @@ function checkCatalog(): void {
     Assert(!!llm && llm.AIModelType === 'LLM' && !UUIDsEqual(llm.ID, model.ID), `OD1: the '${LLM_MODEL_NAME}' LLM is not a separate LLM model`);
     AssertEqual(AIEngine.Instance.Models.filter(m => m.Name === MODEL_NAME).length, 1, 'OD1: models by that name');
 
-    AssertEqual(rowsOf(model, OPENAI_VENDOR, 'Model Developer').length, 1, 'OD1: OpenAI Model Developer rows');
-    const openAIRows = rowsOf(model, OPENAI_VENDOR, 'Inference Provider');
-    const openRouterRows = rowsOf(model, OPENROUTER_VENDOR, 'Inference Provider');
+    AssertEqual(ModelVendorRowsOf(model, OPENAI_VENDOR, 'Model Developer').length, 1, 'OD1: OpenAI Model Developer rows');
+    const openAIRows = ModelVendorRowsOf(model, OPENAI_VENDOR, 'Inference Provider');
+    const openRouterRows = ModelVendorRowsOf(model, OPENROUTER_VENDOR, 'Inference Provider');
     AssertEqual(openAIRows.length, 1, 'OD1: OpenAI Inference Provider rows');
     AssertEqual(openRouterRows.length, 1, 'OD1: OpenRouter Inference Provider rows');
-    assertInferenceRow(openAIRows[0], OPENAI_DRIVER, OPENAI_API_NAME, null, 'OD1 OpenAI row');
-    assertInferenceRow(openRouterRows[0], OPENROUTER_DRIVER, OPENROUTER_API_NAME, OPENROUTER_MAX_INPUT_TOKENS, 'OD1 OpenRouter row');
+    AssertInferenceRow(openAIRows[0], OPENAI_DRIVER, OPENAI_API_NAME, null, 'OD1 OpenAI row');
+    AssertInferenceRow(openRouterRows[0], OPENROUTER_DRIVER, OPENROUTER_API_NAME, OPENROUTER_MAX_INPUT_TOKENS, 'OD1 OpenRouter row');
     Assert(openAIRows[0].Priority > openRouterRows[0].Priority, `OD1: the OpenAI row's priority ${openAIRows[0].Priority} is not above OpenRouter's ${openRouterRows[0].Priority}`);
 
     for (const row of [...openAIRows, ...openRouterRows]) {
@@ -427,20 +347,12 @@ function checkCatalog(): void {
     for (const vendor of [OPENAI_VENDOR, OPENROUTER_VENDOR]) {
         const cost = AIEngine.Instance.GetActiveModelCost(model.ID, RequireVendorID(vendor), 'Realtime');
         Assert(!!cost, `OD1: no active Realtime cost row on ${vendor}`);
-        assertClose(cost!.InputPricePerUnit, INPUT_PRICE_PER_MILLION, `OD1 ${vendor}: input price per unit`);
-        assertClose(cost!.OutputPricePerUnit, 0, `OD1 ${vendor}: output price per unit`);
+        AssertClose(cost!.InputPricePerUnit, INPUT_PRICE_PER_MILLION, `OD1 ${vendor}: input price per unit`);
+        AssertClose(cost!.OutputPricePerUnit, 0, `OD1 ${vendor}: output price per unit`);
         AssertEqual(cost!.UnitType, 'Per 1M Tokens', `OD1 ${vendor}: cost unit type`);
     }
     const vendor = AIEngine.Instance.Vendors.find(v => v.Name === OPENAI_VENDOR);
     AssertEqual(vendor?.CredentialType, 'API Key', 'OD1: the OpenAI vendor credential type');
-}
-
-function assertInferenceRow(row: MJAIModelVendorEntity, driverClass: string, apiName: string, maxInputTokens: number | null, label: string): void {
-    AssertEqual(row.Status, 'Active', `${label}: status`);
-    AssertEqual(row.DriverClass, driverClass, `${label}: DriverClass`);
-    AssertEqual(row.APIName, apiName, `${label}: APIName`);
-    AssertEqual(row.MaxInputTokens, maxInputTokens, `${label}: MaxInputTokens`);
-    AssertEqual(row.SupportsStreaming, false, `${label}: SupportsStreaming`);
 }
 
 // ─── OD2: the driver through the ClassFactory ────────────────────────────────────────────────────
@@ -463,40 +375,47 @@ function checkClassFactory(): void {
 
 async function checkThroughOpenAI(ctx: IntegrationCheckContext): Promise<void> {
     await AIEngine.Instance.Config(false, ctx.User);
+    const fixtures = new DecisionFixtures(ctx, 'od3');
     const params = overrideParams(ctx, OPENAI_VENDOR);
     params.apiKeys = [{ driverClass: OPENAI_DRIVER, apiKey: OPENAI_TOKEN }];
-    await withGuardsArmed({ OpenAI: answerAsOpenAI }, async () => {
-        const before = openAIGuard.Requests.length;
-        const openRouterBefore = openRouterGuard.Requests.length;
-        const result = await runDecision(new AIDecisionRunner(), params, trackForTeardown);
-        assertAnsweredBy(result, OPENAI_VENDOR, OPENAI_DRIVER, 'OD3');
-        assertOpenAIRequest(before, OPENAI_TOKEN, 'OD3');
-        AssertEqual(openRouterGuard.Requests.length - openRouterBefore, 0, 'OD3: OpenRouter requests');
-        assertOpenAIAnswers(result, 'OD3');
-        AssertEqual(result.DecisionResult?.ResolvedModel, OPENAI_API_NAME, 'OD3: resolved model');
-        // OpenAI's response carries no cost, so the run is priced from the model's OpenAI cost row.
-        await assertRunRow(ctx, result, OPENAI_VENDOR, SCRIPTED_INPUT_TOKENS, (SCRIPTED_INPUT_TOKENS * INPUT_PRICE_PER_MILLION) / 1_000_000, 'OD3');
-    });
+    try {
+        await withGuardsArmed({ OpenAI: answerAsOpenAI }, async () => {
+            const before = openAIGuard.Requests.length;
+            const openRouterBefore = OPENROUTER_GUARD.Requests.length;
+            const result = await RunDecision(new AIDecisionRunner(), params, fixtures);
+            AssertAnsweredBy(result, MODEL_NAME, OPENAI_VENDOR, OPENAI_DRIVER, 'OD3');
+            AssertOneRequest(openAIGuard, before, OpenAIDecision.DEFAULT_ENDPOINT, OPENAI_TOKEN, EXPECTED_OPENAI_BODY, 'OD3');
+            AssertEqual(OPENROUTER_GUARD.Requests.length - openRouterBefore, 0, 'OD3: OpenRouter requests');
+            assertOpenAIAnswers(result, 'OD3');
+            AssertEqual(result.DecisionResult?.ResolvedModel, OPENAI_API_NAME, 'OD3: resolved model');
+            // OpenAI's response carries no cost, so the run is priced from the model's OpenAI cost row.
+            await assertRunRow(ctx, result, OPENAI_VENDOR, SCRIPTED_INPUT_TOKENS, (SCRIPTED_INPUT_TOKENS * INPUT_PRICE_PER_MILLION) / 1_000_000, 'OD3');
+        });
+    } finally {
+        await fixtures.Cleanup();
+    }
 }
 
 async function checkThroughOpenRouter(ctx: IntegrationCheckContext): Promise<void> {
     await AIEngine.Instance.Config(false, ctx.User);
+    const fixtures = new DecisionFixtures(ctx, 'od4');
     const params = overrideParams(ctx, OPENROUTER_VENDOR);
     params.apiKeys = [{ driverClass: OPENROUTER_DRIVER, apiKey: OPENROUTER_TOKEN }];
-    await withGuardsArmed({ OpenRouter: answerAsOpenRouter }, async () => {
-        const before = openRouterGuard.Requests.length;
-        const result = await runDecision(new AIDecisionRunner(), params, trackForTeardown);
-        assertAnsweredBy(result, OPENROUTER_VENDOR, OPENROUTER_DRIVER, 'OD4');
-        AssertEqual(openRouterGuard.Requests.length - before, 1, 'OD4: OpenRouter requests');
-        const sent = openRouterGuard.Requests[openRouterGuard.Requests.length - 1];
-        AssertEqual(sent.Url, OpenRouterDecision.DEFAULT_ENDPOINT, 'OD4: request URL');
-        AssertEqual(sent.Authorization, `Bearer ${OPENROUTER_TOKEN}`, 'OD4: Authorization header');
-        AssertEqual(JSON.stringify(sent.Body), JSON.stringify({ model: OPENROUTER_API_NAME, state: STATE, questions: EXPECTED_SYSTEMONE_QUESTIONS }), 'OD4: request body');
-        assertOpenRouterAnswers(result, 'OD4');
-        AssertEqual(result.DecisionResult?.ResolvedModel, OPENROUTER_API_NAME, 'OD4: resolved model');
-        assertClose(result.cost, OPENROUTER_REPORTED_COST, 'OD4: the cost OpenRouter reported');
-        await assertRunRow(ctx, result, OPENROUTER_VENDOR, OPENROUTER_INPUT_TOKENS, OPENROUTER_REPORTED_COST, 'OD4');
-    });
+    try {
+        await withGuardsArmed({ OpenRouter: answerAsOpenRouter }, async () => {
+            const before = OPENROUTER_GUARD.Requests.length;
+            const result = await RunDecision(new AIDecisionRunner(), params, fixtures);
+            AssertAnsweredBy(result, MODEL_NAME, OPENROUTER_VENDOR, OPENROUTER_DRIVER, 'OD4');
+            const body = { model: OPENROUTER_API_NAME, state: STATE, questions: EXPECTED_SYSTEMONE_QUESTIONS };
+            AssertOneRequest(OPENROUTER_GUARD, before, OpenRouterDecision.DEFAULT_ENDPOINT, OPENROUTER_TOKEN, body, 'OD4');
+            assertOpenRouterAnswers(result, 'OD4');
+            AssertEqual(result.DecisionResult?.ResolvedModel, OPENROUTER_API_NAME, 'OD4: resolved model');
+            AssertClose(result.cost, OPENROUTER_REPORTED_COST, 'OD4: the cost OpenRouter reported');
+            await assertRunRow(ctx, result, OPENROUTER_VENDOR, OPENROUTER_INPUT_TOKENS, OPENROUTER_REPORTED_COST, 'OD4');
+        });
+    } finally {
+        await fixtures.Cleanup();
+    }
 }
 
 async function checkRefusalFailsOver(ctx: IntegrationCheckContext): Promise<void> {
@@ -507,13 +426,13 @@ async function checkRefusalFailsOver(ctx: IntegrationCheckContext): Promise<void
     const probe = new DecisionRunnerProbe();
     try {
         const candidates = probe.Candidates(RequireDefaultDecisionPrompt(), params);
-        AssertEqual(candidates.map(describeCandidate).join(', '), `${MODEL_NAME} / ${OPENAI_VENDOR} / ${OPENAI_DRIVER}, ${MODEL_NAME} / ${OPENROUTER_VENDOR} / ${OPENROUTER_DRIVER}`, 'OD5: the candidates');
-        await withGuardsArmed({ OpenAI: () => jsonResponse(200, scriptedOpenAIResponse(REFUSED_TEAM_ANSWERS)), OpenRouter: answerAsOpenRouter }, async () => {
-            const counts = { OpenAI: openAIGuard.Requests.length, OpenRouter: openRouterGuard.Requests.length };
-            const result = await runDecision(probe, params, id => fixtures.TrackPromptRun(id));
+        AssertEqual(candidates.map(DescribeCandidate).join(', '), `${MODEL_NAME} / ${OPENAI_VENDOR} / ${OPENAI_DRIVER}, ${MODEL_NAME} / ${OPENROUTER_VENDOR} / ${OPENROUTER_DRIVER}`, 'OD5: the candidates');
+        await withGuardsArmed({ OpenAI: () => JSONResponse(200, scriptedOpenAIResponse(REFUSED_TEAM_ANSWERS)), OpenRouter: answerAsOpenRouter }, async () => {
+            const counts = { OpenAI: openAIGuard.Requests.length, OpenRouter: OPENROUTER_GUARD.Requests.length };
+            const result = await RunDecision(probe, params, fixtures);
             AssertEqual(openAIGuard.Requests.length - counts.OpenAI, 1, 'OD5: OpenAI requests');
-            AssertEqual(openRouterGuard.Requests.length - counts.OpenRouter, 1, 'OD5: OpenRouter requests');
-            assertAnsweredBy(result, OPENROUTER_VENDOR, OPENROUTER_DRIVER, 'OD5');
+            AssertEqual(OPENROUTER_GUARD.Requests.length - counts.OpenRouter, 1, 'OD5: OpenRouter requests');
+            AssertAnsweredBy(result, MODEL_NAME, OPENROUTER_VENDOR, OPENROUTER_DRIVER, 'OD5');
             assertOpenRouterAnswers(result, 'OD5');
             AssertEqual(probe.Attempts.length, 1, 'OD5: failed attempts before OpenRouter answered');
             const attempt = probe.Attempts[0];
@@ -544,11 +463,9 @@ async function checkBoundCredential(ctx: IntegrationCheckContext): Promise<void>
         await fixtures.BindToModelVendor(credential.ID, RequireInferenceRowID(MODEL_NAME, OPENAI_VENDOR));
         await withGuardsArmed({ OpenAI: answerAsOpenAI }, async () => {
             const before = openAIGuard.Requests.length;
-            const result = await runDecision(new AIDecisionRunner(), params, id => fixtures.TrackPromptRun(id));
-            assertAnsweredBy(result, OPENAI_VENDOR, OPENAI_DRIVER, 'OD6');
-            const sent = openAIGuard.Requests[openAIGuard.Requests.length - 1]?.Authorization ?? '';
-            Assert(!sent.includes('{'), `OD6: the bearer is the credential's JSON, not its token: ${sent}`);
-            assertOpenAIRequest(before, OD6_TOKEN, 'OD6');
+            const result = await RunDecision(new AIDecisionRunner(), params, fixtures);
+            AssertAnsweredBy(result, MODEL_NAME, OPENAI_VENDOR, OPENAI_DRIVER, 'OD6');
+            AssertOneRequest(openAIGuard, before, OpenAIDecision.DEFAULT_ENDPOINT, OD6_TOKEN, EXPECTED_OPENAI_BODY, 'OD6');
             assertOpenAIAnswers(result, 'OD6');
         });
     } finally {
@@ -558,11 +475,6 @@ async function checkBoundCredential(ctx: IntegrationCheckContext): Promise<void>
 
 // ─── OD7: Default Decision's selection (KV4's pattern) ───────────────────────────────────────────
 
-/** A candidate as `model / vendor / driver`, for messages and order comparisons. */
-function describeCandidate(candidate: ModelVendorCandidate): string {
-    return `${candidate.model.Name} / ${candidate.vendorName ?? 'no vendor'} / ${candidate.driverClass}`;
-}
-
 /**
  * The model's two candidates, OpenAI first, both power-matched fallbacks behind Jev and LLM Decision, and
  * the first two fallbacks: its PowerRank (57) is `Default Decision`'s target rank, the priority-weighted
@@ -570,16 +482,16 @@ function describeCandidate(candidate: ModelVendorCandidate): string {
  * the changeset say so; a rank change that moves it fails here.
  */
 function assertLunaBehindBoundModels(candidates: ModelVendorCandidate[], label: string): void {
-    AssertEqual(candidates[0] ? describeCandidate(candidates[0]) : 'none', 'Jev / OpenRouter / OpenRouterDecision', `${label}: first candidate`);
-    AssertEqual(candidates[1] ? describeCandidate(candidates[1]) : 'none', 'LLM Decision / MemberJunction / LLMDecision', `${label}: second candidate`);
+    AssertEqual(candidates[0] ? DescribeCandidate(candidates[0]) : 'none', 'Jev / OpenRouter / OpenRouterDecision', `${label}: first candidate`);
+    AssertEqual(candidates[1] ? DescribeCandidate(candidates[1]) : 'none', 'LLM Decision / MemberJunction / LLMDecision', `${label}: second candidate`);
     const luna = candidates.filter(c => c.model.Name === MODEL_NAME);
     const expected = `${MODEL_NAME} / ${OPENAI_VENDOR} / ${OPENAI_DRIVER}, ${MODEL_NAME} / ${OPENROUTER_VENDOR} / ${OPENROUTER_DRIVER}`;
-    AssertEqual(luna.map(describeCandidate).join(', '), expected, `${label}: the model's candidates`);
+    AssertEqual(luna.map(DescribeCandidate).join(', '), expected, `${label}: the model's candidates`);
     for (const candidate of luna) {
-        Assert(candidates.indexOf(candidate) > 1, `${label}: ${describeCandidate(candidate)} is ahead of Jev or LLM Decision`);
-        AssertEqual(candidate.source, 'power-match-fallback', `${label}: ${describeCandidate(candidate)} source`);
+        Assert(candidates.indexOf(candidate) > 1, `${label}: ${DescribeCandidate(candidate)} is ahead of Jev or LLM Decision`);
+        AssertEqual(candidate.source, 'power-match-fallback', `${label}: ${DescribeCandidate(candidate)} source`);
     }
-    AssertEqual(candidates.slice(2, 4).map(describeCandidate).join(', '), expected, `${label}: the first two power-matched fallbacks`);
+    AssertEqual(candidates.slice(2, 4).map(DescribeCandidate).join(', '), expected, `${label}: the first two power-matched fallbacks`);
 }
 
 /** The model's candidate on OpenAI. */
@@ -589,23 +501,10 @@ function lunaOnOpenAI(candidates: ModelVendorCandidate[], label: string): ModelV
     return candidate!;
 }
 
-/** The first of Jev and LLM Decision the runner has a credential for: what it selected before this model. */
-function expectedSelection(probe: DecisionRunnerProbe, candidates: ModelVendorCandidate[], prompt: MJAIPromptEntityExtended, params: AIDecisionParams): string {
-    const first = candidates.slice(0, 2).find(c => probe.HasCredentials(c, prompt, params));
-    return first ? first.model.Name : 'none';
-}
-
-/** Runs Default Decision through the scripted driver; asserts it selected `expected` and considered `candidates` in order. */
+/** Runs Default Decision through the scripted driver; asserts it selected `expected`, also in the selection info, and considered `candidates` in order. */
 async function assertSelects(ctx: IntegrationCheckContext, probe: DecisionRunnerProbe, fixtures: DecisionFixtures, candidates: ModelVendorCandidate[], expected: string, label: string): Promise<AIDecisionRunResult> {
-    const result = await runDecision(probe, decisionParams(ctx, RequireDefaultDecisionPrompt()), id => fixtures.TrackPromptRun(id));
-    Assert(result.success, `${label}: the decision failed: ${result.errorMessage ?? 'no error message'}`);
-    AssertEqual(result.modelInfo?.modelName, expected, `${label}: the selected model`);
+    const result = await AssertSelects(probe, decisionParams(ctx, RequireDefaultDecisionPrompt()), fixtures, candidates, expected, label);
     AssertEqual(result.modelSelectionInfo?.ModelSelected?.Name, expected, `${label}: the selection info`);
-    AssertEqual(
-        JSON.stringify((result.modelSelectionInfo?.ModelsConsidered ?? []).map(c => `${c.model.Name} / ${c.vendor?.Name ?? 'no vendor'}`)),
-        JSON.stringify(candidates.map(c => `${c.model.Name} / ${c.vendorName ?? 'no vendor'}`)),
-        `${label}: the candidates the run considered`,
-    );
     return result;
 }
 
@@ -617,7 +516,7 @@ async function assertSelectionWithoutCredential(ctx: IntegrationCheckContext, pr
     const candidates = probe.Candidates(prompt, params);
     assertLunaBehindBoundModels(candidates, label);
     Assert(!probe.HasCredentials(lunaOnOpenAI(candidates, label), prompt, params), `${label}: the model on OpenAI has a credential (this database and host must have none)`);
-    const expected = expectedSelection(probe, candidates, prompt, params);
+    const expected = ExpectedSelection(probe, candidates, prompt, params);
     Assert(expected === 'Jev' || expected === 'LLM Decision', `${label}: neither Jev nor LLM Decision has a credential (LLM Decision needs none): ${expected}`);
     await assertSelects(ctx, probe, fixtures, candidates, expected, label);
     return { Candidates: candidates, Selected: expected };
@@ -631,43 +530,11 @@ async function assertSelectionWithBoundCredential(ctx: IntegrationCheckContext, 
     const prompt = RequireDefaultDecisionPrompt();
     const params = decisionParams(ctx, prompt);
     const bound = probe.Candidates(prompt, params);
-    AssertEqual(bound.map(describeCandidate).join(', '), pristine.Candidates.map(describeCandidate).join(', '), `${label}: the candidates and their order`);
+    AssertEqual(bound.map(DescribeCandidate).join(', '), pristine.Candidates.map(DescribeCandidate).join(', '), `${label}: the candidates and their order`);
     Assert(probe.HasCredentials(lunaOnOpenAI(bound, label), prompt, params), `${label}: the model on OpenAI has no credential after its row was bound`);
     const result = await assertSelects(ctx, probe, fixtures, bound, pristine.Selected, label);
     const considered = result.modelSelectionInfo?.ModelsConsidered.find(c => c.model.Name === MODEL_NAME && c.vendor?.Name === OPENAI_VENDOR);
     AssertEqual(considered?.available, true, `${label}: the run saw the model on OpenAI as available`);
-}
-
-/** Every decision driver but OpenAI's, made unavailable in OD7's failover leg. */
-const UNAVAILABLE_DRIVER_CLASSES: readonly string[] = SCRIPTED_DECISION_DRIVER_CLASSES.filter(name => name !== OPENAI_DRIVER);
-
-/** OD7 failover: with every other decision driver unavailable, Default Decision fails over to the bound model on OpenAI. */
-async function assertFailoverReachesBoundModel(ctx: IntegrationCheckContext, probe: DecisionRunnerProbe, fixtures: DecisionFixtures, decider: ScriptedDecision): Promise<void> {
-    const label = 'OD7 failover';
-    const prompt = RequireDefaultDecisionPrompt();
-    const params = decisionParams(ctx, prompt);
-    const candidates = probe.Candidates(prompt, params);
-    const target = candidates.indexOf(lunaOnOpenAI(candidates, label));
-    const credentialedAhead = candidates.slice(0, target).filter(c => probe.HasCredentials(c, prompt, params));
-    const restores = UNAVAILABLE_DRIVER_CLASSES.map(name => RegisterDecisionStandIn(name, UnavailableDecision));
-    const callsBefore = decider.Calls.length;
-    const attemptsBefore = probe.Attempts.length;
-    try {
-        const result = await runDecision(probe, params, id => fixtures.TrackPromptRun(id));
-        assertAnsweredBy(result, OPENAI_VENDOR, OPENAI_DRIVER, label);
-    } finally {
-        for (const restore of restores.reverse()) {
-            restore();
-        }
-    }
-    AssertEqual(decider.Calls.length - callsBefore, 1, `${label}: calls the model's scripted driver answered`);
-    const attempts = probe.Attempts.slice(attemptsBefore).map(a => `${modelNameOf(a.Attempt.modelId)}:${a.Attempt.errorType}`);
-    AssertEqual(JSON.stringify(attempts), JSON.stringify(credentialedAhead.map(c => `${c.model.Name}:ServiceUnavailable`)), `${label}: the failed attempts before the model`);
-    Assert(attempts.some(a => a.startsWith('LLM Decision:')), `${label}: LLM Decision was not tried first`);
-}
-
-function modelNameOf(modelId: string): string {
-    return AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, modelId))?.Name ?? `unknown model ${modelId}`;
 }
 
 async function checkDefaultDecisionSelection(ctx: IntegrationCheckContext): Promise<void> {
@@ -680,7 +547,8 @@ async function checkDefaultDecisionSelection(ctx: IntegrationCheckContext): Prom
     try {
         const pristine = await assertSelectionWithoutCredential(ctx, probe, fixtures);
         await assertSelectionWithBoundCredential(ctx, probe, fixtures, pristine);
-        await assertFailoverReachesBoundModel(ctx, probe, fixtures, decider);
+        const target = { ModelName: MODEL_NAME, VendorName: OPENAI_VENDOR, DriverClass: OPENAI_DRIVER };
+        await AssertDefaultDecisionFailsOverTo(probe, decisionParams(ctx, RequireDefaultDecisionPrompt()), fixtures, decider, target, 'OD7 failover');
     } finally {
         decider.Disarm();
         restore();
@@ -741,23 +609,13 @@ for (const check of OpenAIDecisionsChecks) {
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('openai-decisions', {
     Setup: async (): Promise<void> => {
-        createdPromptRunIDs.length = 0;
-        for (const guard of [openAIGuard, openRouterGuard]) {
-            guard.Requests.length = 0;
-            guard.Respond = undefined;
-        }
+        ResetGuards([openAIGuard, OPENROUTER_GUARD]);
         bundleRestores.push(RegisterDecisionStandIn(OPENAI_DRIVER, GuardedOpenAIDecision, OpenAIDecision));
         bundleRestores.push(RegisterDecisionStandIn(OPENROUTER_DRIVER, GuardedOpenRouterDecision, OpenRouterDecision));
     },
-    Teardown: async (ctx: IntegrationCheckContext): Promise<void> => {
+    Teardown: async (): Promise<void> => {
         await DecisionFixtures.CleanupAll();
-        for (const id of createdPromptRunIDs.splice(0)) {
-            await DeleteById('MJ: AI Prompt Runs', id, ctx.Provider, ctx.User);
-        }
-        for (const guard of [openAIGuard, openRouterGuard]) {
-            guard.Requests.length = 0;
-            guard.Respond = undefined;
-        }
+        ResetGuards([openAIGuard, OPENROUTER_GUARD]);
         for (const restore of bundleRestores.splice(0).reverse()) {
             restore();
         }
