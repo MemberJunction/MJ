@@ -6,7 +6,7 @@
  * under heap pressure) blocks every interactive request for its full duration, and until now nothing
  * recorded that it happened: `/healthcheck` returned a static `{status:'ok'}` and no log line was
  * written. This monitor turns each stall into one timestamped WARN naming the lag, the heap, and the
- * agent runs / scheduled jobs that were in flight, and exposes the latest window to `/healthcheck`.
+ * agent runs / scheduled jobs that were in flight, and exposes the latest window's lag to `/healthcheck`.
  *
  * It cannot report DURING a stall — nothing on a blocked loop can. It reports the moment the loop
  * drains, which is when the evidence (how long, how much heap, what was running) is still current.
@@ -42,16 +42,17 @@ export interface EventLoopSample {
 }
 
 /**
- * The `/healthcheck` response body. The lag fields appear once the monitor has a sample. Keys keep
+ * The `/healthcheck` response body. The lag field appears once the monitor has a sample. Keys keep
  * the endpoint's existing JSON casing (`status`), because platform probes and the Explorer poller read it.
+ *
+ * The heap size is deliberately NOT here: `/healthcheck` is unauthenticated, and a live heap reading
+ * on a public endpoint helps someone tune a memory-pressure attack. It goes in the stall warning instead.
  */
 export interface HealthcheckPayload {
   // case-violation-ok-legacy-back-compat: /healthcheck wire format
   status: 'ok';
   // case-violation-ok-legacy-back-compat: /healthcheck wire format
   eventLoopLagMs?: number;
-  // case-violation-ok-legacy-back-compat: /healthcheck wire format
-  heapUsedMb?: number;
 }
 
 const NANOS_PER_MS = 1e6;
@@ -154,5 +155,5 @@ export function BuildHealthcheckPayload(sample: EventLoopSample | null): Healthc
   if (!sample) {
     return { status: 'ok' };
   }
-  return { status: 'ok', eventLoopLagMs: sample.EventLoopLagMs, heapUsedMb: sample.HeapUsedMb };
+  return { status: 'ok', eventLoopLagMs: sample.EventLoopLagMs };
 }
