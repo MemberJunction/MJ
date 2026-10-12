@@ -40,7 +40,7 @@
  * check's finally block, so the bundle needs no shared lifecycle.
  */
 import { BaseEntity, Metadata, ProviderType, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
-import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { FilterByUUIDs, MJGlobal, NormalizeUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { BaseRealtimeModel, type AIAPIKey, type IRealtimeSession, type RealtimeUnitPrice, type RealtimeUsage } from '@memberjunction/ai';
 import { AIEngineBase, ReadCostLines, ReadRealtimeUsageRecord, RoundCost, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import type { MJAIAgentEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
@@ -193,13 +193,13 @@ function resolvesRealtimeDriver(driverClass: string): boolean {
 
 /** The Active realtime models, by name, each with its Active vendor rows that carry a DriverClass, highest priority first. */
 function realtimeVendorRows(engine: AIEngineBase): Array<{ Model: MJAIModelEntityExtended; Rows: MJAIModelVendorEntity[] }> {
+    const driverRows = engine.ModelVendors.filter((mv) => mv.Status === 'Active' && (mv.DriverClass ?? '').trim().length > 0);
     return engine.Models
         .filter((m) => m.IsActive && String(m.AIModelType ?? '').trim().toLowerCase() === 'realtime')
         .sort((a, b) => a.Name.localeCompare(b.Name))
         .map((model) => ({
             Model: model,
-            Rows: engine.ModelVendors
-                .filter((mv) => UUIDsEqual(mv.ModelID, model.ID) && mv.Status === 'Active' && (mv.DriverClass ?? '').trim().length > 0)
+            Rows: FilterByUUIDs(driverRows, [model.ID], (mv) => mv.ModelID)
                 .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0)),
         }));
 }
@@ -233,7 +233,8 @@ function avatarAnchorsOn(
     const byName = (a: MJAIAgentEntityExtended, b: MJAIAgentEntityExtended): number => (a.Name ?? '').localeCompare(b.Name ?? '');
     const active = engine.Agents.filter((a) => a.Status === 'Active').sort(byName);
     const coAgent = realtimeType ? active.find((a) => UUIDsEqual(a.TypeID, realtimeType.ID)) : undefined;
-    const target = active.find((a) => !UUIDsEqual(a.TypeID, realtimeType?.ID ?? '') && !engine.AgentPersonas.some((ap) => UUIDsEqual(ap.AgentID, a.ID)));
+    const agentsWithPersonas = new UUIDSet(engine.AgentPersonas.map((ap) => ap.AgentID));
+    const target = active.find((a) => !UUIDsEqual(a.TypeID, realtimeType?.ID ?? '') && !agentsWithPersonas.Has(a.ID));
     const video = engine.GetModalityByName('Video');
     const audio = engine.GetModalityByName('Audio');
     if (!coAgent || !target || !picked || !video || !audio) {
@@ -578,7 +579,8 @@ function assertAvatarRunPriced(run: MJAIPromptRunEntity, anchors: AvatarPricingA
 /** Whether the co-agent has a face on the session's vendor: it would then answer for a voiced agent without one. */
 function coAgentHasFace(engine: AIEngineBase, anchors: AvatarFixtureAnchors): boolean {
     const faces = engine.GetModelPersonas(anchors.Model.ID, 'Video', anchors.VendorRow.VendorID!);
-    return engine.GetAgentPersonas(anchors.CoAgent.ID).some((ap) => faces.some((f) => UUIDsEqual(f.Persona.ID, ap.Persona.ID)));
+    const facePersonaIds = new UUIDSet(faces.map((f) => f.Persona.ID));
+    return engine.GetAgentPersonas(anchors.CoAgent.ID).some((ap) => facePersonaIds.Has(ap.Persona.ID));
 }
 
 /**
@@ -718,7 +720,8 @@ function findBridgedUsageFixture(): BridgedUsageFixture | undefined {
         ? (engine.Agents ?? []).find(a => a.Status === 'Active' && UUIDsEqual(a.TypeID, realtimeType.ID) && hasActiveSystemPrompt(a.ID))
         : undefined;
     const realtimeModels = (engine.Models ?? []).filter(m => m.IsActive && m.AIModelType?.trim().toLowerCase() === 'realtime');
-    const pairs = (engine.ModelVendors ?? []).filter(mv => realtimeModels.some(m => UUIDsEqual(m.ID, mv.ModelID)));
+    const realtimeModelIds = new UUIDSet(realtimeModels.map(m => m.ID));
+    const pairs = (engine.ModelVendors ?? []).filter(mv => realtimeModelIds.Has(mv.ModelID));
     const priced = pairs.filter(mv => AIEngineBase.Instance.GetActiveModelCost(mv.ModelID, mv.VendorID, 'Realtime', 'Tokens') !== null);
     const videoPriced = priced.find(mv => avatarVideoPrice(mv) !== undefined);
     const pair = videoPriced ?? priced[0] ?? pairs[0];

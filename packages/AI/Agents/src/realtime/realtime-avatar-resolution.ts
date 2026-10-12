@@ -24,7 +24,7 @@
 
 import type { RealtimeAvatarSettings, RealtimeAvatarStatus, RealtimeAvatarUnavailableReason } from '@memberjunction/ai';
 import type { ResolvedAgentPersona, ResolvedModelPersona } from '@memberjunction/ai-engine-base';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import type { RealtimeCoAgentConfig } from './realtime-coagent-config';
 import type { RealtimeVideoOutputRow } from './realtime-video-output-gate';
 
@@ -223,8 +223,10 @@ export function ResolveRealtimeAvatar(input: RealtimeAvatarResolutionInput, pers
 function firstFaceOf(agentId: string, faces: ResolvedModelPersona[], personas: RealtimeAvatarPersonaSource): ResolvedModelPersona | undefined {
     const agentPersonas = personas.GetAgentPersonas(agentId);
     const ordered = [...agentPersonas.filter((p) => p.AgentPersona.IsDefault), ...agentPersonas.filter((p) => !p.AgentPersona.IsDefault)];
+    // First face per persona wins, as faces.find() would.
+    const facesByPersona = IndexByUUID(faces, (f) => f.Persona.ID);
     for (const agentPersona of ordered) {
-        const face = faces.find((f) => UUIDsEqual(f.Persona.ID, agentPersona.Persona.ID));
+        const face = facesByPersona.Get(agentPersona.Persona.ID);
         if (face) {
             return face;
         }

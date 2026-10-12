@@ -19,7 +19,7 @@
 
 import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, RealtimeToolDefinition, AIAPIKeyResolver, MakeAIAPIKeyResolver } from '@memberjunction/ai';
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, NormalizeUUID, IndexByUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { ResolvedModelPersona } from '@memberjunction/ai-engine-base';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -386,8 +386,10 @@ function appendDriverVoices(voices: RealtimeModelVoiceOption[], driverVoices: Re
  */
 function personaVoiceOptions(modelID: string, vendorID: string, showsAvatar: boolean): RealtimeModelVoiceOption[] {
     const faces = vendorID && showsAvatar ? AIEngine.Instance.GetModelPersonas(modelID, 'Video', vendorID).filter(isPresetFace) : [];
+    // First face per persona wins, as faces.find() would.
+    const facesByPersona = IndexByUUID(faces, (f) => f.Persona.ID);
     return AIEngine.Instance.GetModelPersonas(modelID, 'Audio', vendorID).map((voice) => {
-        const face = faces.find((f) => UUIDsEqual(f.Persona.ID, voice.Persona.ID));
+        const face = facesByPersona.Get(voice.Persona.ID);
         const image = voice.Persona.PreviewImageURL?.trim();
         return {
             ID: voice.PersonaVendor.APIName,
