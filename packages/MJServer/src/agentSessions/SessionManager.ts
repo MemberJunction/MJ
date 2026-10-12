@@ -10,6 +10,7 @@ import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@member
 import { GetHostInstanceID } from './HostInstance.js';
 import { WriteReturningVisitorRecap } from './ReturningVisitorRecap.js';
 import { ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
+import { RecordingAssemblyScheduler } from '../realtimeSessions/RecordingAssemblyScheduler.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -200,6 +201,13 @@ export class SessionManager {
         const closed = await this.markSessionClosed(session, closeReason);
         if (!closed) {
             return false;
+        }
+        if (session.RecordingStartedAt) {
+            // A client-direct recording is assembled only after the grace period while its call is open
+            // (a hidden tab must not rewrite recording.wav on every switch; see RealtimeRecordingHandler).
+            // The call has ended now, so assemble it right away. The ledger's claim arbitrates instances,
+            // and a recording with nothing to assemble (none, or server-bridged) is simply not claimable.
+            RecordingAssemblyScheduler.Instance.ScheduleAssembly(agentSessionID, 0, false);
         }
         await this.disconnectChannels(agentSessionID, contextUser, provider, preloadedChannels);
         await this.finalizeObservabilityRuns(session, contextUser, provider);

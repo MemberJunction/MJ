@@ -4,9 +4,16 @@
  * captured:
  *
  * - `POST /realtime/recording/:agentSessionId/shard/:index` — one shard as raw `application/octet-stream`.
- * - `POST /realtime/recording/:agentSessionId/end?lastShardIndex=&capturedSamples=` — the terminal signal,
- *   with the final partial shard (the tail) as an optional body. The browser sends it with `keepalive` on
- *   End, `pagehide` and `visibilitychange→hidden`, so it may arrive more than once, and late.
+ * - `POST /realtime/recording/:agentSessionId/end?lastShardIndex=&capturedSamples=[&final=false]` — the
+ *   terminal signal, with the final partial shard (the tail) as an optional body. The browser sends it with
+ *   `keepalive` on End, `pagehide` and `visibilitychange→hidden`, so it may arrive more than once, and late.
+ *   A hidden tab sends `final=false`: the call may well go on, so the counts are stamped but the recording
+ *   is assembled only after the grace period.
+ *
+ * Assembly is never scheduled sooner than the grace period while the session is still open, except for a
+ * final terminal: a hidden tab's terminal and the shards re-sent after it would otherwise rewrite
+ * `recording.wav` on every tab switch. Closing the session (`SessionManager.CloseSession`) schedules it
+ * right away.
  *
  * Both run after the unified auth middleware and are owner- and scope-gated (see `loadAuthorizedSession`). A request does only cheap work: parse
  * the shard header and packet bounds, hash, one guarded ledger proc, maybe a count. It never decodes:
@@ -196,6 +203,7 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
     if (lastShardIndex === -1 && capturedSamples !== 0) {
         throw new RecordingRequestError(400, `lastShardIndex -1 (no shards) contradicts capturedSamples ${capturedSamples}`);
     }
+    const final = parseFinalFlag(req.query['final']);
     const tail = readOptionalTail(req, SessionID, lastShardIndex);
 
     const session = await loadAuthorizedSession(deps, SessionID, Caller);
@@ -222,7 +230,11 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
     }
     LogStatus(`RealtimeRecordingHandler: terminal for session ${SessionID}: ${expected} shards, ${capturedSamples} samples; recording ${stamp.RecordingStatus ?? 'not recorded'}`);
     if (stamp.RecordingStatus === 'Pending') {
-        await scheduleWhenReady(deps, Caller.Provider, SessionID, expected);
+        if (final) {
+            await scheduleWhenReady(deps, Caller.Provider, SessionID, expected);
+        } else {
+            deps.Scheduler.ScheduleAssembly(SessionID, deps.GraceMs(), true);
+        }
     }
     res.status(200).json({ accepted: true, ignored: false });
 }
@@ -318,17 +330,24 @@ async function scheduleAfterLateShard(
     if (expected === null || index >= expected) {
         return;
     }
+    if (result.RecordingStatus !== 'Partial' && result.RecordingStatus !== 'Pending') {
+        return;
+    }
+    if (!result.ClosedAt) {
+        // The call is still open (e.g. the tab was hidden and came back): assemble after the grace period,
+        // not now. Repeated requests keep the earliest timer.
+        deps.Scheduler.ScheduleAssembly(sessionID, deps.GraceMs(), true);
+        return;
+    }
     if (result.RecordingStatus === 'Partial') {
-        if (result.ClosedAt && Date.now() - result.ClosedAt.getTime() > LATE_SHARD_REASSEMBLY_WINDOW_MS) {
+        if (Date.now() - result.ClosedAt.getTime() > LATE_SHARD_REASSEMBLY_WINDOW_MS) {
             LogStatus(`RealtimeRecordingHandler: late shard ${index} of session ${sessionID} stored; the session closed over 24 h ago, so the Partial recording is not re-assembled`);
             return;
         }
         deps.Scheduler.ScheduleAssembly(sessionID, 0, false);
         return;
     }
-    if (result.RecordingStatus === 'Pending') {
-        await scheduleWhenReady(deps, provider, sessionID, expected, false);
-    }
+    await scheduleWhenReady(deps, provider, sessionID, expected, false);
 }
 
 /**
@@ -363,6 +382,17 @@ function logIgnoredTerminal(session: MJAIAgentSessionEntity, expected: number, c
 }
 
 /** Parses a non-negative (or, with {@link INT}, signed) safe integer route or query value; 400 otherwise. */
+/** The terminal's `final` flag: absent or `true` means the call ended; `false` means the tab was hidden. */
+function parseFinalFlag(value: unknown): boolean {
+    if (value === undefined || value === 'true') {
+        return true;
+    }
+    if (value === 'false') {
+        return false;
+    }
+    throw new RecordingRequestError(400, `final must be true or false, got '${String(value)}'`);
+}
+
 function parseInteger(value: unknown, field: string, pattern: RegExp): number {
     if (typeof value !== 'string' || !pattern.test(value)) {
         throw new RecordingRequestError(400, `${field} must be an integer, got '${String(value ?? '')}'`);

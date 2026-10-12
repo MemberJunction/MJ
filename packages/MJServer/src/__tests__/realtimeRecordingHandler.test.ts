@@ -413,12 +413,28 @@ describe('realtime recording REST routes', () => {
             expect(scheduler.ScheduleAssembly).not.toHaveBeenCalled();
         });
 
-        it('schedules now when the last missing shard of a Pending (grace-waiting) session arrives', async () => {
-            addSession(SESSION, { RecordingStatus: 'Pending', RecordingExpectedShards: 2, RecordingCapturedSamples: 2 * SHARD_SAMPLES });
+        it('schedules now when the last missing shard of a closed Pending (grace-waiting) session arrives', async () => {
+            addSession(SESSION, { RecordingStatus: 'Pending', RecordingExpectedShards: 2, RecordingCapturedSamples: 2 * SHARD_SAMPLES, ClosedAt: new Date(Date.now() - 60_000) });
             await postShard(1);
             expect(scheduler.ScheduleAssembly).not.toHaveBeenCalled();
             await postShard(0);
             expect(scheduler.ScheduleAssembly).toHaveBeenCalledWith(SESSION, 0, false);
+        });
+
+        it('while the call is still open, a shard that completes a Pending recording schedules after the grace, not now', async () => {
+            // A hidden tab's terminal, then its keepalive re-sends: assembling mid-call on every tab switch
+            // would rewrite recording.wav each time.
+            addSession(SESSION, { RecordingStatus: 'Pending', RecordingExpectedShards: 2, RecordingCapturedSamples: 2 * SHARD_SAMPLES });
+            await postShard(1);
+            await postShard(0);
+            expect(scheduler.ScheduleAssembly).toHaveBeenCalledWith(SESSION, GRACE_MS, true);
+            expect(scheduler.ScheduleAssembly).not.toHaveBeenCalledWith(SESSION, 0, false);
+        });
+
+        it('while the call is still open, a late gap shard of a Partial recording re-assembles after the grace, not now', async () => {
+            addSession(SESSION, { RecordingStatus: 'Partial', RecordingExpectedShards: 4, RecordingCapturedSamples: 4 * SHARD_SAMPLES });
+            expect((await postShard(2)).status).toBe(200);
+            expect(scheduler.ScheduleAssembly).toHaveBeenCalledWith(SESSION, GRACE_MS, true);
         });
 
         it('does not schedule an ordinary live-call shard', async () => {
@@ -470,6 +486,20 @@ describe('realtime recording REST routes', () => {
             expect(ledger.Sessions.get(SESSION)?.RecordingExpectedShards).toBe(1);
             expect(scheduler.ScheduleAssembly).not.toHaveBeenCalled();
             expect(logErrorMock).toHaveBeenCalledWith(expect.stringContaining('no system user'));
+        });
+
+        it('a non-final terminal (the tab was hidden) schedules after the grace even when every shard is present', async () => {
+            await postShard(0);
+            const res = await post(`/${SESSION}/end?lastShardIndex=0&capturedSamples=${SHARD_SAMPLES}&final=false`, null);
+            expect(res.status).toBe(200);
+            expect(ledger.Sessions.get(SESSION)?.RecordingExpectedShards).toBe(1);
+            expect(scheduler.ScheduleAssembly).toHaveBeenCalledWith(SESSION, GRACE_MS, true);
+            expect(scheduler.ScheduleAssembly).not.toHaveBeenCalledWith(SESSION, 0, false);
+        });
+
+        it('rejects a final flag that is not true or false', async () => {
+            const res = await post(`/${SESSION}/end?lastShardIndex=0&capturedSamples=${SHARD_SAMPLES}&final=maybe`, null);
+            expect(res.status).toBe(400);
         });
 
         it('schedules a forced-Partial assembly after the grace when shards are missing', async () => {
