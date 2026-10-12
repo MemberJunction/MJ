@@ -21,6 +21,7 @@
  */
 
 import { Client, type ClientConfig } from 'pg';
+import net from 'node:net';
 
 /**
  * Result of a connectivity check to a PostgreSQL server.
@@ -90,29 +91,43 @@ export class PostgresAdapter {
     timeoutMs: number = 5000
   ): Promise<PgConnectivityResult> {
     const start = Date.now();
-    const client = new Client({
-      host,
-      port,
-      database: 'postgres', // Use the maintenance database for connectivity check
-      user: 'postgres',
-      password: 'ignored', // We don't care if auth fails; we just care if the server is there
-      application_name: 'mj-installer-check',
-      connect_timeout: Math.ceil(timeoutMs / 1000), // pg expects seconds
-    });
 
-    try {
-      await client.connect();
-      const latency = Date.now() - start;
-      await client.end();
-      return { Reachable: true, LatencyMs: latency };
-    } catch (err) {
-      const latency = Date.now() - start;
-      return {
-        Reachable: false,
-        ErrorMessage: formatPgConnectionError(err, host, port),
-        LatencyMs: latency,
+    return new Promise<PgConnectivityResult>((resolve) => {
+      const socket = new net.Socket();
+
+      const cleanup = () => {
+        socket.removeAllListeners();
+        socket.destroy();
       };
-    }
+
+      socket.setTimeout(timeoutMs);
+
+      socket.on('connect', () => {
+        const latency = Date.now() - start;
+        cleanup();
+        resolve({ Reachable: true, LatencyMs: latency });
+      });
+
+      socket.on('timeout', () => {
+        cleanup();
+        resolve({
+          Reachable: false,
+          ErrorMessage: `Connection timed out after ${timeoutMs}ms`,
+          LatencyMs: Date.now() - start,
+        });
+      });
+
+      socket.on('error', (err: NodeJS.ErrnoException) => {
+        cleanup();
+        resolve({
+          Reachable: false,
+          ErrorMessage: formatPgConnectionError(err, host, port),
+          LatencyMs: Date.now() - start,
+        });
+      });
+
+      socket.connect(port, host);
+    });
   }
 
   /**
@@ -164,6 +179,13 @@ export class PostgresAdapter {
     } catch (err) {
       const error = err as NodeJS.ErrnoException & { code?: string };
       const code = error?.code;
+
+      // Always try to end the client to avoid connection leaks
+      try {
+        await client.end();
+      } catch {
+        // Ignore errors from ending the connection
+      }
 
       // Check for login rejection (invalid password or invalid authorization)
       if (code === '28P01' || code === '28000') {
@@ -224,7 +246,7 @@ export class PostgresAdapter {
     database: string,
     username: string,
     password: string,
-    sqlText: string,
+    statements: string[],
     timeoutMs: number = 60000
   ): Promise<{ Success: boolean; ErrorMessage?: string }> {
     const client = new Client({
@@ -241,19 +263,17 @@ export class PostgresAdapter {
       await client.connect();
       await client.query(`SET statement_timeout TO ${timeoutMs}`);
 
-      // Split on semicolon but preserve them for accurate error reporting
-      const statements = sqlText.split(';').map((s) => s.trim()).filter((s) => s.length > 0);
-
       for (const statement of statements) {
         try {
-          await client.query(statement);
+          if (statement.trim().length > 0) {
+            await client.query(statement);
+          }
         } catch (err) {
           const error = err as Error;
           throw new Error(`Statement failed: ${error.message}\n\nStatement:\n${statement}`);
         }
       }
 
-      await client.end();
       return { Success: true };
     } catch (err) {
       const error = err as Error;
@@ -261,6 +281,12 @@ export class PostgresAdapter {
         Success: false,
         ErrorMessage: `PostgreSQL script execution failed: ${error?.message ?? 'unknown error'}`,
       };
+    } finally {
+      try {
+        await client.end();
+      } catch {
+        // Ignore errors from closing the connection
+      }
     }
   }
 }
