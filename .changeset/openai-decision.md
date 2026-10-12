@@ -58,7 +58,7 @@ It calls the endpoint with `fetch`, because the package's `openai` SDK (6.18.0) 
 
 ## Shared code (`@memberjunction/ai`)
 
-- `ReadSystemOneErrorMessage` reads a vendor's message from an error body: FastAPI's `detail` (a string or a list of `{ msg }`), SubQ's `detail` object (`error_type: message`), or an OpenAI-style `error.message`. `SystemOneDecision` and `PerplexityDecision` now use it; they read the same messages as before.
+- `ReadSystemOneErrorMessage` reads a vendor's message from an error body: FastAPI's `detail` (a string or a list of `{ msg }`), SubQ's `detail` object (`error_type: message`), or an OpenAI-style `error.message`. `SystemOneDecision` and `PerplexityDecision` now use it. Every body they read before gives the same message, unless it carries both a `detail` and an `error`, when `detail` now wins. They also read shapes they did not: `SystemOneDecision` SubQ's `detail` object, and `PerplexityDecision` any `detail` and a plain-string `error`.
 - `BaseSystemOneDecision.GetHTTPErrorType` is a new protected hook: a driver returns an error type for a status whose `ErrorAnalyzer` reading is wrong for its API, and the error carries it as a `Retriable` classification that allows failover. The default changes nothing.
 
 ## Default Decision
