@@ -297,15 +297,28 @@ describe('AIBridgeEngine — lifecycle and status transitions', () => {
     });
 
     it('persists resolved TurnAddressing mode (ModelSide when full-duplex auto, Regex otherwise)', async () => {
-        // Full duplex with Auto -> ModelSide
+        // Full duplex with Auto outside moderator mode -> Regex (ModelSide skipped)
         const fdSession = new MockRealtimeSession();
         fdSession.FullDuplex = true;
         const fdRow = makeBridgeRow();
         const { provider: fdProvider } = makeProvider(() => fdRow);
         const a1 = await engine().StartBridgeSession(baseParams(fdSession, fdProvider, { TurnAddressing: 'Auto' }));
-        expect(fdRow.TurnAddressing).toBe('ModelSide');
-        expect(a1.AddressingMode).toBe('ModelSide');
+        expect(fdRow.TurnAddressing).toBe('Regex');
+        expect(a1.AddressingMode).toBe('Regex');
         await engine().StopBridgeSession(a1.SessionBridgeID, 'Explicit');
+
+        // Full duplex with Auto in moderator mode -> ModelSide
+        process.env.MJ_REALTIME_MODERATOR_MODE = 'on';
+        try {
+            const fdModRow = makeBridgeRow();
+            const { provider: fdModProvider } = makeProvider(() => fdModRow);
+            const aMod = await engine().StartBridgeSession(baseParams(fdSession, fdModProvider, { TurnAddressing: 'Auto' }));
+            expect(fdModRow.TurnAddressing).toBe('ModelSide');
+            expect(aMod.AddressingMode).toBe('ModelSide');
+            await engine().StopBridgeSession(aMod.SessionBridgeID, 'Explicit');
+        } finally {
+            delete process.env.MJ_REALTIME_MODERATOR_MODE;
+        }
 
         // Non-full duplex with Auto -> Regex
         const plainSession = new MockRealtimeSession();
@@ -326,6 +339,18 @@ describe('AIBridgeEngine — lifecycle and status transitions', () => {
         expect(explicitRow.TurnAddressing).toBe('ModelSide');
         expect(a3.AddressingMode).toBe('ModelSide');
         await engine().StopBridgeSession(a3.SessionBridgeID, 'Explicit');
+
+        // Explicit ModelSide requested for a turn-based (non-full-duplex) model forces ModelSide
+        const turnBasedSession = new MockRealtimeSession();
+        turnBasedSession.FullDuplex = false;
+        const turnBasedRow = makeBridgeRow();
+        const { provider: turnBasedProvider } = makeProvider(() => turnBasedRow);
+        const a4 = await engine().StartBridgeSession(baseParams(turnBasedSession, turnBasedProvider, { TurnAddressing: 'ModelSide', FullDuplex: false }));
+        expect(turnBasedRow.TurnAddressing).toBe('ModelSide');
+        expect(a4.AddressingMode).toBe('ModelSide');
+        expect(a4.FullDuplex).toBe(false);
+        expect(a4.ModelSideMatcher).toBeDefined();
+        await engine().StopBridgeSession(a4.SessionBridgeID, 'Explicit');
     });
 
     it('StopBridgeSession disconnects the driver and marks the row Disconnected with the reason', async () => {

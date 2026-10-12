@@ -1248,6 +1248,10 @@ export class RunViewResolver extends ResolverBase {
           // otherwise a CacheLocal batch's DataSource:'Materialized' request silently reads the live view.
           DataSource: item.params.DataSource,
           IncludeBinaryFields: item.params.IncludeBinaryFields,
+          // BypassCache likewise — the input type (RunDynamicViewInput) has always declared it, and its
+          // own description promises "the pre-check cache lookup is skipped". Dropping it here left the
+          // provider free to answer a deliberate database read from the server cache.
+          BypassCache: item.params.BypassCache,
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,

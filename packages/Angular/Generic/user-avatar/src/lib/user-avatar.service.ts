@@ -1,7 +1,26 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { IEntityDataProvider, IMetadataProvider, Metadata } from '@memberjunction/core';
 import { MJUserEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { firstValueFrom } from 'rxjs';
+
+/** The outcome of {@link UserAvatarService.UpdateMyAvatar}. */
+export interface UpdateMyAvatarResult {
+  Success: boolean;
+  /** The server's reason when `Success` is false. */
+  ErrorMessage?: string;
+}
+
+const UPDATE_MY_AVATAR_MUTATION = `
+  mutation UpdateMyAvatar($ImageURL: String, $IconClass: String) {
+    UpdateMyAvatar(ImageURL: $ImageURL, IconClass: $IconClass) {
+      Success
+      ErrorMessage
+    }
+  }
+`;
 
 /**
  * Service for managing user avatar operations across the application.
@@ -17,10 +36,44 @@ export class UserAvatarService {
   constructor(private http: HttpClient) {}
 
   /**
-   * Syncs user avatar from an image URL (typically from auth provider profile).
-   * Downloads the image, converts to Base64, and saves to the user entity.
+   * Sets the SIGNED-IN user's avatar through the server's self-service `UpdateMyAvatar` mutation.
    *
-   * @param user - The MJUserEntity to update with avatar data
+   * Use this rather than saving the `MJ: Users` row: the mutation needs no Update permission on
+   * `MJ: Users`, which locked-down deployments do not grant, and it writes only the two avatar
+   * columns. The server validates the values and always acts on the caller's own row.
+   *
+   * @param imageURL - a base64 image data URI or an http(s) URL; null clears it
+   * @param iconClass - a Font Awesome class list; null clears it
+   * @param provider - the GraphQL provider to call; defaults to the global provider
+   * @returns the server's outcome; never throws
+   */
+  async UpdateMyAvatar(
+    imageURL: string | null,
+    iconClass: string | null,
+    provider?: IMetadataProvider | IEntityDataProvider
+  ): Promise<UpdateMyAvatarResult> {
+    try {
+      const gql = (provider ?? Metadata.Provider) as GraphQLDataProvider;
+      const response = (await gql.ExecuteGQL(UPDATE_MY_AVATAR_MUTATION, {
+        ImageURL: imageURL,
+        IconClass: iconClass
+      })) as { UpdateMyAvatar?: UpdateMyAvatarResult } | null;
+      const outcome = response?.UpdateMyAvatar;
+      if (outcome?.Success) {
+        return { Success: true };
+      }
+      return { Success: false, ErrorMessage: outcome?.ErrorMessage || 'The server did not save the avatar.' };
+    } catch (error) {
+      return { Success: false, ErrorMessage: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /**
+   * Syncs the signed-in user's avatar from an image URL (typically from the auth provider profile).
+   * Downloads the image, converts it to a Base64 data URI and saves it through {@link UpdateMyAvatar},
+   * then reloads `user` so it is clean and current.
+   *
+   * @param user - the signed-in user's MJUserEntity; any other user is refused
    * @param imageUrl - URL to the image (can be from Microsoft Graph, Google, etc.)
    * @param authHeaders - Optional headers for authenticated requests (e.g., { 'Authorization': 'Bearer token' })
    * @returns Promise<boolean> - true if avatar was synced and saved, false otherwise
@@ -35,30 +88,27 @@ export class UserAvatarService {
         console.warn('No image URL provided for avatar sync');
         return false;
       }
+      const provider = user.ProviderToUse as GraphQLDataProvider;
+      if (!UUIDsEqual(user.ID, provider.CurrentUser?.ID)) {
+        console.warn('Avatar sync only updates the signed-in user; refusing to sync another user');
+        return false;
+      }
 
-      // Fetch the image as a blob
+      // Fetch the image as a blob and convert it to a Base64 data URI
       const headers: Record<string, string> = authHeaders || {};
       const blob: Blob = await firstValueFrom(
         this.http.get(imageUrl, { headers, responseType: 'blob' })
       );
-
-      // Convert blob to Base64 data URI
       const base64 = await this.blobToBase64(blob);
 
-      // Update user entity
-      user.UserImageURL = base64;
-      user.UserImageIconClass = null; // Clear icon if we have an image
-
-      // Save to database
-      const saved = await user.Save();
-
-      if (saved) {
-        console.log('Successfully synced avatar from image URL');
-        return true;
-      } else {
-        console.warn('Failed to save avatar to database');
+      const result = await this.UpdateMyAvatar(base64, null, provider);
+      if (!result.Success) {
+        console.warn('Failed to save avatar:', result.ErrorMessage);
         return false;
       }
+      await user.Load(user.ID); // pick up the saved values; leaves the entity clean
+      console.log('Successfully synced avatar from image URL');
+      return true;
     } catch (error) {
       console.warn('Could not sync avatar from image URL:', error);
       return false;

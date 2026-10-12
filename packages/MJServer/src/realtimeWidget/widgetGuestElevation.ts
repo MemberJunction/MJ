@@ -127,6 +127,36 @@ export function ResolveScopedAnonymousRunUser(contextUser: UserInfo): UserInfo {
 }
 
 /**
+ * The principal a client-direct call's consolidated RECORDING STORE runs as, once the caller has
+ * already passed the session-ownership and consent gates (#5195).
+ *
+ * The store writes `MJ: Files`, the file↔session link and the session's recording stamp — server
+ * plumbing attributed through the session link, never through the caller. A signed-in user whose only
+ * role is the stock UI role cannot create `MJ: Files`, so running the store as the caller lost every
+ * such user's recording (the object landed in storage, the row never did). It therefore runs as the
+ * system user for signed-in owners, and anonymous sessions keep exactly the
+ * {@link ResolveScopedAnonymousRunUser} behaviour (PUBLIC WEB-WIDGET guests stay on the caller for the
+ * same RLS reason documented there).
+ *
+ * Fails CLOSED: with no system user available the caller is returned, i.e. today's behaviour.
+ * Ownership/consent gates must NEVER use this.
+ */
+export function ResolveRecordingStoreUser(contextUser: UserInfo): UserInfo {
+  if (contextUser?.IsMagicLinkAnonymous || contextUser?.WidgetGuestContext?.WidgetID) {
+    return ResolveScopedAnonymousRunUser(contextUser);
+  }
+  const systemUser = UserCache.Instance.GetSystemUser();
+  if (!systemUser) {
+    LogError(
+      `[Realtime] Cannot elevate the recording store for user ${contextUser?.ID}: no system user available; ` +
+        'storing as the caller.',
+    );
+    return contextUser;
+  }
+  return systemUser;
+}
+
+/**
  * Builds an elevated {@link UserPayload} that runs subsequent agent work as `elevatedUser` while
  * preserving the guest's `sessionId` — so progress/streaming PubSub still routes to the guest's
  * live websocket, but all AI run-entity writes happen under the trusted server principal.

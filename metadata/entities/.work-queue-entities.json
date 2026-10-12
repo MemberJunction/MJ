@@ -17,6 +17,10 @@
       "AllowDirectSQLInsert": true,
       "AllowDirectSQLUpdate": true,
       "AllowDirectSQLDelete": true
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:21:58.659Z",
+      "checksum": "53d510118dd2ae6d1c757660b71585828e2fd086c251428475f802d5bb4f0491"
     }
   },
   {
@@ -37,6 +41,10 @@
       "AllowDirectSQLInsert": true,
       "AllowDirectSQLUpdate": true,
       "AllowDirectSQLDelete": true
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:21:58.681Z",
+      "checksum": "0fa22d0193e4272da024415b912a706f30df2c02de76eebc10dd30c26f777a0f"
     }
   },
   {
@@ -57,6 +65,10 @@
       "AllowDirectSQLInsert": true,
       "AllowDirectSQLUpdate": true,
       "AllowDirectSQLDelete": true
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:21:58.703Z",
+      "checksum": "48314d5ed2c8ffa97f4620339e1a6a6fa458b42a59f00ab3b0661d32abf2d12d"
     }
   }
 ]

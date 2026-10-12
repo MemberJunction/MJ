@@ -565,6 +565,13 @@ export class SessionManager {
         const saved = await this.saveOrLog(session, 'Heartbeat');
         if (saved) {
             this.heartbeatLastWrite.Set(agentSessionID.toLowerCase(), Date.now());
+            // A live session keeps its co-agent run live too — on whichever instance gets its heartbeats —
+            // or the agent-run watchdog force-fails the run mid-call. Same elevation as the finalize path.
+            this.realtimeClientSessionService.KeepCoAgentRunAlive(
+                this.parseSessionRunConfig(session.Config_).coAgentRunID,
+                provider,
+                ResolveScopedAnonymousRunUser(contextUser),
+            );
         }
         return saved;
     }

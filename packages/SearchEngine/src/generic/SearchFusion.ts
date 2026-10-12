@@ -18,6 +18,27 @@
 import { ComputeRRF, ScoredCandidate } from '@memberjunction/core';
 import { SearchResultItem, SearchSource, SearchScoreBreakdown, FusionWeightsByProvider } from './search.types';
 
+/** The RRF smoothing constant: a result at rank r in a list contributes weight / (RRF_K + r). */
+export const RRF_K = 60;
+
+/**
+ * Apply `MinScore` to one lane's results, before fusion.
+ *
+ * Only the semantic (vector) lane gets a numeric floor: its score is a similarity, so "below X"
+ * means "not similar enough". Keyword, full-text, tag and storage hits have no floor — a hit
+ * there already means the text matched, and their scores (a match-breadth heuristic, a rank) say
+ * nothing a threshold could use. Fused RRF scores are rank-based and never compared to MinScore.
+ *
+ * @param source - The lane the results came from.
+ * @param results - That lane's results, as the provider returned them.
+ * @param minScore - The caller's MinScore (0 or unset = no floor).
+ * @returns The results that pass, order unchanged.
+ */
+export function ApplySemanticFloor(source: SearchSource, results: SearchResultItem[], minScore: number | undefined): SearchResultItem[] {
+    if (source !== 'vector' || !minScore || minScore <= 0) return results;
+    return results.filter(r => (r.ScoreBreakdown?.Vector ?? r.Score) >= minScore);
+}
+
 /**
  * A labeled list of search results from a single source.
  */
@@ -37,9 +58,9 @@ export class SearchFusion {
      * Fuse multiple ranked result lists using RRF, deduplicate, and return
      * the top results up to maxResults.
      *
-     * When only one source has results, scores are normalized relative to
-     * the top result so the best match appears at ~95% rather than raw
-     * cosine similarity (~40-50%).
+     * `Score` on every returned item is the RRF score divided by its maximum (see
+     * `normalizeByRRFMax`), in [0, 1], including when only one source has results.
+     * Each provider's raw score stays in `ScoreBreakdown`.
      *
      * @param lists - Labeled result lists from each search source
      * @param maxResults - Maximum number of results to return
@@ -69,13 +90,19 @@ export class SearchFusion {
             ),
         }));
 
-        // Collect only lists that have (sanitized) results
-        const nonEmpty = sanitized.filter(l => l.Results.length > 0);
+        // Collect only lists that have (sanitized) results. A provider list carrying FusionLane
+        // tags is first split into one ranked list per lane (see splitByFusionLane).
+        const nonEmpty = sanitized.flatMap(l => this.splitByFusionLane(l)).filter(l => l.Results.length > 0);
         if (nonEmpty.length === 0) return [];
 
-        // Single source: return as-is (no normalization needed, scores are native to that source)
+        // Single source: RRF over one list is just its rank order, so Score = 1/(k+r) divided by
+        // its maximum 1/(k+1), i.e. (k+1)/(k+r). The same scale as the multi-source path, so a
+        // MinScore-free client sees one meaning of Score; the raw score stays in ScoreBreakdown.
         if (nonEmpty.length === 1) {
-            return nonEmpty[0].Results.slice(0, maxResults);
+            return nonEmpty[0].Results.slice(0, maxResults).map((r, i) => ({
+                ...r,
+                Score: (RRF_K + 1) / (RRF_K + i + 1),
+            }));
         }
 
         // Multiple sources: apply RRF with optional weights
@@ -133,11 +160,12 @@ export class SearchFusion {
             }
         }
 
-        return fused.slice(0, maxResults).map(candidate => {
+        const ranked = fused.slice(0, maxResults).map(candidate => {
             const item = resultMap.get(candidate.ID);
             if (item) return { ...item, Score: candidate.Score };
             return this.createFallbackItem(candidate);
         });
+        return this.normalizeByRRFMax(ranked, weights);
     }
 
     /**
@@ -181,14 +209,13 @@ export class SearchFusion {
                 });
             }
         }
-        // Ensure Score is the max of all ScoreBreakdown values (handles cases
-        // where dedup didn't merge but breakdown was set from a single source)
-        const deduplicated = Array.from(seen.values()).map(r => {
-            const breakdownValues = Object.values(r.ScoreBreakdown).filter((v): v is number => typeof v === 'number' && v > 0);
-            const breakdownMax = breakdownValues.length > 0 ? Math.max(...breakdownValues) : 0;
-            return breakdownMax > r.Score ? { ...r, Score: breakdownMax } : r;
-        });
-        return deduplicated.sort((a, b) => b.Score - a.Score);
+        // Score is the RANKING score: RRF divided by its maximum (`normalizeByRRFMax`) or
+        // a reranker's relevance. It is deliberately NOT raised to the max ScoreBreakdown value:
+        // breakdowns are raw, per-provider scores on different scales (cosine ~0.8 vs the keyword
+        // scorer's ~0.6), and sorting by them threw the fused order away, so an exact keyword
+        // match ranked below every semantic near-miss. A stable sort keeps tied RRF positions in
+        // fused order.
+        return Array.from(seen.values()).sort((a, b) => b.Score - a.Score);
     }
 
     /**
@@ -200,11 +227,24 @@ export class SearchFusion {
         maxResults: number,
         fusionWeights?: FusionWeightsByProvider
     ): SearchResultItem[] {
-        // Build ScoredCandidate arrays for each source. `Rank` is carried as an excess
-        // property for test doubles that key off it; production ComputeRRF ignores it.
-        const rankedLists: ScoredCandidate[][] = lists.map(list =>
-            list.Results.map((r, i) => ({
-                ID: r.RecordID,
+        // A result's identity is EntityName + RecordID: record IDs alone collide across entities
+        // (integer keys, e.g. Accounts:1 vs Contacts:1). And each lane counts a record ONCE, at its
+        // first (best) position: ComputeRRF adds every occurrence, so a duplicate within one lane
+        // would score above the [0, 1] maximum. `Rank` is carried as an excess property for test
+        // doubles that key off it; production ComputeRRF ranks by array position.
+        const keyOf = (r: SearchResultItem) => `${r.EntityName}::${r.RecordID}`;
+        const dedupedLists: SearchResultItem[][] = lists.map(list => {
+            const seen = new Set<string>();
+            return list.Results.filter(r => {
+                const key = keyOf(r);
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        });
+        const rankedLists: ScoredCandidate[][] = dedupedLists.map(list =>
+            list.map((r, i) => ({
+                ID: keyOf(r),
                 Score: r.Score,
                 Rank: i + 1
             } as ScoredCandidate))
@@ -213,20 +253,18 @@ export class SearchFusion {
         const weights = lists.map(l => fusionWeights?.[l.Source] ?? 1);
         const fused = this.computeWeightedRRF(rankedLists, weights);
 
-        // Build a lookup from RecordID to full result item. When the same record
-        // appears in multiple provider lists, merge their `ScoreBreakdown`s so the
-        // multi-provider evidence isn't lost. Keeping only the first occurrence
-        // would silently drop the second provider's contribution — which then
-        // causes the downstream `Deduplicate.breakdownMax` post-processing to
-        // under-rank multi-provider hits (they'd look single-provider).
+        // Build a lookup from the result key to the full item. When the same record appears in
+        // several provider lists, merge their `ScoreBreakdown`s so the multi-provider evidence
+        // isn't lost.
         const resultMap = new Map<string, SearchResultItem>();
-        for (const list of lists) {
-            for (const r of list.Results) {
-                const existing = resultMap.get(r.RecordID);
+        for (const list of dedupedLists) {
+            for (const r of list) {
+                const key = keyOf(r);
+                const existing = resultMap.get(key);
                 if (!existing) {
-                    resultMap.set(r.RecordID, r);
+                    resultMap.set(key, r);
                 } else {
-                    resultMap.set(r.RecordID, {
+                    resultMap.set(key, {
                         ...existing,
                         ScoreBreakdown: { ...existing.ScoreBreakdown, ...r.ScoreBreakdown },
                     });
@@ -235,7 +273,7 @@ export class SearchFusion {
         }
 
         // Map fused candidates back to full result items
-        return fused.slice(0, maxResults).map(candidate => {
+        const ranked = fused.slice(0, maxResults).map(candidate => {
             const item = resultMap.get(candidate.ID);
             if (item) {
                 return { ...item, Score: candidate.Score };
@@ -243,6 +281,7 @@ export class SearchFusion {
             // Fallback (shouldn't happen in practice)
             return this.createFallbackItem(candidate);
         });
+        return this.normalizeByRRFMax(ranked, weights);
     }
 
     /**
@@ -257,27 +296,47 @@ export class SearchFusion {
     private computeWeightedRRF(
         rankedLists: ScoredCandidate[][],
         weights: number[],
-        k: number = 60
+        k: number = RRF_K
     ): ScoredCandidate[] {
         return ComputeRRF(rankedLists, k, weights);
     }
 
     /**
-     * Normalize scores when only one search source returned results.
-     * Scales scores relative to the top result so the best match shows
-     * ~95% instead of raw cosine similarity (~40-50%).
+     * Split a provider's list into one ranked list per `FusionLane`, keeping each lane's order.
+     *
+     * A provider can return results from sources whose scores aren't comparable (the vector
+     * provider: one embedding model per lane). Fusing them as separate RRF lists merges them by
+     * rank instead of by score. Each sub-list keeps the provider's `Source`, so it gets that
+     * source's fusion weight. A list with no lane tags is returned unchanged.
      */
-    private normalizeScores(results: SearchResultItem[]): SearchResultItem[] {
-        if (results.length === 0) return results;
+    private splitByFusionLane(list: LabeledResultList): LabeledResultList[] {
+        if (!list.Results.some(r => r.FusionLane)) return [list];
+        const lanes = new Map<string, SearchResultItem[]>();
+        for (const r of list.Results) {
+            const key = r.FusionLane ?? '';
+            const lane = lanes.get(key);
+            if (lane) lane.push(r); else lanes.set(key, [r]);
+        }
+        return Array.from(lanes.values()).map(results => ({ Source: list.Source, Results: results }));
+    }
 
-        const maxScore = results[0].Score; // Results are already sorted desc
-        if (maxScore <= 0) return results;
-
-        const scaleFactor = 0.95 / maxScore;
-        return results.map(r => ({
-            ...r,
-            Score: Math.min(0.99, r.Score * scaleFactor)
-        }));
+    /**
+     * Divide each fused RRF score by the largest RRF score possible for these lists.
+     *
+     * A result ranked #1 by every list scores Σ weight / (k + 1); that is the maximum, so the
+     * normalized Score is in [0, 1] and 1.0 means "every list that returned results ranked it
+     * first". The mapping is a constant divisor, so order (and ties) are unchanged, it uses ranks
+     * only (no provider's raw scale leaks in), and it means the same thing on every query. RRF is
+     * not a calibrated relevance or confidence, so this is not either; thresholds belong on a
+     * lane's own score before fusion (see `SearchEngine` MinScore).
+     *
+     * @param ranked - Results in fused order, `Score` holding the raw RRF value.
+     * @param weights - The per-list weights passed to RRF; zero-weight lists can't contribute.
+     */
+    private normalizeByRRFMax(ranked: SearchResultItem[], weights: number[]): SearchResultItem[] {
+        const maxPossible = weights.filter(w => w > 0).reduce((sum, w) => sum + w, 0) / (RRF_K + 1);
+        if (maxPossible <= 0) return ranked;
+        return ranked.map(r => ({ ...r, Score: r.Score / maxPossible }));
     }
 
     /**

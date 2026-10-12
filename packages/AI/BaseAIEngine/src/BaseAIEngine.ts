@@ -634,6 +634,35 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
+     * The collections {@link AdditionalLoading} attaches to parents. When these read zero while
+     * the child arrays are full, the derived state has been lost — the failure that row counts
+     * cannot show (model selection then finds no vendor candidates).
+     */
+    protected override GetDerivedStateCensus(): Record<string, number> {
+        const count = <TParent>(parents: TParent[] | undefined, children: (p: TParent) => unknown[] | undefined) => {
+            let withChildren = 0;
+            let attached = 0;
+            for (const parent of parents ?? []) {
+                const n = children(parent)?.length ?? 0;
+                if (n > 0) withChildren++;
+                attached += n;
+            }
+            return { withChildren, attached };
+        };
+        const models = count(this._models, m => m.ModelVendors);
+        const categories = count(this._promptCategories, c => c.Prompts);
+        const agents = count(this._agents, a => a.Notes);
+        return {
+            ModelsWithVendors: models.withChildren,
+            VendorsAttached: models.attached,
+            CategoriesWithPrompts: categories.withChildren,
+            PromptsAttached: categories.attached,
+            AgentsWithNotes: agents.withChildren,
+            NotesAttached: agents.attached,
+        };
+    }
+
+    /**
      * Convenience method to returns the highest power model for a given vendor and model type. Loads the metadata if not already loaded.
      * @param vendorName - if set to null, undefined, or an empty string, then all models of the specified type are considered
      * @param modelType - the type of model to consider

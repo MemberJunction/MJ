@@ -1,5 +1,63 @@
 # Change Log - @memberjunction/ai-openai
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 279b93e: Multi-agent rooms now take turns properly with full-duplex realtime models, and the Live Room doubles as an agent test bed.
+  - **Model-side addressing.** `IAddressedMatcher` gains a model-judged implementation next to the name-matching one. Full-duplex sessions get two host tools, `i_am_addressed` and `yield_turn`, because neither vendor offers a native signal. `TurnAddressing` (`Auto` | `ModelSide` | `Regex`) is selectable per session; `Auto` uses the model's judgement when the model reports the new `FullDuplex` capability (GPT-Live, Gemini 3.8 Live with always-on proactive audio) and name matching otherwise.
+  - **Floor discipline.** `MultiAgentRoomCoordinator` now grants hand-offs with a TTL (a third agent cannot jump in), keeps backchannels (short "mm-hm" acknowledgements) off the floor, lets a person's speech preempt the holder through the existing barge-in flush path while delegated work keeps running, and caps consecutive agent-to-agent turns (default 8, configurable). A new `FullDuplexTurnGate` enforces it on models that decide for themselves when to speak, so two agents never speak at once even if neither asks first.
+  - **Test bed.** New `GetLiveKitRoomTurnState` query and typed `GraphQLLiveKitClient.GetRoomTurnState`; new `mj-livekit-turn-state` widget; the Live Room gets per-agent turn mode and addressing pickers, roster badges and a live Turns panel (floor holder, hand-offs, backchannels, loop cap, event feed) that also works for a person who joins an existing room.
+  - **Tests.** A deterministic replay harness with twelve recorded room timelines asserts no overlapping agent speech, no run beyond the loop cap, humans always preempt and backchannels never take the floor.
+
+  No schema, metadata or CodeGen changes. Live-model behaviour of the host tools is not yet verified; see the "Multi-agent rooms" section of `plans/realtime/bridges-and-widget/LIVE-CALL-CHECKLIST.md`.
+
+- 72e082b: fix(realtime): a spoken update no longer wipes the session identity it speaks under
+
+  `RequestSpokenUpdate` sent the caller's direction as `response.create`'s per-response
+  `instructions`. On the OpenAI Realtime protocol that field is a **full override of the session
+  system prompt for that response**, not an addition to it — so the one turn riding this method spoke
+  with no identity at all: no persona, no name, none of the standing directives the session was
+  minted with.
+
+  The server-side driver already knew the rule and guarded the BLANK case on it, in its own words:
+  forwarding `''` "would wipe the co-agent identity framing (incl. the `call invoke-target-agent,
+don't do the work yourself` directive)". The non-blank case was never guarded, and it wipes exactly
+  the same framing — just less visibly, because only the requested turn loses it while every other
+  turn in the same session reads correctly.
+
+  Reported from a downstream hiring product (bizapps-caliber#397), where the failure was as visible as
+  it gets: the interviewer's opening turn — the first thing an external candidate hears — introduced
+  her as _"ChatGPT, your friendly voice companion"_, while turns 4, 7 and 12 of the same session all
+  correctly said _"I'm Sam Rivera, Support Team Lead."_ The candidate asked about it unprompted and
+  the model conceded it had broken character.
+
+  Both twins now carry the session prompt ahead of the direction, so the direction stays last (the
+  most recent line is the one a model weights hardest) and no caller has to restate an identity the
+  session already holds:
+  - `@memberjunction/ai-realtime-client` — `OpenAIProtocolRealtimeClient.RequestSpokenUpdate` builds
+    its frame through a new `buildSpokenUpdateEvent`, reading the pact through a
+    `currentSessionInstructions()` seam that each transport answers with the config it actually
+    applied (WebRTC from `sessionConfig`, websocket from `sessionObject`). A blank direction now
+    sends a bare `response.create`, matching the server twin.
+  - `@memberjunction/ai-openai` — `OpenAIRealtimeSession` retains the prompt it last sent in
+    `session.update` and carries it the same way.
+
+  This reaches every caller of the method, not only an opening turn: silence check-ins, progress
+  narration and delegation narration were all speaking without identity on that turn.
+
+  `OpenAILiveClient` is deliberately unchanged — it sends a bare `response.create` after
+  `session.commentary.append`, so the session prompt already governs there and it never had this
+  defect.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [bea2386]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Minor Changes

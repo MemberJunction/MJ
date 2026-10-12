@@ -27,7 +27,7 @@ import { CommittedWrite, PushAbortedError, DescribeCommitFailure, DescribeRollba
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
-import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
+import { DescribeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
 import { resolveCollectionRelationship } from '@memberjunction/record-graph';
@@ -1056,7 +1056,7 @@ export class PushService {
     
     // Issue #4199: a push against an entity whose subclass is not loaded in this process
     // "succeeds" with a generic BaseEntity and silently skips the entity's custom logic. Say so.
-    const subclassWarning = describeMissingEntitySubclass(String(entityConfig.entity ?? ''), { dryRun: options.dryRun });
+    const subclassWarning = DescribeMissingEntitySubclass(String(entityConfig.entity ?? ''), { DryRun: options.dryRun });
     if (subclassWarning) {
       this.warnings.push(subclassWarning);
       callbacks?.onWarn?.(`⚠️  ${subclassWarning}`);
@@ -1844,6 +1844,19 @@ export class PushService {
         return { status: 'updated', batchContextEntry };
       } else {
         callbacks?.onLog?.(`[DRY RUN] Would create ${entityName} record`);
+        // A real push records the create after Save; a dry run records it here so the
+        // recap counts it. Only a key the record declares is shown: NewRecord() assigns
+        // a throwaway UUID that changes every run and is never the one a push writes.
+        const entityInfo = this.syncEngine.getEntityInfo(entityName);
+        const primaryKeyDisplay = (entityInfo?.PrimaryKeys ?? [])
+          .filter((pk) => resolvedPrimaryKey?.[pk.Name] != null || record.fields?.[pk.Name] != null)
+          .map((pk) => `${pk.Name}: ${resolvedPrimaryKey?.[pk.Name] ?? entity.Get(pk.Name)}`);
+        this.changeDetails.push({
+          entityName,
+          primaryKey: primaryKeyDisplay.length > 0 ? primaryKeyDisplay.join(', ') : 'new',
+          Operation: 'created',
+          fields: [],
+        });
         return { status: 'created', batchContextEntry };
       }
     }
