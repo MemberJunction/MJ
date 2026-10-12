@@ -19,6 +19,7 @@ import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitH
 import semver from 'semver';
 import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
 import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
+import { OfferTemplateUser } from './template-user.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
@@ -467,6 +468,11 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
           Callbacks: context.Callbacks,
           Manifest: manifest,
         }, context, manifest);
+      }
+      // Step 16c: Offer the app's template user to the installer (never fatal).
+      if (manifest.templateUser) {
+        Callbacks?.OnProgress?.('Template User', `Setting up ${manifest.displayName}'s template user...`);
+        await OfferTemplateUser(manifest, context);
       }
       await SetAppStep(context.ContextUser, createdAppId!, 'HooksRun');
     }
