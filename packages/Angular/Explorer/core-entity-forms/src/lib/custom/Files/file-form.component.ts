@@ -6,6 +6,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJFileFormComponent } from '../../generated/Entities/MJFile/mjfile.form.component';
+import { DescribeFileSize, MediaLoadsByElement, type FileMediaType } from './file-form.logic';
 import { z } from 'zod';
 
 const CreateMediaAccessTokenMutation = gql`
@@ -152,6 +153,10 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
             // fallback
           }
           this.IsMediaLoaded = true;
+        } else if (!MediaLoadsByElement(mediaType)) {
+          // No element will fire `load` for this type: the fallback card is the view, so it is loaded now.
+          // Without this the overlay stayed on "Loading…" for every .docx, .xlsx, .zip and the like (MJ#4947).
+          this.IsMediaLoaded = true;
         }
       } else {
         this.IsMediaLoaded = true;
@@ -176,7 +181,7 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
   /**
    * Determines media type category based on MIME type or file extension.
    */
-  public get MediaType(): 'image' | 'pdf' | 'video' | 'audio' | 'text' | 'other' {
+  public get MediaType(): FileMediaType {
     const mime = (this.record?.ContentType || '').toLowerCase();
     const name = (this.record?.Name || '').toLowerCase();
 
@@ -207,12 +212,10 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
     }
   }
 
-  public FormatFileSize(bytes: number | null | undefined): string {
-    if (bytes == null || isNaN(bytes) || bytes <= 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const idx = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    const val = bytes / Math.pow(1024, idx);
-    return `${val.toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`;
+  /** The size badge's text, or null when no size is recorded: `MJ: Files` has no length column today. */
+  public get FileSizeLabel(): string | null {
+    const length = (this.record as unknown as { ContentLength?: number | null }).ContentLength;
+    return DescribeFileSize(length);
   }
 
   public OpenInExternalTab(): void {
