@@ -15,6 +15,7 @@
  *
  * @module @memberjunction/ai-agents
  */
+import { endianness } from 'os';
 import { Decoder } from '@evan/opus';
 import { IMetadataProvider, LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { MJAIAgentEntity, MJAIAgentSessionEntity, MJFileEntity } from '@memberjunction/core-entities';
@@ -22,7 +23,7 @@ import { FileStorageEngine } from '@memberjunction/storage';
 import {
     ParseRecordingShard, RecordingShardContents, RecordingShardFormatError, RECORDING_SAMPLE_RATE,
 } from '@memberjunction/ai-core-plus';
-import { IRealtimeRecordingLedger, LedgerShard } from './realtime-recording-ledger';
+import { IRealtimeRecordingLedger, LedgerShard, LedgerShardMetadata } from './realtime-recording-ledger';
 import {
     LinkRecordingToSession, RecordingFolder, ResolveRecordingStorageAccountID, ResolveStorageAccountIDForProvider,
     WriteRecordingPeaksSidecar, WriteRecordingWavHeader, RECORDING_WAV_HEADER_BYTES,
@@ -49,18 +50,44 @@ export interface IOpusPacketDecoder {
     Reset(): void;
 }
 
+/** A shard whose packets libopus could not decode; its whole range was left silent (and listed as a gap). */
+export interface ShardDecodeFailure {
+    ShardIndex: number;
+    PacketIndex: number;
+    Message: string;
+}
+
 /** Result of {@link AssembleOpusRecordingPcm}. */
 export interface AssembledOpusRecording {
-    /** Mono PCM16 at 48 kHz. */
+    /** Mono PCM16 at 48 kHz. On little-endian hosts this is a view over `Wav`'s data section. */
     Pcm: Int16Array;
-    /** Silent ranges, in order. */
+    /** The recording as a canonical 44-byte-header mono PCM16 WAV holding `Pcm`. */
+    Wav: Buffer;
+    /** Silent ranges, in timeline order. */
     Gaps: RecordingGap[];
-    /** True only when the terminal counts are known, every expected shard is present, and nothing is silent-filled. */
+    /** Shards dropped because a packet failed to decode (each is also in `Gaps`). */
+    DecodeFailures: ShardDecodeFailure[];
+    /** True only when the terminal counts are known, every expected shard is present and decoded, and nothing is silent-filled. */
     Complete: boolean;
 }
 
-/** Outcome of {@link AssembleRealtimeRecordingFromLedger}. */
-export type AssembleRealtimeRecordingOutcome = 'Complete' | 'Partial' | 'Failed' | 'Superseded' | 'Deferred';
+/**
+ * A deterministic assembly failure: re-running against the same data fails the same way (bounds
+ * exceeded, overlapping or duplicate shards, no storage account, agent not loadable), so the recording
+ * is finished as `Failed`. Any other error is treated as transient (see {@link AssembleRealtimeRecordingFromLedger}).
+ */
+export class RecordingAssemblyError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'RecordingAssemblyError';
+    }
+}
+
+/**
+ * Outcome of {@link AssembleRealtimeRecordingFromLedger}. `Retry`: a transient failure left the claim in
+ * `Assembling` for a stale re-claim to retry.
+ */
+export type AssembleRealtimeRecordingOutcome = 'Complete' | 'Partial' | 'Failed' | 'Superseded' | 'Deferred' | 'Retry';
 
 /** Input to {@link AssembleRealtimeRecordingFromLedger}. */
 export interface AssembleRealtimeRecordingInput {
@@ -86,9 +113,9 @@ export interface AssembleRealtimeRecordingInput {
 export const MAX_ASSEMBLY_SHARDS = 2000;
 
 /**
- * Most samples one assembly produces: 3 h at 48 kHz. The PCM buffer and its WAV copy are each 2 bytes
- * per sample (~1 GB each at this cap), so this is the memory ceiling of one assembly; the captured count
- * comes from the browser, so it must be bounded before anything is allocated.
+ * Most samples one assembly produces: 3 h at 48 kHz. The WAV is 2 bytes per sample (~1 GB at this cap;
+ * on big-endian hosts a separate PCM array doubles that), so this is the memory ceiling of one
+ * assembly; the captured count comes from the browser, so it must be bounded before anything is allocated.
  */
 export const MAX_ASSEMBLY_SAMPLES = RECORDING_SAMPLE_RATE * 60 * 180;
 
@@ -108,7 +135,11 @@ const BYTES_PER_SAMPLE = 2;
  * - A run of missing indexes becomes one silent gap from the end of the previous shard to the start of
  *   the next present one (a trailing run: to the end of the recording), listing the missing indexes.
  * - A present shard that starts after the end of the previous one leaves a silent gap with no indexes.
+ * - A shard with a packet libopus cannot decode is silenced whole, listed as a gap with its index and
+ *   in `DecodeFailures`.
  * - After any gap the decoder is reset.
+ *
+ * The samples are decoded straight into the returned WAV's data section (see `allocatePcm16Wav`).
  *
  * The shard count is `expectedShards`, or the highest present index + 1 when no terminal signal has
  * arrived. The length is `capturedSamples`, or the end of the last shard when unknown (and never less
@@ -118,7 +149,7 @@ const BYTES_PER_SAMPLE = 2;
  * @param expectedShards Shard count from the terminal signal, or null when none arrived.
  * @param capturedSamples Captured sample count from the terminal signal, or null.
  * @param decoder The one decoder for this stream.
- * @throws Error on a duplicate index, a shard overlapping the audio before it, a decode failure, or a
+ * @throws RecordingAssemblyError on a duplicate index, a shard overlapping the audio before it, or a
  *   shard/sample count over {@link MAX_ASSEMBLY_SHARDS} / {@link MAX_ASSEMBLY_SAMPLES}.
  */
 export function AssembleOpusRecordingPcm(
@@ -133,8 +164,10 @@ export function AssembleOpusRecordingPcm(
     const length = Math.max(capturedSamples ?? 0, lastEnd);
     AssertRecordingAssemblyBounds(shardCount, length);
 
-    const pcm = new Int16Array(length);
+    const output = allocatePcm16Wav(length, RECORDING_SAMPLE_RATE);
+    const pcm = output.Pcm;
     const gaps: RecordingGap[] = [];
+    const decodeFailures: ShardDecodeFailure[] = [];
     let position = 0;
     let missing: number[] = [];
     let decodedAny = false;
@@ -145,7 +178,7 @@ export function AssembleOpusRecordingPcm(
             continue;
         }
         if (shard.StartSample < position) {
-            throw new Error(`shard ${index} starts at sample ${shard.StartSample}, before the end of the audio before it (${position})`);
+            throw new RecordingAssemblyError(`shard ${index} starts at sample ${shard.StartSample}, before the end of the audio before it (${position})`);
         }
         if (shard.StartSample > position || missing.length > 0) {
             gaps.push({ startSample: position, sampleCount: shard.StartSample - position, indexes: missing });
@@ -154,7 +187,15 @@ export function AssembleOpusRecordingPcm(
                 decoder.Reset();
             }
         }
-        decodeShardInto(pcm, shard, decoder);
+        const failure = decodeShardInto(pcm, shard, decoder);
+        if (failure) {
+            // One bad packet costs its shard, not the recording: silence the whole shard, list it as a gap,
+            // and reset so the next shard does not start from a broken decoder state.
+            pcm.fill(0, shard.StartSample, shard.StartSample + shard.SampleCount);
+            gaps.push({ startSample: shard.StartSample, sampleCount: shard.SampleCount, indexes: [index] });
+            decodeFailures.push(failure);
+            decoder.Reset();
+        }
         decodedAny = true;
         position = shard.StartSample + shard.SampleCount;
     }
@@ -164,7 +205,7 @@ export function AssembleOpusRecordingPcm(
 
     const complete = expectedShards !== null && capturedSamples !== null
         && gaps.length === 0 && shardCount === expectedShards && length === capturedSamples;
-    return { Pcm: pcm, Gaps: gaps, Complete: complete };
+    return { Pcm: pcm, Wav: output.Finish(), Gaps: gaps, DecodeFailures: decodeFailures, Complete: complete };
 }
 
 /**
@@ -175,10 +216,10 @@ export function AssembleOpusRecordingPcm(
  */
 export function AssertRecordingAssemblyBounds(shardCount: number | null, sampleCount: number | null): void {
     if (shardCount !== null && shardCount > MAX_ASSEMBLY_SHARDS) {
-        throw new Error(`refusing to assemble ${shardCount} shards; the limit is ${MAX_ASSEMBLY_SHARDS}`);
+        throw new RecordingAssemblyError(`refusing to assemble ${shardCount} shards; the limit is ${MAX_ASSEMBLY_SHARDS}`);
     }
     if (sampleCount !== null && sampleCount > MAX_ASSEMBLY_SAMPLES) {
-        throw new Error(`refusing to assemble ${sampleCount} samples; the limit is ${MAX_ASSEMBLY_SAMPLES} (3 h at ${RECORDING_SAMPLE_RATE} Hz)`);
+        throw new RecordingAssemblyError(`refusing to assemble ${sampleCount} samples; the limit is ${MAX_ASSEMBLY_SAMPLES} (3 h at ${RECORDING_SAMPLE_RATE} Hz)`);
     }
 }
 
@@ -186,28 +227,56 @@ function indexShards(shards: RecordingShardContents[]): Map<number, RecordingSha
     const byIndex = new Map<number, RecordingShardContents>();
     for (const shard of shards) {
         if (byIndex.has(shard.ShardIndex)) {
-            throw new Error(`duplicate shard index ${shard.ShardIndex}`);
+            throw new RecordingAssemblyError(`duplicate shard index ${shard.ShardIndex}`);
         }
         byIndex.set(shard.ShardIndex, shard);
     }
     return byIndex;
 }
 
-function decodeShardInto(pcm: Int16Array, shard: RecordingShardContents, decoder: IOpusPacketDecoder): void {
+/** Decodes a shard into its range; returns the first packet that failed to decode (the caller silences the shard), else null. */
+function decodeShardInto(pcm: Int16Array, shard: RecordingShardContents, decoder: IOpusPacketDecoder): ShardDecodeFailure | null {
     let written = 0;
-    shard.Packets.forEach((packet, packetIndex) => {
+    for (let packetIndex = 0; packetIndex < shard.Packets.length; packetIndex++) {
         let frame: Int16Array;
         try {
-            frame = decoder.Decode(packet);
+            frame = decoder.Decode(shard.Packets[packetIndex]);
         } catch (error) {
-            throw new Error(`decoding shard ${shard.ShardIndex}, packet ${packetIndex} failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+            return { ShardIndex: shard.ShardIndex, PacketIndex: packetIndex, Message: error instanceof Error ? error.message : String(error) };
         }
         const take = Math.min(frame.length, shard.SampleCount - written);
         if (take > 0) {
             pcm.set(frame.subarray(0, take), shard.StartSample + written);
             written += take;
         }
-    });
+    }
+    return null;
+}
+
+/**
+ * A zeroed WAV of `sampleCount` samples plus the Int16 array to write the samples into. On a
+ * little-endian host (every Node deployment target) that array is a view over the WAV's data section,
+ * so the recording is held once and `Finish` is free; elsewhere it is a separate array that `Finish`
+ * copies in little-endian order.
+ */
+function allocatePcm16Wav(sampleCount: number, sampleRate: number): { Pcm: Int16Array; Finish(): Buffer } {
+    const dataSize = sampleCount * BYTES_PER_SAMPLE;
+    const wav = Buffer.alloc(RECORDING_WAV_HEADER_BYTES + dataSize);
+    WriteRecordingWavHeader(wav, sampleRate, dataSize);
+    const dataOffset = wav.byteOffset + RECORDING_WAV_HEADER_BYTES;
+    if (endianness() === 'LE' && dataOffset % BYTES_PER_SAMPLE === 0) {
+        return { Pcm: new Int16Array(wav.buffer, dataOffset, sampleCount), Finish: () => wav };
+    }
+    const pcm = new Int16Array(sampleCount);
+    return {
+        Pcm: pcm,
+        Finish: () => {
+            for (let i = 0; i < pcm.length; i++) {
+                wav.writeInt16LE(pcm[i], RECORDING_WAV_HEADER_BYTES + i * BYTES_PER_SAMPLE);
+            }
+            return wav;
+        },
+    };
 }
 
 /**
@@ -249,13 +318,9 @@ export function ComputeRecordingPeaks(pcm: Int16Array, buckets: number = PEAK_BU
  * `WriteRecordingWavHeader`), samples little-endian regardless of host byte order.
  */
 export function EncodePcm16Wav(pcm: Int16Array, sampleRate: number): Buffer {
-    const dataSize = pcm.length * BYTES_PER_SAMPLE;
-    const wav = Buffer.alloc(RECORDING_WAV_HEADER_BYTES + dataSize);
-    WriteRecordingWavHeader(wav, sampleRate, dataSize);
-    for (let i = 0; i < pcm.length; i++) {
-        wav.writeInt16LE(pcm[i], RECORDING_WAV_HEADER_BYTES + i * BYTES_PER_SAMPLE);
-    }
-    return wav;
+    const output = allocatePcm16Wav(pcm.length, sampleRate);
+    output.Pcm.set(pcm);
+    return output.Finish();
 }
 
 /** {@link IOpusPacketDecoder} over libopus (`@evan/opus`: native binding, WASM fallback). */
@@ -287,11 +352,14 @@ export function CreateLibopusDecoder(): IOpusPacketDecoder {
 /**
  * Assembles a claimed session's shard ledger into `recording.wav` + `peaks.json` and finishes the claim.
  *
- * Flow: read the session's terminal counts (bounded before anything is loaded) → resolve where the
- * recording is stored → load and parse the shards (a shard that fails to parse, or whose header
- * disagrees with its ledger row, is logged and treated as missing) → decode ({@link AssembleOpusRecordingPcm}).
- * Then:
- * - incomplete and not `ForcePartial`: the claim is handed back as `Pending` with no file → `Deferred`;
+ * Flow: read the session's terminal counts and the stored rows' positions (both bounded before any
+ * shard bytes are loaded) → without `ForcePartial`, hand the claim back (`Deferred`) when the positions
+ * alone show the recording cannot be Complete → resolve where the recording is stored → load and parse
+ * the shards (a shard that fails to parse, or whose header disagrees with its ledger row, is logged and
+ * treated as missing) → decode ({@link AssembleOpusRecordingPcm}; a shard with an undecodable packet is
+ * logged and silenced). Then:
+ * - incomplete and not `ForcePartial`: the claim is handed back as `Pending` with no file, keeping the
+ *   gaps already stored for the session's existing recording → `Deferred`;
  * - otherwise, if this claim still holds, the WAV is stored: a first assembly uploads `recording.wav`
  *   into the session folder; a re-assembly overwrites the session's existing WAV object in place, keeping
  *   its `MJ: Files` id. `peaks.json` is rewritten next to it. The finish is fenced on `Version`; only then
@@ -300,16 +368,31 @@ export function CreateLibopusDecoder(): IOpusPacketDecoder {
  * The session is never saved through `BaseEntity` (that rewrites every column and would clobber the
  * concurrent proc writes to the recording state); the finish proc stamps `RecordingFileID`.
  *
- * Never throws: any failure is logged with the session id, the claim is finished as `Failed` (when the
- * fence still holds), and the outcome is `Failed`. A lost fence is `Superseded` and leaves the shards.
+ * Never throws. Failures split by kind:
+ * - a {@link RecordingAssemblyError} (deterministic: bounds exceeded, overlapping or duplicate shards,
+ *   no storage account, agent not loadable) is logged, the claim is finished as `Failed` (when the fence
+ *   still holds), and the outcome is `Failed`;
+ * - any other error (SQL, storage, decoder load: likely transient) is logged with the session id and
+ *   version, and the claim is LEFT in `Assembling` with no finish call; the outcome is `Retry`. The
+ *   janitor's stale-`Assembling` re-claim (with its backoff and give-up cap) retries a closed session,
+ *   and a later terminal or shard re-opens a live one.
+ * A lost fence is `Superseded` and leaves the shards.
  */
 export async function AssembleRealtimeRecordingFromLedger(input: AssembleRealtimeRecordingInput): Promise<AssembleRealtimeRecordingOutcome> {
     try {
         return await assembleFromLedger(input);
     } catch (error) {
-        LogError(`AssembleRealtimeRecordingFromLedger failed (session ${input.SessionID}, version ${input.Version}): ${error instanceof Error ? error.message : String(error)}`);
-        await finishAsFailed(input);
-        return 'Failed';
+        const message = error instanceof Error ? error.message : String(error);
+        if (error instanceof RecordingAssemblyError) {
+            LogError(`AssembleRealtimeRecordingFromLedger failed (session ${input.SessionID}, version ${input.Version}): ${message}`);
+            await finishAsFailed(input);
+            return 'Failed';
+        }
+        LogError(
+            `AssembleRealtimeRecordingFromLedger hit a transient error (session ${input.SessionID}, version ${input.Version}); ` +
+            `the claim stays Assembling for a stale re-claim to retry: ${message}`
+        );
+        return 'Retry';
     }
 }
 
@@ -319,16 +402,28 @@ async function assembleFromLedger(input: AssembleRealtimeRecordingInput): Promis
     const expected = session.RecordingExpectedShards;
     const captured = session.RecordingCapturedSamples;
     AssertRecordingAssemblyBounds(expected, captured);
-    const target = await resolveStorageTarget(session, input);
 
     // Bound the row count too before loading: the terminal counts do not limit how many indexes exist.
     const storedShards = await Ledger.CountShardsBelow(SessionID, SQL_INT_MAX);
     AssertRecordingAssemblyBounds(storedShards, null);
+    const positions = await Ledger.LoadShardMetadata(SessionID);
+    if (!ForcePartial && !couldBeComplete(positions, expected, captured)) {
+        // Decided from row positions alone, so an incomplete ledger never costs a full load and decode.
+        return handBack(input, session);
+    }
+    logOverrun(SessionID, positions, captured);
+    const target = await resolveStorageTarget(session, input);
+
     const shards = parseLedgerShards(SessionID, await Ledger.LoadShards(SessionID));
     const assembled = AssembleOpusRecordingPcm(shards, expected, captured, CreateLibopusDecoder());
+    for (const failure of assembled.DecodeFailures) {
+        LogError(
+            `AssembleRealtimeRecordingFromLedger (session ${SessionID}): shard ${failure.ShardIndex} packet ${failure.PacketIndex} ` +
+            `failed to decode (${failure.Message}); the shard is silenced and listed as a gap`
+        );
+    }
     if (!assembled.Complete && !ForcePartial) {
-        const released = await Ledger.FinishAssembly({ SessionID, Version, Status: 'Pending', Gaps: [], FileID: null });
-        return released ? 'Deferred' : 'Superseded';
+        return handBack(input, session);
     }
     // Last check before writing storage, so a superseded assembler does not overwrite a newer result.
     // Storage has no compare-and-set, so a claim landing during the write is caught by the fenced finish.
@@ -338,8 +433,7 @@ async function assembleFromLedger(input: AssembleRealtimeRecordingInput): Promis
     }
 
     const status = assembled.Complete ? 'Complete' : 'Partial';
-    const wav = EncodePcm16Wav(assembled.Pcm, RECORDING_SAMPLE_RATE);
-    const stored = await storeWav(target, wav, input);
+    const stored = await storeWav(target, assembled.Wav, input);
     await WriteRecordingPeaksSidecar(SessionID, target.AccountID, ComputeRecordingPeaks(assembled.Pcm), ContextUser);
 
     const finished = await Ledger.FinishAssembly({ SessionID, Version, Status: status, Gaps: assembled.Gaps, FileID: stored.FileID });
@@ -354,6 +448,51 @@ async function assembleFromLedger(input: AssembleRealtimeRecordingInput): Promis
         await deleteAssembledShards(Ledger, SessionID, expected);
     }
     return status;
+}
+
+/**
+ * True when the stored rows' positions allow a Complete recording: terminal counts known, exactly the
+ * indexes `0..expected-1` stored, each starting where the previous one ends, the last ending at
+ * `captured`. A true result can still assemble Partial (a corrupt or undecodable shard).
+ */
+function couldBeComplete(positions: LedgerShardMetadata[], expected: number | null, captured: number | null): boolean {
+    if (expected === null || captured === null || positions.length !== expected) {
+        return false;
+    }
+    let end = 0;
+    for (let i = 0; i < positions.length; i++) {
+        if (positions[i].Index !== i || positions[i].StartSample !== end) {
+            return false;
+        }
+        end = positions[i].StartSample + positions[i].SampleCount;
+    }
+    return end === captured;
+}
+
+/**
+ * Hands an un-forced, incomplete claim back as `Pending` with no file. The stored gaps are passed
+ * through unchanged: they describe the session's existing recording (if any), which this does not replace.
+ */
+async function handBack(input: AssembleRealtimeRecordingInput, session: MJAIAgentSessionEntity): Promise<AssembleRealtimeRecordingOutcome> {
+    const { SessionID, Version, Ledger } = input;
+    const released = await Ledger.FinishAssembly({ SessionID, Version, Status: 'Pending', Gaps: session.RecordingGaps, FileID: null });
+    return released ? 'Deferred' : 'Superseded';
+}
+
+/** Shards running past a terminal's captured count (the call went on after it): kept, but worth knowing about. */
+function logOverrun(sessionID: string, positions: LedgerShardMetadata[], captured: number | null): void {
+    if (captured === null) {
+        return;
+    }
+    const past = positions.filter(p => p.StartSample + p.SampleCount > captured);
+    if (past.length === 0) {
+        return;
+    }
+    const end = Math.max(...past.map(p => p.StartSample + p.SampleCount));
+    LogStatus(
+        `AssembleRealtimeRecordingFromLedger (session ${sessionID}): shards ${past.map(p => p.Index).join(', ')} run to sample ${end}, ` +
+        `${end - captured} samples past the terminal's captured count of ${captured}; the recording keeps them`
+    );
 }
 
 async function loadSession(input: AssembleRealtimeRecordingInput): Promise<MJAIAgentSessionEntity> {
@@ -395,7 +534,7 @@ async function resolveStorageTarget(session: MJAIAgentSessionEntity, input: Asse
         if (file.ProviderKey.replace(/^\/+/, '') === `${RecordingFolder(session.ID)}/recording.wav`) {
             const accountID = await ResolveStorageAccountIDForProvider(file.ProviderID, ContextUser, Provider);
             if (!accountID) {
-                throw new Error(`no storage account for provider ${file.ProviderID} of recording file ${file.ID}`);
+                throw new RecordingAssemblyError(`no storage account for provider ${file.ProviderID} of recording file ${file.ID}`);
             }
             return { AccountID: accountID, ExistingFile: { ID: file.ID, ProviderKey: file.ProviderKey } };
         }
@@ -403,11 +542,11 @@ async function resolveStorageTarget(session: MJAIAgentSessionEntity, input: Asse
     }
     const agent = await Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ContextUser);
     if (!await agent.Load(session.AgentID)) {
-        throw new Error(`could not load agent ${session.AgentID} of session ${session.ID}`);
+        throw new RecordingAssemblyError(`could not load agent ${session.AgentID} of session ${session.ID}`);
     }
     const accountID = await ResolveRecordingStorageAccountID(agent, ContextUser, Provider);
     if (!accountID) {
-        throw new Error(`agent ${session.AgentID} has no recording storage account configured`);
+        throw new RecordingAssemblyError(`agent ${session.AgentID} has no recording storage account configured`);
     }
     return { AccountID: accountID, ExistingFile: null };
 }

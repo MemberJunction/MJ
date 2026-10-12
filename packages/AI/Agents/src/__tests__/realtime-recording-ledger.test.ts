@@ -79,6 +79,10 @@ describe('SqlRealtimeRecordingLedger procs', () => {
             .rejects.toThrow(/bytes/);
         await expect(ledger.RecordShard({ SessionID: SESSION, Index: 0, StartSample: 0, SampleCount: 0, Data: Buffer.alloc(0), Sha256: 'x' }))
             .rejects.toThrow(/bytes/);
+        for (const bad of ['x', 'AB'.repeat(32), 'ab'.repeat(31), 'ab'.repeat(32) + 'a', 'zz'.repeat(32)]) {
+            await expect(ledger.RecordShard({ SessionID: SESSION, Index: 0, StartSample: 0, SampleCount: 0, Data: Buffer.alloc(1), Sha256: bad }))
+                .rejects.toThrow(/Sha256/);
+        }
         expect(provider.SqlCalls).toHaveLength(0);
     });
 
@@ -112,6 +116,13 @@ describe('SqlRealtimeRecordingLedger procs', () => {
         provider.NextRows = [{ AffectedRows: 0 }];
         expect(await ledger.FinishAssembly({ SessionID: SESSION, Version: 2, Status: 'Pending', Gaps: [], FileID: null })).toBe(false);
         expect(lastCall().Params).toEqual([SESSION, 2, 'Pending', '[]', null]);
+
+        // Already-serialized gaps (and null) are stored verbatim, so a hand-back keeps what is stored.
+        provider.NextRows = [{ AffectedRows: 1 }];
+        await ledger.FinishAssembly({ SessionID: SESSION, Version: 4, Status: 'Pending', Gaps: '[{"startSample":1}]', FileID: null });
+        expect(lastCall().Params).toEqual([SESSION, 4, 'Pending', '[{"startSample":1}]', null]);
+        await ledger.FinishAssembly({ SessionID: SESSION, Version: 4, Status: 'Pending', Gaps: null, FileID: null });
+        expect(lastCall().Params).toEqual([SESSION, 4, 'Pending', null, null]);
     });
 
     it('DeleteShardsBelow and PurgeClosedBefore return AffectedRows', async () => {
@@ -157,6 +168,15 @@ describe('SqlRealtimeRecordingLedger reads', () => {
         expect(shards.map(s => [s.Index, s.StartSample, s.SampleCount, [...s.Data]])).toEqual([
             [0, 0, 960, [1, 2, 3]], [1, 960, 480, [4]],
         ]);
+    });
+
+    it('LoadShardMetadata reads positions only (no Data) and converts a string StartSample', async () => {
+        provider.NextViewResult = { Success: true, TotalRowCount: 1, Results: [{ Index: 0, StartSample: '5000000000', SampleCount: 960 }] };
+        const rows = await ledger.LoadShardMetadata(SESSION);
+        const call = provider.ViewCalls[0];
+        expect(call.Fields).toEqual(['Index', 'StartSample', 'SampleCount']);
+        expect(call.OrderBy).toBe('[Index]');
+        expect(rows).toEqual([{ Index: 0, StartSample: 5_000_000_000, SampleCount: 960 }]);
     });
 
     it('LoadShards throws with the view error when RunView fails', async () => {

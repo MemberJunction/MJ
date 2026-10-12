@@ -24,7 +24,7 @@ import {
     AssembleOpusRecordingPcm, AssembleRealtimeRecordingFromLedger, ComputeRecordingPeaks, EncodePcm16Wav, CreateLibopusDecoder,
     IOpusPacketDecoder, RecordingGap, MAX_ASSEMBLY_SHARDS, MAX_ASSEMBLY_SAMPLES,
 } from '../realtime/realtime-recording-opus-assembly';
-import { FinishAssemblyInput, IRealtimeRecordingLedger, LedgerShard, RecordShardResult } from '../realtime/realtime-recording-ledger';
+import { FinishAssemblyInput, IRealtimeRecordingLedger, LedgerShard, LedgerShardMetadata, RecordShardResult } from '../realtime/realtime-recording-ledger';
 
 const SESSION = '0B5E1C2D-3F4A-4B5C-8D6E-7F8091A2B3C4';
 const FOLDER = `realtime-recordings/${SESSION}`;
@@ -156,6 +156,27 @@ describe('AssembleOpusRecordingPcm (layout rules)', () => {
         expect(decoder.Resets).toBe(1);
     });
 
+    it('a decode failure silences its whole shard, lists it as a gap, resets, and reports the packet', () => {
+        const decoder = new ConstantDecoder();
+        const decode = decoder.Decode.bind(decoder);
+        decoder.Decode = () => { if (decoder.Decoded === 3) { decoder.Decoded++; throw new Error('Opus(InvalidPacket)'); } return decode(); };
+        // Shard 1 is packets 2..3 (0-based decode calls 2 and 3); its second packet throws.
+        const result = AssembleOpusRecordingPcm([fakeShard(0, 0, 1920), fakeShard(1, 1920, 1920), fakeShard(2, 3840, 960)], 3, 4800, decoder);
+        expect(result.Gaps).toEqual([{ startSample: 1920, sampleCount: 1920, indexes: [1] }]);
+        expect(result.DecodeFailures).toEqual([{ ShardIndex: 1, PacketIndex: 1, Message: 'Opus(InvalidPacket)' }]);
+        expect(allZero(result.Pcm, 1920, 3840)).toBe(true);
+        expect(result.Pcm[3840]).toBe(1000);
+        expect(decoder.Resets).toBe(1);
+        expect(result.Complete).toBe(false);
+    });
+
+    it('returns the WAV with the PCM in its data section (one buffer)', () => {
+        const result = AssembleOpusRecordingPcm([fakeShard(0, 0, 960)], 1, 960, new ConstantDecoder(-5));
+        expect(result.Wav.equals(EncodePcm16Wav(result.Pcm, 48000))).toBe(true);
+        expect(result.Pcm.buffer).toBe(result.Wav.buffer);
+        expect(result.Wav.readInt16LE(44)).toBe(-5);
+    });
+
     it('throws on a shard that starts before the end of the previous one', () => {
         expect(() => AssembleOpusRecordingPcm([fakeShard(0, 0, 960), fakeShard(1, 500, 960)], 2, 1460, new ConstantDecoder()))
             .toThrow(/overlap|before/i);
@@ -207,6 +228,7 @@ interface SessionRow {
     RecordingCapturedSamples: number | null;
     RecordingFileID: string | null;
     RecordingAssemblyVersion: number;
+    RecordingGaps: string | null;
 }
 
 /** In-memory ledger over the shared session row, with the procs' fencing semantics. */
@@ -231,11 +253,17 @@ class FakeLedger implements IRealtimeRecordingLedger {
         if (input.Version !== this.row.RecordingAssemblyVersion || this.row.RecordingStatus !== 'Assembling') return false;
         this.row.RecordingStatus = input.Status;
         this.row.RecordingFileID = input.FileID ?? this.row.RecordingFileID;
+        this.row.RecordingGaps = Array.isArray(input.Gaps) ? JSON.stringify(input.Gaps) : input.Gaps;
         return true;
     }
     public async LoadShards(): Promise<LedgerShard[]> {
+        this.FullLoads++;
         if (this.LoadError) throw this.LoadError;
         return [...this.Shards.values()].sort((a, b) => a.Index - b.Index);
+    }
+    public FullLoads = 0;
+    public async LoadShardMetadata(): Promise<LedgerShardMetadata[]> {
+        return [...this.Shards.values()].sort((a, b) => a.Index - b.Index).map(({ Index, StartSample, SampleCount }) => ({ Index, StartSample, SampleCount }));
     }
     public async CountShardsBelow(_: string, below: number): Promise<number> { return [...this.Shards.keys()].filter(i => i < below).length; }
     public async DeleteShardsBelow(_: string, below: number): Promise<number> {
@@ -308,7 +336,7 @@ function messages(spy: ReturnType<typeof vi.spyOn>): string[] {
 }
 
 beforeEach(() => {
-    row = { AgentID: 'agent-1', RecordingStatus: 'Pending', RecordingExpectedShards: EXPECTED, RecordingCapturedSamples: CAPTURED, RecordingFileID: null, RecordingAssemblyVersion: 0 };
+    row = { AgentID: 'agent-1', RecordingStatus: 'Pending', RecordingExpectedShards: EXPECTED, RecordingCapturedSamples: CAPTURED, RecordingFileID: null, RecordingAssemblyVersion: 0, RecordingGaps: null };
     ledger = new FakeLedger(row);
     provider = new FakeProvider(row);
     bucket = new FakeBucket();
@@ -390,9 +418,10 @@ describe('AssembleRealtimeRecordingFromLedger', () => {
         expect(ledger.Deletes).toEqual([]);
         expect(ledger.Shards.size).toBe(3);
 
-        // The missing shard arrives late (the record proc would set Pending); a new claim re-assembles.
+        // The missing shard arrives late. Its index is below expected, so the record proc leaves the
+        // session Partial; the re-assembly happens because spClaim accepts Partial.
         ledger.Put(fixtureShards[2]);
-        row.RecordingStatus = 'Pending';
+        expect(row.RecordingStatus).toBe('Partial');
         const second = await claimAndAssemble();
 
         expect(second.outcome).toBe('Complete');
@@ -457,15 +486,92 @@ describe('AssembleRealtimeRecordingFromLedger', () => {
         expect(messages(errorSpy).join('\n')).not.toContain('must not load');
     });
 
-    it('incomplete without ForcePartial -> Deferred: the claim is handed back as Pending with no file', async () => {
+    it('incomplete without ForcePartial -> Deferred from row positions alone: no shard bytes loaded, no file', async () => {
         fixtureShards.filter(s => s.ShardIndex !== 1).forEach(s => ledger.Put(s));
         const { version, outcome } = await claimAndAssemble();
 
         expect(outcome).toBe('Deferred');
-        expect(ledger.Finishes).toEqual([{ SessionID: SESSION, Version: version, Status: 'Pending', Gaps: [], FileID: null }]);
+        expect(ledger.FullLoads).toBe(0);
+        expect(ledger.Finishes).toEqual([{ SessionID: SESSION, Version: version, Status: 'Pending', Gaps: null, FileID: null }]);
         expect(row.RecordingStatus).toBe('Pending');
         expect(uploads).toHaveLength(0);
         expect(bucket.Objects.size).toBe(0);
+    });
+
+    it.each([
+        ['the last row ends before captured', () => { row.RecordingCapturedSamples = CAPTURED + 960; }],
+        ['no terminal yet', () => { row.RecordingExpectedShards = null; row.RecordingCapturedSamples = null; }],
+        ['a row does not start where the previous ended', () => {
+            const s = ledger.Shards.get(2) as LedgerShard;
+            ledger.Shards.set(2, { ...s, StartSample: s.StartSample + 960 });
+        }],
+    ])('un-forced: Deferred before loading when %s', async (_label, arrange) => {
+        fixtureShards.forEach(s => ledger.Put(s));
+        arrange();
+        const { outcome } = await claimAndAssemble();
+        expect(outcome).toBe('Deferred');
+        expect(ledger.FullLoads).toBe(0);
+    });
+
+    it('a Deferred hand-back keeps the gaps stored for the existing Partial recording', async () => {
+        const stored = JSON.stringify([{ startSample: SHARD_SAMPLES, sampleCount: SHARD_SAMPLES, indexes: [1] }]);
+        row.RecordingStatus = 'Partial';
+        row.RecordingGaps = stored;
+        row.RecordingFileID = 'file-0';
+        fixtureShards.filter(s => s.ShardIndex !== 1).forEach(s => ledger.Put(s));
+        const { outcome } = await claimAndAssemble();
+
+        expect(outcome).toBe('Deferred');
+        expect(ledger.Finishes[0].Gaps).toBe(stored);
+        expect(row.RecordingGaps).toBe(stored);
+        expect(row.RecordingFileID).toBe('file-0');
+    });
+
+    it('a complete-looking ledger with a corrupt shard, un-forced, is decoded and then Deferred', async () => {
+        fixtureShards.forEach(s => ledger.Put(s));
+        ledger.Put(fixtureShards[1], new Uint8Array([1, 2, 3]));
+        const { outcome } = await claimAndAssemble();
+        expect(outcome).toBe('Deferred');
+        expect(ledger.FullLoads).toBe(1);
+        expect(uploads).toHaveLength(0);
+    });
+
+    it('a shard with an undecodable packet is silenced whole, listed as a gap, logged; the rest decodes', async () => {
+        const bad = fixtureShards[1];
+        const packets = bad.Packets.map((p, i) => (i === 10 ? new Uint8Array([0xff]) : p));
+        fixtureShards.forEach(s => ledger.Put(s));
+        ledger.Put({ ...bad, Packets: packets });
+        const { outcome } = await claimAndAssemble(true);
+
+        expect(outcome).toBe('Partial');
+        expect(ledger.Finishes[0].Gaps).toEqual([{ startSample: SHARD_SAMPLES, sampleCount: SHARD_SAMPLES, indexes: [1] }]);
+        const pcm = pcmFromWav(storedWav());
+        expect(pcm.length).toBe(CAPTURED);
+        expect(allZero(pcm, SHARD_SAMPLES, 2 * SHARD_SAMPLES)).toBe(true);
+        expect(allZero(pcm, 2 * SHARD_SAMPLES, 2 * SHARD_SAMPLES + 960)).toBe(false);
+        expect(messages(errorSpy).some(m => m.includes(SESSION) && /shard 1 packet 10\b/.test(m))).toBe(true);
+    });
+
+    it('shards running past the terminal\'s captured count are kept and the overrun is logged', async () => {
+        fixtureShards.forEach(s => ledger.Put(s));
+        row.RecordingCapturedSamples = CAPTURED - 1000;
+        const { outcome } = await claimAndAssemble(true);
+
+        expect(outcome).toBe('Partial');
+        expect(pcmFromWav(storedWav()).length).toBe(CAPTURED);
+        expect(messages(logSpy).some(m => m.includes(SESSION) && m.includes('shards 3') && m.includes('1000 samples past'))).toBe(true);
+    });
+
+    it('a transient storage error -> Retry: logged, no finish call, the claim stays Assembling', async () => {
+        fixtureShards.forEach(s => ledger.Put(s));
+        uploadFileMock.mockRejectedValueOnce(new Error('storage timeout'));
+        const { outcome } = await claimAndAssemble();
+
+        expect(outcome).toBe('Retry');
+        expect(ledger.Finishes).toEqual([]);
+        expect(row.RecordingStatus).toBe('Assembling');
+        expect(ledger.Shards.size).toBe(EXPECTED);
+        expect(messages(errorSpy).some(m => m.includes(SESSION) && m.includes('storage timeout'))).toBe(true);
     });
 
     it('fence lost at finish -> Superseded, shards kept, the orphan upload is not linked and is logged', async () => {
@@ -541,11 +647,14 @@ describe('AssembleRealtimeRecordingFromLedger', () => {
         expect(messages(errorSpy).join('\n')).not.toContain('must not load');
     });
 
-    it('never throws: a ledger read failure -> Failed after finishing as Failed', async () => {
+    it('never throws: a ledger read failure is transient -> Retry with the claim left Assembling', async () => {
+        fixtureShards.forEach(s => ledger.Put(s));
         ledger.LoadError = new Error('db gone');
-        const { outcome } = await claimAndAssemble();
-        expect(outcome).toBe('Failed');
-        expect(ledger.Finishes[0].Status).toBe('Failed');
-        expect(messages(errorSpy).some(m => m.includes(SESSION) && m.includes('db gone'))).toBe(true);
+        const { version, outcome } = await claimAndAssemble();
+        expect(outcome).toBe('Retry');
+        expect(ledger.Finishes).toEqual([]);
+        expect(row.RecordingStatus).toBe('Assembling');
+        expect(row.RecordingAssemblyVersion).toBe(version);
+        expect(messages(errorSpy).some(m => m.includes(SESSION) && m.includes(`version ${version}`) && m.includes('db gone'))).toBe(true);
     });
 });

@@ -50,16 +50,24 @@ export interface FinishAssemblyInput {
     /** The version {@link IRealtimeRecordingLedger.ClaimAssembly} returned; the finish is fenced on it. */
     Version: number;
     Status: FinishAssemblyStatus;
-    Gaps: RecordingGap[];
+    /**
+     * The gaps to store. An array is serialized to JSON; a string (already-serialized JSON) or null is
+     * stored verbatim, which is how a `Pending` hand-back keeps the gaps of the recording already stored.
+     */
+    Gaps: RecordingGap[] | string | null;
     /** The assembled `MJ: Files` id to stamp, or null to leave the session's file unchanged. */
     FileID: string | null;
 }
 
-/** One stored shard as read back for assembly. */
-export interface LedgerShard {
+/** A stored shard's position, without its bytes. */
+export interface LedgerShardMetadata {
     Index: number;
     StartSample: number;
     SampleCount: number;
+}
+
+/** One stored shard as read back for assembly. */
+export interface LedgerShard extends LedgerShardMetadata {
     /** The raw `MJOPUS1` bytes. */
     Data: Uint8Array;
 }
@@ -79,6 +87,8 @@ export interface IRealtimeRecordingLedger {
     FinishAssembly(input: FinishAssemblyInput): Promise<boolean>;
     /** Every stored shard of the session, in index order. */
     LoadShards(sessionID: string): Promise<LedgerShard[]>;
+    /** Every stored shard's position, in index order, without the bytes (cheap pre-checks). */
+    LoadShardMetadata(sessionID: string): Promise<LedgerShardMetadata[]>;
     /** Number of stored shards with an index below `indexBelow`. */
     CountShardsBelow(sessionID: string, indexBelow: number): Promise<number>;
     /** Deletes shards with an index below `indexBelow` (the ones a Complete recording holds). Returns rows deleted. */
@@ -102,7 +112,15 @@ interface RecordShardRow { Outcome: string; RecordingStatus: string | null; Reco
 interface TerminalRow { Outcome: string; RecordingStatus: string | null }
 interface ClaimRow { RecordingAssemblyVersion: number }
 interface AffectedRow { AffectedRows: number }
-interface ShardViewRow { Index: number; StartSample: number; SampleCount: number; Data: string }
+interface ShardMetadataRow { Index: number; StartSample: number | string; SampleCount: number }
+interface ShardViewRow extends ShardMetadataRow { Data: string }
+
+/** StartSample is a BIGINT, which some drivers return as a string. */
+function toMetadata(row: ShardMetadataRow): LedgerShardMetadata {
+    return { Index: row.Index, StartSample: Number(row.StartSample), SampleCount: row.SampleCount };
+}
+
+const SHA256_HEX = /^[0-9a-f]{64}$/;
 
 /**
  * {@link IRealtimeRecordingLedger} over a server-side database provider. Proc calls are built with the
@@ -121,6 +139,10 @@ export class SqlRealtimeRecordingLedger implements IRealtimeRecordingLedger {
         assertNonNegativeInteger(SampleCount, 'sample count');
         if (Data.length === 0 || Data.length > RECORDING_SHARD_MAX_BYTES) {
             throw new Error(`recording ledger: shard ${Index} of session ${SessionID} is ${Data.length} bytes; it must be 1..${RECORDING_SHARD_MAX_BYTES}`);
+        }
+        // The proc compares hashes as strings, so a differently-cased or malformed hash would turn a retry into a Conflict.
+        if (!SHA256_HEX.test(Sha256)) {
+            throw new Error(`recording ledger: shard ${Index} of session ${SessionID} has an invalid Sha256 (expected 64 lowercase hex characters)`);
         }
         const row = await this.callForOneRow<RecordShardRow>(
             SP_RECORD_SHARD, SessionID, [SessionID, Index, StartSample, SampleCount, Data.length, Sha256, Data]);
@@ -164,29 +186,35 @@ export class SqlRealtimeRecordingLedger implements IRealtimeRecordingLedger {
         const { SessionID, Version, Status, Gaps, FileID } = input;
         assertSessionID(SessionID);
         assertNonNegativeInteger(Version, 'assembly version');
-        const affected = await this.callForAffectedRows(SP_FINISH, SessionID, [SessionID, Version, Status, JSON.stringify(Gaps), FileID]);
+        const gaps = Array.isArray(Gaps) ? JSON.stringify(Gaps) : Gaps;
+        const affected = await this.callForAffectedRows(SP_FINISH, SessionID, [SessionID, Version, Status, gaps, FileID]);
         return affected > 0;
     }
 
     public async LoadShards(sessionID: string): Promise<LedgerShard[]> {
+        // Naming the binary Data field makes the provider include it (as base64).
+        const rows = await this.readShardRows<ShardViewRow>(sessionID, ['Index', 'StartSample', 'SampleCount', 'Data'], 'LoadShards');
+        return rows.map(row => ({ ...toMetadata(row), Data: Base64ToBytes(row.Data) }));
+    }
+
+    public async LoadShardMetadata(sessionID: string): Promise<LedgerShardMetadata[]> {
+        const rows = await this.readShardRows<ShardMetadataRow>(sessionID, ['Index', 'StartSample', 'SampleCount'], 'LoadShardMetadata');
+        return rows.map(toMetadata);
+    }
+
+    private async readShardRows<T>(sessionID: string, fields: string[], operation: string): Promise<T[]> {
         assertSessionID(sessionID);
-        const result = await this.provider.RunView<ShardViewRow>({
+        const result = await this.provider.RunView<T>({
             EntityName: SHARD_ENTITY,
             ExtraFilter: `AgentSessionID='${sessionID}'`,
             OrderBy: this.provider.Dialect.QuoteIdentifier('Index'),
-            // Naming the binary Data field makes the provider include it (as base64).
-            Fields: ['Index', 'StartSample', 'SampleCount', 'Data'],
+            Fields: fields,
             ResultType: 'simple',
         }, this.contextUser);
         if (!result.Success) {
-            throw new Error(`LoadShards failed for session ${sessionID}: ${result.ErrorMessage ?? 'unknown error'}`);
+            throw new Error(`${operation} failed for session ${sessionID}: ${result.ErrorMessage ?? 'unknown error'}`);
         }
-        return result.Results.map(row => ({
-            Index: row.Index,
-            StartSample: Number(row.StartSample),
-            SampleCount: row.SampleCount,
-            Data: Base64ToBytes(row.Data),
-        }));
+        return result.Results;
     }
 
     public async CountShardsBelow(sessionID: string, indexBelow: number): Promise<number> {
