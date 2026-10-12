@@ -144,3 +144,19 @@ export {
     DefaultNarrationInstructions,
     type NarrationBuildOptions,
 } from './narration/narration-template';
+
+// Recording shard durability + transport (IndexedDB queue, fetch upload to MJAPI's REST routes).
+export {
+    CreateRecordingShardStore,
+    NullRecordingShardStore,
+    RECORDING_SHARD_RETENTION_MS,
+    type IRecordingShardStore,
+    type PendingRecordingShard,
+} from './session/RecordingShardStore';
+export {
+    FetchRecordingTransport,
+    RecordingBaseURLFromGraphQLURL,
+    type FetchRecordingTransportConfig,
+    type IRecordingTransport,
+    type RecordingTerminalInput,
+} from './session/RecordingTransport';

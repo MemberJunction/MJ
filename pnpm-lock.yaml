@@ -14171,6 +14171,9 @@ importers:
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
