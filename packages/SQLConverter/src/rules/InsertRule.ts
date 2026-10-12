@@ -86,8 +86,12 @@ export class InsertRule implements IConversionRule {
     // with underscores so quotePascalCaseIdentifiers (which requires [A-Z] start) misses them.
     // Uses transformCodeOnly to skip string literals — otherwise values like '__mj_CreatedAt'
     // inside INSERT VALUES would get incorrectly quoted to '"__mj_CreatedAt"'.
+    // A name followed by `.` is a schema qualifier, not a column: Open App schemas follow the
+    // same `__mj_<App>` convention, and quoting `__mj_BizAppsAccounting.` preserved its case,
+    // naming a schema that does not exist (the real one folded to lowercase when it was
+    // created unquoted) — issue #5364.
     result = TransformCodeOnly(result, (code) =>
-      code.replace(/(?<!")\b(__mj_[A-Za-z]\w*)\b(?!")/g, '"$1"')
+      code.replace(/(?<!")\b(__mj_[A-Za-z]\w*)\b(?!")(?!\s*\.)/g, '"$1"')
     );
     // Quote bare PascalCase identifiers (column names in INSERT/UPDATE/DELETE)
     result = QuotePascalCaseIdentifiers(result);
