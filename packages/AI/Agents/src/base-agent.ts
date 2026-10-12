@@ -26,7 +26,7 @@ import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, UUIDSet, EscapeSQLString, IsPlainObject, CleanAndParseJSON } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -980,8 +980,8 @@ export class BaseAgent {
         if (this._depth !== 0 || !bound || Object.keys(bound).length === 0) {
             return null;
         }
-        const known = ActionEngineServer.Instance.Actions;
-        const unknown = Object.keys(bound).filter((id) => !known.some((a) => UUIDsEqual(a.ID, id)));
+        const known = new UUIDSet(ActionEngineServer.Instance.Actions.map((a) => a.ID));
+        const unknown = Object.keys(bound).filter((id) => !known.Has(id));
         if (unknown.length === 0) {
             return null;
         }
