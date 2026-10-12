@@ -37,6 +37,13 @@ export const MAX_CONCURRENT_FLUSHES = 2;
  */
 export const SHARD_UPLOAD_TIMEOUT_MS = 60_000;
 
+/**
+ * Cap on shards held for retry: 10 minutes of 5 s shards. A dead network with flushes at capacity
+ * would otherwise grow the retained list (and its bytes) without bound. Overflow drops the oldest;
+ * dropped shards remain in the IndexedDB store for the next-load drain.
+ */
+export const MAX_RETAINED_SHARDS = 120;
+
 /** One-line reason for a warn message; the raw value is still passed along for its stack. */
 function describeFailure(failure: unknown): string {
   return failure instanceof Error ? failure.message : String(failure);
@@ -73,6 +80,11 @@ export class RecordingShardQueue {
    */
   public async Flush(fresh: RecordingShard[]): Promise<void> {
     if (this.closed) {
+      if (fresh.length > 0) {
+        console.warn(
+          `[RealtimeSession] Recording flush after the recording ended; shard(s) ${fresh.map((s) => s.Index).join(', ')} not sent — they stay in the local store and are drained later.`,
+        );
+      }
       return;
     }
     const freshPending = fresh.map((shard): PendingShard => ({ Shard: shard, Attempts: 0 }));
@@ -114,6 +126,13 @@ export class RecordingShardQueue {
   private retain(pending: PendingShard[]): void {
     this.retained.push(...pending);
     this.retained.sort((a, b) => a.Shard.Index - b.Shard.Index);
+    const overflow = this.retained.length - MAX_RETAINED_SHARDS;
+    if (overflow > 0) {
+      const dropped = this.retained.splice(0, overflow);
+      console.warn(
+        `[RealtimeSession] Retry queue over ${MAX_RETAINED_SHARDS} shards; dropped oldest shard(s) ${dropped.map((p) => p.Shard.Index).join(', ')} from memory — they stay in the local IndexedDB store and are drained on the next load.`,
+      );
+    }
   }
 
   /** Warns once per stall so a wedged uploader is visible without logging every tick. */

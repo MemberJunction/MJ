@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import {
   MAX_CONCURRENT_FLUSHES,
+  MAX_RETAINED_SHARDS,
   MAX_SHARD_UPLOAD_ATTEMPTS,
   RecordingShardQueue,
   SHARD_UPLOAD_TIMEOUT_MS,
@@ -110,6 +111,8 @@ describe('RecordingShardQueue', () => {
       await queue.Flush([shardOf(1)]);
       expect(Calls.map((c) => c.Index)).toEqual([0]);
       expect(queue.RetainedCount).toBe(0);
+      const dropped = warn.mock.calls.map((c) => String(c[0])).find((m) => m.includes('Recording flush after the recording ended'));
+      expect(dropped).toContain('shard(s) 1 ');
     });
 
     it('stops a flush already in flight from sending the rest of its batch', async () => {
@@ -288,6 +291,23 @@ describe('RecordingShardQueue', () => {
       await queue.Flush([]);
       expect(uploaded).toEqual([2, 3]);
       expect(queue.RetainedCount).toBe(0);
+    });
+
+    it('caps retained shards at MAX_RETAINED_SHARDS, dropping the oldest with a warn', async () => {
+      const gate = createDeferred<boolean>();
+      const queue = new RecordingShardQueue(() => gate.Promise);
+      const flushes = [queue.Flush([shardOf(0)]), queue.Flush([shardOf(1)])];
+      await settle();
+      for (let i = 2; i < 2 + MAX_RETAINED_SHARDS + 3; i++) {
+        await queue.Flush([shardOf(i)]);
+      }
+      expect(queue.RetainedCount).toBe(MAX_RETAINED_SHARDS);
+      const dropWarnings = warn.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('dropped oldest'));
+      expect(dropWarnings).toHaveLength(3);
+      expect(dropWarnings[0]).toContain('shard(s) 2 ');
+      expect(dropWarnings[0]).toContain('IndexedDB');
+      gate.Resolve(true);
+      await Promise.all(flushes);
     });
 
     it('warns once per capacity stall, not once per skipped flush', async () => {

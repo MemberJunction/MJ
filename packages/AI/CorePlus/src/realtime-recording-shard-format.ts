@@ -57,7 +57,8 @@ const START_LOW_OFFSET = 12;
 const START_HIGH_OFFSET = 16;
 const SAMPLE_COUNT_OFFSET = 20;
 const PACKET_COUNT_OFFSET = 24;
-const PACKET_LENGTH_PREFIX_BYTES = 2;
+/** Bytes of the length prefix that precedes each packet inside a shard. */
+export const RECORDING_PACKET_LENGTH_PREFIX_BYTES = 2;
 const U32_RANGE = 2 ** 32;
 const U16_MAX = 0xffff;
 /** A shard may exceed one window (a VBR-sealed or merged shard), but never by more than this factor. */
@@ -141,7 +142,7 @@ export function EncodeRecordingShard(shard: RecordingShardContents): Uint8Array 
         if (packet.length < 1 || packet.length > U16_MAX) {
             throw new RecordingShardFormatError(`packet length ${packet.length} cannot be encoded`);
         }
-        total += PACKET_LENGTH_PREFIX_BYTES + packet.length;
+        total += RECORDING_PACKET_LENGTH_PREFIX_BYTES + packet.length;
     }
 
     const bytes = new Uint8Array(total);
@@ -159,8 +160,8 @@ export function EncodeRecordingShard(shard: RecordingShardContents): Uint8Array 
     let offset = RECORDING_SHARD_HEADER_BYTES;
     for (const packet of shard.Packets) {
         view.setUint16(offset, packet.length, true);
-        bytes.set(packet, offset + PACKET_LENGTH_PREFIX_BYTES);
-        offset += PACKET_LENGTH_PREFIX_BYTES + packet.length;
+        bytes.set(packet, offset + RECORDING_PACKET_LENGTH_PREFIX_BYTES);
+        offset += RECORDING_PACKET_LENGTH_PREFIX_BYTES + packet.length;
     }
     return bytes;
 }
@@ -205,14 +206,14 @@ export function ParseRecordingShard(bytes: Uint8Array): RecordingShardContents {
     const packets: Uint8Array[] = [];
     let offset = RECORDING_SHARD_HEADER_BYTES;
     for (let i = 0; i < header.PacketCount; i++) {
-        if (offset + PACKET_LENGTH_PREFIX_BYTES > bytes.length) {
+        if (offset + RECORDING_PACKET_LENGTH_PREFIX_BYTES > bytes.length) {
             throw new RecordingShardFormatError(`shard is truncated: packet ${i} has no length prefix`);
         }
         const length = view.getUint16(offset, true);
         if (length < 1 || length > RECORDING_MAX_OPUS_PACKET_BYTES) {
             throw new RecordingShardFormatError(`invalid packet length ${length} in packet ${i}`);
         }
-        offset += PACKET_LENGTH_PREFIX_BYTES;
+        offset += RECORDING_PACKET_LENGTH_PREFIX_BYTES;
         if (offset + length > bytes.length) {
             throw new RecordingShardFormatError(`shard is truncated: packet ${i} needs ${length} bytes`);
         }

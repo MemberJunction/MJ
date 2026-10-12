@@ -10,6 +10,7 @@
 import {
   EncodeRecordingShard,
   RECORDING_FRAME_SAMPLES,
+  RECORDING_PACKET_LENGTH_PREFIX_BYTES,
   RECORDING_SHARD_HEADER_BYTES,
   RECORDING_SHARD_WINDOW_PACKETS,
   RECORDING_TERMINAL_MAX_BYTES,
@@ -26,9 +27,6 @@ export interface RecordingShard {
   /** The encoded `MJOPUS1` bytes. */
   Bytes: Uint8Array;
 }
-
-/** Per-packet framing inside a shard: a 2-byte length prefix. */
-const PACKET_LENGTH_PREFIX_BYTES = 2;
 
 /**
  * Accumulates Opus packets and seals them into shards. Pure: no timers, no I/O.
@@ -63,7 +61,7 @@ export class RecordingShardWindow {
   public Append(packets: Uint8Array[]): RecordingShard[] {
     const sealed: RecordingShard[] = [];
     for (const packet of packets) {
-      const cost = PACKET_LENGTH_PREFIX_BYTES + packet.length;
+      const cost = RECORDING_PACKET_LENGTH_PREFIX_BYTES + packet.length;
       if (this.pending.length > 0 && this.pendingBytes + cost > RECORDING_TERMINAL_MAX_BYTES) {
         sealed.push(this.seal(this.pending.length * RECORDING_FRAME_SAMPLES));
       }

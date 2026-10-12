@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ParseRecordingShard,
   RECORDING_FRAME_SAMPLES,
+  RECORDING_PACKET_LENGTH_PREFIX_BYTES,
   RECORDING_SHARD_HEADER_BYTES,
   RECORDING_SHARD_WINDOW_PACKETS,
   RECORDING_TERMINAL_MAX_BYTES,
@@ -88,19 +89,21 @@ describe('RecordingShardWindow', () => {
     expect(next[0].StartSample).toBe(tail!.StartSample + tail!.SampleCount);
   });
 
-  it('seals early at the byte cap so any tail fits the terminal body', () => {
+  it('seals exactly before the packet that would overflow the terminal body, and the tail fits', () => {
+    const size = 200;
+    const cost = RECORDING_PACKET_LENGTH_PREFIX_BYTES + size;
     const window = new RecordingShardWindow();
-    const sealed = window.Append(packets(250, 200)); // 250 * 202 + 28 > 48 KiB
-    expect(sealed.length).toBeGreaterThanOrEqual(1);
-    for (const shard of sealed) {
-      expect(shard.Bytes.length).toBeLessThanOrEqual(RECORDING_TERMINAL_MAX_BYTES);
-      const parsed = ParseRecordingShard(shard.Bytes);
-      expect(shard.SampleCount).toBe(parsed.PacketCount * RECORDING_FRAME_SAMPLES);
-    }
+    const sealed = window.Append(packets(250, size)); // would be 28 + 250*202 > 48 KiB if unsealed
+    expect(sealed).toHaveLength(1);
+    const first = ParseRecordingShard(sealed[0].Bytes);
+    expect(sealed[0].Bytes.length).toBeLessThanOrEqual(RECORDING_TERMINAL_MAX_BYTES);
+    // One more packet would not have fit: the seal happened at the latest possible packet.
+    expect(sealed[0].Bytes.length + cost).toBeGreaterThan(RECORDING_TERMINAL_MAX_BYTES);
+    expect(sealed[0].SampleCount).toBe(first.PacketCount * RECORDING_FRAME_SAMPLES);
     const tail = window.SealTail();
-    if (tail) expect(tail.Bytes.length).toBeLessThanOrEqual(RECORDING_TERMINAL_MAX_BYTES);
-    const total = sealed.reduce((n, s) => n + ParseRecordingShard(s.Bytes).PacketCount, 0) + (tail ? ParseRecordingShard(tail.Bytes).PacketCount : 0);
-    expect(total).toBe(250);
+    expect(tail).not.toBeNull();
+    expect(tail!.Bytes.length).toBeLessThanOrEqual(RECORDING_TERMINAL_MAX_BYTES);
+    expect(first.PacketCount + ParseRecordingShard(tail!.Bytes).PacketCount).toBe(250);
     expect(RECORDING_SHARD_HEADER_BYTES).toBe(28);
   });
 });
