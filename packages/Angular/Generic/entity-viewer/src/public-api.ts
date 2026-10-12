@@ -75,6 +75,9 @@ export * from './lib/view-types/renderers/grid-view-renderer.component';
 export * from './lib/view-types/renderers/cards-view-renderer.component';
 export * from './lib/view-types/renderers/timeline-view-renderer.component';
 export * from './lib/view-types/renderers/map-view-renderer.component';
+export * from './lib/view-types/renderers/calendar-view-renderer.component';
+export * from './lib/view-types/renderers/calendar-view-prop-sheet.component';
+export * from './lib/view-types/renderers/calendar-placement';
 
 // Geo support exports
 export const ENTITY_VIEWER_GEO_VERSION = 1;
