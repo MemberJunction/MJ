@@ -896,8 +896,47 @@ describe('C8: transcriptionLanguages → caption language hints', () => {
         const locked = driver.MintParams?.config?.liveConnectConstraints?.config as LiveConnectConfig;
         expect(locked.inputAudioTranscription).toBeUndefined();
         expect(locked.outputAudioTranscription).toBeUndefined();
-        const sessionConfig = (cfg.SessionConfig as { config: LiveConnectConfig }).config;
+        const sessionConfig = (cfg.SessionConfig as { config: LiveConnectConfig & Record<string, unknown> }).config;
         expect(sessionConfig.inputAudioTranscription).toEqual({ languageCodes: ['en-US'] });
+    });
+});
+
+/**
+ * From @google/genai 2.11, `live.connect` resolves only on the server's setupComplete frame and never
+ * rejects when the socket closes first. These drive the REAL connect seam with a fake SDK client.
+ */
+describe('C9: connect fails fast when the socket closes during setup', () => {
+    type FakeCallbacks = { onclose: (e: { code: number; reason: string }) => void; onerror: (e: { message: string }) => void };
+    const withClient = (connect: (p: { callbacks: FakeCallbacks }) => Promise<unknown>): GeminiRealtime =>
+        Object.assign(new GeminiRealtime('k'), { geminiClient: { live: { connect } } });
+
+    it('rejects with the close code and reason instead of hanging', async () => {
+        const driver = withClient(({ callbacks }) => {
+            setTimeout(() => callbacks.onclose({ code: 1008, reason: 'model not found' }));
+            return new Promise(() => undefined); // what the SDK does: never settles
+        });
+        await expect(driver.StartSession(makeParams())).rejects.toThrow('closed during setup (code 1008: model not found)');
+    });
+
+    it('rejects on a websocket error before setup completes', async () => {
+        const driver = withClient(({ callbacks }) => {
+            setTimeout(() => callbacks.onerror({ message: 'boom' }));
+            return new Promise(() => undefined);
+        });
+        await expect(driver.StartSession(makeParams())).rejects.toThrow('connection failed: boom');
+    });
+
+    it('a close after a successful connect reaches the session, not the connect', async () => {
+        let callbacks: FakeCallbacks | null = null;
+        const driver = withClient((p) => {
+            callbacks = p.callbacks;
+            return Promise.resolve(new FakeLiveSession());
+        });
+        const session = await driver.StartSession(makeParams());
+        const errors: string[] = [];
+        session.OnError((e) => errors.push(e.Message));
+        callbacks!.onclose({ code: 1011, reason: 'server restart' });
+        expect(errors.length).toBe(1);
     });
 });
 

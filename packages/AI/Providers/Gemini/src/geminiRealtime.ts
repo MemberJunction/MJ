@@ -336,14 +336,26 @@ export class GeminiRealtime extends BaseRealtimeModel {
      */
     protected async connectLiveSession(args: GeminiConnectArgs): Promise<GeminiLiveSession> {
         const client = this.ensureClient();
-        return client.live.connect({
-            model: args.Model,
-            config: args.Config,
-            callbacks: {
-                onmessage: args.OnMessage,
-                onerror: args.OnError,
-                onclose: args.OnClose,
-            },
+        // `live.connect` (@google/genai 2.11+) resolves only on the server's setupComplete frame and never
+        // rejects when the socket errors or closes first (a rejected key, model or setup field), so fail
+        // the connect on an early error/close instead of waiting forever. A promise settles once, so
+        // callbacks after a successful connect only reach the handlers.
+        return new Promise<GeminiLiveSession>((resolve, reject) => {
+            client.live.connect({
+                model: args.Model,
+                config: args.Config,
+                callbacks: {
+                    onmessage: args.OnMessage,
+                    onerror: (event) => {
+                        reject(new Error(`Gemini Live connection failed: ${event?.message ?? 'websocket error'}`));
+                        args.OnError?.(event);
+                    },
+                    onclose: (event) => {
+                        reject(new Error(`Gemini Live closed during setup (code ${event?.code ?? 'unknown'}${event?.reason ? `: ${event.reason}` : ''})`));
+                        args.OnClose?.(event);
+                    },
+                },
+            }).then(resolve, reject);
         });
     }
 
