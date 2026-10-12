@@ -432,6 +432,47 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         expect(transport.Terminals.map((t) => t.Input.Final)).toEqual([false, true]);
     });
 
+    it('a pagehide right after a hide does not re-send a shard whose keepalive copy is still in flight', async () => {
+        // Closing a tab fires visibilitychange then pagehide back to back; the browser's keepalive budget
+        // is per page, so a second copy of the same shard would only eat the host's close-beacon room.
+        const { runtime, recorder, transport, log } = await startRecorded();
+        recorder.Capture(WINDOW - 2);
+        transport.HoldNextUpload = new Promise(() => undefined);
+        await vi.advanceTimersByTimeAsync(FLUSH_MS);
+        recorder.Capture(7);
+        const logBefore = log.length;
+
+        runtime.SendRecordingTerminal({ Final: false });
+        recorder.Capture(2);
+        runtime.SendRecordingTerminal({ Final: true });
+
+        const sent = log.slice(logBefore);
+        expect(sent.filter((e) => e === 'upload(keepalive):session-1/0')).toHaveLength(1);
+        expect(sent.filter((e) => e.startsWith('terminal:'))).toEqual(['terminal:session-1/1', 'terminal:session-1/2']);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('a drain re-armed while it runs runs again, so shards given up on meanwhile are not left for the next load', async () => {
+        const store = new FakeShardStore();
+        await store.Put({ SessionID: 'old', Index: 0, Bytes: new Uint8Array([1]), SavedAt: 1 });
+        const transport = new FakeRecordingTransport();
+        let release: (outcome: 'stored') => void = () => undefined;
+        transport.HoldNextUpload = new Promise((resolve) => { release = resolve; });
+        const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), store, transport);
+        const first = runtime.DrainPendingRecordingShards();
+        await vi.advanceTimersByTimeAsync(0);
+
+        // While the first run's upload hangs, another shard is given up on and the drain is re-armed.
+        await store.Put({ SessionID: 'old', Index: 1, Bytes: new Uint8Array([2]), SavedAt: 2 });
+        (runtime as unknown as { rearmPendingShardDrain(): void }).rearmPendingShardDrain();
+        void runtime.DrainPendingRecordingShards();
+        release('stored');
+        await first;
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.Keys).toEqual([]);
+    });
+
     it('SendRecordingTerminal is a no-op without a recording', () => {
         const transport = new FakeRecordingTransport();
         const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), new FakeShardStore(), transport);
