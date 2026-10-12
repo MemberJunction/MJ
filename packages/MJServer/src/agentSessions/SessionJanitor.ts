@@ -12,8 +12,6 @@ import { MJAIAgentEntity, MJAIAgentSessionEntity } from '@memberjunction/core-en
 import {
     RecoverRealtimeRecordingFromSegments,
     ResolveRecordingStorageAccountID,
-    type RecoverRealtimeRecordingInput,
-    type RecoverRealtimeRecordingResult,
 } from '@memberjunction/ai-agents';
 import { GetHostInstanceID, GetHostNamePrefix } from './HostInstance.js';
 import { SessionManager, SessionCloseReason } from './SessionManager.js';
@@ -98,6 +96,71 @@ interface RecoveryBackoff {
     Deferred: boolean;
 }
 
+/**
+ * Per-session retry state of one recovery sweep, keyed by lowercase session id (process-local: a restart
+ * gets fresh attempts). A failing session backs off exponentially (`min(2^k * 5 min, 6 h)`) and is given
+ * up on after {@link MAX_RECOVERY_ATTEMPTS} failures with one log line.
+ */
+class RecoveryBackoffTracker {
+    private readonly states = new Map<string, RecoveryBackoff>();
+
+    /** True while a session's backoff (or give-up) window has not elapsed. */
+    public IsBackedOff(sessionID: string): boolean {
+        const state = this.states.get(sessionID.toLowerCase());
+        return state != null && Date.now() < state.NextAttemptAt;
+    }
+
+    /** Forgets a session's failures (it succeeded, or another writer took care of it). */
+    public Clear(sessionID: string): void {
+        this.states.delete(sessionID.toLowerCase());
+    }
+
+    /**
+     * Defers a session that cannot be recovered until configuration changes (its agent has no recording
+     * storage account). That is not a failed attempt, so it never counts toward the give-up: the session
+     * is re-checked every {@link RECOVERY_BACKOFF_MAX_MS} and logged only the first time.
+     */
+    public Defer(sessionID: string, reason: string): void {
+        const key = sessionID.toLowerCase();
+        const state = this.states.get(key);
+        if (!state?.Deferred) {
+            LogStatus(`[SessionJanitor] Recording recovery skipped for session ${sessionID}: ${reason}; re-checked every ${RECOVERY_BACKOFF_MAX_MS / 3_600_000} h`);
+        }
+        this.states.set(key, { Failures: state?.Failures ?? 0, NextAttemptAt: Date.now() + RECOVERY_BACKOFF_MAX_MS, Deferred: true });
+    }
+
+    /**
+     * Counts one more unsuccessful recovery for a session and schedules its next attempt
+     * (`min(2^k * 5 min, 6 h)`); at {@link MAX_RECOVERY_ATTEMPTS} it stops checking the session for this
+     * process with a single log line: a `LogError` when the last attempt failed, a `LogStatus` when it
+     * simply found no shards (nothing to recover is not an error).
+     */
+    public RecordFailure(sessionID: string, kind: 'Failed' | 'NoSegments'): void {
+        const key = sessionID.toLowerCase();
+        const failures = (this.states.get(key)?.Failures ?? 0) + 1;
+        if (failures >= MAX_RECOVERY_ATTEMPTS) {
+            this.states.set(key, { Failures: failures, NextAttemptAt: Infinity, Deferred: false });
+            if (kind === 'NoSegments') {
+                LogStatus(`[SessionJanitor] Session ${sessionID} had no recoverable segments in ${failures} checks; not checking it again until restart`);
+            } else {
+                LogError(`[SessionJanitor] Giving up on recording recovery for session ${sessionID} after ${failures} failed attempts`);
+            }
+        } else {
+            const waitMs = Math.min(2 ** failures * RECOVERY_BACKOFF_BASE_MS, RECOVERY_BACKOFF_MAX_MS);
+            this.states.set(key, { Failures: failures, NextAttemptAt: Date.now() + waitMs, Deferred: false });
+        }
+    }
+
+    /** Drops state for sessions that were not in the latest complete candidate set (lowercase ids). */
+    public Prune(candidateKeys: ReadonlySet<string>): void {
+        for (const key of this.states.keys()) {
+            if (!candidateKeys.has(key)) {
+                this.states.delete(key);
+            }
+        }
+    }
+}
+
 /** Per-sweep working state shared by every candidate in one recovery pass. */
 interface RecoverySweepContext {
     provider: IMetadataProvider;
@@ -168,8 +231,8 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     private _provider: IMetadataProvider | null = null;
     private _systemUser: UserInfo | null = null;
     private readonly sessionManager = new SessionManager();
-    /** Recovery retry state keyed by lowercase session id. Process-local: a restart gets fresh attempts. */
-    private readonly recoveryBackoff = new Map<string, RecoveryBackoff>();
+    /** Retry state of the legacy storage-segment recovery. */
+    private readonly recoveryBackoff = new RecoveryBackoffTracker();
     /**
      * Lowercase ids of sessions whose recovery attempt timed out but has not settled. Skipped by later
      * sweeps so a second attempt never runs alongside the abandoned one; removed when it settles.
@@ -370,7 +433,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         const walk = await this.forEachSessionPage(filter, provider, systemUser, async page => {
             for (const session of page) {
                 seen.add(session.ID.toLowerCase());
-                if (this.isRecoveryBackedOff(session.ID) || this.abandonedRecoveries.has(session.ID.toLowerCase())) {
+                if (this.recoveryBackoff.IsBackedOff(session.ID) || this.abandonedRecoveries.has(session.ID.toLowerCase())) {
                     continue;
                 }
                 if (attempts >= MAX_RECOVERIES_PER_SWEEP || this.abandonedRecoveries.size >= MAX_ABANDONED_RECOVERIES) {
@@ -385,7 +448,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         // Only a walk that reached the end saw every candidate. A capped or failed-load walk has an
         // incomplete `seen`; pruning on it would wipe backoff and give-up state for unseen sessions.
         if (walk === 'complete') {
-            this.pruneRecoveryBackoff(seen);
+            this.recoveryBackoff.Prune(seen);
         }
         if (recovered > 0) {
             LogStatus(`[SessionJanitor] Recording recovery rebuilt ${recovered} recording(s)`);
@@ -528,7 +591,8 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             }
             const storage = await this.resolveRecoveryStorage(candidate.AgentID, context);
             if (storage.Kind === 'NoAccount') {
-                return this.deferRecovery(candidate.ID, `no recording storage account for agent ${candidate.AgentID}`);
+                this.recoveryBackoff.Defer(candidate.ID, `no recording storage account for agent ${candidate.AgentID}`);
+                return { Attempted: false, Recovered: false };
             }
             if (storage.Kind === 'AgentUnavailable') {
                 LogStatus(`[SessionJanitor] Recording recovery skipped for session ${candidate.ID}: agent ${candidate.AgentID} could not be loaded`);
@@ -536,13 +600,17 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             }
             const accountID = storage.AccountID;
             attempted = true;
-            const result = await this.recoverWithinTimeout({
-                SessionID: candidate.ID,
-                StorageAccountID: accountID,
-                StartedAt: startedAt,
-                ContextUser: context.systemUser,
-                Provider: context.provider,
-            });
+            const result = await this.runWithinAttemptTimeout(
+                candidate.ID,
+                RecoverRealtimeRecordingFromSegments({
+                    SessionID: candidate.ID,
+                    StorageAccountID: accountID,
+                    StartedAt: startedAt,
+                    ContextUser: context.systemUser,
+                    Provider: context.provider,
+                }),
+                late => late.Outcome,
+            );
             if (result === 'TimedOut') {
                 LogError(
                     `[SessionJanitor] Recording recovery for session ${candidate.ID} did not finish within ` +
@@ -553,11 +621,11 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             }
             switch (result.Outcome) {
                 case 'Recovered':
-                    this.recoveryBackoff.delete(candidate.ID.toLowerCase());
+                    this.recoveryBackoff.Clear(candidate.ID);
                     LogStatus(`[SessionJanitor] Recovered recording for session ${candidate.ID} from ${result.SegmentCount} segment(s) (file ${result.FileID})`);
                     return { Attempted: true, Recovered: true };
                 case 'Superseded':
-                    this.recoveryBackoff.delete(candidate.ID.toLowerCase());
+                    this.recoveryBackoff.Clear(candidate.ID);
                     LogStatus(`[SessionJanitor] Session ${candidate.ID} was given a recording by another writer; recovery left it alone`);
                     return { Attempted: true, Recovered: false };
                 case 'NoSegments':
@@ -576,13 +644,12 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     }
 
     /**
-     * Runs one session's recovery, giving up on waiting after `recordingRecoveryAttemptTimeoutMinutes`.
-     * A call cannot be cancelled, so a timed-out one keeps running: the session is marked abandoned until
-     * it settles (later sweeps skip it), and its late outcome is logged then.
+     * Waits for one session's recovery attempt for at most `recordingRecoveryAttemptTimeoutMinutes`.
+     * An attempt cannot be cancelled, so a timed-out one keeps running: the session is marked abandoned
+     * until it settles (later sweeps skip it), and its late outcome (`describeLate`) is logged then.
      */
-    private async recoverWithinTimeout(input: RecoverRealtimeRecordingInput): Promise<RecoverRealtimeRecordingResult | 'TimedOut'> {
-        const key = input.SessionID.toLowerCase();
-        const attempt = RecoverRealtimeRecordingFromSegments(input);
+    private async runWithinAttemptTimeout<T>(sessionID: string, attempt: Promise<T>, describeLate: (late: T) => string): Promise<T | 'TimedOut'> {
+        const key = sessionID.toLowerCase();
         let timer: ReturnType<typeof setTimeout> | undefined;
         const timedOut = new Promise<'TimedOut'>(resolve => {
             timer = setTimeout(() => resolve('TimedOut'), this._config.recordingRecoveryAttemptTimeoutMinutes * 60_000);
@@ -593,8 +660,8 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             if (outcome === 'TimedOut') {
                 this.abandonedRecoveries.add(key);
                 attempt.then(
-                    late => LogStatus(`[SessionJanitor] Abandoned recording recovery for session ${input.SessionID} finished late: ${late.Outcome}`),
-                    err => LogError(`[SessionJanitor] Abandoned recording recovery for session ${input.SessionID} failed late: ${err instanceof Error ? err.message : String(err)}`),
+                    late => LogStatus(`[SessionJanitor] Abandoned recording recovery for session ${sessionID} finished late: ${describeLate(late)}`),
+                    err => LogError(`[SessionJanitor] Abandoned recording recovery for session ${sessionID} failed late: ${err instanceof Error ? err.message : String(err)}`),
                 ).finally(() => this.abandonedRecoveries.delete(key));
             }
             return outcome;
@@ -623,21 +690,6 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     }
 
     /**
-     * Defers a session that cannot be recovered until configuration changes (its agent has no recording
-     * storage account). That is not a failed attempt, so it never counts toward the give-up: the session
-     * is re-checked every {@link RECOVERY_BACKOFF_MAX_MS} and logged only the first time.
-     */
-    private deferRecovery(sessionID: string, reason: string): RecoveryVisit {
-        const key = sessionID.toLowerCase();
-        const state = this.recoveryBackoff.get(key);
-        if (!state?.Deferred) {
-            LogStatus(`[SessionJanitor] Recording recovery skipped for session ${sessionID}: ${reason}; re-checked every ${RECOVERY_BACKOFF_MAX_MS / 3_600_000} h`);
-        }
-        this.recoveryBackoff.set(key, { Failures: state?.Failures ?? 0, NextAttemptAt: Date.now() + RECOVERY_BACKOFF_MAX_MS, Deferred: true });
-        return { Attempted: false, Recovered: false };
-    }
-
-    /**
      * Loads the agent carrying a session's recording storage config and resolves its storage account,
      * memoized per agent for the sweep: the resolve may force a storage-engine reload, so it must not
      * repeat for every session of the same agent.
@@ -661,42 +713,10 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         return storage;
     }
 
-    /** True while a session's backoff (or give-up) window has not elapsed. */
-    private isRecoveryBackedOff(sessionID: string): boolean {
-        const state = this.recoveryBackoff.get(sessionID.toLowerCase());
-        return state != null && Date.now() < state.NextAttemptAt;
-    }
-
-    /**
-     * Counts one more unsuccessful recovery for a session and schedules its next attempt
-     * (`min(2^k * 5 min, 6 h)`); at {@link MAX_RECOVERY_ATTEMPTS} it stops checking the session for this
-     * process with a single log line: a `LogError` when the last attempt failed, a `LogStatus` when it
-     * simply found no shards (nothing to recover is not an error).
-     */
+    /** Counts a failed legacy recovery in its backoff (see {@link RecoveryBackoffTracker.RecordFailure}). */
     private recordRecoveryFailure(sessionID: string, attempted: boolean, kind: 'Failed' | 'NoSegments' = 'Failed'): RecoveryVisit {
-        const key = sessionID.toLowerCase();
-        const failures = (this.recoveryBackoff.get(key)?.Failures ?? 0) + 1;
-        if (failures >= MAX_RECOVERY_ATTEMPTS) {
-            this.recoveryBackoff.set(key, { Failures: failures, NextAttemptAt: Infinity, Deferred: false });
-            if (kind === 'NoSegments') {
-                LogStatus(`[SessionJanitor] Session ${sessionID} had no recoverable segments in ${failures} checks; not checking it again until restart`);
-            } else {
-                LogError(`[SessionJanitor] Giving up on recording recovery for session ${sessionID} after ${failures} failed attempts`);
-            }
-        } else {
-            const waitMs = Math.min(2 ** failures * RECOVERY_BACKOFF_BASE_MS, RECOVERY_BACKOFF_MAX_MS);
-            this.recoveryBackoff.set(key, { Failures: failures, NextAttemptAt: Date.now() + waitMs, Deferred: false });
-        }
+        this.recoveryBackoff.RecordFailure(sessionID, kind);
         return { Attempted: attempted, Recovered: false };
-    }
-
-    /** Drops backoff state for sessions that were not in the latest complete candidate set. */
-    private pruneRecoveryBackoff(candidateKeys: ReadonlySet<string>): void {
-        for (const key of this.recoveryBackoff.keys()) {
-            if (!candidateKeys.has(key)) {
-                this.recoveryBackoff.delete(key);
-            }
-        }
     }
 
     /**
