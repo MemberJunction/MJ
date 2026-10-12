@@ -500,7 +500,7 @@ describe('RealtimeSessionService — per-turn recording timing across a tool-cal
     internals(service).agentSessionId = 'sess-1';
     now = 0;
     // Inject a fake recorder whose offset is whatever the test set `now` to, mirroring how the
-    // real RealtimeAudioRecorder reports wall-clock-relative offsets during a live recording.
+    // real RealtimeAudioRecorder reports offsets from its 48 kHz sample clock during a live recording.
     timing(service).recorder = { NowOffsetMs: () => now };
     // Seed as the live recorder path does: first turn starts at ~0, guard not yet captured.
     timing(service).currentTurnStartMs = 0;
