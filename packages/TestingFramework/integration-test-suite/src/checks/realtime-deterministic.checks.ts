@@ -203,7 +203,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
     },
     {
         Id: 'realtime-deterministic.RD4',
-        Name: 'RD4: an agent-session row round-trips its lifecycle fields (and PINS that no EntityServer guards it)',
+        Name: 'RD4: an agent-session row round-trips its lifecycle fields (and PINS that the EntityServer guards only the server-decided Config keys)',
         Fn: async (ctx): Promise<void> => {
             const session = await buildSessionFixture(ctx.User);
             if (!session) {
@@ -228,9 +228,10 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 AssertEqual(persisted!.Status, 'Closed', 'session close round-trip');
 
                 // The save above succeeding WITHOUT a live session is itself a finding worth pinning:
-                console.warn('  ⚠ PRODUCT NOTE (realtime-deterministic.RD4): MJ: AI Agent Sessions has NO *EntityServer subclass — '
-                    + 'all session invariants (CanRun authorization, conversation resolution, terminal-close idempotency) live only in '
-                    + 'SessionManager and are bypassable by any direct entity Save.');
+                console.warn('  ⚠ PRODUCT NOTE (realtime-deterministic.RD4): MJ: AI Agent Sessions has an *EntityServer subclass, but it guards ONLY '
+                    + 'the server-decided Config keys (identityVerification, maxSessionDeadlineIso); the other session invariants (CanRun '
+                    + 'authorization, conversation resolution, terminal-close idempotency) live only in SessionManager and are bypassable '
+                    + 'by any direct entity Save.');
             } finally {
                 if (session.IsSaved) {
                     await session.Delete().catch(() => undefined);

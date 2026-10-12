@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
     RealtimeModalityRegistry,
+    RealtimeTrackKey,
+    ResolveMaxInboundVideoStreams,
     ResolveRequestedTracks,
     type RealtimeTrackDescriptor,
 } from '../generic/realtimeTracks';
@@ -154,3 +156,75 @@ describe('ResolveRequestedTracks', () => {
     });
 });
 
+
+describe('multi-source tracks (SourceID / Label)', () => {
+    const video = (sourceId?: string): RealtimeTrackDescriptor => ({
+        Modality: 'video',
+        Direction: 'inbound',
+        Rate: 1,
+        SourceID: sourceId,
+        Label: sourceId ? sourceId.toUpperCase() : undefined,
+    });
+
+    it('keys a track by direction, modality and source, case-insensitively on the modality', () => {
+        expect(RealtimeTrackKey({ Modality: 'Video', Direction: 'inbound' })).toBe('inbound:video');
+        expect(RealtimeTrackKey({ Modality: 'video', Direction: 'inbound', SourceID: 'cam' })).toBe('inbound:video:cam');
+        expect(RealtimeTrackKey({ Modality: 'video', Direction: 'inbound', SourceID: '' })).toBe('inbound:video');
+    });
+
+    it('carries SourceID and Label through resolution untouched', () => {
+        const [t] = ResolveRequestedTracks([video('cam')], [inVideo], ids);
+        expect(t.Descriptor.SourceID).toBe('cam');
+        expect(t.Descriptor.Label).toBe('CAM');
+    });
+
+    it('with no cap, every requested video stream resolves', () => {
+        const resolved = ResolveRequestedTracks([video('a'), video('b'), video('c')], [inVideo], ids);
+        expect(resolved.map((t) => t.State)).toEqual(['requested', 'requested', 'requested']);
+    });
+
+    it('caps inbound video streams: those over the limit are unsupported, with the reason, in request order', () => {
+        const resolved = ResolveRequestedTracks([video('a'), video('b')], [inVideo], ids, { MaxInboundVideoStreams: 1 });
+        expect(resolved.map((t) => t.State)).toEqual(['requested', 'unsupported']);
+        expect(resolved[1].Reason).toMatch(/at most 1 inbound video stream/);
+    });
+
+    it('a cap of two admits two', () => {
+        const resolved = ResolveRequestedTracks([video('a'), video('b'), video('c')], [inVideo], ids, { MaxInboundVideoStreams: 2 });
+        expect(resolved.map((t) => t.State)).toEqual(['requested', 'requested', 'unsupported']);
+    });
+
+    it('a cap of zero refuses video but never touches audio', () => {
+        const resolved = ResolveRequestedTracks([inAudio, video('a')], [inAudio, inVideo], ids, { MaxInboundVideoStreams: 0 });
+        expect(resolved.map((t) => t.State)).toEqual(['requested', 'unsupported']);
+    });
+
+    it('the cap counts only INBOUND VIDEO', () => {
+        const resolved = ResolveRequestedTracks([outVideo, video('a')], [inVideo, outVideo], ids, { MaxInboundVideoStreams: 1 });
+        expect(resolved.map((t) => t.State)).toEqual(['requested', 'requested']);
+    });
+
+    it('an unsupported modality keeps its modality reason rather than the cap reason', () => {
+        const [t] = ResolveRequestedTracks([video('a')], [inAudio], ids, { MaxInboundVideoStreams: 1 });
+        expect(t.Reason).toMatch(/does not support inbound video/);
+    });
+});
+
+describe('ResolveMaxInboundVideoStreams', () => {
+    it('is zero for a model without video, whatever it declares', () => {
+        expect(ResolveMaxInboundVideoStreams(false)).toBe(0);
+        expect(ResolveMaxInboundVideoStreams(false, 4)).toBe(0);
+    });
+
+    it('is one for a video model that declares nothing, and the declaration when valid', () => {
+        expect(ResolveMaxInboundVideoStreams(true)).toBe(1);
+        expect(ResolveMaxInboundVideoStreams(true, null)).toBe(1);
+        expect(ResolveMaxInboundVideoStreams(true, 3)).toBe(3);
+    });
+
+    it('treats a nonsensical declaration as undeclared, so a bad value cannot make a one-stream model unbounded', () => {
+        for (const bad of [0, -2, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+            expect(ResolveMaxInboundVideoStreams(true, bad), String(bad)).toBe(1);
+        }
+    });
+});
