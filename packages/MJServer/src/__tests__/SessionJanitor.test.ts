@@ -66,6 +66,9 @@ interface FakeSession {
     Status: 'Active' | 'Idle' | 'Closed';
     Load: (id: string) => Promise<boolean>;
     Save: () => Promise<boolean>;
+    /** SessionManager re-hydrates a loaded session without the recording ledger's columns. */
+    GetAll: () => Record<string, unknown>;
+    LoadFromData: (data: Record<string, unknown>) => Promise<boolean>;
     LatestResult?: { CompleteMessage?: string };
     ClosedAt?: Date | null;
     CloseReason?: string | null;
@@ -109,6 +112,8 @@ function makeProvider(store: Map<string, 'Active' | 'Idle' | 'Closed'>): {
                     }
                     return true;
                 }),
+                GetAll: () => ({ ID: entity.ID, Status: entity.Status }),
+                LoadFromData: vi.fn(async () => true),
                 LatestResult: { CompleteMessage: '' },
             };
             return entity as unknown as Awaited<ReturnType<IMetadataProvider['GetEntityObject']>>;
