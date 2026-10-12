@@ -214,7 +214,7 @@ describe('MessageInputComponent — the branch of the turn', () => {
         Object.assign(h.open, { realtimeSession: { StartRealtimeSession: start }, ApplicationId: null, AppContext: null, toastService: { error: vi.fn() } });
         const go = (MessageInputComponent.prototype as unknown as { startRealtimeWithAgent(a: string, n: string): Promise<void> }).startRealtimeWithAgent;
         await go.call(h.component, 'agent-1', 'Sage');
-        expect(start.mock.calls[0][12]).toBe('T6');
+        expect(start.mock.calls[0][12]).toEqual({ ConversationBranchID: 'T6' });
     });
 });
 

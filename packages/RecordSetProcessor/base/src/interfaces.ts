@@ -91,6 +91,17 @@ export interface IRecordProcessor {
      *   with the input `records` array (same length and order).
      */
     ProcessBatch?(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult> | RecordResult[]>;
+
+    /**
+     * Optional run-level readiness check, called ONCE before the first batch. Throw to refuse the
+     * whole run with a clear, actionable message (e.g. "this model needs training") instead of
+     * failing every record one by one until the error-rate circuit breaker trips. The run is still
+     * recorded (status `Failed`, the thrown message as its `ErrorMessage`) so history stays honest,
+     * but no record is processed. Processors without a run-level prerequisite simply omit it.
+     *
+     * @param context - The run-level execution context (user, provider, run/process IDs).
+     */
+    Preflight?(context: RecordProcessorContext): Promise<void>;
 }
 
 /** Opaque handle returned by a tracker's `BeginRun`, threaded back through the other tracker calls. */

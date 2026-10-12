@@ -1587,7 +1587,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // mint-time prompt injection, and seeds the ClientContextChannel's streaming.
         this.ApplicationId,
         this.AppContext as AppContextSnapshot | null,
-        this.TargetBranchID
+        { ConversationBranchID: this.TargetBranchID }
       );
     } catch (error) {
       console.error('Failed to start voice session:', error);

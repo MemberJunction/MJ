@@ -7523,7 +7523,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         // App awareness — see message-input.startVoiceSession for the rationale.
         this.ApplicationId,
         this.AppContext as AppContextSnapshot | null,
-        this.TargetBranchIdFor(request.ConversationId ?? this.ConversationId)
+        { ConversationBranchID: this.TargetBranchIdFor(request.ConversationId ?? this.ConversationId) }
       );
       this.RealtimeReview = null;
       await start;

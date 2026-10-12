@@ -303,7 +303,7 @@ describe('ConversationChatAreaComponent open view', () => {
         await h.component.OnReviewStartLive({ TargetAgentId: 'AGENT-1', ConversationId: 'CONV-1', LastSessionId: 'S-1' });
         await h.component.OnReviewStartLive({ TargetAgentId: 'AGENT-1', ConversationId: 'CONV-2', LastSessionId: 'S-2' });
 
-        expect(start.mock.calls.map(call => call[12])).toEqual(['T1', null]);
+        expect(start.mock.calls.map(call => call[12]?.ConversationBranchID)).toEqual(['T1', null]);
     });
 
     it('does not start a resumed voice session while a draft fork is open, and keeps the review', async () => {

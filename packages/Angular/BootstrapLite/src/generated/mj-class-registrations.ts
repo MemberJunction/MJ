@@ -34,7 +34,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (449 classes)
+// @memberjunction/core-entities (450 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -403,6 +403,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -560,10 +561,12 @@ import {
     MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (8 classes)
+// @memberjunction/ng-conversations (10 classes)
 import {
     AgentMentionProvider,
     ClientContextChannel,
+    IdentityVerificationChannel,
+    InteractiveComponentChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
@@ -1092,6 +1095,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1113,11 +1117,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
-    MJTagEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTagEntity,
     MJTagScopeEntity,
     MJTagSuggestionEntity,
     MJTagSynonymEntity,
@@ -1221,6 +1225,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkOSProvider,
     AgentMentionProvider,
     ClientContextChannel,
+    IdentityVerificationChannel,
+    InteractiveComponentChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
@@ -1315,13 +1321,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricEvaluationFormPolicy,
     RubricEvaluationResultPanel,
     RubricFormPolicy,
-    RubricPublishPanel,
-    RubricScaleFormPolicy,
-    RubricScaleLevelsPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RubricPublishPanel,
+    RubricScaleFormPolicy,
+    RubricScaleLevelsPanel,
     RubricVersionFormPolicy,
     RubricVersionSummaryPanel,
     RubricVersionsPanel,
@@ -1346,7 +1352,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 610;
+export const CLASS_REGISTRATIONS_COUNT = 613;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
