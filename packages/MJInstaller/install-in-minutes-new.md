@@ -6,7 +6,7 @@ MemberJunction is a platform designed to help organizations efficiently manage d
 
 Before running the installer, make sure you have the following ready:
 
-1. **SQL Server** — SQL Server 2022 or above. Can be a local SQL Server instance (including Docker) or Azure SQL. You do **not** need to create a database ahead of time — the installer generates a setup script that handles that.
+1. **SQL Server** — SQL Server 2022 or above. Can be a local SQL Server instance (including Docker) or Azure SQL. You do **not** need to create a database ahead of time — the installer creates it, along with the SQL logins MemberJunction uses, when you give it an administrator login such as `sa`.
    > **Note:** If using a local SQL Server with a self-signed certificate (common with Docker or default installations), the installer will ask if you want to trust the server certificate. Azure SQL handles encryption automatically, so this step is not needed for Azure SQL.
 
 2. **Node.js 22 or above** (Node.js 24 recommended) — Install from [nodejs.org](https://nodejs.org). Verify with:
@@ -54,7 +54,7 @@ The installer runs through 9 phases automatically. Here's what happens at each s
 1. **Preflight** — Checks your environment (Node.js version, disk space, port availability, SQL Server connectivity)
 2. **Scaffold** — Lets you choose a MemberJunction release version, then downloads and extracts the release package from GitHub
 3. **Configure** — Prompts you for database credentials, ports, and authentication settings, then generates configuration files (`.env`, `mj.config.cjs`, and Explorer environment files)
-4. **Database** — Generates SQL setup scripts for creating your database, logins, users, and permissions. **You must run these scripts manually** (see [Running the Database Scripts](#running-the-database-scripts) below)
+4. **Database** — Creates your database, logins, users, and permissions if they don't exist yet (see [Setting Up the Database](#3-setting-up-the-database) below)
 5. **Platform Compatibility** — Patches npm scripts for your operating system (e.g., adds `cross-env` on Windows)
 6. **Dependencies** — Runs the configured package manager's `install` and `run build` (pnpm by default) to install and compile all packages
 7. **Migrate** — Runs database migrations to create the `__mj` schema with all MemberJunction tables, views, stored procedures, and seed data
@@ -83,22 +83,21 @@ If you choose an authentication provider, you'll also be prompted for the provid
 
 > **Note on Authentication:** If you skip authentication setup, MJAPI will start but MJExplorer will not be fully functional until you configure an auth provider. The installer will warn you about this. See [Configuring Authentication](#configuring-authentication) below.
 
-### 3. Run the Database Scripts
+### 3. Setting Up the Database
 
-After the configure step completes, the installer generates two SQL scripts in your working directory:
+The installer first signs in as the CodeGen and API logins you chose. If both work, the database is already set up and it moves on.
 
-- **`mj-db-setup.sql`** — Creates the database (if it doesn't exist), the `__mj` schema, SQL Server logins, database users, and assigns permissions
-- **`mj-db-validate.sql`** — Verifies that the setup was applied correctly
+If they don't, it asks how to set the database up:
 
-**You need to run these scripts manually** using SQL Server Management Studio (SSMS), Azure Data Studio, or any SQL client:
+- **Set it up now (recommended)** — enter a SQL login that can create databases and logins (for example `sa`, or any login with the `sysadmin` role). The installer creates the database, the `__mj` schema, both logins, the database users, and their permissions, then signs in as both logins to confirm it worked. The administrator login is used for this one step only and is never written to `.env`, the install state, or the diagnostic report.
+- **I'll run it myself** — the installer waits while you run `mj-db-setup.sql` from your working directory in SQL Server Management Studio (SSMS), Azure Data Studio, or any SQL client, connected as an administrator. It checks both logins again when you continue.
 
-1. Connect to your SQL Server as an administrator (e.g., `sa` or a login with `sysadmin` role)
-2. Open and execute `mj-db-setup.sql`
-3. Optionally, run `mj-db-validate.sql` to confirm everything was created correctly
+Either way, two scripts are saved in your working directory so you can see exactly what runs:
 
-> **Why manual?** Creating server-level logins requires elevated SQL Server permissions (`sysadmin` or `securityadmin`) that the installer shouldn't hold. Running the script manually lets you review and approve the changes.
+- **`mj-db-setup.sql`** — creates the database (if it doesn't exist), the `__mj` schema, the SQL Server logins, database users, and permissions. It is safe to run more than once.
+- **`mj-db-validate.sql`** — verifies that the setup was applied correctly.
 
-Once the scripts are complete, the installer will continue with the remaining phases (dependencies, migrations, codegen, and smoke test).
+> **Azure SQL:** `mj-db-setup.sql` uses `USE` to switch databases, which Azure SQL Database does not support. Create the database and logins with the Azure portal or your usual tooling, then run the installer; it will find them already set up.
 
 ### 4. Verify Your Installation
 
@@ -203,7 +202,7 @@ For automated or repeat installations, you can skip all prompts:
 mj install --yes
 ```
 
-This auto-selects the latest stable release and uses default values for all settings. You can combine it with a config file to provide your specific values:
+This auto-selects the latest stable release and uses default values for all settings. Nothing is asked, so if the database isn't set up yet, provide an administrator login (`MJ_INSTALL_DB_ADMIN_USER` / `MJ_INSTALL_DB_ADMIN_PASSWORD`, or `DatabaseAdminUser` / `DatabaseAdminPassword` in the config file) and the installer sets it up; without one it stops with instructions. You can combine `--yes` with a config file to provide your specific values:
 
 ```
 mj install --yes --config ./install.config.json
@@ -248,6 +247,8 @@ You can also provide configuration via environment variables (useful for CI/CD):
 | `MJ_INSTALL_CODEGEN_PASSWORD` | CodeGen password |
 | `MJ_INSTALL_API_USER` | API SQL login |
 | `MJ_INSTALL_API_PASSWORD` | API password |
+| `MJ_INSTALL_DB_ADMIN_USER` | SQL administrator login used once to create the database and logins (never saved) |
+| `MJ_INSTALL_DB_ADMIN_PASSWORD` | Password for that administrator login (never saved) |
 | `MJ_INSTALL_API_PORT` | GraphQL API port |
 | `MJ_INSTALL_EXPLORER_PORT` | Explorer UI port |
 | `MJ_INSTALL_AUTH_PROVIDER` | Auth provider (`entra`, `auth0`, `none`) |
