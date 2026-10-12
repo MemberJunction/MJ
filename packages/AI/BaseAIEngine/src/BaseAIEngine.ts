@@ -1,10 +1,10 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID, MJGlobal } from "@memberjunction/global";
-import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
+import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
-         MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity,
+         MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity, MJVectorIndexEntity,
          MJAIAgentPromptEntity,
          MJAIAgentTypeEntity,
          MJAIVendorEntity,
@@ -164,6 +164,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: MJAIModelEntityExtended[] = [];
     private _modelTypes: MJAIModelTypeEntity[] = [];
     private _vectorDatabases: MJVectorDatabaseEntity[] = [];
+    private _vectorIndexes: MJVectorIndexEntity[] = [];
     private _prompts: MJAIPromptEntityExtended[] = [];
     private _promptModels: MJAIPromptModelEntity[] = [];
     private _promptTypes: MJAIPromptTypeEntity[] = [];
@@ -279,6 +280,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 CacheLocal: true
             },
             {
+                PropertyName: '_vectorIndexes',
+                EntityName: 'MJ: Vector Indexes',
+                CacheLocal: true
+            },
+            {
                 PropertyName: '_agentActions',
                 EntityName: 'MJ: AI Agent Actions',
                 CacheLocal: true
@@ -291,7 +297,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentNotes',
                 EntityName: 'MJ: AI Agent Notes',
-                CacheLocal: true
+                CacheLocal: true,
+                // Binary vector column: loaded server-side (the AIEngine reads it), skipped over the wire.
+                IncludeBinaryFields: 'DatabaseProviderOnly',
             },
             {
                 PropertyName: '_scopedPromptParts',
@@ -306,7 +314,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentExamples',
                 EntityName: 'MJ: AI Agent Examples',
-                CacheLocal: true
+                CacheLocal: true,
+                // Binary vector column: loaded server-side (the AIEngine reads it), skipped over the wire.
+                IncludeBinaryFields: 'DatabaseProviderOnly',
             },
             {
                 PropertyName: '_agents',
@@ -535,6 +545,24 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         }
     }
 
+    /**
+     * Configs that {@link AdditionalLoading} never reads, so a save or delete can update them in place.
+     *
+     * BaseEngine refuses in-place updates for every config of an engine that overrides
+     * AdditionalLoading, because that method may derive state from the rows. Those configs instead
+     * reload in full after a 1.5 s debounce, and a caller that saves a row and reads it back inside
+     * that window misses it. AdditionalLoading here only rebuilds model, vendor, configuration and
+     * prompt state, so these configs don't need the full reload.
+     *
+     * If AdditionalLoading starts deriving anything from one of these, remove it from this set.
+     */
+    private static readonly IMMEDIATE_MUTATION_PROPERTIES: ReadonlySet<string> = new Set(['_vectorIndexes']);
+
+    protected override canUseImmediateMutation(config: BaseEnginePropertyConfig, skipAdditionalLoadingCheck: boolean = false): boolean {
+        const independent = AIEngineBase.IMMEDIATE_MUTATION_PROPERTIES.has(config.PropertyName);
+        return super.canUseImmediateMutation(config, skipAdditionalLoadingCheck || independent);
+    }
+
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // Clear the configuration chain cache when data is reloaded
         this._configurationChainCache.clear();
@@ -621,6 +649,35 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         for (const model of this._models) {
             if (model.ModelVendors) replaceContents(model.ModelVendors, vendorsByModel.get(keyFor(model.ID)) ?? []);
         }
+    }
+
+    /**
+     * The collections {@link AdditionalLoading} attaches to parents. When these read zero while
+     * the child arrays are full, the derived state has been lost — the failure that row counts
+     * cannot show (model selection then finds no vendor candidates).
+     */
+    protected override GetDerivedStateCensus(): Record<string, number> {
+        const count = <TParent>(parents: TParent[] | undefined, children: (p: TParent) => unknown[] | undefined) => {
+            let withChildren = 0;
+            let attached = 0;
+            for (const parent of parents ?? []) {
+                const n = children(parent)?.length ?? 0;
+                if (n > 0) withChildren++;
+                attached += n;
+            }
+            return { withChildren, attached };
+        };
+        const models = count(this._models, m => m.ModelVendors);
+        const categories = count(this._promptCategories, c => c.Prompts);
+        const agents = count(this._agents, a => a.Notes);
+        return {
+            ModelsWithVendors: models.withChildren,
+            VendorsAttached: models.attached,
+            CategoriesWithPrompts: categories.withChildren,
+            PromptsAttached: categories.attached,
+            AgentsWithNotes: agents.withChildren,
+            NotesAttached: agents.attached,
+        };
     }
 
     /**
@@ -1410,7 +1467,14 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Resolves the EFFECTIVE {@link AIModelConfiguration} for a model (optionally scoped to one of
      * its vendor rows) by walking the catalog cascade base-first:
      *
-     * `AIModelType.ModelConfiguration` < `AIModel.ModelConfiguration` < `AIModelVendor.ModelConfiguration`
+     * `AIModelType.ModelConfiguration` < `AIModel.ModelConfiguration` < `AIVendor.Configuration.ModelDefaults` < `AIModelVendor.ModelConfiguration`
+     *
+     * The vendor layer (`ModelDefaults` inside the vendor's own `Configuration` bag) is the host-wide
+     * default for every model that vendor serves. It sits ABOVE the model's own bag: a host's
+     * statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. Merged per key, so a
+     * vendor default only touches the keys it sets. The vendor layer only contributes when a
+     * model-vendor row is supplied, because that row's `VendorID` is what names the vendor.
      *
      * Each layer's JSON column is parsed TOLERANTLY (a malformed/absent layer contributes nothing)
      * and the layers deep-merge per key, so a vendor row overriding one knob inherits everything
@@ -1429,13 +1493,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             return null;
         }
         const modelType = model.AIModelTypeID ? this.ModelTypesByID.get(NormalizeUUID(model.AIModelTypeID)) : undefined;
-        const vendor = vendorModelVendorID
+        const modelVendor = vendorModelVendorID
             ? (this.ModelVendorsByModelID.get(NormalizeUUID(model.ID)) ?? []).find(mv => UUIDsEqual(mv.ID, vendorModelVendorID))
             : undefined;
+        const vendor = modelVendor?.VendorID ? this.VendorsByID.get(NormalizeUUID(modelVendor.VendorID)) : undefined;
         return ResolveEffectiveModelConfiguration(
             ParseModelConfiguration(modelType?.ModelConfiguration),
             ParseModelConfiguration(model.ModelConfiguration),
-            ParseModelConfiguration(vendor?.ModelConfiguration),
+            ParseVendorConfiguration(vendor?.Configuration)?.ModelDefaults,
+            ParseModelConfiguration(modelVendor?.ModelConfiguration),
         );
     }
 
@@ -1472,6 +1538,30 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get VectorDatabases(): MJVectorDatabaseEntity[] {
         return this.GetConfigData<MJVectorDatabaseEntity>('_vectorDatabases');
+    }
+
+    /** All Vector Indexes. This is the single cache of `MJ: Vector Indexes`; other engines proxy it. */
+    public get VectorIndexes(): MJVectorIndexEntity[] {
+        return this.GetConfigData<MJVectorIndexEntity>('_vectorIndexes');
+    }
+
+    /** Find a vector index by ID (case-insensitive UUID comparison). */
+    public GetVectorIndexByID(id: string): MJVectorIndexEntity | undefined {
+        if (!id) return undefined;
+        return this.VectorIndexes.find(v => UUIDsEqual(v.ID, id));
+    }
+
+    /**
+     * Returns the name the vector database itself knows this index by — the single source of truth
+     * for addressing an index on its provider.
+     *
+     * A Vector Index row carries two names: `Name` is the MJ display label and `ExternalID` is the
+     * index's name on the provider. They often differ (Pinecone index names cannot contain spaces or
+     * parentheses), so every call that reaches the provider must use this rather than `Name`.
+     * Falls back to `Name` for rows that have no `ExternalID` (indexes not provisioned through MJ).
+     */
+    public GetProviderIndexName(vectorIndex: MJVectorIndexEntity): string {
+        return vectorIndex.ExternalID?.trim() || vectorIndex.Name;
     }
 
     public get ModelCosts(): MJAIModelCostEntity[] {

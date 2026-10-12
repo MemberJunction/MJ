@@ -1,13 +1,14 @@
-import { Component, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Component, ViewChild, ElementRef, ChangeDetectorRef, OnInit } from '@angular/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, Metadata, EntityInfo } from '@memberjunction/core';
-import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation } from '@memberjunction/ng-entity-viewer';
+import { CompositeKey, Metadata, EntityInfo, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation, ExportColumnTypeForSQLType } from '@memberjunction/ng-entity-viewer';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import type { SaveViewAsListResult } from '@memberjunction/ng-list-management';
+import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 /**
  * UserViewResource - Resource wrapper for displaying User Views in tabs
  *
@@ -254,6 +255,29 @@ export class UserViewResource extends BaseResourceComponent {
         private exportService: ExportService
     ) {
         super();
+    }
+
+    public override ngOnInit(): void {
+        super.ngOnInit();
+
+        // Refresh when rows of this view's entity change: a local save/delete, or a server-side
+        // write announced as remote-invalidate (a clone, or another server). Debounced, so a burst
+        // of writes (a clone creating many rows) reloads the view once.
+        MJGlobal.Instance.GetEventListener()
+            .pipe(
+                filter((event) => {
+                    if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) return false;
+                    const entityEvent = event.args as BaseEntityEvent;
+                    const type = entityEvent?.type;
+                    if (type !== 'save' && type !== 'delete' && type !== 'remote-invalidate') return false;
+                    const affectedName = (entityEvent.baseEntity?.EntityInfo?.Name ?? entityEvent.entityName)?.trim().toLowerCase();
+                    return !!affectedName && affectedName === this.entityInfo?.Name?.trim().toLowerCase();
+                }),
+                debounceTime(300),
+                takeUntil(this.destroy$)
+            )
+            // In place: a change made elsewhere shouldn't move the user off their page or sort.
+            .subscribe(() => this.entityViewerRef?.RefreshInPlace());
     }
 
     override set Data(value: ResourceData) {
@@ -514,22 +538,31 @@ export class UserViewResource extends BaseResourceComponent {
       return this.OnExport();
     }
 
-    /** Columns to export — from grid state, else the view's columns, else the entity's real fields. */
+    /**
+     * Columns to export — from grid state, else the view's columns, else the entity's real fields. Each
+     * column carries its field's export type, as the grid's export does, so a date-only field writes
+     * a date cell on its stored day rather than a timestamp.
+     */
     private buildExportColumns(): ExportColumn[] {
         if (!this.EntityInfo) return [];
+        const entity = this.EntityInfo;
+        const typed = (name: string, displayName: string): ExportColumn => {
+            const field = entity.Fields.find(f => f.Name.toLowerCase() === name.toLowerCase());
+            return { name, displayName, dataType: ExportColumnTypeForSQLType(field?.Type) };
+        };
         if (this.GridState?.columnSettings && this.GridState.columnSettings.length > 0) {
             return this.GridState.columnSettings
                 .filter(col => col.hidden !== true)
-                .map(col => ({ name: col.Name, displayName: col.DisplayName || col.Name }));
+                .map(col => typed(col.Name, col.DisplayName || col.Name));
         }
         if (this.ViewEntity?.Columns) {
             return this.ViewEntity.Columns
                 .filter(col => !col.hidden)
-                .map(col => ({ name: col.Name, displayName: col.DisplayName || col.Name }));
+                .map(col => typed(col.Name, col.DisplayName || col.Name));
         }
-        return this.EntityInfo.Fields
+        return entity.Fields
             .filter(f => !f.IsVirtual)
-            .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName }));
+            .map(f => typed(f.Name, f.DisplayNameOrName));
     }
 
     private buildExportFileName(): string {

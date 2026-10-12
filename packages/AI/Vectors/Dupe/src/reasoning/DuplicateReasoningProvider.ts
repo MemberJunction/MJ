@@ -3,17 +3,20 @@
  *
  * `DuplicateReasoningProvider` is an abstract base resolved via `@RegisterClass`. The
  * {@link DuplicateRecordDetector} selects an implementation per Entity Document via
- * `ReasoningMode` ('Prompt' | 'Agent') and calls {@link DuplicateReasoningProvider.Reason}
- * once per source record's matched set. Both shipped implementations
- * (`PromptReasoningProvider`, and `DuplicateReasoningAgentProvider` in `@memberjunction/ai-agents`)
- * consume the same {@link DuplicateReasoningInput} and emit the same
- * {@link DuplicateReasoningOutput}; only the runtime (single-shot prompt vs. orchestrated
- * agent) differs.
+ * `ReasoningMode` ('Prompt' | 'Agent' | 'Decision' | 'DecisionThenPrompt') and calls
+ * {@link DuplicateReasoningProvider.Reason} once per source record's matched set. Every shipped
+ * implementation consumes the same {@link DuplicateReasoningInput} and emits the same
+ * {@link DuplicateReasoningOutput}. `PromptReasoningProvider` and `DuplicateReasoningAgentProvider`
+ * (in `@memberjunction/ai-agents`) run the same instruction set and differ only in runtime
+ * (single-shot prompt vs. orchestrated agent). `DecisionReasoningProvider` asks a typed decision
+ * model instead and never recommends a merge; `DecisionThenPromptReasoningProvider` filters with
+ * the decision and then runs the prompt over the survivors.
  *
  * @module @memberjunction/ai-vector-dupe
  */
 
 import { LogError } from '@memberjunction/core';
+import type { MJEntityDocumentEntity } from '@memberjunction/core-entities';
 import {
     DuplicateReasoningInput,
     DuplicateReasoningOutput,
@@ -27,6 +30,10 @@ import {
 export const PROMPT_REASONING_PROVIDER_KEY = 'Prompt';
 /** Class-factory key for the agent provider (registered in @memberjunction/ai-agents). */
 export const AGENT_REASONING_PROVIDER_KEY = 'Agent';
+/** Class-factory key for the typed-decision provider, which recommends and never merges. */
+export const DECISION_REASONING_PROVIDER_KEY = 'Decision' satisfies MJEntityDocumentEntity['ReasoningMode'];
+/** Class-factory key for the chained mode: the decision filters, then the prompt reasons over the survivors. */
+export const DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY = 'DecisionThenPrompt' satisfies MJEntityDocumentEntity['ReasoningMode'];
 
 /**
  * Abstract reasoning provider. Subclasses implement {@link Reason} for their runtime.

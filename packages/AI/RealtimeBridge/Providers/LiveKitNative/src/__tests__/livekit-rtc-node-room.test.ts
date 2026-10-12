@@ -112,6 +112,7 @@ function makeFakeRtc(remote: RtcParticipant[] = []): {
                 cap.inFlightCaptures--;
             },
             clearQueue: () => { cap.clearQueueCalls++; },
+            queuedDuration: 50,
         };
     }
     function FakeAudioFrame(this: unknown, data: Int16Array, sampleRate: number, channels: number, samplesPerChannel: number): RtcAudioFrame {
@@ -253,6 +254,34 @@ describe('LiveKitRtcNodeRoomClient — connect + audio', () => {
         emit(ROOM_EVENT.TrackSubscribed, { kind: TRACK_KIND.KIND_VIDEO }, {}, { identity: 'x' });
         await new Promise((r) => setTimeout(r, 0));
         expect(heard).toHaveLength(0);
+    });
+
+    it('tracks audio telemetry: inbound gap histogram, outbound captures and queuedDuration, event loop p99', async () => {
+        const { module, emit, inboundFramesFor } = makeFakeRtc();
+        const client = new LiveKitRtcNodeRoomClient(24000, 24000, 1, async () => module);
+        await client.connect(connectArgs);
+
+        // Inbound frames
+        inboundFramesFor([frame([1, 2]), frame([3, 4])]);
+        emit(ROOM_EVENT.TrackSubscribed, { kind: TRACK_KIND.KIND_AUDIO }, {}, { identity: 'user-1', name: 'User 1' });
+        await new Promise((r) => setTimeout(r, 0));
+
+        // Outbound frame
+        client.publishAudio(new Int16Array([10, 20]).buffer);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const tele = client.GetTelemetry();
+        expect(tele.outbound.captureCount).toBe(1);
+        expect(tele.outbound.lastQueuedDuration).toBe(50);
+        expect(tele.inboundGaps['user-1']).toBeDefined();
+        expect(tele.inboundGaps['user-1'].totalFrames).toBeGreaterThanOrEqual(1);
+
+        // Pruning on participant disconnect
+        emit(ROOM_EVENT.ParticipantDisconnected, { identity: 'user-1' });
+        expect(client.GetTelemetry().inboundGaps['user-1']).toBeUndefined();
+
+        await client.disconnect();
+        expect(Object.keys(client.GetTelemetry().inboundGaps)).toHaveLength(0);
     });
 });
 

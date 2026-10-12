@@ -1,10 +1,11 @@
 import { BaseSingleton, MJGlobal, MJEventType } from "@memberjunction/global";
-import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider } from "./interfaces";
+import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider, LocalStorageWriteOptions } from "./interfaces";
 import { AggregateExpression, RunViewParams, IsMaterializedDataSource } from "../views/runView";
-import { LogError, LogStatusEx } from "./logging";
+import { LogError, LogStatusEx, LogWarning } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { Metadata } from "./metadata";
 import { CompositeKey, KeyValuePair } from "./compositeKey";
+import { BufferedEntityChange, EntityEventBatch, EntityEventBatchSet } from "./entityEventBatch";
 
 /** Verbose-only status logging — hidden unless verbose logging is enabled */
 function LogStatusVerbose(message: string): void {
@@ -59,6 +60,15 @@ function deepFreezeCacheValue<T>(value: T, visited: WeakSet<object> = new WeakSe
 // ============================================================================
 // TYPES AND INTERFACES
 // ============================================================================
+
+/**
+ * One change for {@link LocalCacheManager.ApplyRowChanges}: `Row` adds or replaces the row with
+ * `Key`; `Row: null` removes it.
+ */
+export interface CachedRowChange {
+    Key: CompositeKey;
+    Row: Record<string, unknown> | null;
+}
 
 /**
  * The type of cache entry: dataset, runview, or runquery
@@ -337,6 +347,18 @@ export interface CacheChangedEvent {
      * For `'removed'` and `'category_cleared'` actions, this is `undefined`.
      */
     Data?: string;
+
+    /**
+     * Monotonic counter shared by every server, incremented once per shared-cache mutation.
+     *
+     * For recovery rather than ordering: a subscriber that was disconnected cannot see what pub/sub
+     * did not replay, so it records the highest epoch it has seen and compares that with the current
+     * value on reconnect to learn whether anything was invalidated meanwhile.
+     *
+     * Optional — transports without the counter omit it, and consumers that do not reconcile can
+     * ignore it.
+     */
+    Epoch?: number;
 }
 
 // ============================================================================
@@ -420,6 +442,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     private _fingerprintLocks = new Map<string, Promise<void>>();
 
+    /** Logged once when a local TTL is configured against a shared store. See {@link runEvictionSweep}. */
+    private _sharedTTLWarned = false;
+
+    /** Open entity-event batches. See {@link BeginEntityEventBatch}. */
+    private _entityEventBatches = new EntityEventBatchSet();
+    /** Save/delete events a batch took when they were raised. See {@link WasTakenByEntityEventBatch}. */
+    private _eventsTakenByBatch = new WeakSet<BaseEntityEvent>();
+
     private readonly REGISTRY_KEY = '__MJ_CACHE_REGISTRY__';
 
     /**
@@ -441,26 +471,33 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Initialize the cache manager with a storage provider.
      * This should be called during app startup after the storage provider is available.
      *
-     * This method is safe to call multiple times - subsequent calls will return the same
-     * promise as the first caller, ensuring initialization only happens once.
+     * Safe to call repeatedly: the cache is initialized once, but **a `config` passed by a later
+     * caller is still applied**. That matters because a database provider initializes this manager
+     * from inside its own `Config()` — before the host has a chance to pass anything — so a host
+     * that hands its settings to `StartupManager` would otherwise have them silently dropped, and
+     * every `cacheSettings` knob would be inert. The host's explicit settings win
+     * over the provider's implicit initialization, whichever runs first.
      *
      * @param storageProvider - The local storage provider to use for persistence
-     * @param config - Optional configuration overrides
+     * @param config - Optional configuration overrides, applied even when already initialized
      * @returns A promise that resolves when initialization is complete
      */
     public Initialize(
         storageProvider: ILocalStorageProvider,
         config?: Partial<LocalCacheManagerConfig>
     ): Promise<void> {
-        // If already initialized, return immediately
         if (this._initialized) {
+            if (config) {
+                this.UpdateConfig(config);
+            }
             return Promise.resolve();
         }
 
-        // If initialization is in progress, return the existing promise
-        // so all callers await the same initialization
+        // Initialization in flight: share it, then apply this caller's settings on top.
         if (this._initializePromise) {
-            return this._initializePromise;
+            return config
+                ? this._initializePromise.then(() => { this.UpdateConfig(config); })
+                : this._initializePromise;
         }
 
         // First caller - start initialization and store the promise
@@ -542,6 +579,41 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // Subscribe to BaseEntity events for universal cache invalidation.
         // When any entity is saved/deleted, update all cached RunView results for that entity.
         this.subscribeToBaseEntityEvents();
+
+        this.notifyInitialized();
+    }
+
+    private _initializedListeners: Array<() => void> = [];
+
+    /**
+     * Runs `listener` once the cache manager is initialized — immediately if it already is.
+     * Lets code that ran too early (an engine loaded before startup initialized the cache) finish
+     * its cache wiring later instead of never.
+     *
+     * @param listener - Called once; errors are logged and do not affect other listeners
+     */
+    public WhenInitialized(listener: () => void): void {
+        if (this._initialized) {
+            this.runInitializedListener(listener);
+            return;
+        }
+        this._initializedListeners.push(listener);
+    }
+
+    private runInitializedListener(listener: () => void): void {
+        try {
+            listener();
+        } catch (e) {
+            LogError(`LocalCacheManager.WhenInitialized listener failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    private notifyInitialized(): void {
+        const listeners = this._initializedListeners;
+        this._initializedListeners = [];
+        for (const listener of listeners) {
+            this.runInitializedListener(listener);
+        }
     }
 
     /**
@@ -559,10 +631,23 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Updates the configuration at runtime
+     * Updates the configuration at runtime, and re-arms the eviction sweep so a changed interval
+     * (or a disabled cache) takes effect immediately instead of at the next restart.
      */
     public UpdateConfig(config: Partial<LocalCacheManagerConfig>): void {
+        const previousInterval = this._config.evictionSweepIntervalMs;
+        const wasEnabled = this._config.enabled;
         this._config = { ...this._config, ...config };
+        if (!this._initialized) {
+            return; // doInitialize starts the sweep with the merged config
+        }
+        if (this._config.evictionSweepIntervalMs !== previousInterval || this._config.enabled !== wasEnabled) {
+            if (this._config.enabled) {
+                this.startEvictionSweep();
+            } else {
+                this.stopEvictionSweep();
+            }
+        }
     }
 
     /**
@@ -587,9 +672,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param newProvider - The new storage provider to use
      */
     public async SetStorageProvider(newProvider: ILocalStorageProvider): Promise<void> {
+        if (newProvider === this._storageProvider) {
+            // Already in use (a host that installed its shared store before startup): migrating
+            // every entry onto itself would rewrite — and republish — all of them.
+            return;
+        }
         // The freeze decision belongs to the ACTIVE provider, not to whichever one happened to be
-        // installed at Initialize. MJAPI initializes on the in-memory provider during engine
-        // loading and swaps to Redis afterward, so these two have OPPOSITE reference semantics on
+        // installed at Initialize. A host may still swap stores after initialization (and MJAPI did,
+        // before it began installing Redis ahead of metadata), and the two have OPPOSITE reference
+        // semantics on
         // every Redis deployment — carrying the old answer forward means freezing rows Redis has
         // already isolated (all of the hazard, none of the protection), or, on the reverse swap,
         // silently dropping the protection.
@@ -617,7 +708,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 const category = this.getCategoryForType(entry.type);
                 const data = await oldProvider?.GetItem(entry.key, category);
                 if (data) {
-                    await newProvider.SetItem(entry.key, data, category);
+                    await newProvider.SetItem(entry.key, data, category, this.writeOptionsForEntry(entry));
                     migratedCount++;
                 }
             } catch (err) {
@@ -681,6 +772,23 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * delivers it without extra wiring. `BaseEngine` already refuses ordered configs for
      * in-place mutation (`canUseImmediateMutation`); this closes the same gap in the raw
      * provider cache. (B42)
+     *
+     * Maintaining the order in place was built and then withdrawn, so the payoff is on record rather
+     * than left to be rediscovered. It is possible for a narrow subset — plain column terms over
+     * numeric/date/boolean fields with no NULLs present, where JavaScript and SQL provably agree —
+     * but the subset is where the value dies, not the implementation. Of 918 RunView param literals
+     * in this repo, 289 carry an ORDER BY, 112 are also unfiltered and uncapped (the only ones a slot
+     * could maintain), and roughly 26 fall in that type subset, several of which order on a
+     * uniqueidentifier and are refused anyway. The survivors are about a dozen configuration and
+     * admin lists — API keys, credentials, view types, schema info — saved rarely, so the saving is a
+     * handful of small indexed reads per day. High-write entities gain nothing: every ordered read of
+     * MJ: AI Agent Runs, MJ: Conversation Details and MJ: AI Prompt Runs is FILTERED, so their slots
+     * land in the invalidate branch regardless. Against that, the cost is a comparator that must keep
+     * agreeing with SQL collation and NULL placement across dialects forever, whose failure mode is a
+     * silently reordered list in a slot other readers treat as authoritative. Widening it to strings —
+     * by far the largest bucket, `Name` — means owning collation per dialect and per column.
+     *
+     * If you are about to attempt this, the measurement above is the argument not to.
      *
      * @param parts - the fingerprint already split on '|'
      */
@@ -863,14 +971,78 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!currentHash) return false;
 
         if (currentHash !== data.schemaHash) {
-            LogStatusEx({
-                message: `[CACHE-SCHEMA-STALE] Entity "${entityName}" schema changed (cached=${data.schemaHash}, current=${currentHash})`,
-                verboseOnly: false
-            });
+            LogWarning(`[CACHE-SCHEMA-STALE] Entity "${entityName}" schema changed (cached=${data.schemaHash}, current=${currentHash}) — dropping the slot`, 'Cache');
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * The newest `__mj_UpdatedAt` among `rows` as an ISO string, `''` for an empty set, or
+     * `undefined` when the rows carry no such column (so the caller can fall back to its own stamp).
+     * Mirrors how the RunView fill path stamps a slot.
+     */
+    public static MaxUpdatedAtOfRows(rows: ReadonlyArray<unknown>): string | undefined {
+        let max = Number.NEGATIVE_INFINITY;
+        let sawColumn = false;
+        for (const row of rows) {
+            if (!row || typeof row !== 'object') {
+                continue;
+            }
+            // `UpdatedAt` is the fallback an entity whose view predates the `__mj_` prefix carries.
+            // Both cache-write funnels must agree on the stamp they compute, or the same rows get
+            // different slot timestamps depending on which path wrote them and every currency check
+            // between them misfires.
+            const record = row as Record<string, unknown>;
+            const raw = record['__mj_UpdatedAt'] !== undefined ? record['__mj_UpdatedAt'] : record['UpdatedAt'];
+            if (raw === undefined) {
+                continue;
+            }
+            sawColumn = true;
+            if (raw === null) {
+                continue;   // new Date(null) is the epoch, not "no timestamp"
+            }
+            const ms = raw instanceof Date ? raw.getTime() : new Date(raw as string).getTime();
+            if (!Number.isNaN(ms) && ms > max) {
+                max = ms;
+            }
+        }
+        if (rows.length === 0) {
+            return '';
+        }
+        if (!sawColumn) {
+            return undefined;
+        }
+        return max === Number.NEGATIVE_INFINITY ? '' : new Date(max).toISOString();
+    }
+
+    /**
+     * Storage write options for a RunView slot: the entity name as index group, so a shared
+     * provider can find the slot from any process, and the time left before the slot's own expiry
+     * (external-data-source entities), so a rewrite does not extend it.
+     *
+     * @param fingerprint - The slot key
+     * @param expiresAt - Absolute expiry (ms since epoch), when the slot has one
+     */
+    private runViewWriteOptions(fingerprint: string, expiresAt?: number): LocalStorageWriteOptions {
+        const options: LocalStorageWriteOptions = {};
+        const entity = this.extractEntityFromFingerprint(fingerprint);
+        if (entity) {
+            options.IndexGroup = entity;
+        }
+        if (expiresAt) {
+            options.TTLSeconds = Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
+        }
+        return options;
+    }
+
+    /** Storage write options for any registry entry; only RunView slots are indexed. */
+    private writeOptionsForEntry(entry: CacheEntryInfo): LocalStorageWriteOptions | undefined {
+        if (entry.type === 'runview') {
+            return this.runViewWriteOptions(entry.key, entry.expiresAt);
+        }
+        return entry.expiresAt ? { TTLSeconds: Math.max(1, Math.ceil((entry.expiresAt - Date.now()) / 1000)) } : undefined;
     }
 
     /**
@@ -911,13 +1083,32 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Resolves cached fingerprints for an entity, checking the local in-memory
-     * index first and falling back to the shared storage provider (e.g., Redis)
-     * when the local index is empty. This handles cross-server scenarios where
-     * Server A cached RunView results and Server B saves a record — Server B's
-     * local index is empty but Redis still has the stale cached entries.
+     * Resolves cached fingerprints for an entity: this process's own index, plus — on a storage
+     * provider shared between processes — the slots other processes wrote.
+     *
+     * A save on server A has to reach slots server B wrote after A booted, because nothing else
+     * will: B only hears about A's save through the slots A rewrites. A shared provider therefore
+     * answers from its per-entity index ({@link ILocalStorageProvider.GetIndexGroupKeys}) on every
+     * call. A provider without that index is process-local or cannot enumerate cheaply, and keeps
+     * the older behaviour: the category is listed only when the local index knows nothing.
      */
     private async resolveFingerprintsForEntity(entityName: string): Promise<Set<string> | undefined> {
+        if (this._storageProvider?.GetIndexGroupKeys) {
+            const shared = await this._storageProvider.GetIndexGroupKeys(CacheCategory.RunViewCache, entityName);
+            // The local index is deliberately NOT pruned against the shared group here. A slot this
+            // process wrote that the group no longer lists is one that expired or was cleared
+            // elsewhere — and peers may still be holding its rows in memory. Keeping it means the
+            // next save invalidates it, which is what publishes the `removed` those peers reload
+            // on (pinned by localCacheManager.sharedIndex.test.ts). The invalidation then
+            // drops it from the index, so that costs one notice per slot, once — not per save.
+            // Reviewed as and rejected on that evidence
+            for (const fp of shared) {
+                this.addToEntityIndex(fp);
+            }
+            const merged = this._entityFingerprintIndex.get(entityName);
+            return merged && merged.size > 0 ? merged : undefined;
+        }
+
         const local = this._entityFingerprintIndex.get(entityName);
         if (local && local.size > 0) return local;
 
@@ -967,6 +1158,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
             // Only react to completed save and delete events
             if (entityEvent.type !== 'save' && entityEvent.type !== 'delete') return;
+
+            // Inside an open batch the change is recorded now and applied when the batch closes.
+            if (this.bufferIfBatching(entityEvent)) return;
 
             // Fire-and-forget to avoid blocking the save/delete operation
             this.HandleBaseEntityEvent(entityEvent).catch((err) => {
@@ -1041,6 +1235,327 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 }
             }));
         }
+    }
+
+    // ========================================================================
+    // ENTITY-EVENT BATCHES
+    // ========================================================================
+
+    /**
+     * Opens a batch for `owner` (normally a provider), or enters the one already open. Until the
+     * matching {@link EndEntityEventBatch}, saves and deletes raised by entities that use `owner`
+     * as their provider are recorded instead of applied; closing the batch rewrites each affected
+     * slot once. `DatabaseProviderBase.BeginEntityTransaction` opens one for every transaction, so
+     * callers rarely need this directly — {@link RunInEntityEventBatch} is the wrapper for bulk
+     * writers that do not use a transaction.
+     *
+     * Every call must be paired with exactly one {@link EndEntityEventBatch}.
+     */
+    public BeginEntityEventBatch(owner: object): void {
+        this._entityEventBatches.Open(owner);
+    }
+
+    /**
+     * Replaces a RunView slot wholesale while holding the cross-process lock for it.
+     *
+     * The event-driven path already reads-modifies-writes under that lock; a writer that replaces
+     * the same slot outside it can land between a peer's read and its write, and whichever `SET`
+     * lands second wins — the engine sweep's fresh rows lost, or the peer's delta lost, and either
+     * way the losing state is published to the fleet.
+     */
+    public async ReplaceRunViewResultLocked(
+        fingerprint: string,
+        params: RunViewParams,
+        results: unknown[],
+        maxUpdatedAt: string,
+        totalRowCount: number,
+        provider?: IMetadataProvider,
+    ): Promise<boolean> {
+        if (!this._storageProvider || !this._config.enabled) {
+            return false;
+        }
+        // Carry the slot's existing expiry across the replace. An external-data-source slot has one,
+        // and a rewrite that dropped it would turn a bounded cache entry into a permanent one
+        //.
+        const ttlMs = this.remainingTTLForSlot(fingerprint);
+        return this.maintainSlotLocked(fingerprint, async () => {
+            await this.SetRunViewResult(fingerprint, params, results, maxUpdatedAt, undefined, totalRowCount, provider, ttlMs);
+            return true;
+        });
+    }
+
+    /** Milliseconds left on a slot's expiry, or undefined when it has none. @internal */
+    private remainingTTLForSlot(fingerprint: string): number | undefined {
+        const expiresAt = this._registry.get(fingerprint)?.expiresAt;
+        if (!expiresAt) {
+            return undefined;
+        }
+        return Math.max(1, expiresAt - Date.now());
+    }
+
+    /**
+     * Abandons `owner`'s batch at any depth and invalidates every slot it touched.
+     *
+     * For an owner that cannot settle its batch normally: an independent provider instance being
+     * released with a transaction still open, or a transaction handle reset after a failure. The
+     * buffered rows may or may not have reached the database, so the affected slots are invalidated
+     * rather than written, and the entities stop counting as pending — a batch left open makes
+     * every cached read of its entities miss, for the life of the process.
+     *
+     * Never throws. Safe when no batch is open.
+     */
+    public async AbandonEntityEventBatch(owner: object): Promise<void> {
+        const batch = this._entityEventBatches.Abandon(owner);
+        if (!batch) {
+            return;
+        }
+        LogWarning(`LocalCacheManager: an entity-event batch was abandoned with ${batch.Changes.length} buffered change(s) across ${batch.TouchedEntities.size} entit${batch.TouchedEntities.size === 1 ? 'y' : 'ies'} — invalidating them, because whether those rows reached the database is unknown`, 'Cache');
+        try {
+            await this.invalidateBatchEntities(batch);
+        } catch (e) {
+            LogError(`LocalCacheManager.AbandonEntityEventBatch failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Leaves one level of `owner`'s batch. Closing the outermost level applies the batch: with
+     * every level successful, each affected slot is rewritten once with all its changes; if any
+     * level failed (a rollback), the affected slots are invalidated instead, so every server reloads
+     * them from the database. Never throws.
+     *
+     * @param owner - The object passed to {@link BeginEntityEventBatch}
+     * @param succeeded - False when the work this level covered was rolled back or failed
+     */
+    public async EndEntityEventBatch(owner: object, succeeded: boolean): Promise<void> {
+        const batch = this._entityEventBatches.Close(owner, succeeded);
+        if (!batch) {
+            return;
+        }
+        try {
+            await this.applyEntityEventBatch(batch);
+        } catch (e) {
+            LogError(`LocalCacheManager: applying an entity-event batch failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Claims a named lease on the storage provider for `ttlMs`: on a shared store only one process
+     * gets it per period; on a private store the caller always does. A lease that cannot be
+     * checked is reported as not claimed.
+     */
+    public async TryAcquireSharedLease(name: string, ttlMs: number): Promise<boolean> {
+        return (await this.claimLease(name, ttlMs)) === 'claimed';
+    }
+
+    /** One lease attempt: claimed, held by another process, or the store could not be asked. */
+    private async claimLease(name: string, ttlMs: number): Promise<'claimed' | 'held' | 'error'> {
+        const provider = this._storageProvider;
+        if (!provider?.TryAcquireLease) {
+            return 'claimed';
+        }
+        try {
+            return (await provider.TryAcquireLease(name, ttlMs)) ? 'claimed' : 'held';
+        } catch (e) {
+            LogWarning(`LocalCacheManager: could not claim lease "${name}" (${e instanceof Error ? e.message : String(e)})`, 'Cache');
+            return 'error';
+        }
+    }
+
+    /**
+     * Extends a lease this process already holds, so long-running work keeps its turn. Falls back
+     * to re-claiming when the store has no dedicated renewal, which is a no-op for anyone else's
+     * lease because the claim is `SET NX`. Never throws.
+     *
+     * @returns true when the lease is still (or again) held by this process.
+     */
+    public async RenewSharedLease(name: string, ttlMs: number): Promise<boolean> {
+        const provider = this._storageProvider;
+        if (!provider?.TryAcquireLease) {
+            return true; // no shared store: this process is the only one, and holds it by default
+        }
+        try {
+            const renew = (provider as { RenewLease?: (n: string, ttl: number) => Promise<boolean> }).RenewLease;
+            if (renew) {
+                return await renew.call(provider, name, ttlMs);
+            }
+            return await provider.TryAcquireLease(name, ttlMs);
+        } catch (e) {
+            LogWarning(`LocalCacheManager: could not renew lease "${name}" (${e instanceof Error ? e.message : String(e)})`, 'Cache');
+            return false;
+        }
+    }
+
+    /** Ends a lease claimed with {@link TryAcquireSharedLease}. Never throws. */
+    public async ReleaseSharedLease(name: string): Promise<void> {
+        try {
+            await this._storageProvider?.ReleaseLease?.(name);
+        } catch (e) {
+            LogWarning(`LocalCacheManager: could not release lease "${name}" (${e instanceof Error ? e.message : String(e)})`, 'Cache');
+        }
+    }
+
+    /**
+     * Waits until this process claims the lease, polling every `pollMs`, for at most `maxWaitMs`.
+     * @returns Whether the lease was claimed, and how long the wait took.
+     */
+    public async WaitForSharedLease(name: string, ttlMs: number, maxWaitMs: number, pollMs: number = 100): Promise<{ Acquired: boolean; WaitedMs: number }> {
+        const started = Date.now();
+        for (;;) {
+            const outcome = await this.claimLease(name, ttlMs);
+            if (outcome !== 'held') {
+                // An unreachable store coordinates nothing, so waiting on it would only delay the caller.
+                return { Acquired: outcome === 'claimed', WaitedMs: Date.now() - started };
+            }
+            if (Date.now() - started >= maxWaitMs) {
+                return { Acquired: false, WaitedMs: Date.now() - started };
+            }
+            await new Promise(resolve => setTimeout(resolve, pollMs));
+        }
+    }
+
+    /** True while a batch is open for `owner`. */
+    public IsBatchingEntityEvents(owner: object | null | undefined): boolean {
+        return this._entityEventBatches.Find(owner) !== undefined;
+    }
+
+    /**
+     * True when a batch took `entityEvent` as it was raised, so closing that batch maintains every
+     * slot indexed for the entity. A listener that reaches its cache write only after an `await`
+     * asks this instead of {@link IsBatchingEntityEvents}: by then the batch may have closed, and
+     * a write of its own would rewrite the slot once per event.
+     */
+    public WasTakenByEntityEventBatch(entityEvent: BaseEntityEvent): boolean {
+        return this._eventsTakenByBatch.has(entityEvent);
+    }
+
+    /**
+     * Runs `work` inside an entity-event batch for `owner` and applies the batch when it finishes
+     * (as a failure when `work` throws). Use for bulk writes that do not already run in a
+     * transaction.
+     */
+    public async RunInEntityEventBatch<T>(owner: object, work: () => Promise<T>): Promise<T> {
+        this.BeginEntityEventBatch(owner);
+        let succeeded = false;
+        try {
+            const result = await work();
+            succeeded = true;
+            return result;
+        } finally {
+            await this.EndEntityEventBatch(owner, succeeded);
+        }
+    }
+
+    /**
+     * Records a save/delete in the batch open for the entity's provider.
+     * @returns True when the event was taken by a batch (or needs no cache work at all).
+     */
+    private bufferIfBatching(entityEvent: BaseEntityEvent): boolean {
+        const owner = entityEvent.baseEntity?.ProviderToUse;
+        if (!this._entityEventBatches.Find(owner)) {
+            return false;
+        }
+        const taken = this._entityEventBatches.Record(owner, this.captureEntityChange(entityEvent));
+        if (taken) {
+            this._eventsTakenByBatch.add(entityEvent);
+        }
+        return taken;
+    }
+
+    /**
+     * True when `fingerprint`'s entity has changes waiting in an open batch. Such a slot is behind
+     * what the unit of work has written, so reads treat it as a miss (the database answers,
+     * including the uncommitted rows for a reader inside the transaction) and fills are not stored.
+     */
+    private isPendingInBatch(fingerprint: string): boolean {
+        const entityName = this.extractEntityFromFingerprint(fingerprint);
+        return entityName !== null && this._entityEventBatches.HasPendingChanges(entityName);
+    }
+
+    /**
+     * The change a save/delete event describes, captured now — the entity object can change (or,
+     * after a delete, be reset) before a batch closes. Null when the event needs no cache work.
+     */
+    private captureEntityChange(entityEvent: BaseEntityEvent): BufferedEntityChange | null {
+        const entityInfo = entityEvent.baseEntity?.EntityInfo;
+        if (!entityInfo?.Name || !this.IsCachingEnabledForEntity(entityInfo) || !entityInfo.PrimaryKeys?.length) {
+            return null;
+        }
+        if (entityEvent.type !== 'save' && entityEvent.type !== 'delete') {
+            return null;
+        }
+        // A delete resets the entity right after raising the event; its payload keeps the old values.
+        const payload = entityEvent.payload as { OldValues?: Record<string, unknown> } | undefined;
+        const record = (entityEvent.type === 'delete' && payload?.OldValues)
+            ? payload.OldValues
+            : entityEvent.baseEntity.GetAll() as Record<string, unknown>;
+        const key = new CompositeKey();
+        key.LoadFromEntityInfoAndRecord(entityInfo, record);
+        if (key.KeyValuePairs.length === 0 || key.KeyValuePairs.some(kv => kv.Value == null)) {
+            return null;
+        }
+        return { EntityInfo: entityInfo, Type: entityEvent.type, Key: key, Record: record };
+    }
+
+    /** Applies a closed batch; see {@link EndEntityEventBatch}. */
+    private async applyEntityEventBatch(batch: EntityEventBatch): Promise<void> {
+        if (!batch.CanApplyRows) {
+            await this.invalidateBatchEntities(batch);
+            return;
+        }
+        const byEntity = new Map<string, BufferedEntityChange[]>();
+        for (const change of batch.Changes) {
+            const list = byEntity.get(change.EntityInfo.Name) ?? [];
+            list.push(change);
+            byEntity.set(change.EntityInfo.Name, list);
+        }
+        for (const [entityName, changes] of byEntity) {
+            await this.applyEntityChanges(entityName, changes);
+        }
+    }
+
+    /** Invalidates every entity a batch touched — for a batch that failed or was abandoned. */
+    private async invalidateBatchEntities(batch: EntityEventBatch): Promise<void> {
+        for (const entityName of batch.TouchedEntities.keys()) {
+            await this.InvalidateEntityCaches(entityName);
+        }
+    }
+
+    /** Applies one entity's buffered changes to every slot indexed for it, each slot once. */
+    private async applyEntityChanges(entityName: string, changes: BufferedEntityChange[]): Promise<void> {
+        const fingerprints = await this.resolveFingerprintsForEntity(entityName);
+        if (!fingerprints || fingerprints.size === 0) {
+            return;
+        }
+        const snapshot = [...fingerprints];
+        const nowISO = new Date().toISOString();
+        const BATCH_SIZE = 8;
+        for (let i = 0; i < snapshot.length; i += BATCH_SIZE) {
+            await Promise.all(snapshot.slice(i, i + BATCH_SIZE).map(async (fingerprint) => {
+                try {
+                    await this.applyEntityChangesToSlot(fingerprint, changes, nowISO);
+                } catch (err) {
+                    LogError(`LocalCacheManager: failed to apply batched changes to "${fingerprint}": ${(err as Error).message}`);
+                }
+            }));
+        }
+    }
+
+    /**
+     * One slot, several changes: the same decisions {@link processEntityEventForFingerprint} makes
+     * per event, made once for the whole list.
+     */
+    private async applyEntityChangesToSlot(fingerprint: string, changes: BufferedEntityChange[], nowISO: string): Promise<void> {
+        const hasSave = changes.some(c => c.Type === 'save');
+        // Subset and aggregate slots cannot be maintained in place; filtered slots cannot take an
+        // upsert (the new row may not match the filter) but can drop deleted rows.
+        if (this.isSubsetFingerprint(fingerprint) || this.hasAggregates(fingerprint.split('|'))
+            || (hasSave && this.isFilteredFingerprint(fingerprint))) {
+            await this.InvalidateRunViewResult(fingerprint);
+            return;
+        }
+        const rowChanges = changes.map(c => ({ Key: c.Key, Row: c.Type === 'save' ? c.Record : null }));
+        const maintained = await this.ApplyRowChanges(fingerprint, rowChanges, nowISO);
+        await this.invalidateIfNotMaintained(fingerprint, maintained);
     }
 
     /**
@@ -1258,17 +1773,40 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             await this.InvalidateRunViewResult(fingerprint);
         } else if (eventType === 'delete') {
             LogStatusVerbose(`LocalCacheManager: Removing entity ${keyStr} from cache "${fingerprint.substring(0, 60)}"`);
-            await this.RemoveSingleEntity(fingerprint, key, nowISO);
+            const maintained = await this.RemoveSingleEntity(fingerprint, key, nowISO);
+            await this.invalidateIfNotMaintained(fingerprint, maintained);
         } else if (!this.isFilteredFingerprint(fingerprint)) {
             // Unfiltered cache: update the record in place
             LogStatusVerbose(`LocalCacheManager: Upserting entity ${keyStr} in unfiltered cache "${fingerprint.substring(0, 60)}"`);
             const entityData = baseEntity.GetAll() as Record<string, unknown>;
-            await this.UpsertSingleEntity(fingerprint, entityData, key, nowISO);
+            const maintained = await this.UpsertSingleEntity(fingerprint, entityData, key, nowISO);
+            await this.invalidateIfNotMaintained(fingerprint, maintained);
         } else {
             // Filtered cache: conservatively invalidate (can't verify filter match)
             LogStatusVerbose(`LocalCacheManager: Invalidating filtered cache "${fingerprint.substring(0, 60)}"`);
             await this.InvalidateRunViewResult(fingerprint);
         }
+    }
+
+    /**
+     * Handles a save/delete that could not be applied to a slot this process indexed — in practice
+     * because the slot expired or was removed by someone else.
+     *
+     * Rewriting the slot is how peer servers hear about the change: their engines hold the rows in
+     * memory and never read the slot again, so a slot that expired while they were running leaves
+     * nothing to rewrite and the change would never reach them. Invalidating instead publishes a
+     * `removed` event on a shared provider, which makes every peer engine tracking the slot reload
+     * it from the database. It also drops the dead fingerprint from this process's index.
+     *
+     * @param fingerprint - The slot the event was applied to
+     * @param maintained - What the in-place upsert/remove reported
+     */
+    private async invalidateIfNotMaintained(fingerprint: string, maintained: boolean): Promise<void> {
+        if (maintained) {
+            return;
+        }
+        LogStatusVerbose(`LocalCacheManager: slot "${fingerprint.substring(0, 60)}" could not be maintained in place — invalidating so peers reload`);
+        await this.InvalidateRunViewResult(fingerprint);
     }
 
     // ========================================================================
@@ -1333,9 +1871,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * fingerprint. Called by infrastructure code (e.g., {@link RedisLocalStorageProvider})
      * when another server modifies a cached entry.
      *
-     * For `category_cleared` events, dispatches to ALL registered callbacks whose
-     * fingerprints belong to the cleared category (matched by the event's CacheKey
-     * which contains the category name).
+     * For `category_cleared` events on the RunView category, dispatches to ALL registered
+     * callbacks (they all watch RunView slots); a clear of any other category reaches none.
      *
      * Errors in individual callbacks are caught and logged via {@link LogError}
      * to prevent one bad callback from blocking others.
@@ -1347,9 +1884,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         LogStatusVerbose(`LocalCacheManager: DispatchCacheChange received — action="${event.Action}", key="${event.CacheKey}", source="${sourceShort}"`);
 
         if (event.Action === 'category_cleared') {
-            // For category-level clearing, notify ALL registered callbacks
-            // since we can't know which fingerprints belong to which category
-            // without parsing them. This is a rare operation so the overhead is acceptable.
+            // Every registered callback watches a RunView slot (engine configs and RunView
+            // OnDataChanged both key on RunView fingerprints), so only clearing that category
+            // affects them. Notifying them for a Metadata or Dataset clear as well would make a
+            // tool that clears several categories reload every engine once per category.
+            if (event.Category !== CacheCategory.RunViewCache) {
+                return;
+            }
             for (const [, callbacks] of this._changeCallbacks) {
                 for (const cb of callbacks) {
                     try {
@@ -1665,6 +2206,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             parts.push('imr:1');
         }
 
+        // Binary-width segment. Cached slots are fetched at full width, but "full width" leaves
+        // binary columns out unless the caller asks for them (RunViewParams.IncludeBinaryFields,
+        // set automatically by ProviderBase when a caller names a binary field in Fields). A slot
+        // without binary columns must never answer a request that needs them, so the two widths
+        // get separate slots. Appended only when true, so every existing fingerprint stays
+        // byte-for-byte identical.
+        if (params.IncludeBinaryFields === true) {
+            parts.push('bin:1');
+        }
+
         // DataSource segment. RunViewParams.DataSource:'Materialized' routes the read to the entity's
         // materialized snapshot view (GetEffectiveBaseView), a DIFFERENT physical source than the default
         // live base view — so a Live read and a Materialized read of the same entity/filter/orderBy MUST
@@ -1960,6 +2511,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return;
         }
 
+        // Rows read while a unit of work has unapplied changes for this entity may include its
+        // uncommitted writes (or miss them); either way they must not become the shared slot.
+        if (this.isPendingInBatch(fingerprint)) {
+            LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for "${params.EntityName}" — an open batch has changes for it`, verboseOnly: true });
+            return;
+        }
+
         // Short-circuit: if the entity has AllowCaching = false, do not write to the cache.
         // The invalidation path (HandleBaseEntityEvent line 552) already short-circuits for
         // these entities, so any entry we write here would never be invalidated and would
@@ -2037,7 +2595,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // than serving this one query uncached. Always logged (not verbose-gated): an
         // oversized result is a perf smell the operator should be able to see.
         if (this.exceedsMaxEntrySize(sizeBytes)) {
-            LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for "${params.EntityName || fingerprint.substring(0, 60)}" — estimated entry size ${sizeBytes} bytes exceeds per-entry cap (${this._config.maxEntryPercentOfCache}% of ${this._config.maxSizeBytes} byte budget)` });
+            LogWarning(`[CACHE-WRITE-GATE] Skipping cache write for "${params.EntityName || fingerprint.substring(0, 60)}" — estimated entry size ${sizeBytes} bytes exceeds per-entry cap (${this._config.maxEntryPercentOfCache}% of ${this._config.maxSizeBytes} byte budget)`, 'Cache');
             return;
         }
 
@@ -2064,7 +2622,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         try {
             // Native object storage — IDB structured-clones, localStorage / Redis serialize internally.
-            await this._storageProvider.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache);
+            const expiresAt = ttlMs ? Date.now() + ttlMs : undefined;
+            await this._storageProvider.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache,
+                this.runViewWriteOptions(fingerprint, expiresAt));
 
             this.registerEntry({
                 key: fingerprint,
@@ -2085,7 +2645,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 sizeBytes,
                 maxUpdatedAt,
                 rowCount: results.length,  // Registry still tracks this for display/stats, derived from actual results
-                expiresAt: ttlMs ? Date.now() + ttlMs : undefined  // time-based expiry (external entities); undefined => event-invalidated (MJ-DB entities)
+                expiresAt  // time-based expiry (external entities); undefined => event-invalidated (MJ-DB entities)
             });
 
             // Maintain entity→fingerprint reverse index for universal cache invalidation
@@ -2105,6 +2665,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @returns The cached results, maxUpdatedAt, rowCount (derived), and aggregateResults, or null if not found
      */
     public async GetRunViewResult(fingerprint: string): Promise<CachedRunViewResult | null> {
+        if (this.isPendingInBatch(fingerprint)) {
+            this._stats.misses++;
+            return null;
+        }
+        return this.readRunViewSlot(fingerprint);
+    }
+
+    /** {@link GetRunViewResult} without the open-batch check; slot maintenance reads through this. */
+    private async readRunViewSlot(fingerprint: string): Promise<CachedRunViewResult | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
         try {
@@ -2150,7 +2719,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         try {
             const raw = await this._storageProvider.GetItems<CachedRunViewData>(fingerprints, CacheCategory.RunViewCache);
             for (const [fp, parsed] of raw) {
-                out.set(fp, this.materializeCachedRunViewResult(fp, parsed));
+                out.set(fp, this.isPendingInBatch(fp) ? null : this.materializeCachedRunViewResult(fp, parsed));
             }
             return out;
         } catch (e) {
@@ -2199,6 +2768,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         this.recordAccess(fingerprint);
+        this.indexSlotThisProcessDidNotWrite(fingerprint);
         this._stats.hits++;
         const results = parsed.results || [];
         const result: CachedRunViewResult = {
@@ -2215,6 +2785,35 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             result.aggregateResults = parsed.aggregateResults;
         }
         return result;
+    }
+
+    /**
+     * Records a slot this process READ, so a later save can still find it once it has expired.
+     *
+     * An engine loads its rows once and never reads its slot again — that is the design, not a
+     * defect: the slot is a boot shortcut and a propagation channel, and correctness comes from
+     * events. Giving slots a finite expiry opened a window those events could not cross. When a
+     * slot expires under running replicas, a save finds nothing to rewrite and publishes nothing,
+     * so every peer engine keeps serving what it loaded.
+     *
+     * The fix — invalidate a slot that cannot be maintained, which publishes `removed` — only
+     * fires if the saving process still holds the fingerprint, and only the process that WROTE the
+     * slot did. A server that booted warm read it instead, and a read indexed nothing; behind a
+     * load balancer, which server takes the save is arbitrary. A warm read is the only trace such a
+     * process has of that slot, so it is indexed too.
+     *
+     * Gated on the provider exposing a shared per-entity index, which is exactly the case
+     * {@link resolveFingerprintsForEntity} answers from that index — with no category-scan
+     * fallback. On a process-local store there is nothing to gain (no peers to notify, and every
+     * slot in it was written by this process, so it is already indexed) and something to lose: a
+     * non-empty index SUPPRESSES that fallback scan, which is what finds persisted slots the index
+     * does not know about.
+     * @internal
+     */
+    private indexSlotThisProcessDidNotWrite(fingerprint: string): void {
+        if (this._storageProvider?.GetIndexGroupKeys) {
+            this.addToEntityIndex(fingerprint);
+        }
     }
 
     /**
@@ -2394,16 +2993,32 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Upserts a single entity in a cached RunView result.
-     * Used by BaseEngine for immediate cache sync when an entity is saved.
-     * If the entity exists (by primary key), it is replaced; otherwise it is added.
-     *
-     * Serializes async operations on the same cache fingerprint to prevent
-     * lost-update races. When multiple entity events fire simultaneously
-     * (e.g., 3 deletes from a TransactionGroup), each read-modify-write cycle
-     * must complete before the next one starts for the same fingerprint.
-     * Different fingerprints run concurrently with no contention.
+     * Runs an in-place slot rewrite under {@link withFingerprintLock}. When the lock itself fails
+     * (a shared lock another server held too long), reports the rewrite as not done rather than
+     * throwing, so the caller's fallback — invalidate the slot, making every server reload —
+     * applies.
      */
+    private async maintainSlotLocked(fingerprint: string, fn: () => Promise<boolean>): Promise<boolean> {
+        try {
+            return await this.withFingerprintLock(fingerprint, fn);
+        } catch (e) {
+            // Distinguish "another process holds this slot" (expected contention — the caller
+            // invalidates instead of writing) from a fault inside the work itself, which is a bug
+            // and must be reported as one rather than filed under lock contention. The
+            // storage provider owns those error types, and it depends on this package, so they are
+            // recognised by name rather than imported.
+            const name = e instanceof Error ? e.name : '';
+            const isLockProblem = name === 'KeyLockTimeoutError' || name === 'KeyLockLostError';
+            const detail = e instanceof Error ? e.message : String(e);
+            if (isLockProblem) {
+                LogWarning(`LocalCacheManager: could not hold the lock on "${fingerprint.substring(0, 60)}" for an in-place update (${detail}) — invalidating instead`, 'Cache');
+            } else {
+                LogError(`LocalCacheManager: the in-place update of "${fingerprint.substring(0, 60)}" failed (${detail}) — invalidating instead`);
+            }
+            return false;
+        }
+    }
+
     private async withFingerprintLock<T>(fingerprint: string, fn: () => Promise<T>): Promise<T> {
         const existing = this._fingerprintLocks.get(fingerprint) ?? Promise.resolve();
 
@@ -2413,6 +3028,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         try {
             await existing; // Wait for any previous operation on this fingerprint
+            // Another server may be rewriting the same shared entry right now; its write and ours
+            // would each start from the same old array, and the later SET would drop the other's
+            // row. A shared provider serializes the whole read-modify-write across processes.
+            const provider = this._storageProvider;
+            if (provider?.WithKeyLock) {
+                return await provider.WithKeyLock(fingerprint, CacheCategory.RunViewCache, fn);
+            }
             return await fn();
         } finally {
             releaseLock!();
@@ -2424,9 +3046,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Upserts a single entity in a cached RunView result.
+     * Used by BaseEngine for immediate cache sync when an entity is saved.
+     * If the entity exists (by primary key), it is replaced; otherwise it is added.
+     *
+     * Serializes async operations on the same cache fingerprint to prevent
+     * lost-update races. When multiple entity events fire simultaneously
+     * (e.g., 3 deletes from a TransactionGroup), each read-modify-write cycle
+     * must complete before the next one starts for the same fingerprint.
+     * Different fingerprints run concurrently with no contention.
+     *
      * @param fingerprint - The cache fingerprint to update
      * @param entityData - The entity data as a plain object (use entity.GetAll())
-     * @param primaryKeyFieldName - Name of the primary key field
+     * @param key - The record's primary key
      * @param newMaxUpdatedAt - New maxUpdatedAt timestamp (from entity's __mj_UpdatedAt)
      * @returns true if cache was updated, false if cache not found or update failed
      */
@@ -2436,43 +3068,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         key: CompositeKey,
         newMaxUpdatedAt: string
     ): Promise<boolean> {
-        if (!this._storageProvider || !this._config.enabled) return false;
-
-        return this.withFingerprintLock(fingerprint, async () => {
-            try {
-                const cached = await this.GetRunViewResult(fingerprint);
-                if (!cached) {
-                    LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: No cached data found for fingerprint "${fingerprint.substring(0, 60)}" — skipping (cache will be populated on next RunView)`);
-                    return false;
-                }
-                LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: Found cached data with ${cached.results.length} rows, updating...`);
-
-                const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
-                const keyStr = this.cheapKeyFromCompositeKey(key);
-
-                // Build a map of existing records by composite key string. Uses a cheap
-                // delimiter-joined PK string (no per-row CompositeKey/KeyValuePair allocation);
-                // matching is consistent because keyStr above uses the same format.
-                const resultMap = new Map<string, unknown>();
-                for (const row of cached.results) {
-                    const rowObj = row as Record<string, unknown>;
-                    if (pkFieldNames.some(fn => rowObj[fn] == null)) continue; // Skip rows with missing PK fields
-                    resultMap.set(this.cheapRowKey(rowObj, pkFieldNames), row);
-                }
-
-                // Upsert the entity (add or replace)
-                resultMap.set(keyStr, entityData);
-
-                const updatedResults = Array.from(resultMap.values());
-
-                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt,
-                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash,
-                      providerInternalScaffolding: cached.providerInternalScaffolding });
-            } catch (e) {
-                LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
-                return false;
-            }
-        });
+        return this.ApplyRowChanges(fingerprint, [{ Key: key, Row: entityData }], newMaxUpdatedAt);
     }
 
     /**
@@ -2489,43 +3085,74 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         key: CompositeKey,
         newMaxUpdatedAt: string
     ): Promise<boolean> {
-        if (!this._storageProvider || !this._config.enabled) return false;
+        return this.ApplyRowChanges(fingerprint, [{ Key: key, Row: null }], newMaxUpdatedAt);
+    }
 
-        return this.withFingerprintLock(fingerprint, async () => {
+    /**
+     * Applies several row changes to one cached RunView result in a single read-modify-write:
+     * each change with a `Row` adds or replaces that row, each with `Row: null` removes it, in
+     * order. The slot is written once, and not at all when only removals of absent rows were asked.
+     * All keys must name the same primary-key fields.
+     *
+     * @returns true if the slot now reflects the changes, false if it was not cached or the update failed
+     */
+    public async ApplyRowChanges(
+        fingerprint: string,
+        changes: ReadonlyArray<CachedRowChange>,
+        newMaxUpdatedAt: string
+    ): Promise<boolean> {
+        if (!this._storageProvider || !this._config.enabled || changes.length === 0) return false;
+
+        return this.maintainSlotLocked(fingerprint, async () => {
             try {
-                const cached = await this.GetRunViewResult(fingerprint);
+                const cached = await this.readRunViewSlot(fingerprint);
                 if (!cached) {
+                    LogStatusVerbose(`LocalCacheManager.ApplyRowChanges: No cached data found for fingerprint "${fingerprint.substring(0, 60)}" — skipping (cache will be populated on next RunView)`);
                     return false;
                 }
-
-                const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
-                const keyStr = this.cheapKeyFromCompositeKey(key);
-
-                // Build a map of existing records by composite key string (cheap PK keying;
-                // see UpsertSingleEntity for the rationale — no per-row CompositeKey allocation).
-                const resultMap = new Map<string, unknown>();
-                for (const row of cached.results) {
-                    const rowObj = row as Record<string, unknown>;
-                    if (pkFieldNames.some(fn => rowObj[fn] == null)) continue; // Skip rows with missing PK fields
-                    resultMap.set(this.cheapRowKey(rowObj, pkFieldNames), row);
+                const pkFieldNames = changes[0].Key.KeyValuePairs.map(kv => kv.FieldName);
+                const resultMap = this.indexRowsByKey(cached.results, pkFieldNames);
+                if (!this.applyChangesToRowMap(resultMap, changes)) {
+                    return true; // only removals of rows the slot does not hold
                 }
-
-                if (!resultMap.has(keyStr)) {
-                    return true; // Not in cache, no-op
-                }
-
-                resultMap.delete(keyStr);
-
-                const updatedResults = Array.from(resultMap.values());
-
-                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt,
+                return await this.storeCachedResults(fingerprint, Array.from(resultMap.values()), newMaxUpdatedAt,
                     { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash,
                       providerInternalScaffolding: cached.providerInternalScaffolding });
             } catch (e) {
-                LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
+                LogError(`LocalCacheManager.ApplyRowChanges failed: ${e}`);
                 return false;
             }
         });
+    }
+
+    /**
+     * Rows keyed by a cheap delimiter-joined PK string (no per-row CompositeKey/KeyValuePair
+     * allocation); matching is consistent because {@link cheapKeyFromCompositeKey} uses the same
+     * format. Rows missing a PK value are dropped.
+     */
+    private indexRowsByKey(rows: unknown[], pkFieldNames: string[]): Map<string, unknown> {
+        const resultMap = new Map<string, unknown>();
+        for (const row of rows) {
+            const rowObj = row as Record<string, unknown>;
+            if (pkFieldNames.some(fn => rowObj[fn] == null)) continue;
+            resultMap.set(this.cheapRowKey(rowObj, pkFieldNames), row);
+        }
+        return resultMap;
+    }
+
+    /** Applies `changes` to `rows` in order. @returns True when anything changed. */
+    private applyChangesToRowMap(rows: Map<string, unknown>, changes: ReadonlyArray<CachedRowChange>): boolean {
+        let changed = false;
+        for (const change of changes) {
+            const keyStr = this.cheapKeyFromCompositeKey(change.Key);
+            if (change.Row) {
+                rows.set(keyStr, change.Row);
+                changed = true;
+            } else if (rows.delete(keyStr)) {
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     /**
@@ -2548,9 +3175,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         newMaxUpdatedAt: string,
         prior?: { totalRowCount?: number; rowCount: number; schemaHash?: string; providerInternalScaffolding?: boolean }
     ): Promise<boolean> {
+        // Stamp the slot the way the fill path does — the newest row's __mj_UpdatedAt — so the
+        // stamp means the same thing whichever funnel wrote the slot and matches what the database
+        // reports for the same rows (the client smart-cache check compares the two). The caller's
+        // value (the event time) is used only when the rows carry no timestamp column.
+        const maxUpdatedAt = LocalCacheManager.MaxUpdatedAtOfRows(updatedResults) ?? newMaxUpdatedAt;
         const data: CachedRunViewData = {
             results: updatedResults,
-            maxUpdatedAt: newMaxUpdatedAt
+            maxUpdatedAt
         };
         // Carry the schemaHash FORWARD — never recompute it here (B38).
         //
@@ -2591,11 +3223,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             this.freezeRowDataIfProviderSharesReferences(data);
         }
 
-        await this._storageProvider!.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache);
-
         const existingEntry = this._registry.get(fingerprint);
+        await this._storageProvider!.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache,
+            this.runViewWriteOptions(fingerprint, existingEntry?.expiresAt));
+
         if (existingEntry) {
-            existingEntry.maxUpdatedAt = newMaxUpdatedAt;
+            existingEntry.maxUpdatedAt = maxUpdatedAt;
             existingEntry.rowCount = updatedResults.length;
             existingEntry.sizeBytes = sizeBytes;
             existingEntry.lastAccessedAt = Date.now();
@@ -2717,7 +3350,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // Oversized-entry gate — same rationale as SetRunViewResult: never wipe the
         // cache to make room for an entry that can't be retained within budget.
         if (this.exceedsMaxEntrySize(sizeBytes)) {
-            LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for query "${queryName}" — estimated entry size ${sizeBytes} bytes exceeds per-entry cap (${this._config.maxEntryPercentOfCache}% of ${this._config.maxSizeBytes} byte budget)` });
+            LogWarning(`[CACHE-WRITE-GATE] Skipping cache write for query "${queryName}" — estimated entry size ${sizeBytes} bytes exceeds per-entry cap (${this._config.maxEntryPercentOfCache}% of ${this._config.maxSizeBytes} byte budget)`, 'Cache');
             return;
         }
 
@@ -2733,11 +3366,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         await this.evictIfNeeded(sizeBytes);
 
         const now = Date.now();
-        const expiresAt = ttlMs ? now + ttlMs : undefined;
+        // Keep the expiry a rewrite found, exactly as the RunView path does: recomputing it from
+        // `now` on every write pushes a bounded entry's expiry forward for as long as anything keeps
+        // rewriting it, so it never expires at all.
+        const existingExpiry = this._registry.get(fingerprint)?.expiresAt;
+        const expiresAt = existingExpiry ?? (ttlMs ? now + ttlMs : undefined);
 
         try {
-            // Native object storage — no JSON.stringify on the hot path.
-            await this._storageProvider.SetItem(fingerprint, data, CacheCategory.RunQueryCache);
+            // The expiry must reach the STORE, not just this process's registry: another server
+            // reading this slot has no registry entry for it, so a store-side TTL is the only thing
+            // that bounds it there. Without it an external-data-source query result was served
+            // forever by every server except the one that wrote it.
+            await this._storageProvider.SetItem(fingerprint, data, CacheCategory.RunQueryCache,
+                expiresAt ? { TTLSeconds: Math.max(1, Math.ceil((expiresAt - now) / 1000)) } : undefined);
 
             this.registerEntry({
                 key: fingerprint,
@@ -3073,10 +3714,21 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * True when the registry must stay in this process: the storage is shared with other
+     * processes, so a persisted registry would be one key every server overwrites with its own
+     * view (and publishes to every peer on each write), and a booting server would adopt another
+     * server's accounting. Entries written by other processes are found through the provider's
+     * per-entity index instead ({@link resolveFingerprintsForEntity}).
+     */
+    private registryIsProcessLocalOnly(): boolean {
+        return this._storageProvider?.SharedAcrossProcesses === true;
+    }
+
+    /**
      * Loads the registry from storage.
      */
     private async loadRegistry(): Promise<void> {
-        if (!this._storageProvider) return;
+        if (!this._storageProvider || this.registryIsProcessLocalOnly()) return;
 
         try {
             // Native object read — registry is a plain CacheEntryInfo[] array.
@@ -3115,7 +3767,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Persists the registry to storage.
      */
     private async persistRegistry(): Promise<void> {
-        if (!this._storageProvider) return;
+        if (!this._storageProvider || this.registryIsProcessLocalOnly()) return;
 
         try {
             // Native object storage — store the entries array directly.
@@ -3370,8 +4022,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider || !this._config.enabled) return;
 
         const now = Date.now();
-        const ttlMs = this._config.defaultTTLMs;
+        // On a shared store this process must not age out entries by its OWN clock: every server
+        // would delete the same keys on its own schedule and publish a `removed` for each, and the
+        // peers would reload every affected engine — a fleet-wide deletion and reload storm for
+        // entries the store already expires itself (the Redis provider sets a per-key TTL). The
+        // local TTL stays in force for process-private stores, where nothing else can expire them.
+        const sharedStore = this._storageProvider.SharedAcrossProcesses === true;
+        const ttlMs = sharedStore ? 0 : this._config.defaultTTLMs;
+        if (sharedStore && this._config.defaultTTLMs > 0 && !this._sharedTTLWarned) {
+            this._sharedTTLWarned = true;
+            LogWarning(`LocalCacheManager: defaultTTLSeconds is set but the cache store is shared across processes — expiry is left to the store itself (set the store's own TTL, e.g. REDIS_TTL_SECONDS / cacheSettings.sharedCacheTTLSeconds)`, 'Cache');
+        }
         const toDelete: string[] = [];
+        // Entries to drop from this process's bookkeeping WITHOUT touching the store. An entry that
+        // carries its own `expiresAt` always handed the store the matching TTL when it was written,
+        // so a shared store expires the key itself. Deleting it here as well means every server
+        // removes the same key on its own clock and publishes a `removed` for it, and every peer
+        // reloads the affected engine — the storm the TTL branch above already avoids, in miniature.
+        // Forgetting it locally still matters: otherwise this registry records slots the store no
+        // longer has.
+        const toForget: string[] = [];
 
         for (const [key, entry] of this._registry) {
             // TTL expiry check
@@ -3381,13 +4051,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             }
             // expiresAt check (if set individually)
             if (entry.expiresAt && entry.expiresAt < now) {
-                toDelete.push(key);
+                (sharedStore ? toForget : toDelete).push(key);
             }
         }
 
-        if (toDelete.length > 0) {
+        if (toDelete.length > 0 || toForget.length > 0) {
             if (this._config.verboseLogging) {
-                LogStatusEx({ message: `    🗑️ [Cache SWEEP] Evicting ${toDelete.length} TTL-expired entries`, verboseOnly: true });
+                LogStatusEx({ message: `    🗑️ [Cache SWEEP] Evicting ${toDelete.length} TTL-expired entries` +
+                    (toForget.length > 0 ? `, forgetting ${toForget.length} the shared store expires itself` : ''), verboseOnly: true });
             }
 
             for (const key of toDelete) {
@@ -3395,16 +4066,25 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     const entry = this._registry.get(key);
                     const category = this.getCategoryForType(entry?.type);
                     await this._storageProvider.Remove(key, category);
-                    if (entry?.fingerprint) {
-                        this.removeFromEntityIndex(entry.fingerprint);
-                    }
-                    this._registry.delete(key);
+                    this.forgetRegistryEntry(key);
                 } catch {
                     // Continue
                 }
             }
+            for (const key of toForget) {
+                this.forgetRegistryEntry(key);
+            }
 
             await this.persistRegistry();
         }
+    }
+
+    /** Drops one entry from the registry and the fingerprint index, leaving the store alone. @internal */
+    private forgetRegistryEntry(key: string): void {
+        const entry = this._registry.get(key);
+        if (entry?.fingerprint) {
+            this.removeFromEntityIndex(entry.fingerprint);
+        }
+        this._registry.delete(key);
     }
 }

@@ -170,6 +170,11 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
                 await this.CalculateAndSetCost();
             }
 
+            // For parallel parents where DescendantCost is not yet populated, reload descendant cost from children
+            if (this.RunType === 'ParallelParent' && (this.DescendantCost == null || this.DescendantCost === 0) && this.ID) {
+                await this.RecalculateTotalCost();
+            }
+
             // always update our TotalCost in case cost or descendant cost changed
             this.UpdateTotalCost();
             
@@ -244,7 +249,7 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             const activeCost = AIEngineBase.Instance.GetActiveModelCost(
                 this.ModelID,
                 this.VendorID,
-                'Realtime', // For now, assume all prompt runs are realtime
+                this.ResolveProcessingType(),
                 recorded.unitsKind ?? 'Tokens'
             );
 
@@ -292,6 +297,16 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             LogError(`Error calculating cost for AIPromptRun ${this.ID}: ${err}`);
             // Don't throw - we don't want to prevent saving just because cost calc failed
         }
+    }
+
+    /**
+     * Resolves the processing type for active model cost resolution ('Realtime' vs 'Batch').
+     * Returns 'Realtime' by default. Batch producers (such as offline batch evaluation
+     * or asynchronous bulk processing jobs) override or set this when batch pricing applies.
+     * This is an extension seam (PR1 / #4396) rather than a schema column.
+     */
+    protected ResolveProcessingType(): 'Realtime' | 'Batch' {
+        return 'Realtime';
     }
 
     /**

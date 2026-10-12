@@ -19,7 +19,9 @@ export type { IncludeDirective } from './lib/json-preprocessor';
 export { SyncStateManager } from './lib/sync-state-manager';
 export type { SyncState } from './lib/sync-state-manager';
 export { ParseMetadataReference, parseMetadataReference } from './lib/reference-parser';
+/** @deprecated Import from `@memberjunction/record-graph`. */
 export { ResolveCollectionRelationship, resolveCollectionRelationship } from './lib/collection-resolver';
+/** @deprecated Import from `@memberjunction/record-graph`. */
 export type { ResolvedCollectionInfo } from './lib/collection-resolver';
 
 // Deletion audit exports

@@ -3,6 +3,7 @@
  * @module @memberjunction/task-graph
  */
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { AgentDecisionQuestion, TaskGraphDecisionAnswer } from '@memberjunction/ai-core-plus';
 
 /**
  * Mints a fresh metadata/data provider.
@@ -135,6 +136,52 @@ export type TaskPromptRunResult = {
  */
 export type TaskPromptRunner = {
     RunPromptForTask(params: TaskPromptRunParams): Promise<TaskPromptRunResult>;
+};
+
+/** Everything answering one Decision node's questions needs. */
+export type TaskDecisionRunParams = {
+    TaskID: string;
+    /** The decision prompt (`MJ: AI Prompts`) whose model bindings run the call. */
+    PromptID: string;
+    /** What the questions are about, already resolved from the node's `state` path. */
+    State: string | Record<string, unknown>;
+    /** The node's questions, answered together in ONE call. */
+    Questions: Record<string, AgentDecisionQuestion>;
+    Provider: IMetadataProvider;
+    ContextUser: UserInfo;
+    /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
+    OnProgress?: TaskRunProgressCallback;
+};
+
+/** The outcome of one Decision node's call. */
+export type TaskDecisionRunResult = {
+    Success: boolean;
+    /**
+     * The answers by question key, in the shape a condition reads them. Absent on failure: a failed
+     * call has no answers, and a partial set would let a condition act on half a decision.
+     */
+    Answers?: Record<string, TaskGraphDecisionAnswer>;
+    ErrorMessage?: string;
+    /**
+     * The `MJ: AI Prompt Runs` row the call wrote, including a failed one. It is how the decision's
+     * cost reaches the graph's rollup.
+     */
+    PromptRunID?: string;
+};
+
+/**
+ * Answers one Decision node's questions, in one call.
+ *
+ * A seam like the other runners, so the dispatcher's Decision handling is testable without a model.
+ * Unlike them it has a default — `AIDecisionTaskRunner` — because this package can make the call
+ * itself: it already depends on `@memberjunction/ai-prompts`, and a Decision needs nothing a host
+ * owns. A host with its own decision strategy supplies one.
+ *
+ * MUST make exactly one decision call per invocation. The questions a fork needs are asked
+ * together on purpose; splitting them multiplies cost for no gain.
+ */
+export type TaskDecisionRunner = {
+    RunDecisionForTask(params: TaskDecisionRunParams): Promise<TaskDecisionRunResult>;
 };
 
 /** What happened to a task or a graph, as a closed set a consumer can branch on. */

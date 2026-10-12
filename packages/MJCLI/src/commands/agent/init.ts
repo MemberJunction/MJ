@@ -45,7 +45,8 @@ export default class AgentInit extends Command {
       description: 'Open App Git URL to install for business context (default: More Cheese).',
     }),
     'skip-docker-check': Flags.boolean({
-      description: 'Skip verifying whether Docker Desktop is currently running.',
+      description:
+        'Skip the Docker availability check and assume Docker is running (the stack still starts unless --no-start is passed).',
       default: false,
     }),
   };
@@ -65,8 +66,10 @@ export default class AgentInit extends Command {
       );
     }
 
-    // 2. Check Docker availability & attempt auto-launch if stopped on macOS
-    const dockerAvailable = flags['skip-docker-check'] ? false : this.ensureDockerRunning();
+    // 2. Check Docker availability & attempt auto-launch if stopped on macOS. --skip-docker-check
+    //    skips the probe and ASSUMES Docker is available (remote daemon, colima, Podman shim...);
+    //    it must not decide Docker is absent, or the stack never starts for exactly those users.
+    const dockerAvailable = flags['skip-docker-check'] ? true : this.ensureDockerRunning();
 
     // 3. Ensure target directory exists
     if (!existsSync(targetDir)) {
@@ -96,14 +99,16 @@ export default class AgentInit extends Command {
         copyFileSync(envExamplePath, envPath);
       }
 
-      // If custom app URL was supplied, update .env
-      if (flags.app && existsSync(envPath)) {
-        let envContent = readFileSync(envPath, 'utf8');
-        envContent = envContent.replace(
-          /OPEN_APP_INSTALL_URL=.*/,
-          `OPEN_APP_INSTALL_URL=${flags.app}`
-        );
-        writeFileSync(envPath, envContent, 'utf8');
+      if (existsSync(envPath)) {
+        // Pin the workspace to this CLI's own release. docker-compose.yml requires MJ_VERSION: the
+        // container installs this exact CLI and passes it to `mj install --tag`, so the stack cannot
+        // drift onto whatever npm's `latest` or the newest GitHub release happens to be.
+        this.upsertEnvValue(envPath, 'MJ_VERSION', this.cliVersion());
+
+        // If a custom app URL was supplied, point the workspace at it
+        if (flags.app) {
+          this.upsertEnvValue(envPath, 'OPEN_APP_INSTALL_URL', flags.app);
+        }
       }
 
       spinner.succeed(chalk.green('Workspace scaffolded successfully!'));
@@ -122,6 +127,36 @@ export default class AgentInit extends Command {
       }
       this.printNextSteps(targetDir, dockerAvailable);
     }
+  }
+
+  /**
+   * This CLI's own version, read from its package.json. Not `this.config.version`: that is the
+   * version of whatever package root oclif resolved, which is this CLI only when the command runs
+   * through the `mj` binary. Invoked programmatically it can be oclif's own, and a wrong pin here
+   * would silently install an unrelated release into the container.
+   */
+  private cliVersion(): string {
+    // Same depth from src/commands/agent and dist/commands/agent, and package.json always ships.
+    const pkgPath = path.join(__dirname, '..', '..', '..', 'package.json');
+    const pkg: { name?: string; version?: string } = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    if (pkg.name !== '@memberjunction/cli' || !pkg.version) {
+      throw new Error(`Could not determine the @memberjunction/cli version from ${pkgPath}`);
+    }
+    return pkg.version;
+  }
+
+  /**
+   * Set `key=value` in a dotenv file: replace the active assignment if there is one, otherwise
+   * append it. Commented-out example lines are left untouched.
+   */
+  private upsertEnvValue(envPath: string, key: string, value: string): void {
+    const content = readFileSync(envPath, 'utf8');
+    const assignment = `${key}=${value}`;
+    const activeLine = new RegExp(`^${key}=.*$`, 'm');
+    const updated = activeLine.test(content)
+      ? content.replace(activeLine, () => assignment)
+      : `${content}${content.endsWith('\n') ? '' : '\n'}${assignment}\n`;
+    writeFileSync(envPath, updated, 'utf8');
   }
 
   private resolveTemplateDir(): string | null {

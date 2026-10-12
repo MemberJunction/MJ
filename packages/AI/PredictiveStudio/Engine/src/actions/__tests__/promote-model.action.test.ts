@@ -186,6 +186,8 @@ class FakeModel {
   public ID = 'model-1';
   public PipelineID: string | null = 'pipe-1';
   public FeatureImportance: string | null = null;
+  /** Trained by default; set null to model a seeded/untrained row that "needs training". */
+  public ArtifactFileID: string | null = 'file-1';
   public Status: 'Archived' | 'Draft' | 'Published' | 'Validated' = 'Draft';
   public LatestResult: { CompleteMessage: string } | null = null;
   public SaveCallCount = 0;
@@ -304,6 +306,33 @@ describe('ProductionModelPromotionGate — leakage sign-off gate', () => {
     // No mutation, no save.
     expect(model.Status).toBe('Draft');
     expect(model.SaveCallCount).toBe(0);
+  });
+
+  it('refuses to publish a model with no trained artifact (needs training) without saving', async () => {
+    const model = new FakeModel({ tenure: 0.5, city: 0.5 });
+    model.ArtifactFileID = null;
+    model.Status = 'Validated';
+    const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Published' }));
+    expect(outcome.kind).toBe('needs-training');
+    if (outcome.kind === 'needs-training') {
+      expect(outcome.message).toContain('needs training');
+    }
+    expect(model.Status).toBe('Validated');
+    expect(model.SaveCallCount).toBe(0);
+  });
+
+  it('still allows non-publishing transitions for a model with no artifact (e.g. Draft → Validated)', async () => {
+    const model = new FakeModel({ tenure: 0.5, city: 0.5 });
+    model.ArtifactFileID = null;
+    const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Validated' }));
+    expect(outcome.kind).toBe('promoted');
+  });
+
+  it('reports an illegal Draft → Published jump as invalid-transition even when the model has no artifact', async () => {
+    const model = new FakeModel({ tenure: 0.5, city: 0.5 });
+    model.ArtifactFileID = null;
+    const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Published' }));
+    expect(outcome.kind).toBe('invalid-transition');
   });
 
   it('returns not-found when the model does not load', async () => {

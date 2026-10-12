@@ -9,6 +9,7 @@
 
 export {
   LiveKitRoomController,
+  DEFAULT_SPEECH_ROOM_OPTIONS,
   DefaultRoomFactory, defaultRoomFactory,
   DefaultRoleResolver, defaultRoleResolver,
   type LiveKitRoomFactory,

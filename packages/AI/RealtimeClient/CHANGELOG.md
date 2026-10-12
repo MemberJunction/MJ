@@ -1,5 +1,122 @@
 # @memberjunction/ai-realtime-client
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 5acbec6: OpenAI-protocol realtime sessions (OpenAI Realtime, xAI Grok Voice) keep their persona and tools. The client-side `requestedTracks` negotiation hint is no longer sent in `session.update` (OpenAI rejected the whole update with `unknown_parameter`, so the session ran with no instructions and no tools).
+- 72e082b: fix(realtime): a spoken update no longer wipes the session identity it speaks under
+
+  `RequestSpokenUpdate` sent the caller's direction as `response.create`'s per-response
+  `instructions`. On the OpenAI Realtime protocol that field is a **full override of the session
+  system prompt for that response**, not an addition to it — so the one turn riding this method spoke
+  with no identity at all: no persona, no name, none of the standing directives the session was
+  minted with.
+
+  The server-side driver already knew the rule and guarded the BLANK case on it, in its own words:
+  forwarding `''` "would wipe the co-agent identity framing (incl. the `call invoke-target-agent,
+don't do the work yourself` directive)". The non-blank case was never guarded, and it wipes exactly
+  the same framing — just less visibly, because only the requested turn loses it while every other
+  turn in the same session reads correctly.
+
+  Reported from a downstream hiring product (bizapps-caliber#397), where the failure was as visible as
+  it gets: the interviewer's opening turn — the first thing an external candidate hears — introduced
+  her as _"ChatGPT, your friendly voice companion"_, while turns 4, 7 and 12 of the same session all
+  correctly said _"I'm Sam Rivera, Support Team Lead."_ The candidate asked about it unprompted and
+  the model conceded it had broken character.
+
+  Both twins now carry the session prompt ahead of the direction, so the direction stays last (the
+  most recent line is the one a model weights hardest) and no caller has to restate an identity the
+  session already holds:
+  - `@memberjunction/ai-realtime-client` — `OpenAIProtocolRealtimeClient.RequestSpokenUpdate` builds
+    its frame through a new `buildSpokenUpdateEvent`, reading the pact through a
+    `currentSessionInstructions()` seam that each transport answers with the config it actually
+    applied (WebRTC from `sessionConfig`, websocket from `sessionObject`). A blank direction now
+    sends a bare `response.create`, matching the server twin.
+  - `@memberjunction/ai-openai` — `OpenAIRealtimeSession` retains the prompt it last sent in
+    `session.update` and carries it the same way.
+
+  This reaches every caller of the method, not only an opening turn: silence check-ins, progress
+  narration and delegation narration were all speaking without identity on that turn.
+
+  `OpenAILiveClient` is deliberately unchanged — it sends a bare `response.create` after
+  `session.commentary.append`, so the session prompt already governs there and it never had this
+  defect.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [bea2386]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [4d647e6]
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [15a4333]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [e1dd673]
+- Updated dependencies [c261eb8]
+- Updated dependencies [1d43161]
+- Updated dependencies [80905a1]
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Minor Changes

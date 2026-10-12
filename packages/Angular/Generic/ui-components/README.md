@@ -98,7 +98,7 @@ Editable text-input combobox (CDK overlay): type-to-filter, keyboard nav, option
 ```
 
 ### `mj-dropdown` — MJDropdownComponent
-Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`, default false) and `DefaultItem` clear option. Same `Data`/`TextField`/`ValueField`/`ValuePrimitive` contract as combobox. Custom item template via `<ng-template #mjDropdownItem>`.
+Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`, default false) and `DefaultItem` clear option. Same `Data`/`TextField`/`ValueField`/`ValuePrimitive` contract as combobox. Custom item template via `<ng-template #mjDropdownItem>`. Tab in an open panel closes it, puts focus back on the field, and leaves the key to the browser, so Tab moves on from the field.
 
 **Give every dropdown an accessible name** — see [Accessible names](#accessible-names--one-contract-across-every-control). The trigger is a `div[role=combobox]`, so `<label for>` neither names nor focuses it: the visible-label path here is `AriaLabelledBy`, not `InputId`. The name is applied to the popup listbox as well as the trigger, and a filterable panel's filter box takes its name from the same source.
 
@@ -114,7 +114,7 @@ Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`,
 ```
 
 ### `mj-datepicker` — MJDatepickerComponent
-Text input + calendar popup with `Min`/`Max` range disabling and typed-input parsing. Accepts `Date | string | null` through forms; emits `ValueChange: Date | null`. (Display format is currently fixed at `MM/dd/yyyy`.) The toggle button and the calendar grid take their names from the field's own name, so two pickers on one form do not present two grids both called "Calendar".
+Text input + calendar popup with `Min`/`Max` range disabling and typed-input parsing. Accepts `Date | string | null` through forms; emits `ValueChange: Date | null`. (Display format is currently fixed at `MM/dd/yyyy`.) The toggle button and the calendar grid take their names from the field's own name, so two pickers on one form do not present two grids both called "Calendar". Tab in an open calendar closes it, puts focus back on the field, and leaves the key to the browser, so Tab moves on from the field.
 
 ```html
 <mj-datepicker AriaLabel="Due date" [(ngModel)]="dueDate" [Min]="minDate" [Max]="maxDate" Placeholder="Select a date" />
@@ -255,7 +255,7 @@ Re-export of `angular-split` — use `<as-split>` / `<as-split-area>` directly:
 ```
 
 ### `mj-accordion-panel` — MJAccordionPanelComponent (+ directives)
-Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Expanded` (+`ExpandedChange`), `Disabled`, `Variant: 'default'|'primary'|'secondary'`, `Size: 'sm'|'md'`, `Bare`, `FlushBody`, `Fill` (consume leftover height). Rich content via structural directives — `*mjAccordionTitle`, `*mjAccordionActions` (rendered outside the toggle button), and `*mjAccordionBody` (**lazy — instantiated on first expand, then kept alive**). Import `MJAccordionModule` to get the panel plus all three directives in one symbol.
+Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Expanded` (+`ExpandedChange`), `Disabled`, `Variant: 'default'|'primary'|'secondary'`, `Size: 'sm'|'md'`, `Bare` (no border, header background, body fill or row hover fill, for a panel inside a card or a section directly on a page; on a device that can hover, pointing at the title or chevron gives both the brand color), `HeadingLevel: 1–6 | null` (wraps the toggle in a `role="heading"` element with that `aria-level`; null, the default, adds no wrapper), `FlushBody`, `Fill` (consume leftover height). Rich content via structural directives — `*mjAccordionTitle`, `*mjAccordionActions` (rendered outside the toggle button), and `*mjAccordionBody` (**lazy — instantiated on first expand, then kept alive**). Import `MJAccordionModule` to get the panel plus all three directives in one symbol.
 
 ```html
 <mj-accordion-panel [Expanded]="open" (ExpandedChange)="open = $event">
@@ -268,6 +268,13 @@ Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Ex
 
 ### `mj-dialog` — MJDialogComponent
 Modal with backdrop, Esc/backdrop close (`Closeable`), body scroll lock. Inputs: `Visible`, `Title`, `Size: 'sm'|'md'|'lg'|'xl'|'auto'` (400/600/800/1000px), `Width`/`Height`/`MinWidth`, `Role: 'dialog'|'alertdialog'`. Output: `Close`. **`Visible` is not two-way** — set it false in your `(Close)` handler. Slots: default body, `mj-dialog-titlebar`, `mj-dialog-actions`.
+
+Focus inputs, each on by default:
+
+- `AutoFocus` (default `true`) moves focus into the dialog on open: `[data-autofocus]`, else the first field, else the first body or actions button (never the close button), else the container.
+- `TrapFocus` (default `true`) wraps only. The browser moves Tab between stops. Tab on the last stop wraps to the first, and Shift+Tab on the first stop or the container wraps to the last. Only the topmost visible dialog brings a Tab in, and only when it traps focus. Focus in another modal, or in an overlay panel, keeps its Tab. When a dropdown or calendar on the first or last stop hands focus back to its field, the dialog wraps. Stops skip `display: none`, `[hidden]`, `visibility: hidden`, disabled controls, hidden inputs, and `tabindex="-1"`. A `contenteditable` region is a stop unless `contenteditable="false"`. A nested dialog handles its own Tab first.
+- `RestoreFocus` (default `true`) returns focus to the element that opened the dialog.
+- `AriaLabel` names the dialog when `Title` is empty. A title uses `aria-labelledby` and does not also set `aria-label`.
 
 ```html
 <mj-dialog [Visible]="show" Title="Confirm" Size="md" (Close)="show = false">

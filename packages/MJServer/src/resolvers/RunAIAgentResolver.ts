@@ -4,10 +4,11 @@ import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo,
 import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, AgentExecutionStreamingCallback } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { AgentRunStatusPublisher } from './AgentRunStatusPublisher.js';
 import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -24,6 +25,11 @@ import { NotificationEngine } from '@memberjunction/notifications';
  * pre-existing per-call MAX_INLINE_ARTIFACT_CHARS / maxInlineChars constants.
  */
 const INLINE_SIZE_CAP = 100 * 1024;
+
+/** Progress metadata is an untyped bag. A run is an object that carries an ID field. */
+function isAgentRunEntity(value: unknown): value is MJAIAgentRunEntityExtended {
+    return typeof value === 'object' && value !== null && 'ID' in value;
+}
 
 @ObjectType()
 export class AIAgentRunResult {
@@ -250,111 +256,6 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
-     * Create streaming progress callback
-     */
-    private createProgressCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: any }) {
-        return (progress: any) => {
-            // Capture the agent run into the ref as soon as any progress event carries it (even
-            // "noise" steps), so the fire-and-forget liveness pulse can read its id/status mid-run
-            // rather than only after RunAgentInConversation returns.
-            if (progress.metadata?.agentRun) {
-                agentRunRef.current = progress.metadata.agentRun;
-            }
-
-            // Only publish progress for significant steps (not initialization noise)
-            const significantSteps = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
-            if (!significantSteps.includes(progress.step)) {
-                console.log(`🔇 Skipping noise progress: ${progress.step}`);
-                return;
-            }
-            
-            // Get the agent run from the progress metadata or use the ref
-            const agentRun = progress.metadata?.agentRun || agentRunRef.current;
-            if (!agentRun) {
-                console.error('❌ No agent run available for progress callback');
-                return;
-            }
-            
-            console.log('📡 Publishing progress update:', {
-                step: progress.step,
-                percentage: progress.percentage,
-                message: progress.message,
-                sessionId,
-                agentRunId: agentRun.ID
-            });
-            
-            // Publish progress updates with the full serialized agent run
-            const progressMsg: AgentExecutionStreamMessage = {
-                sessionId,
-                agentRunId: agentRun.ID,
-                type: 'progress',
-                agentRun: agentRun.GetAll(), // Serialize the full agent run
-                progress: {
-                    currentStep: progress.step,
-                    percentage: progress.percentage,
-                    message: progress.message,
-                    agentName: (progress.metadata as any)?.agentName || undefined,
-                    agentType: (progress.metadata as any)?.agentType || undefined,
-                    stepCount: (progress.metadata as any)?.stepCount || undefined,
-                    hierarchicalStep: (progress.metadata as any)?.hierarchicalStep || undefined
-                },
-                timestamp: new Date()
-            };
-            this.publishProgressUpdate(pubSub, progressMsg, userPayload);
-        };
-    }
-
-    private publishProgressUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
-        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
-            resolver: 'RunAIAgentResolver',
-            type: 'ExecutionProgress',
-            status: 'ok',
-            data,
-        }), userPayload);
-    }
-
-
-    private publishStreamingUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
-        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
-            resolver: 'RunAIAgentResolver',
-            type: 'StreamingContent',
-            status: 'ok',
-            data,
-        }), userPayload);
-    }
-
-    /**
-     * Create streaming content callback
-     */
-    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: MJAIAgentRunEntityExtended | null }): AgentExecutionStreamingCallback {
-        return (chunk) => {
-            // Use the agent run from the ref
-            const agentRun = agentRunRef.current;
-            if (!agentRun) {
-                console.error('❌ No agent run available for streaming callback');
-                return;
-            }
-
-            // Publish streaming content with the full serialized agent run
-            const streamMsg: AgentExecutionStreamMessage = {
-                sessionId,
-                agentRunId: agentRun.ID,
-                type: 'streaming',
-                agentRun: agentRun.GetAll(), // Include the full serialized agent run
-                streaming: {
-                    content: chunk.content,
-                    isPartial: !chunk.isComplete,
-                    stepName: chunk.stepType,
-                    agentName: chunk.modelName,
-                    kind: chunk.kind
-                },
-                timestamp: new Date()
-            };
-            this.publishStreamingUpdate(pubSub, streamMsg, userPayload);
-        };
-    }
-
-    /**
      * Internal method that handles the core AI agent execution logic.
      * This method is called by both the regular and system user resolvers.
      * @private
@@ -434,6 +335,11 @@ export class RunAIAgentResolver extends ResolverBase {
 
             console.log(`🚀 Starting agent execution with sessionId: ${sessionId}`);
 
+            // The publisher owns every status message. The resolver still copies the run into
+            // agentRunRef, including noise steps, for the fire-and-forget liveness pulse.
+            const statusPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId);
+            const publishProgress = statusPublisher.OnProgress;
+
             // Execute the agent in conversation context - handles conversation, artifacts, etc.
             const conversationResult = await agentRunner.RunAgentInConversation({
                 agent: agentEntity,
@@ -441,8 +347,14 @@ export class RunAIAgentResolver extends ResolverBase {
                 payload: payload ? SafeJSONParse(payload) : undefined,
                 contextUser: currentUser,
                 sessionID: sessionId,
-                onProgress: this.createProgressCallback(pubSub, sessionId, userPayload, agentRunRef),
-                onStreaming: this.createStreamingCallback(pubSub, sessionId, userPayload, agentRunRef),
+                onProgress: (progress) => {
+                    const fromEvent = progress.metadata?.agentRun;
+                    if (isAgentRunEntity(fromEvent)) {
+                        agentRunRef.current = fromEvent;
+                    }
+                    publishProgress(progress);
+                },
+                onStreaming: statusPublisher.OnStreaming,
                 lastRunId: lastRunId,
                 autoPopulateLastRunPayload: autoPopulateLastRunPayload,
                 configurationId: configurationId,
@@ -526,7 +438,7 @@ export class RunAIAgentResolver extends ResolverBase {
             const returnResult = JSON.stringify(sanitizedResult);
 
             // Publish final events with enriched result data for fire-and-forget clients
-            this.publishFinalEvents(pubSub, sessionId, userPayload, result, returnResult);
+            statusPublisher.PublishFinal(result, result.agentRun?.ConversationDetailID, returnResult);
 
             // Log completion
             if (result.success) {
@@ -602,65 +514,16 @@ export class RunAIAgentResolver extends ResolverBase {
                     detail.Message = errorMessage;
                     detail.Error = errorMessage;
                     if (!(await detail.Save())) {
-                        LogError(`Failed to persist Error on conversation detail ${conversationDetailId}`);
+                        LogError(
+                            `Failed to persist Error on conversation detail ${conversationDetailId}: ` +
+                                `${detail.LatestResult?.CompleteMessage?.trim() || 'no failure detail recorded'}`,
+                        );
                     }
                 }
             }
         } catch (persistError) {
             LogError(`persistInFlightAgentFailure failed: ${persistError}`, undefined, persistError);
         }
-    }
-
-    /**
-     * Publish final streaming events (partial result and completion).
-     * The completion event includes the full result JSON so clients using
-     * fire-and-forget mode can receive the result via WebSocket.
-     */
-    private publishFinalEvents(
-        pubSub: PubSubEngine,
-        sessionId: string,
-        userPayload: UserPayload,
-        result: ExecuteAgentResult,
-        resultJson?: string
-    ) {
-        if (result.agentRun) {
-            // Get the last step from agent run
-            let lastStep = 'Completed';
-            if (result.agentRun?.Steps && result.agentRun.Steps.length > 0) {
-                // Get the last step from the Steps array
-                const lastStepEntity = result.agentRun.Steps[result.agentRun.Steps.length - 1];
-                lastStep = lastStepEntity?.StepName || 'Completed';
-            }
-
-            // Publish partial result
-            const partialResult: AgentPartialResult = {
-                currentStep: lastStep,
-                partialOutput: result.payload || undefined
-            };
-
-            const partialMsg: AgentExecutionStreamMessage = {
-                sessionId,
-                agentRunId: result.agentRun.ID,
-                type: 'partial_result',
-                partialResult,
-                timestamp: new Date()
-            };
-            this.publishStreamingUpdate(pubSub, partialMsg, userPayload);
-        }
-
-        // Publish completion with conversationDetailId for client-side routing.
-        // Include result data so fire-and-forget clients can receive the full result via WebSocket.
-        const completionData: Record<string, unknown> = {
-            sessionId,
-            agentRunId: result.agentRun?.ID || 'unknown',
-            type: 'complete',
-            timestamp: new Date(),
-            conversationDetailId: result.agentRun?.ConversationDetailID,
-            success: result.success,
-            errorMessage: result.agentRun?.ErrorMessage || undefined,
-            result: resultJson || undefined
-        };
-        this.publishStreamingUpdate(pubSub, completionData, userPayload);
     }
 
     /**
@@ -1381,18 +1244,9 @@ export class RunAIAgentResolver extends ResolverBase {
             const errorMessage = (error instanceof Error) ? error.message : 'Unknown background execution error';
             LogError(`🔥 Fire-and-forget background execution failed: ${errorMessage}`, undefined, error);
 
-            // Publish error completion event so the client knows the agent failed
-            const errorCompletionData: Record<string, unknown> = {
-                sessionId,
-                agentRunId: 'unknown',
-                type: 'complete',
-                timestamp: new Date(),
-                conversationDetailId,
-                success: false,
-                errorMessage,
-                result: JSON.stringify({ success: false, errorMessage })
-            };
-            this.publishStreamingUpdate(pubSub, errorCompletionData, userPayload);
+            // Publish error completion event so the client knows the agent failed.
+            // The publisher is created inside executeAIAgent, which rejected before returning one.
+            new AgentRunStatusPublisher(pubSub, userPayload, sessionId).PublishFailure(conversationDetailId, errorMessage);
         }).finally(() => pulse.Stop());
     }
 

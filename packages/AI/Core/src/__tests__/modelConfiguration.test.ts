@@ -9,8 +9,12 @@
 import { describe, it, expect } from 'vitest';
 import {
     AIModelConfiguration,
+    IsPrefixPromptCache,
+    IsZeroDataRetention,
     ParseModelConfiguration,
+    ParseVendorConfiguration,
     ResolveEffectiveModelConfiguration,
+    ResolveIsModelFullDuplex,
 } from '../generic/modelConfiguration';
 
 describe('ParseModelConfiguration — tolerant single-layer parse', () => {
@@ -227,3 +231,118 @@ describe('LLM control-flow knobs', () => {
         expect(merged?.LLM?.NativeControlFlow).toBeNull();
     });
 });
+
+describe('IsPrefixPromptCache — the catalog answers "is this serving path a byte-prefix cache?"', () => {
+    it('is false when no layer declares the flag (callers then replace in place)', () => {
+        expect(IsPrefixPromptCache(null)).toBe(false);
+        expect(IsPrefixPromptCache(undefined)).toBe(false);
+        expect(IsPrefixPromptCache({})).toBe(false);
+        expect(IsPrefixPromptCache({ LLM: {} })).toBe(false);
+        expect(IsPrefixPromptCache({ LLM: { PrefixPromptCache: null } })).toBe(false);
+        expect(IsPrefixPromptCache({ LLM: { PrefixPromptCache: false } })).toBe(false);
+    });
+
+    it('is true only for a literal true; a truthy string in stored JSON is not a flag', () => {
+        expect(IsPrefixPromptCache({ LLM: { PrefixPromptCache: true } })).toBe(true);
+        const stored = ParseModelConfiguration('{"LLM":{"PrefixPromptCache":"yes"}}');
+        expect(IsPrefixPromptCache(stored)).toBe(false);
+    });
+
+    it("Type < Model < Vendor.ModelDefaults < ModelVendor: the vendor default beats the model's bag, the serving row beats everything, and sibling knobs survive", () => {
+        const type: AIModelConfiguration = { LLM: { PrefixPromptCache: false } };
+        const model: AIModelConfiguration = { LLM: { PrefixPromptCache: false, SupportsNativeToolCalling: true } };
+        const vendorDefaults: AIModelConfiguration = { LLM: { PrefixPromptCache: true } };
+        const modelVendor: AIModelConfiguration = { LLM: { PrefixPromptCache: false } };
+
+        expect(IsPrefixPromptCache(ResolveEffectiveModelConfiguration(type, model))).toBe(false);
+        expect(IsPrefixPromptCache(ResolveEffectiveModelConfiguration(type, model, vendorDefaults))).toBe(true); // the vendor default wins over the model's own false
+        const effective = ResolveEffectiveModelConfiguration(type, model, vendorDefaults, modelVendor);
+        expect(IsPrefixPromptCache(effective)).toBe(false); // the serving row is the tie-breaker
+        expect(effective?.LLM?.SupportsNativeToolCalling).toBe(true); // ...without wiping the model's other knobs
+    });
+
+    it('ParseVendorConfiguration is as tolerant as ParseModelConfiguration and exposes ModelDefaults', () => {
+        expect(ParseVendorConfiguration(null)).toBeNull();
+        expect(ParseVendorConfiguration('{ nope')).toBeNull();
+        expect(ParseVendorConfiguration('[1,2]')).toBeNull();
+        expect(ParseVendorConfiguration('{"ModelDefaults":{"LLM":{"PrefixPromptCache":true}}}')?.ModelDefaults?.LLM?.PrefixPromptCache).toBe(true);
+        expect(ParseVendorConfiguration('{"SomethingElse":1}')?.ModelDefaults).toBeUndefined();
+    });
+});
+
+describe('Decision section — per-model typed-decision limits', () => {
+    it('lets a vendor layer narrow one limit while keeping the model layer\'s others', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { Decision: { MaxChoiceOptions: 255, MaxScoreLevels: 10, MaxStateTokens: 32000 } },
+            { Decision: { MaxStateTokens: 16000 } }
+        );
+        expect(merged?.Decision).toEqual({ MaxChoiceOptions: 255, MaxScoreLevels: 10, MaxStateTokens: 16000 });
+    });
+
+    it('does not disturb another modality section', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { LLM: { SupportsNativeToolCalling: true } },
+            { Decision: { MaxQuestionsPerCall: 32 } }
+        );
+        expect(merged?.LLM?.SupportsNativeToolCalling).toBe(true);
+        expect(merged?.Decision?.MaxQuestionsPerCall).toBe(32);
+    });
+
+    it('leaves the section absent when no layer declares limits', () => {
+        const merged = ResolveEffectiveModelConfiguration({ LLM: { NativeToolResults: true } });
+        expect(merged?.Decision).toBeUndefined();
+    });
+});
+
+describe('Privacy.ZeroDataRetention', () => {
+    it('is true only for an explicit true', () => {
+        expect(IsZeroDataRetention({ Privacy: { ZeroDataRetention: true } })).toBe(true);
+        expect(IsZeroDataRetention({ Privacy: { ZeroDataRetention: false } })).toBe(false);
+        expect(IsZeroDataRetention({ Privacy: { ZeroDataRetention: null } })).toBe(false);
+        expect(IsZeroDataRetention({ Privacy: {} })).toBe(false);
+        expect(IsZeroDataRetention({})).toBe(false);
+        expect(IsZeroDataRetention(null)).toBe(false);
+        expect(IsZeroDataRetention(undefined)).toBe(false);
+    });
+
+    it('survives a tolerant parse of a catalog row', () => {
+        const parsed = ParseModelConfiguration('{"Privacy":{"ZeroDataRetention":true}}');
+        expect(IsZeroDataRetention(parsed)).toBe(true);
+    });
+
+    it('cascades like every other section: the vendor row can declare it for a model that did not', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { LLM: { NativeToolResults: true } },
+            { Privacy: { ZeroDataRetention: true } }
+        );
+        expect(IsZeroDataRetention(merged)).toBe(true);
+        expect(merged?.LLM?.NativeToolResults).toBe(true);
+    });
+
+    it('the most specific layer wins, even when it withdraws the claim', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { Privacy: { ZeroDataRetention: true } },
+            { Privacy: { ZeroDataRetention: false } }
+        );
+        expect(IsZeroDataRetention(merged)).toBe(false);
+    });
+});
+describe('ResolveIsModelFullDuplex — metadata wins over driver fallback', () => {
+    it('returns true when metadata FullDuplex is true, regardless of driver capability', () => {
+        expect(ResolveIsModelFullDuplex({ Realtime: { FullDuplex: true } }, false)).toBe(true);
+        expect(ResolveIsModelFullDuplex({ Realtime: { FullDuplex: true } }, undefined)).toBe(true);
+    });
+
+    it('returns false when metadata FullDuplex is false, even if driver capability is true', () => {
+        expect(ResolveIsModelFullDuplex({ Realtime: { FullDuplex: false } }, true)).toBe(false);
+    });
+
+    it('falls back to driver capability when metadata FullDuplex is omitted or null', () => {
+        expect(ResolveIsModelFullDuplex({ Realtime: { FullDuplex: null } }, true)).toBe(true);
+        expect(ResolveIsModelFullDuplex({ Realtime: {} }, true)).toBe(true);
+        expect(ResolveIsModelFullDuplex(null, true)).toBe(true);
+        expect(ResolveIsModelFullDuplex(null, false)).toBe(false);
+        expect(ResolveIsModelFullDuplex(null, undefined)).toBe(false);
+    });
+});
+

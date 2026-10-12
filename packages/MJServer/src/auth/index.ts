@@ -253,14 +253,9 @@ export const VerifyUserRecord = async (
 ): Promise<UserInfo | undefined> => {
   if (!email) return undefined;
 
-  let user = UserCache.Instance.Users.find((u) => {
-    if (!u.Email || u.Email.trim() === '') {
-      // this condition should never occur. If it doesn throw a console error including the user id
-      // DB requires non-null but this is just an extra check and we could in theory have a blank string in the DB
-      console.error(`SYSTEM METADATA ISSUE: User ${u.ID} has no email address`);
-      return false;
-    } else return u.Email.toLowerCase().trim() === email.toLowerCase().trim();
-  });
+  // FindUser, not Users.find: a user this process has not loaded yet (created seconds ago on
+  // another server) is looked up in the database instead of being treated as nonexistent.
+  let user = await UserCache.Instance.FindUser({ Email: email });
 
   if (!user) {
     // NOTE: `requestDomain` (parsed from the spoofable `Origin` header) is deliberately NOT part of

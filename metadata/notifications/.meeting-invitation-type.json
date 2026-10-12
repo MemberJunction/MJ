@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "Name": "Meeting Invitation",
+    "Description": "Sent when a user or host invites you to a scheduled or live meeting. Clicking the notification opens the meeting details or lobby.",
+    "DefaultInApp": true,
+    "DefaultEmail": true,
+    "DefaultSMS": false,
+    "AllowUserPreference": true,
+    "Icon": "fa-calendar-check",
+    "Color": "#0076b6",
+    "AutoExpireDays": 14,
+    "Priority": 30
+  },
+  "primaryKey": {
+    "ID": "EA2237A9-BC49-47A2-A601-04E35238D022"
+  },
+  "sync": {
+    "lastModified": "2026-10-06T20:21:54.730Z",
+    "checksum": "79dce86e439c360dc3aab8555e70158d3a87f2e6bf9ca436ce31e8236aad3afd"
+  }
+}

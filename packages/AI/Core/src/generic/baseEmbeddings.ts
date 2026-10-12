@@ -117,6 +117,17 @@ export abstract class BaseEmbeddings extends BaseModel {
     }
 
     /**
+     * Whether this provider needs an API key to run. Defaults to `true`, because most embedding
+     * providers call a hosted API. A provider that runs in-process or against a local server (e.g.
+     * `LocalEmbedding`, which runs ONNX models in-process) overrides this to return `false`, so a
+     * caller that checks credentials before a call (such as `AIEmbeddingRunner`) does not reject it
+     * for having no key. Mirrors `VectorDBBase.RequiresAPIKey`.
+     */
+    public get RequiresAPIKey(): boolean {
+        return true;
+    }
+
+    /**
      * Max in-flight `EmbedText` calls for the default (non-batch) path. Override to tune.
      *
      * Only the per-text fallback is throttled this way — the native {@link embedBatch} path sends all

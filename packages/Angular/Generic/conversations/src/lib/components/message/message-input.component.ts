@@ -9,7 +9,25 @@ import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { BeforeAgentTurnEventArgs, AfterAgentTurnEventArgs } from '../../events/chat-events';
 import type { AgentReplyMode, AgentTurnHandler, AgentTurnRequest, AgentTurnResult, AgentTurnTarget } from '../../models/agent-turn.model';
-import { ResolveAgentTurn, IsAgentAllowed, FindDisallowedTaskGraphAgents, type AgentTurnCandidates, type AgentTurnRules } from '../../utils/agent-turn-routing';
+import { ResolveAgentTurn, FindDisallowedTaskGraphAgents, type AgentTurnCandidates, type AgentTurnRules } from '../../utils/agent-turn-routing';
+import {
+  ApplyRoutingDecision,
+  ArtifactVersionForTurn,
+  RunRoutingDecision,
+  ShouldRunRoutingDecision
+} from '../../utils/decision-routing';
+import {
+  BuildRecentTurns,
+  BuildRoutingArtifactVersions,
+  CanAskRoutingDecision,
+  CollectRoutingParticipants,
+  IsAgentAllowed,
+  type RoutingArtifactVersion,
+  type RoutingCatalogAgent,
+  type RoutingDecisionInput,
+  type RoutingDecisionOutcome,
+  type RoutingParticipant
+} from '@memberjunction/ai-core-plus';
 import type { MentionPerson } from '@memberjunction/conversations-runtime';
 import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
@@ -38,6 +56,10 @@ import {
 } from '../../services/realtime-pairing';
 import { Subscription } from 'rxjs';
 import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
+import { InjectFrameZone } from '../../util/frame-zone';
+
+/** Streamed-delta render cadence where no animation frame will come (hidden tab, no rAF). */
+const STREAMED_FRAME_FALLBACK_MS = 50;
 
 @Component({
   standalone: false,
@@ -89,6 +111,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   get disabled(): boolean {
     return this.Disabled;
   }
+  /**
+   * Blocks sending. Distinct from {@link Disabled}, which means the composer is busy.
+   */
+  @Input() ReadOnly = false;
   @Input() Placeholder: string = 'Type a message... (Ctrl+Enter to send)';
 
   /** @deprecated Use {@link Placeholder}. */
@@ -547,6 +573,22 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   @Input() AutoNameConversation: boolean = true;
 
+  /**
+   * Whether an unmentioned message asks one typed decision which agent in the conversation should
+   * answer it, instead of always going back to the last agent that answered. The same call can
+   * name the artifact version the message modifies. The answer replaces continuity only when it
+   * is confident and arrives in time; an error, a slow or unsure answer keeps today's routing, and
+   * a tagged message or a form response makes no call (see `decision-routing.ts`). False (the
+   * default) changes nothing: no call, and today's routing.
+   *
+   * What goes to the model: each qualifying message sends these to the model behind the
+   * `Default Decision` prompt, which can be a different vendor from the agents' own: the first
+   * 1,000 characters of the new message, the last 6 turns (150 characters each), each participant's
+   * name, description and last reply, and the names of their artifact versions. Each call writes an
+   * `MJ: AI Prompt Runs` row, even when the answer comes too late to be used.
+   */
+  @Input() EnableDecisionRouting: boolean = false;
+
   @Output() MessageSent = new EventEmitter<MJConversationDetailEntity>();
 
   /**
@@ -557,6 +599,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() messageSent = this.MessageSent;
+  /**
+   * A streamed final-response delta was applied to an in-progress message: `Message` holds the
+   * full reply so far. Informational, so no Before/After pair; coalesced to at most one emission
+   * per animation frame; silent once the message has settled, because the completion path owns
+   * the final render. Hosts refresh the bubble in place on this, while {@link MessageSent} keeps
+   * announcing new and status-changed messages.
+   */
+  @Output() MessageStreamed = new EventEmitter<MJConversationDetailEntity>();
   @Output() AgentResponse = new EventEmitter<{message: MJConversationDetailEntity, agentResult: any}>();
 
   /**
@@ -966,6 +1016,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   // Track completion timestamps to prevent race conditions with late progress updates
   private completionTimestamps = new Map<string, number>();
+  private readonly ngZone = InjectFrameZone();
   // Track registered streaming callbacks for cleanup
   private registeredCallbacks = new Map<string, (progress: MessageProgressUpdate) => Promise<void>>();
   // After a post-ACK disconnect, keep observing ConversationDetail.Status until
@@ -1073,6 +1124,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Called from setter or ngAfterViewInit when conditions are met.
    */
   private triggerInitialSend(): void {
+    if (this.ReadOnly) {
+      return;
+    }
     const message = this._initialMessage;
     const attachments = this._initialAttachments;
     const hasContent = !!message || !!(attachments && attachments.length > 0);
@@ -1187,7 +1241,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /** True when the mic button should be enabled (have an agent + not disabled). */
   public get CanStartRealtime(): boolean {
-    return !this.Disabled && !this.VoiceActive && !!this.ResolveCurrentAgentId();
+    return !this.ReadOnly && !this.Disabled && !this.VoiceActive && !!this.ResolveCurrentAgentId();
   }
 
   /** @deprecated Use {@link CanStartRealtime}. */
@@ -1568,11 +1622,51 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Create a progress callback for a specific message ID.
    * This callback will be invoked by the streaming service when progress updates arrive.
    */
+  /**
+   * Emits {@link MessageStreamed} for a coalesced frame of streamed deltas, unless the message
+   * settled in the meantime: then the completion path has already reconciled the bubble and a
+   * late frame has nothing to add. Settled is read off the captured entity's status and off the
+   * callback registration, which markMessageComplete drops: a frame can sleep through completion
+   * in a hidden tab, and the registration outlasts every other trace of it.
+   */
+  private emitStreamedUpdate(messageId: string, message: MJConversationDetailEntity): void {
+    if (message.Status !== 'In-Progress' || !this.registeredCallbacks.has(messageId)) {
+      return;
+    }
+    if (this.MessageStreamed.observed) {
+      this.MessageStreamed.emit(message);
+    } else {
+      // TRANSITIONAL: a host that still binds only the old output keeps streaming on MessageSent at
+      // the coalesced cadence. Remove once direct hosts bind MessageStreamed. Re-enters the zone
+      // because MessageSent handlers replace template-bound state.
+      this.ngZone.run(() => this.MessageSent.emit(message));
+    }
+  }
+
+  /**
+   * Runs `callback` on the next animation frame, outside Angular: the in-place render checks its
+   * own child view, so a zone-triggered application tick per frame would be pure waste, and the
+   * paths that do touch template-bound state re-enter the zone themselves. A hidden tab never
+   * paints a frame, so there (and without requestAnimationFrame) a short timer stands in; the
+   * browser throttles it in the background, the right cadence for a bubble nobody is looking at.
+   */
+  private scheduleFrame(callback: () => void): void {
+    this.ngZone.runOutsideAngular(() => {
+      if (typeof requestAnimationFrame === 'function' && !document.hidden) {
+        requestAnimationFrame(callback);
+      } else {
+        setTimeout(callback, STREAMED_FRAME_FALLBACK_MS);
+      }
+    });
+  }
+
   private createMessageProgressCallback(messageId: string): (progress: MessageProgressUpdate) => Promise<void> {
     // Resolve the message once and reuse it for the callback's lifetime: streamed
     // final-response updates arrive per content delta, and re-awaiting the cache on
     // every delta both wastes work and (on a cold cache) races concurrent loads.
     let resolvedMessage: Awaited<ReturnType<DataCacheService['getConversationDetail']>> = null;
+    // One pending frame per message: deltas arriving inside a frame collapse into one emission.
+    let streamedFramePending = false;
     return async (progress: MessageProgressUpdate) => {
       try {
         // Get message from cache (single source of truth)
@@ -1602,9 +1696,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // bubble with the server-saved final message, so no append/merge is needed here.
         if (progress.streaming) {
           message.Message = progress.streaming.content;
-          this.MessageSent.emit(message);
-          // Keep the tasks dropdown on a stable status line rather than the growing reply text.
-          this.activeTasks.updateStatusByConversationDetailId(message.ID, 'Responding…');
+          if (!streamedFramePending) {
+            streamedFramePending = true;
+            this.scheduleFrame(() => {
+              streamedFramePending = false;
+              this.emitStreamedUpdate(messageId, message);
+            });
+            // Keep the tasks dropdown on a stable status line rather than the growing reply text.
+            this.activeTasks.updateStatusByConversationDetailId(message.ID, 'Responding…');
+          }
           return;
         }
 
@@ -1655,7 +1755,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   get CanSend(): boolean {
-    return !this.Disabled && !this.IsSending && this.MessageText.trim().length > 0;
+    return !this.ReadOnly && !this.Disabled && !this.IsSending && this.MessageText.trim().length > 0;
   }
 
   /** @deprecated Use {@link CanSend}. */
@@ -1691,6 +1791,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Handle text submitted from the input box
    */
   async OnTextSubmitted(text: string): Promise<void> {
+    if (this.ReadOnly) {
+      return;
+    }
     // Check if we have either text or attachments
     const hasText = text && text.trim().length > 0;
     const hasAttachments = this.pendingAttachments.length > 0;
@@ -1829,6 +1932,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * explicitly and we merge + dedupe (by `id`) before saving.
    */
   public async SendMessageWithText(text: string, extraAttachments?: PendingAttachment[]): Promise<boolean> {
+    if (this.ReadOnly) {
+      return false;
+    }
     const merged: PendingAttachment[] = (() => {
       if (!extraAttachments || extraAttachments.length === 0) {
         return [...this.pendingAttachments];
@@ -2011,6 +2117,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Routing picks the agent ({@link resolveAgentTurnTarget}): a tagged agent, then (under
    * `AgentReplyMode` `'Always'`) the last agent that answered, the conversation's pinned agent,
    * the host's default agent, and the conversation manager, each only if the host allows it.
+   * With {@link EnableDecisionRouting} on, a routing decision may first put another agent in the
+   * last agent's place ({@link decideAgentRouting}).
    * {@link BeforeAgentTurn} is then fired once, before any reply row exists, and the turn runs on
    * MJ's path or through the host's {@link AgentTurnHandler}.
    */
@@ -2043,7 +2151,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         .catch(error => console.error('Conversation naming failed:', error));
     }
 
-    const target = this.resolveAgentTurnTarget(mentionResult);
+    // Read the candidates before any await. This composer stays cached while the person opens
+    // another conversation, and the chat area then rebinds its history and pinned agent, so a
+    // read after the routing decision could see another conversation's state (or none).
+    const candidates = this.agentTurnCandidates(this.agentMentionIds(mentionResult));
+    const routing = await this.decideAgentRouting(messageDetail, candidates);
+    const target = this.resolveAgentTurnTarget(candidates, routing);
     if (!target) {
       await this.finishWithoutAgentTurn(messageDetail, 'NoAgent');
       return;
@@ -2053,7 +2166,89 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       await this.finishWithoutAgentTurn(messageDetail, 'Declined');
       return;
     }
-    await this.runAgentTurn(messageDetail, mentionResult, turn);
+    await this.runAgentTurn(messageDetail, mentionResult, turn, routing);
+  }
+
+  /**
+   * Asks the routing decision for this message when {@link EnableDecisionRouting} is on and the
+   * message qualifies (see `ShouldRunRoutingDecision`). Returns null, with no call, otherwise, and
+   * when anything fails: the message then keeps today's routing.
+   *
+   * @param candidates The turn's candidates, read before any await (see {@link routeMessage}).
+   */
+  private async decideAgentRouting(
+    message: MJConversationDetailEntity,
+    candidates: AgentTurnCandidates
+  ): Promise<RoutingDecisionOutcome | null> {
+    const continuityAgentId = candidates.ContinuityAgentId;
+    const qualifies = ShouldRunRoutingDecision({
+      Enabled: this.EnableDecisionRouting,
+      ReplyMode: this.AgentReplyMode,
+      MentionedAgentIds: candidates.MentionedAgentIds,
+      Message: message.Message ?? '',
+      ContinuityAgentId: continuityAgentId
+    });
+    if (!qualifies || !continuityAgentId) {
+      return null;
+    }
+    try {
+      // Built before the first await, so it reads the same conversation as the candidates.
+      const input = this.buildRoutingDecisionInput(message, continuityAgentId);
+      if (!CanAskRoutingDecision(input)) {
+        return null;
+      }
+      input.ArtifactVersions = await this.loadRoutingArtifactVersions(message.ConversationID, input.Participants);
+      const outcome = await RunRoutingDecision(input, params => this.agentService.RunDecision(params));
+      LogStatusEx({
+        message: `Decision routing: ${outcome.Verdict}, ${outcome.Reason} (prompt run ${outcome.PromptRunID ?? 'none'})`,
+        verboseOnly: true
+      });
+      return outcome;
+    } catch (error) {
+      console.warn('Decision routing failed, so the message keeps continuity:', error);
+      return null;
+    }
+  }
+
+  /**
+   * The routing decision's input, rebuilt from the conversation as it is now: the agents that
+   * have answered within the history floor, the last few turns, and the conversation manager.
+   * Artifact versions are added after, once the input is known to be worth asking about.
+   *
+   * Participants come only from the '@' list's agents (`GetAvailableAgents`): active, top-level,
+   * unrestricted agents this person has run permission for. An agent that answered here but that
+   * the person can't run (a shared conversation, a revoked permission) is never offered, so routing
+   * can't send the turn to an agent the server would refuse. Before that list has loaded there are
+   * no participants, so no call is made and the message keeps today's routing. Speaker names in
+   * the recent turns still come from the full catalog, since any agent may have spoken.
+   */
+  private buildRoutingDecisionInput(message: MJConversationDetailEntity, continuityAgentId: string): RoutingDecisionInput {
+    const history = this.ConversationHistory.filter(row => this.isWithinHistoryFloor(row) && !UUIDsEqual(row.ID, message.ID));
+    const findAgent = (agentId: string): RoutingCatalogAgent | undefined => AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
+    const runnable = this.mentionAutocomplete.GetAvailableAgents();
+    const findRunnable = (agentId: string): RoutingCatalogAgent | undefined => runnable.find(a => UUIDsEqual(a.ID, agentId));
+    const manager = this.ConverationManagerAgent;
+    return {
+      Message: message.Message ?? '',
+      ContinuityAgentId: continuityAgentId,
+      Participants: CollectRoutingParticipants(history, manager?.ID ?? null, this.AllowedAgentIDs, findRunnable),
+      ConversationManager: manager?.ID && IsAgentAllowed(manager.ID, this.AllowedAgentIDs) ? manager : null,
+      RecentTurns: BuildRecentTurns(history, findAgent),
+      ArtifactVersions: [],
+      AllowedAgentIDs: this.AllowedAgentIDs
+    };
+  }
+
+  /** Every participant's artifact versions in this conversation, for the artifact question. */
+  private async loadRoutingArtifactVersions(
+    conversationId: string,
+    participants: readonly RoutingParticipant[]
+  ): Promise<RoutingArtifactVersion[]> {
+    const artifactsByAgent = await Promise.all(participants.map(async participant => ({
+      Agent: participant.Agent,
+      Artifacts: await this.agentService.FindAgentArtifacts(conversationId, participant.Agent.ID, this.AgentHistoryFrom)
+    })));
+    return BuildRoutingArtifactVersions(artifactsByAgent);
   }
 
   /** The host's rules, as the routing functions take them. */
@@ -2072,14 +2267,24 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     };
   }
 
-  /** Picks the agent that answers this message and the route that chose it, or null for no turn. */
-  private resolveAgentTurnTarget(mentionResult: MentionParseResult): AgentTurnTarget | null {
-    const mentionedAgentIds = mentionResult.mentions.filter(m => m.type === 'agent').map(m => m.id);
+  /**
+   * Picks the agent that answers this message and the route that chose it, or null for no turn.
+   * A routing decision, when there was one, is applied to the candidates first.
+   */
+  private resolveAgentTurnTarget(
+    candidates: AgentTurnCandidates,
+    routing: RoutingDecisionOutcome | null
+  ): AgentTurnTarget | null {
     return ResolveAgentTurn(
-      this.agentTurnCandidates(mentionedAgentIds),
+      ApplyRoutingDecision(candidates, routing),
       this.agentTurnRules,
       agentId => this.isKnownAgent(agentId)
     );
+  }
+
+  /** The agents a message tags, in the order they appear. */
+  private agentMentionIds(mentionResult: MentionParseResult): string[] {
+    return mentionResult.mentions.filter(m => m.type === 'agent').map(m => m.id);
   }
 
   /**
@@ -2124,15 +2329,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
   }
 
-  /** Runs a turn that {@link BeforeAgentTurn} let through, on the host's handler or MJ's path. */
+  /**
+   * Runs a turn that {@link BeforeAgentTurn} let through, on the host's handler or MJ's path.
+   * The routing decision, when there was one, supplies the artifact version the turn's agent
+   * continues from; a host's handler receives it as `TargetArtifactVersionId`.
+   */
   private async runAgentTurn(
     userMessage: MJConversationDetailEntity,
     mentionResult: MentionParseResult,
-    turn: AgentTurnTarget
+    turn: AgentTurnTarget,
+    routing: RoutingDecisionOutcome | null = null
   ): Promise<void> {
     const mention = turn.Route === 'Mention' ? this.findAgentMention(mentionResult, turn.AgentId) : null;
+    const targetArtifactVersionId = ArtifactVersionForTurn(routing, turn.AgentId);
     if (this.AgentTurnHandler) {
-      await this.runHostAgentTurn(this.AgentTurnHandler, userMessage, turn, mention);
+      await this.runHostAgentTurn(this.AgentTurnHandler, userMessage, turn, mention, targetArtifactVersionId);
       return;
     }
     if (mention) {
@@ -2141,7 +2352,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       await this.runConversationManagerTurn(userMessage, mentionResult);
     } else {
       // Pinned and host defaults keep their direct call even when they name the manager, as before.
-      await this.handleAgentContinuity(userMessage, turn.AgentId);
+      await this.handleAgentContinuity(userMessage, turn.AgentId, targetArtifactVersionId);
     }
   }
 
@@ -2183,13 +2394,23 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * method are preserved (not deleted) so we can reintroduce intent checking in the future
    * when browser-local inference is fast enough (~20-50ms) to do this without blocking the
    * user. See PR #2309 for the full discussion.
+   *
+   * With {@link EnableDecisionRouting} on, a typed routing decision runs before routing instead
+   * ({@link decideAgentRouting}); the prompt-based check stays unused. A confident answer from it
+   * may name the artifact version this agent should continue from.
+   *
+   * @param targetArtifactVersionId The artifact version the routing decision named, or null.
    */
-  private async handleAgentContinuity(messageDetail: MJConversationDetailEntity, agentId: string): Promise<void> {
+  private async handleAgentContinuity(
+    messageDetail: MJConversationDetailEntity,
+    agentId: string,
+    targetArtifactVersionId: string | null = null
+  ): Promise<void> {
     await this.continueWithAgent(
       messageDetail,
       agentId,
       messageDetail.ConversationID,
-      undefined // artifact version targeting unavailable without intent check
+      targetArtifactVersionId ?? undefined // set only by a confident routing decision
     );
   }
 
@@ -2303,9 +2524,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     handler: AgentTurnHandler,
     userMessage: MJConversationDetailEntity,
     turn: AgentTurnTarget,
-    mention: Mention | null
+    mention: Mention | null,
+    targetArtifactVersionId: string | null
   ): Promise<void> {
-    const result = await this.callAgentTurnHandler(handler, this.buildAgentTurnRequest(userMessage, turn, mention));
+    const request = this.buildAgentTurnRequest(userMessage, turn, mention, targetArtifactVersionId);
+    const result = await this.callAgentTurnHandler(handler, request);
     if (!result.Success) {
       this.notifyAgentTurnProblem(result.ErrorMessage || 'The agent could not answer this message.', 'error');
     } else {
@@ -2327,11 +2550,17 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
   }
 
-  /** What the host's handler is told about the turn. */
+  /**
+   * What the host's handler is told about the turn.
+   *
+   * @param targetArtifactVersionId The artifact version the routing decision named for this
+   *   turn's agent, or null.
+   */
   private buildAgentTurnRequest(
     userMessage: MJConversationDetailEntity,
     turn: AgentTurnTarget,
-    mention: Mention | null
+    mention: Mention | null,
+    targetArtifactVersionId: string | null
   ): AgentTurnRequest {
     return {
       ConversationId: userMessage.ConversationID,
@@ -2346,7 +2575,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       // A mention carries its own preset (or none); every other route follows the header picker.
       ConfigurationPresetId: turn.Route === 'Mention' ? (mention?.configurationId ?? null) : this.AgentConfigurationPresetId,
       RequestedSkillIDs: [...this._pendingRequestedSkillIDs],
-      PlanMode: this.PlanModeEnabled
+      PlanMode: this.PlanModeEnabled,
+      TargetArtifactVersionId: targetArtifactVersionId
     };
   }
 

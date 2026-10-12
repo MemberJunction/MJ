@@ -41,7 +41,7 @@ vi.mock('../install/migration-runner.js', () => ({ RunAppMigrations: vi.fn() }))
 vi.mock('../install/package-manager.js', () => ({
     AddAppPackages: vi.fn(),
     RemoveAppPackages: vi.fn(),
-    RunPackageInstall: vi.fn(),
+    RunPackageInstallAsync: vi.fn(),
     BumpPrefixedDependencies: vi.fn(),
 }));
 vi.mock('../install/config-manager.js', () => ({
@@ -79,7 +79,7 @@ import { RemoveApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
 import { DropAppSchema } from '../install/schema-manager.js';
 import { DownloadMigrations } from '../github/github-client.js';
-import { RunPackageInstall } from '../install/package-manager.js';
+import { RunPackageInstallAsync } from '../install/package-manager.js';
 import {
     FindInstalledApp,
     FindDependentApps,
@@ -143,7 +143,7 @@ describe('RemoveApp — migrations-model teardown (HandleTeardown)', () => {
         vi.mocked(SetAppStatus).mockResolvedValue(undefined);
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
         vi.mocked(UpdateAppRecord).mockResolvedValue(undefined);
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(FindInstalledApp).mockResolvedValue(
             installedConnector() as unknown as Awaited<ReturnType<typeof FindInstalledApp>>,
         );
@@ -249,7 +249,7 @@ describe('RemoveApp — schema-drop refusal names the remedy that matches the cl
         vi.mocked(SetAppStatus).mockResolvedValue(undefined);
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
         vi.mocked(UpdateAppRecord).mockResolvedValue(undefined);
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(CheckSchemaSharedByOtherApps).mockResolvedValue({ Shared: false, CheckFailed: false });
         vi.mocked(FindInstalledApp).mockResolvedValue({
             ID: 'app-legacy',

@@ -96,6 +96,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     private static readonly DEFAULT_PANEL_WIDTH = 320;
     private static readonly MIN_PANEL_WIDTH = 200;
     private static readonly MAX_PANEL_WIDTH = 600;
+    private static treePanelCount = 0;
 
     public isLoading = true;
     public Categories: MJQueryCategoryEntity[] = [];
@@ -162,6 +163,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     }
     public PanelWidth = QueryBrowserResourceComponent.DEFAULT_PANEL_WIDTH;
     public IsResizing = false;
+    /** Unique id of the query list panel, which the splitter names in aria-controls. */
+    public readonly TreePanelId = `query-tree-panel-${++QueryBrowserResourceComponent.treePanelCount}`;
 
     /** Status filter toggles — which statuses to show in the tree */
     public StatusFilters: Record<string, boolean> = {
@@ -1630,6 +1633,42 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         });
     }
 
+    /** Arrow keys nudge the splitter; Home/End jump to the bounds. */
+    public OnResizeKeydown(event: KeyboardEvent): void {
+        const step = event.shiftKey ? 40 : 8;
+        switch (event.key) {
+            case 'ArrowLeft':  this.setPanelWidth(this.PanelWidth - step); break;
+            case 'ArrowRight': this.setPanelWidth(this.PanelWidth + step); break;
+            case 'Home':       this.setPanelWidth(this.MinPanelWidth); break;
+            case 'End':        this.setPanelWidth(this.MaxPanelWidth); break;
+            default: return;
+        }
+        event.preventDefault();
+        this.persistPanelWidth();
+    }
+
+    /** Exposed for the splitter's aria-valuemin/max. */
+    public get MinPanelWidth(): number {
+        return QueryBrowserResourceComponent.MIN_PANEL_WIDTH;
+    }
+
+    public get MaxPanelWidth(): number {
+        return QueryBrowserResourceComponent.MAX_PANEL_WIDTH;
+    }
+
+    /** Single clamp+assign for both the drag and keyboard paths. */
+    private setPanelWidth(width: number): void {
+        this.PanelWidth = Math.max(this.MinPanelWidth, Math.min(this.MaxPanelWidth, width));
+        this.cdr.markForCheck();
+    }
+
+    private persistPanelWidth(): void {
+        UserInfoEngine.Instance.SetSettingDebounced(
+            QueryBrowserResourceComponent.SETTINGS_KEY,
+            this.PanelWidth.toString()
+        );
+    }
+
     /** @deprecated Use {@link OnResizeStart}. */
     public onResizeStart(event: MouseEvent): void {
       return this.OnResizeStart(event);
@@ -1641,14 +1680,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         const containerRect = this.elementRef.nativeElement.querySelector('.query-browser-container')?.getBoundingClientRect();
         if (!containerRect) return;
 
-        const newWidth = event.clientX - containerRect.left;
-        const clamped = Math.max(
-            QueryBrowserResourceComponent.MIN_PANEL_WIDTH,
-            Math.min(QueryBrowserResourceComponent.MAX_PANEL_WIDTH, newWidth)
-        );
-
-        this.PanelWidth = clamped;
-        this.zone.run(() => this.cdr.markForCheck());
+        this.zone.run(() => this.setPanelWidth(event.clientX - containerRect.left));
     }
 
     private onResizeEnd(): void {
@@ -1658,12 +1690,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         document.removeEventListener('mousemove', this.boundOnResizeMove);
         document.removeEventListener('mouseup', this.boundOnResizeEnd);
 
-        // Persist width with debouncing
-        UserInfoEngine.Instance.SetSettingDebounced(
-            QueryBrowserResourceComponent.SETTINGS_KEY,
-            this.PanelWidth.toString()
-        );
-
+        this.persistPanelWidth();
         this.zone.run(() => this.cdr.markForCheck());
     }
 

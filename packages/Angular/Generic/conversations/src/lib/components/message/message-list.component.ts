@@ -222,6 +222,22 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   public get allowMessageDelete(): boolean {
     return this.AllowMessageDelete;
   }
+  /**
+   * Hides response forms and actionable commands on each message.
+   * Restamped onto already-rendered items — they are created dynamically.
+   */
+  @Input()
+  public set ReadOnly(value: boolean) {
+    if (value === this._readOnly) {
+      return;
+    }
+    this._readOnly = value;
+    this.restampAssistantIdentity();
+  }
+  public get ReadOnly(): boolean {
+    return this._readOnly;
+  }
+  private _readOnly = false;
 
   // ── Windowed-transcript paging state ────────────────────────────────────────
   // The list renders only the LOADED window, not the whole conversation. These two
@@ -592,6 +608,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public messagePinToggled = this.MessagePinToggled;
+
+  /** A message's run has gone quiet; the host should re-read durable state. Emits messageId. */
+  @Output() public LivenessCheckRequested = new EventEmitter<string>();
   /** Emitted with the `MJ: AI Agent Sessions.ID` when a realtime session block's Open affordance is clicked. */
   @Output() public RealtimeSessionOpenRequested = new EventEmitter<string>();
 
@@ -886,6 +905,40 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * (not just scroll to it) use this instead of a `[data-message-id]` query, which fails for
    * exactly the cases listed — see {@link scrollToTimelineEntry}.
    */
+  /**
+   * Refreshes one rendered message in place: the streaming path's alternative to replacing the
+   * whole `messages` array, which rebuilds the timeline and re-measures the mounted range on
+   * every delta. Marks the item as streaming so its stylesheet can lift the status-line cap.
+   *
+   * @returns false only when the message has no rendered entry at all, so the caller can fall
+   * back to the full path for that one update. A spacer or a session card standing in for the
+   * message is a no-op: the entity holds the text and a remount renders it.
+   */
+  public RefreshRenderedMessage(message: MJConversationDetailEntity): boolean {
+    const existing = this._renderedMessages.get(this.getMessageKey(message));
+    if (!existing) {
+      return false;
+    }
+    switch (existing.kind) {
+      case 'embedded':
+        existing.ref.context.$implicit = message;
+        existing.ref.context.message = message;
+        if (!existing.ref.destroyed) {
+          existing.ref.detectChanges();
+        }
+        return true;
+      case 'component':
+        existing.ref.instance.message = message;
+        existing.ref.instance.IsStreaming = true;
+        if (!this.isViewDestroyed(existing.ref.changeDetectorRef)) {
+          existing.ref.changeDetectorRef.detectChanges();
+        }
+        return true;
+      default:
+        return true;
+    }
+  }
+
   public FindTimelineElement(messageId: string): HTMLElement | null {
     const detail = this.messages?.find(m => UUIDsEqual(m.ID, messageId));
     if (!detail) {
@@ -977,6 +1030,21 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // Watch for session-meta changes so realtime session blocks pick up their
     // agent name / status chip once the (async, batched) session lookup lands
     if (changes['sessionMetaMap'] && this.messages && this.MessageContainerRef) {
+      this.updateMessages(this.messages);
+    }
+
+    // Watch for agent-run changes so a run refreshed mid-flight reaches the rendered bubble.
+    // `agentRun` is stamped onto each item as static config at create/update time, so a replaced
+    // map alone never reaches an item already on screen — it keeps the object it was given.
+    //
+    // This became load-bearing with per-message liveness (MJ #4222): reconciliation re-reads the
+    // run over HTTP precisely when the socket is dead, and if the fresh `LastHeartbeatAt` cannot
+    // reach the bubble, the pill stays degraded while the client is in fact being told the run is
+    // healthy. Observed directly — the pill held 'checking…' for a full minute across successful
+    // reconciles.
+    // Keyed by whichever input name the host bound — the deprecated alias or the current one.
+    const agentRunMapChanged = changes['AgentRunMap'] ?? changes['agentRunMap'];
+    if (agentRunMapChanged && this.messages && this.MessageContainerRef) {
       this.updateMessages(this.messages);
     }
 
@@ -1768,6 +1836,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     const previousMessage = instance.message;
 
     instance.message = message;
+    // Streaming ends with the message. It is deliberately NOT cleared on an in-progress full
+    // render (an artifact landing mid-stream): that would snap the status cap back on for a frame.
+    if (message.Status !== 'In-Progress') {
+      instance.IsStreaming = false;
+    }
     instance.allMessages = messages;
     instance.isProcessing = this.IsProcessing;
     instance.userAvatarMap = this.UserAvatarMap;
@@ -1803,6 +1876,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.allowPinning = this.AllowPinning;
     instance.allowMessageEdit = this.AllowMessageEdit;
     instance.allowMessageDelete = this.AllowMessageDelete;
+    instance.ReadOnly = this.ReadOnly;
     instance.assistantDisplayName = this.AssistantDisplayName;
     instance.assistantAvatarUrl = this.AssistantAvatarUrl;
   }
@@ -1863,6 +1937,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.SuggestedResponseSelected.emit(data));
     instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.AttachmentClicked.emit(attachment));
     instance.diagnosticRequested.subscribe((messageId: string) => this.DiagnosticRequested.emit(messageId));
+    instance.LivenessCheckRequested.subscribe((messageId: string) => this.LivenessCheckRequested.emit(messageId));
     instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.MessagePinToggled.emit(msg));
     instance.beforeResponseFormSubmitted.subscribe((e: BeforeResponseFormSubmittedEventArgs) => this.BeforeResponseFormSubmitted.emit(e));
     instance.afterResponseFormSubmitted.subscribe((e: AfterResponseFormSubmittedEventArgs) => this.AfterResponseFormSubmitted.emit(e));

@@ -35,10 +35,14 @@ vi.mock('../adapters/FileSystemAdapter.js', () => {
   };
 });
 
-vi.mock('../adapters/SqlServerAdapter.js', () => {
+vi.mock('../adapters/SqlServerAdapter.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../adapters/SqlServerAdapter.js')>();
   return {
+    SqlBatchError: actual.SqlBatchError,
     SqlServerAdapter: class {
       CheckConnectivity = mockSql.CheckConnectivity;
+      TryLogin = mockSql.TryLogin;
+      ExecuteBatches = mockSql.ExecuteBatches;
     },
   };
 });
@@ -49,8 +53,13 @@ vi.mock('../adapters/SqlServerAdapter.js', () => {
 
 import {
   DatabaseProvisionPhase,
+  SplitSqlBatches,
+  QuoteSqlIdentifier,
+  EscapeSqlString,
   type DatabaseProvisionContext,
 } from '../phases/DatabaseProvisionPhase.js';
+import { SqlBatchError, type SqlLoginTarget, type SqlLoginResult } from '../adapters/SqlServerAdapter.js';
+import type { PromptEvent } from '../events/InstallerEvents.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,6 +89,8 @@ describe('DatabaseProvisionPhase', () => {
     // Clear call history and reset implementations to defaults
     mockFs.WriteText.mockClear().mockResolvedValue(undefined);
     mockSql.CheckConnectivity.mockClear().mockResolvedValue({ Reachable: true, LatencyMs: 12 });
+    mockSql.TryLogin.mockReset().mockResolvedValue({ Ok: true, LoginRejected: false });
+    mockSql.ExecuteBatches.mockReset().mockResolvedValue(undefined);
   });
 
   // -----------------------------------------------------------------------
@@ -274,39 +285,278 @@ describe('DatabaseProvisionPhase', () => {
   // Interactive vs --yes mode
   // -----------------------------------------------------------------------
 
-  describe('interactive mode', () => {
-    it('should emit prompt event with PromptId run-db-script when Yes=false', async () => {
+  // -----------------------------------------------------------------------
+  // Setting the database up
+  // -----------------------------------------------------------------------
+
+  /**
+   * Simulate a server where the app logins are refused until the setup script
+   * has run, and only `adminPassword` lets the admin login in.
+   */
+  function simulateServer(options: { adminPassword?: string; setupWorks?: boolean } = {}): { SetupRan: () => boolean } {
+    let setupRan = false;
+    mockSql.ExecuteBatches.mockImplementation(async () => {
+      setupRan = options.setupWorks ?? true;
+    });
+    mockSql.TryLogin.mockImplementation(async (target: SqlLoginTarget): Promise<SqlLoginResult> => {
+      if (target.Database === 'master') {
+        return target.Password === (options.adminPassword ?? 'admin-pw')
+          ? { Ok: true, LoginRejected: false }
+          : { Ok: false, LoginRejected: true, ErrorMessage: `Login failed for user '${target.User}'.` };
+      }
+      return setupRan
+        ? { Ok: true, LoginRejected: false }
+        : { Ok: false, LoginRejected: true, ErrorMessage: `Login failed for user '${target.User}'.` };
+    });
+    return { SetupRan: () => setupRan };
+  }
+
+  /** Answer prompts by PromptId from a queue of answers per id. */
+  function answerPrompts(emitter: ReturnType<typeof createMockEmitter>['emitter'], answers: Record<string, string[]>): PromptEvent[] {
+    const seen: PromptEvent[] = [];
+    emitter.On('prompt', (e) => {
+      seen.push(e);
+      const queue = answers[e.PromptId] ?? [];
+      e.Resolve(queue.shift() ?? e.Default ?? '');
+    });
+    return seen;
+  }
+
+  describe('when the database is already set up', () => {
+    it('signs in as both logins and does nothing else', async () => {
       const { emitter, emitSpy } = createMockEmitter();
-
-      // Auto-resolve the prompt so the phase continues
-      emitter.On('prompt', (e) => {
-        e.Resolve('yes');
-      });
-
       const ctx = makeContext({ Yes: false, Emitter: emitter });
+
+      const result = await phase.Run(ctx);
+
+      expect(result.ValidationPassed).toBe(true);
+      expect(result.SetupScriptExecuted).toBe(false);
+      expect(mockSql.ExecuteBatches).not.toHaveBeenCalled();
+      expect(emittedEvents(emitSpy, 'prompt')).toHaveLength(0);
+      const users = mockSql.TryLogin.mock.calls.map(([t]) => `${t.User}@${t.Database}`);
+      expect(users).toEqual(['MJ_CodeGen@MemberJunction', 'MJ_Connect@MemberJunction']);
+    });
+
+    it('passes host, port, and trust-certificate settings to the sign-in check', async () => {
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.DatabaseTrustCert = true;
 
       await phase.Run(ctx);
 
-      const prompts = emittedEvents(emitSpy, 'prompt') as Array<{ PromptId: string }>;
-      expect(prompts.length).toBe(1);
-      expect(prompts[0].PromptId).toBe('run-db-script');
+      const target = mockSql.TryLogin.mock.calls[0][0];
+      expect(target).toMatchObject({ Host: 'localhost', Port: 1433, TrustServerCertificate: true, Password: 'test_password_1' });
     });
   });
 
   describe('non-interactive (--yes) mode', () => {
-    it('should skip prompt and emit warn about non-interactive mode', async () => {
+    it('runs the setup script with the configured admin login, then confirms both logins', async () => {
+      const server = simulateServer();
+      const { emitter, emitSpy } = createMockEmitter();
+      const ctx = makeContext({ Yes: true, Emitter: emitter });
+      ctx.Config.DatabaseAdminUser = 'sa';
+      ctx.Config.DatabaseAdminPassword = 'admin-pw';
+
+      const result = await phase.Run(ctx);
+
+      expect(server.SetupRan()).toBe(true);
+      expect(result.SetupScriptExecuted).toBe(true);
+      expect(result.ValidationPassed).toBe(true);
+      expect(emittedEvents(emitSpy, 'prompt')).toHaveLength(0);
+
+      const [target, batches] = mockSql.ExecuteBatches.mock.calls[0];
+      expect(target).toMatchObject({ Database: 'master', User: 'sa', Password: 'admin-pw' });
+      expect(batches[0]).toContain('CREATE DATABASE [MemberJunction]');
+      expect(batches.some((b) => b.includes('CREATE LOGIN [MJ_CodeGen]'))).toBe(true);
+      expect(batches.every((b) => !/^\s*GO\s*$/im.test(b))).toBe(true);
+    });
+
+    it('fails with DB_NOT_SET_UP and instructions when no admin login is configured', async () => {
+      simulateServer();
       const { emitter, emitSpy } = createMockEmitter();
       const ctx = makeContext({ Yes: true, Emitter: emitter });
 
+      const error = await phase.Run(ctx).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(InstallerError);
+      expect((error as InstallerError).Code).toBe('DB_NOT_SET_UP');
+      expect((error as InstallerError).SuggestedFix).toContain('MJ_INSTALL_DB_ADMIN_USER');
+      expect(mockSql.ExecuteBatches).not.toHaveBeenCalled();
+      expect(emittedEvents(emitSpy, 'prompt')).toHaveLength(0);
+    });
+
+    it('fails with DB_ADMIN_LOGIN_FAILED when the configured admin login is refused', async () => {
+      simulateServer({ adminPassword: 'right' });
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.DatabaseAdminUser = 'sa';
+      ctx.Config.DatabaseAdminPassword = 'wrong';
+
+      await expect(phase.Run(ctx)).rejects.toMatchObject({ Code: 'DB_ADMIN_LOGIN_FAILED' });
+      expect(mockSql.ExecuteBatches).not.toHaveBeenCalled();
+    });
+
+    it('fails with DB_SETUP_FAILED naming the batch when the script fails', async () => {
+      simulateServer();
+      mockSql.ExecuteBatches.mockRejectedValue(new SqlBatchError(3, 'CREATE LOGIN permission denied'));
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.DatabaseAdminUser = 'sa';
+      ctx.Config.DatabaseAdminPassword = 'admin-pw';
+
+      const error = (await phase.Run(ctx).catch((e: unknown) => e)) as InstallerError;
+
+      expect(error.Code).toBe('DB_SETUP_FAILED');
+      expect(error.message).toContain('batch 3');
+      expect(error.message).toContain('CREATE LOGIN permission denied');
+    });
+
+    it('fails with DB_SETUP_FAILED when the script runs but a login still cannot sign in', async () => {
+      simulateServer({ setupWorks: false });
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.DatabaseAdminUser = 'sa';
+      ctx.Config.DatabaseAdminPassword = 'admin-pw';
+
+      await expect(phase.Run(ctx)).rejects.toMatchObject({ Code: 'DB_SETUP_FAILED' });
+    });
+
+    it('never puts the admin password in an emitted event', async () => {
+      simulateServer({ adminPassword: 'Sup3r-Secret!' });
+      const { emitter, emitSpy } = createMockEmitter();
+      const ctx = makeContext({ Yes: true, Emitter: emitter });
+      ctx.Config.DatabaseAdminUser = 'sa';
+      ctx.Config.DatabaseAdminPassword = 'Sup3r-Secret!';
+
       await phase.Run(ctx);
 
-      const warns = emittedEvents(emitSpy, 'warn') as Array<{ Message: string }>;
-      expect(warns.length).toBeGreaterThanOrEqual(1);
-      expect(warns[0].Message).toContain('Non-interactive mode');
+      const everything = JSON.stringify(emitSpy.mock.calls);
+      expect(everything).not.toContain('Sup3r-Secret!');
+    });
+  });
 
-      // No prompt events should be emitted
-      const prompts = emittedEvents(emitSpy, 'prompt');
-      expect(prompts.length).toBe(0);
+  describe('interactive mode', () => {
+    it('asks for an admin login and sets the database up when the user picks "set it up now"', async () => {
+      simulateServer();
+      const { emitter } = createMockEmitter();
+      const prompts = answerPrompts(emitter, {
+        'db-setup-method': ['auto'],
+        'db-admin-user': ['sa'],
+        'db-admin-password': ['admin-pw'],
+      });
+      const ctx = makeContext({ Yes: false, Emitter: emitter });
+
+      const result = await phase.Run(ctx);
+
+      expect(result.SetupScriptExecuted).toBe(true);
+      expect(prompts.map((p) => p.PromptId)).toEqual(['db-setup-method', 'db-admin-user', 'db-admin-password']);
+      expect(prompts[2].PromptType).toBe('password');
+      expect(mockSql.ExecuteBatches.mock.calls[0][0]).toMatchObject({ User: 'sa', Password: 'admin-pw' });
+    });
+
+    it('asks again when the admin password is wrong', async () => {
+      simulateServer();
+      const { emitter, emitSpy } = createMockEmitter();
+      answerPrompts(emitter, {
+        'db-setup-method': ['auto'],
+        'db-admin-user': ['sa', 'sa'],
+        'db-admin-password': ['typo', 'admin-pw'],
+      });
+      const ctx = makeContext({ Yes: false, Emitter: emitter });
+
+      const result = await phase.Run(ctx);
+
+      expect(result.SetupScriptExecuted).toBe(true);
+      const warns = emittedEvents(emitSpy, 'warn') as Array<{ Message: string }>;
+      expect(warns.some((w) => w.Message.includes('could not sign in'))).toBe(true);
+    });
+
+    it('gives up with DB_ADMIN_LOGIN_FAILED after three refused attempts', async () => {
+      simulateServer();
+      const { emitter } = createMockEmitter();
+      answerPrompts(emitter, {
+        'db-setup-method': ['auto'],
+        'db-admin-password': ['a', 'b', 'c'],
+      });
+      const ctx = makeContext({ Yes: false, Emitter: emitter });
+
+      await expect(phase.Run(ctx)).rejects.toMatchObject({ Code: 'DB_ADMIN_LOGIN_FAILED' });
+      expect(mockSql.ExecuteBatches).not.toHaveBeenCalled();
+    });
+
+    it('lets the user run the script by hand, then confirms the result', async () => {
+      const server = simulateServer();
+      const { emitter } = createMockEmitter();
+      const prompts: PromptEvent[] = [];
+      emitter.On('prompt', (e) => {
+        prompts.push(e);
+        if (e.PromptId === 'run-db-script') {
+          // The user runs the script in SSMS: emulate it by flipping the server state.
+          void mockSql.ExecuteBatches({} as SqlLoginTarget, [], () => undefined).then(() => e.Resolve('yes'));
+          return;
+        }
+        e.Resolve('manual');
+      });
+      const ctx = makeContext({ Yes: false, Emitter: emitter });
+
+      const result = await phase.Run(ctx);
+
+      expect(server.SetupRan()).toBe(true);
+      expect(prompts.map((p) => p.PromptId)).toEqual(['db-setup-method', 'run-db-script']);
+      expect(result.SetupScriptExecuted).toBe(false);
+      expect(result.ValidationPassed).toBe(true);
+    });
+
+    it('fails with DB_NOT_SET_UP when the user says they ran the script but the logins still fail', async () => {
+      simulateServer();
+      const { emitter } = createMockEmitter();
+      answerPrompts(emitter, { 'db-setup-method': ['manual'], 'run-db-script': ['yes'] });
+      const ctx = makeContext({ Yes: false, Emitter: emitter });
+
+      await expect(phase.Run(ctx)).rejects.toMatchObject({ Code: 'DB_NOT_SET_UP' });
+    });
+  });
+
+  describe('when the sign-in check cannot tell', () => {
+    it('warns, skips setup, and reports ValidationPassed=false', async () => {
+      mockSql.TryLogin.mockResolvedValue({ Ok: false, LoginRejected: false, ErrorMessage: 'self-signed certificate' });
+      const { emitter, emitSpy } = createMockEmitter();
+      const ctx = makeContext({ Yes: true, Emitter: emitter });
+
+      const result = await phase.Run(ctx);
+
+      expect(result.ValidationPassed).toBe(false);
+      expect(mockSql.ExecuteBatches).not.toHaveBeenCalled();
+      const warns = emittedEvents(emitSpy, 'warn') as Array<{ Message: string }>;
+      expect(warns[0].Message).toContain('self-signed certificate');
+    });
+  });
+
+  describe('SQL quoting', () => {
+    it('doubles ] in identifiers and \' in literals so names cannot break the script', async () => {
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.DatabaseName = "Odd]Name";
+      ctx.Config.CodeGenUser = "o'brien";
+      ctx.Config.CodeGenPassword = "pa'ss";
+
+      await phase.Run(ctx);
+
+      const setupScript = mockFs.WriteText.mock.calls[0][1] as string;
+      expect(setupScript).toContain('CREATE DATABASE [Odd]]Name]');
+      expect(setupScript).toContain("WHERE name = 'o''brien'");
+      expect(setupScript).toContain("CREATE LOGIN [o'brien] WITH PASSWORD = N'pa''ss'");
+    });
+
+    it('QuoteSqlIdentifier and EscapeSqlString', () => {
+      expect(QuoteSqlIdentifier('a]b')).toBe('[a]]b]');
+      expect(EscapeSqlString("it's")).toBe("it''s");
+    });
+  });
+
+  describe('SplitSqlBatches', () => {
+    it('splits on GO lines in any case and drops comment-only batches', () => {
+      const batches = SplitSqlBatches("-- header\nSELECT 1;\nGO\n-- only a comment\ngo\n  GO  \nPRINT 'GO';\nGO\n");
+      expect(batches).toEqual(['-- header\nSELECT 1;', "PRINT 'GO';"]);
+    });
+
+    it('does not split on GO inside a line', () => {
+      expect(SplitSqlBatches('SELECT 1 AS GOAL;\nGO')).toEqual(['SELECT 1 AS GOAL;']);
     });
   });
 

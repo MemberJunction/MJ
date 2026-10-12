@@ -87,6 +87,7 @@ describe('chat area — host rules reach every composer', () => {
             '[AgentHistoryFrom]="AgentHistoryFrom"',
             '[AgentTurnHandler]="AgentTurnHandler"',
             '[AutoNameConversation]="AutoNameConversation"',
+            '[EnableDecisionRouting]="EnableDecisionRouting"',
         ]) {
             expect(normalView).toContain(binding);
         }

@@ -10,8 +10,14 @@ import { CohereClient } from 'cohere-ai';
  * - rerank-v3.5: Latest English reranker with best accuracy
  * - rerank-multilingual-v3.0: Supports 100+ languages
  *
+ * Driver class:
+ * Registered as both `CohereReranker` (the name the Cohere reranker models' model-vendor rows carry, and
+ * so the one `AIRerankerRunner` and `RerankerService` resolve) and `CohereLLM`.
+ *
  * API Key:
- * Set via environment variable: AI_VENDOR_API_KEY__COHERELLM
+ * The legacy environment-variable fallback is named after the model-vendor row's driver class:
+ * AI_VENDOR_API_KEY__COHERERERANKER for the shipped Cohere reranker models. A Cohere credential
+ * binding takes precedence over it.
  *
  * Usage:
  * ```typescript
@@ -32,6 +38,10 @@ import { CohereClient } from 'cohere-ai';
  * });
  * ```
  */
+// 'CohereReranker' is the DriverClass on every Cohere reranker model-vendor row; without it the
+// ClassFactory falls back to a bare BaseReranker and every rerank fails. 'CohereLLM' is kept for
+// callers that resolved it by that name.
+@RegisterClass(BaseReranker, 'CohereReranker')
 @RegisterClass(BaseReranker, 'CohereLLM')
 export class CohereReranker extends BaseReranker {
     private _client: CohereClient;

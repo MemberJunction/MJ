@@ -1,9 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LogError } from '@memberjunction/core';
+import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 
 // Hoisted mock variables
-const { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef, mockContentSourcesRef, mockEntitiesRef, mockConstrainedRef } = vi.hoisted(() => {
+const { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef, mockContentSourcesRef, mockEntitiesRef, mockConstrainedRef, mockRunEmbeddingFn, mockModelsRef } = vi.hoisted(() => {
     const mockRunViewFn = vi.fn();
+    /** Every AIEmbeddingRunner instance shares this, so a test can read the params the provider passed. */
+    const mockRunEmbeddingFn = vi.fn(async (params: EmbeddingRunParams): Promise<EmbeddingRunResult> => ({
+        Success: true,
+        Vectors: params.Texts.map(() => [0.1, 0.2, 0.3]),
+        PromptRunID: null,
+        TokensUsed: 0,
+        Cost: 0,
+        ErrorMessage: null,
+        ExecutionTimeMs: 0,
+    }));
+    /** The embedding models AIEngine knows, looked up by an index's EmbeddingModelID. */
+    const mockModelsRef: { value: Array<{ ID: string; Name: string; DriverClass: string; APIName: string }> } = { value: [] };
     const mockAvailable = { value: false };
     const mockKHConfig = vi.fn();
     const mockEntityDocumentsRef: { value: Array<{ VectorIndexID: string; Entity: string }> } = { value: [] };
@@ -15,7 +28,7 @@ const { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef, mock
         value: Array<{ ID: string; Name: string; ParentID: string | null; Fields: Array<{ Name: string; IsNameField: boolean; Sequence: number }>; NameField: { Name: string } | null }>
     } = { value: [] };
     const mockConstrainedRef = { value: false };
-    return { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef, mockContentSourcesRef, mockEntitiesRef, mockConstrainedRef };
+    return { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef, mockContentSourcesRef, mockEntitiesRef, mockConstrainedRef, mockRunEmbeddingFn, mockModelsRef };
 });
 
 vi.mock('@memberjunction/core', () => {
@@ -53,6 +66,7 @@ vi.mock('@memberjunction/core', () => {
         Metadata: MockMetadata,
         RunView: MockRunView,
         CompositeKey: MockCompositeKey,
+        BaseEngine: class MockBaseEngine {},
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         UserInfo: vi.fn(),
@@ -83,7 +97,9 @@ vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         Instance: {
             Config: vi.fn(),
-            Models: [],
+            get Models() { return mockModelsRef.value; },
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
         },
     },
 }));
@@ -92,6 +108,15 @@ vi.mock('@memberjunction/ai', () => ({
     BaseEmbeddings: vi.fn(),
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
 }));
+
+vi.mock('@memberjunction/ai-prompts', () => {
+    class MockAIEmbeddingRunner {
+        RunEmbedding = mockRunEmbeddingFn;
+    }
+    return {
+        AIEmbeddingRunner: MockAIEmbeddingRunner,
+    };
+});
 
 vi.mock('@memberjunction/ai-vectordb', () => ({
     VectorDBBase: vi.fn(),
@@ -108,6 +133,7 @@ vi.mock('@memberjunction/global', () => ({
     },
     UUIDsEqual: (a: unknown, b: unknown) =>
         typeof a === 'string' && typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase(),
+    NormalizeUUID: (id: string) => id.trim().toLowerCase(),
     RegisterClass: () => (target: Function) => target,
 }));
 
@@ -783,6 +809,101 @@ describe('VectorSearchProvider', () => {
         });
     });
 
+    // ────────────────────────────────────────────────────────────────
+    // The query embedding must come from the model the index's vectors came from. The ModelID pin
+    // is what guarantees it: unpinned, the runner may answer from any Embeddings model.
+    // ────────────────────────────────────────────────────────────────
+    describe('Search — the query embedding is pinned to each index\'s model', () => {
+        beforeEach(() => {
+            mockModelsRef.value = [
+                { ID: 'embed-model-1', Name: 'Embed One', DriverClass: 'LocalEmbedding', APIName: 'Xenova/one' },
+                { ID: 'embed-model-2', Name: 'Embed Two', DriverClass: 'OpenAIEmbedding', APIName: 'text-embedding-3-small' },
+            ];
+            mockRunEmbeddingFn.mockClear();
+        });
+
+        it("passes the index's EmbeddingModelID as ModelID, and its Dimensions", async () => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ ID: 'idx-1', Name: 'people', VectorDatabaseID: 'db-1', EmbeddingModelID: 'embed-model-1', Dimensions: 384 }],
+            });
+
+            await provider.Search('pinned query: people', 5, undefined, contextUser);
+
+            expect(mockRunEmbeddingFn).toHaveBeenCalledTimes(1);
+            expect(mockRunEmbeddingFn).toHaveBeenCalledWith(expect.objectContaining({
+                Texts: ['pinned query: people'],
+                ModelID: 'embed-model-1',
+                Dimensions: 384,
+                ContextUser: contextUser,
+            }));
+        });
+
+        it('embeds once per model group, each pinned to its own model', async () => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [
+                    { ID: 'idx-1', Name: 'people', VectorDatabaseID: 'db-1', EmbeddingModelID: 'embed-model-1', Dimensions: null },
+                    { ID: 'idx-2', Name: 'docs', VectorDatabaseID: 'db-1', EmbeddingModelID: 'embed-model-2', Dimensions: 1024 },
+                ],
+            });
+
+            await provider.Search('pinned query: two models', 5, undefined, contextUser);
+
+            const pinned = mockRunEmbeddingFn.mock.calls.map(([params]) => [params.ModelID, params.Dimensions]);
+            expect(pinned).toHaveLength(2);
+            expect(pinned).toEqual(expect.arrayContaining([['embed-model-1', undefined], ['embed-model-2', 1024]]));
+        });
+
+        it('does not answer a query for one model from the cached vector of another model on the same driver', async () => {
+            mockModelsRef.value.push({ ID: 'embed-model-3', Name: 'Embed Three', DriverClass: 'LocalEmbedding', APIName: 'Xenova/three' });
+            const index = (id: string, modelID: string) => ({ ID: id, Name: id, VectorDatabaseID: 'db-1', EmbeddingModelID: modelID, Dimensions: null });
+
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [index('idx-1', 'embed-model-1')] });
+            await provider.Search('pinned query: shared driver', 5, undefined, contextUser);
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [index('idx-3', 'embed-model-3')] });
+            await provider.Search('pinned query: shared driver', 5, undefined, contextUser);
+
+            expect(mockRunEmbeddingFn.mock.calls.map(([params]) => params.ModelID)).toEqual(['embed-model-1', 'embed-model-3']);
+        });
+    });
+
+    // ────────────────────────────────────────────────────────────────
+    // One ranked list per embedding model: sorted by score WITHIN a model (comparable), tagged with
+    // the model's FusionLane so fusion merges models by rank (their cosine scales aren't comparable).
+    // ────────────────────────────────────────────────────────────────
+    describe('Search — results are ranked per embedding model', () => {
+        const hit = (id: string, score: number) => ({
+            ID: id, EntityName: 'People', RecordID: id, SourceType: 'vector', ResultType: 'entity-record',
+            Title: id, Snippet: '', Score: score, ScoreBreakdown: { Vector: score }, Tags: [], MatchedAt: new Date(),
+        });
+
+        it('sorts each model\'s results by score and tags them with that model\'s lane', async () => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [
+                    { ID: 'idx-a1', Name: 'a1', VectorDatabaseID: 'db-1', EmbeddingModelID: 'model-A', Dimensions: null },
+                    { ID: 'idx-b1', Name: 'b1', VectorDatabaseID: 'db-1', EmbeddingModelID: 'model-B', Dimensions: null },
+                ],
+            });
+            // Per-model groups as the indexes return them: unsorted across a model's indexes.
+            const byModel: Record<string, ReturnType<typeof hit>[]> = {
+                'model-A': [hit('a-low', 0.60), hit('a-high', 0.62), hit('a-mid', 0.61)],
+                'model-B': [hit('b-low', 0.87), hit('b-high', 0.88)],
+            };
+            const spy = vi.spyOn(provider as unknown as { embedAndQueryGroup: (...args: unknown[]) => Promise<unknown[]> }, 'embedAndQueryGroup')
+                .mockImplementation(async (_q: unknown, modelID: unknown) => byModel[modelID as string]);
+
+            const results = await provider.Search('q', 10, undefined, contextUser) as Array<{ RecordID: string; FusionLane?: string }>;
+            spy.mockRestore();
+
+            const laneOf = (lane: string) => results.filter(r => r.FusionLane === lane).map(r => r.RecordID);
+            expect(laneOf('vector:model-A')).toEqual(['a-high', 'a-mid', 'a-low']);
+            expect(laneOf('vector:model-B')).toEqual(['b-high', 'b-low']);
+            expect(results.every(r => r.FusionLane)).toBe(true);
+        });
+    });
+
     describe('queryOneIndex — colocated routing', () => {
         type QueryOneIndex = (
             vectorIndex: { Name: string; VectorDatabaseID: string },
@@ -791,10 +912,17 @@ describe('VectorSearchProvider', () => {
             topK: number,
             filter: object | undefined,
             providerConfig: Record<string, unknown> | undefined,
-            contextUser: UserInfo
+            contextUser: UserInfo,
+            // Mirrors the real 8th parameter (UnmergedFilters). The colocated path ignores it, but a
+            // test of the entity-document pool path written against this alias must be able to pass it.
+            unmerged?: { Search?: unknown; ScopeHasMetadataFilter: boolean }
         ) => Promise<Array<{ Score: number }>>;
 
-        it('routes a colocated provider through ColocatedQuery, passing the query text as the keyword', async () => {
+        it('routes a colocated provider through ColocatedQuery as a vector-only (semantic) search', async () => {
+            // The semantic lane asks the colocated store for similarity only. MJ's own keyword and
+            // full-text lanes cover text matching, and MJ's RRF fuses all lanes. A store-side
+            // vector+keyword RRF here would count text matches twice and return an RRF value
+            // (<= 2/61) where the semantic floor expects a similarity.
             // VectorDatabase lookup resolves to a colocated ClassKey
             mockRunViewFn.mockResolvedValue({
                 Success: true,
@@ -820,9 +948,10 @@ describe('VectorSearchProvider', () => {
 
             expect(tryWire).toHaveBeenCalledTimes(1);
             expect(colocatedQuery).toHaveBeenCalledWith(
-                expect.objectContaining({ indexName: 'idx', keyword: 'climate policy', fusion: 'rrf' }),
+                expect.objectContaining({ indexName: 'idx', fusion: 'vector-only' }),
                 contextUser
             );
+            expect(colocatedQuery.mock.calls[0][0].keyword).toBeUndefined();
             expect(queryIndex).not.toHaveBeenCalled();
             expect(results[0].Score).toBe(0.91);
         });

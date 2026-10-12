@@ -1079,8 +1079,8 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * back-to-back local triggers can't both fire.
      *
      * @param instructions Instructions for the single spoken update. **Blank/empty means "respond now using
-     *   the SESSION system prompt"** (the meeting-mode bridge trigger passes `''`); only a non-empty value is
-     *   forwarded as a per-response override.
+     *   the SESSION system prompt"** (the meeting-mode bridge trigger passes `''`); a non-empty value is
+     *   forwarded as a per-response override **carrying the session prompt ahead of it** — see below.
      */
     public RequestSpokenUpdate(instructions: string): boolean {
         if (this.responseActive) {
@@ -1088,15 +1088,29 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             return false; // NOT sent — the caller (bridge) releases the floor instead of wedging on it
         }
         this.responseActive = true;
-        RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${typeof instructions === 'string' && instructions.trim().length > 0 ? 'yes' : 'none → session prompt governs'})`);
-        // CRITICAL: only set per-response `instructions` when the caller actually supplied some. OpenAI's
-        // `response.create` treats `response.instructions` as a FULL override of the session system prompt for
-        // that response — so forwarding `''` would wipe the co-agent identity framing (incl. the
-        // "call invoke-target-agent, don't do the work yourself" directive), and the model would answer
-        // directly instead of delegating. A blank value ⇒ plain `response.create` ⇒ the session prompt governs.
-        const hasInstructions = typeof instructions === 'string' && instructions.trim().length > 0;
+        const direction = typeof instructions === 'string' ? instructions.trim() : '';
+        RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${direction.length > 0 ? 'yes, with the session prompt carried ahead of it' : 'none → session prompt governs'})`);
+        // CRITICAL: OpenAI's `response.create` treats `response.instructions` as a FULL override of the
+        // session system prompt for that response. A blank value ⇒ plain `response.create` ⇒ the session
+        // prompt governs; forwarding `''` as an override would wipe the co-agent identity framing (incl.
+        // the "call invoke-target-agent, don't do the work yourself" directive) and the model would answer
+        // directly instead of delegating.
+        //
+        // ⚠️ THE SAME IS TRUE OF A NON-BLANK VALUE, and that half went unguarded until #4591. A caller
+        // handing over a real direction — an opening nudge, a silence check-in, a progress narration —
+        // wiped the identity just as thoroughly and far less visibly: only the ONE turn riding this method
+        // lost it, so the session read as intermittently amnesiac rather than as misconfigured. Observed
+        // downstream (bizapps-caliber#397) as an interviewer opening a hiring assessment with "I'm ChatGPT,
+        // your friendly voice companion" while every other turn in the same session correctly gave her
+        // configured name. So the session prompt is carried AHEAD of the direction, which keeps the
+        // direction last — the most recent line is the one the model weights hardest — and means no caller
+        // has to restate an identity the session already holds.
+        const identity = this.activeSystemPrompt;
+        const perResponse = identity === null ? direction : `${identity}\n\n${direction}`;
         this.connection.send(
-            hasInstructions ? { type: 'response.create', response: { instructions } } : { type: 'response.create' },
+            direction.length > 0
+                ? { type: 'response.create', response: { instructions: perResponse } }
+                : { type: 'response.create' },
         );
         return true; // a response.create was issued — the bridge may hold the floor for this turn
     }
@@ -1422,8 +1436,21 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     // ---- Config helpers ----
 
+    /**
+     * The session system prompt currently in force — the co-agent's identity, persona and standing
+     * directives, exactly as the last `session.update` established them.
+     *
+     * Retained because {@link RequestSpokenUpdate} has to carry it: a per-response `instructions`
+     * override REPLACES it rather than adding to it, so a spoken update that does not restate it
+     * speaks with no identity at all (#4591). Null before the first `session.update`.
+     */
+    private activeSystemPrompt: string | null = null;
+
     /** Sends the `session.update` that establishes instructions, input transcription, tools, and GA features. */
     private sendSessionUpdate(systemPrompt: string, tools?: RealtimeToolDefinition[], config?: JSONObject): void {
+        // Remembered here rather than at the call site so a LIVE Reconfigure that rebuilds the session
+        // cannot leave the two disagreeing: whatever was last SENT is what the model is holding.
+        this.activeSystemPrompt = systemPrompt.trim().length > 0 ? systemPrompt : null;
         // Pull the MJ-idiomatic feature keys OUT of the open Config bag: the host-neutral meeting flag
         // (disableAutoResponse), the output voice, and the GA features (reasoningEffort/parallelToolCalls/
         // mcpTools) — each translated to its provider-native field only when the profile confirms support,

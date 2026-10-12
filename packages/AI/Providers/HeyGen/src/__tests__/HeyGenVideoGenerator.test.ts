@@ -6,10 +6,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockHttpPost = vi.hoisted(() => vi.fn());
 const mockHttpGet = vi.hoisted(() => vi.fn());
 
-vi.mock('@memberjunction/network-utils', () => ({
-  HttpPost: mockHttpPost,
-  HttpGet: mockHttpGet,
-}));
+// The real module, with only the requests stubbed: the driver classifies a failure with the real
+// IsHttpError.
+vi.mock('@memberjunction/network-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/network-utils')>();
+  return { ...actual, HttpPost: mockHttpPost, HttpGet: mockHttpGet };
+});
 
 vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (_target: unknown) => {},
@@ -38,7 +40,10 @@ vi.mock('@memberjunction/ai', () => {
     AvatarVideoParams: class {},
     VideoResult: MockVideoResult,
     AvatarInfo: MockAvatarInfo,
-    ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
+    ErrorAnalyzer: {
+      analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }),
+      AnalyzeError: vi.fn().mockReturnValue({ category: 'unknown' }),
+    },
   };
 });
 

@@ -31,6 +31,7 @@ import { CreatePromptDialogComponent } from "./AIAgents/create-prompt-dialog.com
 import { CreateSubAgentDialogComponent } from "./AIAgents/create-sub-agent-dialog.component";
 import { AIAgentManagementService } from "./AIAgents/ai-agent-management.service";
 import { AgentsModule } from "@memberjunction/ng-agents";
+import { ArtifactsModule } from "@memberjunction/ng-artifacts";
 import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
 import { TestingModule } from "@memberjunction/ng-testing";
@@ -102,8 +103,16 @@ import { ModelPredictionPanel } from "../panels/model-predictions/model-predicti
 import { AISkillSharingPanel } from "../panels/ai-skill-sharing/ai-skill-sharing-panel.component";
 import { EntityFormChromeEditorComponent } from "../panels/form-chrome/entity-form-chrome-editor.component";
 import { EntityRelationshipFormRolePanel } from "../panels/form-chrome/entity-relationship-form-role.panel";
+import { EntityCloneConfigEditorComponent } from "../panels/record-clone/entity-clone-config-editor.component";
+import { ClonePlanTreeComponent } from "@memberjunction/ng-record-clone";
 import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissions";
 import { MLModelFormComponentExtended, LoadMLModelFormComponentExtended } from "./MLModels/ml-model-form.component";
+import { RubricsModule } from "@memberjunction/ng-rubrics";
+import { MJRubricFormComponentExtended } from "./Rubrics/rubric-form.component";
+import { RubricAuthorPanel, RubricDiffPanel, RubricPublishPanel, RubricVersionsPanel } from "./Rubrics/rubric-form.panels";
+import { MJRubricEvaluationFormComponentExtended, RubricEvaluationComparePanel, RubricEvaluationResultPanel } from "./Rubrics/evaluation-form.component";
+import { MJRubricScaleFormComponentExtended, RubricScaleLevelsPanel } from "./Rubrics/scale-form.component";
+import { MJAIAgentRubricFormComponentExtended, MJRubricBandFormComponentExtended, MJRubricCategoryFormComponentExtended, MJRubricCriterionFormComponentExtended, MJRubricEvaluationScoreFormComponentExtended, MJRubricScaleLevelFormComponentExtended, MJRubricVersionFormComponentExtended, RubricVersionSummaryPanel } from "./Rubrics/record-forms.component";
 import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
 
 @NgModule({
@@ -150,6 +159,16 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
         MJListFormComponentExtended,
+        MJRubricFormComponentExtended,
+        MJRubricEvaluationFormComponentExtended,
+        MJRubricScaleFormComponentExtended,
+        MJRubricVersionFormComponentExtended,
+        MJRubricCriterionFormComponentExtended,
+        MJRubricEvaluationScoreFormComponentExtended,
+        MJRubricScaleLevelFormComponentExtended,
+        MJRubricBandFormComponentExtended,
+        MJRubricCategoryFormComponentExtended,
+        MJAIAgentRubricFormComponentExtended,
         // ContentSource-specific BaseFormPanel slot components (no custom form override).
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
@@ -167,11 +186,22 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         RecordProcessFormComponentExtended,
         EntityFormChromeEditorComponent,
         EntityRelationshipFormRolePanel,
+        EntityCloneConfigEditorComponent,
         MJFileFormComponentExtended,
         MLModelFormComponentExtended,
     ],
     imports: [
+    ArtifactsModule,
         CommonModule,
+        RubricsModule,
+        RubricAuthorPanel,
+        RubricDiffPanel,
+        RubricPublishPanel,
+        RubricVersionsPanel,
+        RubricVersionSummaryPanel,
+        RubricEvaluationResultPanel,
+        RubricEvaluationComparePanel,
+        RubricScaleLevelsPanel,
         FormsModule,
         ReactiveFormsModule,
         DragDropModule,
@@ -195,6 +225,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         LinkDirectivesModule,
         JoinGridModule,
         BaseFormsModule,
+        ClonePlanTreeComponent,
         MJTabStripModule,
         CodeEditorModule,
         DeepDiffModule,

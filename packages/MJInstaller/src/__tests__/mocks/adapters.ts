@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import type { ProcessResult, ProcessOptions } from '../../adapters/ProcessRunner.js';
-import type { SqlConnectivityResult } from '../../adapters/SqlServerAdapter.js';
+import type { SqlConnectivityResult, SqlLoginTarget, SqlLoginResult } from '../../adapters/SqlServerAdapter.js';
 import type { VersionInfo } from '../../models/VersionInfo.js';
 
 /**
@@ -64,6 +64,10 @@ export function createMockSqlAdapter() {
 
   return {
     CheckConnectivity: vi.fn<(config: unknown) => Promise<SqlConnectivityResult>>().mockResolvedValue({ ...defaultResult }),
+    TryLogin: vi.fn<(target: SqlLoginTarget) => Promise<SqlLoginResult>>().mockResolvedValue({ Ok: true, LoginRejected: false }),
+    ExecuteBatches: vi
+      .fn<(target: SqlLoginTarget, batches: string[], onMessage: (message: string) => void) => Promise<void>>()
+      .mockResolvedValue(undefined),
   };
 }
 

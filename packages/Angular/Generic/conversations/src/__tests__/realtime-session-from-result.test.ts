@@ -338,7 +338,10 @@ describe('RealtimeSessionService — StartRealtimeSession after the mint/run spl
 
   it('still lands a MINT failure in the error state (never a half-open session)', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    executeGQL.mockImplementationOnce(async () => ({ StartRealtimeClientSession: null }));
+    // Keyed on the MINT document, not on call order: a connect-only provider reads the channel
+    // registry over GraphQL before the mint, so "the first call" is no longer the mint.
+    executeGQL.mockImplementation(async (query: string) =>
+      query.includes('StartRealtimeClientSession') ? { StartRealtimeClientSession: null } : MINT_REPLY);
 
     await service.StartRealtimeSession('agent-1');
 

@@ -16,7 +16,7 @@ import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { MJConversationEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
-import { IsAgentAllowed } from '../../utils/agent-turn-routing';
+import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
 
 /**
  * Header widget that lets a user pin a default AI agent on the active

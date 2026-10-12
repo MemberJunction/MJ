@@ -30,6 +30,7 @@ function makePipeline(overrides: Partial<FeaturePipelineSummary> = {}): FeatureP
         LastRunProcessed: null,
         LastRunSuccess: null,
         LastRunErrors: null,
+        PipelineType: 'LLM',
         ...overrides,
     };
 }

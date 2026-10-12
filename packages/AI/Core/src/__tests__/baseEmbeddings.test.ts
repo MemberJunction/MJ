@@ -156,6 +156,21 @@ describe('BaseEmbeddings.SupportsBatchEmbeddings', () => {
     });
 });
 
+describe('BaseEmbeddings.RequiresAPIKey', () => {
+    it('defaults to true, since most providers call a hosted API', () => {
+        expect(new DefaultEmbeddings('k').RequiresAPIKey).toBe(true);
+    });
+
+    it('can be overridden to false by an in-process provider', () => {
+        class KeylessEmbeddings extends DefaultEmbeddings {
+            public override get RequiresAPIKey(): boolean {
+                return false;
+            }
+        }
+        expect(new KeylessEmbeddings('').RequiresAPIKey).toBe(false);
+    });
+});
+
 describe('BaseEmbeddings default EmbedTexts (per-text fallback)', () => {
     let embeddings: DefaultEmbeddings;
     beforeEach(() => {

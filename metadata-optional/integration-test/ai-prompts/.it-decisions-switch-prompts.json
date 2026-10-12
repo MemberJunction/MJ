@@ -1,0 +1,39 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Decisions Switch Agent - System Prompt",
+      "Description": "Shared prompt of the IT: Decisions Switch agents. The agent-decisions-switch bundle answers every call to it with a scripted reply, so no model ever runs it. Bound to one model so the bundle knows which driver class to stand in for. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-decisions-switch.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "None",
+      "MaxRetries": 0
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9AB2AEB2-9591-41EE-B01F-F764672459C9"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0A537B22-BCF1-464D-BFD0-09D40D197BB8"
+    }
+  }
+]

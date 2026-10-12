@@ -1,0 +1,30 @@
+{
+  "name": "@memberjunction/ai-systemone",
+  "type": "module",
+  "version": "6.2.0-edge.3",
+  "description": "MemberJunction drivers for System One decision APIs: any server with POST /v1/systemone (Kev on Modal, llama.cpp llama-server, TypeSafe), and Perplexity's Decisions API (pplx-decider-v1-27b)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@memberjunction/ai": "6.2.0-edge.3",
+    "@memberjunction/global": "6.2.0-edge.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

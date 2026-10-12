@@ -20,7 +20,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import * as coreModule from '@memberjunction/core';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJActionParamEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, MJLruCache } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
 import { MJAIAgentEntityExtended, MJAIModelEntityExtended, AppContextSnapshot } from '@memberjunction/ai-core-plus';
@@ -36,6 +36,7 @@ import {
 } from '../realtime/realtime-client-session-service';
 import { INVOKE_TARGET_AGENT_TOOL_NAME, INVOKE_TARGET_AGENT_DESCRIPTION, DelegateToTargetRequest, DelegatedResult, DelegatedRunArtifact, RealtimeColleague } from '../realtime/realtime-tool-broker';
 import { BuildAppRealtimeOverridesJson, RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
+import { AgentRunWatchdog } from '../agent-run-watchdog';
 
 // Mock AgentRunner so the REAL delegateToTarget path (below) can be exercised without DB/SDK.
 // `runAgentMock` is hoisted so the vi.mock factory can close over it.
@@ -174,6 +175,10 @@ class TestableService extends RealtimeClientSessionService {
     public ExposeParseActionParams(argumentsJson?: string): Record<string, unknown> {
         return this.parseActionParams(argumentsJson);
     }
+    /** Public passthroughs to the session-scoped tool-projection caches (Round 16 leak fix). */
+    public ExposeSessionWireActionMaps() { return this.sessionWireActionMaps; }
+    public ExposeTargetWireActionMaps() { return this.targetWireActionMaps; }
+    public ExposeSessionDirectConfigs() { return this.sessionDirectConfigs; }
     protected override async delegateToTarget(
         _input: ExecuteRelayedToolInput,
         request: DelegateToTargetRequest
@@ -184,6 +189,11 @@ class TestableService extends RealtimeClientSessionService {
 
 const contextUser = { ID: 'user-1', Email: 'u@example.com' } as unknown as UserInfo;
 const provider = {} as unknown as IMetadataProvider;
+
+beforeEach(() => {
+    // The service logs each mint (`[RealtimeCoAgent] mint …`) and status line to the console; keep test output clean.
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+});
 
 function makeCoAgent(overrides: Partial<MJAIAgentEntityExtended> = {}): MJAIAgentEntityExtended {
     return { ID: 'co-1', Name: 'Realtime Co-Agent', InjectNotes: false, InjectExamples: false, ...overrides } as unknown as MJAIAgentEntityExtended;
@@ -311,6 +321,21 @@ describe('RealtimeClientSessionService.PrepareClientSession', () => {
         );
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('Realtime Co-Agent could not be resolved');
+    });
+
+    it('adds host tools to the tool set and host framing to the prompt WITHOUT the interactive-surface clause', async () => {
+        const svc = new TestableService();
+        const hostTool: RealtimeToolDefinition = { Name: 'end_call', Description: 'Ends the call', ParametersSchema: { type: 'object', properties: {} } };
+        const duplicate: RealtimeToolDefinition = { Name: INVOKE_TARGET_AGENT_TOOL_NAME, Description: 'dup', ParametersSchema: { type: 'object', properties: {} } };
+        const result = await svc.PrepareClientSession(
+            makePrepInput({ HostTools: [hostTool, duplicate], HostFraming: 'PHONE CALL: audio only.' }),
+            contextUser, provider,
+        );
+        const names = (result.SessionParams!.Tools ?? []).map(t => t.Name);
+        expect(names).toContain('end_call');
+        expect(names.filter(n => n === INVOKE_TARGET_AGENT_TOOL_NAME)).toHaveLength(1);
+        expect(result.SessionParams!.SystemPrompt).toContain('PHONE CALL: audio only.');
+        expect(result.SessionParams!.SystemPrompt).not.toContain('interactive-surface');
     });
 
     it('returns a failure result (no throw) when the model rejects minting', async () => {
@@ -1013,6 +1038,137 @@ function makeObsProvider(agentRun: FakeObsRun, promptRun: FakeObsRun, runStep: F
     });
 }
 
+// ════════════════════════════════════════════════════════════════════
+// The co-agent run: the voice model's cost, and liveness for the run watchdog
+// ════════════════════════════════════════════════════════════════════
+
+/** A provider the run watchdog accepts (a database provider), serving the given fakes. */
+function makeDatabaseProvider(byName: (entityName: string) => FakeRun): IMetadataProvider {
+    return Object.assign(Object.create(coreModule.DatabaseProviderBase.prototype), {
+        GetEntityObject: vi.fn(async (name: string) => byName(name)),
+    }) as IMetadataProvider;
+}
+
+describe('RealtimeClientSessionService — the co-agent run carries the voice model\'s cost', () => {
+    /** What a 17-minute Gemini Live call accumulated on its prompt run (prod, 2026-10-02). */
+    const callUsage = { TokensPrompt: 1_048_871, TokensCompletion: 5_879, TokensUsed: 1_054_750, Cost: 0.81310875, TotalCost: 0.81310875 };
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('copies the prompt run\'s tokens and cost onto the co-agent run when the session ends', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1', Dirty: true });
+        const promptRun = makeRun({ ID: 'prompt-run-1', ...callUsage });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true);
+
+        // Before: TotalCost stayed 0, so anything summing agent runs saw only the delegated runs.
+        expect(agentRun).toMatchObject({
+            TotalPromptTokensUsed: 1_048_871,
+            TotalCompletionTokensUsed: 5_879,
+            TotalTokensUsed: 1_054_750,
+            TotalCost: 0.81310875,
+        });
+        expect(agentRun.Save).toHaveBeenCalledTimes(2); // the finalize, then the totals
+    });
+
+    it('still charges a run the watchdog (or a shutdown) already ended', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1', Status: 'Failed', Dirty: true });
+        const promptRun = makeRun({ ID: 'prompt-run-1', ...callUsage });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true);
+
+        expect(agentRun.Status).toBe('Failed'); // the status is not rewritten …
+        expect(agentRun.TotalCost).toBe(0.81310875); // … but the cost is owed all the same
+    });
+
+    it('falls back to the prompt run\'s own cost and summed tokens when the totals are missing', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1', Dirty: true });
+        const promptRun = makeRun({ ID: 'prompt-run-1', TokensPrompt: 100, TokensCompletion: 20, TokensUsed: null, Cost: 0.5, TotalCost: null });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true);
+
+        expect(agentRun).toMatchObject({ TotalTokensUsed: 120, TotalCost: 0.5 });
+    });
+
+    it('leaves the run\'s totals alone when the session had no prompt run', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1' });
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', null, contextUser, makeRunProvider(() => agentRun), true);
+
+        expect(agentRun.TotalCost).toBeUndefined();
+    });
+});
+
+describe('RealtimeClientSessionService — the co-agent run stays alive for the run watchdog', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('registers a session\'s co-agent run — only with an id, and only on a database provider', () => {
+        const track = vi.spyOn(AgentRunWatchdog.Instance, 'Track').mockImplementation(() => undefined);
+        const svc = new RealtimeClientSessionService();
+        const dbProvider = makeDatabaseProvider(() => makeRun());
+
+        svc.KeepCoAgentRunAlive('co-run-1', dbProvider, contextUser);
+        svc.KeepCoAgentRunAlive(null, dbProvider, contextUser);
+        svc.KeepCoAgentRunAlive('co-run-1', makeRunProvider(() => makeRun()), contextUser); // can't stamp heartbeats
+
+        expect(track.mock.calls).toEqual([['co-run-1', dbProvider, contextUser]]);
+    });
+
+    it('registers the run the moment it is created, so a long call is never taken for a dead process', async () => {
+        const track = vi.spyOn(AgentRunWatchdog.Instance, 'Track').mockImplementation(() => undefined);
+        const agentRun = makeObsRun('co-run-real');
+        const prov = makeDatabaseProvider(name => {
+            if (name === 'MJ: AI Agent Runs') return agentRun;
+            return makeObsRun(name === 'MJ: AI Agent Run Steps' ? 'run-step-real' : 'prompt-run-real');
+        });
+
+        await new ObservabilityTestService().CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'vendor-1', 'u1', 'session-1', prov);
+
+        expect(track).toHaveBeenCalledWith('co-run-real', prov, contextUser);
+    });
+
+    it('unregisters it, and still charges it, even when finalizing the run throws', async () => {
+        const untrack = vi.spyOn(AgentRunWatchdog.Instance, 'Untrack');
+        let agentRunLoads = 0;
+        const agentRun = makeRun({
+            ID: 'co-run-1',
+            Dirty: true,
+            // The finalize's load fails hard; the cost copy's load (the second) succeeds.
+            Load: vi.fn(async () => {
+                agentRunLoads++;
+                if (agentRunLoads === 1) {
+                    throw new Error('connection reset');
+                }
+                return true;
+            }),
+        });
+        const promptRun = makeRun({ ID: 'prompt-run-1', TokensPrompt: 10, TokensCompletion: 2, TokensUsed: 12, TotalCost: 0.25 });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await expect(
+            new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true)
+        ).rejects.toThrow('connection reset');
+
+        expect(untrack).toHaveBeenCalledWith('co-run-1');
+        expect(agentRun.TotalCost).toBe(0.25);
+    });
+
+    it('unregisters it when the session ends', async () => {
+        const untrack = vi.spyOn(AgentRunWatchdog.Instance, 'Untrack');
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', null, contextUser, makeRunProvider(() => makeRun({ ID: 'co-run-1' })), true);
+
+        expect(untrack).toHaveBeenCalledWith('co-run-1');
+    });
+});
+
 describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)', () => {
     it('creates the co-agent AIAgentRun + linked AIPromptRun + single run step with full linkage stamping', async () => {
         const agentRun = makeObsRun('co-run-real');
@@ -1227,6 +1383,42 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
 
         expect(runAgentMock.mock.calls[0][0].userId).toBeUndefined();
+    });
+
+    it('threads the browser session id and app context into the delegated run', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const appContext: AppContextSnapshot = {
+            App: { Name: 'Dashboards', Description: '' },
+            ActiveNavItem: { Name: 'Sales Overview' },
+            OtherNavItems: [],
+            User: { Name: 'A', Roles: [] },
+            Capabilities: { Tools: [] },
+        };
+        const svc = new DelegateTestService();
+
+        await svc.ExecuteRelayedTool(
+            makeDelegateInput({ BrowserSessionID: 'browser-abc', AppContext: appContext }),
+            contextUser,
+            provider,
+        );
+
+        expect(runAgentMock).toHaveBeenCalledTimes(1);
+        const passed = runAgentMock.mock.calls[0][0];
+        // The client-tool request channel is keyed on the browser session id.
+        expect(passed.sessionID).toBe('browser-abc');
+        // `data.appContext` is where the run's prompt reads app context and surface tools.
+        expect(passed.data).toEqual({ appContext });
+    });
+
+    it('leaves sessionID and data unset when the relay carries no browser session or app context', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        const passed = runAgentMock.mock.calls[0][0];
+        expect(passed.sessionID).toBeUndefined();
+        expect(passed.data).toBeUndefined();
     });
 
     it('returns the question + surfaces PausedRunID when the run is AwaitingFeedback', async () => {
@@ -2615,5 +2807,84 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             expect(taskResult.Success).toBe(false);
             expect(taskResult.Output).toContain('not enabled for direct voice invocation');
         });
+    });
+});
+
+/**
+ * Round 16 memory-leak fix: `sessionWireActionMaps`/`targetWireActionMaps`/`sessionDirectConfigs`
+ * were plain `Map`s populated once per session/target but never deleted, on an instance held for the
+ * process lifetime by `RealtimeClientSessionResolver`. Every voice session or target agent ever
+ * projected left a permanent entry. Fixed by converting all three to `MJLruCache` (mirroring the same
+ * file's `promptRunWriteChains`), bounded at 5,000 entries / 4h TTL.
+ */
+describe('RealtimeClientSessionService — session-scoped tool caches are bounded (Round 16 leak fix)', () => {
+    const mockAction = {
+        ID: 'act-bounded-1',
+        Name: 'DoThing',
+        Description: 'Does a thing.',
+        Params: { Items: [] }
+    } as unknown as MJActionEntityExtended;
+
+    const directActionsConfig: RealtimeCoAgentConfig = {
+        realtime: { directActions: { enabled: true, actionNames: ['*'] } }
+    };
+
+    class DynamicDriverModel extends BaseRealtimeModel {
+        public static override SupportsDynamicToolSet = true;
+    }
+
+    beforeAll(() => {
+        MJGlobal.Instance.ClassFactory.Register(BaseRealtimeModel, DynamicDriverModel, 'BoundedCacheTestDriver', 10);
+    });
+
+    it('backs sessionWireActionMaps, targetWireActionMaps, and sessionDirectConfigs with MJLruCache, not a plain Map', () => {
+        const service = new TestableService();
+        expect(service.ExposeSessionWireActionMaps()).toBeInstanceOf(MJLruCache);
+        expect(service.ExposeTargetWireActionMaps()).toBeInstanceOf(MJLruCache);
+        expect(service.ExposeSessionDirectConfigs()).toBeInstanceOf(MJLruCache);
+    });
+
+    it('still projects and executes a direct action for a session after BuildDirectActionTools populates the caches', () => {
+        const service = new TestableService();
+        service.TargetActions = [mockAction];
+
+        const tools = service.BuildDirectActionTools('target-bounded', directActionsConfig, 'BoundedCacheTestDriver', 'session-bounded-1');
+
+        expect(tools.map(t => t.Name)).toEqual(['DoThing']);
+        expect(service.ExposeSessionWireActionMaps().Get('session-bounded-1')?.has('DoThing')).toBe(true);
+        expect(service.ExposeTargetWireActionMaps().Get('target-bounded')?.has('DoThing')).toBe(true);
+        expect(service.ExposeSessionDirectConfigs().Get('session-bounded-1')).toEqual({
+            enabled: true,
+            actionNames: ['*'],
+            timeoutMs: 10_000
+        });
+    });
+
+    it('re-projecting the same session id updates the entry in place rather than growing the cache', () => {
+        const service = new TestableService();
+        service.TargetActions = [mockAction];
+
+        service.BuildDirectActionTools('target-bounded', directActionsConfig, 'BoundedCacheTestDriver', 'session-repeat');
+        const sizeAfterFirst = service.ExposeSessionWireActionMaps().Size;
+        service.BuildDirectActionTools('target-bounded', directActionsConfig, 'BoundedCacheTestDriver', 'session-repeat');
+        const sizeAfterSecond = service.ExposeSessionWireActionMaps().Size;
+
+        expect(sizeAfterSecond).toBe(sizeAfterFirst);
+    });
+
+    it('never grows sessionWireActionMaps past its configured maxSize, evicting the oldest session', () => {
+        const service = new TestableService();
+        service.TargetActions = [mockAction];
+        const maxSize = service.ExposeSessionWireActionMaps().MaxSize;
+
+        for (let i = 0; i < maxSize + 5; i++) {
+            service.BuildDirectActionTools('target-bounded', directActionsConfig, 'BoundedCacheTestDriver', `session-${i}`);
+        }
+
+        expect(service.ExposeSessionWireActionMaps().Size).toBeLessThanOrEqual(maxSize);
+        // The very first session projected should have been evicted (oldest/least-recently-used).
+        expect(service.ExposeSessionWireActionMaps().Get('session-0')).toBeUndefined();
+        // A recently-projected session should still be present.
+        expect(service.ExposeSessionWireActionMaps().Get(`session-${maxSize + 4}`)).toBeDefined();
     });
 });
