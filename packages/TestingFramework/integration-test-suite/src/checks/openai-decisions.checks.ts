@@ -64,7 +64,7 @@ import { OpenRouterDecision } from '@memberjunction/ai-openrouter';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import { DeleteById } from './agent-live-shared';
-import { RegisterScriptedDecision, ScriptedDecision, SCRIPTED_DECISION_DRIVER_CLASSES, UnavailableDecision } from './decision-test-double';
+import { RegisterScriptedDecision, ScriptedDecision, SCRIPTED_DECISION_DRIVER_CLASSES } from './decision-test-double';
 import {
     DecisionFixtures,
     DecisionRunnerProbe,
@@ -74,6 +74,7 @@ import {
     RequireDefaultDecisionPrompt,
     RequireInferenceRowID,
     RequireVendorID,
+    UnavailableDecision,
 } from './decision-fixtures';
 
 // ─── Constants ───────────────────────────────────────────────────────────────────────────────────

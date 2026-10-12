@@ -89,7 +89,7 @@ import type { MJAIVendorEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import { DeleteById, RequireRows } from './agent-live-shared';
-import { RegisterScriptedDecision, ScriptedDecision, SCRIPTED_DECISION_DRIVER_CLASSES, UnavailableDecision } from './decision-test-double';
+import { RegisterScriptedDecision, ScriptedDecision, SCRIPTED_DECISION_DRIVER_CLASSES } from './decision-test-double';
 import {
     ClearEnvironment,
     DecisionFixtures,
@@ -99,6 +99,7 @@ import {
     RegisterDecisionStandIn,
     RequireDefaultDecisionPrompt,
     RequireInferenceRowID,
+    UnavailableDecision,
 } from './decision-fixtures';
 
 // ─── Constants ───────────────────────────────────────────────────────────────────────────────────
@@ -711,11 +712,12 @@ async function assertSelectionWithBoundKev(
 const UNAVAILABLE_DRIVER_CLASSES: readonly string[] = SCRIPTED_DECISION_DRIVER_CLASSES.filter(name => name !== DRIVER_CLASS);
 
 /**
- * KV4 failover: with every other decision driver unavailable (Jev, LLM Decision, Clef, GPT-6 Luna
- * Decisions on OpenAI and every OpenRouter row among them), `Default Decision` fails over from model to
- * model, past every credentialed candidate ahead of the bound Kev-27B, and Kev-27B answers. Its
- * `FailoverStrategy` is the column default, `SameModelDifferentVendor`, and `AIDecisionRunner` treats
- * every strategy but `None` as the full priority list: the strategy does not keep it on one model.
+ * KV4 failover: with every other decision driver unavailable (Jev, LLM Decision, Clef, the Perplexity
+ * Decider, GPT-6 Luna Decisions on OpenAI and every OpenRouter row among them), `Default Decision` fails
+ * over from model to model, past every credentialed candidate ahead of the bound Kev-27B, and Kev-27B
+ * answers. Its `FailoverStrategy` is the column default, `SameModelDifferentVendor`, and
+ * `AIDecisionRunner` treats every strategy but `None` as the full priority list: the strategy does not
+ * keep it on one model.
  */
 async function assertFailoverReachesBoundKev(
     ctx: IntegrationCheckContext,

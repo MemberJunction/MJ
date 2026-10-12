@@ -126,12 +126,52 @@ export class ErrorAnalyzer {
      */
     private static extractHttpStatusCode(error: any): number | undefined {
         // Common patterns across different provider SDKs
-        return error?.status || 
-               error?.statusCode || 
-               error?.response?.status || 
-               error?.response?.statusCode ||
-               error?.code ||
-               undefined;
+        const candidates = [error?.status, error?.statusCode, error?.response?.status, error?.response?.statusCode, error?.code];
+        // `code` is also where Node puts a system error code ('ECONNRESET') and a DOMException its
+        // legacy number (20 for an abort), so only a number in the HTTP range counts as a status.
+        return candidates.find((c): c is number => typeof c === 'number' && c >= 100 && c <= 599);
+    }
+
+    /**
+     * Error codes Node and its built-in fetch (undici) put on a failure to reach the server or to
+     * read its response. They describe the connection, never the request, so another attempt or
+     * another vendor can succeed.
+     */
+    private static readonly TRANSPORT_ERROR_CODES: ReadonlySet<string> = new Set([
+        'ECONNREFUSED', 'ECONNRESET', 'ECONNABORTED', 'EPIPE', 'ETIMEDOUT',
+        'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'ENETDOWN', 'EHOSTUNREACH', 'EHOSTDOWN',
+        'UND_ERR_SOCKET', 'UND_ERR_CLOSED', 'UND_ERR_CONNECT_TIMEOUT',
+        'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT',
+    ]);
+
+    /** How far down an error's `cause` chain to look; SDKs wrap at most two or three levels deep. */
+    private static readonly MAX_CAUSE_DEPTH = 5;
+
+    /**
+     * Whether the error is a connection failure that its message does not name. Node's fetch
+     * reports one as `TypeError: fetch failed` (or `terminated` when the socket closes mid-response)
+     * and keeps the real reason — `ECONNRESET`, `ENOTFOUND` — on `cause`. SDKs built on fetch,
+     * such as `@google/genai`, rethrow that error unchanged, so the message alone reads as unknown.
+     *
+     * A plain `AbortError` is deliberately not a transport failure: it is also what a caller's
+     * cancellation looks like, and a cancellation must not fail over.
+     */
+    private static isTransportFailure(error: Error | null | undefined): boolean {
+        return this.causeChain(error).some((link) =>
+            (typeof link.code === 'string' && this.TRANSPORT_ERROR_CODES.has(link.code)) ||
+            (link.name === 'TypeError' && (link.message === 'fetch failed' || link.message === 'terminated'))
+        );
+    }
+
+    /** The error followed by each `cause` beneath it, stopping at a non-error, a cycle or the depth limit. */
+    private static causeChain(error: Error | null | undefined): Array<Error & { code?: string | number }> {
+        const chain: Array<Error & { code?: string | number }> = [];
+        let current: Error['cause'] = error;
+        while (current instanceof Error && chain.length < this.MAX_CAUSE_DEPTH && !chain.includes(current)) {
+            chain.push(current);
+            current = current.cause;
+        }
+        return chain;
     }
     
     /**
@@ -214,7 +254,8 @@ export class ErrorAnalyzer {
             errorString.includes('timeout') ||
             errorString.includes('econnrefused') ||
             errorString.includes('dns') ||
-            errorString.includes('connection reset')) {
+            errorString.includes('connection reset') ||
+            this.isTransportFailure(error)) {
             return 'NetworkError';
         }
 

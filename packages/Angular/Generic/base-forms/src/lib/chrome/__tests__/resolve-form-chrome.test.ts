@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, type FormRole } from '@memberjunction/core';
-import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, FieldGroupsInDetails, RailGroupSectionKeys, SlotChromeGroup, SectionDrawingAnyField } from '../form-chrome';
+import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, DefaultContributionChromeGroup, FieldGroupsInDetails, RailGroupSectionKeys, SlotChromeGroup, SectionDrawingAnyField } from '../form-chrome';
 import { ApplyEmptySectionBehavior, ApplyFormChromeRuleTitles, ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, OverlayChromeSectionOrder, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
 import type { FormChromeGroup, FormChromeSpec } from '../form-chrome';
 import { FormChromeCoordinator } from '../form-chrome-coordinator.service';
@@ -1386,6 +1386,26 @@ describe('SlotChromeGroup', () => {
         expect(SlotChromeGroup(null)).toBeNull();
         expect(SlotChromeGroup('made-up')).toBeNull();
     });
+});
+
+/**
+ * The slot is a default for a contribution that says nothing more specific. A declared L1
+ * `inclusion` is more specific: an Overview registered `inclusion: 'Primary'` at
+ * `before-fields` must lead the rail, not be pinned inside the Details tab it should precede.
+ * (That an unpinned Primary contribution leads is covered by the Overview resolver test above.)
+ */
+describe('DefaultContributionChromeGroup', () => {
+    it('keeps the slot default when the contribution declares no inclusion', () => {
+        expect(DefaultContributionChromeGroup('before-fields', false)).toBe('details');
+        expect(DefaultContributionChromeGroup('after-fields', false)).toBe('details');
+        expect(DefaultContributionChromeGroup('after-related', false)).toBeNull();
+    });
+
+    it('lets a declared inclusion outrank the slot so it is never pinned into Details', () => {
+        expect(DefaultContributionChromeGroup('before-fields', true)).toBeNull();
+        expect(DefaultContributionChromeGroup('after-fields', true)).toBeNull();
+    });
+
 });
 
 /**

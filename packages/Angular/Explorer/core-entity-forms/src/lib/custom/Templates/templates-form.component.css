@@ -168,6 +168,7 @@
 ::ng-deep .configuration-sections .mj-accordion-panel--expanded .mj-accordion-header {
     background: var(--mj-brand-primary);
     color: var(--mj-text-inverse);
+    outline-color: var(--mj-text-inverse);
 }
 
 ::ng-deep .configuration-sections .mj-accordion-body {

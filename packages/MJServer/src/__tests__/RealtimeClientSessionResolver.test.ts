@@ -87,13 +87,14 @@ const cancelInFlightMock = vi.fn((_agentSessionID: string, _callID?: string): nu
 // class-property/getter references above).
 const { resolveStorageMock, storeRecordingMock, writeSegmentMock, deleteSegmentsMock } = vi.hoisted(() => ({
     resolveStorageMock: vi.fn(async (): Promise<string | null> => 'storage-acct-1'),
-    storeRecordingMock: vi.fn(async (): Promise<StoreRealtimeRecordingResult> => ({ FileID: 'file-1', ErrorMessage: null })),
+    storeRecordingMock: vi.fn(async (): Promise<StoreRealtimeRecordingResult> => ({ FileID: 'file-1', ErrorMessage: null, Superseded: false })),
     writeSegmentMock: vi.fn(async (): Promise<boolean> => true),
     deleteSegmentsMock: vi.fn(async (): Promise<number> => 0),
 }));
 const onChannelStateSaveMock = vi.fn(
     async (_agentSessionID: string, _channelName: string, stateJson: string): Promise<string> => stateJson,
 );
+const pruneSessionChannelsMock = vi.fn((_agentSessionID: string, _channelNames: ReadonlyArray<string>): string[] => []);
 // PARTIAL mock: the service + channel host are stubbed, but the PURE co-agent config module
 // (DeepMergeConfigs / ResolveEffectiveRealtimeConfig / EvaluateRuntimeOverrideAuthorization /
 // ParseRealtimeTypeConfiguration) stays REAL — the resolver's pairing/override gate is under test.
@@ -117,7 +118,7 @@ vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
         },
         RealtimeChannelServerHost: {
             get Instance() {
-                return { OnChannelStateSave: onChannelStateSaveMock };
+                return { OnChannelStateSave: onChannelStateSaveMock, PruneSessionChannels: pruneSessionChannelsMock };
             },
         },
         resolveRecordingStorageAccountID: resolveStorageMock,
@@ -2836,6 +2837,165 @@ describe('RealtimeClientSessionResolver — app awareness (applicationId / appCo
     });
 });
 
+describe('RealtimeClientSessionResolver — delegated runs get the browser session and app context', () => {
+    const appContext = {
+        App: { Name: 'Dashboards', Description: '' },
+        ActiveNavItem: { Name: 'Sales Overview' },
+        OtherNavItems: [],
+        User: { Name: 'A', Roles: [] },
+        Capabilities: { Tools: [{ Name: 'AddPanel', Description: 'Adds a panel', InputSchema: {} }] },
+    };
+    /** Mirrors the resolver's MAX_CLIENT_TOOLS_JSON_CHARS, the cap on a stored app-context snapshot. */
+    const APP_CONTEXT_CAP_CHARS = 256_000;
+
+    beforeEach(() => {
+        // The resolver logs each relayed tool dispatch to the console; keep test output clean.
+        vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    });
+
+    /** Starts a session whose browser sent `appContextJson` and returns the created session entity. */
+    async function startWithAppContext(appContextJson: string): Promise<FakeSession> {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        const createdSession = makeSessionEntity({ ID: 'session-app' });
+        createSessionMock.mockResolvedValue(createdSession);
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: { Provider: 'openai', Model: 'm', EphemeralToken: 'ek', ExpiresAt: '2099-01-01T00:00:00Z', SessionConfig: {} },
+        });
+        await makeResolver().StartRealtimeClientSession(
+            'target-1', makeCtx(),
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            'app-9', appContextJson,
+        );
+        return createdSession;
+    }
+
+    /** An app-context snapshot whose JSON is exactly `chars` long, padded through AdditionalContext. */
+    function snapshotOfLength(chars: number): typeof appContext & { AdditionalContext: { Padding: string } } {
+        const unpadded = { ...appContext, AdditionalContext: { Padding: '' } };
+        return { ...appContext, AdditionalContext: { Padding: 'x'.repeat(chars - JSON.stringify(unpadded).length) } };
+    }
+
+    it('stores the parsed appContext on the session config in the post-prepare write', async () => {
+        const session = await startWithAppContext(JSON.stringify(appContext));
+
+        expect(JSON.parse(session.Config_ as string).appContext).toEqual(appContext);
+    });
+
+    it('stores an appContext whose JSON is exactly at the size cap', async () => {
+        const atCap = snapshotOfLength(APP_CONTEXT_CAP_CHARS);
+        expect(JSON.stringify(atCap)).toHaveLength(APP_CONTEXT_CAP_CHARS);
+
+        const session = await startWithAppContext(JSON.stringify(atCap));
+
+        expect(JSON.parse(session.Config_ as string).appContext).toEqual(atCap);
+    });
+
+    it('stores no appContext over the size cap and logs a warning', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        const session = await startWithAppContext(JSON.stringify(snapshotOfLength(APP_CONTEXT_CAP_CHARS + 1)));
+
+        const persisted = JSON.parse(session.Config_ as string) as { targetAgentID?: string; appContext?: unknown };
+        expect(persisted.targetAgentID).toBe('target-1');
+        expect(persisted.appContext).toBeUndefined();
+        const warning = errSpy.mock.calls.map((call) => String(call[0])).find((line) => line.includes('app context'));
+        expect(warning).toContain('[WARNING]');
+        expect(warning).toContain('session-app');
+        expect(warning).toContain(String(APP_CONTEXT_CAP_CHARS));
+    });
+
+    it('passes the browser session id and the stored appContext into ExecuteRelayedTool', async () => {
+        currentProvider = makeProvider(() =>
+            makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 'target-1', appContext }) }),
+        );
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+
+        await makeResolver().ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'invoke-target-agent', '{"request":"x"}', makeCtx(), makePubSub(),
+        );
+
+        const relayArg = executeRelayedToolMock.mock.calls[0][0] as { BrowserSessionID?: string; AppContext?: unknown };
+        // The client-tool channel is keyed on the caller's GraphQL session id (x-session-id).
+        expect(relayArg.BrowserSessionID).toBe('pubsub-session-1');
+        expect(relayArg.AppContext).toEqual(appContext);
+    });
+
+    it('passes no AppContext when the session config has none', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 'target-1' }) }));
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+
+        await makeResolver().ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        const relayArg = executeRelayedToolMock.mock.calls[0][0] as { BrowserSessionID?: string; AppContext?: unknown };
+        expect(relayArg.AppContext).toBeUndefined();
+        expect(relayArg.BrowserSessionID).toBe('pubsub-session-1');
+    });
+
+    it('ignores a stored appContext that is not an object', async () => {
+        currentProvider = makeProvider(() =>
+            makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 'target-1', appContext: 'not-an-object' }) }),
+        );
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+
+        await makeResolver().ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        const relayArg = executeRelayedToolMock.mock.calls[0][0] as { AppContext?: unknown };
+        expect(relayArg.AppContext).toBeUndefined();
+    });
+
+    it('passes no AppContext when the run is elevated to the system user for a scoped-anonymous caller', async () => {
+        const systemUser = { ID: 'system-1', Email: 'system@system.org' } as UserInfo;
+        const anonymousCaller = {
+            ID: 'anon-1',
+            Email: 'anonymous@magic-link.local',
+            IsMagicLinkAnonymous: true,
+            MagicLinkScope: { ResourceID: 'scope-res-1' },
+        } as UserInfo;
+        /** A resolver whose caller is a scoped anonymous magic-link visitor. */
+        class AnonymousCallerResolver extends RealtimeClientSessionResolver {
+            protected override GetUserFromPayload(): UserInfo | undefined {
+                return anonymousCaller;
+            }
+        }
+        getSystemUserMock.mockReturnValue(systemUser);
+        currentProvider = makeProvider(() =>
+            makeSessionEntity({ UserID: 'anon-1', Config_: JSON.stringify({ targetAgentID: 'target-1', appContext }) }),
+        );
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+
+        await new AnonymousCallerResolver().ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub(),
+        );
+
+        expect(executeRelayedToolMock.mock.calls[0][1]).toBe(systemUser);
+        const relayArg = executeRelayedToolMock.mock.calls[0][0] as { BrowserSessionID?: string; AppContext?: unknown };
+        expect(relayArg.AppContext).toBeUndefined();
+        expect(relayArg.BrowserSessionID).toBe('pubsub-session-1');
+    });
+
+    it('keeps appContext and directActions when a paused run rewrites the session config', async () => {
+        const directActions = { enabled: true, actionNames: ['SendEmail'] };
+        const session = makeSessionEntity({
+            Config_: JSON.stringify({ targetAgentID: 'target-1', appContext, directActions }),
+        });
+        currentProvider = makeProvider(() => session);
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"q":1}', Success: true, PausedRunID: 'paused-1' });
+
+        await makeResolver().ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        const persisted = JSON.parse(session.Config_ as string) as {
+            pendingFeedbackRunID?: string;
+            appContext?: unknown;
+            directActions?: unknown;
+        };
+        expect(persisted.pendingFeedbackRunID).toBe('paused-1');
+        expect(persisted.appContext).toEqual(appContext);
+        expect(persisted.directActions).toEqual(directActions);
+    });
+});
+
 describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3371)', () => {
     /** A scoped anonymous magic-link caller (no widget context) — the elevation-eligible shape. */
     const ANON_USER = {
@@ -3198,7 +3358,21 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect((writeSegmentMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(SYSTEM_USER);
     });
 
-    it('recording writes stay entirely on the caller for a normal authenticated user', async () => {
+    it('refuses a crash-recovery segment once the session has its consolidated recording (no orphan shard) (#5197)', async () => {
+        // A shard upload still on the wire at hang-up can land after UploadRealtimeRecording stored the
+        // file and deleted the shards; nothing deletes a shard written after that.
+        const session = makeSessionEntity({ UserID: 'anon-1', RecordingFileID: 'file-1' });
+        const agent = makeSessionEntity({ ID: 'co-agent-1' });
+        currentProvider = { GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : session)) };
+        const resolver = makeAnonResolver();
+
+        const ok = await resolver.UploadRealtimeRecordingSegment('session-1', 3, AUDIO_B64, 'audio/L16;rate=24000', makeCtx());
+
+        expect(ok).toBe(false);
+        expect(writeSegmentMock).not.toHaveBeenCalled();
+    });
+
+    it('a normal authenticated owner’s recording store runs as the SYSTEM user; ownership stays on the caller (#5195)', async () => {
         currentProvider = makeRecordingProvider();
         // A named caller owning the session (the recording provider stamps UserID 'anon-1', so re-stamp).
         const session = makeSessionEntity({ UserID: 'user-1' });
@@ -3211,9 +3385,13 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
 
         expect(result.Success).toBe(true);
-        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agents', USER);
-        expect((storeRecordingMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(USER);
-        expect(getSystemUserMock).not.toHaveBeenCalled();
+        // Ownership is proven as the CALLER; the store (MJ: Files, the file link and the session stamp —
+        // entities the stock UI role cannot create/update) runs as SYSTEM.
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agent Sessions', USER);
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agents', SYSTEM_USER);
+        expect(resolveStorageMock.mock.calls[0][1]).toBe(SYSTEM_USER);
+        expect((storeRecordingMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(SYSTEM_USER);
+        expect(deleteSegmentsMock).toHaveBeenCalledWith('session-1', 'storage-acct-1', SYSTEM_USER);
     });
 
     /** Provider routing a hidden-tool-turn RelayRealtimeToolTurn call: session, prompt run, detail. */
@@ -3637,5 +3815,163 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
 
         expect(historyArg()).toEqual([]);
         expect(runView.mock.calls.some((c) => (c[0] as { ExtraFilter?: string }).ExtraFilter?.startsWith('ConversationID='))).toBe(false);
+    });
+});
+
+
+describe('RealtimeClientSessionResolver — channel scoping at mint (Realtime Channels v2)', () => {
+    const okConfig = { Provider: 'openai', Model: 'm', EphemeralToken: 'ek', ExpiresAt: '2099-01-01T00:00:00Z', SessionConfig: {} };
+    const CANDIDATE = {
+        Key: 'Whiteboard',
+        DefaultAvailability: 'all-sessions',
+        DisplayPolicy: 'open-on-start',
+        MaxExposure: 'pixels',
+        ToolNamePrefix: 'Whiteboard_',
+        Tools: [{ Name: 'Whiteboard_AddNote', Description: 'Add a note', ParametersSchema: { type: 'object' } }],
+    };
+    const POLICY = {
+        Version: 1,
+        Channels: [{ Key: 'Whiteboard', DisplayPolicy: 'open-on-start', MaxExposure: 'pixels', Source: 'default' }],
+        ExcludedChannels: [{ Key: 'RemoteBrowser', Reason: 'excluded-by-config' }],
+    };
+
+    function setupStart(prepOverrides: Record<string, unknown> = {}): { created: FakeSession } {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        const created = makeSessionEntity({ ID: 'session-ch' });
+        createSessionMock.mockResolvedValue(created);
+        prepareClientSessionMock.mockResolvedValue({ Success: true, ClientConfig: okConfig, ...prepOverrides });
+        pruneSessionChannelsMock.mockClear();
+        return { created };
+    }
+
+    async function start(channelCandidatesJson?: string) {
+        const resolver = makeResolver();
+        return resolver.StartRealtimeClientSession(
+            'target-1', makeCtx(),
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            undefined, undefined, channelCandidatesJson,
+        );
+    }
+
+    it('threads valid candidates to PrepareClientSession and returns the resolved policy as ClientPolicyJson', async () => {
+        setupStart({ ClientPolicy: POLICY });
+        const result = await start(JSON.stringify([CANDIDATE]));
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { ChannelCandidates?: Array<{ Key: string }> };
+        expect(prepArg.ChannelCandidates?.map((c) => c.Key)).toEqual(['Whiteboard']);
+        expect(JSON.parse(result.ClientPolicyJson ?? 'null')).toEqual(POLICY);
+    });
+
+    it('sends no candidates and returns no policy when the caller reported none (a client that predates scoping)', async () => {
+        setupStart();
+        const result = await start(undefined);
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { ChannelCandidates?: unknown };
+        expect(prepArg.ChannelCandidates).toBeUndefined();
+        expect(result.ClientPolicyJson).toBeUndefined();
+    });
+
+    it('persists the in-scope channel keys on the session config, preserving what was stamped at start', async () => {
+        const { created } = setupStart({ ClientPolicy: POLICY });
+        await start(JSON.stringify([CANDIDATE]));
+        const persisted = JSON.parse(created.Config_ as string) as { channels?: string[]; targetAgentID: string };
+        expect(persisted.channels).toEqual(['Whiteboard']);
+        expect(persisted.targetAgentID).toBe('target-1');
+    });
+
+    it('carries the config stamped at session start (the media-kit override) through the run-id rewrite', async () => {
+        const { created } = setupStart({ CoAgentRunID: 'run-1' });
+        const resolver = makeResolver();
+        // The create call receives the initial config; emulate the stored value the rewrite reads back.
+        createSessionMock.mockImplementation(async (arg: { config: string }) => {
+            created.Config_ = arg.config;
+            return created;
+        });
+        await resolver.StartRealtimeClientSession(
+            'target-1', makeCtx(),
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            '11111111-1111-4111-8111-111111111111',
+        );
+        const persisted = JSON.parse(created.Config_ as string) as { mediaCollectionID?: string; coAgentRunID?: string };
+        expect(persisted.mediaCollectionID).toBe('11111111-1111-4111-8111-111111111111');
+        expect(persisted.coAgentRunID).toBe('run-1');
+    });
+
+    it('prunes the server plugins of channels the scope excluded', async () => {
+        setupStart({ ClientPolicy: POLICY });
+        await start(JSON.stringify([CANDIDATE]));
+        expect(pruneSessionChannelsMock).toHaveBeenCalledWith('session-ch', ['RemoteBrowser']);
+    });
+
+    it('does not touch server plugins when nothing was excluded', async () => {
+        setupStart({ ClientPolicy: { Version: 1, Channels: POLICY.Channels } });
+        await start(JSON.stringify([CANDIDATE]));
+        expect(pruneSessionChannelsMock).not.toHaveBeenCalled();
+    });
+
+    it('tolerantly drops malformed, oversized and flooded candidate payloads (the session still starts)', async () => {
+        for (const payload of ['{not json', JSON.stringify({ not: 'an array' }), JSON.stringify(Array.from({ length: 33 }, (_, i) => ({ ...CANDIDATE, Key: `C${i}` }))), 'x'.repeat(300_000)]) {
+            setupStart();
+            await start(payload);
+            const prepArg = prepareClientSessionMock.mock.calls.at(-1)?.[0] as { ChannelCandidates?: unknown };
+            expect(prepArg.ChannelCandidates).toBeUndefined();
+            prepareClientSessionMock.mockClear();
+        }
+    });
+
+    it('skips an invalid candidate but keeps the valid ones', async () => {
+        setupStart();
+        await start(JSON.stringify([CANDIDATE, { Key: 'Broken', DefaultAvailability: 'sometimes' }]));
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { ChannelCandidates?: Array<{ Key: string }> };
+        expect(prepArg.ChannelCandidates?.map((c) => c.Key)).toEqual(['Whiteboard']);
+    });
+});
+
+describe('RealtimeClientSessionResolver — save endpoints honor the session\'s resolved channel scope', () => {
+    const CHANNEL_ROW = { ID: 'channel-wb', IsActive: true };
+
+    function provider(session: FakeSession) {
+        engineChannelsMock.mockReturnValue([{ Name: 'Whiteboard', ...CHANNEL_ROW }]);
+        const newRow = makeSessionEntity({ ID: 'sc-new' });
+        return {
+            newRow,
+            provider: {
+                GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agent Session Channels' ? newRow : session)),
+                RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+            },
+        };
+    }
+
+    it('refuses to save state for a channel the session\'s scope excluded', async () => {
+        const session = makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 't', channels: ['Media'] }) });
+        const p = provider(session);
+        currentProvider = p.provider;
+        const ok = await makeResolver().SaveSessionChannelState('session-1', 'Whiteboard', '{}', makeCtx());
+        expect(ok).toBe(false);
+        expect(p.newRow.Save).not.toHaveBeenCalled();
+    });
+
+    it('saves state for an in-scope channel (case-insensitively)', async () => {
+        const session = makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 't', channels: ['whiteboard'] }) });
+        const p = provider(session);
+        currentProvider = p.provider;
+        const ok = await makeResolver().SaveSessionChannelState('session-1', 'Whiteboard', '{}', makeCtx());
+        expect(ok).toBe(true);
+    });
+
+    it('an unscoped session (no persisted channels) allows any channel, as before', async () => {
+        const session = makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 't' }) });
+        const p = provider(session);
+        currentProvider = p.provider;
+        const ok = await makeResolver().SaveSessionChannelState('session-1', 'Whiteboard', '{}', makeCtx());
+        expect(ok).toBe(true);
+    });
+
+    it('refuses to save an artifact for an out-of-scope channel with a structured failure', async () => {
+        const session = makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 't', channels: ['Media'] }) });
+        const p = provider(session);
+        currentProvider = p.provider;
+        const result = await makeResolver().SaveSessionChannelArtifact('session-1', 'Whiteboard', 'Board', '{}', makeCtx());
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('not in session');
     });
 });
