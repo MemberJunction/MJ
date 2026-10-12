@@ -22,6 +22,14 @@ export const REALTIME_RELAY_OPEN_WINDOW_SECONDS = 300;
 /** The longest a relay session lives, in seconds; a shorter `MaxSessionSeconds` ends it sooner. */
 export const REALTIME_RELAY_SESSION_LIFETIME_SECONDS = 1800;
 
+/**
+ * The close code the relay sends the browser when a relay session reaches its lifetime
+ * ({@link REALTIME_RELAY_SESSION_LIFETIME_SECONDS}, or a shorter `MaxSessionSeconds`). A private-use code (RFC 6455
+ * §7.4.2), so a client tells the time limit from a dropped connection: it ends the call with its own message instead of
+ * trying to resume on a session that is gone.
+ */
+export const REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE = 4000;
+
 /** The most connections one relay session accepts: the fresh one plus resumes. */
 export const REALTIME_RELAY_MAX_CONNECTIONS = 10;
 

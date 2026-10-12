@@ -664,10 +664,10 @@ describe('RealtimeProxyServer: the realtime relay', () => {
             expect(await Browser.Open(rig.RelayUrl(id))).toBe(401);
         });
 
-        it('closes the live connection when the session ends, and refuses upgrades after', async () => {
+        it('closes the live connection when the session ends, with the time-limit code to the browser, and refuses upgrades after', async () => {
             const id = issue(new FakePolicy(), { LifetimeSeconds: 1 });
             const { Browser: browser, Upstream: connection } = await openFresh(id);
-            expect(await browser.WaitClosed()).toEqual({ Code: 1000, Reason: 'Relay session ended' });
+            expect(await browser.WaitClosed()).toEqual({ Code: 4000, Reason: 'Call time limit reached' });
             await waitFor(() => connection.Closed !== null, 'the upstream to close');
             expect(connection.Closed?.Code).toBe(1000);
             expect(await Browser.Open(rig.RelayUrl(id))).toBe(401);

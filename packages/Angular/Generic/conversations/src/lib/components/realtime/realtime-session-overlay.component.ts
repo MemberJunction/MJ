@@ -8,6 +8,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJStorageMediaPlayerComponent, MediaTranscriptCue } from '@memberjunction/ng-media-player';
 import {
+  DescribeCallEnd,
   REALTIME_CAPTURES_OFF,
   REALTIME_CAPTURE_OFFERS_NONE,
   REALTIME_MICROPHONE_NONE,
@@ -1763,6 +1764,14 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     return AgentOrbStateFor(state);
   }
 
+  /**
+   * Why the call ended, when its client said so (a relayed call that reached its time limit): the label the banner and the
+   * hero show in the `'error'` state in place of "Connection error"; `null` otherwise.
+   */
+  public get CallEndLabel(): string | null {
+    return DescribeCallEnd(this.realtime.LastSessionError)?.Label ?? null;
+  }
+
   /** Short first-person status line for the pure-audio hero. */
   public HeroStateLabel(state: RealtimeConnectionState): string {
     switch (state) {
@@ -1770,7 +1779,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       case 'thinking': return `${this.AgentName} is working…`;
       case 'listening': return 'Listening';
       case 'connecting': return 'Connecting…';
-      case 'error': return 'Connection error';
+      case 'error': return this.CallEndLabel ?? 'Connection error';
       default: return 'On call';
     }
   }

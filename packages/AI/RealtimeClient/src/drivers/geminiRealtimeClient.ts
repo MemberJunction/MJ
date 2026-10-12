@@ -12,6 +12,7 @@ import {
     RealtimeToolBatchBarrier,
     RealtimeTrackDescriptor,
     ExtractToolSchedulingHint,
+    REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE,
     type RealtimeAvatarUnavailableReason,
     type RealtimeClientTransport,
     type RealtimeResumeAttempt,
@@ -31,7 +32,12 @@ import {
     type Part,
     type Transcription,
 } from '@google/genai';
-import { BaseRealtimeClient, RealtimeClientState, REQUESTED_TRACKS_SESSION_KEY } from '../generic/baseRealtimeClient';
+import {
+    BaseRealtimeClient,
+    REALTIME_CLIENT_TIME_LIMIT_ERROR_CODE,
+    RealtimeClientState,
+    REQUESTED_TRACKS_SESSION_KEY,
+} from '../generic/baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
@@ -1082,8 +1088,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * Handles a close of the current connection that the consumer did not ask for. When Google
-     * issued a resumption handle, the session reconnects with it; otherwise the close ends the
+     * Handles a close of the current connection that the consumer did not ask for. MJAPI's relay
+     * closing at the session's time limit ends the call with a `time-limit` error. Otherwise, when
+     * Google issued a resumption handle, the session reconnects with it; else the close ends the
      * session, as an error when it was abnormal.
      */
     private handleTransportClose(event?: CloseEvent): void {
@@ -1092,6 +1099,16 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const wasClean = event?.wasClean;
         RealtimeDiagLog(`[GeminiRealtimeClient] Transport closed: code=${code} reason=${reason} wasClean=${wasClean}`);
         if (this.currentState === 'error' || this.currentState === 'closed') {
+            return;
+        }
+        if (code === REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE) {
+            // The relay session reached its time limit: it is gone, so a resume could only fail. End with its own code.
+            this.emitError({
+                Message: `Gemini Live session reached its time limit (${code}): ${reason || 'no reason given'}`,
+                Code: REALTIME_CLIENT_TIME_LIMIT_ERROR_CODE,
+                Fatal: true,
+            });
+            this.setState('error');
             return;
         }
         if (this.resumption?.ConnectionLost()) {

@@ -1080,6 +1080,12 @@ export class RealtimeSessionRuntime {
    */
   private lastStartError: Error | null = null;
 
+  /**
+   * The fatal error the call's client reported, or `null` when it has reported none. Each start clears it
+   * ({@link beginSessionStart}). See {@link LastSessionError}.
+   */
+  private lastSessionError: RealtimeClientError | null = null;
+
   // ── Interactive channels (registry-resolved plugins) ───────────────────────
   /** Debounce window for persisting a channel's state of record after a change burst. */
   private static readonly channelSaveDebounceMs = 3000;
@@ -1447,6 +1453,7 @@ export class RealtimeSessionRuntime {
     // Before this start publishes anything: hosts read LastStartError as this start's states arrive,
     // so from the first of them it must describe this start, not an earlier one.
     this.lastStartError = null;
+    this.lastSessionError = null;
 
     // App awareness (Move 1/3/4): the application the session runs in (sources the app config
     // cascade + RelevantAgents → allowed-agent union) and the live app-context snapshot injected
@@ -1983,6 +1990,17 @@ export class RealtimeSessionRuntime {
    */
   public get LastStartError(): Error | null {
     return this.lastStartError;
+  }
+
+  /**
+   * The fatal error the call's client reported, or `null` when it has reported none.
+   *
+   * Read it when {@link ConnectionState$} reports `'error'` on a call that was live, to tell a call that reached its time
+   * limit (`Code` `'time-limit'`; {@link DescribeCallEnd} words it) from a dropped connection. Each start clears it before
+   * it reports `'connecting'`.
+   */
+  public get LastSessionError(): RealtimeClientError | null {
+    return this.lastSessionError;
   }
 
   /**
@@ -3521,6 +3539,9 @@ export class RealtimeSessionRuntime {
     });
     client.OnError((error: RealtimeClientError) => {
       console.error('[RealtimeSession] Provider error event:', JSON.stringify(error), error);
+      if (error.Fatal && this.client === client) {
+        this.lastSessionError = error;
+      }
     });
     // Usage telemetry: accumulate the driver's per-response token DELTAS and relay them to
     // the server (onto the co-agent AIPromptRun) debounced + once at teardown. Providers

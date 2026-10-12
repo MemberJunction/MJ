@@ -165,6 +165,12 @@ export interface RealtimeClientUsage {
 export type RealtimeClientState = 'connecting' | 'connected' | 'listening' | 'speaking' | 'closed' | 'error';
 
 /**
+ * The {@link RealtimeClientError.Code} of a call that ended because its session reached its time limit (MJAPI's relay
+ * closed it with `REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE`), so a host can say so instead of showing a connection error.
+ */
+export const REALTIME_CLIENT_TIME_LIMIT_ERROR_CODE = 'time-limit';
+
+/**
  * An error surfaced by a realtime client. `Fatal: true` means the session is unusable
  * (transport failure); `Fatal: false` is a provider-reported, recoverable error frame.
  */

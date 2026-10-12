@@ -1,5 +1,6 @@
 import { WebSocket as WsClient, type RawData } from 'ws';
 import {
+    REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE,
     RealtimeProxyRegistry,
     type IRealtimeRelayPolicy,
     type RealtimeRelayFrameVerdict,
@@ -185,8 +186,12 @@ export class RealtimeRelayTunnel {
         this.grant = result.Granted;
         this.openedAtMs = Date.now();
         this.host.OnGranted(this);
+        // The browser gets the time-limit code, so the call ends with its own message rather than a resume attempt.
         this.lifetimeTimer = RealtimeRelayTunnel.after(this.grant.ExpiresAtMs - this.openedAtMs, () =>
-            this.closeWith({ Code: CLOSE_NORMAL, Reason: 'Relay session ended' })
+            this.closeWith(
+                { Code: REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE, Reason: 'Call time limit reached' },
+                { Code: CLOSE_NORMAL, Reason: 'Relay session ended' },
+            )
         );
         this.logOpened(this.grant, intent);
         void this.openUpstream(this.grant);

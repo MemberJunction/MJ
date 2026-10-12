@@ -2,10 +2,12 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRealtimeClient, MEDIA_PLACEMENTS, REQUESTED_TRACKS_SESSION_KEY } from '@memberjunction/ai-realtime-client';
+import { BaseRealtimeClient, MEDIA_PLACEMENTS, REQUESTED_TRACKS_SESSION_KEY, type RealtimeClientError } from '@memberjunction/ai-realtime-client';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
+    DescribeCallEnd,
+    REALTIME_CALL_TIME_LIMIT_END,
     RealtimeSessionRuntime,
     type IRealtimeMediaHost,
     type IRealtimeSessionRecorder,
@@ -759,6 +761,41 @@ describe('session lifecycle, driven end to end with fakes', () => {
         expect(runtime.LastStartError?.message).toContain('gemini');
         // The minted row is durable, so declining still has to close it.
         expect(mutationNames(provider)).toContain('CloseAgentSession');
+    });
+
+    it("keeps the call's fatal client error, which says why it ended, until the next start clears it", async () => {
+        /** A client that ends the call the way the relay's time limit does. */
+        @RegisterClass(BaseRealtimeClient, 'fake-time-limit')
+        class TimeLimitClient extends FakeRealtimeClient {
+            public static Last: TimeLimitClient | null = null;
+            public override async Connect(): Promise<void> {
+                TimeLimitClient.Last = this;
+            }
+            public Fail(error: RealtimeClientError): void {
+                this.emitError(error);
+            }
+        }
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            const { runtime } = build(new FakeMediaHost());
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-time-limit', 'session-1'));
+            expect(runtime.LastSessionError).toBeNull();
+            TimeLimitClient.Last?.Fail({ Message: 'recoverable', Fatal: false });
+            expect(runtime.LastSessionError).toBeNull();
+            const ended: RealtimeClientError = { Message: 'Gemini Live session reached its time limit (4000)', Code: 'time-limit', Fatal: true };
+            TimeLimitClient.Last?.Fail(ended);
+            expect(runtime.LastSessionError).toEqual(ended);
+            expect(DescribeCallEnd(runtime.LastSessionError)).toBe(REALTIME_CALL_TIME_LIMIT_END);
+            expect(DescribeCallEnd({ Message: 'Gemini Live connection closed (1011)', Fatal: true })).toBeNull();
+            expect(DescribeCallEnd(null)).toBeNull();
+            await runtime.EndRealtimeSession();
+
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-time-limit', 'session-2'));
+            expect(runtime.LastSessionError).toBeNull();
+            await runtime.EndRealtimeSession();
+        } finally {
+            error.mockRestore();
+        }
     });
 
     it("keeps a failed start's error until the next start, which clears it before it reports connecting (#5431)", async () => {

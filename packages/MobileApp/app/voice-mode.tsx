@@ -7,7 +7,7 @@ import { Type } from '@/theme/tokens';
 import { ResolveTargetAgent } from '@/data/services/agents';
 import { GetDefaultAgentId, SetDefaultAgent } from '@/data/preferences';
 import { AgentPicker } from '@/components/AgentPicker';
-import type { RealtimeAvatarNotice, RealtimeCaption, RealtimeConnectionState } from '@memberjunction/realtime-runtime';
+import { DescribeCallEnd, type RealtimeAvatarNotice, type RealtimeCaption, type RealtimeConnectionState } from '@memberjunction/realtime-runtime';
 import { MobileVoiceSession } from '@/voice/MobileVoiceSession';
 import { AnnounceAvatarNotice, AvatarNotice } from '@/voice/AvatarNotice';
 import { AvatarNoticePresenter } from '@/voice/avatar-notice-presenter';
@@ -98,6 +98,8 @@ export default function VoiceModeScreen() {
                         setState('unavailable');
                         return;
                     }
+                    // A call that reached its time limit says so on the error screen.
+                    setErrorMessage(DescribeCallEnd(service.LastSessionError)?.Message ?? null);
                     // No recorded start failure means the PROVIDER failed mid-call. The runtime
                     // does not tear down on a provider error — it surfaces the state and leaves the
                     // call open — so showing the fallback without ending the session would leave a
