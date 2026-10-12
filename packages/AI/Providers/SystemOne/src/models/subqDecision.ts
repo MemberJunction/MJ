@@ -77,9 +77,12 @@ export class SubQDecision extends BaseSystemOneDecision {
      * fatal `InvalidRequest`, and a `403` whose message says "unauthorized" as a fatal `Authentication`
      * error: either stops `Default Decision`'s failover loop, though another candidate could answer.
      * - `402` (no credits) is `NoCredit`;
-     * - `403` (the key cannot use the model) is `Authentication`, still allowing failover, which also
-     *   skips SubQ's other rows;
-     * - `422` (a request SubQ rejects, which passed MJ's own validation) is `VendorValidationError`.
+     * - `403` (the key cannot use the model) and `422` (a request SubQ rejects, which passed MJ's own
+     *   validation) are `ModelError`: another model may answer.
+     *
+     * Not `Authentication` or `VendorValidationError`: on those the runner drops the vendor's other
+     * candidates, and the index it continues from then skips the next candidate (`BaseModelRunner`),
+     * while SubQ serves one decision model, so dropping its rows gains nothing.
      *
      * `ErrorAnalyzer` keeps the rest: `401` stays a fatal `Authentication` error, as for every other
      * driver; `429` and `503` allow failover.
@@ -89,9 +92,8 @@ export class SubQDecision extends BaseSystemOneDecision {
             case 402:
                 return 'NoCredit';
             case 403:
-                return 'Authentication';
             case 422:
-                return 'VendorValidationError';
+                return 'ModelError';
             default:
                 return undefined;
         }

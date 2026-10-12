@@ -257,12 +257,12 @@ describe('SubQDecision', () => {
       return new SubQDecision(API_KEY).Decide(docsParams());
     };
 
-    it("names the docs' 422 detail object, error_type first, and lets it fail over as a vendor validation error", async () => {
+    it("names the docs' 422 detail object, error_type first, and lets it fail over as a ModelError", async () => {
       const result = await run({ detail: { error_type: 'validation_error', message: "questions/queue: must have required property 'criteria'" } }, 422);
 
       expect(result.success).toBe(false);
       expect(result.errorMessage).toBe("SubQ Decisions API returned HTTP 422: validation_error: questions/queue: must have required property 'criteria'");
-      expect(result.errorInfo).toMatchObject({ errorType: 'VendorValidationError', severity: 'Retriable', canFailover: true, httpStatusCode: 422 });
+      expect(result.errorInfo).toMatchObject({ errorType: 'ModelError', severity: 'Retriable', canFailover: true, httpStatusCode: 422 });
     });
 
     // ErrorAnalyzer alone would read this 422 as a fatal InvalidRequest (no validation word in the
@@ -272,7 +272,7 @@ describe('SubQDecision', () => {
       const result = await run({ detail: { error_type: 'unsupported_model', message: 'subq-preview is not a decision model.' } }, 422);
 
       expect(result.errorMessage).toBe('SubQ Decisions API returned HTTP 422: unsupported_model: subq-preview is not a decision model.');
-      expect(result.errorInfo).toMatchObject({ errorType: 'VendorValidationError', severity: 'Retriable', canFailover: true });
+      expect(result.errorInfo).toMatchObject({ errorType: 'ModelError', severity: 'Retriable', canFailover: true });
     });
 
     it('makes a 402 (no credits) a NoCredit error that allows failover', async () => {
@@ -284,10 +284,10 @@ describe('SubQDecision', () => {
 
     // The message is hypothetical: ErrorAnalyzer alone would read "unauthorized" as a fatal
     // Authentication error and stop the failover loop.
-    it('makes a 403 (the key cannot use the model) an Authentication error that still allows failover', async () => {
+    it('makes a 403 (the key cannot use the model) a ModelError that allows failover', async () => {
       const result = await run({ detail: { error_type: 'permission_denied', message: 'Unauthorized: this API key cannot use subq-snap-preview.' } }, 403);
 
-      expect(result.errorInfo).toMatchObject({ errorType: 'Authentication', severity: 'Retriable', canFailover: true, httpStatusCode: 403 });
+      expect(result.errorInfo).toMatchObject({ errorType: 'ModelError', severity: 'Retriable', canFailover: true, httpStatusCode: 403 });
     });
 
     it('keeps a 401 a fatal authentication error, as for every other driver', async () => {

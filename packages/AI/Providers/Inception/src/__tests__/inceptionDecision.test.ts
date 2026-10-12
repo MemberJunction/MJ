@@ -232,11 +232,11 @@ describe('InceptionDecision', () => {
       expect(result.errorInfo).toMatchObject({ errorType: 'NoCredit', severity: 'Retriable', canFailover: true, httpStatusCode: 402 });
     });
 
-    it("names a 422's FastAPI detail[].msg, and lets it fail over as a vendor validation error", async () => {
+    it("names a 422's FastAPI detail[].msg, and lets it fail over as a ModelError", async () => {
       const result = await run({ detail: [{ loc: ['body', 'questions'], msg: 'Field required', type: 'missing' }] }, 422);
 
       expect(result.errorMessage).toBe('Inception Decisions API returned HTTP 422: Field required');
-      expect(result.errorInfo).toMatchObject({ errorType: 'VendorValidationError', severity: 'Retriable', canFailover: true, httpStatusCode: 422 });
+      expect(result.errorInfo).toMatchObject({ errorType: 'ModelError', severity: 'Retriable', canFailover: true, httpStatusCode: 422 });
     });
 
     // ErrorAnalyzer alone reads this one as a fatal InvalidRequest, which stops Default Decision's
@@ -245,7 +245,7 @@ describe('InceptionDecision', () => {
       const result = await run({ error: { code: 'upstream_error', type: 'invalid_request_error', message: 'Decision service could not complete the request.' } }, 422);
 
       expect(result.errorMessage).toBe('Inception Decisions API returned HTTP 422: Decision service could not complete the request.');
-      expect(result.errorInfo).toMatchObject({ errorType: 'VendorValidationError', severity: 'Retriable', canFailover: true });
+      expect(result.errorInfo).toMatchObject({ errorType: 'ModelError', severity: 'Retriable', canFailover: true });
     });
 
     it.each([

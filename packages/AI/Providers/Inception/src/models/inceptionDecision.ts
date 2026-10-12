@@ -73,8 +73,12 @@ export class InceptionDecision extends BaseSystemOneDecision {
      * - `402` (billing inactive or quota exceeded, "Account access is unavailable.") reads as `Unknown`;
      *   it is `NoCredit`;
      * - `422` (a request Inception rejects, which passed MJ's own validation) reads as a fatal
-     *   `InvalidRequest` that stops `Default Decision`'s failover loop unless the message happens to name
-     *   a validation word; it is `VendorValidationError`.
+     *   `InvalidRequest` that stops `Default Decision`'s failover loop, unless the message happens to name
+     *   a validation word; it is `ModelError`: another model may answer.
+     *
+     * Not `VendorValidationError`: on that the runner drops the vendor's other candidates, and the index
+     * it continues from then skips the next candidate (`BaseModelRunner`), which here would be Mercury
+     * Decide's OpenRouter row; Inception serves one decision model, so dropping its rows gains nothing.
      *
      * `ErrorAnalyzer` keeps the rest: `401` stays a fatal `Authentication` error, as for every other
      * driver; `404` (`model_not_found`) is `ModelError` and `413` (`request_too_large`) `Unknown`, both
@@ -85,7 +89,7 @@ export class InceptionDecision extends BaseSystemOneDecision {
             case 402:
                 return 'NoCredit';
             case 422:
-                return 'VendorValidationError';
+                return 'ModelError';
             default:
                 return undefined;
         }
