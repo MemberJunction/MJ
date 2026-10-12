@@ -129,6 +129,7 @@ export * from 'type-graphql';
 // later importers, which makes schema build fail on ViewResult.RowCount.
 export { Int, Float, ID } from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
+export { CreateIsolatedProvider } from './isolatedProvider.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export { ServerExtensionLoader, BaseServerExtension, DefaultServerExtensionServiceRegistry } from '@memberjunction/server-extensions-core';
 export type {
@@ -1664,9 +1665,10 @@ const setupComplete$ = new ReplaySubject(1);
     });
   }
 
-  // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then keep a
-  // periodic staleness sweep running. Self-registers with ShutdownRegistry, so its timer is cleared
-  // by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
+  // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then a periodic tick
+  // that closes stale and over-deadline sessions and rebuilds lost realtime recordings from their
+  // crash-recovery shards (storage reads and writes). Self-registers with ShutdownRegistry, so its timer
+  // is cleared by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
     SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
       .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
