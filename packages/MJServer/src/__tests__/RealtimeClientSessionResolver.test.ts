@@ -3357,6 +3357,20 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect((writeSegmentMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(SYSTEM_USER);
     });
 
+    it('refuses a crash-recovery segment once the session has its consolidated recording (no orphan shard) (#5197)', async () => {
+        // A shard upload still on the wire at hang-up can land after UploadRealtimeRecording stored the
+        // file and deleted the shards; nothing deletes a shard written after that.
+        const session = makeSessionEntity({ UserID: 'anon-1', RecordingFileID: 'file-1' });
+        const agent = makeSessionEntity({ ID: 'co-agent-1' });
+        currentProvider = { GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : session)) };
+        const resolver = makeAnonResolver();
+
+        const ok = await resolver.UploadRealtimeRecordingSegment('session-1', 3, AUDIO_B64, 'audio/L16;rate=24000', makeCtx());
+
+        expect(ok).toBe(false);
+        expect(writeSegmentMock).not.toHaveBeenCalled();
+    });
+
     it('a normal authenticated owner’s recording store runs as the SYSTEM user; ownership stays on the caller (#5195)', async () => {
         currentProvider = makeRecordingProvider();
         // A named caller owning the session (the recording provider stamps UserID 'anon-1', so re-stamp).
