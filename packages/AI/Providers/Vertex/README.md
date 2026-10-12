@@ -78,7 +78,7 @@ Both drivers take one key: a JSON string, usually the environment key `AI_VENDOR
 
 ## Gemini Live on Gemini Enterprise: `GeminiEnterpriseRealtime`
 
-`@RegisterClass(BaseRealtimeModel, 'GeminiEnterpriseRealtime')`, key `AI_VENDOR_API_KEY__GeminiEnterpriseRealtime` (a key in the shapes above). Nothing selects it until a deployment has the key and the catalog's Vertex AI model-vendor row for Gemini 3.8 Live (`DriverClass: GeminiEnterpriseRealtime`, Priority 1, above the Google row): realtime vendor selection takes the highest-priority row whose driver has a key.
+`@RegisterClass(BaseRealtimeModel, 'GeminiEnterpriseRealtime')`, key `AI_VENDOR_API_KEY__GeminiEnterpriseRealtime` (a key in the shapes above). Nothing selects it until a deployment has the key and the catalog's Vertex AI model-vendor row for Gemini 3.8 Live (`DriverClass: GeminiEnterpriseRealtime`, Priority 1, above the Google row): realtime vendor selection takes the highest-priority row whose driver has a key. A co-agent session that won't show an avatar goes to the Google row instead when its key is set too, so Vertex AI takes only avatar sessions then.
 
 Everything but the endpoint, the credentials and the browser connection is `GeminiRealtime`'s: the connect config, the legality rules, the avatar rule and the session translation, resolved on the `'enterprise'` endpoint (see the [Gemini readme](../Gemini/readme.md#gemini-live-realtime)). On that endpoint `gemini-3.8-live` renders a live avatar, and the endpoint accepts only the `audioActivityOnly` turn coverage: a session that asks for all video is sent `audioActivityOnly`, with one log line.
 

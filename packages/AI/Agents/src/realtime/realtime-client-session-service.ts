@@ -2395,6 +2395,10 @@ export class RealtimeClientSessionService {
      *   {@link resolveRealtimeModel} (highest-PowerRank active Realtime model), with the generic
      *   {@link noModelMessage} on failure. The two explicit choices above win over the video preference.
      *
+     * On every path the chosen model's vendor follows whether the session will show an avatar (the video setting is on
+     * and the session could show one): among the model's keyed vendors, one that renders avatars (Vertex AI for Gemini
+     * 3.8 Live) only when it will, else one that renders none; see {@link resolveVendorAndInstantiate}.
+     *
      * @param input The prepare-session input (carries the optional preferred model id).
      * @param coAgent The resolved co-agent (threaded to the default-resolution seam).
      * @param effectiveConfig The resolved effective configuration (carries `modelPreference` and the video setting).
@@ -2413,14 +2417,14 @@ export class RealtimeClientSessionService {
         // subclass that overrides the seam would lose to AI_VENDOR_API_KEY__<driver>.
         const resolveRunKey = this.buildRunKeyResolver(input.APIKeys);
         const scope = input.CredentialScope ?? 'Any';
+        const preferAvatar = effectiveConfig?.realtime?.video?.enabled === true && this.sessionCanShowAvatar(input);
         if (input.PreferredModelID) {
-            return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveRunKey, scope);
+            return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveRunKey, scope, preferAvatar);
         }
-        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig, resolveRunKey, scope);
+        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig, resolveRunKey, scope, preferAvatar);
         if (fromConfig) {
             return { Resolution: fromConfig };
         }
-        const preferAvatar = effectiveConfig?.realtime?.video?.enabled === true && this.sessionCanShowAvatar(input);
         const resolution = await this.resolveDefaultRealtimeModel(coAgent, preferAvatar, resolveRunKey, scope);
         return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage() };
     }
@@ -2452,7 +2456,7 @@ export class RealtimeClientSessionService {
         if (withAvatar) {
             return withAvatar;
         }
-        const resolution = await this.resolveRealtimeModel(coAgent, resolve, credentialScope);
+        const resolution = await this.resolveRealtimeModel(coAgent, resolve, credentialScope, preferAvatar);
         if (preferAvatar && resolution) {
             LogStatus(
                 '[RealtimeCoAgent] Video is on, but no realtime model with a usable key shows an avatar (its Video/Output row ' +
@@ -2513,9 +2517,15 @@ export class RealtimeClientSessionService {
      * @param effectiveConfig The resolved effective configuration.
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
+     * @param showsAvatar Whether the session will show an avatar; see {@link resolveVendorAndInstantiate}.
      * @returns The resolution, or `null` when no preference is configured or it can't be satisfied.
      */
-    protected resolveConfiguredModelPreference(effectiveConfig?: RealtimeCoAgentConfig, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolution | null {
+    protected resolveConfiguredModelPreference(
+        effectiveConfig?: RealtimeCoAgentConfig,
+        resolve?: AIAPIKeyResolver,
+        credentialScope: AICredentialScope = 'Any',
+        showsAvatar = false,
+    ): RealtimeModelResolution | null {
         const preference = effectiveConfig?.realtime?.modelPreference;
         if (!preference) {
             return null;
@@ -2535,7 +2545,7 @@ export class RealtimeClientSessionService {
             );
             return null;
         }
-        const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope);
+        const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope, showsAvatar);
         if (!resolution) {
             LogError(
                 `RealtimeClientSessionService: configured realtime model preference '${model.Name}' has no usable ` +
@@ -2574,9 +2584,15 @@ export class RealtimeClientSessionService {
      * @param preferredModelID The `MJ: AI Models.ID` the user chose.
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
+     * @param showsAvatar Whether the session will show an avatar; see {@link resolveVendorAndInstantiate}.
      * @returns The resolution outcome (resolution or a specific failure reason).
      */
-    protected resolvePreferredRealtimeModel(preferredModelID: string, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolutionOutcome {
+    protected resolvePreferredRealtimeModel(
+        preferredModelID: string,
+        resolve?: AIAPIKeyResolver,
+        credentialScope: AICredentialScope = 'Any',
+        showsAvatar = false,
+    ): RealtimeModelResolutionOutcome {
         const model = this.findModelByID(preferredModelID);
         if (!model) {
             return { ErrorMessage: `The requested realtime model (id '${preferredModelID}') was not found in AI model metadata.` };
@@ -2587,7 +2603,7 @@ export class RealtimeClientSessionService {
         if (!this.isRealtimeModel(model)) {
             return { ErrorMessage: `The requested model '${model.Name}' is not a Realtime model (its type is '${model.AIModelType}').` };
         }
-        const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope);
+        const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope, showsAvatar);
         if (!resolution) {
             return {
                 ErrorMessage:
@@ -2625,9 +2641,15 @@ export class RealtimeClientSessionService {
      * @param coAgent The co-agent being voiced (reserved for future per-agent model preference).
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
+     * @param showsAvatar Whether the session will show an avatar; see {@link resolveVendorAndInstantiate}.
      * @returns The resolved model + identifiers, or `null`.
      */
-    protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): Promise<RealtimeModelResolution | null> {
+    protected async resolveRealtimeModel(
+        coAgent: MJAIAgentEntityExtended,
+        resolve?: AIAPIKeyResolver,
+        credentialScope: AICredentialScope = 'Any',
+        showsAvatar = false,
+    ): Promise<RealtimeModelResolution | null> {
         // Walk candidates in descending PowerRank, returning the FIRST that fully resolves to a usable
         // client-direct driver (active vendor + API key + ClassFactory driver + SupportsClientDirect).
         // Single-pick dead-ended whenever the highest-power model lacked a key or client-direct support
@@ -2635,7 +2657,7 @@ export class RealtimeClientSessionService {
         // surfaced "No usable Realtime model" instead of falling through to a model that works.
         const candidates = this.selectRealtimeModelCandidates(coAgent);
         for (const model of candidates) {
-            const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope);
+            const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope, showsAvatar);
             if (resolution && resolution.Model.SupportsClientDirect) {
                 return resolution;
             }
@@ -2658,12 +2680,54 @@ export class RealtimeClientSessionService {
      * @param credentialScope A scope that rules out the `'Environment'` source (`'RuntimeOnly'`) drops the
      *   {@link getAPIKeyForDriver} seam: the run's keys are the whole chain, so a vendor they do not key
      *   is never selected on the platform's key.
+     * @param showsAvatar Whether the session will show an avatar. The highest-Priority keyed vendor stands when it
+     *   renders avatars ({@link RealtimeModelShowsAvatar}) exactly when the session will show one; otherwise the first
+     *   other keyed vendor that does is taken, when there is one. So a vendor that renders avatars (Vertex AI for Gemini
+     *   3.8 Live, with its own billing and limits) takes a session only when it will show an avatar, or when it is the
+     *   only keyed vendor; and a session that will show one goes to such a vendor whatever the Priority order.
      * @returns The full resolution, or `null` when no vendor/key/driver can be satisfied.
      */
-    protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolution | null {
+    protected resolveVendorAndInstantiate(
+        model: MJAIModelEntityExtended,
+        resolve?: AIAPIKeyResolver,
+        credentialScope: AICredentialScope = 'Any',
+        showsAvatar = false,
+    ): RealtimeModelResolution | null {
         const resolveKey = this.buildKeyChain(resolve, credentialScope);
         const vendor = this.selectRealtimeVendor(model.ID, resolveKey);
-        return vendor ? this.instantiateRealtimeVendor(model, vendor, resolveKey) : null;
+        const first = vendor ? this.instantiateRealtimeVendor(model, vendor, resolveKey) : null;
+        const vendors = first ? ListRealtimeVendorsForModel(model.ID) : [];
+        if (!first || vendors.length < 2 || RealtimeModelShowsAvatar(first, AIEngine.Instance) === showsAvatar) {
+            return first;
+        }
+        return this.vendorMatchingAvatar(model, vendors, resolveKey, showsAvatar, first) ?? first;
+    }
+
+    /**
+     * The first keyed vendor of a model, other than `first`, that renders avatars exactly when the session will show one
+     * and does client-direct sessions when `first` does; `null` when none does.
+     */
+    private vendorMatchingAvatar(
+        model: MJAIModelEntityExtended,
+        vendors: RealtimeVendorSelection[],
+        resolveKey: AIAPIKeyResolver,
+        showsAvatar: boolean,
+        first: RealtimeModelResolution,
+    ): RealtimeModelResolution | null {
+        for (const vendor of vendors) {
+            if (vendor.DriverClass === first.DriverClass && vendor.VendorID === first.VendorID) {
+                continue;
+            }
+            const resolution = this.instantiateRealtimeVendor(model, vendor, resolveKey);
+            if (
+                resolution &&
+                (resolution.Model.SupportsClientDirect || !first.Model.SupportsClientDirect) &&
+                RealtimeModelShowsAvatar(resolution, AIEngine.Instance) === showsAvatar
+            ) {
+                return resolution;
+            }
+        }
+        return null;
     }
 
     /**

@@ -614,6 +614,48 @@ describe('resolveModelForSession — a co-agent with video on prefers a model th
         expect(fallbackLines()).toEqual([]);
     });
 
+    describe('Vertex AI only for sessions that show an avatar', () => {
+        /** Gemini 3.8 Live alone, on the Developer API and on Vertex AI (which renders avatars), Vertex AI first by Priority. */
+        function liveOnly(vertexFirst = true): void {
+            engineState.Models = [model('m-live', 'Gemini 3.8 Live', 15)];
+            engineState.ModelVendors = [
+                vendor('m-live', 'GeminiRealtime', vertexFirst ? 0 : 5, 'Active', 'v-google', 'gemini-3.8-live'),
+                vendor('m-live', 'GeminiEnterpriseRealtime', 1, 'Active', 'v-vertex', 'gemini-3.8-live'),
+            ];
+            engineState.ModelModalities = [videoOutput('m-live', true)];
+        }
+
+        it('routes an audio-only session to the vendor that shows no avatar when both are keyed, whatever the path', async () => {
+            liveOnly();
+            expect((await bothKeys().CallResolveModelForSession({}, VIDEO_OFF)).Resolution?.DriverClass).toBe('GeminiRealtime');
+            expect((await bothKeys().CallResolveModelForSession({})).Resolution?.DriverClass).toBe('GeminiRealtime');
+            expect((await bothKeys().CallResolveModelForSession({ ServerSide: true, PhoneCall: true }, VIDEO_ON)).Resolution?.DriverClass).toBe('GeminiRealtime');
+            expect((await bothKeys().CallResolveModelForSession({ ShowsAgentVideo: false }, VIDEO_ON)).Resolution?.DriverClass).toBe('GeminiRealtime');
+            expect((await bothKeys().CallResolveModelForSession({ PreferredModelID: 'm-live' }, VIDEO_OFF)).Resolution?.DriverClass).toBe('GeminiRealtime');
+            const configured = await bothKeys().CallResolveModelForSession({}, { realtime: { modelPreference: 'Gemini 3.8 Live' } });
+            expect(configured.Resolution?.DriverClass).toBe('GeminiRealtime');
+        });
+
+        it('routes a session that shows an avatar to Vertex AI, on the default walk and on an explicit model, whatever the Priority', async () => {
+            for (const vertexFirst of [true, false]) {
+                liveOnly(vertexFirst);
+                expect((await bothKeys().CallResolveModelForSession({}, VIDEO_ON)).Resolution?.DriverClass).toBe('GeminiEnterpriseRealtime');
+                const picked = await bothKeys().CallResolveModelForSession({ PreferredModelID: 'm-live' }, VIDEO_ON);
+                expect(picked.Resolution?.DriverClass).toBe('GeminiEnterpriseRealtime');
+                expect(picked.Resolution?.VendorID).toBe('v-vertex');
+            }
+        });
+
+        it('keeps Vertex AI for an audio-only session when it is the only keyed vendor', async () => {
+            liveOnly();
+            const svc = new MetadataExposedService();
+            svc.Keys = { GeminiEnterpriseRealtime: 'k-vertex' };
+            svc.AvatarDrivers.add('GeminiEnterpriseRealtime');
+            expect((await svc.CallResolveModelForSession({}, VIDEO_OFF)).Resolution?.DriverClass).toBe('GeminiEnterpriseRealtime');
+            expect((await svc.CallResolveModelForSession({ PreferredModelID: 'm-live' }, VIDEO_OFF)).Resolution?.DriverClass).toBe('GeminiEnterpriseRealtime');
+        });
+    });
+
     it("skips the preference for a browser app that shows no agent video (the widget, the mobile app), and keeps it when it may", async () => {
         geminiCatalog();
         const svc = bothKeys();
