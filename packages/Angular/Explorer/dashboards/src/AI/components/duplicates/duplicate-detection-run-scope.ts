@@ -24,7 +24,7 @@
  * for any single run larger than 1000 rows.
  */
 import { RunViewParams } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 
 /** The slice of an `MJ: Duplicate Runs` row the board needs to choose which run it shows. */
 export interface DuplicateRunCandidate {
@@ -94,9 +94,11 @@ export function PickDefaultEntityDocument<D extends EntityDocumentCandidate>(
     if (documents.length === 0) {
         return null;
     }
+    // First document per entity wins, as documents.find() would.
+    const documentsByEntity = IndexByUUID(documents, d => d.EntityID);
     const ordered = [...newestFirst(runs.filter(isPreferredRun)), ...newestFirst(runs)];
     for (const run of ordered) {
-        const match = documents.find(d => UUIDsEqual(d.EntityID, run.EntityID));
+        const match = documentsByEntity.Get(run.EntityID);
         if (match) {
             return match;
         }
