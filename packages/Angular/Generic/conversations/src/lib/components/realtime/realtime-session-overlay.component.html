@@ -89,6 +89,12 @@
       </div>
 
       @if (!IsReviewing) {
+        <!-- "Agent can see": what the agent is looking at, with a switch per source. Always shown while any
+             video source exists (a privacy indicator is never gated behind the disclosure ladder). -->
+        <mj-realtime-perception-chip [Sources]="VideoSources"
+                                     (SourceToggled)="OnVideoSourceToggled($event)">
+        </mj-realtime-perception-chip>
+
         <!-- Active channels (earned with the console at level 2+, host-gated via [ShowChannels]).
              The strip component self-hides when there are no active channels. -->
         @if (ChannelStripVisible) {
@@ -140,7 +146,8 @@
           [Fill]="ChannelFocusMode"
           (OpenRunRequested)="OnOpenRunRequested($event)"
           (CollapsedChange)="OnPanelCollapsedChange($event)"
-          (WideChanged)="OnPanelWideChanged($event)">
+          (WideChanged)="OnPanelWideChanged($event)"
+          (ActiveChannelChange)="OnActiveChannelChange($event)">
         </mj-realtime-surface-tabs>
       </div>
     }

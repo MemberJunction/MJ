@@ -2713,7 +2713,7 @@ importers:
         version: 3.0.7(@azure/identity@4.13.1)
       googleapis:
         specifier: ^144.0.0
-        version: 144.0.0(encoding@0.1.13)
+        version: 144.0.0
 
   packages/AI/RealtimeClient:
     dependencies:
@@ -4557,6 +4557,9 @@ importers:
       '@memberjunction/ng-ai-test-harness':
         specifier: 6.2.0-edge.3
         version: link:../../Generic/ai-test-harness
+      '@memberjunction/ng-artifacts':
+        specifier: 6.2.0-edge.3
+        version: link:../../Generic/artifacts
       '@memberjunction/ng-base-application':
         specifier: 6.2.0-edge.3
         version: link:../base-application
@@ -5113,6 +5116,9 @@ importers:
       '@memberjunction/ng-notifications':
         specifier: 6.2.0-edge.3
         version: link:../../Generic/notifications
+      '@memberjunction/ng-realtime-channels':
+        specifier: 6.2.0-edge.3
+        version: link:../../Generic/realtime-channels
       '@memberjunction/ng-shared':
         specifier: 6.2.0-edge.3
         version: link:../shared
@@ -6853,6 +6859,12 @@ importers:
       '@memberjunction/ng-notifications':
         specifier: 6.2.0-edge.3
         version: link:../notifications
+      '@memberjunction/ng-react':
+        specifier: 6.2.0-edge.3
+        version: link:../react
+      '@memberjunction/ng-realtime-channels':
+        specifier: 6.2.0-edge.3
+        version: link:../realtime-channels
       '@memberjunction/ng-resource-permissions':
         specifier: 6.2.0-edge.3
         version: link:../resource-permissions
@@ -8506,6 +8518,189 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Angular/Generic/realtime-channel-examples:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.3
+        version: link:../../../AI/Core
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0-edge.3
+        version: link:../../../AI/CorePlus
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.3
+        version: link:../../../MJGlobal
+      '@memberjunction/ng-realtime-channels':
+        specifier: 6.2.0-edge.3
+        version: link:../realtime-channels
+      '@memberjunction/realtime-runtime':
+        specifier: 6.2.0-edge.3
+        version: link:../../../RealtimeRuntime
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.2.0-edge.3
+        version: link:../test-utils
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Angular/Generic/realtime-channels:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.3
+        version: link:../../../AI/Core
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0-edge.3
+        version: link:../../../AI/CorePlus
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.3
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.3
+        version: link:../../../MJGlobal
+      '@memberjunction/realtime-runtime':
+        specifier: 6.2.0-edge.3
+        version: link:../../../RealtimeRuntime
+      html-to-image:
+        specifier: ^1.11.11
+        version: 1.11.13
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.2.0-edge.3
+        version: link:../test-utils
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Angular/Generic/realtime-widget:
+    dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.3
+        version: link:../../../AI/Core
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0-edge.3
+        version: link:../../../AI/CorePlus
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.3
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.3
+        version: link:../../../MJGlobal
+      '@memberjunction/graphql-dataprovider':
+        specifier: 6.2.0-edge.3
+        version: link:../../../GraphQLDataProvider
+      '@memberjunction/ng-conversations':
+        specifier: 6.2.0-edge.3
+        version: link:../conversations
+      '@memberjunction/ng-realtime-channels':
+        specifier: 6.2.0-edge.3
+        version: link:../realtime-channels
+      '@memberjunction/ng-shared-generic':
+        specifier: 6.2.0-edge.3
+        version: link:../shared
+      '@memberjunction/ng-ui-components':
+        specifier: 6.2.0-edge.3
+        version: link:../ui-components
+      '@memberjunction/realtime-runtime':
+        specifier: 6.2.0-edge.3
+        version: link:../../../RealtimeRuntime
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/animations':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
+      '@angular/cdk':
+        specifier: 21.2.14
+        version: 21.2.14(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@angular/common':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@angular/core':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/elements':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/forms':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@angular/platform-browser':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
+      '@babel/core':
+        specifier: 7.29.7
+        version: 7.29.7
+      '@fortawesome/fontawesome-free':
+        specifier: 6.7.2
+        version: 6.7.2
+      '@memberjunction/ai-realtime-client':
+        specifier: 6.2.0-edge.3
+        version: link:../../../AI/RealtimeClient
+      '@memberjunction/ng-test-utils':
+        specifier: 6.2.0-edge.3
+        version: link:../test-utils
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
+      jsdom:
+        specifier: 26.1.0
+        version: 26.1.0
+      sass:
+        specifier: ^1.97.3
+        version: 1.97.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      zone.js:
+        specifier: ^0.16.0
+        version: 0.16.0
 
   packages/Angular/Generic/record-changes:
     dependencies:
@@ -11697,6 +11892,9 @@ importers:
       '@memberjunction/query-gen':
         specifier: 6.2.0-edge.3
         version: link:../QueryGen
+      '@memberjunction/record-cloning':
+        specifier: 6.2.0-edge.3
+        version: link:../RecordCloning/engine
       '@memberjunction/redis-provider':
         specifier: 6.2.0-edge.3
         version: link:../RedisProvider
@@ -11704,14 +11902,14 @@ importers:
         specifier: 6.2.0-edge.3
         version: link:../ServerBootstrapLite
       '@memberjunction/skyway-core':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.1
+        version: 0.7.1
       '@memberjunction/skyway-postgres':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.1
+        version: 0.7.1
       '@memberjunction/skyway-sqlserver':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.1
+        version: 0.7.1
       '@memberjunction/sql-converter':
         specifier: 6.2.0-edge.3
         version: link:../SQLConverter
@@ -12554,6 +12752,12 @@ importers:
       minimatch:
         specifier: ^9.0.5
         version: 9.0.9
+      mssql:
+        specifier: ^12.2.0
+        version: 12.7.0
+      pg:
+        specifier: ^8.13.3
+        version: 8.18.0
       simple-git:
         specifier: ^3.30.0
         version: 3.30.0
@@ -12561,6 +12765,12 @@ importers:
       '@types/adm-zip':
         specifier: ^0.5.7
         version: 0.5.7
+      '@types/mssql':
+        specifier: ^9.1.9
+        version: 9.1.9
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
       tsc-alias:
         specifier: ^1.8.15
         version: 1.8.16
@@ -12820,6 +13030,9 @@ importers:
       '@memberjunction/queue':
         specifier: 6.2.0-edge.3
         version: link:../MJQueue
+      '@memberjunction/record-cloning':
+        specifier: 6.2.0-edge.3
+        version: link:../RecordCloning/engine
       '@memberjunction/record-comparison':
         specifier: 6.2.0-edge.3
         version: link:../RecordComparison
@@ -13553,6 +13766,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.3
         version: link:../../MJGlobal
+      '@memberjunction/record-cloning':
+        specifier: 6.2.0-edge.3
+        version: link:../../RecordCloning/engine
       '@memberjunction/sql-dialect':
         specifier: 6.2.0-edge.3
         version: link:../../SQLDialect
@@ -13589,14 +13805,14 @@ importers:
         version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
     optionalDependencies:
       '@memberjunction/skyway-core':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.1
+        version: 0.7.1
       '@memberjunction/skyway-postgres':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.1
+        version: 0.7.1
       '@memberjunction/skyway-sqlserver':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.1
+        version: 0.7.1
       mssql:
         specifier: ^11.0.1
         version: 11.0.1
@@ -15555,15 +15771,24 @@ importers:
       '@memberjunction/aiengine':
         specifier: 6.2.0-edge.3
         version: link:../../AI/Engine
+      '@memberjunction/component-registry-client-sdk':
+        specifier: 6.2.0-edge.3
+        version: link:../../ComponentRegistryClientSDK
       '@memberjunction/core':
         specifier: 6.2.0-edge.3
         version: link:../../MJCore
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.3
         version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.3
+        version: link:../../Credentials/Engine
       '@memberjunction/global':
         specifier: 6.2.0-edge.3
         version: link:../../MJGlobal
+      '@memberjunction/interactive-component-types':
+        specifier: 6.2.0-edge.3
+        version: link:../../InteractiveComponents
       '@memberjunction/rubrics':
         specifier: 6.2.0-edge.3
         version: link:../../Rubrics/Engine
@@ -15716,6 +15941,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.3
         version: link:../../MJCoreEntities
+      '@memberjunction/core-entities-server':
+        specifier: 6.2.0-edge.3
+        version: link:../../MJCoreEntitiesServer
       '@memberjunction/credentials':
         specifier: 6.2.0-edge.3
         version: link:../../Credentials/Engine
@@ -19210,6 +19438,10 @@ packages:
   '@foblex/utils@1.1.1':
     resolution: {integrity: sha512-w4g49vLAIogIXNYHWQzcv2p5jJKi/XAoTw7LvuEzKvEXDJ8ezL0BZJfbeg43q2+PyKvlUfu+6ySvNxnXYrb/Bg==}
 
+  '@fortawesome/fontawesome-free@6.7.2':
+    resolution: {integrity: sha512-JUOtgFW6k9u4Y+xeIaEiLr3+cjoUPiAuLXoyKOJSia6Duzb7pq+A76P9ZdPDoAoxHdHzq6gE9/jKBGXlZT8FbA==}
+    engines: {node: '>=6'}
+
   '@gar/promise-retry@1.0.3':
     resolution: {integrity: sha512-GmzA9ckNokPypTg10pgpeHNQe7ph+iIKKmhKu3Ob9ANkswreCx7R3cKmY781K8QK3AqVL3xVh9A42JvIAbkkSA==}
     engines: {node: ^20.17.0 || >=22.9.0}
@@ -20030,16 +20262,16 @@ packages:
   '@mediapipe/tasks-vision@0.10.14':
     resolution: {integrity: sha512-vOifgZhkndgybdvoRITzRkIueWWSiCKuEUXXK6Q4FaJsFvRJuwgg++vqFUMlL0Uox62U5aEXFhHxlhV7Ja5e3Q==}
 
-  '@memberjunction/skyway-core@0.6.2':
-    resolution: {integrity: sha512-qrwF6EaqlbwyDl0dnd0U7AaQqfkL9NbVGT/8dy3PO61bJXavrATex+Gy7bImiwsQgslZiwswIb2fzwi04n/vKA==}
+  '@memberjunction/skyway-core@0.7.1':
+    resolution: {integrity: sha512-jvuPXHEhg1V8n0Vaca21xzzYW2qbpuLzExfchDUF/aS9yVFIOx0YGtvCNvvIK61U5gD/Knq+FEWxPHFxbnFbig==}
     engines: {node: '>=18.0.0'}
 
-  '@memberjunction/skyway-postgres@0.6.2':
-    resolution: {integrity: sha512-m37zroaduRFQ6OtxslKpDN0+/ayDsuDMLZneC1g1H5O9cKXveuPBqvPRglHbuR/g9qYj54tZbKomheFwHjAdpA==}
+  '@memberjunction/skyway-postgres@0.7.1':
+    resolution: {integrity: sha512-8jAPsNGqryrFRKtagIUfKUiDvwOTv2ttoa0RviFWydsW6jkdW5rOcaqWMpHUMpOkdk30BsRELeT7Wbia/5IFxA==}
     engines: {node: '>=18.0.0'}
 
-  '@memberjunction/skyway-sqlserver@0.6.2':
-    resolution: {integrity: sha512-2mVkECnMhGieU++ZesoK3NDMveBgamkpWKTeYo3T0r9OTxhISNrM6clXUuZOhq7vKCQwNPb2SY53/n60J+ecuw==}
+  '@memberjunction/skyway-sqlserver@0.7.1':
+    resolution: {integrity: sha512-0HSf2/ZR6EKeBGYfvzJIu2X9aiQYPXOcWx00vkqStqFW2GGBVjZYc48pu+LeYeUX9ckZ1aNRkQIW/Bum6wi3mA==}
     engines: {node: '>=18.0.0'}
 
   '@mermaid-js/parser@0.6.3':
@@ -36053,6 +36285,8 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  '@fortawesome/fontawesome-free@6.7.2': {}
+
   '@gar/promise-retry@1.0.3': {}
 
   '@gerrit0/mini-shiki@3.22.0':
@@ -36987,21 +37221,21 @@ snapshots:
 
   '@mediapipe/tasks-vision@0.10.14': {}
 
-  '@memberjunction/skyway-core@0.6.2':
+  '@memberjunction/skyway-core@0.7.1':
     dependencies:
       crc-32: 1.2.2
       fast-glob: 3.3.3
 
-  '@memberjunction/skyway-postgres@0.6.2':
+  '@memberjunction/skyway-postgres@0.7.1':
     dependencies:
-      '@memberjunction/skyway-core': 0.6.2
+      '@memberjunction/skyway-core': 0.7.1
       pg: 8.18.0
     transitivePeerDependencies:
       - pg-native
 
-  '@memberjunction/skyway-sqlserver@0.6.2':
+  '@memberjunction/skyway-sqlserver@0.7.1':
     dependencies:
-      '@memberjunction/skyway-core': 0.6.2
+      '@memberjunction/skyway-core': 0.7.1
       mssql: 11.0.1
     transitivePeerDependencies:
       - supports-color
@@ -43933,7 +44167,7 @@ snapshots:
 
   google-logging-utils@1.1.3: {}
 
-  googleapis-common@7.2.0(encoding@0.1.13):
+  googleapis-common@7.2.0:
     dependencies:
       extend: 3.0.2
       gaxios: 6.7.1(encoding@0.1.13)
@@ -43956,10 +44190,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  googleapis@144.0.0(encoding@0.1.13):
+  googleapis@144.0.0:
     dependencies:
       google-auth-library: 9.15.1(encoding@0.1.13)
-      googleapis-common: 7.2.0(encoding@0.1.13)
+      googleapis-common: 7.2.0
     transitivePeerDependencies:
       - encoding
       - supports-color
