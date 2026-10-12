@@ -115,6 +115,12 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
         return this._trackedRuns.size;
     }
 
+    /** IDs of the runs this process is currently guarding — i.e. the agent runs executing here.
+     *  A copy; read by MJAPI's event-loop stall monitor to name what was running during a stall. */
+    public get TrackedRunIDs(): string[] {
+        return this.trackedIds();
+    }
+
     /**
      * IShutdownable: on graceful shutdown, mark every run this process still owns as `Cancelled`
      * (via {@link SP_CANCEL}) so it doesn't linger as a phantom `Running` row until the next sweep.
