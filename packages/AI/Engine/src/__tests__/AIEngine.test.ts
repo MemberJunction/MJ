@@ -351,6 +351,9 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 
 import { AIEngine, AIActionParams, EntityAIActionParams } from '../AIEngine';
 import { MJGlobal, Float32VectorToBase64 } from '@memberjunction/global';
+import { GetAIAPIKey } from '@memberjunction/ai';
+import type { ChatMessageContent } from '@memberjunction/ai';
+import type { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 // Test-only handles exported from the @memberjunction/global mock above (see vi.mock).
 // Typed locally so we avoid `any` while reaching into the mocked module surface.
 import * as MockGlobal from '@memberjunction/global';
@@ -1586,6 +1589,65 @@ describe('AIEngine', () => {
             await engine.EmbedText(model, longText);
 
             expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    // ======================================================================
+    // Embedding API key resolution (#5056)
+    // ======================================================================
+
+    /**
+     * A keyed embedding model (Gemini, OpenAI, ...) must be constructed with its provider key even
+     * when the caller passes none — the same fallback `PrepareLLMInstance` applies to chat models.
+     * `SearchEntity`'s semantic pass embeds the query with the EntityDocument's model and no key,
+     * so without the fallback the driver gets `undefined` and the provider rejects the call.
+     */
+    describe('Embedding API key resolution', () => {
+        const keyedModel = { ID: 'model-keyed', Name: 'Gemini Embedding 2', APIName: 'gemini-embedding-2', DriverClass: 'GeminiEmbedding' } as unknown as MJAIModelEntityExtended;
+        const mediaContent: ChatMessageContent = [
+            { type: 'text', content: 'a caption' },
+            { type: 'image_url', content: 'data:image/png;base64,AAAA' }
+        ];
+        let createInstanceMock: ReturnType<typeof vi.fn>;
+
+        beforeEach(() => {
+            vi.mocked(GetAIAPIKey).mockImplementation((driverClass: string) => `env-key-for-${driverClass}`);
+            createInstanceMock = MJGlobal.Instance.ClassFactory.CreateInstance as unknown as ReturnType<typeof vi.fn>;
+            createInstanceMock.mockReturnValue({
+                EmbedText: vi.fn().mockResolvedValue({ vector: [0.1, 0.2] }),
+                EmbedContent: vi.fn().mockResolvedValue({ vector: [0.3, 0.4] })
+            });
+            engine.ClearEmbeddingCache();
+        });
+
+        it('EmbedText resolves the driver key when the caller passes none', async () => {
+            await engine.EmbedText(keyedModel, 'find me an agent');
+
+            expect(createInstanceMock).toHaveBeenCalledWith(expect.anything(), 'GeminiEmbedding', 'env-key-for-GeminiEmbedding');
+        });
+
+        it('EmbedText uses the caller-supplied key instead of the resolved one', async () => {
+            await engine.EmbedText(keyedModel, 'find me an agent', 'caller-key');
+
+            expect(createInstanceMock).toHaveBeenCalledWith(expect.anything(), 'GeminiEmbedding', 'caller-key');
+        });
+
+        it('EmbedContent with text-only content resolves the driver key when the caller passes none', async () => {
+            await engine.EmbedContent(keyedModel, 'find me an agent');
+
+            expect(createInstanceMock).toHaveBeenCalledWith(expect.anything(), 'GeminiEmbedding', 'env-key-for-GeminiEmbedding');
+        });
+
+        it('EmbedContent with media content resolves the driver key when the caller passes none', async () => {
+            await engine.EmbedContent(keyedModel, mediaContent);
+
+            expect(createInstanceMock).toHaveBeenCalledWith(expect.anything(), 'GeminiEmbedding', 'env-key-for-GeminiEmbedding');
+        });
+
+        it('EmbedContent with media content uses the caller-supplied key instead of the resolved one', async () => {
+            await engine.EmbedContent(keyedModel, mediaContent, 'caller-key');
+
+            expect(createInstanceMock).toHaveBeenCalledWith(expect.anything(), 'GeminiEmbedding', 'caller-key');
         });
     });
 
