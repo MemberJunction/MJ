@@ -21,7 +21,7 @@ import { IMetadataProvider, LogError, LogStatus, UserInfo } from '@memberjunctio
 import { MJAIAgentEntity, MJAIAgentSessionEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import {
-    ParseRecordingShard, RecordingShardContents, RecordingShardFormatError, RECORDING_SAMPLE_RATE,
+    ParseRecordingShard, RecordingShardContents, RecordingShardFormatError, RECORDING_SAMPLE_RATE, RECORDING_SHARD_WINDOW_PACKETS, RECORDING_FRAME_SAMPLES,
 } from '@memberjunction/ai-core-plus';
 import { IRealtimeRecordingLedger, LedgerShard, LedgerShardMetadata } from './realtime-recording-ledger';
 import {
@@ -68,6 +68,12 @@ export interface AssembledOpusRecording {
     /** Shards dropped because a packet failed to decode (each is also in `Gaps`). */
     DecodeFailures: ShardDecodeFailure[];
     /** True when the terminal counts are known and the timeline matches them (shard count == expected, length == captured). */
+    /**
+     * The gap of the run of missing indexes from 0 up to the first present shard (the whole timeline when
+     * none is present), or null when shard 0 is present. One of `Gaps`; the only range
+     * {@link FillGapsFromPreviousRecording} may reuse.
+     */
+    LeadingMissingRun: RecordingGap | null;
     TerminalMatched: boolean;
     /** `TerminalMatched` and no gaps: every expected range holds decoded (or reused, see {@link FillGapsFromPreviousRecording}) audio. */
     Complete: boolean;
@@ -179,6 +185,7 @@ export function AssembleOpusRecordingPcm(
     let position = 0;
     let missing: number[] = [];
     let decodedAny = false;
+    let leadingMissingRun: RecordingGap | null = null;
     for (let index = 0; index < shardCount; index++) {
         const shard = byIndex.get(index);
         if (!shard) {
@@ -189,7 +196,11 @@ export function AssembleOpusRecordingPcm(
             throw new RecordingAssemblyError(`shard ${index} starts at sample ${shard.StartSample}, before the end of the audio before it (${position})`);
         }
         if (shard.StartSample > position || missing.length > 0) {
-            gaps.push({ startSample: position, sampleCount: shard.StartSample - position, indexes: missing });
+            const gap: RecordingGap = { startSample: position, sampleCount: shard.StartSample - position, indexes: missing };
+            gaps.push(gap);
+            if (!decodedAny && missing.length > 0) {
+                leadingMissingRun = gap;
+            }
             missing = [];
             if (decodedAny) {
                 decoder.Reset();
@@ -208,52 +219,70 @@ export function AssembleOpusRecordingPcm(
         position = shard.StartSample + shard.SampleCount;
     }
     if (position < length || missing.length > 0) {
-        gaps.push({ startSample: position, sampleCount: length - position, indexes: missing });
+        const gap: RecordingGap = { startSample: position, sampleCount: length - position, indexes: missing };
+        gaps.push(gap);
+        if (!decodedAny && missing.length > 0) {
+            leadingMissingRun = gap;
+        }
     }
 
     const terminalMatched = expectedShards !== null && capturedSamples !== null
         && shardCount === expectedShards && length === capturedSamples;
     return {
-        Pcm: pcm, Wav: output.Finish(), Gaps: gaps, DecodeFailures: decodeFailures,
+        Pcm: pcm, Wav: output.Finish(), Gaps: gaps, DecodeFailures: decodeFailures, LeadingMissingRun: leadingMissingRun,
         TerminalMatched: terminalMatched, Complete: terminalMatched && gaps.length === 0,
     };
 }
 
 /**
- * Fills an assembly's silent gaps from the session's previous recording wherever that recording reaches.
+ * Most samples one shard can carry: the format caps a shard at two windows of packets (see
+ * `ParseRecordingShard`), each packet at most one 960-sample frame of kept audio.
+ */
+const MAX_SHARD_SAMPLES = 2 * RECORDING_SHARD_WINDOW_PACKETS * RECORDING_FRAME_SAMPLES;
+
+/**
+ * Fills the leading run of missing shards from the session's previous recording.
  *
- * Why: a Complete assembly deletes its shard rows. When a strictly higher terminal later re-opens the
- * session (the tab was hidden, a terminal went out, the call continued), the re-assembly finds those
- * indexes missing. Their audio lives only in the previous `recording.wav`, so it is copied back rather
- * than overwritten with silence.
+ * Why: a Complete assembly deletes its shard rows (everything below its expected count). When a strictly
+ * higher terminal later re-opens the session (the tab was hidden, a terminal went out, the call
+ * continued), the re-assembly finds those indexes missing. Their audio lives only in the previous
+ * `recording.wav`, so it is copied back rather than overwritten with silence.
  *
- * A gap range inside the previous recording is copied from it and stops being a gap; the previous
- * recording's own gaps that fall inside it are carried over (clipped), since those samples are its
- * silence. The part of a gap beyond the previous recording's length stays silent and stays a gap.
+ * Why only the LEADING run (indexes 0 up to the first present shard): that prefix is exactly what a
+ * Complete deletes, and every later assembly reproduces it identically from the same file, so it is the
+ * same audio whichever assembly wrote the object last. A later missing range is different: an assembly
+ * may have overwritten the object with silence there and then lost its fence or failed to finish, so the
+ * object can be newer than the stored `RecordingGaps`, and reusing it could report silence as audio.
+ * Those ranges stay silent gaps.
+ *
+ * Within the reused range the previous recording's own gaps are carried over (clipped), since those
+ * samples are its silence. The part of the run beyond the previous recording's length stays silent and
+ * stays a gap; the run's rows are gone, so per-index boundaries are unknown, and the remainder lists the
+ * indexes that can hold samples past the old end: an index `i` ends no later than
+ * `(i + 1) * MAX_SHARD_SAMPLES`, so indexes that provably end inside the old recording are dropped.
+ *
  * Returns a new result (the samples are written in place) with `Complete` recomputed.
  */
 export function FillGapsFromPreviousRecording(assembled: AssembledOpusRecording, previous: PreviousRecording): AssembledOpusRecording {
     const { Pcm: pcm } = assembled;
-    const previousLength = previous.Pcm.length;
-    const gaps: RecordingGap[] = [];
-    for (const gap of assembled.Gaps) {
-        const gapEnd = gap.startSample + gap.sampleCount;
-        const reuseEnd = Math.min(gapEnd, previousLength);
-        if (reuseEnd <= gap.startSample) {
-            gaps.push(gap);
-            continue;
+    const run = assembled.LeadingMissingRun;
+    const reuseEnd = run ? Math.min(run.startSample + run.sampleCount, previous.Pcm.length) : 0;
+    if (!run || reuseEnd <= run.startSample) {
+        return assembled;
+    }
+    const runEnd = run.startSample + run.sampleCount;
+    pcm.set(previous.Pcm.subarray(run.startSample, reuseEnd), run.startSample);
+    const gaps: RecordingGap[] = assembled.Gaps.filter(gap => gap !== run);
+    for (const old of previous.Gaps) {
+        const start = Math.max(old.startSample, run.startSample);
+        const end = Math.min(old.startSample + old.sampleCount, reuseEnd);
+        if (end > start) {
+            gaps.push({ startSample: start, sampleCount: end - start, indexes: old.indexes });
         }
-        pcm.set(previous.Pcm.subarray(gap.startSample, reuseEnd), gap.startSample);
-        for (const old of previous.Gaps) {
-            const start = Math.max(old.startSample, gap.startSample);
-            const end = Math.min(old.startSample + old.sampleCount, reuseEnd);
-            if (end > start) {
-                gaps.push({ startSample: start, sampleCount: end - start, indexes: old.indexes });
-            }
-        }
-        if (gapEnd > reuseEnd) {
-            gaps.push({ startSample: reuseEnd, sampleCount: gapEnd - reuseEnd, indexes: gap.indexes });
-        }
+    }
+    if (runEnd > reuseEnd) {
+        const indexes = run.indexes.filter(i => (i + 1) * MAX_SHARD_SAMPLES > reuseEnd);
+        gaps.push({ startSample: reuseEnd, sampleCount: runEnd - reuseEnd, indexes });
     }
     gaps.sort((a, b) => a.startSample - b.startSample);
     // On little-endian hosts Pcm is a view of the WAV, so the copy above already landed in it.
@@ -449,8 +478,8 @@ export function CreateLibopusDecoder(): IOpusPacketDecoder {
  * alone show the recording cannot be Complete → resolve where the recording is stored → load and parse
  * the shards (a shard that fails to parse, or whose header disagrees with its ledger row, is logged and
  * treated as missing) → decode ({@link AssembleOpusRecordingPcm}; a shard with an undecodable packet is
- * logged and silenced) → when the session already has its own `recording.wav` and gaps remain, read it
- * and fill the gaps it covers from it ({@link FillGapsFromPreviousRecording}: a Complete assembly deleted
+ * logged and silenced) → when the session already has its own `recording.wav` and the leading shards are
+ * missing, read it and fill that prefix from it ({@link FillGapsFromPreviousRecording}: a Complete assembly deleted
  * the rows its audio came from, so a re-opened session must not overwrite that audio with silence; the
  * early position-only Deferred is skipped for such a session for the same reason). Then:
  * - incomplete and not `ForcePartial`: the claim is handed back as `Pending` with no file, keeping the
@@ -518,7 +547,7 @@ async function assembleFromLedger(input: AssembleRealtimeRecordingInput): Promis
             `failed to decode (${failure.Message}); the shard is silenced and listed as a gap`
         );
     }
-    if (assembled.Gaps.length > 0 && target.ExistingFile) {
+    if (assembled.LeadingMissingRun && target.ExistingFile) {
         const previous = await readPreviousRecording(session, target, input);
         if (previous) {
             assembled = FillGapsFromPreviousRecording(assembled, previous);
@@ -567,8 +596,14 @@ async function readPreviousRecording(
         return null;
     }
     const driver = await FileStorageEngine.Instance.GetDriver(target.AccountID, input.ContextUser);
-    const pcm = ParseCanonicalRecordingWav(await driver.GetObject({ fullPath: file.ProviderKey }));
     const prefix = `AssembleRealtimeRecordingFromLedger (session ${session.ID})`;
+    // A missing object is permanent, not transient: treating it as a read error would Retry forever.
+    // Assembly goes on and the write recreates the object at the same key.
+    if (!await driver.ObjectExists(file.ProviderKey)) {
+        LogError(`${prefix}: existing recording file ${file.ID} has no object at ${file.ProviderKey}; nothing to reuse, so missing ranges stay silent gaps`);
+        return null;
+    }
+    const pcm = ParseCanonicalRecordingWav(await driver.GetObject({ fullPath: file.ProviderKey }));
     if (!pcm) {
         LogError(`${prefix}: existing recording file ${file.ID} is not a canonical 48 kHz mono PCM16 WAV; its audio is not reused, so missing ranges stay silent gaps`);
         return null;
