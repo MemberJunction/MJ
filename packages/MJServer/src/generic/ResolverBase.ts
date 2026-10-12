@@ -1292,6 +1292,7 @@ export class ResolverBase {
           BypassCache: bypassCache,
           DataSource: dataSource,
           IncludeBinaryFields: includeBinaryFields,
+          TimeZone: userPayload?.TimeZone,
         },
         user
       );
@@ -1441,6 +1442,7 @@ export class ResolverBase {
           BypassCache: param.bypassCache,
           DataSource: param.dataSource,
           IncludeBinaryFields: param.includeBinaryFields,
+          TimeZone: param.userPayload?.TimeZone,
         });
       }
 

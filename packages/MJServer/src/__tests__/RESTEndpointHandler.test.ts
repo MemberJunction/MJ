@@ -540,6 +540,17 @@ describe('RESTEndpointHandler view routes', () => {
             expect(jsonBody()).toEqual({ Success: true, Results: [{ ID: '1' }] });
         });
 
+        it('drops fields only server code may set, and keeps the route\'s entity over the body\'s', async () => {
+            mockOpsRunView.mockResolvedValue({ success: true, result: { Success: true, Results: [] } });
+            const handler = makeHandler();
+            const req = makeReq({ params: { entityName: 'Users' }, body: { EntityName: 'Secrets', TimeZone: 'Asia/Tokyo', MaxRows: 5 } });
+            const { res } = makeRes();
+
+            await handler.runView(req, res);
+
+            expect(mockOpsRunView).toHaveBeenCalledWith({ EntityName: 'Users', MaxRows: 5 }, MJ_USER);
+        });
+
         it('maps view-layer failures to 400', async () => {
             mockOpsRunView.mockResolvedValue({ success: false, error: 'does not have permission' });
             const handler = makeHandler();
@@ -589,6 +600,18 @@ describe('RESTEndpointHandler view routes', () => {
             expect(filtered).toEqual([{ EntityName: 'Users' }]);
             expect(user).toBe(MJ_USER);
             expect(jsonBody()).toEqual([{ Success: true, Results: [] }]);
+        });
+
+        it('drops fields only server code may set from every batched view', async () => {
+            mockOpsRunViews.mockResolvedValue({ success: true, results: [{ Success: true, Results: [] }] });
+            const handler = makeHandler();
+            const req = makeReq({ body: { params: [{ EntityName: 'Users', TimeZone: 'Asia/Tokyo' }] } });
+            const { res } = makeRes();
+
+            await handler.runViews(req, res);
+
+            const [sent] = mockOpsRunViews.mock.calls[0] as [RunViewParams[], UserInfo];
+            expect(sent).toEqual([{ EntityName: 'Users' }]);
         });
 
         it('maps view-layer batch failures to 400', async () => {

@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { RunQuery, RunQueryParams, RunQueryResult } from '@memberjunction/core';
+import { IMetadataProvider, RunQuery, RunQueryParams, RunQueryResult } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
@@ -208,6 +208,13 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
     // Query Loading
     // ========================================
 
+    /** The QueryEngine for a passed-in provider's connection, loaded on its first use. */
+    private async loadProviderQueryEngine(provider: IMetadataProvider): Promise<QueryEngine> {
+        const engine = QueryEngine.GetProviderInstance<QueryEngine>(provider, QueryEngine) as QueryEngine;
+        await engine.Config(false, provider.CurrentUser, provider);
+        return engine;
+    }
+
     private async onQueryIdChanged(): Promise<void> {
         // Reset state
         this.QueryInfo = null;
@@ -226,8 +233,13 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
             return;
         }
 
-        // Load query info from metadata
-        this.QueryInfo = QueryEngine.Instance.Queries.find(q => UUIDsEqual(q.ID, this._queryId)) || null;
+        // Load query info from metadata, through the passed-in provider when there is one
+        const queryId = this._queryId;
+        const engine = this.Provider ? await this.loadProviderQueryEngine(this.Provider) : QueryEngine.Instance;
+        if (!UUIDsEqual(queryId, this._queryId)) {
+            return; // a newer QueryId arrived while the provider's engine loaded; that run takes over
+        }
+        this.QueryInfo = engine.Queries.find(q => UUIDsEqual(q.ID, queryId)) || null;
 
         if (!this.QueryInfo) {
             this.LastError = `Query with ID ${this._queryId} not found`;

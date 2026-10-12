@@ -48,6 +48,7 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
             <div class="query-content">
               <mj-query-viewer
                 #queryViewer
+                [Provider]="Provider"
                 [QueryId]="queryId"
                 [AutoRun]="true"
                 [ShowToolbar]="showToolbar"

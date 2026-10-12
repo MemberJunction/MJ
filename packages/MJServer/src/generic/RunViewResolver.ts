@@ -1255,6 +1255,7 @@ export class RunViewResolver extends ResolverBase {
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,
+          TimeZone: userPayload?.TimeZone,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,

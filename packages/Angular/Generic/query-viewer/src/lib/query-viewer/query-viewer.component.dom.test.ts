@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { By } from '@angular/platform-browser';
+import type { IMetadataProvider } from '@memberjunction/core';
 import type { MJQueryEntityExtended } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, text, capture } from '@memberjunction/ng-test-utils';
 import { QueryViewerComponent } from './query-viewer.component';
@@ -16,6 +17,7 @@ import type { QueryEntityLinkClickEvent } from '../query-data-grid/models/query-
 
 @Component({ standalone: true, selector: 'mj-query-data-grid', template: '' })
 class GridStub {
+  @Input() Provider: IMetadataProvider | null = null;
   @Input() QueryInfo: MJQueryEntityExtended | null = null;
   @Input() Data: unknown; @Input() TotalRowCount = 0; @Input() PageNumber = 1; @Input() PageSize = 100;
   @Input() SelectionMode = ''; @Input() ShowToolbar = true; @Input() VisualConfig: unknown; @Input() IsLoading = false;
@@ -34,7 +36,7 @@ class GridStub {
 class ParamFormStub { @Input() QueryInfo: MJQueryEntityExtended | null = null; @Input() InitialValues: unknown; @Input() IsOpen = false;
   @Output() ParametersSubmit = new EventEmitter<unknown>(); @Output() Close = new EventEmitter<void>(); }
 @Component({ standalone: true, selector: 'mj-query-info-panel', template: '' })
-class InfoPanelStub { @Input() QueryInfo: MJQueryEntityExtended | null = null; @Input() Visible = false;
+class InfoPanelStub { @Input() Provider: IMetadataProvider | null = null; @Input() QueryInfo: MJQueryEntityExtended | null = null; @Input() Visible = false;
   @Output() Close = new EventEmitter<void>(); @Output() OpenRecord = new EventEmitter<unknown>(); @Output() CompositionTokenClick = new EventEmitter<unknown>(); }
 
 const CHILDREN = [GridStub, ParamFormStub, InfoPanelStub];

@@ -2,7 +2,7 @@ import express from 'express';
 import {
     BaseEntity, CompositeKey, EntityDeleteOptions, EntityInfo,
     EntityPermissionType, EntitySaveOptions, LogError, Metadata,
-    RunView, RunViewParams, UserInfo
+    RunView, RunViewParams, StripServerOnlyRunViewParams, UserInfo
 } from '@memberjunction/core';
 import { EntityCRUDHandler } from './EntityCRUDHandler.js';
 import { ViewOperationsHandler } from './ViewOperationsHandler.js';
@@ -499,11 +499,11 @@ export class RESTEndpointHandler {
             
             const user = req['mjUser'];
             
-            // Create RunViewParams from the request body
-            const params: RunViewParams = {
-                EntityName: entityName,
-                ...viewParams
-            };
+            // Create RunViewParams from the request body, without the fields only server code sets
+            const params: RunViewParams = StripServerOnlyRunViewParams({
+                ...viewParams,
+                EntityName: entityName
+            });
             
             const result = await ViewOperationsHandler.runView(params, user);
             
@@ -533,7 +533,7 @@ export class RESTEndpointHandler {
             
             // Filter out any views for entities that aren't allowed
             // using our enhanced entity filtering with wildcards and schema support
-            const filteredParams = params.filter(p => this.isEntityAllowed(p.EntityName));
+            const filteredParams = params.filter(p => this.isEntityAllowed(p.EntityName)).map(StripServerOnlyRunViewParams);
             
             // If all requested entities were filtered out, return an error
             if (filteredParams.length === 0 && params.length > 0) {

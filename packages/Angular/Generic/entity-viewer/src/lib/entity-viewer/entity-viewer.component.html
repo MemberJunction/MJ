@@ -49,7 +49,7 @@
       <!-- Recycle Bin chip (auto-hides when entity has no deleted records, no tracking,
            or user lacks Delete permission) -->
       @if (ShowRecycleBin) {
-        <mj-recycle-bin-chip [EntityName]="EffectiveEntity?.Name ?? null"></mj-recycle-bin-chip>
+        <mj-recycle-bin-chip [Provider]="Provider" [EntityName]="EffectiveEntity?.Name ?? null"></mj-recycle-bin-chip>
       }
     </div>
   }

@@ -17,7 +17,7 @@ import { EntityViewerComponent } from './entity-viewer.component';
 class SwitcherStub { @Input() ActiveViewTypeID: string | null = null; @Input() Entity: EntityInfo | null = null; @Input() Provider: unknown;
   @Output() ViewTypeSelected = new EventEmitter<unknown>(); }
 @Component({ standalone: true, selector: 'mj-recycle-bin-chip', template: '<div class="recycle-stub"></div>' })
-class RecycleChipStub { @Input() EntityName: string | null = null; }
+class RecycleChipStub { @Input() Provider: unknown; @Input() EntityName: string | null = null; }
 
 const CHILDREN = [SwitcherStub, RecycleChipStub, StubEmptyStateComponent, StubLoadingComponent];
 const ENTITY = { Name: 'Accounts' } as unknown as EntityInfo;

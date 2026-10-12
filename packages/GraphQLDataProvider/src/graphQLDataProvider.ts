@@ -16,7 +16,8 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
-         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress } from "@memberjunction/core";
+         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress,
+         GetLocalTimeZone, TIME_ZONE_HEADER } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -478,6 +479,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         // CRITICAL: Always set this instance's _configData first
         // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
         this._configData = configData;
+        this.setTimeZoneHeader();
 
         // An instance that is not the global singleton (built while the global-store slot was
         // parked) owns its own connection, even when a re-entry path omits the flag:
@@ -513,6 +515,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // This ensures ExecuteGQL() can use this._client.request()
             this._sessionId = GraphQLDataProvider.Instance._sessionId;
             this._client = GraphQLDataProvider.Instance._client;
+        }
+    }
+
+    /**
+     * Sends this runtime's IANA time zone on every request (`x-mj-timezone`), so the server works
+     * date tokens out in the caller's zone. A value the host set first is kept; where `Intl` gives
+     * no zone, nothing is sent and the server uses UTC.
+     */
+    private setTimeZoneHeader(): void {
+        const timeZone = GetLocalTimeZone();
+        if (timeZone && !this._dynamicHeaders.has(TIME_ZONE_HEADER)) {
+            this.SetDynamicHeader(TIME_ZONE_HEADER, timeZone);
         }
     }
 

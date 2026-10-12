@@ -1371,6 +1371,11 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             instance.Panel = panel;
             instance.PartType = partType;
             instance.IsEditing = this.IsEditing;
+            // The part reads and runs data through the viewer's provider. Without one, the part keeps
+            // its own default (the global provider), exactly as before.
+            if (this.Provider) {
+                instance.Provider = this.Provider;
+            }
 
             // Subscribe to events
             instance.ConfigureRequested.subscribe(() => {

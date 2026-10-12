@@ -122,6 +122,22 @@ export interface RunViewTelemetryOptions {
  * This class is fully backward compatible with object literal syntax - you can still use:
  * `{ EntityName: 'Users', ExtraFilter: 'Active=1' }` and it will work as expected.
  */
+/**
+ * `RunViewParams` fields only server code may set. A transport that builds run params from a
+ * client's request body (the REST endpoint) removes these before running the view, so a client
+ * cannot choose them. GraphQL run inputs never carry them in the first place.
+ */
+export const SERVER_ONLY_RUN_VIEW_PARAMS: ReadonlyArray<keyof RunViewParams> = ['TimeZone'];
+
+/** A copy of client-supplied run params without the {@link SERVER_ONLY_RUN_VIEW_PARAMS} fields. */
+export function StripServerOnlyRunViewParams(params: RunViewParams): RunViewParams {
+    const copy: RunViewParams = { ...params };
+    for (const key of SERVER_ONLY_RUN_VIEW_PARAMS) {
+        delete copy[key];
+    }
+    return copy;
+}
+
 export class RunViewParams {
     /**
      * optional - ID of the UserView record to run, if provided, ViewName is ignored
@@ -422,6 +438,19 @@ export class RunViewParams {
     IncludeBinaryFields?: boolean;
 
     /**
+     * Server only: the IANA time zone (e.g. `'Europe/Paris'`) that context tokens such as
+     * `Context.Today` are worked out in for this run. Unset means UTC.
+     *
+     * MJServer's GraphQL resolvers set it from the request's `x-mj-timezone` header
+     * (`TIME_ZONE_HEADER`); server code that runs without a request (agents, schedules) sets it
+     * itself. No GraphQL run input carries it, so a GraphQL client cannot set it.
+     *
+     * It is not part of the result-cache fingerprint. Code that resolves tokens with it must put the
+     * resolved values, not the zone, into whatever the fingerprint covers.
+     */
+    TimeZone?: string;
+
+    /**
      * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
      * After this time, cached results will be considered stale and fresh data will be fetched.
      * If not specified, the LocalCacheManager's default TTL will be used (typically 5 minutes).
@@ -535,6 +564,7 @@ export class RunViewParams {
         // Including binary fields changes the columns returned, so a toggle must trigger a reload.
         // undefined and false mean the same thing and must not cause a spurious one.
         if ((a.IncludeBinaryFields === true) !== (b.IncludeBinaryFields === true)) return false;
+        if (a.TimeZone !== b.TimeZone) return false;
         // A Live↔Materialized DataSource toggle changes the result set and MUST trigger a reload. Compared via
         // IsMaterializedDataSource so undefined/'Live' are treated as equal (no spurious reload) while a switch to
         // (or from) 'Materialized' is not — matching the read-routing decision everywhere else.

@@ -141,6 +141,19 @@ export type RunQueryParams = {
      * Existing callers that omit this are unaffected (they get live results, exactly as before).
      */
     DataSource?: 'Live' | 'Materialized'
+
+    /**
+     * Server only: the IANA time zone (e.g. `'Europe/Paris'`) that context tokens such as
+     * `Context.Today` are worked out in for this run. Unset means UTC.
+     *
+     * MJServer's GraphQL resolvers set it from the request's `x-mj-timezone` header
+     * (`TIME_ZONE_HEADER`); server code that runs without a request (agents, schedules) sets it
+     * itself. No GraphQL run input carries it, so a GraphQL client cannot set it.
+     *
+     * It is not part of the result-cache fingerprint. Code that resolves tokens with it must put the
+     * resolved values, not the zone, into whatever the fingerprint covers.
+     */
+    TimeZone?: string
 }
 
 /**

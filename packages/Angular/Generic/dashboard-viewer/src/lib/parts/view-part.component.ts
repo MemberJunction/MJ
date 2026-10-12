@@ -47,6 +47,7 @@ import { RecordSelectedEvent, RecordOpenedEvent, ViewRelatedRecordNavigation } f
           <!-- Entity Viewer -->
           @if (!IsLoading && !ErrorMessage && hasView && entityInfo) {
             <mj-entity-viewer
+              [Provider]="Provider"
               [Entity]="entityInfo"
               [ViewEntity]="viewEntity"
               (RecordSelected)="onRecordSelected($event)"

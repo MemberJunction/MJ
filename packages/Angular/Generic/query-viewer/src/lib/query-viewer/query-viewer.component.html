@@ -81,6 +81,7 @@
     <!-- Grid -->
     @if (QueryInfo) {
       <mj-query-data-grid
+        [Provider]="Provider"
         [QueryInfo]="QueryInfo"
         [Data]="QueryData"
         [ExportDataProvider]="FetchAllRowsForExport"
@@ -112,6 +113,7 @@
 
   <!-- Query info panel -->
   <mj-query-info-panel
+    [Provider]="Provider"
     [QueryInfo]="QueryInfo"
     [Visible]="ShowInfoPanel"
     (Close)="CloseInfoPanel()"

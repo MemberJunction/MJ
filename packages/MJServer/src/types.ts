@@ -33,6 +33,12 @@ export type UserPayload = {
    * redemption; do not treat `undefined` as `false`.
    */
   emailVerified?: boolean;
+  /**
+   * The caller's IANA time zone, from the request's `x-mj-timezone` header, when it names a zone
+   * this runtime knows. Undefined when the header is absent or invalid; callers then use UTC. The
+   * view and query resolvers pass it on as `RunViewParams.TimeZone` / `RunQueryParams.TimeZone`.
+   */
+  TimeZone?: string;
 };
 
 /**

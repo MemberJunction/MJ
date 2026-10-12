@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Subject } from 'rxjs';
 import type { ApplicationRef, ChangeDetectorRef, ElementRef, EnvironmentInjector, Injector } from '@angular/core';
+import type { IMetadataProvider } from '@memberjunction/core';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
 import type { ResolvedLayoutConfig } from 'golden-layout';
 import type { DashboardPanel, PanelInteractionEvent } from '../models/dashboard-types';
@@ -681,7 +682,7 @@ function showEveryPart(
 
 /** A part component that the viewer created with Angular's createComponent. */
 interface PartComponentDouble {
-  instance: { ConfigureRequested: Subject<void>; RemoveRequested: Subject<void>; NavigationRequested: Subject<void> };
+  instance: { ConfigureRequested: Subject<void>; RemoveRequested: Subject<void>; NavigationRequested: Subject<void>; Provider?: IMetadataProvider | null };
   location: { nativeElement: HTMLElement };
   hostView: object;
   destroy: ReturnType<typeof vi.fn>;
@@ -998,6 +999,27 @@ describe('DashboardViewerComponent overlapping layout builds', () => {
 
     expect(createPartInstanceMock).not.toHaveBeenCalled();
     expect(shown.at(-1)?.textContent).toContain(prompt);
+  });
+
+  it("hands the viewer's provider to each part it creates", async () => {
+    const provider = { InstanceConnectionString: 'http://other-server/' } as unknown as IMetadataProvider;
+    const viewer = createViewer({ width: 800, height: 600 });
+    viewer.Provider = provider;
+    viewer.Dashboard = partsDashboard('dash-1', 'part-1', 'part-2');
+    await finishLayout();
+
+    expect(partComponents).toHaveLength(2);
+    expect(partComponents.map((part) => part.instance.Provider)).toEqual([provider, provider]);
+  });
+
+  it('leaves a part on its own default provider when the viewer has none, as before', async () => {
+    const viewer = createViewer({ width: 800, height: 600 });
+    viewer.Provider = null;
+    viewer.Dashboard = partsDashboard('dash-1', 'part-1');
+    await finishLayout();
+
+    expect(partComponents).toHaveLength(1);
+    expect('Provider' in partComponents[0].instance).toBe(false);
   });
 });
 
