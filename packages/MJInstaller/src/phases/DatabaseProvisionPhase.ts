@@ -606,7 +606,7 @@ export class DatabaseProvisionPhase {
 
     const admin = await this.resolveAdminCredentials(context, platform, host, port, dbName, scriptPath);
     if (admin) {
-      await this.runSetupScript(platform, host, port, admin, setupScript, scriptPath, emitter);
+      await this.runSetupScript(platform, context.Config, host, port, admin, setupScript, scriptPath, emitter);
     } else if (context.Yes) {
       const dbType = platform === 'postgresql' ? 'PostgreSQL' : 'SQL Server';
       throw new InstallerError(
@@ -816,6 +816,7 @@ export class DatabaseProvisionPhase {
   /** Run the setup script. */
   private async runSetupScript(
     platform: string,
+    config: PartialInstallConfig,
     host: string,
     port: number,
     admin: AdminCredentials,
@@ -831,13 +832,16 @@ export class DatabaseProvisionPhase {
 
     try {
       if (platform === 'postgresql') {
+        // For PostgreSQL, generate setup statements and execute them
+        // The setup script is human-readable; we extract statements for driver execution
+        const statements = setupScript.split(';').map(s => s.trim()).filter(s => s.length > 0 && !s.startsWith('\\'));
         const result = await this.pgAdapter.ExecuteScript(
           host,
           port,
           'postgres',
           admin.User,
           admin.Password,
-          setupScript
+          statements
         );
         if (!result.Success) {
           throw new Error(result.ErrorMessage ?? 'unknown error');
@@ -847,7 +851,7 @@ export class DatabaseProvisionPhase {
           {
             Host: host,
             Port: port,
-            TrustServerCertificate: false,
+            TrustServerCertificate: config.DatabaseTrustCert ?? false,
             Database: 'master',
             User: admin.User,
             Password: admin.Password,
