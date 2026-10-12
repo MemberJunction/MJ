@@ -2,6 +2,7 @@ import { Hook } from '@oclif/core';
 import figlet from 'figlet';
 import { INTERACTIVE_ENV, ResolveOutputFormat, ShouldSuppressChrome } from '@memberjunction/cli-core';
 import { LIGHT_COMMANDS } from '../light-commands.js';
+import { KeepAwakeForCommand } from '../lib/keep-awake.js';
 
 /**
  * Mirror of `DYNAMIC_PACKAGES_MODE_ENV_VAR` from @memberjunction/dynamic-packages, inlined so
@@ -39,6 +40,8 @@ function readFormatArg(argv: string[]): string | undefined {
 
 const hook: Hook<'prerun'> = async function (options) {
   const argv = options.argv ?? [];
+  // Long database commands must not be interrupted by the machine sleeping — see keep-awake.ts.
+  KeepAwakeForCommand(options.Command.id ?? '');
 
   // `--interactive` / `--no-interactive` override the terminal detection that decides
   // whether a command may prompt. Like `--no-banner` they must work on every command,

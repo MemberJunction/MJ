@@ -4557,6 +4557,9 @@ importers:
       '@memberjunction/ng-ai-test-harness':
         specifier: 6.2.0-edge.3
         version: link:../../Generic/ai-test-harness
+      '@memberjunction/ng-artifacts':
+        specifier: 6.2.0-edge.3
+        version: link:../../Generic/artifacts
       '@memberjunction/ng-base-application':
         specifier: 6.2.0-edge.3
         version: link:../base-application
