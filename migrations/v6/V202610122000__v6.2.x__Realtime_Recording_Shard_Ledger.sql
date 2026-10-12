@@ -63,7 +63,9 @@ GO
 -- Records one shard. Insert-if-absent under a key-range lock (the MERGE the design calls for):
 --   * absent            → inserted; a NULL status becomes Pending, and a Complete/Partial session given a
 --                         shard at or past its expected count becomes Pending again (the call went on after a
---                         terminal signal, so there is unassembled audio).
+--                         terminal signal, so there is unassembled audio). An insert while Assembling also
+--                         re-opens it AND bumps the version: the running assembler may already have read the
+--                         ledger, so its fenced finish must lose and a fresh claim must pick the shard up.
 --   * same index + hash → Duplicate (a retry; acknowledged as success).
 --   * same index, other hash → Conflict; the session is marked Failed for a human to look at.
 -- Returns one row: Outcome plus the session's status, expected shard count and ClosedAt after the write.
@@ -96,9 +98,12 @@ BEGIN
     BEGIN
         SET @Outcome = N'Inserted';
         UPDATE [${flyway:defaultSchema}].[AIAgentSession]
-           SET [RecordingStatus] = N'Pending'
+           SET [RecordingStatus] = N'Pending',
+               [RecordingAssemblyVersion] = CASE WHEN [RecordingStatus] = N'Assembling' THEN [RecordingAssemblyVersion] + 1
+                                                 ELSE [RecordingAssemblyVersion] END
          WHERE [ID] = @AgentSessionID
            AND ([RecordingStatus] IS NULL
+                OR [RecordingStatus] = N'Assembling'
                 OR ([RecordingStatus] IN (N'Complete', N'Partial') AND @Index >= ISNULL([RecordingExpectedShards], 0)));
     END
     ELSE IF EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIAgentSessionRecordingShard]
@@ -123,8 +128,11 @@ GO
 
 -- Stamps the terminal signal. Idempotent: accepted when both counts are at or above what is stored (or
 -- nothing is stored yet); a lower terminal is Ignored (the caller logs it). A strictly higher terminal on a
--- Complete/Partial session re-opens it (Pending): the call continued after an earlier terminal (a tab that
--- went to the background and came back). A NULL status becomes Pending; Failed stays Failed.
+-- Complete/Partial/Assembling session re-opens it (Pending): the call continued after an earlier terminal (a
+-- tab that went to the background and came back). On Assembling the version is bumped too, so the running
+-- assembler's fenced finish loses and a fresh claim reads the new counts. Both counts rise together within a
+-- call, so a mixed pair (one higher, one lower) is treated as lower and Ignored. A NULL status becomes
+-- Pending; Failed stays Failed. NULL or negative counts are refused.
 DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spStampAIAgentSessionRecordingTerminal];
 GO
 CREATE PROCEDURE [${flyway:defaultSchema}].[spStampAIAgentSessionRecordingTerminal]
@@ -134,14 +142,21 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spStampAIAgentSessionRecordingTermin
 AS
 BEGIN
     SET NOCOUNT ON;
+    IF @ExpectedShards IS NULL OR @ExpectedShards < 0 OR @CapturedSamples IS NULL OR @CapturedSamples < 0
+        THROW 51100, N'spStampAIAgentSessionRecordingTerminal: expected shards and captured samples must be non-negative', 1;
     DECLARE @Stamped TABLE ([RecordingStatus] NVARCHAR(20));
     UPDATE [${flyway:defaultSchema}].[AIAgentSession]
        SET [RecordingStatus] = CASE
                WHEN [RecordingStatus] IS NULL THEN N'Pending'
-               WHEN [RecordingStatus] IN (N'Complete', N'Partial')
+               WHEN [RecordingStatus] IN (N'Complete', N'Partial', N'Assembling')
                     AND (@ExpectedShards > ISNULL([RecordingExpectedShards], -1) OR @CapturedSamples > ISNULL([RecordingCapturedSamples], -1))
                     THEN N'Pending'
                ELSE [RecordingStatus] END,
+           [RecordingAssemblyVersion] = CASE
+               WHEN [RecordingStatus] = N'Assembling'
+                    AND (@ExpectedShards > ISNULL([RecordingExpectedShards], -1) OR @CapturedSamples > ISNULL([RecordingCapturedSamples], -1))
+                    THEN [RecordingAssemblyVersion] + 1
+               ELSE [RecordingAssemblyVersion] END,
            [RecordingExpectedShards] = @ExpectedShards,
            [RecordingCapturedSamples] = @CapturedSamples
     OUTPUT inserted.[RecordingStatus] INTO @Stamped
@@ -163,8 +178,10 @@ GO
 -- Claims assembly: one conditional UPDATE, so of two concurrent callers exactly one gets a row back.
 -- Claimable from Pending or Partial; also from Assembling when the previous claim is older than
 -- @StaleBefore (an assembler that died — the janitor passes its attempt timeout; request paths pass NULL).
--- The row's __mj_UpdatedAt (stamped by its update trigger) is the claim time. Returns the new version, or
--- no row when the claim was lost.
+-- Staleness reads the row's __mj_UpdatedAt, which its update trigger stamps on ANY update (the claim, a
+-- terminal stamp, a heartbeat), so it measures time since the row was last touched, not since the claim:
+-- a re-claim can only be delayed, never early, and the janitor only sweeps closed sessions, which are
+-- rarely touched. Returns the new version, or no row when the claim was lost.
 DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spClaimAIAgentSessionRecordingAssembly];
 GO
 CREATE PROCEDURE [${flyway:defaultSchema}].[spClaimAIAgentSessionRecordingAssembly]
@@ -243,6 +260,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spPurgeAIAgentSessionRecordingShards
 AS
 BEGIN
     SET NOCOUNT ON;
+    IF @ClosedBefore IS NULL OR @MaxRows IS NULL OR @MaxRows <= 0
+        THROW 51101, N'spPurgeAIAgentSessionRecordingShards: a cutoff and a positive row limit are required', 1;
     DELETE TOP (@MaxRows) shard
       FROM [${flyway:defaultSchema}].[AIAgentSessionRecordingShard] shard WITH (READPAST)
       INNER JOIN [${flyway:defaultSchema}].[AIAgentSession] s ON s.[ID] = shard.[AgentSessionID]
@@ -361,7 +380,9 @@ GO
  * Sequence values are apply-time MAX(Sequence)+1 expressions), the foreign-key indexes, the
  * regenerated vwAIAgentSessionRecordingShards / vwAIAgentSessions views, the spCreate / spUpdate /
  * spDelete procedures (including the spDeleteConversation and spDeleteAIAgent cascades that now
- * reach the shard table), permission grants and extended properties.
+ * reach the shard table), permission grants, extended properties and the generated validators of the
+ * new table's CHECK constraints. Validator rows CodeGen emitted for unrelated entities (drift in the
+ * generating database) were removed.
  *
  * Do NOT edit it by hand. If the hand-written DDL above changes, re-run CodeGen against a database
  * at the last released version and replace this entire generated section.
@@ -4578,446 +4599,3 @@ VALUES ('b287d6d8-612a-4c6a-83a9-135b46330627', (SELECT [ID] FROM [${flyway:defa
 	}
 }', 'Start sample, sample count, and byte count must each be zero or greater to ensure recording data measurements are valid and non-negative.', 'ValidateStartSampleSampleCountAndBytesNonNegative', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'EBAED427-2514-46B1-A20C-777A2055C937')
    END;
-
-/* Generated Validation Functions for MJ: Interaction Offers */
--- CHECK constraint for MJ: Interaction Offers @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '6DC12139-38A1-43C6-85EE-8066450E762B' AND [Name] = 'ValidateRespondedAtOnOrAfterOfferedAt'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('ea6948f9-7a7a-40a9-bbc6-a5d863ba2955', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '([RespondedAt] IS NULL OR [RespondedAt]>=[OfferedAt])', 'public ValidateRespondedAtOnOrAfterOfferedAt(result: ValidationResult) {
-	if (this.RespondedAt != null && this.OfferedAt != null && this.RespondedAt < this.OfferedAt) {
-		result.Errors.push(new ValidationErrorInfo(
-			"RespondedAt",
-			"Response date and time cannot occur before the offered date and time.",
-			this.RespondedAt,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'The response date and time must be on or after the date and time when the interaction was offered.', 'ValidateRespondedAtOnOrAfterOfferedAt', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '6DC12139-38A1-43C6-85EE-8066450E762B')
-   END;
-
-/* Generated Validation Functions for MJ: Interactions */
--- CHECK constraint for MJ: Interactions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '4A355A56-EAE0-47D9-84CD-CE2BB49160DB' AND [Name] = 'ValidateEndedAtGreaterThanOrEqualToStartedAt'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('52e90301-2b1c-416a-a7c5-e2d4a9aa0386', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '([EndedAt] IS NULL OR [EndedAt]>=[StartedAt])', 'public ValidateEndedAtGreaterThanOrEqualToStartedAt(result: ValidationResult) {
-	if (this.EndedAt != null && this.StartedAt != null && this.EndedAt < this.StartedAt) {
-		result.Errors.push(new ValidationErrorInfo(
-			"EndedAt",
-			"End time must be on or after the start time.",
-			this.EndedAt,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'End time must be on or after the start time.', 'ValidateEndedAtGreaterThanOrEqualToStartedAt', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '4A355A56-EAE0-47D9-84CD-CE2BB49160DB')
-   END;
-
-/* Generated Validation Functions for MJ: Meeting Participants */
--- CHECK constraint for MJ: Meeting Participants @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'DB511323-5673-45F9-A47F-5A4604FB19B0' AND [Name] = 'ValidateLeftAtAfterJoinedAt'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('69005762-2222-46df-b7a7-d9e80759146d', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '([LeftAt] IS NULL OR [JoinedAt] IS NOT NULL AND [LeftAt]>=[JoinedAt])', 'public ValidateLeftAtAfterJoinedAt(result: ValidationResult) {
-	if (this.LeftAt != null) {
-		if (this.JoinedAt == null) {
-			result.Errors.push(new ValidationErrorInfo(
-				"LeftAt",
-				"Left time cannot be specified without a joined time.",
-				this.LeftAt,
-				ValidationErrorType.Failure
-			));
-		} else if (new Date(this.LeftAt) < new Date(this.JoinedAt)) {
-			result.Errors.push(new ValidationErrorInfo(
-				"LeftAt",
-				"Left time must be on or after the joined time.",
-				this.LeftAt,
-				ValidationErrorType.Failure
-			));
-		}
-	}
-}', 'A participant''s leave time cannot be recorded without a join time, and the leave time must be on or after the join time to ensure accurate attendance tracking.', 'ValidateLeftAtAfterJoinedAt', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'DB511323-5673-45F9-A47F-5A4604FB19B0')
-   END;
-
--- CHECK constraint for MJ: Meeting Participants @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'DB511323-5673-45F9-A47F-5A4604FB19B0' AND [Name] = 'ValidateParticipantIdentityType'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('cda7bbd6-9fa8-40a2-a0a0-130a544e90a2', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '(((case when [UserID] IS NOT NULL then (1) else (0) end+case when [AgentID] IS NOT NULL then (1) else (0) end)+case when [ExternalEmail] IS NOT NULL OR [ExternalPhone] IS NOT NULL then (1) else (0) end)=(1))', 'public ValidateParticipantIdentityType(result: ValidationResult) {
-	let identityCount = 0;
-	if (this.UserID != null) {
-		identityCount++;
-	}
-	if (this.AgentID != null) {
-		identityCount++;
-	}
-	if (this.ExternalEmail != null || this.ExternalPhone != null) {
-		identityCount++;
-	}
-
-	if (identityCount !== 1) {
-		result.Errors.push(new ValidationErrorInfo(
-			"UserID",
-			"Exactly one participant identity must be specified: a User, an Agent, or an External Contact (Email or Phone).",
-			this.UserID,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'A participant must be identified by exactly one source: an internal user, an agent, or an external contact (via email or phone). You cannot combine different identity types or leave all of them blank.', 'ValidateParticipantIdentityType', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'DB511323-5673-45F9-A47F-5A4604FB19B0')
-   END;
-
-/* Generated Validation Functions for MJ: Meetings */
--- CHECK constraint for MJ: Meetings @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'D2A67D87-F495-43E3-A91B-5A46E5553C31' AND [Name] = 'ValidateEndedAtAfterStartedAt'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('4b0be439-040a-4f4a-b9a1-42e1b9e1e443', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '([EndedAt] IS NULL OR [StartedAt] IS NOT NULL AND [EndedAt]>=[StartedAt])', 'public ValidateEndedAtAfterStartedAt(result: ValidationResult) {
-	if (this.EndedAt != null) {
-		if (this.StartedAt == null) {
-			result.Errors.push(new ValidationErrorInfo(
-				"StartedAt",
-				"Start time must be provided if an end time is set.",
-				this.StartedAt,
-				ValidationErrorType.Failure
-			));
-		} else if (this.EndedAt < this.StartedAt) {
-			result.Errors.push(new ValidationErrorInfo(
-				"EndedAt",
-				"End time must be on or after the start time.",
-				this.EndedAt,
-				ValidationErrorType.Failure
-			));
-		}
-	}
-}', 'If an end time is provided, a start time must also be set and the end time must be on or after the start time.', 'ValidateEndedAtAfterStartedAt', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'D2A67D87-F495-43E3-A91B-5A46E5553C31')
-   END;
-
--- CHECK constraint for MJ: Meetings @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'D2A67D87-F495-43E3-A91B-5A46E5553C31' AND [Name] = 'ValidateScheduledEndAtAfterScheduledStartAt'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('d526fc99-e0be-493e-9bd8-6993b9bc06bf', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '([ScheduledEndAt] IS NULL OR [ScheduledStartAt] IS NOT NULL AND [ScheduledEndAt]>[ScheduledStartAt])', 'public ValidateScheduledEndAtAfterScheduledStartAt(result: ValidationResult) {
-	if (this.ScheduledEndAt != null) {
-		if (this.ScheduledStartAt == null || this.ScheduledEndAt <= this.ScheduledStartAt) {
-			result.Errors.push(new ValidationErrorInfo(
-				"ScheduledEndAt",
-				"Scheduled end time must be after the scheduled start time, and a start time must be provided.",
-				this.ScheduledEndAt,
-				ValidationErrorType.Failure
-			));
-		}
-	}
-}', 'If a scheduled end time is specified, a scheduled start time must also be provided and the scheduled end time must be after the scheduled start time.', 'ValidateScheduledEndAtAfterScheduledStartAt', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'D2A67D87-F495-43E3-A91B-5A46E5553C31')
-   END;
-
-/* Generated Validation Functions for MJ: Rubric Criteria */
--- CHECK constraint for MJ: Rubric Criteria @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '49D89CDD-B89F-45D7-A5BB-04FC1C10E71D' AND [Name] = 'ValidateGateMinimumScoreWhenIsGate'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('09c71f8e-9953-4bc3-82d6-cbf1fc1ff0d8', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '([IsGate]=(0) OR [GateMinimumScore] IS NOT NULL)', 'public ValidateGateMinimumScoreWhenIsGate(result: ValidationResult) {
-	if (this.IsGate && this.GateMinimumScore == null) {
-		result.Errors.push(new ValidationErrorInfo(
-			"GateMinimumScore",
-			"A minimum score is required when an item is designated as a gate.",
-			this.GateMinimumScore,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'Items designated as gates must have a minimum score specified.', 'ValidateGateMinimumScoreWhenIsGate', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '49D89CDD-B89F-45D7-A5BB-04FC1C10E71D')
-   END;
-
--- CHECK constraint for MJ: Rubric Criteria @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '49D89CDD-B89F-45D7-A5BB-04FC1C10E71D' AND [Name] = 'ValidateRollupMethodForNodeType'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('fd4aac4e-3ab6-4970-b5ad-d4f4bf6d2481', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '([NodeType]=''Group'' OR [RollupMethod] IS NULL)', 'public ValidateRollupMethodForNodeType(result: ValidationResult) {
-	if (this.NodeType !== ''Group'' && this.RollupMethod != null) {
-		result.Errors.push(new ValidationErrorInfo(
-			"RollupMethod",
-			"A rollup method can only be specified for ''Group'' node types.",
-			this.RollupMethod,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'Only group nodes can have a rollup method specified; all other node types must leave the rollup method empty.', 'ValidateRollupMethodForNodeType', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '49D89CDD-B89F-45D7-A5BB-04FC1C10E71D')
-   END;
-
--- CHECK constraint for MJ: Rubric Criteria @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '49D89CDD-B89F-45D7-A5BB-04FC1C10E71D' AND [Name] = 'ValidateScaleIDByNodeType'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('3dc1d05d-b033-4a74-b2df-a1feee37e71e', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '([NodeType]=''Criterion'' AND [ScaleID] IS NOT NULL OR [NodeType]=''Group'' AND [ScaleID] IS NULL)', 'public ValidateScaleIDByNodeType(result: ValidationResult) {
-	if (this.NodeType === "Criterion" && this.ScaleID == null) {
-		result.Errors.push(new ValidationErrorInfo(
-			"ScaleID",
-			"A Scale must be specified for Criterion nodes.",
-			this.ScaleID,
-			ValidationErrorType.Failure
-		));
-	} else if (this.NodeType === "Group" && this.ScaleID != null) {
-		result.Errors.push(new ValidationErrorInfo(
-			"ScaleID",
-			"Group nodes cannot have a Scale assigned.",
-			this.ScaleID,
-			ValidationErrorType.Failure
-		));
-	} else if (this.NodeType !== "Criterion" && this.NodeType !== "Group") {
-		result.Errors.push(new ValidationErrorInfo(
-			"NodeType",
-			"Node Type must be either ''Criterion'' with a Scale or ''Group'' without a Scale.",
-			this.NodeType,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'Criterion nodes must have an associated scale, while Group nodes cannot have a scale assigned.', 'ValidateScaleIDByNodeType', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '49D89CDD-B89F-45D7-A5BB-04FC1C10E71D')
-   END;
-
-/* Generated Validation Functions for MJ: Rubric Evaluation Scores */
--- CHECK constraint for MJ: Rubric Evaluation Scores @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '122ED707-2BC0-42E8-B25F-6BDDE7164962' AND [Name] = 'ValidateEvaluationMetricsRanges'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('0286e3c3-de93-4c3f-a492-8a4169707336', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '(([NormalizedScore] IS NULL OR [NormalizedScore]>=(0) AND [NormalizedScore]<=(1)) AND ([EffectiveWeight] IS NULL OR [EffectiveWeight]>=(0) AND [EffectiveWeight]<=(1)) AND ([OverallContribution] IS NULL OR [OverallContribution]>=(0) AND [OverallContribution]<=(1)) AND ([Completeness] IS NULL OR [Completeness]>=(0) AND [Completeness]<=(1)) AND ([Confidence] IS NULL OR [Confidence]>=(0) AND [Confidence]<=(1)))', 'public ValidateEvaluationMetricsRanges(result: ValidationResult) {
-	if (this.NormalizedScore != null && (this.NormalizedScore < 0 || this.NormalizedScore > 1)) {
-		result.Errors.push(new ValidationErrorInfo(
-			"NormalizedScore",
-			"Normalized score must be between 0 and 1.",
-			this.NormalizedScore,
-			ValidationErrorType.Failure
-		));
-	}
-	if (this.EffectiveWeight != null && (this.EffectiveWeight < 0 || this.EffectiveWeight > 1)) {
-		result.Errors.push(new ValidationErrorInfo(
-			"EffectiveWeight",
-			"Effective weight must be between 0 and 1.",
-			this.EffectiveWeight,
-			ValidationErrorType.Failure
-		));
-	}
-	if (this.OverallContribution != null && (this.OverallContribution < 0 || this.OverallContribution > 1)) {
-		result.Errors.push(new ValidationErrorInfo(
-			"OverallContribution",
-			"Overall contribution must be between 0 and 1.",
-			this.OverallContribution,
-			ValidationErrorType.Failure
-		));
-	}
-	if (this.Completeness != null && (this.Completeness < 0 || this.Completeness > 1)) {
-		result.Errors.push(new ValidationErrorInfo(
-			"Completeness",
-			"Completeness must be between 0 and 1.",
-			this.Completeness,
-			ValidationErrorType.Failure
-		));
-	}
-	if (this.Confidence != null && (this.Confidence < 0 || this.Confidence > 1)) {
-		result.Errors.push(new ValidationErrorInfo(
-			"Confidence",
-			"Confidence must be between 0 and 1.",
-			this.Confidence,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'Normalized score, effective weight, overall contribution, completeness, and confidence values must each be between 0 and 1 when provided.', 'ValidateEvaluationMetricsRanges', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '122ED707-2BC0-42E8-B25F-6BDDE7164962')
-   END;
-
-/* Generated Validation Functions for MJ: Rubric Evaluations */
--- CHECK constraint for MJ: Rubric Evaluations @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '7FAA091D-C1A3-48A7-82D2-3D17729470F9' AND [Name] = 'ValidateEvaluatorUserIDWhenHuman'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('e931d695-c3cc-4764-94d9-446afedeb4aa', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '([EvaluatorType]<>''Human'' OR [EvaluatorUserID] IS NOT NULL)', 'public ValidateEvaluatorUserIDWhenHuman(result: ValidationResult) {
-	if (this.EvaluatorType === "Human" && this.EvaluatorUserID == null) {
-		result.Errors.push(new ValidationErrorInfo(
-			"EvaluatorUserID",
-			"An evaluator user must be specified when the evaluator type is Human.",
-			this.EvaluatorUserID,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'When the evaluator type is Human, an evaluator user must be specified.', 'ValidateEvaluatorUserIDWhenHuman', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '7FAA091D-C1A3-48A7-82D2-3D17729470F9')
-   END;
-
--- CHECK constraint for MJ: Rubric Evaluations @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '7FAA091D-C1A3-48A7-82D2-3D17729470F9' AND [Name] = 'ValidateNormalizedMetricsRange'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('5433c1d2-525f-4eb1-9507-9925cd57fdd1', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '(([NormalizedScore] IS NULL OR [NormalizedScore]>=(0) AND [NormalizedScore]<=(1)) AND ([PassThresholdApplied] IS NULL OR [PassThresholdApplied]>=(0) AND [PassThresholdApplied]<=(1)) AND ([Completeness] IS NULL OR [Completeness]>=(0) AND [Completeness]<=(1)) AND ([Confidence] IS NULL OR [Confidence]>=(0) AND [Confidence]<=(1)))', 'public ValidateNormalizedMetricsRange(result: ValidationResult): void {
-	if (this.NormalizedScore != null && (this.NormalizedScore < 0 || this.NormalizedScore > 1)) {
-		result.Errors.push(new ValidationErrorInfo(
-			"NormalizedScore",
-			"Normalized score must be between 0 and 1.",
-			this.NormalizedScore,
-			ValidationErrorType.Failure
-		));
-	}
-	if (this.PassThresholdApplied != null && (this.PassThresholdApplied < 0 || this.PassThresholdApplied > 1)) {
-		result.Errors.push(new ValidationErrorInfo(
-			"PassThresholdApplied",
-			"Pass threshold applied must be between 0 and 1.",
-			this.PassThresholdApplied,
-			ValidationErrorType.Failure
-		));
-	}
-	if (this.Completeness != null && (this.Completeness < 0 || this.Completeness > 1)) {
-		result.Errors.push(new ValidationErrorInfo(
-			"Completeness",
-			"Completeness must be between 0 and 1.",
-			this.Completeness,
-			ValidationErrorType.Failure
-		));
-	}
-	if (this.Confidence != null && (this.Confidence < 0 || this.Confidence > 1)) {
-		result.Errors.push(new ValidationErrorInfo(
-			"Confidence",
-			"Confidence must be between 0 and 1.",
-			this.Confidence,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'Normalized score, pass threshold applied, completeness, and confidence must each be between 0 and 1 (inclusive) when provided.', 'ValidateNormalizedMetricsRange', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '7FAA091D-C1A3-48A7-82D2-3D17729470F9')
-   END;
-
--- CHECK constraint for MJ: Rubric Evaluations @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '7FAA091D-C1A3-48A7-82D2-3D17729470F9' AND [Name] = 'ValidateSubmittedAtAndOutcomeRequiredByStatus'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('dfe034fd-66c3-477e-b859-8dcd3e00c20f', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '(NOT ([Status]=''Withdrawn'' OR [Status]=''Superseded'' OR [Status]=''Submitted'') OR [SubmittedAt] IS NOT NULL AND [Outcome] IS NOT NULL)', 'public ValidateSubmittedAtAndOutcomeRequiredByStatus(result: ValidationResult): void {
-	if (this.Status === "Withdrawn" || this.Status === "Superseded" || this.Status === "Submitted") {
-		if (this.SubmittedAt == null) {
-			result.Errors.push(new ValidationErrorInfo(
-				"SubmittedAt",
-				"Submission date and time is required when status is " + this.Status + ".",
-				this.SubmittedAt,
-				ValidationErrorType.Failure
-			));
-		}
-		if (this.Outcome == null) {
-			result.Errors.push(new ValidationErrorInfo(
-				"Outcome",
-				"Outcome is required when status is " + this.Status + ".",
-				this.Outcome,
-				ValidationErrorType.Failure
-			));
-		}
-	}
-}', 'Evaluations with a status of Submitted, Withdrawn, or Superseded must have both a submission timestamp and an outcome specified.', 'ValidateSubmittedAtAndOutcomeRequiredByStatus', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '7FAA091D-C1A3-48A7-82D2-3D17729470F9')
-   END;
-
-/* Generated Validation Functions for MJ: Rubric Versions */
--- CHECK constraint for MJ: Rubric Versions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'A60434B6-1893-45ED-9ECB-169EE8FE6241' AND [Name] = 'ValidateScoreDisplayMaxGreaterThanScoreDisplayMin'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('d244b193-ab60-4c0c-af6b-faecfb7021ba', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '([ScoreDisplayMax]>[ScoreDisplayMin])', 'public ValidateScoreDisplayMaxGreaterThanScoreDisplayMin(result: ValidationResult) {
-	if (this.ScoreDisplayMax != null && this.ScoreDisplayMin != null && this.ScoreDisplayMax <= this.ScoreDisplayMin) {
-		result.Errors.push(new ValidationErrorInfo(
-			"ScoreDisplayMax",
-			"The maximum score display value must be greater than the minimum score display value.",
-			this.ScoreDisplayMax,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'The maximum score display value must be greater than the minimum score display value.', 'ValidateScoreDisplayMaxGreaterThanScoreDisplayMin', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'A60434B6-1893-45ED-9ECB-169EE8FE6241')
-   END;
-
--- CHECK constraint for MJ: Rubric Versions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'A60434B6-1893-45ED-9ECB-169EE8FE6241' AND [Name] = 'ValidateVersionNumbersNonNegative'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('e5bc56f1-c08b-4845-b8ca-da8a672c7c62', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '(([MajorVersion] IS NULL OR [MajorVersion]>=(0)) AND ([MinorVersion] IS NULL OR [MinorVersion]>=(0)) AND ([PatchVersion] IS NULL OR [PatchVersion]>=(0)))', 'public ValidateVersionNumbersNonNegative(result: ValidationResult) {
-	if (this.MajorVersion != null && this.MajorVersion < 0) {
-		result.Errors.push(new ValidationErrorInfo(
-			"MajorVersion",
-			"Major version must be 0 or greater.",
-			this.MajorVersion,
-			ValidationErrorType.Failure
-		));
-	}
-	if (this.MinorVersion != null && this.MinorVersion < 0) {
-		result.Errors.push(new ValidationErrorInfo(
-			"MinorVersion",
-			"Minor version must be 0 or greater.",
-			this.MinorVersion,
-			ValidationErrorType.Failure
-		));
-	}
-	if (this.PatchVersion != null && this.PatchVersion < 0) {
-		result.Errors.push(new ValidationErrorInfo(
-			"PatchVersion",
-			"Patch version must be 0 or greater.",
-			this.PatchVersion,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'Major, minor, and patch version numbers must be 0 or greater when provided.', 'ValidateVersionNumbersNonNegative', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'A60434B6-1893-45ED-9ECB-169EE8FE6241')
-   END;
-
-/* Generated Validation Functions for MJ: Scoped Notification Configs */
--- CHECK constraint for MJ: Scoped Notification Configs @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '05323DF8-34B1-43B0-9D2F-F8BD8E366883' AND [Name] = 'ValidateAtLeastOneNotificationChannel'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('8aea431d-36ef-4db9-b41a-7274f77e38ce', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '([InApp] IS NOT NULL OR [Email] IS NOT NULL OR [SMS] IS NOT NULL)', 'public ValidateAtLeastOneNotificationChannel(result: ValidationResult) {
-	if (this.InApp == null && this.Email == null && this.SMS == null) {
-		result.Errors.push(new ValidationErrorInfo(
-			"InApp",
-			"At least one notification delivery method (In-App, Email, or SMS) must be provided.",
-			null,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'At least one notification delivery method (In-App, Email, or SMS) must be provided.', 'ValidateAtLeastOneNotificationChannel', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '05323DF8-34B1-43B0-9D2F-F8BD8E366883')
-   END;
-
--- CHECK constraint for MJ: Scoped Notification Configs @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '05323DF8-34B1-43B0-9D2F-F8BD8E366883' AND [Name] = 'ValidatePrimaryScopeRecordIDRequiresPrimaryScopeEntityID'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('60768760-b64e-486e-98f1-47ee77ea809f', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '4B500A24-0259-4EFF-9E34-24E9F5EC9DAB', GETUTCDATE(), 'TypeScript', 'Approved', '([PrimaryScopeRecordID] IS NULL OR [PrimaryScopeEntityID] IS NOT NULL)', 'public ValidatePrimaryScopeRecordIDRequiresPrimaryScopeEntityID(result: ValidationResult) {
-	if (this.PrimaryScopeRecordID != null && this.PrimaryScopeEntityID == null) {
-		result.Errors.push(new ValidationErrorInfo(
-			"PrimaryScopeEntityID",
-			"A primary scope entity must be specified when a primary scope record ID is provided.",
-			this.PrimaryScopeEntityID,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'A primary scope record cannot be specified without also specifying the primary scope entity it belongs to.', 'ValidatePrimaryScopeRecordIDRequiresPrimaryScopeEntityID', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '05323DF8-34B1-43B0-9D2F-F8BD8E366883')
-   END;
-
