@@ -10,7 +10,7 @@ import {
     OpusEncoderEnvironment,
     SelectOpusPacketEncoder,
 } from '../lib/services/recording/opus-packet-encoder';
-import { WasmOpusEncoder, WASM_OPUS_FLUSH_TIMEOUT_MS } from '../lib/services/recording/wasm-opus-encoder';
+import { WasmOpusEncoder, WASM_OPUS_FLUSH_TIMEOUT_MS, WASM_OPUS_READY_TIMEOUT_MS } from '../lib/services/recording/wasm-opus-encoder';
 import {
     AudioDataConstructor,
     AudioEncoderConstructor,
@@ -291,5 +291,36 @@ describe('Opus encoders → runtime shards → server decode (real libopus)', ()
         expect(encoder.TakePackets()).toEqual([]);
         expect(warn).toHaveBeenCalledWith(expect.stringContaining('libopus init failed'));
         encoder.Close();
+    });
+
+    describe('WasmOpusEncoder.Start waits for the worker to be ready', () => {
+        it('resolves once libopus is instantiated in the worker', async () => {
+            const encoder = await WasmOpusEncoder.Start(StartInProcessOpusWorker(), LibopusWasmBytes());
+            expect(encoder.Kind).toBe('wasm');
+            encoder.Close();
+        });
+
+        it('rejects (and stops the worker) when libopus cannot be instantiated, so selection fails visibly', async () => {
+            vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const port = StartInProcessOpusWorker();
+            const onClose = vi.fn();
+            await expect(WasmOpusEncoder.Start(port, new Uint8Array([0, 1, 2, 3]).buffer, onClose)).rejects.toThrow(/libopus init failed/);
+            expect(port.Terminated).toBe(true);
+            expect(onClose).toHaveBeenCalledTimes(1);
+        });
+
+        it(`rejects after ${WASM_OPUS_READY_TIMEOUT_MS} ms when the worker never answers (e.g. a CSP that blocks it)`, async () => {
+            vi.useFakeTimers();
+            try {
+                const silent = { OnReply: null, Post: vi.fn(), Terminate: vi.fn() };
+                const started = WasmOpusEncoder.Start(silent, new ArrayBuffer(8));
+                const outcome = started.then(() => 'resolved', (error: Error) => error.message);
+                await vi.advanceTimersByTimeAsync(WASM_OPUS_READY_TIMEOUT_MS);
+                await expect(outcome).resolves.toMatch(/did not start/);
+                expect(silent.Terminate).toHaveBeenCalledTimes(1);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
     });
 });
