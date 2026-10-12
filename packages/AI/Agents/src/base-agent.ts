@@ -989,6 +989,30 @@ export class BaseAgent {
     }
 
     /**
+     * Gives a run that continues another (`lastRunId`) the earlier run's stored bindings, when its caller
+     * passed none. Fails closed: a prior run that can't be read, or whose stored bindings don't parse,
+     * fails this run rather than starting it unbound.
+     */
+    private async inheritBoundActionParams(params: ExecuteAgentParams): Promise<void> {
+        if (params.boundActionParams || !params.lastRunId) {
+            return;
+        }
+        const result = await new RunView().RunView<{ BoundActionParams: string | null }>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ID='${EscapeSQLString(params.lastRunId)}'`,
+            Fields: ['BoundActionParams'],
+            ResultType: 'simple'
+        }, params.contextUser);
+        if (!result.Success) {
+            throw new Error(`Could not read the bindings of run ${params.lastRunId}: ${result.ErrorMessage}`);
+        }
+        const stored = result.Results[0]?.BoundActionParams;
+        if (stored) {
+            params.boundActionParams = JSON.parse(stored) as BoundActionParams;
+        }
+    }
+
+    /**
      * The model's parameters for one action as the progress line and the model-facing invocation record
      * show them: minus any name the run binds, since a value the model wrote for a bound parameter was
      * discarded and must not be shown as if it had been used. With no bindings, `Object.entries(aa.params)`.
@@ -2171,6 +2195,11 @@ export class BaseAgent {
 
         try {
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
+
+            // A run that continues another keeps that run's bindings unless its caller gives its own.
+            // Without this, resuming a bound run (from a stored request, or a client's lastRunId)
+            // would show the model the parameters its original caller hid.
+            await this.inheritBoundActionParams(params);
 
             // =====================================================================================
             // LATENCY OPTIMIZATION (Opt #4): Parallelized initialization sequence.
@@ -11646,7 +11675,12 @@ The context is now within limits. Please retry your request with the recovered c
         // 0. It has to be recorded on the run itself because the run is the only thing that outlives
         // the dispatcher that started it, and the next graph this run submits reads it back.
         this._agentRun.ContinuationDepth = params.continuationDepth ?? 0;
-        
+        // Stored so a run that continues this one (lastRunId) applies the same bindings.
+        // Plain JSON.stringify on purpose: a binding that can't be stored must fail the run, not be dropped.
+        if (params.boundActionParams) {
+            this._agentRun.BoundActionParams = JSON.stringify(params.boundActionParams);
+        }
+
         // Set LastRunID for run chaining (different from ParentRunID)
         if (params.lastRunId) {
             // Check for circular references in the run chain

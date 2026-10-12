@@ -20,9 +20,12 @@ import { LoopAgentType } from '../agent-types/loop-agent-type';
 import { NoCatalogNarrowing } from '../catalog-narrowing';
 import { ApplyBoundActionParams, BindingsForAction, IsBoundParamName, UnboundParams } from '../bound-action-params';
 
+/** What a RunView of the prior run returns; tests set it per case. */
+const priorRun = vi.hoisted(() => ({ result: { Success: true, Results: [] as { BoundActionParams: string | null }[], ErrorMessage: '' }, reads: [] as unknown[] }));
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
-    return { ...actual, LogError: vi.fn(), LogStatus: vi.fn(), LogStatusEx: vi.fn(), LogErrorEx: vi.fn(), IsVerboseLoggingEnabled: vi.fn(() => false) };
+    class RunView { async RunView(params: unknown) { priorRun.reads.push(params); return priorRun.result; } }
+    return { ...actual, RunView, LogError: vi.fn(), LogStatus: vi.fn(), LogStatusEx: vi.fn(), LogErrorEx: vi.fn(), IsVerboseLoggingEnabled: vi.fn(() => false) };
 });
 
 /** The process-wide base catalog the engine would cache; tests set it per case. */
@@ -85,6 +88,7 @@ interface AgentInternals {
     gatherPromptTemplateData(agent: MJAIAgentEntityExtended, user?: unknown, extra?: unknown, actionChanges?: unknown, subAgentChanges?: unknown, bound?: BoundActionParams): Promise<{ actionDetails: string; agentTypePromptParams?: Record<string, unknown> }>;
     _agentTypePromptParams: Record<string, unknown>;
     boundActionParamsError(params: ExecuteAgentParams): string | null;
+    inheritBoundActionParams(params: ExecuteAgentParams): Promise<void>;
     shownActionParamEntries(params: ExecuteAgentParams, aa: { name: string; params: Record<string, unknown> }): [string, unknown][];
     ensureCatalogNarrowing: () => Promise<void>;
     availableSkills: () => Promise<unknown[]>;
@@ -148,6 +152,8 @@ const AGENT = { ID: 'agent-1', Name: 'Space Agent' } as unknown as MJAIAgentEnti
 beforeEach(() => {
     vi.clearAllMocks();
     catalogHolder.catalog = undefined;
+    priorRun.result = { Success: true, Results: [], ErrorMessage: '' };
+    priorRun.reads = [];
     runAction.mockImplementation(async (p) => okResult(p.Action));
     runAgent.mockResolvedValue({ success: true, agentRun: { ID: 'child-run' }, payload: {} });
 });
@@ -458,5 +464,44 @@ describe('runs that inherit the bindings', () => {
         await probe.Internals.delegateRealtimeToTarget(agentParams({ boundActionParams: bound }), {} as AgentConfiguration, { CallID: 'c1', Arguments: '{}' });
         expect(runAgent).toHaveBeenCalledTimes(1);
         expect(runAgent.mock.calls[0][0].boundActionParams).toBe(bound);
+    });
+});
+
+describe('a run that continues another (lastRunId)', () => {
+    const inherit = (params: ExecuteAgentParams) => new Probe().Internals.inheritBoundActionParams(params);
+
+    it('takes the earlier run\'s stored bindings when its caller passes none', async () => {
+        priorRun.result.Results = [{ BoundActionParams: JSON.stringify(bindChapter()) }];
+        const params = agentParams({ lastRunId: 'run-1' });
+        await inherit(params);
+        expect(params.boundActionParams).toEqual(bindChapter());
+        expect(priorRun.reads).toEqual([expect.objectContaining({ EntityName: 'MJ: AI Agent Runs', ExtraFilter: "ID='run-1'", Fields: ['BoundActionParams'] })]);
+    });
+    it('keeps the caller\'s own bindings and reads nothing', async () => {
+        const own = bindChapter('chapter-9');
+        const params = agentParams({ lastRunId: 'run-1', boundActionParams: own });
+        await inherit(params);
+        expect(params.boundActionParams).toBe(own);
+        expect(priorRun.reads).toHaveLength(0);
+    });
+    it('reads nothing for a run that continues no other', async () => {
+        const params = agentParams();
+        await inherit(params);
+        expect(params.boundActionParams).toBeUndefined();
+        expect(priorRun.reads).toHaveLength(0);
+    });
+    it('stays unbound when the earlier run had no bindings', async () => {
+        priorRun.result.Results = [{ BoundActionParams: null }];
+        const params = agentParams({ lastRunId: 'run-1' });
+        await inherit(params);
+        expect(params.boundActionParams).toBeUndefined();
+    });
+    it('fails closed when the earlier run cannot be read', async () => {
+        priorRun.result = { Success: false, Results: [], ErrorMessage: 'boom' };
+        await expect(inherit(agentParams({ lastRunId: 'run-1' }))).rejects.toThrow(/Could not read the bindings of run run-1: boom/);
+    });
+    it('fails closed when the stored bindings do not parse', async () => {
+        priorRun.result.Results = [{ BoundActionParams: '{not json' }];
+        await expect(inherit(agentParams({ lastRunId: 'run-1' }))).rejects.toThrow();
     });
 });
