@@ -46,6 +46,8 @@ export interface FormContributionSummary {
  */
 @RegisterClass(BaseAction, "__GetFormContributionsForEntity")
 export class GetFormContributionsForEntityAction extends BaseAction {
+    /** Reads only with the caller's permissions. */
+    public static readonly AuthorizesCaller = true;
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
