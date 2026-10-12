@@ -103,6 +103,57 @@ export interface RealtimeTrackDescriptor {
      * When optional, failure to establish the track does not terminate the session.
      */
     Required?: boolean;
+
+    /**
+     * Which SOURCE feeds this track, when more than one independent stream of the same modality and
+     * direction can exist (several inbound video streams on a model that accepts them). Absent means
+     * "the one stream of this modality and direction", which is every track today: a model that
+     * accepts a single inbound video stream gets one track, and an arbiter decides which source is
+     * written to it (`VideoSourceArbiter` in `@memberjunction/ai-realtime-client`).
+     *
+     * The id is opaque to the model session; it is a correlation key between a source (a camera, a
+     * shared screen, a whiteboard) and the stream it occupies. Two requested tracks with the same
+     * modality and direction but different `SourceID`s are distinct streams, not duplicates.
+     */
+    SourceID?: string;
+
+    /**
+     * A human-readable name for the source feeding this track ("Whiteboard", "Camera"). Used in
+     * context notes that tell the model what it is looking at, and in the UI's "agent can see" list.
+     */
+    Label?: string;
+}
+
+/**
+ * The key two track descriptors are considered "the same track" by: direction, modality, and (for
+ * multi-stream) the source. Case- and whitespace-insensitive on the modality.
+ *
+ * Without the source in the key, two requested inbound video streams from different sources would
+ * collapse into one and a model that accepts several could never be given more than one.
+ */
+export function RealtimeTrackKey(descriptor: Pick<RealtimeTrackDescriptor, 'Modality' | 'Direction' | 'SourceID'>): string {
+    const source = descriptor.SourceID && descriptor.SourceID.length > 0 ? `:${descriptor.SourceID}` : '';
+    return `${descriptor.Direction}:${String(descriptor.Modality).trim().toLowerCase()}${source}`;
+}
+
+/**
+ * How many concurrent inbound video streams a model accepts, given its declared capability.
+ *
+ * `0` when the model does not accept inbound video at all; otherwise the declared maximum, defaulting
+ * to `1` (every inbound-video model shipped so far takes exactly one stream, so a profile that names no
+ * limit means one, not unlimited). Non-integer, negative and non-finite declarations are treated as
+ * undeclared, so a bad value cannot turn a one-stream model into an unbounded one.
+ *
+ * One definition, so a provider's profile table, the minted session config and the client agree.
+ *
+ * @param supportsInboundVideo Whether the model accepts inbound video at all.
+ * @param declaredMax The model's declared stream ceiling, when it declares one.
+ */
+export function ResolveMaxInboundVideoStreams(supportsInboundVideo: boolean, declaredMax?: number | null): number {
+    if (!supportsInboundVideo) {
+        return 0;
+    }
+    return typeof declaredMax === 'number' && Number.isInteger(declaredMax) && declaredMax > 0 ? declaredMax : 1;
 }
 
 /**
@@ -301,12 +352,14 @@ export class RealtimeModalityRegistry extends BaseSingleton<RealtimeModalityRegi
 export function ResolveRequestedTracks(
     requested: readonly RealtimeTrackDescriptor[] | undefined,
     supported: readonly RealtimeTrackDescriptor[] | undefined,
-    makeTrackID: (descriptor: RealtimeTrackDescriptor, index: number) => string
+    makeTrackID: (descriptor: RealtimeTrackDescriptor, index: number) => string,
+    limits?: RealtimeTrackLimits
 ): RealtimeTrack[] {
     if (!requested || requested.length === 0) {
         return [];
     }
     const supportedList = supported ?? [];
+    let inboundVideoSeen = 0;
     return requested.map((descriptor, index) => {
         const supportedTrack = supportedList.find(
             (s) =>
@@ -327,13 +380,33 @@ export function ResolveRequestedTracks(
                 Rate: effectiveRate,
             };
         }
+        const overStreamCap =
+            isSupported && isInboundVideo(descriptor) && exceedsStreamCap(++inboundVideoSeen, limits?.MaxInboundVideoStreams);
         return {
             TrackID: makeTrackID(refinedDescriptor, index),
             Descriptor: refinedDescriptor,
-            State: isSupported ? 'requested' : 'unsupported',
-            Reason: isSupported
-                ? undefined
-                : `Model does not support ${descriptor.Direction} ${String(descriptor.Modality)} tracks.`,
+            State: isSupported && !overStreamCap ? 'requested' : 'unsupported',
+            Reason: !isSupported
+                ? `Model does not support ${descriptor.Direction} ${String(descriptor.Modality)} tracks.`
+                : overStreamCap
+                  ? `Model accepts at most ${limits?.MaxInboundVideoStreams} inbound video stream(s); this one is over the limit.`
+                  : undefined,
         } satisfies RealtimeTrack;
     });
+}
+
+/** Per-model ceilings {@link ResolveRequestedTracks} enforces beyond "is the modality supported at all". */
+export interface RealtimeTrackLimits {
+    /** The most inbound video streams the model accepts (see {@link ResolveMaxInboundVideoStreams}). Absent means no cap here. */
+    MaxInboundVideoStreams?: number;
+}
+
+/** Whether a descriptor is an inbound video track. */
+function isInboundVideo(descriptor: RealtimeTrackDescriptor): boolean {
+    return descriptor.Direction === 'inbound' && String(descriptor.Modality).trim().toLowerCase() === 'video';
+}
+
+/** Whether the nth inbound video stream (1-based) is over a declared cap. An undeclared cap never excludes. */
+function exceedsStreamCap(ordinal: number, cap: number | undefined): boolean {
+    return typeof cap === 'number' && ordinal > cap;
 }

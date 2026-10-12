@@ -532,6 +532,18 @@ describe('SearchFusion', () => {
             expect(fused[0].Score).toBeCloseTo(1, 10);
         });
 
+        it('ranks the untagged remainder of a partly tagged list as its own lane', () => {
+            // Contract: tag all or none. If a provider tags only some results, the untagged ones are
+            // still merged by rank (their own lane), not slotted into a tagged lane by raw score.
+            const fused = fusion.Fuse([{ Source: 'vector', Results: [
+                vec('a1', 0.60, 'm:A'), vec('x1', 0.95), vec('a2', 0.59, 'm:A'),
+            ] }], 10);
+            const ids = fused.map(r => r.RecordID);
+            expect(ids.slice(0, 2).sort()).toEqual(['a1', 'x1']); // each lane's #1 ties
+            expect(ids[2]).toBe('a2');
+            for (const r of fused.slice(0, 2)) expect(r.Score).toBeCloseTo(0.5, 10); // two lanes
+        });
+
         it('gives sub-lanes the weight of their source', () => {
             const fused = fusion.Fuse([
                 { Source: 'vector', Results: [vec('a1', 0.6, 'm:A'), vec('b1', 0.9, 'm:B')] },

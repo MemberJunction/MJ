@@ -559,10 +559,12 @@ import {
     MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (8 classes)
+// @memberjunction/ng-conversations (10 classes)
 import {
     AgentMentionProvider,
     ClientContextChannel,
+    IdentityVerificationChannel,
+    InteractiveComponentChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
@@ -1219,6 +1221,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkOSProvider,
     AgentMentionProvider,
     ClientContextChannel,
+    IdentityVerificationChannel,
+    InteractiveComponentChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
@@ -1315,12 +1319,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricFormPolicy,
     RubricPublishPanel,
     RubricScaleFormPolicy,
-    RubricScaleLevelsPanel,
-    RubricVersionFormPolicy,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RubricScaleLevelsPanel,
+    RubricVersionFormPolicy,
     RubricVersionSummaryPanel,
     RubricVersionsPanel,
     SkillHierarchyPanel,
@@ -1344,7 +1348,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 609;
+export const CLASS_REGISTRATIONS_COUNT = 611;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
