@@ -44,8 +44,10 @@ export interface WidgetGuestRunContext {
  * `mj_widget_id` claim by `buildMagicLinkSessionUser`). The widget instance is loaded under the
  * SYSTEM principal so resolving the pinned agent does not depend on the guest's narrow grants.
  *
- * Never throws: a resolution failure (no system user, widget not found, read error) returns `null`,
- * so the caller falls back to the normal (guest-principal) path rather than failing the request.
+ * Never throws: a resolution failure (no system user, widget not found, read error) returns `null`.
+ * The caller then treats the request as an ordinary one — and since a guest is a scope-limited
+ * principal, `RunAIAgentFromConversationDetail` refuses it rather than dispatching a client-chosen
+ * agent under the guest principal.
  */
 export async function ResolveWidgetGuestRunContext(
   userPayload: UserPayload,

@@ -4,6 +4,7 @@ import { DataContext } from "@memberjunction/data-context";
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from "../util.js";
 import { MJDataContextItemEntity } from "@memberjunction/core-entities";
 import { ResolverBase } from "../generic/ResolverBase.js";
+import { RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
 
 @ObjectType()
 export class GetDataContextItemDataOutputType {
@@ -39,6 +40,7 @@ export class GetDataContextDataOutputType {
 }
 
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class GetDataContextDataResolver extends ResolverBase {
     /**

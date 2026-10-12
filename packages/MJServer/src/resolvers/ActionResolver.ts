@@ -9,6 +9,7 @@ import { AppContext, ProviderInfo } from "../types.js";
 import { CopyScalarsAndArrays, UUIDsEqual } from "@memberjunction/global";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
+import { RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
 
 /**
  * Input type for action parameters
@@ -171,6 +172,7 @@ export class ActionResultOutput {
  * Resolver for action-related GraphQL operations
  * Handles running actions and entity actions through GraphQL
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class ActionResolver extends ResolverBase {
   /**

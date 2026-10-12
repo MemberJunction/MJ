@@ -5,6 +5,7 @@ import { RemoteOperationEngineBase } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 
 /** PubSub topic carrying RemoteOpProgress envelopes for attached over-the-wire callers (RO-3). */
 const REMOTE_OP_PROGRESS_TOPIC = 'RemoteOperationProgress';
@@ -62,8 +63,8 @@ export class ExecuteRemoteOperationResultType {
 
 /**
  * The single generic server entry point for Remote Operations. Resolves the operation by key,
- * applies the framework authorization gates (API-key scope, system-user, then the operation's own
- * `Authorize`), and routes the operation through the per-request provider — which executes it
+ * applies the framework authorization gates (API-key scope, system-user, the scope-limited opt-in, then
+ * the operation's own `Authorize`), and routes the operation through the per-request provider — which executes it
  * in-process. Only registered, active operations are reachable, so the public `RouteOperation`
  * power-tool is safe by construction.
  */
@@ -100,6 +101,11 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
             const user = this.GetUserFromPayload(ctx.userPayload);
             if (!user) {
                 return fail('NO_USER', 'Not authenticated');
+            }
+            // (3b) Scope-limited gate: a magic-link guest or resource-scoped session may only run an
+            // operation that opts in — and an opted-in operation's Authorize checks the caller's scope.
+            if (IsScopeLimitedPrincipal(user) && !ctx.userPayload.isSystemUser && opDecl?.AllowScopeLimitedPrincipals !== true) {
+                return fail('FORBIDDEN', `Operation '${key}' is not available to scope-limited sessions`);
             }
 
             // (4) Metadata gate (defense-in-depth): honor the op's MJ: Remote Operations Status/approval, so a

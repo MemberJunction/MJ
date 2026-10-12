@@ -9,6 +9,7 @@ import { LoadConfig } from '../config.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { UserCache, SqlLoggingOptions as ProviderSqlLoggingOptions } from '@memberjunction/generic-database-provider';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 /**
  * Configuration options for SQL logging sessions.
@@ -229,6 +230,7 @@ export class SqlLoggingConfig {
  * await stopSqlLogging(session.id);
  * ```
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class SqlLoggingConfigResolver extends ResolverBase {
   /** Default prefix for auto-generated SQL log filenames */

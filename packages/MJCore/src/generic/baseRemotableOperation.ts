@@ -60,6 +60,17 @@ export abstract class BaseRemotableOperation<TInput = unknown, TOutput = unknown
     /** When true, the server only permits the system user to invoke this operation. */
     public readonly RequiresSystemUser?: boolean;
 
+    /**
+     * When true, scope-limited sessions — anonymous magic-link guests and resource-scoped
+     * magic-link sessions — may invoke this operation. The server refuses them otherwise.
+     *
+     * A session's scope is enforced by row-level security on entity reads, which does not bound
+     * what an operation does. An operation that opts in must therefore check the caller's scope
+     * itself in {@link Authorize}: compare `user.MagicLinkScope` (or the guest's identity) with
+     * the record the input names, and return false when they do not match.
+     */
+    public readonly AllowScopeLimitedPrincipals?: boolean;
+
     /** Whether this operation is a plain `Sync` request/response or a `LongRunning` run. */
     public readonly ExecutionMode: RemoteOpExecMode = 'Sync';
 
