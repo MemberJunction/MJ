@@ -20,7 +20,7 @@ vi.mock('../adapters/FileSystemAdapter.js', () => {
 // Import the phase under test AFTER mocks are set up
 // ---------------------------------------------------------------------------
 
-import { ConfigurePhase } from '../phases/ConfigurePhase.js';
+import { ConfigurePhase, FindUnsetRequiredConfig } from '../phases/ConfigurePhase.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -847,25 +847,50 @@ describe('ConfigurePhase', () => {
 
   // ─── Warning about default values in yes mode ──────────────────────
 
-  describe('yes mode default values warning', () => {
-    it('should emit warn about default values when files are created in yes mode', async () => {
+  describe('yes mode unset values warning', () => {
+    function arrangeFreshDir(): void {
       mockFs.FileExists.mockResolvedValue(false);
       mockFs.DirectoryExists.mockImplementation(async (path: string) => {
         if (path.includes('environments')) return false;
-        if (path.includes('MJExplorer/src') || path.includes('MJExplorer\\src')) return true;
         return true;
       });
       mockFs.ListFiles.mockResolvedValue([]);
+    }
 
+    function unsetWarning(emitSpy: Parameters<typeof emittedEvents>[0]): string | undefined {
+      const warn = emittedEvents(emitSpy, 'warn').find((e: unknown) =>
+        (e as Record<string, string>).Message?.includes('values unset')
+      ) as Record<string, string> | undefined;
+      return warn?.Message;
+    }
+
+    it('does not warn when every required value was supplied', async () => {
+      arrangeFreshDir();
       const { emitter, emitSpy } = createMockEmitter();
-      const ctx = makeContext({ Yes: true, Emitter: emitter });
-      await phase.Run(ctx);
+      await phase.Run(makeContext({ Yes: true, Emitter: emitter }));
+      expect(unsetWarning(emitSpy)).toBeUndefined();
+    });
 
-      const warnEvents = emittedEvents(emitSpy, 'warn');
-      const defaultWarn = warnEvents.find((e: unknown) =>
-        (e as Record<string, string>).Message?.includes('default/empty values')
-      );
-      expect(defaultWarn).toBeDefined();
+    it('names exactly the required values left empty', async () => {
+      arrangeFreshDir();
+      const config = sampleConfig();
+      config.CodeGenPassword = '';
+      config.APIPassword = '   ';
+      const { emitter, emitSpy } = createMockEmitter();
+      await phase.Run(makeContext({ Config: config, Yes: true, Emitter: emitter }));
+      const message = unsetWarning(emitSpy);
+      expect(message).toContain('CodeGenPassword, APIPassword');
+      expect(message).not.toContain('DatabaseName');
+    });
+  });
+
+  describe('FindUnsetRequiredConfig', () => {
+    it('lists only the empty required connection values, in a stable order', () => {
+      const config = sampleConfig();
+      expect(FindUnsetRequiredConfig(config)).toEqual([]);
+      config.DatabaseName = '';
+      config.APIUser = ' ';
+      expect(FindUnsetRequiredConfig(config)).toEqual(['DatabaseName', 'APIUser']);
     });
   });
 
