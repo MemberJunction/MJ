@@ -1,0 +1,22 @@
+[
+  {
+    "primaryKey": {
+      "ID": "387D65A6-6797-48CD-95C6-3136B60C826B"
+    },
+    "fields": {
+      "NotificationTypeID": "@lookup:MJ: User Notification Types.Name=Resource Shared",
+      "Description": "A grant the system user writes is plumbing, not a person sharing: an application bridging its own roster to a resource's permissions. Nobody wants a notice for it, so it is denied on every channel and locked, so no application or user preference below can turn it back on. A grant a person writes is unaffected: its origin is Person.",
+      "PrimaryScopeEntityID": null,
+      "PrimaryScopeRecordID": null,
+      "SecondaryScopes": {
+        "origin": "System"
+      },
+      "InApp": "Deny",
+      "Email": "Deny",
+      "SMS": "Deny",
+      "IsLocked": true,
+      "Priority": 0,
+      "Status": "Active"
+    }
+  }
+]

@@ -10,18 +10,24 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * `fused`/`final`.
  */
 
-const { streamEvents } = vi.hoisted(() => ({ streamEvents: { current: [] as unknown[] } }));
+const { streamEvents, streamCalls, resolveEffectivePermission, logForbiddenSearch } = vi.hoisted(() => ({
+    streamEvents: { current: [] as unknown[] },
+    streamCalls: { count: 0 },
+    resolveEffectivePermission: vi.fn(),
+    logForbiddenSearch: vi.fn(),
+}));
 
 vi.mock('@memberjunction/search-engine', () => ({
     SearchEngine: {
         Instance: {
             streamSearch: async function* () {
+                streamCalls.count++;
                 for (const ev of streamEvents.current) yield ev;
             },
-            LogForbiddenSearch: vi.fn(),
+            LogForbiddenSearch: logForbiddenSearch,
         },
     },
-    GetSearchScopePermissionResolver: () => ({ ResolveEffectivePermission: vi.fn() }),
+    GetSearchScopePermissionResolver: () => ({ ResolveEffectivePermission: resolveEffectivePermission }),
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -98,5 +104,58 @@ describe('SearchKnowledgeStreamResolver — provider events are progress only', 
         const final = published.find(p => p.Phase === 'final');
         expect(final?.Results?.map(r => r.RecordID)).toEqual(['readable']);
         expect(final?.ResultCount).toBeUndefined();
+    });
+});
+
+describe('SearchKnowledgeStreamResolver — the scope permission gate runs before the stream starts', () => {
+    const verdict = (Allowed: boolean, Level: string) => ({ Allowed, Level, Source: 'NoGrant', Reason: 'judged in test' });
+
+    beforeEach(() => {
+        streamEvents.current = [{ phase: 'final', results: [], sourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 }, elapsedMs: 1 }];
+        streamCalls.count = 0;
+        resolveEffectivePermission.mockReset();
+        logForbiddenSearch.mockReset();
+    });
+
+    async function start(scopeIDs: string[]) {
+        const pubSub = { publish: vi.fn(async () => undefined) };
+        const result = await new TestStreamResolver().StreamScopedSearch(
+            'budget', 20, undefined, scopeIDs, undefined, undefined,
+            pubSub as unknown as PubSubEngine, { userPayload: {} } as never,
+        );
+        return { result, pubSub };
+    }
+
+    it('refuses a denied scope, logs it, and never starts the stream or publishes', async () => {
+        resolveEffectivePermission.mockResolvedValue(verdict(false, 'None'));
+
+        const { result, pubSub } = await start(['scope-a']);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/^Forbidden: refused for this user on scope 'scope-a'/);
+        expect(logForbiddenSearch).toHaveBeenCalledTimes(1);
+        await new Promise((r) => setTimeout(r, 20));
+        expect(streamCalls.count).toBe(0);
+        expect(pubSub.publish).not.toHaveBeenCalled();
+    });
+
+    it('refuses a Read-level grant: Read is metadata only, not search', async () => {
+        resolveEffectivePermission.mockResolvedValue(verdict(true, 'Read'));
+
+        const { result } = await start(['scope-a']);
+
+        expect(result.Success).toBe(false);
+        await new Promise((r) => setTimeout(r, 20));
+        expect(streamCalls.count).toBe(0);
+    });
+
+    it('judges every requested scope and starts the stream when all may be searched', async () => {
+        resolveEffectivePermission.mockResolvedValue(verdict(true, 'Search'));
+
+        const { result } = await start(['scope-a', 'scope-b']);
+
+        expect(result.Success).toBe(true);
+        expect(resolveEffectivePermission).toHaveBeenCalledTimes(2);
+        await vi.waitFor(() => expect(streamCalls.count).toBe(1), { timeout: 500, interval: 5 });
     });
 });

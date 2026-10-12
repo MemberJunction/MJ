@@ -58,8 +58,9 @@ const CONTROL_CHARACTERS = /[\x00-\x1f\x7f]/;
  * Whether an object key is one the storage access checks will compare at all. A key that fails is refused (treated as
  * an object the caller may not read) rather than canonicalized, because its meaning depends on the provider:
  *
- * - a `.` or `..` path segment — a hierarchical provider (Box, Dropbox, Google Drive, SharePoint) may resolve it as
- *   traversal, so the object served need not be the one compared;
+ * - a `.` or `..` path segment, including one padded with whitespace or zero-width characters — a hierarchical
+ *   provider (Box, Dropbox, Google Drive, SharePoint) may resolve it as traversal, so the object served need not be
+ *   the one compared;
  * - a backslash — some providers and URL layers treat it as a path separator;
  * - a percent-encoded `/`, `\`, `.` or control character (`%2F`, `%5C`, `%2E`, `%00`–`%1F`, `%7F`) — a pre-signed URL
  *   carries the key in its path, where the provider decodes it, so `hr%2Fsecret.pdf` would be compared as one segment and
@@ -75,5 +76,14 @@ export function IsSafeStorageObjectKey(objectKey: string): boolean {
     if (objectKey.includes('\\') || CONTROL_CHARACTERS.test(objectKey) || MEANING_CHANGING_ENCODED.test(objectKey)) {
         return false;
     }
-    return !objectKey.split('/').some(segment => segment.trim() === '.' || segment.trim() === '..');
+    return !objectKey.split('/').map(visibleSegment).some(segment => segment === '.' || segment === '..');
+}
+
+/**
+ * A path segment as a filesystem would read it: Unicode format characters (`\p{Cf}`: zero-width space, joiners,
+ * word joiner, BOM, soft hyphen) removed, then trimmed. Without this, `\u200B..\u200B` would not compare equal to
+ * `..` though a driver that drops such characters would resolve it as traversal.
+ */
+function visibleSegment(segment: string): string {
+    return segment.replace(/\p{Cf}/gu, '').trim();
 }

@@ -35,6 +35,21 @@ describe('NormalizeStorageObjectKey', () => {
 
 describe('IsSafeStorageObjectKey', () => {
     it.each([
+        ['zero-width space', '\u200B'],
+        ['zero-width non-joiner', '\u200C'],
+        ['zero-width joiner', '\u200D'],
+        ['word joiner', '\u2060'],
+        ['byte-order mark', '\uFEFF'],
+    ])('refuses a .. or . segment padded with a %s', (_name, zw) => {
+        expect(IsSafeStorageObjectKey(`hr/${zw}..${zw}/payroll.pdf`)).toBe(false);
+        expect(IsSafeStorageObjectKey(`hr/${zw}.${zw}/x.pdf`)).toBe(false);
+    });
+
+    it('still allows a name that merely contains a zero-width character', () => {
+        expect(IsSafeStorageObjectKey('hr/re\u200Bport.pdf')).toBe(true);
+    });
+
+    it.each([
         ['a .. segment', 'hr/../payroll/x.pdf'],
         ['a leading .. segment', '../x.pdf'],
         ['a . segment', 'hr/./x.pdf'],

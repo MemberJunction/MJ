@@ -39,6 +39,7 @@ import { SearchEngine } from '../generic/SearchEngine';
 import type { SearchResultItem, SearchParams, SearchStreamEvent } from '../generic/search.types';
 import { BaseSearchProvider } from '../generic/ISearchProvider';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { ScopeBundle } from '@memberjunction/core-entities';
 
 function createUser(id: string): UserInfo {
     return { ID: id, Name: 'Test User', Email: 't@example.com' } as UserInfo;
@@ -201,6 +202,78 @@ describe('SearchEngine MinScore is a semantic-lane floor applied before fusion',
         const streamedCounts: number[] = [];
         let final: string[] = [];
         for await (const ev of engine.streamSearch({ Query: 'floor-f', MinScore: 0.5 } as SearchParams, user)) {
+            const e = ev as SearchStreamEvent;
+            if (e.phase === 'provider') streamedCounts.push(e.resultCount);
+            if (e.phase === 'final') final = e.results.map(r => r.RecordID);
+        }
+        expect(streamedCounts).toEqual([1]);
+        expect(final).toEqual(['v-high']);
+    });
+});
+
+// ────────────────────────────────────────────────────────────────
+// The SCOPED path (executeScopeBundle) has its own ApplySemanticFloor call. Agents search through
+// scopes, so it is pinned separately: only scope lookup is stubbed; the real scoped code runs.
+// ────────────────────────────────────────────────────────────────
+describe('SearchEngine MinScore floor on the scoped path (executeScopeBundle)', () => {
+    let engine: TestSearchEngine;
+    let resolveScopesSpy: ReturnType<typeof vi.spyOn>;
+    const user = createUser('u-floor-scoped');
+    // A non-global scope reaches only what its rows declare (a scope with no provider rows or lanes returns nothing),
+    // so the scope enables both injected providers and carries one external-index lane, the lane kind a plain
+    // BaseSearchProvider reads.
+    const providerRow = (providerID: string) => ({ ID: `${providerID}-row`, SearchScopeID: 'scope-floor', SearchProviderID: providerID, Enabled: true, MaxResultsOverride: null });
+    const bundle = {
+        Scope: { ID: 'scope-floor', Name: 'Floor Scope', IsGlobal: false, ScopeConfig: null, SearchContextConfig: null },
+        Providers: [providerRow('prov-Vec'), providerRow('prov-Kw')],
+        ExternalIndexes: [{
+            ID: 'lane-floor', SearchScopeID: 'scope-floor', IndexType: 'Vector', VectorIndexID: 'D6E1A5C2-3F4B-4E8A-9C1D-2B7F0E9A8C11',
+            ExternalIndexName: null, ExternalIndexConfig: null, MetadataFilter: null, RequiredMetadataKeys: null,
+        }],
+        Entities: [], StorageAccounts: [],
+    } as unknown as ScopeBundle;
+
+    beforeEach(() => {
+        engine = new TestSearchEngine();
+        mockEntityByName.mockReturnValue({ Name: 'Test', FirstPrimaryKey: { Name: 'ID' } });
+        mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+        resolveScopesSpy = vi.spyOn(
+            engine as unknown as { resolveScopes: (ids?: string[]) => { Bundles: ScopeBundle[]; Unresolved: string[] } },
+            'resolveScopes',
+        ).mockReturnValue({ Bundles: [bundle], Unresolved: [] });
+    });
+
+    it('drops vector hits below MinScore before fusion, and goes through the scoped branch', async () => {
+        engine.InjectProviders([
+            makeEntry('Vec', new FixedProvider('vector', [scored('v-high', 'vector', 0.8), scored('v-low', 'vector', 0.2)])),
+            makeEntry('Kw', new FixedProvider('entity', [scored('k', 'entity', 0.59)])),
+        ]);
+        const result = await engine.Search({ Query: 'scoped-a', MinScore: 0.5, ScopeIDs: ['scope-floor'] } as SearchParams, user);
+        expect(resolveScopesSpy).toHaveBeenCalled();
+        const ids = result.Results.map(r => r.RecordID);
+        expect(ids).toContain('v-high');
+        expect(ids).toContain('k');
+        expect(ids).not.toContain('v-low');
+        expect(result.SourceCounts.Vector).toBe(1);
+    });
+
+    it('never drops keyword hits on the scoped path', async () => {
+        engine.InjectProviders([
+            makeEntry('Kw', new FixedProvider('entity', [scored('k-weak', 'entity', 0.15)])),
+        ]);
+        const result = await engine.Search({ Query: 'scoped-b', MinScore: 0.9, ScopeIDs: ['scope-floor'] } as SearchParams, user);
+        expect(result.Results.map(r => r.RecordID)).toEqual(['k-weak']);
+    });
+
+    it('applies the floor to streamed per-provider results on the scoped path', async () => {
+        engine.InjectProviders([
+            makeEntry('Vec', new FixedProvider('vector', [scored('v-high', 'vector', 0.8), scored('v-low', 'vector', 0.2)])),
+        ]);
+        // A provider event carries only a count (its hits precede the permission pass): the floor shows there as the
+        // count, and in the final results.
+        const streamedCounts: number[] = [];
+        let final: string[] = [];
+        for await (const ev of engine.streamSearch({ Query: 'scoped-c', MinScore: 0.5, ScopeIDs: ['scope-floor'] } as SearchParams, user)) {
             const e = ev as SearchStreamEvent;
             if (e.phase === 'provider') streamedCounts.push(e.resultCount);
             if (e.phase === 'final') final = e.results.map(r => r.RecordID);

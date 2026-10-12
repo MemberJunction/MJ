@@ -14,6 +14,7 @@ vi.mock('@octokit/rest', () => ({
     Octokit: class {
         public repos = { getContent };
         public git = { getBlob: vi.fn() };
+        public hook = { wrap: () => undefined };
     },
 }));
 

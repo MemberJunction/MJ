@@ -301,6 +301,38 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         expect(mockSocket.isClosed).toBe(true);
     });
 
+    it('drops registered handlers and clears the safety timer after Close()', async () => {
+        const mockSocket = new MockLiveWebSocket();
+        const session = new OpenAILiveSession(mockSocket, { Model: 'gpt-live-1', SystemPrompt: 'Prompt' });
+        mockSocket.triggerOpen();
+        mockSocket.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-1' }));
+        await session.WaitForStarted();
+
+        const onTranscript = vi.fn();
+        const onClose = vi.fn();
+        session.OnTranscript(onTranscript);
+        session.OnClose(onClose);
+
+        vi.useFakeTimers();
+        try {
+            const closePromise = session.Close();
+            expect(vi.getTimerCount()).toBe(1); // 5s safety timer armed
+            mockSocket.triggerMessage(JSON.stringify({ type: 'session.closed', reason: 'close_requested' }));
+            await closePromise;
+            // Graceful close won the race: the safety timer must not be left armed
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            vi.useRealTimers();
+        }
+
+        // Handlers were released: a late frame no longer reaches the caller's closure
+        onTranscript.mockClear();
+        mockSocket.triggerMessage(JSON.stringify({
+            type: 'response.output_audio_transcript.delta', delta: 'late',
+        }));
+        expect(onTranscript).not.toHaveBeenCalled();
+    });
+
     it('supports remote reasoning plane: sends delegation.type responses and tools in session.start', async () => {
         const mockSocket = new MockLiveWebSocket();
         const session = new OpenAILiveSession(
