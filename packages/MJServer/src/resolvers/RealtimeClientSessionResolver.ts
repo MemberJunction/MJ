@@ -76,6 +76,7 @@ import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser, ResolveRec
 import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
 import { BuildMintConfigStamps, LoadInheritedVerifiedIdentity } from '../realtimeSessions/sessionConfigStamps.js';
 import { ParseConfigObject } from '../realtimeSessions/verificationCore.js';
+import { LoadOwnedRealtimeSession } from '../realtimeSessions/ownedRealtimeSession.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -366,7 +367,7 @@ export class CancelRealtimeSessionToolResult {
  * Result of {@link RealtimeClientSessionResolver.UploadRealtimeRecording} — a structured
  * success/failure envelope. A recording-storage failure must never throw to the browser (the
  * session it belongs to has already ended), so problems come back as `Success: false` with a
- * human-readable reason; only ownership/authn violations (from `loadOwnedSession`) still throw.
+ * human-readable reason; only ownership/authn violations (from `LoadOwnedRealtimeSession`) still throw.
  */
 @ObjectType()
 export class UploadRealtimeRecordingResult {
@@ -829,7 +830,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * the call and uploads the assembled blob (base64) once the session ends.
      *
      * Hard gates (in order):
-     * 1. Ownership — `loadOwnedSession` enforces `UserID === contextUser.ID` (throws on violation).
+     * 1. Ownership — `LoadOwnedRealtimeSession` enforces `UserID === contextUser.ID` (throws on violation).
      * 2. Consent — `consent !== true` is a hard refusal: no audio is ever stored without it.
      * 3. Storage configuration — the session's agent must resolve a recording storage account (the
      *    agent's `RecordingStorageProviderID`, else `AttachmentStorageProviderID`).
@@ -858,7 +859,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('peaks', () => [Float], { nullable: true }) peaks?: number[],
     ): Promise<UploadRealtimeRecordingResult> {
         const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
-        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
 
         // HARD consent gate — no audio is ever stored without an explicit grant.
         if (consent !== true) {
@@ -945,7 +946,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<boolean> {
         try {
             const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
-            const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+            const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
             // The consolidated recording already landed and its upload deleted the shards; a shard
             // arriving now (one still on the wire at hang-up) would be an orphan nothing deletes.
             if (session.RecordingFileID) {
@@ -1067,7 +1068,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('callId', () => String, { nullable: true }) callId?: string,
     ): Promise<CancelRealtimeSessionToolResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-        await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
         try {
             const aborted = this.clientSessionService.CancelInFlightDelegations(agentSessionId, callId);
             return { AbortedCount: aborted, Success: true };
@@ -1106,7 +1107,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Ctx() { userPayload, providers }: AppContext,
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
 
         const inputDelta = this.clampTokenDelta(inputTokens);
         const outputDelta = this.clampTokenDelta(outputTokens);
@@ -1199,7 +1200,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Ctx() { userPayload, providers }: AppContext,
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
 
         if (!this.isChannelInSessionScope(session, channelName)) {
             LogError(`SaveSessionChannelState: channel '${channelName}' is not in session ${agentSessionId}'s resolved scope — state not saved.`);
@@ -1282,7 +1283,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Ctx() { userPayload, providers }: AppContext,
     ): Promise<SaveSessionChannelArtifactResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
 
         if (!this.isChannelInSessionScope(session, channelName)) {
             const message = `SaveSessionChannelArtifact: channel '${channelName}' is not in session ${agentSessionId}'s resolved scope — nothing saved.`;
@@ -1782,36 +1783,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<MJAIAgentSessionEntity> {
-        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
         if (session.Status === 'Closed') {
             throw new Error(`Realtime session ${agentSessionId} is closed`);
         }
         return session;
     }
 
-    /**
-     * Loads a session and enforces inbound ownership (`UserID === contextUser.ID`) WITHOUT
-     * rejecting `Closed` sessions — {@link SaveSessionChannelState}'s final on-end flush
-     * legitimately arrives after the session closed. Throws when not found / not owned.
-     */
-    private async loadOwnedSession(
-        agentSessionId: string,
-        contextUser: UserInfo,
-        provider: IMetadataProvider,
-    ): Promise<MJAIAgentSessionEntity> {
-        const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
-        const loaded = await session.Load(agentSessionId);
-        if (!loaded) {
-            throw new Error(`Realtime session ${agentSessionId} not found`);
-        }
-        if (!UUIDsEqual(session.UserID, contextUser.ID)) {
-            LogError(
-                `RealtimeClientSessionResolver: ownership check failed — user ${contextUser.ID} attempted to operate on session ${agentSessionId} owned by ${session.UserID}`,
-            );
-            throw new Error('Not authorized: you do not own this realtime session');
-        }
-        return session;
-    }
 
     /**
      * Resolves an ACTIVE channel definition (`MJ: AI Agent Channels`) by name from
