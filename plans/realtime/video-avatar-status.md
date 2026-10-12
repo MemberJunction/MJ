@@ -95,7 +95,7 @@ In the order the stack builds them, one change per row:
 - **A move to a new connection in the middle of an answer** (a `goAway` while the agent speaks).
 - **Meetings longer than 15 minutes.**
 - **Barge-in, lip sync and tool calls during an avatar call through the relay:** the runs above report answers, moves, usage and video delivery, not these.
-- **What Google bills,** against what MJ charges: the avatar's video by the second, at $0.37152 per minute (seeded from $1.00 per 1M avatar video tokens at 6,192 tokens per second), and Vertex AI's token prices.
+- **What Google bills,** against what MJ charges: the avatar's video tokens at $1.00 per 1M (Google's list price, which bills only while the avatar speaks), and Vertex AI's token prices. The per-minute seed this replaced priced the 10-minute call's idle avatar too: $3.83 against about $0.46 of video tokens.
 - **Binary relay frames.** The tests send Google's frames to the browser as text; binary frames, which the web SDK reads asynchronously, are untested.
 - **Browsers other than Chrome:** Firefox, desktop Safari and iOS Safari for playout; Edge and Chromium 104 to 131 for panel capture.
 - **The other voices seeded for Vertex AI** (Charon, Kore, Fenrir, Aoede); the scripted check used Puck, Ben's voice.

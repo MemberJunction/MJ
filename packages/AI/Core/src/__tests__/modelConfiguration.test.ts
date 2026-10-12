@@ -417,12 +417,11 @@ function seededLayers(modelName: string, vendorName: string): { Model: AIModelCo
 }
 
 describe('Realtime.Pricing as seeded for Gemini 3.8 Live (metadata/ai-models)', () => {
-    it('Vertex AI prices avatar video per minute in USD: $1.00 per 1M tokens at 6,192 tokens per second', () => {
+    it('Vertex AI prices avatar video by its tokens in USD, $1.00 per 1M, which Google bills only while the avatar speaks', () => {
         const { Model, Row } = seededLayers('Gemini 3.8 Live', 'Vertex AI');
         const price = ResolveEffectiveModelConfiguration(Model, Row)?.Realtime?.Pricing?.AvatarVideoOutput;
 
-        expect(price).toEqual({ Price: 0.37152, Unit: 'Per Minute', Currency: 'USD' });
-        expect(price?.Price).toBeCloseTo((1 / 1_000_000) * 6192 * 60, 10);
+        expect(price).toEqual({ Price: 1, Unit: 'Per 1M Tokens', Currency: 'USD' });
     });
 
     it('the Google row (the Gemini Developer API, which renders no avatar) carries no price', () => {

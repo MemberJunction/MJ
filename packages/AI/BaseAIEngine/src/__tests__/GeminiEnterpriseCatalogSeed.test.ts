@@ -337,10 +337,16 @@ describe('Gemini 3.8 Live on Vertex AI — the token cost row', () => {
 });
 
 describe('Gemini 3.8 Live on Vertex AI — the avatar video price, as pricing reads it', () => {
+    it('prices the video tokens Google bills, not the stored seconds, which also count the idle avatar', () => {
+        const idle = { Output: { AudioTokens: 2000, VideoTokens: 74 * 6192, VideoSeconds: 617.79 } };
+        const video = PriceAvatarVideoOutput(idle, configurationOn(VERTEX), 'USD');
+        expect(video).toEqual({ Priced: true, Measure: 'Tokens', Seconds: 617.79, Cost: 0.458208, VideoTokens: 458208 });
+    });
+
     /** One speaking minute: Google counts the avatar's 60 s of video as 371,520 of the 373,520 output tokens. */
     const minute = { Output: { AudioTokens: 2000, VideoTokens: 371520, VideoSeconds: 60 } };
 
-    it("prices a speaking minute on Vertex AI: the token row's $0.0165 plus the row's $0.37152 of video, $0.38802", () => {
+    it("prices a speaking minute on Vertex AI: the token row's $0.0165 plus 371,520 video tokens at $1.00 per 1M, $0.38802", () => {
         const costRow = AIEngineBase.Instance.GetActiveModelCost(MODEL, VERTEX, 'Realtime');
         if (!costRow) {
             throw new Error('metadata seeds no Vertex AI token cost row for Gemini 3.8 Live');
@@ -348,7 +354,7 @@ describe('Gemini 3.8 Live on Vertex AI — the avatar video price, as pricing re
         const video = PriceAvatarVideoOutput(minute, configurationOn(VERTEX), costRow.Currency);
         const tokens = new PerMillionTokensPriceUnitType().CalculateCost(costRow, ExcludeAvatarVideoTokens({ input: 10000, output: 373520 }, 371520).Usage);
 
-        expect(video).toEqual({ Priced: true, Measure: 'Seconds', Seconds: 60, Cost: 0.37152, VideoTokens: 371520 });
+        expect(video).toEqual({ Priced: true, Measure: 'Tokens', Seconds: 60, Cost: 0.37152, VideoTokens: 371520 });
         expect(RoundCost(tokens)).toBe(0.0165);
         expect(RoundCost(tokens + (video?.Priced ? video.Cost : 0))).toBe(0.38802);
     });

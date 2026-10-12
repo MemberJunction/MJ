@@ -41,7 +41,7 @@
  */
 import { BaseEntity, Metadata, ProviderType, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { BaseRealtimeModel, type AIAPIKey, type IRealtimeSession, type RealtimeUsage } from '@memberjunction/ai';
+import { BaseRealtimeModel, type AIAPIKey, type IRealtimeSession, type RealtimeUnitPrice, type RealtimeUsage } from '@memberjunction/ai';
 import { AIEngineBase, ReadCostLines, ReadRealtimeUsageRecord, RoundCost, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import type { MJAIAgentEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import {
@@ -483,6 +483,12 @@ async function assertNoRowLeavesItToTheEndpoint(ctx: IntegrationCheckContext, se
     AssertEqual(prep.SessionParams?.Avatar?.AvatarID, fixture.AvatarID, 'RD18: with no row, the endpoint decides, and the session asks for the face');
 }
 
+/** A model-vendor row's avatar video price, with the unit it prices in. */
+interface AvatarVideoPrice {
+    Price: number;
+    Unit: NonNullable<RealtimeUnitPrice['Unit']>;
+}
+
 // ── RD16: avatar video priced at finalize ──────────────────────────────────────────────────────────
 
 /** One speaking minute on Gemini 3.8 Live: Google counts the avatar's 60 s of video as 371,520 of the 373,520 output tokens. */
@@ -499,8 +505,8 @@ interface AvatarPricingAnchors {
     VendorID: string;
     PromptID: string;
     CostRow: MJAIModelCostEntity;
-    /** The model vendor's avatar video price per minute, from its resolved configuration. */
-    PricePerMinute: number;
+    /** The model vendor's avatar video price, per minute or per 1M tokens, from its resolved configuration. */
+    VideoPrice: AvatarVideoPrice;
 }
 
 /** The anchors RD16 needs, or why the deployment cannot supply them. */
@@ -511,15 +517,15 @@ async function findAvatarPricingAnchors(engine: AIEngineBase, user: UserInfo): P
         return !model ? "no 'Gemini 3.8 Live' model" : "no 'Vertex AI' vendor";
     }
     const row = engine.ModelVendors.find((mv) => UUIDsEqual(mv.ModelID, model.ID) && UUIDsEqual(mv.VendorID, vendor.ID) && engine.IsInferenceProvider(mv));
-    const price = row ? engine.GetEffectiveModelConfiguration(model.ID, row.ID)?.Realtime?.Pricing?.AvatarVideoOutput : undefined;
+    const price = row ? avatarVideoPrice(row) : undefined;
     const costRow = engine.GetActiveModelCost(model.ID, vendor.ID, 'Realtime', 'Tokens');
     const promptID = await firstID('MJ: AI Prompts', user);
-    if (typeof price?.Price !== 'number' || !costRow || !promptID) {
-        return typeof price?.Price !== 'number' ? 'the Vertex AI model-vendor row has no Realtime.Pricing.AvatarVideoOutput price'
+    if (!price || !costRow || !promptID) {
+        return !price ? 'the Vertex AI model-vendor row has no Realtime.Pricing.AvatarVideoOutput price'
             : !costRow ? 'no Active Realtime token cost row for Gemini 3.8 Live on Vertex AI'
             : 'no AI prompt to hang the prompt run on';
     }
-    return { ModelID: model.ID, VendorID: vendor.ID, PromptID: promptID, CostRow: costRow, PricePerMinute: price.Price };
+    return { ModelID: model.ID, VendorID: vendor.ID, PromptID: promptID, CostRow: costRow, VideoPrice: price };
 }
 
 /** A tagged, Running prompt run shaped like a realtime co-agent's, started two minutes ago (the stored video is capped at the elapsed time + 30 s). */
@@ -538,12 +544,15 @@ async function createAvatarPricingRun(anchors: AvatarPricingAnchors, user: UserI
     return run;
 }
 
-/** The cost RD16 expects from the rows it priced with: the token row over 10,000 in and 2,000 out, plus 60 s of video. */
+/**
+ * The cost RD16 expects from the rows it priced with: the token row over 10,000 in and 2,000 out, plus the video: 60 s
+ * at a per-minute price, or 371,520 video tokens at a per-token price.
+ */
 function expectedAvatarRunCost(anchors: AvatarPricingAnchors, engine: AIEngineBase): { Tokens: number; Video: number } {
     const divisor = engine.GetPriceCalculator(anchors.CostRow)?.UnitsPerBillingUnit ?? 1_000_000;
     const videoTokens = RD16_USAGE.Output?.VideoTokens ?? 0;
     const tokens = (RD16_INPUT_TOKENS * Number(anchors.CostRow.InputPricePerUnit) + (RD16_OUTPUT_TOKENS - videoTokens) * Number(anchors.CostRow.OutputPricePerUnit)) / divisor;
-    return { Tokens: RoundCost(tokens), Video: RoundCost(((RD16_USAGE.Output?.VideoSeconds ?? 0) / 60) * anchors.PricePerMinute) };
+    return { Tokens: RoundCost(tokens), Video: expectedVideoLine(anchors.VideoPrice, RD16_USAGE.Output?.VideoSeconds ?? 0, videoTokens)[2] };
 }
 
 /** Asserts the finalized run: its cost is the two lines, both written beside the stored usage, and the token total is Google's. */
@@ -558,7 +567,11 @@ function assertAvatarRunPriced(run: MJAIPromptRunEntity, anchors: AvatarPricingA
     const [tokenLine, videoLine] = lines;
     Assert(tokenLine.Modality === null && UUIDsEqual(tokenLine.CostRowID ?? '', anchors.CostRow.ID), 'RD16: the first line is the token cost row');
     AssertEqual(JSON.stringify([tokenLine.Input, tokenLine.Output, tokenLine.Cost]), JSON.stringify([RD16_INPUT_TOKENS, 2000, expected.Tokens]), "RD16: the token line prices the output without the video's tokens");
-    AssertEqual(JSON.stringify([videoLine.Modality, videoLine.Measure, videoLine.Output, videoLine.Cost]), JSON.stringify(['Video', 'Seconds', 60, expected.Video]), 'RD16: the video line prices 60 s at the per-minute price');
+    AssertEqual(
+        JSON.stringify([videoLine.Modality, videoLine.Measure, videoLine.Output, videoLine.Cost]),
+        JSON.stringify(['Video', ...expectedVideoLine(anchors.VideoPrice, RD16_USAGE.Output?.VideoSeconds ?? 0, RD16_USAGE.Output?.VideoTokens ?? 0)]),
+        `RD16: the video line prices the video at the row's ${anchors.VideoPrice.Unit} price`,
+    );
     AssertEqual(ReadRealtimeUsageRecord(run.ModelSpecificResponseDetails)?.Output?.VideoSeconds, 60, 'RD16: the usage record stays beside the lines');
 }
 
@@ -636,19 +649,23 @@ interface BridgedUsageFixture {
     /** Whether the model and vendor have an active Tokens price, so finalize must give the run a cost. */
     Priced: boolean;
     /**
-     * The model vendor's avatar video price per minute (`Realtime.Pricing.AvatarVideoOutput`), when the pair has one:
-     * finalize must then price the stored video seconds on a line of their own.
+     * The model vendor's avatar video price (`Realtime.Pricing.AvatarVideoOutput`), when the pair has one: finalize must
+     * then price the stored video seconds (per minute) or video tokens (per 1M tokens) on a line of their own.
      */
-    VideoPricePerMinute?: number;
+    VideoPrice?: AvatarVideoPrice;
 }
 
-/** One turn's usage, as the Gemini driver reports it; output video seconds stand in for an avatar's. */
+/** The output tokens the turn's avatar video counts as: Google's 6,192 tokens a second over its 2.5 s. */
+const RD15_VIDEO_TOKENS = 15480;
+/** One turn's usage, as the Gemini driver reports it; output video seconds and tokens stand in for an avatar's. */
 const RD15_TURN: RealtimeUsage = {
     InputTokens: 1200,
-    OutputTokens: 300,
+    OutputTokens: 300 + RD15_VIDEO_TOKENS,
     InputTokenDetails: { AudioTokens: 1000, TextTokens: 200 },
-    OutputTokenDetails: { AudioTokens: 300, VideoSeconds: 2.5 },
+    OutputTokenDetails: { AudioTokens: 300, VideoTokens: RD15_VIDEO_TOKENS, VideoSeconds: 2.5 },
 };
+/** The turn's output tokens, video included. */
+const RD15_OUTPUT_TOKENS = 300 + RD15_VIDEO_TOKENS;
 /** A duration-only update (a running total), as GPT-Live reports it. */
 const RD15_DURATION: RealtimeUsage = { InputTokens: 0, OutputTokens: 0, DurationSeconds: 42 };
 /** What the session reports while it closes, as a Gemini avatar session does: avatar seconds not reported yet. */
@@ -668,16 +685,26 @@ function hasActiveSystemPrompt(agentID: string): boolean {
 }
 
 /**
- * A model-vendor row's avatar video price per minute, from its resolved configuration; `undefined` when it has none. Only
+ * A model-vendor row's avatar video price and unit, from its resolved configuration; `undefined` when it has none. Only
  * an inference provider's row prices a run's video.
  */
-function avatarVideoPricePerMinute(row: MJAIModelVendorEntity): number | undefined {
+function avatarVideoPrice(row: MJAIModelVendorEntity): AvatarVideoPrice | undefined {
     const engine = AIEngineBase.Instance;
     if (!engine.IsInferenceProvider(row)) {
         return undefined;
     }
     const price = engine.GetEffectiveModelConfiguration(row.ModelID, row.ID)?.Realtime?.Pricing?.AvatarVideoOutput;
-    return typeof price?.Price === 'number' ? price.Price : undefined;
+    return typeof price?.Price === 'number' && price.Unit ? { Price: price.Price, Unit: price.Unit } : undefined;
+}
+
+/**
+ * The video line a price writes, as `[Measure, Output, Cost]`: the seconds at a per-minute price, the video tokens at
+ * a per-token price.
+ */
+function expectedVideoLine(price: AvatarVideoPrice, seconds: number, videoTokens: number): [string, number, number] {
+    return price.Unit === 'Per 1M Tokens'
+        ? ['Tokens', videoTokens, RoundCost((videoTokens / 1_000_000) * price.Price)]
+        : ['Seconds', seconds, RoundCost((seconds / 60) * price.Price)];
 }
 
 /**
@@ -693,18 +720,18 @@ function findBridgedUsageFixture(): BridgedUsageFixture | undefined {
     const realtimeModels = (engine.Models ?? []).filter(m => m.IsActive && m.AIModelType?.trim().toLowerCase() === 'realtime');
     const pairs = (engine.ModelVendors ?? []).filter(mv => realtimeModels.some(m => UUIDsEqual(m.ID, mv.ModelID)));
     const priced = pairs.filter(mv => AIEngineBase.Instance.GetActiveModelCost(mv.ModelID, mv.VendorID, 'Realtime', 'Tokens') !== null);
-    const videoPriced = priced.find(mv => avatarVideoPricePerMinute(mv) !== undefined);
+    const videoPriced = priced.find(mv => avatarVideoPrice(mv) !== undefined);
     const pair = videoPriced ?? priced[0] ?? pairs[0];
     if (!coAgent || !pair) {
         return undefined;
     }
-    const videoPrice = videoPriced ? avatarVideoPricePerMinute(videoPriced) : undefined;
+    const videoPrice = videoPriced ? avatarVideoPrice(videoPriced) : undefined;
     return {
         CoAgent: coAgent,
         ModelID: pair.ModelID,
         VendorID: pair.VendorID,
         Priced: priced.length > 0,
-        ...(videoPrice !== undefined ? { VideoPricePerMinute: videoPrice } : {}),
+        ...(videoPrice !== undefined ? { VideoPrice: videoPrice } : {}),
     };
 }
 
@@ -735,8 +762,8 @@ interface StoredRealtimeUsage {
 /** Asserts the prompt run holds the turn's tokens and record and what the session reported while closing, finalized, and nothing from after close. */
 function assertPromptRunUsage(promptRun: MJAIPromptRunEntity): void {
     AssertEqual(promptRun.TokensPrompt, 1200, 'TokensPrompt holds the reported input (the late update not added)');
-    AssertEqual(promptRun.TokensCompletion, 300, 'TokensCompletion holds the reported output');
-    AssertEqual(promptRun.TokensUsed, 1500, 'TokensUsed is their sum');
+    AssertEqual(promptRun.TokensCompletion, RD15_OUTPUT_TOKENS, 'TokensCompletion holds the reported output, video tokens included');
+    AssertEqual(promptRun.TokensUsed, 1200 + RD15_OUTPUT_TOKENS, 'TokensUsed is their sum');
     AssertEqual(promptRun.Status, 'Completed', 'the prompt run was finalized');
     Assert(promptRun.CompletedAt != null, 'finalize stamped CompletedAt');
     const details: { RealtimeUsage?: StoredRealtimeUsage } = JSON.parse(promptRun.ModelSpecificResponseDetails ?? '{}');
@@ -750,22 +777,23 @@ function assertPromptRunUsage(promptRun: MJAIPromptRunEntity): void {
 }
 
 /**
- * Asserts finalize priced the run's 4 s of avatar video, the 1.5 s the session reported while closing included, on a
- * line of its own at the pair's per-minute price, and that the run's cost is the sum of its lines.
+ * Asserts finalize priced the run's avatar video on a line of its own at the pair's price (per minute: its 4 s, the
+ * 1.5 s the session reported while closing included; per 1M tokens: the turn's video tokens), and that the run's cost
+ * is the sum of its lines.
  */
-function assertVideoPriced(promptRun: MJAIPromptRunEntity, pricePerMinute: number | undefined): void {
-    if (pricePerMinute === undefined) {
+function assertVideoPriced(promptRun: MJAIPromptRunEntity, price: AvatarVideoPrice | undefined): void {
+    if (price === undefined) {
         console.warn('  ⚠ realtime-deterministic.RD15: the video line not asserted — no Realtime model-vendor pair with an active '
             + 'Tokens price has a Realtime.Pricing.AvatarVideoOutput price');
         return;
     }
     const lines = ReadCostLines(promptRun.ModelSpecificResponseDetails);
     const video = lines.find(line => line.Modality === 'Video');
-    Assert(!!video, 'finalize wrote no video cost line: the stored avatar seconds went unpriced');
+    Assert(!!video, 'finalize wrote no video cost line: the stored avatar video went unpriced');
     AssertEqual(
         JSON.stringify([video?.Measure, video?.Output, video?.Cost]),
-        JSON.stringify(['Seconds', RD15_VIDEO_SECONDS, RoundCost((RD15_VIDEO_SECONDS / 60) * pricePerMinute)]),
-        'the video line prices 4 s at the per-minute price, the 1.5 s reported while closing included',
+        JSON.stringify(expectedVideoLine(price, RD15_VIDEO_SECONDS, RD15_VIDEO_TOKENS)),
+        `the video line prices the stored video at the ${price.Unit} price`,
     );
     // Each line is rounded to 8 decimals, so the lines' sum may differ from Cost in the last place.
     const linesTotal = lines.reduce((sum, line) => sum + line.Cost, 0);
@@ -773,16 +801,16 @@ function assertVideoPriced(promptRun: MJAIPromptRunEntity, pricePerMinute: numbe
 }
 
 /** Asserts the run was priced at finalize (when it can be), its video on a line of its own, and that the co-agent run carries its totals. */
-function assertPricedAndRolledUp(promptRun: MJAIPromptRunEntity, coAgentRun: MJAIAgentRunEntity, mustBePriced: boolean, videoPricePerMinute: number | undefined): void {
+function assertPricedAndRolledUp(promptRun: MJAIPromptRunEntity, coAgentRun: MJAIAgentRunEntity, mustBePriced: boolean, videoPrice: AvatarVideoPrice | undefined): void {
     if (mustBePriced) {
         Assert(promptRun.Cost != null, 'an active Tokens price exists and pricing runs on this Save path, yet finalize left Cost NULL');
-        assertVideoPriced(promptRun, videoPricePerMinute);
+        assertVideoPriced(promptRun, videoPrice);
     } else {
         console.warn('  ⚠ realtime-deterministic.RD15: cost not asserted — no Realtime model-vendor pair has an active Tokens price, '
             + 'or the prompt run server subclass (pricing) is not active on this Save path');
     }
     AssertEqual(coAgentRun.TotalPromptTokensUsed, 1200, 'co-agent run TotalPromptTokensUsed (roll-up)');
-    AssertEqual(coAgentRun.TotalCompletionTokensUsed, 300, 'co-agent run TotalCompletionTokensUsed (roll-up)');
+    AssertEqual(coAgentRun.TotalCompletionTokensUsed, RD15_OUTPUT_TOKENS, 'co-agent run TotalCompletionTokensUsed (roll-up)');
     const expectedCost = promptRun.TotalCost ?? promptRun.Cost ?? 0;
     Assert(Math.abs((coAgentRun.TotalCost ?? 0) - expectedCost) < 1e-9, `co-agent run TotalCost ${coAgentRun.TotalCost} != prompt run ${expectedCost}`);
 }
@@ -818,7 +846,7 @@ async function runBridgedUsageScenario(ctx: IntegrationCheckContext, fixture: Br
     if (promptRun && coAgentRun) {
         assertPromptRunUsage(promptRun);
         const pricingActive = serverInvariantsActive(ctx.Provider.ProviderType, 'MJ: AI Prompt Runs');
-        assertPricedAndRolledUp(promptRun, coAgentRun, fixture.Priced && pricingActive, fixture.VideoPricePerMinute);
+        assertPricedAndRolledUp(promptRun, coAgentRun, fixture.Priced && pricingActive, fixture.VideoPrice);
     }
 }
 
@@ -1650,8 +1678,8 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 await DeepDeleteRunTrees(ctx.Provider, ctx.User, cleanup);
             }
             const priced = !fixture.Priced || !serverInvariantsActive(ctx.Provider.ProviderType, 'MJ: AI Prompt Runs') ? ' (cost not asserted)'
-                : fixture.VideoPricePerMinute === undefined ? ' (no avatar video price: video line not asserted)'
-                : `, ${RD15_VIDEO_SECONDS} s of video on its own line`;
+                : fixture.VideoPrice === undefined ? ' (no avatar video price: video line not asserted)'
+                : `, the video on its own line at the ${fixture.VideoPrice.Unit} price`;
             console.log(`      → usage stored on the co-agent prompt run, priced at finalize${priced}; runs removed`);
         }
     },

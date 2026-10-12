@@ -25637,7 +25637,8 @@
         },
         {
           "_comments": [
-            "Realtime.TurnDetection.Coverage is audioActivityOnly on this row, unlike the model's and the Google row's: Gemini Enterprise refuses TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO at session setup (1007, invalid value at setup.realtime_input_config.turn_coverage; found against Vertex AI on 2026-10-09). The Gemini Enterprise driver sends only activity there whatever is configured."
+            "Realtime.TurnDetection.Coverage is audioActivityOnly on this row, unlike the model's and the Google row's: Gemini Enterprise refuses TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO at session setup (1007, invalid value at setup.realtime_input_config.turn_coverage; found against Vertex AI on 2026-10-09). The Gemini Enterprise driver sends only activity there whatever is configured.",
+            "Realtime.Pricing.AvatarVideoOutput is $1.00 per 1M avatar video output tokens, Google's Vertex AI Live API list price. It prices the output tokens Google reports as VIDEO, not the stored video seconds: Google bills avatar video only while the avatar speaks, while the stored seconds also count the idle avatar between answers."
           ],
           "fields": {
             "ModelID": "@parent:ID",
@@ -25663,8 +25664,8 @@
                 "FullDuplex": true,
                 "Pricing": {
                   "AvatarVideoOutput": {
-                    "Price": 0.37152,
-                    "Unit": "Per Minute",
+                    "Price": 1,
+                    "Unit": "Per 1M Tokens",
                     "Currency": "USD"
                   }
                 }
@@ -25736,7 +25737,7 @@
             "OutputPricePerUnit": 4.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.8 Live on Vertex AI (Gemini Enterprise) text token pricing: $0.75 / 1M input tokens, $4.50 / 1M output tokens. Mirrors the Gemini Developer API list price; VERIFY against the Vertex AI price list. Avatar video output is priced separately, by ModelConfiguration.Realtime.Pricing.AvatarVideoOutput on the Vertex AI model-vendor row: $0.37152 / min ($1.00 / 1M tokens at 6,192 tokens per second; VERIFY).",
+            "Comments": "Gemini 3.8 Live on Vertex AI (Gemini Enterprise) text token pricing: $0.75 / 1M input tokens, $4.50 / 1M output tokens. Mirrors the Gemini Developer API list price; VERIFY against the Vertex AI price list. Avatar video output is priced separately, by ModelConfiguration.Realtime.Pricing.AvatarVideoOutput on the Vertex AI model-vendor row: $1.00 / 1M avatar video output tokens, which Google charges only while the avatar speaks.",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
           },
