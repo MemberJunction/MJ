@@ -46,6 +46,14 @@ export const REALTIME_RECORDING_MOUNT_PATH = '/realtime/recording';
 const LATE_SHARD_REASSEMBLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const OCTET_STREAM = 'application/octet-stream';
+/**
+ * How soon a final terminal that found shards missing looks again. The browser sends the terminal first
+ * and re-sends its unacknowledged shards right after it (all `keepalive`), so they normally land within a
+ * second or two; when the tab closed right after End, no close follows to trigger assembly. A re-check
+ * that is still incomplete comes back `Deferred`, and the scheduler then arms the forced-`Partial` grace.
+ */
+export const FINAL_TERMINAL_RECHECK_MS = 5000;
+
 /** Largest shard index the ledger's SQL `INT` column holds; also the bound on expected shards. */
 const MAX_SHARD_INDEX = 2_147_483_647;
 const NON_NEGATIVE_INT = /^\d+$/;
@@ -351,15 +359,16 @@ async function scheduleAfterLateShard(
 }
 
 /**
- * Schedules a `Pending` recording: now when every expected shard is stored, otherwise (unless
- * `graceWhenIncomplete` is false) a forced-`Partial` assembly after the grace period.
+ * Schedules a `Pending` recording: now when every expected shard is stored; otherwise, after a final
+ * terminal (`recheckWhenIncomplete`), a re-check in {@link FINAL_TERMINAL_RECHECK_MS} that falls back to
+ * the forced-`Partial` grace when shards are still missing.
  */
 async function scheduleWhenReady(
     deps: RealtimeRecordingRouterDeps,
     provider: DatabaseProviderBase,
     sessionID: string,
     expected: number,
-    graceWhenIncomplete = true,
+    recheckWhenIncomplete = true,
 ): Promise<void> {
     const systemUser = deps.SystemUser();
     if (!systemUser) {
@@ -369,8 +378,8 @@ async function scheduleWhenReady(
     const present = await deps.CreateLedger(provider, systemUser).CountShardsBelow(sessionID, expected);
     if (present === expected) {
         deps.Scheduler.ScheduleAssembly(sessionID, 0, false);
-    } else if (graceWhenIncomplete) {
-        deps.Scheduler.ScheduleAssembly(sessionID, deps.GraceMs(), true);
+    } else if (recheckWhenIncomplete) {
+        deps.Scheduler.ScheduleAssembly(sessionID, FINAL_TERMINAL_RECHECK_MS, false);
     }
 }
 
@@ -381,7 +390,6 @@ function logIgnoredTerminal(session: MJAIAgentSessionEntity, expected: number, c
     );
 }
 
-/** Parses a non-negative (or, with {@link INT}, signed) safe integer route or query value; 400 otherwise. */
 /** The terminal's `final` flag: absent or `true` means the call ended; `false` means the tab was hidden. */
 function parseFinalFlag(value: unknown): boolean {
     if (value === undefined || value === 'true') {
@@ -393,6 +401,7 @@ function parseFinalFlag(value: unknown): boolean {
     throw new RecordingRequestError(400, `final must be true or false, got '${String(value)}'`);
 }
 
+/** Parses a non-negative (or, with {@link INT}, signed) safe integer route or query value; 400 otherwise. */
 function parseInteger(value: unknown, field: string, pattern: RegExp): number {
     if (typeof value !== 'string' || !pattern.test(value)) {
         throw new RecordingRequestError(400, `${field} must be an integer, got '${String(value ?? '')}'`);

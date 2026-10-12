@@ -21,7 +21,7 @@ import type {
     LedgerShard, LedgerShardMetadata, RecordShardInput, RecordShardResult,
 } from '@memberjunction/ai-agents';
 import {
-    CreateRealtimeRecordingRouter, REALTIME_RECORDING_MOUNT_PATH, type RealtimeRecordingRouterDeps,
+    CreateRealtimeRecordingRouter, FINAL_TERMINAL_RECHECK_MS, REALTIME_RECORDING_MOUNT_PATH, type RealtimeRecordingRouterDeps,
 } from '../rest/RealtimeRecordingHandler.js';
 import { RealtimeSessionNotFoundError, RealtimeSessionOwnershipError } from '../realtimeSessions/ownedRealtimeSession.js';
 import { RecordingAssemblyScheduler, type IRecordingAssemblyScheduler } from '../realtimeSessions/RecordingAssemblyScheduler.js';
@@ -502,10 +502,13 @@ describe('realtime recording REST routes', () => {
             expect(res.status).toBe(400);
         });
 
-        it('schedules a forced-Partial assembly after the grace when shards are missing', async () => {
+        it('a final terminal with shards missing re-checks shortly (their keepalive re-sends follow it), not after the grace', async () => {
+            // End then the tab closes: the close is never sent, and the shards still unacknowledged at End
+            // land just after the terminal. A Deferred re-check arms the forced-Partial grace (scheduler).
             await postShard(0);
             await postEnd(2, 3 * SHARD_SAMPLES);
-            expect(scheduler.ScheduleAssembly).toHaveBeenCalledWith(SESSION, GRACE_MS, true);
+            expect(scheduler.ScheduleAssembly).toHaveBeenCalledWith(SESSION, FINAL_TERMINAL_RECHECK_MS, false);
+            expect(FINAL_TERMINAL_RECHECK_MS).toBeLessThan(10_000);
         });
 
         it('treats a duplicate /end as idempotent', async () => {
