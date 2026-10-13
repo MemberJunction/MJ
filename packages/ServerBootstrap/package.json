@@ -41,6 +41,7 @@
     "@memberjunction/actions-bizapps-lms": "6.2.0-edge.3",
     "@memberjunction/actions-bizapps-social": "6.2.0-edge.3",
     "@memberjunction/actions-content-autotag": "6.2.0-edge.3",
+    "@memberjunction/actions-peopledatalabs": "6.2.0-edge.3",
     "@memberjunction/ai-agent-harness": "6.2.0-edge.3",
     "@memberjunction/ai-agent-manager": "6.2.0-edge.3",
     "@memberjunction/ai-agents": "6.2.0-edge.3",
