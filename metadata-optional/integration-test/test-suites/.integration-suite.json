@@ -1209,6 +1209,28 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT111 - Realtime Session Config Guard",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C6B1B073-56CC-4F28-B50E-9783D55FE494"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT112 - Realtime Session Identity Verification",
+            "Sequence": 50,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7696BECA-B4E1-4531-8348-B6D440F0D27C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT95 - Trailing Runtime State",
             "Sequence": 48,
             "Status": "Active"
@@ -1302,6 +1324,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT110 - Perplexity Decider Decision Model",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3D3B073E-4AE5-4B13-A3C1-62B4B96DFAD3"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT96 - Record Cloning",
             "Sequence": 71,
             "Status": "Active"
@@ -1363,6 +1396,17 @@
           },
           "primaryKey": {
             "ID": "3DA009D7-6777-438C-B45A-66BE07808056"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT113 - LiveKit Room Agent Vision Consent",
+            "Sequence": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "84E2D287-9A54-49AC-859C-D796DA5E6182"
           }
         }
       ]

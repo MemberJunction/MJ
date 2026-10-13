@@ -132,7 +132,7 @@
       "ValueType": "number",
       "Category": "Search",
       "DisplayName": "Default Minimum Relevance Score",
-      "Description": "Minimum relevance score threshold for search results (0-1). Results below this score are filtered out.",
+      "Description": "Minimum semantic similarity (0-1) for search results, applied to semantic (vector) matches before fusion. Keyword and other text matches are never filtered by it. Embedding models score even unrelated text fairly high, so the useful value depends on the model in use.",
       "DefaultValue": "0.35"
     },
     "primaryKey": {
