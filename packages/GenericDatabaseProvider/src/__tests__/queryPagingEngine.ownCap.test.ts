@@ -218,3 +218,57 @@ describe('R20 / R15 — the row cap keeps the query as written and its ORDER BY 
             .toMatch(/FETCH NEXT 5 ROWS ONLY\nOPTION \(RECOMPILE\)$/);
     });
 });
+
+describe('#3778 — a set operation’s ORDER BY moved outside a derived table still binds, and its own cap survives', () => {
+    // Caps on more than one branch force the derived-table form; the set operation's ORDER BY then
+    // has to order the derived table, where the branches' table aliases are out of scope.
+    const union = 'SELECT TOP 5 a.Name, a.ID FROM dbo.A a UNION ALL SELECT TOP 5 b.Name, b.ID FROM dbo.B b';
+
+    it('the row cap orders the derived table by output columns, not by the branches’ aliases', () => {
+        const sql = QueryPagingEngine.WrapWithMaxRows(`${union} ORDER BY a.Name DESC, [a].[ID]`, 10, 'sqlserver');
+        expect(sql).toMatch(/\) AS \[_mj_capped\]\nORDER BY Name DESC, \[ID\]$/);
+        expect(sql).not.toMatch(/\)\s*AS \[_mj_capped\][\s\S]*\ba\./);
+    });
+
+    it('paging orders the derived table by output columns, not by the branches’ aliases', () => {
+        const paged = QueryPagingEngine.WrapWithPaging(`${union} ORDER BY a.Name`, 20, 10, 'sqlserver');
+        expect(paged.DataSQL).toMatch(/\) AS \[__mj_page\]\nORDER BY Name\nOFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY$/);
+    });
+
+    it('a schema-qualified name keeps only its column part', () => {
+        expect(QueryPagingEngine.WrapWithMaxRows(`${union} ORDER BY dbo.A.Name`, 10, 'sqlserver')).toMatch(/\nORDER BY Name$/);
+    });
+
+    it('an unqualified ORDER BY is moved unchanged', () => {
+        expect(QueryPagingEngine.WrapWithMaxRows(`${union} ORDER BY Name`, 10, 'sqlserver')).toMatch(/\nORDER BY Name$/);
+    });
+
+    // SQL Server refuses the branches' TOP and the set operation's OFFSET in one subquery, so the
+    // own cap is applied by a second derived table around the set operation.
+    const ownCapped = `SELECT * FROM (\n${union}\n) AS [_mj_set]\nORDER BY Name\nOFFSET 2 ROWS FETCH NEXT 4 ROWS ONLY`;
+
+    it('the row cap still applies the set operation’s own OFFSET … FETCH', () => {
+        const sql = QueryPagingEngine.WrapWithMaxRows(`${union} ORDER BY a.Name OFFSET 2 ROWS FETCH NEXT 4 ROWS ONLY`, 10, 'sqlserver');
+        expect(sql).toBe(`SELECT TOP 10 * FROM (\n${ownCapped}\n) AS [_mj_capped]\nORDER BY Name`);
+    });
+
+    it('paging still applies the set operation’s own OFFSET … FETCH', () => {
+        const paged = QueryPagingEngine.WrapWithPaging(`${union} ORDER BY a.Name OFFSET 2 ROWS FETCH NEXT 4 ROWS ONLY`, 0, 10, 'sqlserver');
+        expect(paged.DataSQL).toBe(`SELECT * FROM (\n${ownCapped}\n) AS [__mj_page]\nORDER BY Name\nOFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY`);
+    });
+
+    it('the count query counts through the same second derived table, not the set operation as written', () => {
+        const paged = QueryPagingEngine.WrapWithPaging(`${union} ORDER BY a.Name OFFSET 2 ROWS FETCH NEXT 4 ROWS ONLY`, 0, 10, 'sqlserver');
+        expect(paged.CountSQL).toBe(`WITH [__count] AS (\n${ownCapped}\n)\nSELECT COUNT(*) AS TotalRowCount FROM [__count]`);
+    });
+
+    it('a set operation with only its own OFFSET … FETCH is still counted as written', () => {
+        const own = 'SELECT a.Name FROM dbo.A a UNION ALL SELECT b.Name FROM dbo.B b ORDER BY Name OFFSET 2 ROWS FETCH NEXT 4 ROWS ONLY';
+        expect(QueryPagingEngine.WrapWithPaging(own, 0, 10, 'sqlserver').CountSQL).toContain(`WITH [__count] AS (\n${own}\n)`);
+    });
+
+    it('a non-set-operation derived table keeps its ORDER BY inside beside its own TOP', () => {
+        const sql = QueryPagingEngine.WrapWithMaxRows('SELECT TOP 50 PERCENT a.Name FROM dbo.A a ORDER BY a.Name', 10, 'sqlserver');
+        expect(sql).toBe('SELECT TOP 10 * FROM (\nSELECT TOP 50 PERCENT a.Name FROM dbo.A a ORDER BY a.Name\n) AS [_mj_capped]');
+    });
+});
