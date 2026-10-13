@@ -2,9 +2,8 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { SafeFetch, SSRFError, DrainResponseBody } from "@memberjunction/network-utils";
-import TurndownService from 'turndown';
-import { JSDOM } from 'jsdom';
-import pdfParse from 'pdf-parse';
+import { GetTurndown, HtmlToText, TransformHtml, TransformPdf, TruncateContent, type HtmlTransformOptions, type PdfTransformOptions } from './web-content-transforms';
+import { WebContentWorkerHost } from './worker/WebContentWorkerHost';
 import mammoth from 'mammoth';
 import xml2js from 'xml2js';
 import Papa from 'papaparse';
@@ -57,16 +56,6 @@ export class WebPageContentAction extends BaseAction {
 
     private readonly MAX_CONTENT_SIZE = 10 * 1024 * 1024; // 10MB limit
     private readonly MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit for images
-    private turndown: TurndownService;
-
-    constructor() {
-        super();
-        this.turndown = new TurndownService({
-            headingStyle: 'atx',
-            codeBlockStyle: 'fenced',
-            emDelimiter: '*'
-        });
-    }
 
     /**
      * Executes web content retrieval and processing
@@ -318,38 +307,16 @@ export class WebPageContentAction extends BaseAction {
     }
 
     /**
-     * Process PDF content
+     * Process PDF content. Parsing runs on the web-content worker thread when one is available:
+     * pdf-parse is synchronous and blocks the thread it runs on (MJ #5510).
      */
     private async processPdf(response: Response, outputType: string, includeMetadata: boolean, maxLength: number): Promise<Record<string, unknown>> {
-        const buffer = await response.arrayBuffer();
-        const pdfData = await pdfParse(Buffer.from(buffer));
-
-        const result: Record<string, unknown> = {
-            detectedType: 'pdf',
-            outputType
-        };
-
-        if (includeMetadata) {
-            result.metadata = {
-                pages: pdfData.numpages,
-                info: pdfData.info,
-                version: pdfData.version
-            };
-        }
-
-        const text = pdfData.text || '';
-
-        if (outputType === 'json') {
-            result.content = {
-                text: this.truncateContent(text, maxLength),
-                pages: pdfData.numpages,
-                metadata: pdfData.info
-            };
-        } else {
-            result.content = this.truncateContent(text, maxLength);
-        }
-
-        return result;
+        const data = new Uint8Array(await response.arrayBuffer());
+        const options: PdfTransformOptions = { OutputType: outputType, IncludeMetadata: includeMetadata, MaxLength: maxLength };
+        const host = WebContentWorkerHost.Instance;
+        return host.IsAvailable
+            ? host.Run({ Kind: 'pdf', Data: data, Options: options })
+            : TransformPdf(data, options);
     }
 
     /**
@@ -374,11 +341,11 @@ export class WebPageContentAction extends BaseAction {
 
         let content: string;
         if (outputType === 'markdown') {
-            content = this.turndown.turndown(htmlContent);
+            content = GetTurndown().turndown(htmlContent);
         } else if (outputType === 'html') {
             content = htmlContent;
         } else {
-            content = this.htmlToText(htmlContent);
+            content = HtmlToText(htmlContent);
         }
 
         if (outputType === 'json') {
@@ -465,7 +432,8 @@ export class WebPageContentAction extends BaseAction {
     }
 
     /**
-     * Process HTML content
+     * Process HTML content. Conversion runs on the web-content worker thread when one is
+     * available: jsdom and turndown are synchronous and block the thread they run on (MJ #5510).
      */
     private async processHtml(
         response: Response,
@@ -475,42 +443,11 @@ export class WebPageContentAction extends BaseAction {
         maxLength: number
     ): Promise<Record<string, unknown>> {
         const html = await response.text();
-
-        const result: Record<string, unknown> = {
-            detectedType: 'html',
-            outputType,
-            extractMainContent: extractMain
-        };
-
-        if (includeMetadata) {
-            result.metadata = this.extractHtmlMetadata(html);
-        }
-
-        let contentHtml = html;
-        if (extractMain) {
-            contentHtml = this.extractMainContent(html);
-        }
-
-        let content: string;
-        if (outputType === 'markdown') {
-            content = this.turndown.turndown(contentHtml);
-        } else if (outputType === 'text') {
-            content = this.htmlToText(contentHtml);
-        } else if (outputType === 'json') {
-            const dom = new JSDOM(contentHtml);
-            result.content = {
-                html: this.truncateContent(contentHtml, maxLength),
-                text: this.truncateContent(this.htmlToText(contentHtml), maxLength),
-                markdown: this.truncateContent(this.turndown.turndown(contentHtml), maxLength),
-                structure: this.extractStructure(dom.window.document)
-            };
-            return result;
-        } else {
-            content = contentHtml;
-        }
-
-        result.content = this.truncateContent(content, maxLength);
-        return result;
+        const options: HtmlTransformOptions = { OutputType: outputType, ExtractMainContent: extractMain, IncludeMetadata: includeMetadata, MaxLength: maxLength };
+        const host = WebContentWorkerHost.Instance;
+        return host.IsAvailable
+            ? host.Run({ Kind: 'html', Html: html, Options: options })
+            : TransformHtml(html, options);
     }
 
     /**
@@ -570,111 +507,6 @@ export class WebPageContentAction extends BaseAction {
     }
 
     /**
-     * Extracts HTML metadata
-     */
-    private extractHtmlMetadata(html: string): Record<string, unknown> {
-        const dom = new JSDOM(html);
-        const doc = dom.window.document;
-        const metadata: Record<string, unknown> = {};
-
-        // Title
-        const title = doc.querySelector('title');
-        if (title) {
-            metadata.title = title.textContent?.trim();
-        }
-
-        // Meta tags
-        const metas = doc.querySelectorAll('meta');
-        metas.forEach(meta => {
-            const name = meta.getAttribute('name') || meta.getAttribute('property');
-            const content = meta.getAttribute('content');
-            if (name && content) {
-                metadata[name] = content;
-            }
-        });
-
-        // Canonical URL
-        const canonical = doc.querySelector('link[rel="canonical"]');
-        if (canonical) {
-            metadata.canonical = canonical.getAttribute('href');
-        }
-
-        return metadata;
-    }
-
-    /**
-     * Attempts to extract main content from HTML
-     */
-    private extractMainContent(html: string): string {
-        const dom = new JSDOM(html);
-        const doc = dom.window.document;
-
-        // Remove scripts and styles
-        doc.querySelectorAll('script, style, nav, header, footer, aside').forEach(el => el.remove());
-
-        // Try to find main content containers
-        const mainSelectors = ['main', 'article', '[role="main"]', '.content', '#content', '.post', '.article'];
-
-        for (const selector of mainSelectors) {
-            const element = doc.querySelector(selector);
-            if (element && element.textContent && element.textContent.trim().length > 100) {
-                return element.innerHTML;
-            }
-        }
-
-        // If no main content found, return body without nav/header/footer
-        const body = doc.querySelector('body');
-        return body ? body.innerHTML : html;
-    }
-
-    /**
-     * Converts HTML to plain text
-     */
-    private htmlToText(html: string): string {
-        const dom = new JSDOM(html);
-        const doc = dom.window.document;
-
-        // Remove script and style elements
-        doc.querySelectorAll('script, style').forEach(el => el.remove());
-
-        return doc.body.textContent || '';
-    }
-
-    /**
-     * Extracts document structure from HTML
-     */
-    private extractStructure(doc: Document): Record<string, unknown> {
-        const structure: Record<string, unknown> = {
-            headings: [],
-            links: [],
-            images: []
-        };
-
-        // Extract headings
-        const headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6');
-        (structure.headings as Array<Record<string, unknown>>) = Array.from(headings).map(h => ({
-            level: parseInt(h.tagName[1]),
-            text: h.textContent?.trim() || ''
-        }));
-
-        // Extract links
-        const links = doc.querySelectorAll('a[href]');
-        (structure.links as Array<Record<string, unknown>>) = Array.from(links).map(a => ({
-            url: a.getAttribute('href'),
-            text: a.textContent?.trim() || ''
-        }));
-
-        // Extract images
-        const images = doc.querySelectorAll('img[src]');
-        (structure.images as Array<Record<string, unknown>>) = Array.from(images).map(img => ({
-            src: img.getAttribute('src'),
-            alt: img.getAttribute('alt') || ''
-        }));
-
-        return structure;
-    }
-
-    /**
      * Converts CSV data to markdown table
      */
     private csvToMarkdownTable(data: Array<Record<string, string | number | boolean>>, fields: string[]): string {
@@ -705,10 +537,7 @@ export class WebPageContentAction extends BaseAction {
      * Truncates content to specified length
      */
     private truncateContent(content: string, maxLength: number): string {
-        if (content.length <= maxLength) {
-            return content;
-        }
-        return content.substring(0, maxLength) + '...';
+        return TruncateContent(content, maxLength);
     }
 
     /**
