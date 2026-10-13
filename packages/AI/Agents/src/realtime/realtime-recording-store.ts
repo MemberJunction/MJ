@@ -42,7 +42,7 @@ export async function ResolveRecordingStorageAccountID(
     await FileStorageEngine.Instance.Config(false, contextUser, provider);
     let accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerID);
     if (accounts.length === 0) {
-        await FileStorageEngine.Instance.Config(true, contextUser, provider);
+        await FileStorageEngine.Instance.RefreshAfterMiss(provider);
         accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerID);
     }
     return accounts[0]?.ID ?? null;

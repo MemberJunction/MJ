@@ -632,6 +632,18 @@ describe('ScopedSearchAction', () => {
             expect(searchSpy.mock.calls[0][0].AISkillID).toBeUndefined();
         });
 
+        it('REFUSES a named skill on a dispatch that carries the run\'s RunScope but lost its context (a bridge call)', async () => {
+            const action = new ScopedSearchAction();
+            const params = mkParams(
+                [{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }, { Name: 'AISkillID', Value: SKILL_UUID }],
+            );
+            (params as unknown as { RunScope: unknown }).RunScope = { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null };
+            const result = await run(action, params);
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
         it('outside an agent run (no ActiveSkillIDs on the context) the explicit parameter still rules', async () => {
             const action = new ScopedSearchAction();
             const result = await run(action, mkParams(

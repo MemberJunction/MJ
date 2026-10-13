@@ -850,9 +850,9 @@ export class FileResolver extends FileResolverBase {
       }
 
       // Storage gate, then read the bytes via authenticated MJStorage (server-side GetObject on the file's own account).
-      // A refusal throws and is reported below; a row with no ProviderKey or no account has no bytes to read.
+      // A refusal throws and is reported below; a row whose provider has no account has no bytes to read.
       const resolved = await this.assertFileObjectAccess(fileEntity, 'Read', contextUser, provider);
-      const bytes = resolved && fileEntity.ProviderKey ? await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey }) : null;
+      const bytes = resolved ? await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey }) : null;
       if (!bytes || bytes.length === 0) {
         return { Success: false, ErrorMessage: 'The file could not be read from storage.' };
       }

@@ -361,7 +361,7 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         // On-demand fallback: account wasn't in cache (failed init, added late, etc.)
         let resolved = this.Base.GetAccountWithProvider(accountId);
         if (!resolved) {
-            await this.Config(true, contextUser);
+            await this.RefreshAfterMiss();
             resolved = this.Base.GetAccountWithProvider(accountId);
         }
 
@@ -484,8 +484,8 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         // 1. Resolve storage account
         let resolved = this.ResolveStorageAccount(storageAccountId);
         if (!resolved) {
-            // Attempt a forced refresh from database in case account was recently added or cache was stale
-            await this.Config(true, contextUser, md);
+            // Attempt a refresh from the database in case the account was recently added or the cache was stale
+            await this.RefreshAfterMiss(md);
             resolved = this.ResolveStorageAccount(storageAccountId);
         }
 

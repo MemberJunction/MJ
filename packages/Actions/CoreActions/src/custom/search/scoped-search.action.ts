@@ -824,11 +824,13 @@ export class ScopedSearchAction extends BaseAction {
      * action call. A named skill the run never activated is REFUSED — inside a Loop agent this parameter
      * is written by the model, and a model must not be able to widen its own reach by naming a skill —
      * and, when exactly one skill is active and none is named, it becomes the principal without the
-     * model having to say so. Several active and none named: no principal (logged as verbose). Outside
-     * a run (no ActiveSkillIDs on the context) the explicit parameter is the only source, unchanged.
+     * model having to say so. Several active and none named: no principal (logged as verbose). A dispatch
+     * that carries the run's `RunScope` but not its context (a runtime action's bridge call) has no list
+     * of active skills to trust, so it counts as a run with none active: a named skill is refused. Outside
+     * a run (no RunScope, no ActiveSkillIDs) the explicit parameter is the only source, unchanged.
      */
     private resolveSkillPrincipalID(params: RunActionParams): { skillID: string | undefined } | { result: ActionResultSimple } {
-        const activeInRun = this.readActiveSkillIDs(params);
+        const activeInRun = this.readActiveSkillIDs(params) ?? (params.RunScope ? [] : undefined);
         const named = this.getStringParam(params, "aiskillid");
         if (!activeInRun) return { skillID: named };
         if (named && !activeInRun.some(id => UUIDsEqual(id, named))) {

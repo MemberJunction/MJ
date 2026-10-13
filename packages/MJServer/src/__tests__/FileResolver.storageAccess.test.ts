@@ -97,6 +97,7 @@ const FILE_SECRET = '99999999-0000-4000-8000-000000000007';
 const FILE_MINE = '88888888-0000-4000-8000-000000000008';
 const FILE_ALIAS = '77777777-0000-4000-8000-000000000009';      // plainUser's own row, pointed at HR's object
 const FILE_Q3 = '66666666-0000-4000-8000-00000000000A';         // plainUser's row on the Finance-only provider
+const FILE_NOKEY = '55555555-0000-4000-8000-00000000000B';      // plainUser's row stored with an empty ProviderKey
 
 function makeUser(id: string, roleIDs: string[]): UserInfo {
     return { ID: id, Name: id, Email: `${id}@example.com`, UserRoles: roleIDs.map(RoleID => ({ RoleID })) } as unknown as UserInfo;
@@ -114,11 +115,12 @@ const PERMISSIONS: StorageAccountPermissionRow[] = [
 const FILES = [
     { ID: FILE_SECRET, Name: 'secret.pdf', ProviderKey: 'hr/secret.pdf', ProviderID: PROVIDER_S3, Status: 'Uploaded' },
     { ID: FILE_MINE, Name: 'mine.pdf', ProviderKey: 'me/mine.pdf', ProviderID: PROVIDER_S3, Status: 'Uploaded' },
+    { ID: FILE_NOKEY, Name: 'open/brochure.pdf', ProviderKey: '', ProviderID: PROVIDER_S3, Status: 'Uploaded' },
     { ID: FILE_ALIAS, Name: 'innocent.pdf', ProviderKey: '/HR/secret.pdf', ProviderID: PROVIDER_S3, Status: 'Uploaded' },
     { ID: FILE_Q3, Name: 'q3.xlsx', ProviderKey: 'q3.xlsx', ProviderID: PROVIDER_FINANCE, Status: 'Uploaded' },
 ];
 const READABLE_FILES: Record<string, string[]> = {
-    [plainUser.ID]: [FILE_MINE, FILE_ALIAS, FILE_Q3],
+    [plainUser.ID]: [FILE_MINE, FILE_ALIAS, FILE_Q3, FILE_NOKEY],
     [financeUser.ID]: [FILE_SECRET, FILE_MINE, FILE_ALIAS, FILE_Q3],
 };
 /** The accounts on each provider, first one first — what ResolveFileObject resolves a row's provider to. */
@@ -138,7 +140,7 @@ function answerView(params: RunViewParams, user: UserInfo | undefined): RunViewR
             return ok(PERMISSIONS.filter(p => namedIn(params, p.FileStorageAccountID)));
         case 'MJ: Files':
             if (user?.ID === systemUser.ID) {
-                return ok(FILES.filter(f => namedIn(params, f.ProviderID) && namedIn(params, `'${f.ProviderKey.toLowerCase()}'`)));
+                return ok(FILES.filter(f => namedIn(params, f.ProviderID) && namedIn(params, `'${(f.ProviderKey || f.Name).toLowerCase()}'`)));
             }
             return ok(FILES.filter(f => namedIn(params, f.ID) && (READABLE_FILES[user?.ID ?? ''] ?? []).includes(f.ID)).map(f => ({ ID: f.ID })));
         default:
@@ -442,6 +444,12 @@ describe('FileResolver — storage routes honour account permissions', () => {
             const mine = await resolver.GetFileContents(FILE_MINE, contextFor(plainUser));
             expect(mine.Success).toBe(true);
             expect(mine.Base64).toBe(Buffer.from('bytes').toString('base64'));
+        });
+
+        it('GetFileContents reads a row stored with an empty ProviderKey from its Name, as DownloadUrl does', async () => {
+            const result = await resolver.GetFileContents(FILE_NOKEY, contextFor(plainUser));
+            expect(result.Success).toBe(true);
+            expect(fakeDriver.GetObject).toHaveBeenCalledWith({ fullPath: 'open/brochure.pdf' });
         });
 
         it('CreateMediaAccessToken mints nothing for an aliasing row', async () => {
