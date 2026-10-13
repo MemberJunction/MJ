@@ -205,6 +205,9 @@ export class GetRubricAction extends BaseAction {
  */
 @RegisterClass(BaseAction, 'Create Rubric Draft')
 export class CreateRubricDraftAction extends BaseAction {
+    /** Writes the draft through the caller's provider, with the caller's permissions. */
+    public static readonly AuthorizesCaller = true;
+
     public async Invoke(engine: RubricEngine, input: { rubricId?: string; rubricName?: string; nodes?: RubricNodeSnapshot[]; matrix?: string; description?: string }): Promise<{ id: string; status: 'Draft' }> {
         const nodes = input.matrix
             ? NodesFromMatrix(input.matrix)
@@ -241,6 +244,9 @@ export class CreateRubricDraftAction extends BaseAction {
  */
 @RegisterClass(BaseAction, 'Submit Human Rubric')
 export class SubmitHumanRubricAction extends BaseAction {
+    /** Records the caller's own evaluation, with the caller's permissions. */
+    public static readonly AuthorizesCaller = true;
+
     public async Invoke(provider: Parameters<typeof SubmitHumanEvaluation>[0], user: unknown, input: Parameters<typeof SubmitHumanEvaluation>[2]): Promise<{ id: string; status: 'Submitted' }> {
         return SubmitHumanEvaluation(provider, user, input);
     }

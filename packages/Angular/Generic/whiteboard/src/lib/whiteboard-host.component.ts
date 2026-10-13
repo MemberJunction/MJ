@@ -47,7 +47,7 @@ const PRESENCE_MS = 4200;
  *    (`Whiteboard_AddNote` … see `WHITEBOARD_TOOL_DEFINITIONS`) with the violet pop-in,
  *    toast and presence-cursor garnish, returning the result JSON for the tool round-trip;
  *  - `AgentUndo` fires when the user clicks Undo on the agent-action toast;
- *  - `FocusModeChange` asks the shell to collapse/restore the call rail ("Focus board").
+ *  - `FocusModeChange` asks the host to move the board to the stage or back to its tab ("Move to stage").
  *
  * Extensibility (before/after events): the host mirrors the engine's cancelable
  * BEFORE / AFTER mutation pairs as outputs (`ItemAdding`/`ItemAdded`,
@@ -161,7 +161,7 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   @Output() SceneDelta = new EventEmitter<string>();
   /** The user clicked Undo on the agent-action toast (the undo itself already applied). */
   @Output() AgentUndo = new EventEmitter<void>();
-  /** Focus-board toggle — the session shell collapses/restores the call rail. */
+  /** "Move to stage" / "Back to tab": asks the host to put the board on the stage (`true`) or back on its tab. */
   @Output() FocusModeChange = new EventEmitter<boolean>();
   /** Emitted when the user picks "Save to artifacts" — the channel plugin persists via its host context. */
   @Output() SaveToArtifactsRequested = new EventEmitter<void>();
@@ -366,6 +366,14 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   public ToggleFocus(): void {
     this.FocusMode = !this.FocusMode;
     this.FocusModeChange.emit(this.FocusMode);
+  }
+
+  /** The host reports whether the board is on the stage, however it got there, so the header offers the way back. */
+  public SetOnStage(onStage: boolean): void {
+    if (onStage !== this.FocusMode) {
+      this.FocusMode = onStage;
+      this.cdr.markForCheck();
+    }
   }
 
   // ────────────────────────────────────────────── export menu

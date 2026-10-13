@@ -12,19 +12,35 @@
 
     @if (Expanded) {
       <div class="perception-chip__panel" role="group" aria-label="What the agent can see">
-        <p class="perception-chip__hint">Turn a source off and the agent stops seeing it.</p>
+        <p class="perception-chip__hint">
+          @if (CanPick) {
+            The agent sees fewer sources than are on. Pick the one it sees, or turn a source off.
+          } @else {
+            Turn a source off and the agent stops seeing it.
+          }
+        </p>
         <ul class="perception-chip__list">
           @for (source of Sources; track TrackSource($index, source)) {
             <li class="perception-chip__row">
               <span class="perception-chip__label">{{ source.Label }}</span>
               <span class="perception-chip__status"
                     [class.perception-chip__status--live]="source.Enabled && source.Active">{{ StatusText(source) }}</span>
+              @if (CanPick && source.Enabled && !source.Active) {
+                <button type="button" mjButton variant="flat" size="sm" class="perception-chip__pick"
+                        [attr.aria-label]="PickLabel(source)"
+                        (click)="OnPick(source)">Show</button>
+              }
               <mj-switch [AriaLabel]="SwitchLabel(source)"
                          [ngModel]="source.Enabled"
                          (ngModelChange)="OnSwitch(source, $event)"></mj-switch>
             </li>
           }
         </ul>
+        @if (HasPick) {
+          <button type="button" mjButton variant="flat" size="sm" class="perception-chip__auto" (click)="OnPick(null)">
+            Let the call choose
+          </button>
+        }
       </div>
     }
   </div>

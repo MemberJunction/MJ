@@ -38,6 +38,11 @@ export class WidgetFakeClient extends BaseRealtimeClient {
   public Drop(): void {
     this.emitStateChange('error');
   }
+  /** Ends the call the way MJAPI's relay does at the session's time limit. */
+  public ReachTimeLimit(): void {
+    this.emitError({ Message: 'Gemini Live session reached its time limit (4000)', Code: 'time-limit', Fatal: true });
+    this.emitStateChange('error');
+  }
   public SendText(): void {}
   public CancelActiveResponse(): void {}
   public SendContextNote(text: string): void {
