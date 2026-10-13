@@ -287,6 +287,8 @@ export class RoomCallSessionStarter {
                 OnSessionEnded: (reason: BridgeDisconnectReason) => this.onSessionEnded(args, agentSessionID, reason),
                 JoinMethod: args.Channel === 'phone' && args.Direction === 'Inbound' ? 'InboundRoute' : 'OnDemand',
                 Direction: args.Direction,
+                // A phone caller sees no video: on 'phone' the coordinator asks for no avatar (reason `phone`).
+                Channel: args.Channel,
             },
         });
         ref.BridgeID = started.SessionBridgeID;

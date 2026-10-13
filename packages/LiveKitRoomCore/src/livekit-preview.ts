@@ -9,7 +9,12 @@
 
 import { createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack } from 'livekit-client';
 
-/** A live, room-free media preview for a PreJoin screen. */
+/**
+ * A live, room-free media preview for a PreJoin screen.
+ *
+ * @deprecated Use `MediaPreview` from `@memberjunction/ai-realtime-client/media`, on a `LocalMediaController`: the
+ * shared lobby preview the meeting room now runs, with the shared microphone meter and a controller a test can fake.
+ */
 export class LiveKitMediaPreview {
   private videoTrack: LocalVideoTrack | null = null;
   private audioTrack: LocalAudioTrack | null = null;

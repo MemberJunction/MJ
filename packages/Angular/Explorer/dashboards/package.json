@@ -101,6 +101,7 @@
   "devDependencies": {
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
+    "@fortawesome/fontawesome-free": "6.7.2",
     "@types/d3": "^7.4.0",
     "sass": "^1.97.3",
     "@memberjunction/ng-test-utils": "6.2.0-edge.3"
