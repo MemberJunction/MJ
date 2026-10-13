@@ -18,6 +18,28 @@ import { MarkdownService } from '../services/markdown.service';
 import { MarkdownConfig, DEFAULT_MARKDOWN_CONFIG, MarkdownRenderEvent, HeadingInfo } from '@memberjunction/markdown-core';
 // Collapsible section toggle is handled inline in setupCollapsibleListeners
 
+/** Inputs whose change re-parses the markdown, by camelCase name. */
+const RERENDER_INPUTS = new Set([
+  'data',
+  'enableHighlight',
+  'enableMermaid',
+  'enableMath',
+  'enableCodeCopy',
+  'enableCollapsibleHeadings',
+  'collapsibleHeadingLevel',
+  'collapsibleDefaultExpanded',
+  'autoExpandLevels',
+  'enableAlerts',
+  'enableSmartypants',
+  'enableSvgRenderer',
+  'enableHtml',
+  'enableJavaScript',
+  'enableHeadingIds',
+  'headingIdPrefix',
+  'mermaidTheme',
+  'sanitize',
+]);
+
 /**
  * Angular component for rendering markdown content.
  *
@@ -415,26 +437,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
-    // Check if any relevant input changed
-    const needsRerender =
-      changes['data'] ||
-      changes['enableHighlight'] ||
-      changes['enableMermaid'] ||
-      changes['EnableMath'] ||
-      changes['enableCodeCopy'] ||
-      changes['enableCollapsibleHeadings'] ||
-      changes['collapsibleHeadingLevel'] ||
-      changes['collapsibleDefaultExpanded'] ||
-      changes['autoExpandLevels'] ||
-      changes['enableAlerts'] ||
-      changes['enableSmartypants'] ||
-      changes['enableSvgRenderer'] ||
-      changes['enableHtml'] ||
-      changes['enableJavaScript'] ||
-      changes['enableHeadingIds'] ||
-      changes['headingIdPrefix'] ||
-      changes['mermaidTheme'] ||
-      changes['sanitize'];
+    // Each input binds under its PascalCase name and a deprecated camelCase alias (Data / data),
+    // and SimpleChanges keys by whichever name the template bound, so compare camelCased names.
+    const needsRerender = Object.keys(changes).some((name) =>
+      RERENDER_INPUTS.has(name.charAt(0).toLowerCase() + name.slice(1))
+    );
 
     if (needsRerender) {
       this.render();
@@ -496,7 +503,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     // Check for mermaid and code blocks
     this.hasMermaid = html.includes('language-mermaid') || html.includes('class="mermaid"');
     this.hasCodeBlocks = html.includes('<pre>') && html.includes('<code');
-    this.hasMath = html.includes('class="mj-math') || html.includes('<math');
+    this.hasMath = html.includes('class="mj-math') || /<math[\s>]/.test(html);
 
     // Sanitize if enabled
     // Note: We bypass Angular's sanitizer when SVG renderer or HTML passthrough is enabled
