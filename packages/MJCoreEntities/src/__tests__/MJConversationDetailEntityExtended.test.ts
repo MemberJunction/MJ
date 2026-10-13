@@ -77,6 +77,11 @@ vi.mock('../generated/entity_subclasses', () => ({
         public Role: string = 'User';
         public UserID: string | null = null;
         public Fields: { Name: string; Dirty: boolean; OldValue?: unknown }[] = [];
+        /** Mirrors `BaseEntity.GetFieldByName`: trimmed, any case. */
+        public GetFieldByName(name: string) {
+            const key = name.trim().toLowerCase();
+            return this.Fields.find((f) => f.Name.toLowerCase() === key) ?? null;
+        }
 
         public ResultHistory: MockResultEntry[] = [];
         public get LatestResult(): MockResultEntry | null {
@@ -114,7 +119,7 @@ type Harness = {
     UserID: string | null;
     CloneContext?: { CloneLogID: string; SourceRecordID: string; RootEntityName: string } | null;
     Fields: { Name: string; Dirty: boolean; OldValue?: unknown }[];
-    TransactionGroup?: { Variables: { EntityObject: unknown; Type: 'Define' | 'Use' }[] };
+    TransactionGroup?: { Variables: { EntityObject: unknown; FieldName: string; Type: 'Define' | 'Use' }[] };
     ResultHistory: MockResultEntry[];
     LatestResult: MockResultEntry | null;
     Save: () => Promise<boolean>;
@@ -440,6 +445,14 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
             toNoOne.UserID = null;
             expect(await toNoOne.Save()).toBe(false);
         });
+
+        it("refuses the owner handing their message with no UserID to a grantee", async () => {
+            const entity = await savedMessageAs(OWNER, null, ['UserID']);
+            entity.UserID = GRANTEE;
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe('You can post a message only as yourself.');
+        });
     });
 
     describe('deleting a message', () => {
@@ -517,24 +530,67 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
         expect(entity.LatestResult?.CompleteMessage).toBe('You can post a message only as yourself.');
     });
 
-    it('refuses a message a transaction variable fills in at submit, after this check', async () => {
+    /** A new message from the grantee, one of whose fields (`fieldName`) a 'Use' variable sets at submit. */
+    async function messageWithVariable(fieldName: string, variableFieldName = fieldName): Promise<Harness> {
         const entity = await messageAs(GRANTEE);
-        entity.TransactionGroup = { Variables: [{ EntityObject: entity, Type: 'Use' }] };
+        entity.Fields = [{ Name: fieldName, Dirty: false }];
+        entity.TransactionGroup = { Variables: [{ EntityObject: entity, FieldName: variableFieldName, Type: 'Use' }] };
+        return entity;
+    }
 
-        expect(await entity.Save()).toBe(false);
-        expect(entity.LatestResult?.CompleteMessage).toBe(
-            'A conversation message cannot take its values from a transaction variable.'
-        );
+    it('refuses a message whose author, text, rating or place a transaction variable fills in at submit, after this check', async () => {
+        for (const field of ['UserID', 'Role', 'Message', 'ParentID', 'ConversationID', 'BranchID', 'UserRating']) {
+            const entity = await messageWithVariable(field);
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe(
+                'A conversation message cannot take its values from a transaction variable.'
+            );
+        }
+        expect(mocks.superSave).not.toHaveBeenCalled();
+    });
+
+    it("matches a variable's field the way Set does at submit: trimmed, any case", async () => {
+        expect(await (await messageWithVariable('UserID', ' userid ')).Save()).toBe(false);
+    });
+
+    it('allows a variable on a field the gate does not decide on', async () => {
+        expect(await (await messageWithVariable('HiddenToUser')).Save()).toBe(true);
+    });
+
+    it('does not refuse a delete for a variable: a delete sets no field', async () => {
+        const entity = await messageWithVariable('UserID');
+        entity.UserID = GRANTEE;
+
+        expect(await entity.Delete()).toBe(true);
     });
 
     it("allows a message whose own values define a variable, or whose group's variables are another item's", async () => {
         const defines = await messageAs(GRANTEE);
-        defines.TransactionGroup = { Variables: [{ EntityObject: defines, Type: 'Define' }] };
+        defines.TransactionGroup = { Variables: [{ EntityObject: defines, FieldName: 'ID', Type: 'Define' }] };
         expect(await defines.Save()).toBe(true);
 
         const other = await messageAs(GRANTEE);
-        other.TransactionGroup = { Variables: [{ EntityObject: {}, Type: 'Use' }] };
+        other.TransactionGroup = { Variables: [{ EntityObject: {}, FieldName: 'UserID', Type: 'Use' }] };
         expect(await other.Save()).toBe(true);
+    });
+
+    it('logs when there is no system user to tell a hidden conversation from a missing one', async () => {
+        mocks.conversationVisible.mockReturnValue(false);
+        mocks.getSystemUser.mockResolvedValue(null);
+        const entity = await messageAs(GRANTEE);
+
+        expect(await entity.Save()).toBe(true);
+        expect(mocks.logError).toHaveBeenCalledTimes(1);
+        expect(mocks.logError.mock.calls[0][0]).toContain('no system user');
+    });
+
+    it("puts back the caller's empty UserID when the save the gate let through fails", async () => {
+        mocks.superSave.mockResolvedValue(false);
+        const entity = await messageAs(GRANTEE);
+
+        expect(await entity.Save()).toBe(false);
+        expect(entity.UserID).toBeNull();
     });
 
     it('checks access before authorship: a person without a grant is told they have no access', async () => {

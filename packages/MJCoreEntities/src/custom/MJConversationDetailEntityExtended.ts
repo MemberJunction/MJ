@@ -23,8 +23,9 @@ const OWNER_ONLY_RATING_FIELDS = ['UserRating', 'UserFeedback'];
 
 /**
  * The fields of a person's (`Role='User'`) message that say who wrote it and what it says: its author, its role, its
- * text, its attachment, its media type and where it sits in a thread. Only its author may change them. Other fields
- * (pinning, hiding, bookkeeping the server writes) keep the conversation-level rules.
+ * text, its attachment, its media type and where it sits in a thread. Only its author may change them, except
+ * `Role`, which no one may change. Other fields (pinning, hiding, bookkeeping the server writes) keep the
+ * conversation-level rules.
  */
 const AUTHORED_FIELDS = ['UserID', 'Role', 'Message', 'ArtifactID', 'ArtifactVersionID', 'MediaType', 'ParentID'];
 
@@ -33,6 +34,12 @@ const AUTHORED_FIELDS = ['UserID', 'Role', 'Message', 'ArtifactID', 'ArtifactVer
  * its author included: moving it takes it out of the thread it was written in.
  */
 const PLACEMENT_FIELDS = ['ConversationID', 'BranchID'];
+
+/**
+ * The fields this gate decides on when a person saves a message. A transaction variable sets its field at submit,
+ * after the gate has run, so none of these may take its value from one.
+ */
+const GATED_FIELDS = [...PLACEMENT_FIELDS, ...OWNER_ONLY_RATING_FIELDS, ...AUTHORED_FIELDS];
 
 /**
  * Whether a `Role` value is a person's message. Compared the way validation and the database's CHECK constraint
@@ -83,10 +90,15 @@ function isPersonRole(role: string | null | undefined): boolean {
 @RegisterClass(BaseEntity, 'MJ: Conversation Details')
 export class MJConversationDetailEntityExtended extends MJConversationDetailEntity {
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        const callerUserID = this.UserID; // the gate may fill in a grantee's; a save that fails keeps the caller's
         if (!(await this.currentUserMayWrite('save'))) {
             return false;
         }
-        return super.Save(options);
+        const saved = await super.Save(options);
+        if (!saved) {
+            this.UserID = callerUserID;
+        }
+        return saved;
     }
 
     override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -114,7 +126,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
         // the conversation or hold a grant on it: some server paths elevate an anonymous visitor to the system user
         // (MJ#4791), and this gate is what keeps those paths out of other people's conversations.
         const isSystemUser = WellKnownUserSource.Instance.IsSystemUser(user);
-        if (!isSystemUser && this.TransactionGroup?.Variables.some((v) => v.EntityObject === this && v.Type === 'Use')) {
+        if (operation === 'save' && !isSystemUser && this.gatedFieldSetByTransactionVariable()) {
             // A transaction variable sets its field after this check has passed, at submit, to any value an earlier
             // item in the group produced: a person's message would be checked with one author and saved with another.
             this.recordDenied('A conversation message cannot take its values from a transaction variable.', resultType);
@@ -251,19 +263,34 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
     private async conversationExists(provider: IMetadataProvider): Promise<boolean> {
         const systemUser = await WellKnownUserSource.Instance.GetSystemUser(provider);
         if (!systemUser) {
+            LogError(
+                `MJConversationDetailEntityExtended: no system user to check whether conversation ${this.ConversationID} ` +
+                    'exists; treating it as missing.'
+            );
             return false;
         }
         const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', systemUser);
         return conversation.Load(this.ConversationID);
     }
 
+    /**
+     * Whether a transaction variable of this message's group sets one of {@link GATED_FIELDS} on it. The field is
+     * resolved the way `Set` resolves it at submit (trimmed, any case).
+     */
+    private gatedFieldSetByTransactionVariable(): boolean {
+        return !!this.TransactionGroup?.Variables.some((v) => {
+            const name = v.EntityObject === this && v.Type === 'Use' ? this.GetFieldByName(v.FieldName)?.Name : null;
+            return !!name && GATED_FIELDS.includes(name);
+        });
+    }
+
     private isFieldDirty(name: string): boolean {
-        return !!this.Fields.find((f) => f.Name === name)?.Dirty;
+        return !!this.GetFieldByName(name)?.Dirty;
     }
 
     /** A field's value as loaded, before this save's changes; `null` when it was empty or is not text. */
     private originalFieldText(name: string): string | null {
-        const original: unknown = this.Fields.find((f) => f.Name === name)?.OldValue;
+        const original: unknown = this.GetFieldByName(name)?.OldValue;
         return typeof original === 'string' && original.length > 0 ? original : null;
     }
 
