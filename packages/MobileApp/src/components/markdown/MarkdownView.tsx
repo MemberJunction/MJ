@@ -15,6 +15,8 @@ import type { Token, Tokens } from 'marked';
 import {
     MarkdownEngine,
     formatLanguageName,
+    type MathMLToken,
+    type MathToken,
     type SvgCodeBlockToken,
 } from '@memberjunction/markdown-core';
 import { Colors, Radius, Spacing, Type } from '@/theme/tokens';
@@ -134,7 +136,7 @@ function renderBlock(token: Token, key: string): React.ReactNode {
         case 'mathmlBlock':
             // TeX or MathML (markdown-core's math extension). No typesetter on mobile yet: show
             // the source as code.
-            return <CodeBlock key={key} code={(token as Tokens.Generic).raw.trim()} />;
+            return <CodeBlock key={key} code={(token as Tokens.Generic as MathToken | MathMLToken).text} />;
 
         case 'def':
             return null;
@@ -175,7 +177,7 @@ function renderInline(tokens: Token[] | undefined, keyPrefix: string): React.Rea
                 return <Text key={key} style={styles.codespan}>{decodeEntities((token as Tokens.Codespan).text)}</Text>;
             case 'math':
             case 'mathml':
-                return <Text key={key} style={styles.codespan}>{(token as Tokens.Generic).raw}</Text>;
+                return <Text key={key} style={styles.codespan}>{(token as Tokens.Generic as MathToken | MathMLToken).text}</Text>;
             case 'link': {
                 const l = token as Tokens.Link;
                 return (

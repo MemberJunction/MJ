@@ -56,6 +56,10 @@ const MATHML_BLOCK_RULE = new RegExp(
   'i',
 );
 const MATHML_OPENER = new RegExp(OPENER, 'i');
+// How far the inline `start()` looks ahead for an opener. marked calls it at every inline step, so
+// searching the whole rest of the message made parsing quadratic in its length. A formula further on
+// is still found: inline text stops at `<`, and `start()` runs again from there.
+const MATHML_INLINE_LOOKAHEAD = 2000;
 
 function matchMathML(src: string, rule: RegExp, type: MathMLToken['type']): MathMLToken | undefined {
   const match = rule.exec(src);
@@ -227,7 +231,7 @@ export function CreateMathExtension(): MarkedExtension {
         name: 'mathml',
         level: 'inline',
         start(src: string) {
-          const index = src.search(MATHML_OPENER);
+          const index = src.slice(0, MATHML_INLINE_LOOKAHEAD).search(MATHML_OPENER);
           return index === -1 ? undefined : index;
         },
         tokenizer(src: string) {

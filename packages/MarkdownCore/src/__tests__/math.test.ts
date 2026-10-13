@@ -143,6 +143,11 @@ describe('math extension: MathML markup', () => {
     expect(out).not.toMatch(/mml:/);
   });
 
+  it('an inline formula far into a long message still renders (the opener search is bounded)', () => {
+    const out = html(`${'plain words '.repeat(300)}then ${jatsInline} per pulse.`);
+    expect(out).toMatch(/then <math display="inline">[\s\S]*<\/math> per pulse\.<\/p>/);
+  });
+
   it('a pretty-printed display formula is one block, even across a blank line and deep indentation', () => {
     const out = html(`Before.\n\n${jatsBlock}\n\nAfter.`);
     expect(out).toContain('<div class="mj-math-block"><math display="block">');
@@ -221,6 +226,9 @@ describe('math extension: cost', () => {
     ['unclosed \\[ blocks', '\\[ x\n\n'.repeat(2000)],
     ['unclosed \\( spans', 'text \\( a b c\n\n'.repeat(2000)],
     ['unclosed $$ blocks', '$$ x\n\n'.repeat(2000)],
+    // The inline MathML start() searched the whole rest of the message at every inline step.
+    ['300 KB of "$a " amounts', '$a '.repeat(100_000)],
+    ['200 KB of "a_b " identifiers', 'a_b '.repeat(50_000)],
   ])('%s stay linear', (_name, markdown) => {
     const started = performance.now();
     html(markdown);
