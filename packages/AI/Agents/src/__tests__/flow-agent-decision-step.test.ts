@@ -263,6 +263,7 @@ class DecisionFlowHarness {
             Agents: subAgentRows,
             AgentRelationships: [],
             AgentCategories: [],
+            ResolveAgentStorageAccountID: () => null,
             ScopedPromptParts: [],
             ScopedPromptConfigs: [],
             AgentTypes: [{
