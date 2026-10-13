@@ -1,10 +1,11 @@
-import { DatabasePlatform, UserInfo, QueryDependencySpec, LogStatus } from '@memberjunction/core';
-import { MJQueryParameterEntity } from '@memberjunction/core-entities';
+import { BuildQueryTemplateContext, DatabasePlatform, UserInfo, QueryDependencySpec, LogStatus } from '@memberjunction/core';
+import { MJQueryEntityExtended, MJQueryParameterEntity, QueryEngine } from '@memberjunction/core-entities';
+import { UUIDMap, UUIDSet } from '@memberjunction/global';
 import { GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser, IsReadOnlyQuery, FindForbiddenFunctionCalls } from '@memberjunction/sql-parser';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
 import { QueryPagingEngine, PagingWrappedSQL, RowCapOutcome } from './queryPagingEngine.js';
-import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunction/query-processor';
+import { QueryParameterProcessor, type QueryServerValues, type QueryTemplateInput } from '@memberjunction/query-processor';
 
 // ════════════════════════════════════════════════════════════════════
 // Types
@@ -53,6 +54,15 @@ export interface RenderContext {
     ContextUser?: UserInfo;
     /** Parameter values from the caller */
     Parameters?: Record<string, string>;
+    /**
+     * Values only server code sets (`RunQueryParams.ServerParameters`). A caller value for a
+     * server-set parameter, here or in a composed query, is refused.
+     */
+    ServerParameters?: Record<string, unknown>;
+    /** IANA time zone the template's `Context` dates are worked out in. UTC when unset. */
+    TimeZone?: string;
+    /** The clock the template's `Context` reads. Defaults to now. */
+    Now?: Date;
     /** Formal parameter definitions (for validation). Null = skip validation. */
     ParameterDefinitions?: MJQueryParameterEntity[];
     /** Whether the outer query uses Nunjucks templates */
@@ -87,6 +97,11 @@ export interface RenderResult {
     FinalSQL: string;
     /** Parameters that were applied during template processing */
     AppliedParameters: Record<string, string>;
+    /**
+     * The `Context` members the template read, with their values. Empty when it read none. A
+     * cached result depends on exactly these.
+     */
+    ContextValues: Record<string, string>;
     /** Whether composition tokens were found and resolved */
     HasCompositions: boolean;
     /** Metadata about each CTE generated during composition */
@@ -146,6 +161,7 @@ export class RenderPipeline {
 
         let currentSQL = sql;
         let appliedParameters: Record<string, string> = {};
+        let contextValues: Record<string, string> = {};
 
         // ── Step 1: Composition ──────────────────────────────────────
         const compositionResult = RenderPipeline.runComposition(currentSQL, ctx);
@@ -165,6 +181,7 @@ export class RenderPipeline {
         const templateResult = RenderPipeline.runTemplates(currentSQL, sql, ctx, compositionResult);
         currentSQL = templateResult.processedSQL;
         appliedParameters = templateResult.appliedParameters;
+        contextValues = templateResult.contextValues;
         const afterTemplates = currentSQL;
 
         // ── Step 2.5: Safety validation (mutation + injection guard) ──
@@ -201,6 +218,7 @@ export class RenderPipeline {
         return {
             FinalSQL: currentSQL,
             AppliedParameters: appliedParameters,
+            ContextValues: contextValues,
             HasCompositions: compositionResult.HasCompositions,
             CTEs: compositionResult.CTEs,
             Trace: {
@@ -336,11 +354,11 @@ export class RenderPipeline {
         originalSQL: string,
         ctx: RenderContext,
         compositionResult: CompositionResult
-    ): { processedSQL: string; appliedParameters: Record<string, string> } {
+    ): { processedSQL: string; appliedParameters: Record<string, string>; contextValues: Record<string, string> } {
         const needsTemplateProcessing = ctx.UsesTemplate || compositionResult.AnyDependencyUsesTemplates;
 
         if (!needsTemplateProcessing) {
-            return { processedSQL: composedSQL, appliedParameters: {} };
+            return { processedSQL: composedSQL, appliedParameters: {}, contextValues: {} };
         }
 
         // Build the template input. When a QueryInfo object is provided (saved
@@ -353,11 +371,12 @@ export class RenderPipeline {
         };
 
         const skipUnknownParamCheck = compositionResult.AnyDependencyUsesTemplates || !ctx.ParameterDefinitions;
-        const result = QueryParameterProcessor.processQueryTemplate(
+        const result = QueryParameterProcessor.ProcessQueryTemplate(
             templateInput,
             ctx.Parameters,
             composedSQL,
-            skipUnknownParamCheck
+            skipUnknownParamCheck,
+            RenderPipeline.buildServerValues(ctx, compositionResult)
         );
 
         if (!result.success) {
@@ -367,7 +386,48 @@ export class RenderPipeline {
         return {
             processedSQL: result.processedSQL,
             appliedParameters: (result.appliedParameters || {}) as Record<string, string>,
+            contextValues: result.contextValues ?? {},
         };
+    }
+
+    /**
+     * What the server sets on this render: its `ServerParameters`, the names that reach a
+     * server-set parameter of a composed query, and the `Context` object, worked out from the
+     * context user and the run's time zone. Context members resolve only when the template reads them.
+     */
+    private static buildServerValues(ctx: RenderContext, compositionResult: CompositionResult): QueryServerValues {
+        return {
+            ServerParameters: ctx.ServerParameters,
+            ProtectedNames: RenderPipeline.composedServerSetNames(compositionResult),
+            Context: BuildQueryTemplateContext({ User: ctx.ContextUser, TimeZone: ctx.TimeZone, Now: ctx.Now }),
+        };
+    }
+
+    /**
+     * The names a caller value may not use because they reach a server-set parameter of a composed
+     * query: the parameter's own name when the composition token leaves it unmapped (it then reads
+     * the outer render context), or the outer name it is passed through from. A static value in the
+     * token is the query author's and protects nothing.
+     */
+    private static composedServerSetNames(compositionResult: CompositionResult): string[] {
+        if (compositionResult.CTEs.length === 0) {
+            return [];
+        }
+        const composedIDs = new UUIDSet(compositionResult.CTEs.map(c => c.QueryID));
+        const composed = new UUIDMap<MJQueryEntityExtended>(
+            QueryEngine.Instance.Queries.filter(q => composedIDs.Has(q.ID)).map((q): [string, MJQueryEntityExtended] => [q.ID, q])
+        );
+        const names = new Set<string>();
+        for (const cte of compositionResult.CTEs) {
+            for (const param of composed.Get(cte.QueryID)?.QueryParameters.filter(p => p.IsServerSet) ?? []) {
+                const mapped = cte.Parameters[param.Name];
+                const passThrough = mapped === undefined ? param.Name : /^\{\{\s*([A-Za-z_]\w*)\s*\}\}$/.exec(mapped)?.[1];
+                if (passThrough) {
+                    names.add(passThrough);
+                }
+            }
+        }
+        return [...names];
     }
 
 }

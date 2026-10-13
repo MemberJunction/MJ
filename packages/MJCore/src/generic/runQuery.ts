@@ -154,6 +154,46 @@ export type RunQueryParams = {
      * resolved values, not the zone, into whatever the fingerprint covers.
      */
     TimeZone?: string
+
+    /**
+     * Server only: values for the query's server-set parameters (`MJ: Query Parameters.IsServerSet`),
+     * keyed by parameter name. Server code sets them; a value for a server-set parameter in
+     * {@link Parameters} is refused, so a caller cannot choose it. A value here may also set an
+     * ordinary parameter, and wins over {@link Parameters} when both name it.
+     *
+     * No GraphQL run input carries it, and the `RunQuery*` resolvers never read it from a request,
+     * so a GraphQL client cannot set it. Transports that build run params from a request body strip
+     * it ({@link SERVER_ONLY_RUN_QUERY_PARAMS}). The result-cache fingerprint covers these values.
+     */
+    ServerParameters?: Record<string, unknown>
+
+    /**
+     * Opt-in: refuse to run unless the query's approval is current — its status is Approved and
+     * the fingerprint stored when it was approved matches the fingerprint of the definition about
+     * to run (SQL, dialect variants, parameter contract), worked out on the server. A query it
+     * composes must have a current approval too. Unset, an unapproved query runs with a logged
+     * warning, as before.
+     *
+     * Server only: no GraphQL run input carries it. A run with it set skips the `CacheLocal`
+     * result cache, so every run is checked.
+     */
+    RequireApproved?: boolean
+}
+
+/**
+ * `RunQueryParams` fields only server code may set. A transport that builds run params from a
+ * client's request body removes these before running the query, so a client cannot choose them.
+ * GraphQL run inputs never carry them in the first place.
+ */
+export const SERVER_ONLY_RUN_QUERY_PARAMS: ReadonlyArray<keyof RunQueryParams> = ['TimeZone', 'ServerParameters'];
+
+/** A copy of client-supplied run params without the {@link SERVER_ONLY_RUN_QUERY_PARAMS} fields. */
+export function StripServerOnlyRunQueryParams(params: RunQueryParams): RunQueryParams {
+    const copy: RunQueryParams = { ...params };
+    for (const key of SERVER_ONLY_RUN_QUERY_PARAMS) {
+        delete copy[key];
+    }
+    return copy;
 }
 
 /**

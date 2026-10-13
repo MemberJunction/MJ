@@ -14,6 +14,7 @@ export * from './custom/MJEnvironmentEntityExtended';
 export * from './custom/MJTemplateEntityExtended';
 export * from './custom/MJConversationDetailEntityExtended';
 export * from './custom/MJQueryEntityExtended';
+export * from './custom/approvals';
 export * from './custom/AIAgentNoteStatus';
 
 export * from './custom/ResourcePermissions/ResourcePermissionEngine';

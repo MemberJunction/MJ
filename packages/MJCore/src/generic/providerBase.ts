@@ -25,6 +25,8 @@ import { Observable, Subscription } from "rxjs";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 import { TransformSimpleObjectToEntityObject } from "./util";
 import { LoadRelatedRecordsBatched } from "./relatedRecordBatchLoader";
+import { ContextToken, GetLocalTimeZone } from "./contextTokens";
+import { FindQueryContextTokens, QueryContextCacheValues } from "./queryTemplateContext";
 
 
 
@@ -116,6 +118,12 @@ export interface QueryCacheAuthorization {
     categoryPath?: string;
     /** Resolved query name — for log messages when the request was by ID only. */
     queryName?: string;
+    /**
+     * The context tokens the resolved query's template reads, with every query it composes
+     * (`FindQueryContextTokens`). Their values join the fingerprint, so a result that depends on
+     * the user or the date is never served to another user or on another day.
+     */
+    contextTokens?: ContextToken[];
 }
 
 export const AllMetadataArrays = [
@@ -2361,8 +2369,40 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // the gate only consults `authorized` when a contextUser is present.
             authorized: !user || qInfo.UserCanRun(user),
             categoryPath: qInfo.CategoryPath,
-            queryName: qInfo.Name
+            queryName: qInfo.Name,
+            contextTokens: FindQueryContextTokens(
+                qInfo.ID,
+                id => [this.Queries.find(q => UUIDsEqual(q.ID, id))?.SQL, ...this.QuerySQLs.filter(s => UUIDsEqual(s.QueryID, id)).map(s => s.SQL)],
+                id => this.QueryDependencies.filter(d => UUIDsEqual(d.QueryID, id)).map(d => d.DependsOnQueryID)
+            )
         };
+    }
+
+    /**
+     * The fingerprint segment for what the server sets on a run: `ServerParameters`, and the
+     * `Context.*` values the query reads, worked out for this user, zone and day. Empty when the
+     * run has neither, so the fingerprint is exactly what it was before either existed.
+     * @returns null when the query reads `Context.Now`: such a result is never reused
+     */
+    private queryCacheServerSegment(params: RunQueryParams, contextUser: UserInfo | undefined, auth: QueryCacheAuthorization): Record<string, unknown> | null {
+        const segment: Record<string, unknown> = {};
+        if (params.ServerParameters && Object.keys(params.ServerParameters).length > 0) {
+            segment.__serverParameters = params.ServerParameters;
+        }
+        // ponytail: an unresolvable query (not in metadata) adds no Context segment. The TTL gate then
+        // serves only the slot's warmer, so users stay apart, but a date value can be stale for up to
+        // the slot's TTL across midnight. Resolve the SQL here too if that ever matters.
+        const tokens = auth.resolvable ? auth.contextTokens ?? [] : [];
+        if (tokens.length > 0) {
+            // A browser's server works out dates in the zone the browser sends; a server run uses its own TimeZone or UTC.
+            const timeZone = params.TimeZone ?? (this.ProviderType === ProviderType.Network ? GetLocalTimeZone() : undefined);
+            const values = QueryContextCacheValues(tokens, { User: contextUser ?? this.CurrentUser, TimeZone: timeZone });
+            if (values === null) {
+                return null;
+            }
+            segment.__context = values;
+        }
+        return segment;
     }
 
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
@@ -2394,6 +2434,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // (the fingerprint carries no DataSource segment). Keeping materialized out of this layer
             // means the only staleness is the refresh cadence the snapshot already advertises.
             && !IsMaterializedDataSource(params.DataSource)
+            // A RequireApproved run must check the approval on every run; a cached slot would skip it.
+            && !params.RequireApproved
             && LocalCacheManager.Instance.IsInitialized;
         let queryFingerprint: string | undefined;
         if (queryCacheEngaged) {
@@ -2404,21 +2446,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const queryAuth = this.ResolveQueryCacheAuthorization(params, contextUser);
             // MaxRows/StartRow shape the result set — they MUST distinguish cache slots,
             // so fold them into the parameters portion of the fingerprint.
+            // Server-set values (ServerParameters, the Context.* values the query reads) shape the
+            // result too, so one user's slot never answers another user or another day.
+            const serverSegment = this.queryCacheServerSegment(params, contextUser, queryAuth);
             const fingerprintParams: Record<string, unknown> = {
                 ...(params.Parameters ?? {}),
                 __maxRows: params.MaxRows ?? -1,
-                __startRow: params.StartRow ?? 0
+                __startRow: params.StartRow ?? 0,
+                ...serverSegment
             };
-            queryFingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
-                params.QueryID, params.QueryName, fingerprintParams, this.InstanceConnectionString,
-                // B46: the full category path is a DISTINGUISHING element. Canonical resolved
-                // path when metadata resolves; the caller-stated path otherwise (runtime-created
-                // queries) — either way, same-named queries in different categories get
-                // different slots.
-                queryAuth.resolvable ? queryAuth.categoryPath : params.CategoryPath
-            );
-            const cached = await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint); // TTL-enforced
-            if (cached) {
+            if (serverSegment !== null) {
+                queryFingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
+                    params.QueryID, params.QueryName, fingerprintParams, this.InstanceConnectionString,
+                    // B46: the full category path is a DISTINGUISHING element. Canonical resolved
+                    // path when metadata resolves; the caller-stated path otherwise (runtime-created
+                    // queries) — either way, same-named queries in different categories get
+                    // different slots.
+                    queryAuth.resolvable ? queryAuth.categoryPath : params.CategoryPath
+                );
+            }
+            const cached = queryFingerprint ? await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint) : null; // TTL-enforced
+            if (cached && queryFingerprint) {
                 const serveFromSlot = (): RunQueryResult => ({
                     QueryID: cached.queryId ?? params.QueryID ?? '',
                     QueryName: params.QueryName ?? '',

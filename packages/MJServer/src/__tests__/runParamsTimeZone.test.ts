@@ -148,3 +148,32 @@ describe('RunQueryParams.TimeZone from the request', () => {
         expect(queries[0].TimeZone).toBe('America/Chicago');
     });
 });
+
+/**
+ * #4789 A17: ServerParameters (values for server-set query parameters) and RequireApproved are
+ * server-only. No GraphQL run input declares them, and the RunQuery* resolvers build the run params
+ * field by field, so a value a client smuggles into an input object never reaches the provider. A
+ * client's only channel for a value is `Parameters`, where a server-set parameter is refused.
+ */
+describe('RunQueryParams.ServerParameters and RequireApproved never come from a request', () => {
+    const smuggled = { ServerParameters: { ChapterID: 'someone-elses-chapter' }, RequireApproved: false, TimeZone: 'Pacific/Fiji' };
+
+    it('a batch drops them from each input', async () => {
+        const { provider, queries } = recordingProvider();
+        const input = [{ QueryName: 'A', Parameters: { Region: 'West' }, ...smuggled }] as unknown as RunQueryInput[];
+        await new RunQueryResolver().RunQueries(input, appContext(provider, payload('Asia/Tokyo')));
+        expect(queries[0].ServerParameters).toBeUndefined();
+        expect(queries[0].RequireApproved).toBeUndefined();
+        expect(queries[0].TimeZone).toBe('Asia/Tokyo'); // from the header, not the input
+        expect(queries[0].Parameters).toEqual({ Region: 'West' });
+    });
+
+    it('the cache-check batch drops them too', async () => {
+        const { provider, queries } = recordingProvider();
+        const input = [{ params: { QueryName: 'A', ...smuggled } }] as unknown as RunQueryWithCacheCheckInput[];
+        await new RunQueryResolver().RunQueriesWithCacheCheck(input, appContext(provider, payload()));
+        expect(queries[0].ServerParameters).toBeUndefined();
+        expect(queries[0].RequireApproved).toBeUndefined();
+        expect(queries[0].TimeZone).toBeUndefined();
+    });
+});

@@ -1397,6 +1397,14 @@
           "primaryKey": {
             "ID": "3DA009D7-6777-438C-B45A-66BE07808056"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT120 - Server-Set Query Parameters and Approvals",
+            "Sequence": 49,
+            "Status": "Active"
+          }
         }
       ]
     },

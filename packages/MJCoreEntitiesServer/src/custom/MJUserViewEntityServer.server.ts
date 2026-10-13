@@ -1,9 +1,10 @@
 import { RegisterClass, CleanAndParseJSON } from "@memberjunction/global";
-import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
-import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
+import { BaseEntity, EntityInfo, EntitySaveOptions, LogError, IMetadataProvider, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
+import { ComputeUserViewFingerprintAsync, MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
+import { ApplyApprovalRulesAsync, ApprovalRefusalResult } from "./approvalStamp";
 
 /**
  * Expected response format from the Smart Filter AI prompt
@@ -34,6 +35,31 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
      * This property is hard-coded to true in this class because we DO support smart filters in this class. If you want to disable smart filters for a specific view you can override this property in your subclass and set it to false.
      */
     protected override get SmartFilterImplemented(): boolean {
+        return true;
+    }
+
+    /**
+     * Applies the approval rules (see `ApplyApprovalRulesAsync`). The base save regenerates the
+     * WhereClause before it writes, so an approving save stamps the fingerprint after the write,
+     * from the definition as stored, with one more write.
+     */
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        let approving: boolean;
+        try {
+            approving = !options?.ReplayOnly && await ApplyApprovalRulesAsync(this, 'ApprovalStatus', this.ApprovalStatus);
+        } catch (e) {
+            this.RegisterResultHistoryEntry(ApprovalRefusalResult(this, e));
+            return false;
+        }
+        if (!await super.Save(options)) {
+            return false;
+        }
+        if (approving) {
+            this.ApprovedFingerprint = await ComputeUserViewFingerprintAsync(this);
+            if (!await super.Save()) {
+                LogError(`[MJUserViewEntityServer] View "${this.Name}" was approved but its fingerprint was not saved: ${this.LatestResult?.CompleteMessage}`);
+            }
+        }
         return true;
     }
 

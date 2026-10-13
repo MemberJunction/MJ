@@ -74,6 +74,7 @@ export * from "./generic/data-snapshot";
 export * from "./generic/permissionInterfaces";
 export * from "./generic/entitySubtypeResolver";
 export * from "./generic/contextTokens";
+export * from "./generic/queryTemplateContext";
 export * from "./generic/JSONType-interfaces/IFileStorageProviderConfiguration";
 export * from "./generic/JSONType-interfaces/IEntitySubtypeSelectorConfig";
 export * from "./generic/JSONType-interfaces/IQueryConfiguration";

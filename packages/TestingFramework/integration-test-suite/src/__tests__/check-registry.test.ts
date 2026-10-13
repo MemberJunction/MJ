@@ -303,6 +303,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'perplexity-decider': 5,
         'predictive-studio': 5,
         'prompt-runner': 1,
+        'query-approvals': 4,
         'queue': 7,
         'realtime-deterministic': 12,
         'realtime-session-guard': 2,
@@ -371,7 +372,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(112);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(113);
     });
 });
 

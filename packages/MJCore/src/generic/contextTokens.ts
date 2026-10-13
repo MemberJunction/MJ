@@ -32,6 +32,13 @@ export const CONTEXT_TOKENS = [
 /** A context token: one of {@link CONTEXT_TOKENS}. */
 export type ContextToken = typeof CONTEXT_TOKENS[number];
 
+/**
+ * The version of what {@link CONTEXT_TOKENS} means. Approval fingerprints include it, so an approval
+ * given under one meaning is stale under another. Bump it whenever a token is added, removed or
+ * worked out differently (a new week start, a different date format, a different user field).
+ */
+export const CONTEXT_TOKEN_CONTRACT_VERSION = 1;
+
 /** The value types a property can declare. */
 export const PROPERTY_VALUE_TYPES = ['string', 'number', 'boolean', 'date', 'uuid'] as const;
 

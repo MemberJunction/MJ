@@ -76,9 +76,11 @@ import {
     ExternalDataSourceReadRouter,
     resolveQueryResultEnricher,
     QueryInfo,
+    FindQueryContextTokens,
+    ContextToken,
 } from '@memberjunction/core';
 
-import { BytesToBase64, IsByteArray, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, IsByteArray, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -94,6 +96,7 @@ import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.
 import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
+    GetQueryApprovalStateAsync,
     MJEntityAIActionEntity,
     MJQueryEntityExtended,
     MJQueryParameterEntity,
@@ -3865,7 +3868,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 resolvable: true,
                 authorized: !user || query.UserCanRun(user).canRun,
                 categoryPath: query.CategoryPath,
-                queryName: query.Name
+                queryName: query.Name,
+                contextTokens: this.queryContextTokens(query)
             };
         } catch (e) {
             LogStatusEx({ message: `ResolveQueryCacheAuthorization: resolution failed (${e instanceof Error ? e.message : String(e)}) — treating as unresolvable.`, verboseOnly: true });
@@ -3942,6 +3946,38 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (query.Status !== 'Approved') {
             LogStatus(`WARNING: Executing query '${query.Name}' (ID: ${query.ID}) with status '${query.Status}'. Query has not been approved.`);
         }
+    }
+
+    /**
+     * For a `RequireApproved` run: refuses unless the query, and every query it composes, has a
+     * current approval — status Approved and a stored fingerprint equal to the fingerprint of the
+     * definition this run executes. The fingerprint is worked out here, from the same
+     * `QueryEngine` metadata the run renders, never from a caller's value.
+     *
+     * @throws Error naming the first query whose approval is not current
+     */
+    protected async ValidateQueryApprovalAsync(query: MJQueryEntityExtended, render: RenderResult): Promise<void> {
+        const composedIDs = new UUIDSet(render.CTEs.map(c => c.QueryID));
+        const composed = composedIDs.Size > 0 ? QueryEngine.Instance.Queries.filter(q => composedIDs.Has(q.ID)) : [];
+        for (const q of [query, ...composed]) {
+            const state = await GetQueryApprovalStateAsync(q);
+            if (state !== 'Current') {
+                const reason = state === 'NotApproved'
+                    ? `its status is '${q.Status}'`
+                    : 'its definition changed after it was approved (or it was approved before approvals were fingerprinted)';
+                throw new Error(`Query '${q.Name}' (ID: ${q.ID}) is not approved in its current form: ${reason}. The run requires an approved query.`);
+            }
+        }
+    }
+
+    /** The context tokens a query reads, with every query it composes, as the `QueryEngine` holds them. */
+    private queryContextTokens(query: MJQueryEntityExtended): ContextToken[] {
+        const engine = QueryEngine.Instance;
+        return FindQueryContextTokens(
+            query.ID,
+            id => [engine.Queries.find(q => UUIDsEqual(q.ID, id))?.SQL, ...engine.QuerySQLs.filter(s => UUIDsEqual(s.QueryID, id)).map(s => s.SQL)],
+            id => engine.Dependencies.filter(d => UUIDsEqual(d.QueryID, id)).map(d => d.DependsOnQueryID)
+        );
     }
 
     /**
@@ -4327,7 +4363,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             schemaName: mat.SchemaName,
             viewName: mat.ViewName,
             spec,
-            paramValues: params.Parameters,
+            // Server-set parameters take their values from ServerParameters (a caller value for one was
+            // already refused when the template rendered), so the row filter sees both.
+            paramValues: params.ServerParameters ? { ...params.Parameters, ...params.ServerParameters } : params.Parameters,
             paramTypes,
             isPostgres: this.PlatformKey === 'postgresql',
         });
@@ -4345,9 +4383,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const query = this.findAndValidateQuery(params, contextUser);
 
             // Process parameters (composition + Nunjucks templates)
-            const resolved = this.processQueryParameters(query, params.Parameters, contextUser);
+            const resolved = this.processQueryParameters(query, params.Parameters, contextUser, params);
             finalSQL = resolved.finalSQL;
             const appliedParameters = resolved.appliedParameters;
+
+            // Opt-in: the approval must be current for the definition about to run
+            if (params.RequireApproved) {
+                await this.ValidateQueryApprovalAsync(query, resolved.renderResult);
+            }
 
             // ── Phase 2: materialized read redirect (plan §5) ──
             // If the caller opted into DataSource:'Materialized' and this query has a fresh, Active
@@ -4439,7 +4482,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // credential should be least-privilege). Do not assume EDS RLS covers the Query path.
             if (query.ExternalDataSourceID) {
                 const externalRouter = this.resolveExternalReadRouterOrThrow(`Query '${query.Name}'`);
-                return await this.runExternalQueryWithCache(query, finalSQL, params, externalRouter, contextUser);
+                return await this.runExternalQueryWithCache(query, finalSQL, params, externalRouter, contextUser, resolved.renderResult.ContextValues);
             }
 
             // Execute query — use SQL-level paging when requested, else fetch all rows
@@ -4711,6 +4754,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         query: MJQueryEntityExtended,
         parameters?: Record<string, string>,
         contextUser?: UserInfo,
+        serverSet?: Pick<RunQueryParams, 'ServerParameters' | 'TimeZone'>,
     ): { finalSQL: string; appliedParameters: Record<string, string>; renderResult: RenderResult } {
         const result = RenderPipeline.Run(
             query.GetPlatformSQL(this.PlatformKey),
@@ -4718,6 +4762,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Platform: this.PlatformKey as DatabasePlatform,
                 ContextUser: contextUser,
                 Parameters: parameters,
+                ServerParameters: serverSet?.ServerParameters,
+                TimeZone: serverSet?.TimeZone,
                 UsesTemplate: query.UsesTemplate ?? false,
                 QueryInfo: {
                     SQL: query.SQL ?? '',
@@ -4762,10 +4808,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         params: RunQueryParams,
         router: ExternalDataSourceReadRouter,
         contextUser?: UserInfo,
+        contextValues?: Record<string, string>,
     ): Promise<RunQueryResult> {
         const externalDataSourceID = query.ExternalDataSourceID!;
         const ttlSeconds = await router.GetCacheTTLSeconds(externalDataSourceID, contextUser, this);
-        const cacheable = !params.SQL && ttlSeconds > 0 && LocalCacheManager.Instance.IsInitialized;
+        // A result that read Context.Now depends on the instant it ran and is never reused.
+        const cacheable = !params.SQL && ttlSeconds > 0 && LocalCacheManager.Instance.IsInitialized && !(contextValues && 'Now' in contextValues);
 
         let fingerprint: string | undefined;
         if (cacheable) {
@@ -4775,6 +4823,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 __maxRows: params.MaxRows ?? -1,
                 __startRow: params.StartRow ?? 0,
                 __eds: externalDataSourceID,
+                // What the server set shapes the result too, so one user's slot never answers another's.
+                ...this.serverSetFingerprintSegment(params, contextValues),
             };
             fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString, query.CategoryPath);
             const cached = await LocalCacheManager.Instance.GetRunQueryResult(fingerprint); // TTL-enforced
@@ -4816,6 +4866,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             ).catch(e => LogError(`External RunQuery cache write failed: ${e}`));
         }
         return { ...checked, Results: paginatedResult as RunQueryResult['Results'], RowCount: paginatedResult.length, TotalRowCount: totalRowCount };
+    }
+
+    /**
+     * The result-cache fingerprint segment for what the server set on a run: its `ServerParameters`
+     * and the `Context` values the template read. Empty when there are neither, so the fingerprint
+     * is exactly what it was before either existed.
+     */
+    private serverSetFingerprintSegment(params: RunQueryParams, contextValues?: Record<string, string>): Record<string, unknown> {
+        const segment: Record<string, unknown> = {};
+        if (params.ServerParameters && Object.keys(params.ServerParameters).length > 0) {
+            segment.__serverParameters = params.ServerParameters;
+        }
+        if (contextValues && Object.keys(contextValues).length > 0) {
+            segment.__context = contextValues;
+        }
+        return segment;
     }
 
     protected warnIfExternalQueryFieldsMissing(query: MJQueryEntityExtended, result: RunQueryResult): RunQueryResult {
