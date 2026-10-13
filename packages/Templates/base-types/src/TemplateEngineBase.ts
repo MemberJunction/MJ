@@ -1,6 +1,21 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
-import { UUIDsEqual } from "@memberjunction/global";
+import { NormalizeUUID } from "@memberjunction/global";
+
+/** Rows grouped by their normalized TemplateID. */
+function groupByTemplate<T extends { TemplateID: string }>(rows: T[]): Map<string, T[]> {
+    const groups = new Map<string, T[]>();
+    for (const row of rows) {
+        const key = NormalizeUUID(row.TemplateID);
+        const bucket = groups.get(key);
+        if (bucket) {
+            bucket.push(row);
+        } else {
+            groups.set(key, [row]);
+        }
+    }
+    return groups;
+}
 
 /**
  * TemplateEngine is used for accessing template metadata/caching it, and rendering templates
@@ -35,11 +50,18 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
     }
 
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        // post-process the template content and params to associate them with a template
-        this.Templates.forEach((t) => {
-            t.Content = this.TemplateContents.filter((tc) => UUIDsEqual(tc.TemplateID, t.ID));
-            t.Params = this.TemplateParams.filter((tp) => UUIDsEqual(tp.TemplateID, t.ID));
-        });
+        // Associate content and params with their templates. Each template gets a new array on
+        // every run, so repeated rebuilds converge. Grouping first keeps this linear; filtering
+        // both child arrays once per template was O(templates x children).
+        // (The templates load as a dataset, which a cache-sourced related-record collection cannot
+        // read from, so these stay hand-associated.)
+        const contentByTemplate = groupByTemplate(this.TemplateContents);
+        const paramsByTemplate = groupByTemplate(this.TemplateParams);
+        for (const template of this.Templates) {
+            const key = NormalizeUUID(template.ID);
+            template.Content = contentByTemplate.get(key) ?? [];
+            template.Params = paramsByTemplate.get(key) ?? [];
+        }
     }
 
     public get Templates(): MJTemplateEntityExtended[] {

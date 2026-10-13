@@ -1,0 +1,133 @@
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.ic-surface {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+}
+
+.ic-tabbar {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+}
+
+.ic-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 0 8px;
+}
+
+.ic-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--mj-text-secondary);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ic-tab:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.ic-tab:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: -2px;
+}
+
+.ic-tab--active {
+  color: var(--mj-text-primary);
+  border-bottom-color: var(--mj-brand-primary);
+}
+
+.ic-tab__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ic-tab__version {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+
+.ic-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+}
+
+.ic-close:hover {
+  background: var(--mj-bg-surface-active);
+  color: var(--mj-text-primary);
+}
+
+.ic-close:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: -2px;
+}
+
+.ic-panes {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+
+.ic-pane {
+  height: 100%;
+  min-height: 0;
+}
+
+.ic-pane[hidden] {
+  display: none;
+}
+
+.ic-empty {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 24px;
+  text-align: center;
+  color: var(--mj-text-muted);
+}
+
+.ic-empty__icon {
+  font-size: 28px;
+}
+
+.ic-empty__title {
+  margin: 8px 0 0;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+}
+
+.ic-empty__hint {
+  margin: 0;
+}

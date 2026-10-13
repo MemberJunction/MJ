@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, type AICredentialScope } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ChatMessageContentBlock, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, type AICredentialScope } from '@memberjunction/ai';
 import {
   BaseModelRunner,
   type ExecutionBound,
@@ -343,18 +343,13 @@ export class AIPromptRunner extends BaseModelRunner {
         // actually selected — not merely the caller's override, which is usually absent — and the
         // selected candidate's AIPromptModel bag. Resolving without those skips the two layers the
         // capability is normally declared on and silently inverts the decision.
-        if (params.tools?.length) {
-          const nativeDecision = this.ResolveNativeToolCallingDecision(
-            prompt, params, selection.model,
-            selection.selectionInfo?.vendorSelected?.ID ?? params.override?.vendorId ?? null,
-            selection.promptModelConfiguration);
-          params.data = {
-            ...(params.data ?? {}),
-            _NATIVE_TOOL_CALLING: nativeDecision.useNativeTools,
-            // The template renders the implicit-mode section only when this is the gate's REAL answer.
-            _NATIVE_CONTROL_FLOW: nativeDecision.controlFlow
-          };
-        }
+        const nativeDecision = params.tools?.length
+          ? this.ResolveNativeToolCallingDecision(
+              prompt, params, selection.model,
+              selection.selectionInfo?.vendorSelected?.ID ?? params.override?.vendorId ?? null,
+              selection.promptModelConfiguration)
+          : null;
+        params.data = this.ApplyNativeTemplateFlags(params.data, nativeDecision);
 
         // Check if we have a system prompt override
         if (params.systemPromptOverride) {
@@ -1943,6 +1938,37 @@ export class AIPromptRunner extends BaseModelRunner {
   }
 
 
+  /**
+   * Returns the template data with `_NATIVE_TOOL_CALLING` and `_NATIVE_CONTROL_FLOW` set.
+   *
+   * With a decision, both carry the gate's real answer. Without one (a run that declares no tools),
+   * they are set to the envelope path's values unless the caller already supplied them. The Loop
+   * system prompt reads both unconditionally, so template parameter extraction marks them required,
+   * and a run that left them unset failed to render.
+   *
+   * @param data The caller's template data, if any
+   * @param decision The resolved native tool-calling decision, or null when no tools were declared
+   */
+  protected ApplyNativeTemplateFlags(
+    data: Record<string, unknown> | undefined,
+    decision: NativeToolCallingDecision | null
+  ): Record<string, unknown> {
+    const current = data ?? {};
+    if (decision) {
+      return {
+        ...current,
+        _NATIVE_TOOL_CALLING: decision.useNativeTools,
+        // The template renders the implicit-mode section only when this is the gate's REAL answer.
+        _NATIVE_CONTROL_FLOW: decision.controlFlow
+      };
+    }
+    return {
+      ...current,
+      _NATIVE_TOOL_CALLING: current._NATIVE_TOOL_CALLING ?? false,
+      _NATIVE_CONTROL_FLOW: current._NATIVE_CONTROL_FLOW ?? 'envelope'
+    };
+  }
+
   /** @deprecated Use {@link ResolveNativeToolCallingDecision}. */
   public resolveNativeToolCallingDecision(
     prompt: MJAIPromptEntityExtended,
@@ -2406,8 +2432,12 @@ export class AIPromptRunner extends BaseModelRunner {
    * No-op when the driver's GetFileCapabilities() returns non-null AND the
    * block's MIME matches the supported list. The driver baseclass returns
    * null by default; only providers that declare vision/file support override
-   * it (currently: OpenAI). For everyone else, every media block falls back
+   * it (currently Anthropic, OpenAI and Gemini; drivers built on the OpenAI
+   * driver inherit its list). For everyone else, every media block falls back
    * to text — exactly what you want when running a text-only model.
+   *
+   * A changed message is replaced by a new object in chatParams.messages; the
+   * caller's message objects stay as they were.
    */
   private stripUnsupportedMediaBlocks(
     llm: BaseLLM,
@@ -2420,10 +2450,11 @@ export class AIPromptRunner extends BaseModelRunner {
     const modelName = model?.Name ?? '<unknown model>';
     let stripped = 0;
 
-    for (const msg of chatParams.messages) {
+    chatParams.messages = chatParams.messages.map((msg): ChatMessage => {
       // Path 1: replace unsupported media content BLOCKS in array-content messages.
       if (Array.isArray(msg.content)) {
-        msg.content = msg.content.map((block) => {
+        const blocks = msg.content;
+        const content = blocks.map((block) => {
           const blockType = (block as { type?: string }).type;
           if (blockType !== 'image_url' && blockType !== 'audio_url' && blockType !== 'video_url' && blockType !== 'file_url') {
             return block;
@@ -2441,7 +2472,7 @@ export class AIPromptRunner extends BaseModelRunner {
               `Tell the user the active model cannot process ${blockMime.split('/')[0]} content rather than guessing what the file contains.]`,
           };
         });
-        continue;
+        return content.some((b, i) => b !== blocks[i]) ? { ...msg, content } : msg;
       }
 
       // Path 2: artifacts that went through the tool-dispatch path appear in
@@ -2452,11 +2483,14 @@ export class AIPromptRunner extends BaseModelRunner {
       // examples and pretends. Annotate the manifest inline so the model
       // knows it can't actually view the artifact.
       if (typeof msg.content === 'string' && msg.role === ChatMessageRole.system) {
-        const before = msg.content;
-        msg.content = this.annotateManifestForUnsupportedMedia(before, caps, modelName);
-        if (msg.content !== before) stripped++;
+        const annotated = this.annotateManifestForUnsupportedMedia(msg.content, caps, modelName);
+        if (annotated !== msg.content) {
+          stripped++;
+          return { ...msg, content: annotated };
+        }
       }
-    }
+      return msg;
+    });
 
     if (stripped > 0) {
       this.logStatus(
@@ -2571,16 +2605,16 @@ export class AIPromptRunner extends BaseModelRunner {
 
     if (fileBlocks.length === 0 && textFallbackBlocks.length === 0) return;
 
-    // Find the last user message and convert its content to content blocks
+    // Find the last user message and put the file blocks ahead of its content, keeping any blocks it already has.
+    // A block the message already carries is not added again, so injecting the same files twice adds them once.
     for (let i = chatParams.messages.length - 1; i >= 0; i--) {
       const msg = chatParams.messages[i];
       if (msg.role === 'user') {
-        const textContent = typeof msg.content === 'string' ? msg.content : '';
-        msg.content = [
-          ...fileBlocks,
-          ...textFallbackBlocks,
-          { type: 'text', content: textContent },
-        ];
+        const existing: ChatMessageContentBlock[] = typeof msg.content === 'string'
+          ? [{ type: 'text', content: msg.content }]
+          : [...msg.content];
+        const isNew = (block: ChatMessageContentBlock) => !existing.some((e) => e.type === block.type && e.content === block.content);
+        msg.content = [...fileBlocks.filter(isNew), ...textFallbackBlocks.filter(isNew), ...existing];
         break;
       }
     }

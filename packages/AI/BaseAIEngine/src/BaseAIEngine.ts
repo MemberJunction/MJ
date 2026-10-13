@@ -545,6 +545,24 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         }
     }
 
+    /**
+     * Configs that {@link AdditionalLoading} never reads, so a save or delete can update them in place.
+     *
+     * BaseEngine refuses in-place updates for every config of an engine that overrides
+     * AdditionalLoading, because that method may derive state from the rows. Those configs instead
+     * reload in full after a 1.5 s debounce, and a caller that saves a row and reads it back inside
+     * that window misses it. AdditionalLoading here only rebuilds model, vendor, configuration and
+     * prompt state, so these configs don't need the full reload.
+     *
+     * If AdditionalLoading starts deriving anything from one of these, remove it from this set.
+     */
+    private static readonly IMMEDIATE_MUTATION_PROPERTIES: ReadonlySet<string> = new Set(['_vectorIndexes']);
+
+    protected override canUseImmediateMutation(config: BaseEnginePropertyConfig, skipAdditionalLoadingCheck: boolean = false): boolean {
+        const independent = AIEngineBase.IMMEDIATE_MUTATION_PROPERTIES.has(config.PropertyName);
+        return super.canUseImmediateMutation(config, skipAdditionalLoadingCheck || independent);
+    }
+
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // Clear the configuration chain cache when data is reloaded
         this._configurationChainCache.clear();
@@ -631,6 +649,35 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         for (const model of this._models) {
             if (model.ModelVendors) replaceContents(model.ModelVendors, vendorsByModel.get(keyFor(model.ID)) ?? []);
         }
+    }
+
+    /**
+     * The collections {@link AdditionalLoading} attaches to parents. When these read zero while
+     * the child arrays are full, the derived state has been lost — the failure that row counts
+     * cannot show (model selection then finds no vendor candidates).
+     */
+    protected override GetDerivedStateCensus(): Record<string, number> {
+        const count = <TParent>(parents: TParent[] | undefined, children: (p: TParent) => unknown[] | undefined) => {
+            let withChildren = 0;
+            let attached = 0;
+            for (const parent of parents ?? []) {
+                const n = children(parent)?.length ?? 0;
+                if (n > 0) withChildren++;
+                attached += n;
+            }
+            return { withChildren, attached };
+        };
+        const models = count(this._models, m => m.ModelVendors);
+        const categories = count(this._promptCategories, c => c.Prompts);
+        const agents = count(this._agents, a => a.Notes);
+        return {
+            ModelsWithVendors: models.withChildren,
+            VendorsAttached: models.attached,
+            CategoriesWithPrompts: categories.withChildren,
+            PromptsAttached: categories.attached,
+            AgentsWithNotes: agents.withChildren,
+            NotesAttached: agents.attached,
+        };
     }
 
     /**

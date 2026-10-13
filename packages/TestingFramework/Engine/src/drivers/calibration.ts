@@ -1,4 +1,4 @@
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, NormalizeUUID } from '@memberjunction/global';
 import type { OracleResult } from '@memberjunction/testing-engine-base';
 
 /** Rank a scale's levels by sequence into indexes 0..n-1. n is every level on the scale. */
@@ -30,11 +30,12 @@ export function CalibrationPairs(input: {
     const majorByVersion = new Map(input.versions.map(row => [NormalizeUUID(row.id), row.major]));
     const keyByCriterion = new Map(input.criteria.map(row => [NormalizeUUID(row.id), row.key || row.id]));
     const levelById = new Map(input.levels.map(level => [NormalizeUUID(level.id), level]));
+    const evaluationById = IndexByUUID(input.evaluations, row => row.id);
     const { indexByLevel, countByScale } = RankLevels(input.levels);
     const buckets = new Map<string, { subjectId: string; criterionId: string; major: number; human?: { level: number; score: number; categories: number }; ai?: { level: number; score: number; categories: number } }>();
     for (const score of input.scores) {
         if (score.normalizedScore == null) continue;
-        const evaluation = input.evaluations.find(row => UUIDsEqual(row.id, score.evaluationId));
+        const evaluation = evaluationById.Get(score.evaluationId);
         if (!evaluation || evaluation.status !== 'Submitted') continue;
         const side = evaluation.evaluatorType === 'Human' ? 'human' : (evaluation.evaluatorType === 'AIPrompt' || evaluation.evaluatorType === 'Agent') ? 'ai' : null;
         if (!side) continue;

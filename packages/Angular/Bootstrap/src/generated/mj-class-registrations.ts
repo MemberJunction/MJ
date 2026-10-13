@@ -11,10 +11,11 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (7 classes)
+// @memberjunction/ai-realtime-client (8 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
     OpenAILiveClient,
@@ -34,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (447 classes)
+// @memberjunction/core-entities (450 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -203,6 +204,8 @@ import {
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -401,6 +404,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -558,11 +562,16 @@ import {
     MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (8 classes)
+// @memberjunction/ng-conversations (13 classes)
 import {
     AgentMentionProvider,
     ClientContextChannel,
+    IdentityVerificationChannel,
+    InteractiveComponentChannel,
+    RealtimeAvatarChannel,
+    RealtimeCameraChannel,
     RealtimeMediaChannel,
+    RealtimeScreenShareChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
     RemoteBrowserChannel,
@@ -701,7 +710,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (108 classes)
+// @memberjunction/ng-dashboards (109 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -742,6 +751,7 @@ import {
     CredentialsOverviewResourceComponent,
     CredentialsTypesResourceComponent,
     DashboardBrowserResourceComponent,
+    DashboardsCategoriesResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
     DatabaseDesignerDashboardComponent,
@@ -842,6 +852,7 @@ import {
 const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
     OpenAILiveClient,
@@ -1018,6 +1029,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -1037,13 +1050,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardEntity,
     MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
-    MJDashboardPermissionEntity,
-    MJDashboardPermissionEntityExtended,
-    MJDashboardUserPreferenceEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardPermissionEntity,
+    MJDashboardPermissionEntityExtended,
+    MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
     MJDataContextEntity,
     MJDataContextItemEntity,
@@ -1220,6 +1233,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1240,14 +1254,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
-    MJTagCoOccurrenceEntity,
-    MJTagEntity,
-    MJTagScopeEntity,
-    MJTagSuggestionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTagCoOccurrenceEntity,
+    MJTagEntity,
+    MJTagScopeEntity,
+    MJTagSuggestionEntity,
     MJTagSynonymEntity,
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
@@ -1349,7 +1363,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkOSProvider,
     AgentMentionProvider,
     ClientContextChannel,
+    IdentityVerificationChannel,
+    InteractiveComponentChannel,
+    RealtimeAvatarChannel,
+    RealtimeCameraChannel,
     RealtimeMediaChannel,
+    RealtimeScreenShareChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
     RemoteBrowserChannel,
@@ -1439,6 +1458,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricPublishPanel,
     RubricScaleFormPolicy,
     RubricScaleLevelsPanel,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     RubricVersionFormPolicy,
     RubricVersionSummaryPanel,
     RubricVersionsPanel,
@@ -1448,10 +1471,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TestSuiteHierarchyPanel,
     UserHeaderPanel,
     UserOverviewPanel,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     UserViewCategoryHierarchyPanel,
     TagEngineBase,
     AIAnalyticsResourceComponent,
@@ -1493,6 +1512,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CredentialsOverviewResourceComponent,
     CredentialsTypesResourceComponent,
     DashboardBrowserResourceComponent,
+    DashboardsCategoriesResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
     DatabaseDesignerDashboardComponent,
@@ -1590,7 +1610,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 724;
+export const CLASS_REGISTRATIONS_COUNT = 734;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

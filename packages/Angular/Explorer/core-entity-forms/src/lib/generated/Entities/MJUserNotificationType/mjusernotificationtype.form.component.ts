@@ -21,7 +21,8 @@ export class MJUserNotificationTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'templateSettings', sectionName: 'Template Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJUserNotifications', sectionName: 'User Notifications', isExpanded: false },
-            { sectionKey: 'mJUserNotificationPreferences', sectionName: 'User Notification Preferences', isExpanded: false }
+            { sectionKey: 'mJUserNotificationPreferences', sectionName: 'User Notification Preferences', isExpanded: false },
+            { sectionKey: 'mJScopedNotificationConfigs', sectionName: 'Scoped Notification Configs', isExpanded: false }
         ]);
     }
 }

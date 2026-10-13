@@ -1,12 +1,14 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone, inject } from '@angular/core';
 
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime } from 'rxjs/operators';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { IndexByUUID, RegisterClass, UUIDMap, UUIDsEqual } from '@memberjunction/global';
+import { CompositeKey, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo, LogError } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
 import { MJApplicationEntityEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import {
@@ -28,6 +30,7 @@ import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-pane
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { buildDataExplorerAgentContext, isValidViewMode, isValidEntityBrowserMode, AppGroupSummary, entityDisplayName, resolveEntityByName, resolveRecordSelection, RecordSelectionRequest } from './data-explorer-agent-context';
 import { validateStringParam, validateEnumParam, validateNonNegativeNumberParam, VALID_ENTITY_BROWSER_MODES_FOR_VALIDATION } from '../shared/agent-tool-validation';
+import { DASHBOARDS_LIBRARY_NAV_ITEM, EnsureDashboardsApp } from '../shared/dashboards-app.helpers';
 
 /**
  * Default server-side page size used by the inner entity viewer when {@link viewerConfig}
@@ -64,6 +67,7 @@ const DATA_EXPLORER_DEFAULT_PAGE_SIZE = 100;
 export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges, AfterViewInit {
   protected override destroy$ = new Subject<void>();
   private metadata = this.ProviderToUse;
+  private appManager = inject(ApplicationManager);
 
   /** Reference to the filter input for keyboard shortcuts */
   @ViewChild('filterInput') FilterInputRef: ElementRef<HTMLInputElement> | undefined;
@@ -194,6 +198,21 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** @deprecated Use {@link Entities}. */
   public set entities(value: EntityInfo[]) {
     this.Entities = value;
+  }
+
+  private entitiesIndexSource: EntityInfo[] | null = null;
+  private entitiesIndex = new UUIDMap<EntityInfo>();
+
+  /**
+   * Entities keyed by ID, rebuilt only when Entities is replaced (it is never mutated in place),
+   * so the per-render RecentEntities / FavoriteEntities getters don't scan every entity per item.
+   */
+  private get entitiesByID(): UUIDMap<EntityInfo> {
+    if (this.entitiesIndexSource !== this.Entities) {
+      this.entitiesIndex = IndexByUUID(this.Entities);
+      this.entitiesIndexSource = this.Entities;
+    }
+    return this.entitiesIndex;
   }
   // Application entity groups for the home view (Concept D)
   public AppEntityGroups: AppEntityGroup[] = [];
@@ -380,6 +399,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.RecentRecordsEntityFilter = value;
   }
 
+  /** User setting that records the dismissal of the "Dashboards moved" banner. */
+  private static readonly DASHBOARDS_MOVED_KEY = 'DataExplorer.DashboardsMovedBanner';
+
+  /** True until the user dismisses the "Dashboards moved" banner. ngOnInit sets it from the user's settings. */
+  private dashboardsMovedBannerOpen = false;
+
+  /**
+   * Shows the "Dashboards moved" banner on the Data tab, with or without a selected entity.
+   * An explorer that has an entity filter (an application's own scoped explorer) never shows it.
+   */
+  public get ShowDashboardsMovedBanner(): boolean {
+    return this.dashboardsMovedBannerOpen && !this.EntityFilter;
+  }
+
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
     return "Data Explorer"
   }
@@ -502,7 +535,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   get RecentEntities(): EntityInfo[] {
     return this.State.recentEntityAccesses
       .slice(0, 5)
-      .map(r => this.Entities.find(e => UUIDsEqual(e.ID, r.entityId)))
+      .map(r => this.entitiesByID.Get(r.entityId))
       .filter((e): e is EntityInfo => e !== undefined);
   }
 
@@ -516,7 +549,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   get FavoriteEntities(): EntityInfo[] {
     return this.State.favoriteEntities
-      .map(f => this.Entities.find(e => UUIDsEqual(e.ID, f.entityId)))
+      .map(f => this.entitiesByID.Get(f.entityId))
       .filter((e): e is EntityInfo => e !== undefined);
   }
 
@@ -724,6 +757,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // This prevents race conditions where we try to load default view settings
     // before the user settings have been loaded from the server
     await UserInfoEngine.Instance.Config(false);
+    this.dashboardsMovedBannerOpen = !this.isDashboardsMovedBannerDismissed();
 
     // Read initial query params — prefer params forwarded from the resource wrapper
     // (which has Data.Configuration.queryParams from the shell), then fall back to
@@ -2958,6 +2992,39 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** @deprecated Use {@link ToggleShowAllEntities}. */
   public toggleShowAllEntities(): void {
     return this.ToggleShowAllEntities();
+  }
+
+  /**
+   * Opens the Library page of the Dashboards app. First installs or re-enables the app for the
+   * user when necessary. When the app cannot be opened, tells the user to try again or ask for access.
+   */
+  public async OpenDashboardsApp(): Promise<void> {
+    const app = await EnsureDashboardsApp(this.appManager);
+    if (app) {
+      await this.navigationService.SwitchToApp(app.ID, DASHBOARDS_LIBRARY_NAV_ITEM);
+    } else {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Could not open the Dashboards app. Try again, or ask your administrator for access.',
+        'warning',
+        4000,
+      );
+    }
+  }
+
+  /** Hides the "Dashboards moved" banner and saves the dismissal in the user's settings. */
+  public async DismissDashboardsMovedBanner(): Promise<void> {
+    this.dashboardsMovedBannerOpen = false;
+    await UserInfoEngine.Instance.SetSetting(DataExplorerDashboardComponent.DASHBOARDS_MOVED_KEY, 'dismissed');
+  }
+
+  /** True when the user dismissed the "Dashboards moved" banner, or when the user's settings cannot be read. */
+  private isDashboardsMovedBannerDismissed(): boolean {
+    try {
+      return UserInfoEngine.Instance.GetSetting(DataExplorerDashboardComponent.DASHBOARDS_MOVED_KEY) === 'dismissed';
+    } catch (error) {
+      LogError(`Data Explorer: cannot read the Dashboards moved banner setting: ${error instanceof Error ? error.message : String(error)}`);
+      return true;
+    }
   }
 
   // ========================================

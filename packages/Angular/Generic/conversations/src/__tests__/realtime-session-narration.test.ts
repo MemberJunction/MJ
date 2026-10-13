@@ -792,6 +792,7 @@ describe('RealtimeSessionService — delegation lifecycle (thinking state, resul
       OnToolCall: () => undefined,
       OnError: () => undefined,
       OnUsage: () => undefined,
+      OnRemoteVideo: () => undefined,
       OnInterruption: (handler: () => void) => { interrupt = handler; }
     };
     h.i.wireClientHandlers(wiringClient);

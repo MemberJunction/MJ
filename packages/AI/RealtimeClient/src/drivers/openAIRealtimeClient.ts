@@ -25,10 +25,15 @@ export interface IRealtimeDataChannel {
     close(): void;
 }
 
+/** The subset of `RTCRtpSender` this client uses: moving a sender to another microphone track. */
+export interface IRealtimeRtpSender {
+    replaceTrack(track: MediaStreamTrack | null): Promise<void>; // case-violation-ok-legacy-back-compat: the platform's RTCRtpSender name, so a real sender satisfies this interface
+}
+
 /** The subset of `RTCPeerConnection` this client uses. */
 export interface IRealtimePeerConnection {
     ontrack: ((event: RTCTrackEvent) => void) | null;
-    addTrack(track: MediaStreamTrack, stream: MediaStream): void;
+    addTrack(track: MediaStreamTrack, stream: MediaStream): IRealtimeRtpSender;
     createDataChannel(label: string): IRealtimeDataChannel;
     createOffer(): Promise<RTCSessionDescriptionInit>;
     setLocalDescription(description: RTCSessionDescriptionInit): Promise<void>;
@@ -65,17 +70,11 @@ export interface IRealtimeAudioSink {
 export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
     // ── Transport ──────────────────────────────────────────────────────────────
     private peerConnection: IRealtimePeerConnection | null = null;
+    /** The senders carrying the mic tracks, kept so {@link ReplaceMicrophone} can move them to a new track. */
+    private micSenders: IRealtimeRtpSender[] = [];
     /** Protected so test subclasses can inspect/inject; production code treats it as private. */
     protected dataChannel: IRealtimeDataChannel | null = null;
     private remoteAudioEl: IRealtimeAudioSink | null = null;
-    /**
-     * The AGENT's remote-audio stream, captured from the peer connection's `ontrack` event
-     * (see {@link attachRemoteAudio}). Exposed via {@link GetRemoteMediaStream} so a host can
-     * mix the agent's voice into a browser-side recording. `null` until the remote track lands.
-     */
-    private remoteStream: MediaStream | null = null;
-    /** Host handlers notified when the agent's remote-audio stream lands (or immediately, if already present). */
-    private remoteStreamHandlers: Array<(stream: MediaStream) => void> = [];
     /**
      * The server-built session config applied verbatim via `session.update` when the data
      * channel opens. Protected so test subclasses can seed it without a full Connect.
@@ -97,6 +96,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
      * data channel opens; the client reports `'listening'` at that point.
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
+        this.AssertTransportSupported(config);
         this.sessionConfig = config.SessionConfig;
         this.micStream = micStream;
         this.setState('connecting');
@@ -116,6 +116,23 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
     }
 
     /**
+     * Moves the mic senders and the input meter to the stream's current tracks (obligation #10).
+     * `replaceTrack` needs no renegotiation, so the call carries on.
+     */
+    public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
+        if (this.micSenders.length === 0) {
+            return;
+        }
+        const tracks = micStream.getAudioTracks();
+        if (tracks.length === 0) {
+            throw new Error('The microphone stream has no audio track.');
+        }
+        await Promise.all(this.micSenders.map((sender, index) => sender.replaceTrack(tracks[index] ?? null)));
+        this.micStream = micStream;
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
+    }
+
+    /**
      * Tears down the channel, peer connection, mic tracks, and audio sink, resets the
      * response state machine, and emits a final `'closed'` (unless already `'error'`).
      */
@@ -123,6 +140,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         this.closeAudioMeters();
         this.micStream?.getTracks().forEach((t) => t.stop());
         this.micStream = null;
+        this.micSenders = [];
 
         if (this.dataChannel) {
             try { this.dataChannel.close(); } catch { /* already closing */ }
@@ -137,9 +155,8 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             this.remoteAudioEl.remove();
             this.remoteAudioEl = null;
         }
-        this.remoteStream = null;
-        // Session-scoped host handlers must not survive into a later Connect on a reused instance.
-        this.remoteStreamHandlers = [];
+        // Drops the stream and the session-scoped host handlers (must not survive a reused instance).
+        this.clearRemoteMediaStream();
 
         this.sessionConfig = null;
         this.resetResponseState();
@@ -241,11 +258,9 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
 
     // ── Connection internals ───────────────────────────────────────────────────
 
-    /** Streams the mic tracks to the provider. */
+    /** Streams the mic tracks to the provider, keeping their senders. */
     private attachMicrophone(pc: IRealtimePeerConnection, micStream: MediaStream): void {
-        for (const track of micStream.getAudioTracks()) {
-            pc.addTrack(track, micStream);
-        }
+        this.micSenders = micStream.getAudioTracks().map((track) => pc.addTrack(track, micStream));
     }
 
     /** Routes the provider's audio track into the hidden `<audio>` sink. */
@@ -254,54 +269,15 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         pc.ontrack = (e: RTCTrackEvent) => {
             if (this.remoteAudioEl && e.streams[0]) {
                 this.remoteAudioEl.srcObject = e.streams[0];
-                // Capture the agent's remote stream so a host can mix it into a recording
-                // (see GetRemoteMediaStream). Playback still flows through the <audio> element.
-                this.remoteStream = e.streams[0];
-                // Notify hosts (e.g. a browser recorder) that the agent's stream is now available
-                // so they can mix it in — the track typically lands AFTER recording already began.
-                this.notifyRemoteStream(e.streams[0]);
+                // Publish the agent's remote stream so a host can mix it into a recording
+                // (see GetRemoteMediaStream) — the track typically lands AFTER recording already
+                // began. Playback still flows through the <audio> element.
+                this.publishRemoteMediaStream(e.streams[0]);
                 // Agent-side audio meter taps the remote stream (obligation #9). The
                 // analyser sinks nowhere — playback still flows through the <audio> element.
                 this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(e.streams[0]));
             }
         };
-    }
-
-    /**
-     * Returns the AGENT's remote-audio stream once the WebRTC `ontrack` event has delivered it,
-     * or `null` before the track lands. Lets a host mix the agent's voice into a browser-side
-     * recording alongside the mic.
-     */
-    public GetRemoteMediaStream(): MediaStream | null {
-        return this.remoteStream;
-    }
-
-    /**
-     * Registers a handler invoked when the agent's remote-audio stream becomes available — either
-     * later via the WebRTC `ontrack`, or IMMEDIATELY if the track has already landed. Lets a host
-     * attach the agent voice to a recording that started (mic-only) before the track arrived.
-     */
-    public OnRemoteMediaStream(handler: (stream: MediaStream) => void): void {
-        this.remoteStreamHandlers.push(handler);
-        if (this.remoteStream) {
-            this.invokeRemoteStreamHandler(handler, this.remoteStream);
-        }
-    }
-
-    /** Fans a freshly-landed remote stream out to all registered host handlers. */
-    private notifyRemoteStream(stream: MediaStream): void {
-        for (const handler of this.remoteStreamHandlers) {
-            this.invokeRemoteStreamHandler(handler, stream);
-        }
-    }
-
-    /** Invokes one remote-stream handler, isolating host errors so they never disturb the call. */
-    private invokeRemoteStreamHandler(handler: (stream: MediaStream) => void, stream: MediaStream): void {
-        try {
-            handler(stream);
-        } catch (error) {
-            console.warn('[OpenAIRealtimeClient] remote-stream handler threw:', error);
-        }
     }
 
     /**

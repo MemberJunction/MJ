@@ -364,6 +364,17 @@ export interface AgentPipelineRequest {
 }
 
 /**
+ * One image a client tool returns for the model to see. `Base64` is raw base64 without a data
+ * URL prefix.
+ */
+export interface ClientToolMediaItem {
+    MimeType: string;
+    Base64: string;
+    Width?: number;
+    Height?: number;
+}
+
+/**
  * Response from a client tool execution — returned to the server when
  * the client finishes running the tool.
  */
@@ -374,6 +385,8 @@ export interface ClientToolResponse {
     Success: boolean;
     /** The tool result (if successful) */
     Result?: unknown;
+    /** Images for the model, when the tool returns any. */
+    Media?: ClientToolMediaItem[];
     /** Error message (if failed) */
     ErrorMessage?: string;
 }
@@ -388,6 +401,8 @@ export interface ClientToolResultSummary {
     Success: boolean;
     /** Result data from the tool */
     Result?: unknown;
+    /** Images for the model, when the tool returns any. */
+    Media?: ClientToolMediaItem[];
     /** Error message if the tool failed */
     ErrorMessage?: string;
 }
@@ -1320,6 +1335,14 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * Omitted (the default), the run reads the whole conversation, as before.
      */
     ConversationHistoryFrom?: Date;
+
+    /**
+     * The conversation branch this run belongs to. Meaningful only with {@link conversationId}.
+     * The framework reads the conversation on the run's behalf only along that branch's path:
+     * history retrieval tools, offered artifacts, cross-turn compaction and the previous
+     * turn's tool results. Omitted, the run reads the trunk (rows with no branch).
+     */
+    ConversationBranchID?: string;
 
     /**
      * Optional flag to automatically populate the payload from the last run.

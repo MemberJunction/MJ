@@ -1260,9 +1260,32 @@ export class SyncEngine {
         }
         return cached;
       }
-      return null;
+      // A cache miss is NOT proof the row is absent. The preload cache learns about rows saved
+      // during this push only through BaseEngine's save-event bus, and inside an open transaction
+      // that mutation is deferred to commit (rollback-safe engine caches) — and the default push is
+      // one transaction. So a record created earlier in this same push (e.g. by another directory)
+      // is missing here until commit. Confirm against the database on the push's own provider,
+      // which shares the transaction and sees its uncommitted rows. Don't cache the hit: a delegated
+      // slot is a donor engine's live array, and an uncommitted row placed there would outlive a
+      // rollback. The deferred event mutation populates the cache once the transaction commits.
+      return this.loadFromDatabase(entityName, entityInfo, primaryKey, recordProvider, false);
     }
-    
+
+    return this.loadFromDatabase(entityName, entityInfo, primaryKey, recordProvider, true);
+  }
+
+  /**
+   * Loads a record by primary key straight from the database, using the record's provider when one
+   * is passed so the read joins that provider's transaction. Returns `null` when no row exists.
+   * `cacheResult` controls whether a hit is added to the preload cache.
+   */
+  private async loadFromDatabase(
+    entityName: string,
+    entityInfo: EntityInfo,
+    primaryKey: Record<string, unknown>,
+    recordProvider: IMetadataProvider | undefined,
+    cacheResult: boolean
+  ): Promise<BaseEntity | null> {
     // First, check if the record exists using RunView to avoid "Error in BaseEntity.Load" messages
     // when records don't exist (which is a normal scenario during sync operations).
     // Use the graph provider when one is passed so an update does not replace a
@@ -1304,7 +1327,7 @@ export class SyncEngine {
     const loaded = await entity.InnerLoad(compositeKey);
     
     const loadedEntity = loaded ? entity : null;
-    if (loadedEntity && this.syncMetadataEngine) {
+    if (loadedEntity && cacheResult && this.syncMetadataEngine) {
       this.syncMetadataEngine.addEntityToCache(entityName, loadedEntity);
     }
     return loadedEntity;

@@ -103,6 +103,66 @@ describe('GraphQLLiveKitClient', () => {
     });
   });
 
+  describe('SetAgentVision', () => {
+    it("sends the room and the user's choice, and returns the server's answer", async () => {
+      const { provider, calls } = makeProvider({ SetLiveKitAgentVision: { Success: false, ErrorMessage: 'You are not in this room.' } });
+      const result = await new GraphQLLiveKitClient(provider).SetAgentVision('r1', true);
+
+      expect(calls[0].variables).toEqual({ input: { RoomName: 'r1', Allow: true } });
+      expect(calls[0].query).toContain('SetLiveKitAgentVision(input: $input)');
+      expect(result).toEqual({ Success: false, ErrorMessage: 'You are not in this room.' });
+    });
+
+    it('sends a withdrawal as it is', async () => {
+      const { provider, calls } = makeProvider({ SetLiveKitAgentVision: { Success: true } });
+      const result = await new GraphQLLiveKitClient(provider).SetAgentVision('r1', false);
+
+      expect(calls[0].variables).toEqual({ input: { RoomName: 'r1', Allow: false } });
+      expect(result.Success).toBe(true);
+    });
+
+    it('turns a missing reply or a transport error into a failure (never throws)', async () => {
+      const empty = await new GraphQLLiveKitClient(makeProvider({}).provider).SetAgentVision('r1', true);
+      const thrown = await new GraphQLLiveKitClient(
+        makeProvider(() => {
+          throw new Error('network down');
+        }).provider,
+      ).SetAgentVision('r1', true);
+
+      expect(empty).toEqual({ Success: false, ErrorMessage: 'Invalid response from server' });
+      expect(thrown).toEqual({ Success: false, ErrorMessage: 'network down' });
+    });
+  });
+
+  describe('GetRealtimeModelVoices', () => {
+    it("selects each voice's persona, avatar and preview image, and returns them as the server sent them", async () => {
+      const models = [
+        {
+          ModelID: 'm1',
+          ModelName: 'Live Voice Model',
+          Voices: [
+            { ID: 'Puck', Name: 'Puck', PersonaID: 'p-puck', AvatarID: null, PreviewImageURL: null },
+            { ID: 'Puck', Name: 'Avery', PersonaID: 'p-avery', AvatarID: 'Avery', PreviewImageURL: 'https://img.example.test/avery.png' },
+            { ID: 'Kore', Name: 'Kore', PersonaID: null, AvatarID: null, PreviewImageURL: null },
+          ],
+        },
+      ];
+      const { provider, calls } = makeProvider({ GetRealtimeModelVoices: models });
+      const result = await new GraphQLLiveKitClient(provider).GetRealtimeModelVoices();
+
+      const voiceFields = /\bVoices\s*{([^}]*)}/.exec(calls[0].query)?.[1].split(/\s+/).filter(Boolean);
+      expect(voiceFields).toEqual(['ID', 'Name', 'PersonaID', 'AvatarID', 'PreviewImageURL']);
+      expect(result).toEqual(models);
+    });
+
+    it('resolves to an empty list when the query fails, so the picker offers no overrides', async () => {
+      const { provider } = makeProvider(() => {
+        throw new Error('network down');
+      });
+      expect(await new GraphQLLiveKitClient(provider).GetRealtimeModelVoices()).toEqual([]);
+    });
+  });
+
   describe('GetRoomTurnState', () => {
     const state = {
       RoomId: 'r1',
