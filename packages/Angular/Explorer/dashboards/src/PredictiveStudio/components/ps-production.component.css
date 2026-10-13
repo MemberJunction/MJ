@@ -126,6 +126,7 @@
 .prod-layout .mlist .mrow .meta { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: 0 0 auto; }
 
 /* deploy-state icon colors (master + detail) */
+.st-needs-training { background: var(--mj-status-warning); }
 .st-bound { background: var(--mj-status-success); }
 .st-scheduled { background: var(--mj-status-info); }
 .st-idle { background: var(--mj-text-disabled); }

@@ -2,6 +2,13 @@ import {
     IRealtimeMediaHost,
     IRealtimeSessionRecorder,
 } from '@memberjunction/realtime-runtime';
+import {
+    type DisplayCaptureOptions,
+    type DisplayCaptureResult,
+    type ILocalMediaController,
+    LocalMediaController,
+    RequestDisplayCapture,
+} from '@memberjunction/ai-realtime-client/media';
 import { RealtimeAudioRecorder } from './realtime-audio-recorder';
 
 /**
@@ -16,9 +23,26 @@ export class BrowserRealtimeMediaHost implements IRealtimeMediaHost {
     /**
      * Requests the microphone through the standard Web API, which surfaces the browser's own
      * permission prompt. A denial rejects, and the runtime treats that as a failed session start.
+     * The runtime uses {@link CreateLocalMediaController} instead when it is present, as it is here.
      */
     public async AcquireMicrophone(): Promise<MediaStream> {
         return navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+
+    /**
+     * The browser's camera-and-microphone controller. The runtime starts the microphone through it,
+     * so a call follows a device switch and keeps going when a headset is unplugged.
+     */
+    public CreateLocalMediaController(): ILocalMediaController {
+        return new LocalMediaController();
+    }
+
+    /**
+     * Opens the browser's share picker for the session's screen share: a screen, window or tab, or one panel of
+     * this page where the browser can narrow a capture to it.
+     */
+    public RequestDisplayCapture(options?: DisplayCaptureOptions): Promise<DisplayCaptureResult> {
+        return RequestDisplayCapture(options);
     }
 
     /**
@@ -62,6 +86,10 @@ class BrowserRealtimeSessionRecorder implements IRealtimeSessionRecorder {
 
     public AttachRemoteStream(stream: MediaStream): void {
         this.recorder.AttachRemoteStream(stream);
+    }
+
+    public ReplaceMicrophone(micStream: MediaStream): void {
+        this.recorder.ReplaceMicrophone(micStream);
     }
 
     public NowOffsetMs(): number {

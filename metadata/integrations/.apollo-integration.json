@@ -1,0 +1,30 @@
+[
+  {
+    "_comments": [
+      "APOLLO as an MJ: Integrations row, so a company can hold its own Apollo key on an MJ: Company",
+      "Integrations row linked to an MJ: Credentials record of type API Key ({ \"apiKey\": \"…\" }).",
+      "@memberjunction/actions-apollo already resolves keys by this Integration's Name (lists/credentials.ts,",
+      "APOLLO_INTEGRATION_NAME); until this row existed the per-company path could never match, and every",
+      "action fell back to the APOLLO_API_KEY environment variable. ClassName is null on purpose: this is a",
+      "vendor API, not a sync connector, so the Integration engine has nothing to run for it",
+      "(MJCompanyIntegrationEntityServer logs 'No connector registered' and skips its pipeline).",
+      "BatchMaxRequestCount 10 is Apollo's people/bulk_match ceiling. No sync block: the release push writes",
+      "that back. primaryKey from uuidgen."
+    ],
+    "fields": {
+      "Name": "Apollo",
+      "Description": "Apollo.io (apollo.io): person and organization enrichment (people/bulk_match, organizations/enrich), prospecting search, and list management. Used by the Apollo Enrichment and Apollo list actions and by the person-enrichment engine in BizApps Common.",
+      "NavigationBaseURL": "https://app.apollo.io",
+      "ClassName": null,
+      "ImportPath": null,
+      "BatchMaxRequestCount": 10,
+      "BatchRequestWaitTime": 0,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key",
+      "Icon": "fa-solid fa-rocket",
+      "Configuration": null
+    },
+    "primaryKey": {
+      "ID": "219AA458-DA8E-48AD-B304-0343D8D5B6BB"
+    }
+  }
+]
