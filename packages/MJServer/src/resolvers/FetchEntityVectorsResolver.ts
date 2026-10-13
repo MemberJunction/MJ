@@ -317,6 +317,7 @@ export class FetchEntityVectorsResolver extends ResolverBase {
                 ExtraFilter: `ID IN (${idList})`,
                 Fields: ['ID', 'VectorJSON'],
                 IgnoreMaxRows: true,
+                BypassCache: true, // one-off ID lists: a cache slot per call would only hold memory
                 ResultType: 'simple',
             });
         }
@@ -367,6 +368,9 @@ export class FetchEntityVectorsResolver extends ResolverBase {
                 ExtraFilter: `EntityDocumentID='${EscapeSQLString(entityDoc.ID)}' AND VectorJSON IS NOT NULL`,
                 Fields: ['ID', 'RecordID'],
                 IgnoreMaxRows: true,
+                // A cached RunView fetches every column so its slot can serve any field set, which
+                // would pull each vector's VectorJSON here. Bypass the cache so Fields is honoured.
+                BypassCache: true,
                 ResultType: 'simple',
             },
         ], contextUser);

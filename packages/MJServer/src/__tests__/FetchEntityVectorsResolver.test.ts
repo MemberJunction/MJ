@@ -202,6 +202,21 @@ describe('FetchEntityVectorsResolver', () => {
             expect(vectorCall.params.IgnoreMaxRows).toBe(true);
         });
 
+        it('bypasses the server RunView cache for both Entity Record Documents views, so Fields is honoured', async () => {
+            useVectorDB(true);
+            routeViews('Members', {
+                'MJ: Entity Record Documents': erdView(storedRows),
+                Members: () => ({ Success: true, Results: memberRows }),
+            });
+
+            await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, undefined, undefined, appContext(membersEntity));
+
+            const erdCalls = callsFor('MJ: Entity Record Documents');
+            expect(erdCalls).toHaveLength(2);
+            expect(erdCalls.map((c) => c.params.BypassCache)).toEqual([true, true]);
+            expect(callsFor('Members')[0].params.BypassCache).toBeUndefined();
+        });
+
         it('labels each item with Entity, RecordID and the record name fields (RecordID matched case-insensitively)', async () => {
             useVectorDB(true);
             routeViews('Members', {
