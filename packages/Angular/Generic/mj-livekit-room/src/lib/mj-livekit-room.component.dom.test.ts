@@ -521,9 +521,17 @@ describe('MJLiveKitRoomComponent: what the agent sees, in a meeting (DOM)', () =
     const errors: string[] = [];
     f.componentInstance.ErrorOccurred.subscribe((e: { Kind: string; Message: string }) => errors.push(`${e.Kind}: ${e.Message}`));
     await flip(f);
-    expect(notice(f)?.textContent).toContain("Couldn't change what agents see: You are not in this room.");
-    expect(errors).toEqual(["agent-vision: Couldn't change what agents see: You are not in this room."]);
+    expect(notice(f)?.textContent).toContain("Couldn't change what the agent sees: You are not in this room.");
+    expect(errors).toEqual(["agent-vision: Couldn't change what the agent sees: You are not in this room."]);
     expect(f.nativeElement.querySelector('mj-livekit-room')).not.toBeNull();
+  });
+
+  it('says "agents" in that notice when the room has more than one agent', async () => {
+    vi.spyOn(GraphQLLiveKitClient.prototype, 'SetAgentVision').mockResolvedValue({ Success: false, ErrorMessage: 'You are not in this room.' });
+    vi.spyOn(LiveKitRoomComponent.prototype, 'AgentCount', 'get').mockReturnValue(2);
+    const f = render();
+    await flip(f, 'button[title="Let agents in this room see your camera and screen"]');
+    expect(notice(f)?.textContent).toContain("Couldn't change what agents see: You are not in this room.");
   });
 
   it('lets the user dismiss the notice, and clears it when they choose again', async () => {

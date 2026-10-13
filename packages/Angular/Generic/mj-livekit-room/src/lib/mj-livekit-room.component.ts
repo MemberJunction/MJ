@@ -4,7 +4,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLLiveKitClient, LiveKitRoomTurnState, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
 import { LIVEKIT_ROOM_CONTROLLER_FACTORY, LiveKitRoomComponent, LiveKitTurnStateComponent, SummarizeFloor, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
-import { AvatarNoticeText, LOCAL_MEDIA_CONTROLLER_FACTORY, type AvatarNoticeOverrides } from '@memberjunction/ng-realtime-media';
+import { AgentVisionText, AvatarNoticeText, LOCAL_MEDIA_CONTROLLER_FACTORY, type AvatarNoticeOverrides } from '@memberjunction/ng-realtime-media';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
 import { MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -1081,7 +1081,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
     const result = await client.SetAgentVision(this.ResolvedRoomName, on);
     if (!result.Success) {
-      this.AgentVisionNotice = `Couldn't change what agents see: ${result.ErrorMessage ?? 'unknown error'}`;
+      const words = AgentVisionText(this.roomComponent?.AgentCount ?? 1);
+      this.AgentVisionNotice = `${words.ChangeFailed}: ${result.ErrorMessage ?? 'unknown error'}`;
       this.ErrorOccurred.emit({ Kind: 'agent-vision', Message: this.AgentVisionNotice });
     }
     this.cdr.markForCheck();

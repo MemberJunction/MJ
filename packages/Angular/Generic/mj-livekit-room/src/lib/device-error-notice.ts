@@ -1,7 +1,7 @@
 /**
  * @fileoverview The meeting room's notice for a device error: a microphone, camera, speaker or share that failed, or
  * that the browser refused. Its line says what the user asked for and, after a colon, the reason the browser, LiveKit or
- * the share picker gave, as the room's notice about what the agent sees does ("Couldn't change what agents see: …").
+ * the share picker gave, as the room's notice about what the agent sees does ("Couldn't change what the agent sees: …").
  * For a panel share where the user picked another surface, the reason is `/media`'s own hint, so the line reads
  * "Couldn't start sharing: To share only the panel, choose this tab in the browser's picker." A share picker the user
  * closed is no error, so nothing shows for it.
