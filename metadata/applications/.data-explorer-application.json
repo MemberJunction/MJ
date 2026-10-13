@@ -20,13 +20,6 @@
         "ResourceType": "Custom",
         "DriverClass": "QueryBrowserResource",
         "isDefault": false
-      },
-      {
-        "Label": "Dashboards",
-        "Icon": "fa-solid fa-gauge-high",
-        "ResourceType": "Custom",
-        "DriverClass": "DashboardBrowserResource",
-        "isDefault": false
       }
     ]
   },

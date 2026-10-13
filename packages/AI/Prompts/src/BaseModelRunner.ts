@@ -280,6 +280,19 @@ export abstract class BaseModelRunner {
   }
 
   /**
+   * The Active model-vendor rows of a model on one vendor, Inference Provider rows first: the rows a
+   * `ModelVendor` credential binding can target. A vendor that both develops and serves a model has two
+   * rows for the pair, a Model Developer row and an Inference Provider row, and the engine holds them in
+   * no set order (the database returns them in key order), so taking the first match could read the
+   * Model Developer row and miss a binding on the row that serves the model.
+   */
+  private activeModelVendorRows(modelId: string, vendorId: string): MJAIModelVendorEntity[] {
+    const rows = (AIEngine.Instance.ModelVendorsByModelID.get(NormalizeUUID(modelId)) ?? [])
+      .filter(mv => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active');
+    return [...rows.filter(mv => this.IsInferenceProvider(mv)), ...rows.filter(mv => !this.IsInferenceProvider(mv))];
+  }
+
+  /**
    * Fire-and-forget AIPromptRun persistence. Prompt-run logging never blocks the execution path on a
    * DB round-trip; the shared {@link BaseEntitySaveQueue} sequences saves for the SAME entity (the
    * initial 'Running' INSERT always completes before the finalize UPDATE, and the finalize mutation
@@ -375,9 +388,7 @@ export abstract class BaseModelRunner {
 
     // Priority 3: ModelVendor bindings - with failover
     if (modelId && vendorId) {
-      const modelVendor = AIEngine.Instance.ModelVendorsByModelID.get(NormalizeUUID(modelId))
-        ?.find(mv => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active');
-      if (modelVendor) {
+      for (const modelVendor of this.activeModelVendorRows(modelId, vendorId)) {
         const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('ModelVendor', modelVendor.ID);
         const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(ModelVendor)', params, verbose);
         if (result) return result;
@@ -612,9 +623,7 @@ export abstract class BaseModelRunner {
 
     // Priority 3: ModelVendor bindings
     if (modelId && vendorId) {
-      const modelVendor = AIEngine.Instance.ModelVendorsByModelID.get(NormalizeUUID(modelId))
-        ?.find(mv => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active');
-      if (modelVendor && AIEngine.Instance.HasCredentialBindings('ModelVendor', modelVendor.ID)) {
+      if (this.activeModelVendorRows(modelId, vendorId).some(mv => AIEngine.Instance.HasCredentialBindings('ModelVendor', mv.ID))) {
         return true;
       }
     }

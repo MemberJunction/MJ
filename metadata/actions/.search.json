@@ -56,7 +56,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Minimum relevance score threshold (0-1). Results below this score are excluded after RRF fusion. Defaults to 0 (no filtering).",
+            "Description": "Minimum semantic similarity (0-1), applied to the semantic (vector) lane before RRF fusion: semantic-only matches below it are dropped. Keyword, full-text, tag and storage matches are never filtered by it. Similarity scales differ by embedding model, so choose the value for the model in use. Defaults to 0 (no filtering).",
             "IsRequired": false
           },
           "primaryKey": {

@@ -222,7 +222,8 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
 
     /**
      * Internal: subscribe to NavigationService query param notifications.
-     * Filters to only this component's tab to prevent cross-tab leakage.
+     * Filters to only this component's tab to prevent cross-tab leakage, and to the
+     * times that tab shows this component (see queryParamOwner).
      * This is the explicit back/forward (popstate) path.
      */
     private setupQueryParamSubscription(): void {
@@ -230,11 +231,25 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
             .pipe(
                 filter(event => {
                     const myTabId = this.getTabId();
-                    return !myTabId || event.TabId === myTabId;
+                    if (myTabId && event.TabId !== myTabId) {
+                        return false;
+                    }
+                    const owner = this.queryParamOwner;
+                    return !owner || this.navigationService.IsTabShowingResource(event.TabId, owner);
                 }),
                 takeUntil(this.destroy$)
             )
             .subscribe(event => this.deliverQueryParams(event.Params, event.Force === true));
+    }
+
+    /**
+     * The resource data this component's tab must show for the tab's query params to reach it: its own
+     * Data when the tab container created it for the tab. A cached component stays bound to its tab's ID
+     * after the tab is reused for another resource. A child that a host stamps with ParentTabId has none,
+     * so it receives its host tab's params.
+     */
+    private get queryParamOwner(): ResourceData | undefined {
+        return !this.ParentTabId && this.Data?.Configuration?.['tabId'] ? this.Data : undefined;
     }
 
     /**
@@ -251,7 +266,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
             return; // No tab scope (e.g. embedded usage) — nothing to observe.
         }
         this.reactiveParamSub?.unsubscribe();
-        this.reactiveParamSub = this.navigationService.ObserveTabQueryParams(tabId)
+        this.reactiveParamSub = this.navigationService.ObserveTabQueryParams(tabId, this.queryParamOwner)
             .pipe(takeUntil(this.destroy$))
             .subscribe(params => this.deliverQueryParams(params));
     }

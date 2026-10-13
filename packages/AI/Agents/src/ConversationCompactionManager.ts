@@ -55,6 +55,8 @@ export interface EffectiveContextBudget {
 export interface CompactIfNeededInput {
     /** The conversation whose window may need compacting */
     ConversationId: string;
+    /** The branch whose path is compacted; null or omitted is the trunk. */
+    BranchID?: string | null;
     /** The executing agent (per-agent compaction knobs + summary prompt override) */
     Agent: MJAIAgentEntityExtended;
     /** The agent's type (type-level defaults) — null only for typeless programmatic runs */
@@ -321,7 +323,9 @@ export class ConversationCompactionManager {
         const rows = await ConversationEngine.LoadWindowRowsFresh(
             input.ConversationId,
             input.ContextUser,
-            input.Provider || Metadata.Provider // global-provider-ok: caller-supplied provider preferred; global is the documented last-resort fallback
+            input.Provider || Metadata.Provider, // global-provider-ok: caller-supplied provider preferred; global is the documented last-resort fallback
+            undefined,
+            input.BranchID ?? null
         );
         return ConversationEngine.AssembleContextWindow(rows, {
             excludeDetailIds: input.ExcludeDetailIds

@@ -241,6 +241,36 @@ describe('SearchService visibility scope', () => {
     expect(results.messages).toEqual([]);
   });
 
+  it('reads the branch and sequence of each message hit', async () => {
+    rows['MJ: Conversations'] = [{ ID: 'c1' }];
+    service.SetSearchFilter('messages');
+
+    await service.Search('poem', 'env-1', USER);
+
+    const messageQuery = queriesFor('MJ: Conversation Details')[0];
+    expect(messageQuery.ResultType).toBe('simple');
+    expect(messageQuery.Fields).toEqual(expect.arrayContaining(['ID', 'ConversationID', 'Conversation', 'Message', 'BranchID', 'Sequence', '__mj_CreatedAt']));
+  });
+
+  it('puts the branch and sequence of a message on its result; a trunk row has a null branch', async () => {
+    const createdAt = new Date('2026-10-01T00:00:00Z');
+    rows['MJ: Conversations'] = [{ ID: 'c1' }];
+    rows['MJ: Conversation Details'] = [
+      { ID: 'm1', ConversationID: 'c1', Conversation: 'Poems', Message: 'a poem on a branch', BranchID: 'b1', Sequence: 7, __mj_CreatedAt: createdAt },
+      { ID: 'm2', ConversationID: 'c1', Conversation: 'Poems', Message: 'a poem on the trunk', BranchID: null, Sequence: 3, __mj_CreatedAt: createdAt },
+    ];
+    service.SetSearchFilter('messages');
+
+    const results = await service.Search('poem', 'env-1', USER);
+
+    expect(results.messages.map(m => ({ id: m.id, conversationId: m.conversationId, branchId: m.branchId, sequence: m.sequence }))).toEqual([
+      { id: 'm1', conversationId: 'c1', branchId: 'b1', sequence: 7 },
+      { id: 'm2', conversationId: 'c1', branchId: null, sequence: 3 },
+    ]);
+    expect(results.messages[0].title).toBe('Message in Poems');
+    expect(results.messages[0].createdAt).toBe(createdAt);
+  });
+
   it('searches only artifacts the user can read', async () => {
     service.SetSearchFilter('artifacts');
 

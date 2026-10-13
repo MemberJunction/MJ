@@ -23,7 +23,7 @@ vi.mock('@memberjunction/ai-prompts', () => ({
     AIDecisionRunner: class AIDecisionRunner {},
 }));
 
-import { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction } from '../actions.js';
+import { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction, SubmitHumanRubricAction } from '../actions.js';
 import { CreateDraftVersion, SubmitHumanEvaluation } from '../providerRecords.js';
 import { RubricEngine, type RubricEvaluationStore, type RubricRecords } from '../RubricEngine.js';
 import { FakePromptService } from './fakePromptService.js';
@@ -566,5 +566,16 @@ describe('rubric actions', () => {
         expect(failed.Success).toBe(false);
         expect(failed.ResultCode).toBe('FAILED');
         expect(failed.Message).toBe('the model refused');
+    });
+});
+
+describe('rubric actions that authorize their own caller', () => {
+    it('Create Rubric Draft and Submit Human Rubric declare AuthorizesCaller: they write only with the caller\'s permissions', () => {
+        expect(CreateRubricDraftAction.AuthorizesCaller).toBe(true);
+        expect(SubmitHumanRubricAction.AuthorizesCaller).toBe(true);
+    });
+
+    it('Evaluate Record Against Rubric does not declare it', () => {
+        expect(EvaluateRecordAgainstRubricAction.AuthorizesCaller).not.toBe(true);
     });
 });

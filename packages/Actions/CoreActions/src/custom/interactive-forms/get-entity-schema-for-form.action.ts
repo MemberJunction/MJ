@@ -19,6 +19,8 @@ import { buildCuratedFormSchema } from "@memberjunction/interactive-component-ty
  */
 @RegisterClass(BaseAction, "__GetEntitySchemaForForm")
 export class GetEntitySchemaForFormAction extends BaseAction {
+    /** Reads entity metadata only. */
+    public static readonly AuthorizesCaller = true;
 
     /**
      * Required input:

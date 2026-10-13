@@ -506,6 +506,14 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         try {
             this.UpdatePollingInterval();
 
+            // A job activated while polling is live arrives with a null NextRunAt, which
+            // isJobDue treats as "never due". StartPolling seeds NextRunAt only at startup,
+            // so seed it here too. Polling may hold live locks, so this is a targeted
+            // update of the one column, never a full Save().
+            if (this.isPolling) {
+                await this.seedNextRunAtForActivatedJobs();
+            }
+
             if (!this.isPolling && this.ScheduledJobs.length > 0 && this._pollingContextUser) {
                 console.log(`📅 Scheduled Jobs: Job activated, starting polling`);
                 await this.StartPolling(this._pollingContextUser);
@@ -1095,18 +1103,9 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // Caching" — `BypassCache: true` is the documented opposite escape hatch
         // for readers; this is the producer-side counterpart.
         //
-        // Wrapped in try/catch: cache invalidation is best-effort observability
-        // hygiene, not load-bearing for job execution. If LocalCacheManager throws
-        // (e.g., uninitialized in a test environment, transient storage error),
-        // the stats UPDATE has already persisted — the worst case is one cached
-        // dashboard view stays stale until its TTL.
-        try {
-            if (LocalCacheManager.Instance.IsInitialized) {
-                await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Scheduled Jobs');
-            }
-        } catch (cacheError) {
-            this.logError('Cache invalidation after stats update failed (non-fatal)', cacheError);
-        }
+        // Best-effort (see invalidateScheduledJobsCache): the stats UPDATE has already
+        // persisted, so the worst case is one cached dashboard view stays stale until its TTL.
+        await this.invalidateScheduledJobsCache('stats update');
     }
 
     /**
@@ -1570,6 +1569,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             ExtraFilter: `ID IN (${idList}) AND (LockToken IS NULL OR ExpectedCompletionAt IS NULL OR ExpectedCompletionAt < '${nowIso}')`,
             Fields: ['ID', 'Name', 'ExpectedCompletionAt'],
             ResultType: 'simple',
+            // Live lock/lease state must come from the database. Without this the server cache
+            // would answer (a server trusts its cache hits), and the per-poll timestamp in the
+            // filter would also mint a new, never-read cache key on every poll.
+            BypassCache: true,
             // Deliberately a fresh, narrowly-filtered read of LIVE lock/lease state — the cached
             // SchedulingEngineBase copy would be stale (and possibly cross-process stale). Exempt it
             // from the "Entity Already in Engine" optimization analyzer rather than have it flagged.
@@ -1734,12 +1737,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private async initializeNextRunTimes(contextUser: UserInfo): Promise<void> {
         for (const job of this.ScheduledJobs) {
             if (!job.NextRunAt) {
-                if (job.RunImmediatelyIfNeverRun && !job.LastRunAt) {
-                    job.NextRunAt = new Date();
-                    console.log(`  ⏱️  Job ${job.Name} flagged RunImmediatelyIfNeverRun — scheduling for immediate execution`);
-                } else {
-                    job.NextRunAt = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone);
-                }
+                job.NextRunAt = this.computeInitialNextRunAt(job);
                 try {
                     // SAFE: this Save runs in StartPolling's upfront block, BEFORE
                     // isPolling=true is set. No locks can have been acquired yet,
@@ -1753,6 +1751,69 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                     this.logError(`Failed to initialize NextRunAt for job ${job.Name}`, error);
                 }
             }
+        }
+    }
+
+    /**
+     * The first NextRunAt for a job that has none: now, when RunImmediatelyIfNeverRun is set
+     * and the job has never run; otherwise the next cron tick.
+     * @private
+     */
+    private computeInitialNextRunAt(job: MJScheduledJobEntity): Date {
+        if (job.RunImmediatelyIfNeverRun && !job.LastRunAt) {
+            console.log(`  ⏱️  Job ${job.Name} flagged RunImmediatelyIfNeverRun — scheduling for immediate execution`);
+            return new Date();
+        }
+        return CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone);
+    }
+
+    /**
+     * Seeds NextRunAt for every active job that arrived without one while polling is live
+     * (a job switched from Disabled to Active at runtime). Persists through
+     * spSetScheduledJobNextRunAt, which touches only that column: a full-entity Save() here
+     * would write the entity's stale lock columns over a live lock, exactly what
+     * updateJobStatistics avoids. Each job is independent; one failure is logged and the
+     * rest are still seeded.
+     * @private
+     */
+    private async seedNextRunAtForActivatedJobs(): Promise<void> {
+        for (const job of this.ScheduledJobs) {
+            if (job.NextRunAt || job.Status !== 'Active') {
+                continue;
+            }
+            const nextRun = this.computeInitialNextRunAt(job);
+            try {
+                const provider = this.Base.ProviderToUse as DatabaseProviderBase;
+                await provider.ExecuteSQL(
+                    this.buildLockSprocCall(provider, 'spSetScheduledJobNextRunAt', ['JobID', 'NextRunAt']),
+                    [job.ID, nextRun],
+                    { isMutation: true, description: 'spSetScheduledJobNextRunAt' },
+                    this.Base.ContextUser
+                );
+                job.NextRunAt = nextRun;
+                console.log(`  ⚙️  Seeded NextRunAt for activated job ${job.Name} -> ${nextRun.toISOString()}`);
+                await this.invalidateScheduledJobsCache('NextRunAt seed');
+            } catch (error) {
+                this.logError(`Failed to seed NextRunAt for activated job ${job.Name}`, error);
+            }
+        }
+    }
+
+    /**
+     * Direct SQL bypasses BaseEntity.Save(), so it skips the save event that drives
+     * LocalCacheManager invalidation; call this after any targeted sproc update (named by
+     * `after`, for the log line) so cached 'MJ: Scheduled Jobs' views do not keep stale values
+     * until their TTL. Best-effort:
+     * the update has already persisted, so a cache failure is logged, never thrown.
+     * @private
+     */
+    private async invalidateScheduledJobsCache(after: string): Promise<void> {
+        try {
+            if (LocalCacheManager.Instance.IsInitialized) {
+                await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Scheduled Jobs');
+            }
+        } catch (cacheError) {
+            this.logError(`Cache invalidation after ${after} failed (non-fatal)`, cacheError);
         }
     }
 

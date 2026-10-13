@@ -93,6 +93,8 @@ export class PredictiveStudioPromoteModelServerOperation extends PredictiveStudi
           `Model ${input.modelId} cannot move from '${outcome.currentStatus}' to '${outcome.targetStatus}'. ` +
             'Allowed lifecycle: Draft → Validated → Published → Archived (with Published ↔ Archived).',
         );
+      case 'needs-training':
+        throw new Error(outcome.message);
       case 'not-found':
         throw new Error(`ML Model '${input.modelId}' was not found.`);
       case 'save-failed':

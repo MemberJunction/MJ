@@ -370,3 +370,107 @@ describe('Initialize', () => {
         expect(vi.mocked(LogError).mock.calls.map((c) => String(c[0])).join('\n')).toContain('ECONNREFUSED');
     });
 });
+
+describe('custom inbound handler', () => {
+    it('delegates to injected inboundHandler when it handles the call', async () => {
+        const h = harness();
+        const customHandler = {
+            HandleInboundCall: vi.fn().mockResolvedValue({
+                Handled: true,
+                Outcome: { accepted: true },
+            }),
+        };
+        h.service.SetInboundHandler(customHandler);
+
+        const result = await h.service.HandleWebhookEvent(inboundEvent(), USER, dbProvider());
+        expect(result).toEqual({ accepted: true });
+        expect(customHandler.HandleInboundCall).toHaveBeenCalledWith(
+            expect.objectContaining({
+                DialedNumber: '+18005550100',
+                CallerNumber: '+14155550123',
+                RoomName: 'call-abc',
+            })
+        );
+        // Default agent identity lookup was bypassed
+        expect(h.starter.Start).not.toHaveBeenCalled();
+    });
+
+    it('falls back to default agent lookup when custom handler returns Handled: false', async () => {
+        const h = harness();
+        const customHandler = {
+            HandleInboundCall: vi.fn().mockResolvedValue({
+                Handled: false,
+            }),
+        };
+        h.service.SetInboundHandler(customHandler);
+
+        const result = await h.service.HandleWebhookEvent(inboundEvent(), USER, dbProvider());
+        expect(result.accepted).toBe(true);
+        expect(customHandler.HandleInboundCall).toHaveBeenCalled();
+        expect(h.starter.Start).toHaveBeenCalled();
+    });
+
+    it('treats Handled: true without Outcome as terminal and returns default accepted: true without falling back', async () => {
+        const h = harness();
+        const customHandler = {
+            HandleInboundCall: vi.fn().mockResolvedValue({
+                Handled: true,
+            }),
+        };
+        h.service.SetInboundHandler(customHandler);
+
+        const result = await h.service.HandleWebhookEvent(inboundEvent(), USER, dbProvider());
+        expect(result).toEqual({ accepted: true });
+        expect(customHandler.HandleInboundCall).toHaveBeenCalled();
+        expect(h.starter.Start).not.toHaveBeenCalled();
+    });
+
+    it('fails closed and hangs up when custom handler throws an error', async () => {
+        const h = harness();
+        const customHandler = {
+            HandleInboundCall: vi.fn().mockRejectedValue(new Error('Ingress exploded')),
+        };
+        h.service.SetInboundHandler(customHandler);
+
+        const result = await h.service.HandleWebhookEvent(inboundEvent(), USER, dbProvider());
+        expect(result.accepted).toBe(false);
+        expect(result.reason).toContain('Ingress exploded');
+        expect(customHandler.HandleInboundCall).toHaveBeenCalled();
+        expect(h.sip.RemoveParticipant).toHaveBeenCalledWith('call-abc', 'sip_+14155550123');
+        expect(h.starter.Start).not.toHaveBeenCalled();
+    });
+
+    it('invokes HandleRoomFinished on room_finished webhook event', async () => {
+        const h = harness();
+        const customHandler = {
+            HandleInboundCall: vi.fn(),
+            HandleRoomFinished: vi.fn().mockResolvedValue(undefined),
+        };
+        h.service.SetInboundHandler(customHandler);
+
+        const finishedEvent: LiveKitRoomWebhookEvent = {
+            Event: 'room_finished',
+            RoomName: 'call-finish-1',
+            RoomSid: 'sid-1',
+            ParticipantIdentity: 'part-1',
+            IsSipParticipant: true,
+        };
+
+        const result = await h.service.HandleWebhookEvent(finishedEvent, USER, dbProvider());
+        expect(result).toEqual({ accepted: false, reason: 'room finished' });
+        expect(customHandler.HandleRoomFinished).toHaveBeenCalledWith('call-finish-1', USER, expect.anything());
+    });
+
+    it('exposes HangUpParticipant and HangUpRoom', async () => {
+        const h = harness();
+        h.sip.ListParticipants.mockResolvedValueOnce([{ Identity: 'p-1', IsSip: true }, { Identity: 'p-2', IsSip: false }]);
+        await h.service.HangUpParticipant('call-room', 'sip-part');
+        expect(h.sip.RemoveParticipant).toHaveBeenCalledWith('call-room', 'sip-part');
+
+        await h.service.HangUpRoom('call-room');
+        expect(h.sip.RemoveParticipant).toHaveBeenCalledWith('call-room', 'p-1');
+        expect(h.sip.RemoveParticipant).not.toHaveBeenCalledWith('call-room', 'p-2');
+    });
+});
+
+

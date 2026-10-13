@@ -1,0 +1,52 @@
+/* A node grows by its share of the parent (flex-grow is bound to its weight). */
+:host {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  gap: 4px;
+}
+
+:host(.dlp-row) {
+  flex-direction: row;
+}
+
+:host(.dlp-column) {
+  flex-direction: column;
+}
+
+/* A panel box: the panel's icon above its title, in small text. The top edge stands for the panel header. */
+.dlp-panel {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 4px;
+  overflow: hidden;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-top: 3px solid color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+  border-radius: var(--mj-radius-sm);
+  color: var(--mj-text-secondary);
+}
+
+.dlp-icon {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--mj-brand-primary);
+}
+
+.dlp-title {
+  max-width: 100%;
+  font-size: 10px;
+  font-weight: var(--mj-font-semibold);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
