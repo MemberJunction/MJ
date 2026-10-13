@@ -97,7 +97,7 @@ const REFUSAL = {
     OnlyAuthorChanges: 'Only the person who wrote this message can change it.',
     OnlyAuthorOrOwnerDeletes: "Only the message's author or the conversation's owner can delete it.",
     NoAccess: 'You do not have access to this conversation.',
-    MovedConversation: 'A message cannot be moved to another conversation.',
+    MovedConversation: 'A message cannot be moved to another conversation or fork.',
     TransactionVariable: 'A conversation message cannot take its values from a transaction variable.'
 } as const;
 

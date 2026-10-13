@@ -29,6 +29,12 @@ const OWNER_ONLY_RATING_FIELDS = ['UserRating', 'UserFeedback'];
 const AUTHORED_FIELDS = ['UserID', 'Role', 'Message', 'ArtifactID', 'ArtifactVersionID', 'MediaType', 'ParentID'];
 
 /**
+ * Where a message sits: its conversation and its fork (`BranchID`, null is Main). No one moves a person's message,
+ * its author included: moving it takes it out of the thread it was written in.
+ */
+const PLACEMENT_FIELDS = ['ConversationID', 'BranchID'];
+
+/**
  * Whether a `Role` value is a person's message. Compared the way validation and the database's CHECK constraint
  * compare it (trimmed, any case), so `'user'` or `'User '`, which both store, cannot slip past these rules.
  */
@@ -58,6 +64,7 @@ function isPersonRole(role: string | null | undefined): boolean {
  *    with no `UserID` gets the grantee's (an empty one reads as the conversation's owner). The owner's stays empty,
  *    since it already means them;
  *  - change who wrote it and what it says ({@link AUTHORED_FIELDS}) only when they wrote it, and never its role;
+ *  - never move it to another conversation or fork ({@link PLACEMENT_FIELDS});
  *  - delete it only when they wrote it, or own the conversation.
  *
  * The system user is exempt from these authorship rules, since server code writes on people's behalf, but it still
@@ -201,7 +208,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
 
     /**
      * An existing person's message: only its author changes who wrote it and what it says, no one its role (to or
-     * from `User`), and no one moves it to another conversation. A message with no `UserID` is the owner's.
+     * from `User`), and no one moves it to another conversation or fork. A message with no `UserID` is the owner's.
      */
     private changeRefusal(user: UserInfo, isOwner: boolean): string | null {
         const wasPerson = isPersonRole(this.originalFieldText('Role'));
@@ -211,10 +218,10 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
         if (!wasPerson) {
             return null;
         }
-        if (this.isFieldDirty('ConversationID')) {
-            // Moving it would take it out of its conversation (a delete) and, with no UserID, make it read as the
-            // other conversation's owner's.
-            return 'A message cannot be moved to another conversation.';
+        if (PLACEMENT_FIELDS.some((name) => this.isFieldDirty(name))) {
+            // Moving it would take it out of the thread it was written in (a delete) and put it in one its author never
+            // wrote in, and, with no UserID, make it read as another conversation's owner's.
+            return 'A message cannot be moved to another conversation or fork.';
         }
         const changed = AUTHORED_FIELDS.filter((name) => this.isFieldDirty(name));
         if (changed.length === 0) {

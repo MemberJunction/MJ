@@ -405,10 +405,23 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
         it('refuses moving a person\'s message to another conversation, its author included', async () => {
             const someoneElses = await savedMessageAs(GRANTEE, OTHER, ['ConversationID']);
             expect(await someoneElses.Save()).toBe(false);
-            expect(someoneElses.LatestResult?.CompleteMessage).toBe('A message cannot be moved to another conversation.');
+            expect(someoneElses.LatestResult?.CompleteMessage).toBe('A message cannot be moved to another conversation or fork.');
 
             const own = await savedMessageAs(OWNER, null, ['ConversationID']);
             expect(await own.Save()).toBe(false);
+        });
+
+        it("refuses a grantee moving the owner's message onto a fork they started", async () => {
+            for (const ownersMessage of [await savedMessageAs(GRANTEE, OWNER, ['BranchID']), await savedMessageAs(GRANTEE, null, ['BranchID'])]) {
+                expect(await ownersMessage.Save()).toBe(false);
+                expect(ownersMessage.LatestResult?.CompleteMessage).toBe('A message cannot be moved to another conversation or fork.');
+            }
+            expect(mocks.superSave).not.toHaveBeenCalled();
+        });
+
+        it("refuses moving a person's message to another fork, its author included", async () => {
+            expect(await (await savedMessageAs(GRANTEE, GRANTEE, ['BranchID'])).Save()).toBe(false);
+            expect(await (await savedMessageAs(OWNER, null, ['BranchID'])).Save()).toBe(false);
         });
 
         it('treats a stored role in another case as a person\'s message', async () => {
